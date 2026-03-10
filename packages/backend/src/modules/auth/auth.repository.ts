@@ -2,7 +2,7 @@ import { and, count, desc, eq, gte, ne } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
-import * as auth from "#modules/auth/auth.db";
+import * as auth from "./auth.db";
 import type {
   AccountClaim,
   AccountClaimMagicLink,
@@ -10,9 +10,9 @@ import type {
   AccountClaimOutput,
   Waitlist,
   WaitlistOutput,
-} from "#modules/auth/auth.dto";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseRepository } from "#modules/base/base.repository";
+} from "./auth.dto";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseRepository } from "../base/base.repository";
 
 const schema = { ...auth };
 type Schema = typeof schema;

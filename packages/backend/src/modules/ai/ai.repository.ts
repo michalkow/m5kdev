@@ -2,9 +2,9 @@ import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import { eq, sql } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { ok } from "neverthrow";
-import * as ai from "#modules/ai/ai.db";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseTableRepository } from "#modules/base/base.repository";
+import * as ai from "./ai.db";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseTableRepository } from "../base/base.repository";
 
 const schema = { ...ai };
 type Schema = typeof schema;

@@ -1,12 +1,12 @@
 import { IconChevronDown } from "@tabler/icons-react";
 import { useLayoutEffect, useRef, useState } from "react";
-import { Button } from "#components/ui/button";
+import { Button } from "./button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "#components/ui/dropdown-menu";
+} from "./dropdown-menu";
 
 interface SegmentControlProps {
   options: string[];

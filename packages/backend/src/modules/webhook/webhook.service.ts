@@ -1,7 +1,7 @@
 import { safeParseJson } from "@m5kdev/commons/utils/json";
 import { err, ok } from "neverthrow";
-import type { ServerResult, ServerResultAsync } from "#modules/base/base.dto";
-import { BaseService } from "#modules/base/base.service";
+import type { ServerResult, ServerResultAsync } from "../base/base.dto";
+import { BaseService } from "../base/base.service";
 import { WEBHOOK_STATUS_ENUM } from "./webhook.constants";
 import type { WebhookRepository } from "./webhook.repository";
 

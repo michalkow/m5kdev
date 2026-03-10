@@ -1,4 +1,4 @@
-import { Prompt } from "#modules/ai/ai.prompt";
+import { Prompt } from "../ai.prompt";
 
 export const ideogramGenerateSystemPrompt = new Prompt<Record<string, never>>(`
 You are an expert prompt writer for Ideogram. Use the instruction below to assist user in creating prompts for Ideogram.

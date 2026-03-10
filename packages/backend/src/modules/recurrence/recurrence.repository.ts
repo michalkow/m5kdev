@@ -1,9 +1,9 @@
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { ok } from "neverthrow";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseTableRepository } from "#modules/base/base.repository";
-import * as recurrence from "#modules/recurrence/recurrence.db";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseTableRepository } from "../base/base.repository";
+import * as recurrence from "./recurrence.db";
 
 const schema = { ...recurrence };
 type Schema = typeof schema;

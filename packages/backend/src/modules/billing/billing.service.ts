@@ -1,11 +1,11 @@
 import { err, ok } from "neverthrow";
 import type Stripe from "stripe";
-import type { User } from "#modules/auth/auth.lib";
-import type { ServerResult, ServerResultAsync } from "#modules/base/base.dto";
-import { BaseService } from "#modules/base/base.service";
-import type { BillingRepository } from "#modules/billing/billing.repository";
+import type { User } from "../auth/auth.lib";
+import type { ServerResult, ServerResultAsync } from "../base/base.dto";
+import { BaseService } from "../base/base.service";
+import type { BillingRepository } from "./billing.repository";
 
-import { posthogCapture } from "#utils/posthog";
+import { posthogCapture } from "../../utils/posthog";
 
 const allowedEvents: Stripe.Event.Type[] = [
   "checkout.session.completed",

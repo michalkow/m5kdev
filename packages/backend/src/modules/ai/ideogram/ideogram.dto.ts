@@ -7,7 +7,7 @@ import {
   ideogramResolutions,
   ideogramStylePresets,
   ideogramStyleTypes,
-} from "#modules/ai/ideogram/ideogram.constants";
+} from "./ideogram.constants";
 
 export const ideogramAISchema = z.object({
   prompt: z.string().describe("Create a prompt for the image generation."),

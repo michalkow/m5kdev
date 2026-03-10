@@ -1,7 +1,7 @@
 import bodyParser from "body-parser";
 import { Router } from "express";
-import type { AuthMiddleware, AuthRequest } from "#modules/auth/auth.middleware";
-import type { BillingService } from "#modules/billing/billing.service";
+import type { AuthMiddleware, AuthRequest } from "../auth/auth.middleware";
+import type { BillingService } from "./billing.service";
 
 export function createBillingRouter(
   authMiddleware: AuthMiddleware,

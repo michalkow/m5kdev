@@ -3,9 +3,9 @@ import type { TRPCRootObject } from "@trpc/server";
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import { fromNodeHeaders } from "better-auth/node";
 import type { Result } from "neverthrow";
-import type { BetterAuth, Context, Session, User } from "#modules/auth/auth.lib";
-import { ServerError } from "#utils/errors";
-import { logger } from "#utils/logger";
+import type { BetterAuth, Context, Session, User } from "../modules/auth/auth.lib";
+import { ServerError } from "./errors";
+import { logger } from "./logger";
 
 type TRPCCreate = TRPCRootObject<Context, any, { transformer: typeof transformer }>;
 

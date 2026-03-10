@@ -6,9 +6,9 @@ import type {
 import { and, eq, inArray } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { ok } from "neverthrow";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseRepository } from "#modules/base/base.repository";
-import * as workflow from "#modules/workflow/workflow.db";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseRepository } from "../base/base.repository";
+import * as workflow from "./workflow.db";
 
 const schema = { ...workflow };
 

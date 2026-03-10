@@ -4,8 +4,8 @@ import bodyParser from "body-parser";
 import express, { type Request, type Response } from "express";
 import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
-import { FileRepository } from "#modules/file/file.repository";
-import { FileService } from "#modules/file/file.service";
+import { FileRepository } from "./file.repository";
+import { FileService } from "./file.service";
 
 const fileRepository = new FileRepository();
 const fileService = new FileService({ file: fileRepository });

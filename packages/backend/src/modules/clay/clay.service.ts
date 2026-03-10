@@ -1,7 +1,7 @@
 import type { z } from "zod";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseService } from "#modules/base/base.service";
-import type { WebhookService } from "#modules/webhook/webhook.service";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseService } from "../base/base.service";
+import type { WebhookService } from "../webhook/webhook.service";
 import type { ClayRepository } from "./clay.repository";
 
 type ClayTable = {

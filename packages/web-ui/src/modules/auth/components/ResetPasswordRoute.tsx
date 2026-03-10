@@ -1,7 +1,7 @@
 import { Card, CardBody, CardHeader } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
-import { ResetPasswordForm } from "#modules/auth/components/ResetPasswordForm";
+import { ResetPasswordForm } from "./ResetPasswordForm";
 
 export function ResetPasswordRoute() {
   const { t } = useTranslation();

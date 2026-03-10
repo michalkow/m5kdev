@@ -2,7 +2,7 @@
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from "motion/react";
 import type React from "react";
 import { useState } from "react";
-import { cn } from "#utils";
+import { cn } from "../../lib/utils";
 
 export const FloatingNav = ({
   navItems,

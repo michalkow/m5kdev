@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/backend",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Composable Express server stack with Drizzle ORM and tRPC.",
   "license": "GPL-3.0-only",
   "repository": {
@@ -88,28 +88,6 @@
     "tsup": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"
-  },
-  "imports": {
-    "#modules/ai/*": "./src/modules/ai/*.ts",
-    "#modules/utils/*": "./src/modules/utils/*.ts",
-    "#modules/base/*": "./src/modules/base/*.ts",
-    "#modules/billing/*": "./src/modules/billing/*.ts",
-    "#modules/crypto/*": "./src/modules/crypto/*.ts",
-    "#modules/auth/*": "./src/modules/auth/*.ts",
-    "#modules/tag/*": "./src/modules/tag/*.ts",
-    "#modules/connect/*": "./src/modules/connect/*.ts",
-    "#modules/workflow/*": "./src/modules/workflow/*.ts",
-    "#modules/file/*": "./src/modules/file/*.ts",
-    "#modules/recurrence/*": "./src/modules/recurrence/*.ts",
-    "#modules/video/*": "./src/modules/video/*.ts",
-    "#modules/posthog/*": "./src/modules/posthog/*.ts",
-    "#modules/access/*": "./src/modules/access/*.ts",
-    "#modules/social/*": "./src/modules/social/*.ts",
-    "#modules/clay/*": "./src/modules/clay/*.ts",
-    "#modules/webhook/*": "./src/modules/webhook/*.ts",
-    "#modules/email/*": "./src/modules/email/*.ts",
-    "#lib/*": "./src/lib/*.ts",
-    "#utils/*": "./src/utils/*.ts"
   },
   "exports": {
     "./modules/ai/*": {

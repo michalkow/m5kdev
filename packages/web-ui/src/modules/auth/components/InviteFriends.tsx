@@ -4,8 +4,8 @@ import { CheckCircle2, Link2Icon, Mail, Send, Ticket, Users, Zap } from "lucide-
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
-import { CopyButton } from "#components/CopyButton";
-import type { UseBackendTRPC } from "#types";
+import { CopyButton } from "../../../components/CopyButton";
+import type { UseBackendTRPC } from "../../../types";
 
 export interface InviteFriendsProps {
   useTRPC: UseBackendTRPC;

@@ -2,7 +2,7 @@ import { getTableColumns, type InferSelectModel, type Table } from "drizzle-orm"
 import { createSelectSchema } from "drizzle-zod";
 import type { Result } from "neverthrow";
 import { z } from "zod";
-import type { ServerError } from "#utils/errors";
+import type { ServerError } from "../../utils/errors";
 
 type Simplify<T> = { [K in keyof T]: T[K] } & {};
 type StringKeys<T> = Extract<keyof T, string>;

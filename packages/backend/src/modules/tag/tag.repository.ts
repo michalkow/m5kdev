@@ -8,10 +8,10 @@ import type {
 import { and, count, eq, inArray } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseTableRepository } from "#modules/base/base.repository";
-import * as tag from "#modules/tag/tag.db";
-import type { TaggingSelectOutputResult, TagSelectOutputResult } from "#modules/tag/tag.dto";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseTableRepository } from "../base/base.repository";
+import * as tag from "./tag.db";
+import type { TaggingSelectOutputResult, TagSelectOutputResult } from "./tag.dto";
 
 const schema = { ...tag };
 type Schema = typeof schema;

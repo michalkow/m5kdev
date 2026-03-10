@@ -7,11 +7,11 @@ import type {
   TagSchema,
   TagUpdateSchema,
 } from "@m5kdev/commons/modules/tag/tag.schema";
-import type { User } from "#modules/auth/auth.lib";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseService } from "#modules/base/base.service";
-import type { TaggingSelectOutputResult, TagSelectOutputResult } from "#modules/tag/tag.dto";
-import type { TagRepository } from "#modules/tag/tag.repository";
+import type { User } from "../auth/auth.lib";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseService } from "../base/base.service";
+import type { TaggingSelectOutputResult, TagSelectOutputResult } from "./tag.dto";
+import type { TagRepository } from "./tag.repository";
 
 export class TagService extends BaseService<{ tag: TagRepository }, Record<string, never>> {
   async list(input: TagListInputSchema & TagListSchema): ServerResultAsync<TagListOutputSchema> {

@@ -1,4 +1,4 @@
-import { type DialogProps, useDialog } from "#components/DialogProvider";
+import { type DialogProps, useDialog } from "../components/DialogProvider";
 
 export { useDialog };
 

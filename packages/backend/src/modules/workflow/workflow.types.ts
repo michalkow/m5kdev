@@ -1,6 +1,6 @@
 import type { Job, JobsOptions } from "bullmq";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import type { ServerError } from "#utils/errors";
+import type { ServerResultAsync } from "../base/base.dto";
+import type { ServerError } from "../../utils/errors";
 
 export type WorkflowMeta = {
   queue?: string;

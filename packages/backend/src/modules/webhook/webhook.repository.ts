@@ -1,7 +1,7 @@
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseTableRepository } from "#modules/base/base.repository";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseTableRepository } from "../base/base.repository";
 import { WEBHOOK_STATUS_ENUM } from "./webhook.constants";
 import { webhook } from "./webhook.db";
 

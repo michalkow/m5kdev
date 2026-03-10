@@ -1,6 +1,6 @@
 import { err, ok } from "neverthrow";
-import type { Session, User } from "#modules/auth/auth.lib";
-import type { ServerResultAsync } from "#modules/base/base.dto";
+import type { Session, User } from "../auth/auth.lib";
+import type { ServerResultAsync } from "./base.dto";
 
 type Level = "user" | "team" | "organization";
 type Access = "all" | "own";

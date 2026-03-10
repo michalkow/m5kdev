@@ -2,9 +2,9 @@ import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { ok } from "neverthrow";
-import { BaseTableRepository } from "#modules/base/base.repository";
-import * as connect from "#modules/connect/connect.db";
-import type { ConnectListInputSchema } from "#modules/connect/connect.dto";
+import { BaseTableRepository } from "../base/base.repository";
+import * as connect from "./connect.db";
+import type { ConnectListInputSchema } from "./connect.dto";
 
 const schema = { ...connect };
 type Schema = typeof schema;

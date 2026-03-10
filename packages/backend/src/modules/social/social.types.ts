@@ -1,5 +1,5 @@
-import type { ConnectRow } from "#modules/connect/connect.repository";
-import type { FileService } from "#modules/file/file.service";
+import type { ConnectRow } from "../connect/connect.repository";
+import type { FileService } from "../file/file.service";
 
 export type SocialMediaType = "image" | "video" | "document";
 

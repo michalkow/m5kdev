@@ -7,15 +7,15 @@ import type {
 } from "@m5kdev/commons/modules/recurrence/recurrence.schema";
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import { err, ok } from "neverthrow";
-import type { Context, User } from "#modules/auth/auth.lib";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseService } from "#modules/base/base.service";
+import type { Context, User } from "../auth/auth.lib";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseService } from "../base/base.service";
 import type {
   CreateRecurrenceRuleInput,
   CreateWithRulesResult,
   RecurrenceRepository,
   RecurrenceRulesRepository,
-} from "#modules/recurrence/recurrence.repository";
+} from "./recurrence.repository";
 
 const RECURRENCE_RULE_INSERT_KEYS = [
   "freq",

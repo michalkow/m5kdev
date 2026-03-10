@@ -3,7 +3,7 @@ import createGlobe from "cobe";
 import { motion } from "motion/react";
 import type React from "react";
 import { useEffect, useRef } from "react";
-import { cn } from "#utils";
+import { cn } from "../lib/utils";
 
 export default function FeaturesSectionDemo() {
   const features = [

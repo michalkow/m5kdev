@@ -3,10 +3,10 @@ import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { drizzle } from "drizzle-orm/libsql";
 import fs from "fs";
 import path from "path";
-import { AccessRepository } from "#modules/access/access.repository";
-import { AccessService } from "#modules/access/access.service";
-import { createAccessRoles } from "#modules/access/access.utils";
-import * as authSchema from "#modules/auth/auth.db";
+import { AccessRepository } from "./access.repository";
+import { AccessService } from "./access.service";
+import { createAccessRoles } from "./access.utils";
+import * as authSchema from "../auth/auth.db";
 
 describe("AccessService", () => {
   const statements = {

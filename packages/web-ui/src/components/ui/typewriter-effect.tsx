@@ -2,7 +2,7 @@
 
 import { motion, stagger, useAnimate, useInView } from "motion/react";
 import { useEffect } from "react";
-import { cn } from "#utils";
+import { cn } from "../../lib/utils";
 
 export const TypewriterEffect = ({
   words,

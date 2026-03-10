@@ -1,9 +1,9 @@
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server";
 import { err } from "neverthrow";
-import type { ServerResult, ServerResultAsync } from "#modules/base/base.dto";
-import type { ServerErrorLayer } from "#modules/base/base.types";
-import { reportError, ServerError } from "#utils/errors";
-import { logger } from "#utils/logger";
+import type { ServerResult, ServerResultAsync } from "./base.dto";
+import type { ServerErrorLayer } from "./base.types";
+import { reportError, ServerError } from "../../utils/errors";
+import { logger } from "../../utils/logger";
 
 export abstract class Base {
   public layer: ServerErrorLayer;

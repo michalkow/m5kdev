@@ -1,6 +1,6 @@
 import { billingSchema } from "@m5kdev/commons/modules/billing/billing.schema";
-import type { BillingService } from "#modules/billing/billing.service";
-import { handleTRPCResult, type TRPCMethods } from "#utils/trpc";
+import type { BillingService } from "./billing.service";
+import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 
 export function createBillingTRPC(
   { router, privateProcedure: procedure }: TRPCMethods,

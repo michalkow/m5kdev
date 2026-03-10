@@ -5,10 +5,10 @@ import type {
   WorkflowReadOutputSchema,
 } from "@m5kdev/commons/modules/workflow/workflow.schema";
 import type { Job } from "bullmq";
-import type { User } from "#modules/auth/auth.lib";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseService } from "#modules/base/base.service";
-import type { WorkflowRepository } from "#modules/workflow/workflow.repository";
+import type { User } from "../auth/auth.lib";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseService } from "../base/base.service";
+import type { WorkflowRepository } from "./workflow.repository";
 export class WorkflowService extends BaseService<{ workflow: WorkflowRepository }, never> {
   async read(
     input: WorkflowReadInputSchema,

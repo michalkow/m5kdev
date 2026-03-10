@@ -4,11 +4,11 @@ import { and, desc, eq, type InferSelectModel, inArray } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import type { Stripe } from "stripe";
-import * as auth from "#modules/auth/auth.db";
-import type { ServerResult, ServerResultAsync } from "#modules/base/base.dto";
-import { BaseTableRepository } from "#modules/base/base.repository";
-import * as billing from "#modules/billing/billing.db";
-import { posthogCapture } from "#utils/posthog";
+import * as auth from "../auth/auth.db";
+import type { ServerResult, ServerResultAsync } from "../base/base.dto";
+import { BaseTableRepository } from "../base/base.repository";
+import * as billing from "./billing.db";
+import { posthogCapture } from "../../utils/posthog";
 
 const schema = { ...auth, ...billing };
 type Schema = typeof schema;

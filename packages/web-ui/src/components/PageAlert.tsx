@@ -3,7 +3,7 @@ import { AlertCircle, AlertTriangle, CheckCircle, Info, X } from "lucide-react";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 
-import { cn } from "#utils";
+import { cn } from "../lib/utils";
 
 const pageAlertVariants = cva(
   "relative w-full border-b px-4 py-3 text-sm transition-all duration-300 ease-in-out",

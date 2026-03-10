@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/web-ui",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -86,23 +86,6 @@
     "@types/react-dom": "catalog:",
     "globals": "catalog:",
     "vite": "catalog:"
-  },
-  "imports": {
-    "#components/*": "./src/components/*.tsx",
-    "#components/ui/*": "./src/components/ui/*.tsx",
-    "#components/shared/*": "./src/components/ui/shared/*.tsx",
-    "#animations/*": "./src/animations/*.ts",
-    "#modules/auth/components/*": "./src/modules/auth/components/*.tsx",
-    "#modules/auth/types": "./src/modules/auth/types.ts",
-    "#modules/billing/components/*": "./src/modules/billing/components/*.tsx",
-    "#modules/app/components/*": "./src/modules/app/components/*.tsx",
-    "#icons/*": "./src/icons/*.tsx",
-    "#modules/charts/components/*": "./src/modules/charts/components/*.tsx",
-    "#modules/table/components/*": "./src/modules/table/components/*.tsx",
-    "#hooks/*": "./src/hooks/*.ts",
-    "#utils": "./src/lib/utils.ts",
-    "#lib/*": "./src/lib/*.ts",
-    "#types": "./src/types.ts"
   },
   "exports": {
     "./components/*": {

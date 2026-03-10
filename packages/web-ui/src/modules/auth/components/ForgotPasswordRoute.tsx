@@ -1,7 +1,7 @@
 import { Card, CardBody, CardHeader } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
-import { ForgotPasswordForm } from "#modules/auth/components/ForgotPasswordForm";
+import { ForgotPasswordForm } from "./ForgotPasswordForm";
 
 export function ForgotPasswordRoute() {
   const { t } = useTranslation();

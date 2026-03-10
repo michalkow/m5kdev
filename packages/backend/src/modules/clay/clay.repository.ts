@@ -1,6 +1,6 @@
 import { ok } from "neverthrow";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseExternaRepository } from "#modules/base/base.repository";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseExternaRepository } from "../base/base.repository";
 
 const { CLAY_WEBHOOK_AUTH_TOKEN } = process.env;
 

@@ -7,8 +7,8 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { ok } from "neverthrow";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseExternaRepository } from "#modules/base/base.repository";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseExternaRepository } from "../base/base.repository";
 
 export class FileRepository extends BaseExternaRepository {
   private readonly s3: S3Client;

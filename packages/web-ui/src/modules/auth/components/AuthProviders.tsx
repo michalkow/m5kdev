@@ -2,9 +2,9 @@ import { Button } from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { GoogleIcon } from "#icons/GoogleIcon";
-import { LinkedInIcon } from "#icons/LinkedInIcon";
-import { MicrosoftIcon } from "#icons/MicrosoftIcon";
+import { GoogleIcon } from "../../../icons/GoogleIcon";
+import { LinkedInIcon } from "../../../icons/LinkedInIcon";
+import { MicrosoftIcon } from "../../../icons/MicrosoftIcon";
 import { LastUsedBadge } from "./LastUsedBadge";
 
 export function AuthProviders({

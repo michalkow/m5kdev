@@ -1,7 +1,7 @@
 import { ok } from "neverthrow";
 import { createElement, type FunctionComponent } from "react";
 import { Resend } from "resend";
-import { BaseService } from "#modules/base/base.service";
+import { BaseService } from "../base/base.service";
 
 type Brand = {
   name: string;

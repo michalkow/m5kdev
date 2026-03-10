@@ -1,7 +1,7 @@
 import { Check, Edit } from "lucide-react";
 import * as React from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#components/ui/card";
-import { cn } from "#utils";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { cn } from "../lib/utils";
 
 export interface CardSelectItem {
   id: string;

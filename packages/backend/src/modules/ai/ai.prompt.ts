@@ -1,6 +1,6 @@
 import type { AiModel } from "@m5kdev/commons/modules/ai/ai.constants";
 import mustache from "mustache";
-import { logger } from "#utils/logger";
+import { logger } from "../../utils/logger";
 
 export class Prompt<C extends Record<string, string>> {
   public prompt: string;

@@ -8,7 +8,7 @@ import {
   IconUser,
   IconWriting,
 } from "@tabler/icons-react";
-import { cn } from "#utils";
+import { cn } from "../lib/utils";
 
 export default function FeaturesSectionDemo() {
   const features = [

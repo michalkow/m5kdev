@@ -3,9 +3,9 @@ import * as bip39 from "bip39";
 import * as bitcoin from "bitcoinjs-lib";
 import * as ecc from "tiny-secp256k1";
 import { ok } from "neverthrow";
-import { BaseService } from "#modules/base/base.service";
-import type { ServerResult } from "#modules/base/base.dto";
-import type { CryptoRepository } from "#modules/crypto/crypto.repository";
+import { BaseService } from "../base/base.service";
+import type { ServerResult } from "../base/base.dto";
+import type { CryptoRepository } from "./crypto.repository";
 import type { BIP32Interface } from "bip32";
 
 const BITCOIN_NATIVE_SEGWIT_PATH = "m/84'/0'/0'/0";

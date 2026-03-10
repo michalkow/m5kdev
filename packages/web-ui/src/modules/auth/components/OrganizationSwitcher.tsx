@@ -7,8 +7,8 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { toast } from "sonner";
-import { useSidebar } from "#components/ui/sidebar";
-import { cn } from "#utils";
+import { useSidebar } from "../../../components/ui/sidebar";
+import { cn } from "../../../lib/utils";
 
 type OrganizationOption = {
   id: string;

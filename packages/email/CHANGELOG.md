@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.3.0
+
+### Minor Changes
+
+- relative
+
 ## 0.2.0
 
 ### Minor Changes

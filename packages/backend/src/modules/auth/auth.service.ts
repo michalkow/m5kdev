@@ -5,14 +5,14 @@ import type {
   AccountClaimOutput,
   Waitlist,
   WaitlistOutput,
-} from "#modules/auth/auth.dto";
-import type { User } from "#modules/auth/auth.lib";
-import type { AuthRepository } from "#modules/auth/auth.repository";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseService } from "#modules/base/base.service";
-import type { BillingService } from "#modules/billing/billing.service";
-import type { EmailService } from "#modules/email/email.service";
-import { posthogCapture } from "#utils/posthog";
+} from "./auth.dto";
+import type { User } from "./auth.lib";
+import type { AuthRepository } from "./auth.repository";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseService } from "../base/base.service";
+import type { BillingService } from "../billing/billing.service";
+import type { EmailService } from "../email/email.service";
+import { posthogCapture } from "../../utils/posthog";
 
 type AuthServiceDependencies =
   | { email: EmailService }

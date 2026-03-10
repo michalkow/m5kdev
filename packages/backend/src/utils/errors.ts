@@ -2,7 +2,7 @@ import type { captureException } from "@sentry/node";
 import { type TRPC_ERROR_CODE_KEY, TRPCError } from "@trpc/server";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { camel } from "radashi";
-import type { ServerErrorLayer } from "#modules/base/base.types";
+import type { ServerErrorLayer } from "../modules/base/base.types";
 import { logger } from "./logger";
 
 export type { ServerErrorLayer };

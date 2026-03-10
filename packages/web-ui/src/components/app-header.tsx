@@ -6,9 +6,9 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "#components/ui/breadcrumb";
-import { Separator } from "#components/ui/separator";
-import { SidebarTrigger } from "#components/ui/sidebar";
+} from "./ui/breadcrumb";
+import { Separator } from "./ui/separator";
+import { SidebarTrigger } from "./ui/sidebar";
 
 export function AppHeader({ breadcrumbs }: { breadcrumbs: { label: string; href?: string }[] }) {
   return (

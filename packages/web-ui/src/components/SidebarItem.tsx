@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { SidebarMenuButton, SidebarMenuItem } from "#components/ui/sidebar";
+import { SidebarMenuButton, SidebarMenuItem } from "./ui/sidebar";
 
 export function SidebarItem({
   label,

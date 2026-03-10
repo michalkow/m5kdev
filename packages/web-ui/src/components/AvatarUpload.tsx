@@ -2,10 +2,10 @@ import { useFileUpload } from "@m5kdev/frontend/modules/file/hooks/useUpload";
 import { Edit2, User } from "lucide-react";
 import { type ChangeEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CropDialog } from "#components/CropDialog";
-import { Avatar, AvatarFallback, AvatarImage } from "#components/ui/avatar";
-import { Progress } from "#components/ui/progress";
-import { cn } from "#utils";
+import { CropDialog } from "./CropDialog";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import { Progress } from "./ui/progress";
+import { cn } from "../lib/utils";
 
 interface AvatarUploadProps {
   currentAvatarUrl?: string | null;

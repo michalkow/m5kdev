@@ -1,11 +1,11 @@
 import type { TableProps } from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
-import { Input } from "#components/ui/input";
+import { Input } from "../../../components/ui/input";
 import {
   Pagination,
   PaginationContent,
   PaginationNext,
   PaginationPrevious,
-} from "#components/ui/pagination";
+} from "../../../components/ui/pagination";
 
 interface TablePaginationProps {
   pageCount: number;

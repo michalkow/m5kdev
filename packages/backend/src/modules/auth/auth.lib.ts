@@ -4,12 +4,12 @@ import { getOAuthState } from "better-auth/api";
 import { admin, apiKey, lastLoginMethod, magicLink, organization } from "better-auth/plugins";
 import { and, desc, eq, gte, type InferSelectModel } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
-import * as auth from "#modules/auth/auth.db";
-import { createOrganizationAndTeam, getActiveOrganizationAndTeam } from "#modules/auth/auth.utils";
-import type { BillingService } from "#modules/billing/billing.service";
-import type { EmailService } from "#modules/email/email.service";
-import { logger as rootLogger } from "#utils/logger";
-import { posthogCapture } from "#utils/posthog";
+import * as auth from "./auth.db";
+import { createOrganizationAndTeam, getActiveOrganizationAndTeam } from "./auth.utils";
+import type { BillingService } from "../billing/billing.service";
+import type { EmailService } from "../email/email.service";
+import { logger as rootLogger } from "../../utils/logger";
+import { posthogCapture } from "../../utils/posthog";
 
 const schema = { ...auth };
 type Schema = typeof schema;

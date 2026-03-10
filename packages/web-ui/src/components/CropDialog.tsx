@@ -2,9 +2,9 @@ import { ZoomIn, ZoomOut } from "lucide-react";
 import { useState } from "react";
 import Cropper, { type Area } from "react-easy-crop";
 import { useTranslation } from "react-i18next";
-import { Button } from "#components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "#components/ui/dialog";
-import { Slider } from "#components/ui/slider";
+import { Button } from "./ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Slider } from "./ui/slider";
 
 interface CropArea {
   x: number;

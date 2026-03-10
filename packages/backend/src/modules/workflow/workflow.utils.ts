@@ -1,10 +1,10 @@
 import type { WorkflowReadOutputSchema } from "@m5kdev/commons/modules/workflow/workflow.schema";
 import { type JobsOptions, type Queue, Worker, type WorkerOptions } from "bullmq";
 import { err } from "neverthrow";
-import type { ServerErrorLayer } from "#modules/base/base.types";
-import { ServerError } from "#utils/errors";
-import { logger as rootLogger } from "#utils/logger";
-import { runWithPosthogRequestState } from "#utils/posthog";
+import type { ServerErrorLayer } from "../base/base.types";
+import { ServerError } from "../../utils/errors";
+import { logger as rootLogger } from "../../utils/logger";
+import { runWithPosthogRequestState } from "../../utils/posthog";
 import type { ServerResultAsync } from "../base/base.dto";
 import type { WorkflowService } from "./workflow.service";
 import type { WorkflowDataType, WorkflowJob, WorkflowMeta } from "./workflow.types";

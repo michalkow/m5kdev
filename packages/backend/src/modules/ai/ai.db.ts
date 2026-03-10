@@ -1,6 +1,6 @@
 import { integer, real, sqliteTable as table, text } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
-import { organizations, teams, users } from "#modules/auth/auth.db";
+import { organizations, teams, users } from "../auth/auth.db";
 
 export const chats = table("chats", {
   id: text("id").primaryKey().$default(uuidv4),

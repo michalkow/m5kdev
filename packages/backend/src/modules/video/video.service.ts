@@ -5,8 +5,8 @@ import ffbin from "ffmpeg-ffprobe-static";
 import ffmpeg from "fluent-ffmpeg";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseService } from "#modules/base/base.service";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseService } from "../base/base.service";
 
 if (!ffbin.ffmpegPath || !ffbin.ffprobePath) {
   throw new Error("FFmpeg or FFprobe not found");

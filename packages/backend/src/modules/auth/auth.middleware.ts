@@ -1,9 +1,9 @@
 import { fromNodeHeaders } from "better-auth/node";
 import type { InferSelectModel } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
-import * as auth from "#modules/auth/auth.db";
-import type { BetterAuth } from "#modules/auth/auth.lib";
-import { runWithPosthogRequestState } from "#utils/posthog";
+import * as auth from "./auth.db";
+import type { BetterAuth } from "./auth.lib";
+import { runWithPosthogRequestState } from "../../utils/posthog";
 
 const { users, sessions } = auth;
 

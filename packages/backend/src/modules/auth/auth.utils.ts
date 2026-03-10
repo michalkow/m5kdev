@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { v4 as uuidv4 } from "uuid";
-import * as auth from "#modules/auth/auth.db";
+import * as auth from "./auth.db";
 
 const schema = { ...auth };
 type Schema = typeof schema;

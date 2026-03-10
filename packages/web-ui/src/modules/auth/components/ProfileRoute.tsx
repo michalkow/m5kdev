@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { z } from "zod";
-import { AvatarUpload } from "#components/AvatarUpload";
+import { AvatarUpload } from "../../../components/AvatarUpload";
 import {
   Form,
   FormControl,
@@ -14,7 +14,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "#components/ui/form";
+} from "../../../components/ui/form";
 
 const profileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),

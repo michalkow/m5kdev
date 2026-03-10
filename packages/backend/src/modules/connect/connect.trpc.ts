@@ -1,4 +1,4 @@
-import { handleTRPCResult, type TRPCMethods } from "#utils/trpc";
+import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 import {
   connectDeleteInputSchema,
   connectDeleteOutputSchema,

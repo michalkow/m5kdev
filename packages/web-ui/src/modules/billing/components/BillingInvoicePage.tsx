@@ -17,7 +17,7 @@ import { useSubscription } from "@m5kdev/frontend/modules/billing/hooks/useSubsc
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, ExternalLink } from "lucide-react";
 
-import type { UseBackendTRPC } from "#types";
+import type { UseBackendTRPC } from "../../../types";
 
 interface BillingInvoicePageProps {
   useTRPC: UseBackendTRPC;

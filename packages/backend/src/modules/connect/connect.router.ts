@@ -1,5 +1,5 @@
 import { Router } from "express";
-import type { AuthMiddleware, AuthRequest } from "#modules/auth/auth.middleware";
+import type { AuthMiddleware, AuthRequest } from "../auth/auth.middleware";
 import type { ConnectService } from "./connect.service";
 
 export function createConnectRouter(

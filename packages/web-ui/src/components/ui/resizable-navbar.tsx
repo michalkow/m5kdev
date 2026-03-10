@@ -3,7 +3,7 @@
 import { MenuIcon, XIcon } from "lucide-react";
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from "motion/react";
 import React, { useRef, useState } from "react";
-import { cn } from "#utils";
+import { cn } from "../../lib/utils";
 
 interface NavbarProps {
   children: React.ReactNode;

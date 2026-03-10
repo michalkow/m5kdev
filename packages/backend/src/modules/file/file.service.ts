@@ -7,9 +7,9 @@ import { pipeline } from "node:stream/promises";
 import { fileTypes } from "@m5kdev/commons/modules/file/file.constants";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
-import type { ServerResult, ServerResultAsync } from "#modules/base/base.dto";
-import { BaseService } from "#modules/base/base.service";
-import type { FileRepository } from "#modules/file/file.repository";
+import type { ServerResult, ServerResultAsync } from "../base/base.dto";
+import { BaseService } from "../base/base.service";
+import type { FileRepository } from "./file.repository";
 
 export class FileService extends BaseService<{ file: FileRepository }, never> {
   isS3Path(path: string): boolean {

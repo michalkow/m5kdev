@@ -18,11 +18,11 @@ import {
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import type { SQLiteColumn, SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
 import { ok } from "neverthrow";
-import { Base } from "#modules/base/base.abstract";
-import { pickColumns, type ServerResult, type ServerResultAsync } from "#modules/base/base.dto";
-import { applyPagination } from "#modules/utils/applyPagination";
-import { applySorting } from "#modules/utils/applySorting";
-import { getConditionsFromFilters } from "#modules/utils/getConditionsFromFilters";
+import { Base } from "./base.abstract";
+import { pickColumns, type ServerResult, type ServerResultAsync } from "./base.dto";
+import { applyPagination } from "../utils/applyPagination";
+import { applySorting } from "../utils/applySorting";
+import { getConditionsFromFilters } from "../utils/getConditionsFromFilters";
 
 /** Payload for update/updateMany: id key required (string), other table fields optional. */
 export type TableUpdatePayload<

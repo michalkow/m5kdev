@@ -18,7 +18,7 @@ import type {
 import { PlusIcon, XIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button } from "#components/ui/button";
+import { Button } from "../../../components/ui/button";
 import {
   type FilterValue,
   type HeroUIFilter,

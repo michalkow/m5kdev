@@ -10,7 +10,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { EyeIcon, EyeOffIcon, GripVertical } from "lucide-react";
 import { useCallback, useState } from "react";
 import type { ColumnOrderState, VisibilityState } from "@tanstack/react-table";
-import { Button } from "#components/ui/button";
+import { Button } from "../../../components/ui/button";
 import type { ColumnItem } from "./table.types";
 
 interface ColumnOrderAndVisibilityItemProps {

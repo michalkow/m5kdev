@@ -1,5 +1,5 @@
 import * as client from "openid-client";
-import { logger as rootLogger } from "#utils/logger";
+import { logger as rootLogger } from "../../utils/logger";
 import type { ConnectProvider } from "./connect.types";
 
 export interface OAuthState {

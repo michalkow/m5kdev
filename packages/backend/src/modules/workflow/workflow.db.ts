@@ -1,7 +1,7 @@
 import type { WorkflowStatus } from "@m5kdev/commons/modules/workflow/workflow.constants";
 import { integer, sqliteTable as table, text } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
-import { users } from "#modules/auth/auth.db";
+import { users } from "../auth/auth.db";
 
 export const workflows = table("workflows", {
   id: text("id").primaryKey().$default(uuidv4),

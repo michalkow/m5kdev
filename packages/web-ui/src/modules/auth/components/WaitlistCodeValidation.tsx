@@ -1,7 +1,7 @@
 import { Alert } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import type { UseBackendTRPC } from "#types";
+import type { UseBackendTRPC } from "../../../types";
 
 interface WaitlistCodeValidationProps {
   useTRPC: UseBackendTRPC;

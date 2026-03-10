@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
 import { Route } from "react-router";
-import { AuthLayout } from "#modules/auth/components/AuthLayout";
-import { ClaimAccountRoute } from "#modules/auth/components/ClaimAccountRoute";
-import { ErrorAuthRoute } from "#modules/auth/components/ErrorAuthRoute";
-import { ForgotPasswordRoute } from "#modules/auth/components/ForgotPasswordRoute";
-import { LoginRoute } from "#modules/auth/components/LoginRoute";
-import { ResetPasswordRoute } from "#modules/auth/components/ResetPasswordRoute";
-import { SignupRoute } from "#modules/auth/components/SignupRoute";
-import type { UseBackendTRPC } from "#types";
+import { AuthLayout } from "./AuthLayout";
+import { ClaimAccountRoute } from "./ClaimAccountRoute";
+import { ErrorAuthRoute } from "./ErrorAuthRoute";
+import { ForgotPasswordRoute } from "./ForgotPasswordRoute";
+import { LoginRoute } from "./LoginRoute";
+import { ResetPasswordRoute } from "./ResetPasswordRoute";
+import { SignupRoute } from "./SignupRoute";
+import type { UseBackendTRPC } from "../../../types";
 
 interface AuthRouterProps {
   header: ReactNode;

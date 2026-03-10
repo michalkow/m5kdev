@@ -1,9 +1,9 @@
 import type { Statements } from "better-auth/plugins/access";
 import { err, ok } from "neverthrow";
-import type { AccessRepository } from "#modules/access/access.repository";
-import type { AccessControlRoles } from "#modules/access/access.utils";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseService } from "#modules/base/base.service";
+import type { AccessRepository } from "./access.repository";
+import type { AccessControlRoles } from "./access.utils";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseService } from "../base/base.service";
 
 type User = {
   id: string;

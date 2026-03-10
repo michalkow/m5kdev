@@ -1,10 +1,10 @@
 import { Bell, CheckCircle2, Clock3, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Badge } from "#components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#components/ui/card";
-import { Separator } from "#components/ui/separator";
-import { cn } from "#utils";
+import { Badge } from "../../../components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../components/ui/card";
+import { Separator } from "../../../components/ui/separator";
+import { cn } from "../../../lib/utils";
 
 interface BillingBetaPageProps {
   appName: string;

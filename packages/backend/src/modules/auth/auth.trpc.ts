@@ -5,9 +5,9 @@ import {
   accountClaimSchema,
   waitlistOutputSchema,
   waitlistSchema,
-} from "#modules/auth/auth.dto";
-import type { AuthService } from "#modules/auth/auth.service";
-import { handleTRPCResult, type TRPCMethods } from "#utils/trpc";
+} from "./auth.dto";
+import type { AuthService } from "./auth.service";
+import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 
 export function createAuthTRPC(
   { router, publicProcedure, privateProcedure: procedure, adminProcedure }: TRPCMethods,

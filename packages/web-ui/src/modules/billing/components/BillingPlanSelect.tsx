@@ -1,5 +1,5 @@
 import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
-import { BillingSinglePlanSelect } from "#modules/billing/components/BillingSinglePlanSelect";
+import { BillingSinglePlanSelect } from "./BillingSinglePlanSelect";
 
 interface BillingPlanSelectProps {
   plans: StripePlan[];

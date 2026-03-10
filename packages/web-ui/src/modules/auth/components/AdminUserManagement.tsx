@@ -42,7 +42,7 @@ import {
 import { useCallback, useEffect, useId, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import type { UseBackendTRPC } from "#types";
+import type { UseBackendTRPC } from "../../../types";
 
 type SortField = "name" | "email" | "role" | "createdAt";
 type SortOrder = "asc" | "desc";

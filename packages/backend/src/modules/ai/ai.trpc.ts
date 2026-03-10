@@ -1,7 +1,7 @@
 import type { Mastra } from "@mastra/core";
 import { z } from "zod";
-import type { AIService } from "#modules/ai/ai.service";
-import { handleTRPCResult, type TRPCMethods } from "#utils/trpc";
+import type { AIService } from "./ai.service";
+import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 
 export function createAITRPC<MastraInstance extends Mastra>(
   { router, adminProcedure }: TRPCMethods,

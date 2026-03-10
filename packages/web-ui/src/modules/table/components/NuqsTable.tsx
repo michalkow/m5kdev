@@ -14,7 +14,7 @@ import {
 } from "@tanstack/react-table";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "#components/ui/button";
+import { Button } from "../../../components/ui/button";
 import {
   Table,
   TableBody,
@@ -22,7 +22,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "#components/ui/table";
+} from "../../../components/ui/table";
 import { ColumnOrderAndVisibility } from "./ColumnOrderAndVisibility";
 import { TableFiltering } from "./TableFiltering";
 import { TablePagination } from "./TablePagination";

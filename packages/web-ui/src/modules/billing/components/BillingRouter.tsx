@@ -1,7 +1,7 @@
 import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
 import { Route } from "react-router";
-import { BillingInvoicePage } from "#modules/billing/components/BillingInvoicePage";
-import type { UseBackendTRPC } from "#types";
+import { BillingInvoicePage } from "./BillingInvoicePage";
+import type { UseBackendTRPC } from "../../../types";
 
 interface BillingRouterProps {
   useTRPC?: UseBackendTRPC;

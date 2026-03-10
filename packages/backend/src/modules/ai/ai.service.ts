@@ -13,15 +13,15 @@ import { embed, embedMany, generateObject, generateText } from "ai";
 import { err, ok } from "neverthrow";
 import type Replicate from "replicate";
 import type { ZodType, z } from "zod";
-import type { AiUsageRepository, AiUsageRow } from "#modules/ai/ai.repository";
+import type { AiUsageRepository, AiUsageRow } from "./ai.repository";
 import type {
   IdeogramV3GenerateInput,
   IdeogramV3GenerateOutput,
-} from "#modules/ai/ideogram/ideogram.dto";
-import type { IdeogramService } from "#modules/ai/ideogram/ideogram.service";
-import type { User } from "#modules/auth/auth.lib";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseService } from "#modules/base/base.service";
+} from "./ideogram/ideogram.dto";
+import type { IdeogramService } from "./ideogram/ideogram.service";
+import type { User } from "../auth/auth.lib";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseService } from "../base/base.service";
 
 type MastraAgent = ReturnType<Mastra["getAgent"]>;
 type MastraAgentGenerateOptions = Parameters<MastraAgent["generate"]>[1];

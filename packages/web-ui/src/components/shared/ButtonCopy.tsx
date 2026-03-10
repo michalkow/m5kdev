@@ -2,8 +2,8 @@ import { CheckCircle, Copy } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Button, type ButtonProps } from "#components/ui/button";
-import { cn } from "#utils";
+import { Button, type ButtonProps } from "../ui/button";
+import { cn } from "../../lib/utils";
 
 export function ButtonCopy({
   text,

@@ -3,7 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import type { UseBackendTRPC } from "#types";
+import type { UseBackendTRPC } from "../../../types";
 
 interface WaitlistCardProps {
   useTRPC: UseBackendTRPC;

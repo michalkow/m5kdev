@@ -1,11 +1,11 @@
 import { Link } from "react-router";
-import { CollapsibleSidebarMenuItem } from "#components/CollapsibleSidebarMenuItem";
+import { CollapsibleSidebarMenuItem } from "../../../components/CollapsibleSidebarMenuItem";
 import {
   SidebarGroup,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "#components/ui/sidebar";
+} from "../../../components/ui/sidebar";
 
 type NavigationItem = {
   label: string;

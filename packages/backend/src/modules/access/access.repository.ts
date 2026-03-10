@@ -1,9 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { ok } from "neverthrow";
-import * as auth from "#modules/auth/auth.db";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseRepository } from "#modules/base/base.repository";
+import * as auth from "../auth/auth.db";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseRepository } from "../base/base.repository";
 
 const schema = { ...auth };
 type Schema = typeof schema;

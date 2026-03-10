@@ -4,10 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
-import { GoogleIcon } from "#icons/GoogleIcon";
-import { LinkedInIcon } from "#icons/LinkedInIcon";
-import { MicrosoftIcon } from "#icons/MicrosoftIcon";
-import type { UseBackendTRPC } from "#types";
+import { GoogleIcon } from "../../../icons/GoogleIcon";
+import { LinkedInIcon } from "../../../icons/LinkedInIcon";
+import { MicrosoftIcon } from "../../../icons/MicrosoftIcon";
+import type { UseBackendTRPC } from "../../../types";
 
 export function ClaimAccountRoute({ useTRPC }: { useTRPC?: UseBackendTRPC }) {
   const { data: session, registerSession } = useSession();

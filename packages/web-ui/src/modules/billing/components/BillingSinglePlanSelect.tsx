@@ -12,9 +12,9 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "#components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "#components/ui/tabs";
-import { cn } from "#utils";
+} from "../../../components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "../../../components/ui/tabs";
+import { cn } from "../../../lib/utils";
 
 export interface BillingSinglePlanSelectProps {
   plan: StripePlan;

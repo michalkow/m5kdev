@@ -1,5 +1,5 @@
 import { err, ok } from "neverthrow";
-import type { Session, User } from "#modules/auth/auth.lib";
+import type { Session, User } from "../auth/auth.lib";
 import {
   checkPermissionAsync,
   checkPermissionSync,
@@ -7,8 +7,8 @@ import {
   flattenNestedGrants,
   type NestedGrants,
   type ResourceActionGrant,
-} from "#modules/base/base.grants";
-import { ServerError } from "#utils/errors";
+} from "./base.grants";
+import { ServerError } from "../../utils/errors";
 
 // ============================================
 // Mock Factories

@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/frontend",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -43,9 +43,6 @@
     "globals": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:"
-  },
-  "imports": {
-    "#types": "./src/types.ts"
   },
   "exports": {
     "./modules/auth/components/*": {

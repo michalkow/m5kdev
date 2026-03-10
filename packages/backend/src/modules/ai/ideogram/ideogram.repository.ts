@@ -2,9 +2,9 @@ import { ok } from "neverthrow";
 import type {
   IdeogramV3GenerateInput,
   IdeogramV3GenerateOutput,
-} from "#modules/ai/ideogram/ideogram.dto";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseExternaRepository } from "#modules/base/base.repository";
+} from "./ideogram.dto";
+import type { ServerResultAsync } from "../../base/base.dto";
+import { BaseExternaRepository } from "../../base/base.repository";
 
 export class IdeogramRepository extends BaseExternaRepository {
   async generate(input: IdeogramV3GenerateInput): ServerResultAsync<IdeogramV3GenerateOutput> {

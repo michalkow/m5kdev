@@ -1,6 +1,6 @@
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
-import { BaseTableRepository } from "#modules/base/base.repository";
-import * as crypto from "#modules/crypto/crypto.db";
+import { BaseTableRepository } from "../base/base.repository";
+import * as crypto from "./crypto.db";
 
 const schema = { ...crypto };
 type Schema = typeof schema;

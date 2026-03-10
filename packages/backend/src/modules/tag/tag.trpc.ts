@@ -7,9 +7,9 @@ import {
   tagListSchema,
   tagUpdateSchema,
 } from "@m5kdev/commons/modules/tag/tag.schema";
-import { taggingsSelectOutput, tagsSelectOutput } from "#modules/tag/tag.dto";
-import type { TagService } from "#modules/tag/tag.service";
-import { handleTRPCResult, type TRPCMethods } from "#utils/trpc";
+import { taggingsSelectOutput, tagsSelectOutput } from "./tag.dto";
+import type { TagService } from "./tag.service";
+import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 
 export function createTagTRPC(
   { router, privateProcedure: procedure }: TRPCMethods,

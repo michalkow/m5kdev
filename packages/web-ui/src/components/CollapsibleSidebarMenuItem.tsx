@@ -2,13 +2,13 @@ import type { CollapsibleProps } from "@radix-ui/react-collapsible";
 import { ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "#components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
   useSidebar,
-} from "#components/ui/sidebar";
+} from "./ui/sidebar";
 
 export function CollapsibleSidebarMenuItem({
   children,

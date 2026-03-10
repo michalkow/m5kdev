@@ -22,7 +22,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mail, MoreHorizontal, Search, Trash2, UserPlus, X } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { toast } from "sonner";
-import type { UseBackendTRPC } from "#types";
+import type { UseBackendTRPC } from "../../../types";
 
 interface AdminWaitlistProps {
   useTRPC: UseBackendTRPC;

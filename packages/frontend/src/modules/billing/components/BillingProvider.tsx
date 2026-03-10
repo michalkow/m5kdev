@@ -1,7 +1,7 @@
 import type { BillingSchema } from "@m5kdev/commons/modules/billing/billing.schema";
 import { useQuery } from "@tanstack/react-query";
 import { createContext } from "react";
-import type { UseBackendTRPC } from "#types";
+import type { UseBackendTRPC } from "../../../types";
 
 export const billingProviderContext = createContext<{
   isLoading: boolean;

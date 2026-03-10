@@ -1,11 +1,11 @@
 import { err, ok } from "neverthrow";
-import type { User } from "#modules/auth/auth.lib";
-import type { ServerResultAsync } from "#modules/base/base.dto";
-import { BaseService } from "#modules/base/base.service";
+import type { User } from "../auth/auth.lib";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseService } from "../base/base.service";
 import type {
   ConnectDeleteInputSchema,
   ConnectListInputSchema,
-} from "#modules/connect/connect.dto";
+} from "./connect.dto";
 import {
   buildAuthorizationUrl,
   exchangeCodeForTokens,
