@@ -6,6 +6,8 @@
     "importHelpers": true,
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
     "outDir": "dist",
+    "emitDeclarationOnly": false,
+    "noEmit": false,
     "types": [
       "jest"
     ]
