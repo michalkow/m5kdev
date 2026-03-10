@@ -1,8 +1,8 @@
-import type { ConditionBuilder } from "@m5kdev/backend/modules/base/base.repository";
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import { and, between, eq, gte, inArray, isNotNull, isNull, like, lte, ne, or } from "drizzle-orm";
 import type { SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
 import { DateTime } from "luxon";
+import type { ConditionBuilder } from "#modules/modules/base/base.repository";
 
 type ColumnDataType = "string" | "number" | "date" | "boolean" | "enum";
 

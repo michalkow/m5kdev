@@ -1,5 +1,5 @@
-import type { ConnectRow } from "@m5kdev/backend/modules/connect/connect.repository";
-import type { FileService } from "@m5kdev/backend/modules/file/file.service";
+import type { ConnectRow } from "#modules/modules/connect/connect.repository";
+import type { FileService } from "#modules/modules/file/file.service";
 
 export type SocialMediaType = "image" | "video" | "document";
 

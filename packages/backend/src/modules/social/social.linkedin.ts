@@ -1,7 +1,7 @@
 import { createReadStream } from "node:fs";
 import { stat, unlink } from "node:fs/promises";
-import type { ConnectRow } from "@m5kdev/backend/modules/connect/connect.repository";
-import type { FileService } from "@m5kdev/backend/modules/file/file.service";
+import type { ConnectRow } from "#modules/modules/connect/connect.repository";
+import type { FileService } from "#modules/modules/file/file.service";
 import type { SocialMediaDescriptor, SocialPostPayload, SocialProvider } from "./social.types";
 
 const LINKEDIN_API_BASE = "https://api.linkedin.com/rest";

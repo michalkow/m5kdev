@@ -2,11 +2,11 @@
 alwaysApply: true
 ---
 
-# Backend Stack Rules (`@m5kdev/backend`)
+# Backend Stack Rules (`#modules`)
 
 ## Intent
 
-`@m5kdev/backend` is a composable backend stack, not a closed framework.
+`#modules` is a composable backend stack, not a closed framework.
 
 - Prefer extensible classes and factories.
 - Keep module contracts open for app-level composition.
