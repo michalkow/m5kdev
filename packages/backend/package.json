@@ -1,7 +1,6 @@
 {
   "name": "@m5kdev/backend",
   "version": "0.1.0",
-  "private": true,
   "description": "Composable Express server stack with Drizzle ORM and tRPC.",
   "license": "GPL-3.0-only",
   "repository": {
@@ -16,6 +15,7 @@
   "scripts": {
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
+    "build": "tsc --build",
     "check-types": "tsc --noEmit",
     "test": "jest -c jest.config.ts",
     "test:watch": "jest -c jest.config.ts --watch"
@@ -114,27 +114,27 @@
     "#utils/*": "./src/utils/*.ts"
   },
   "exports": {
-    "./modules/ai/*": "./src/modules/ai/*.ts",
-    "./modules/utils/*": "./src/modules/utils/*.ts",
-    "./modules/base/*": "./src/modules/base/*.ts",
-    "./modules/billing/*": "./src/modules/billing/*.ts",
-    "./modules/crypto/*": "./src/modules/crypto/*.ts",
-    "./modules/auth/*": "./src/modules/auth/*.ts",
-    "./modules/tag/*": "./src/modules/tag/*.ts",
-    "./modules/connect/*": "./src/modules/connect/*.ts",
-    "./modules/workflow/*": "./src/modules/workflow/*.ts",
-    "./modules/file/*": "./src/modules/file/*.ts",
-    "./modules/recurrence/*": "./src/modules/recurrence/*.ts",
-    "./modules/video/*": "./src/modules/video/*.ts",
-    "./modules/posthog/*": "./src/modules/posthog/*.ts",
-    "./modules/access/*": "./src/modules/access/*.ts",
-    "./modules/social/*": "./src/modules/social/*.ts",
-    "./modules/clay/*": "./src/modules/clay/*.ts",
-    "./modules/webhook/*": "./src/modules/webhook/*.ts",
-    "./modules/email/*": "./src/modules/email/*.ts",
-    "./lib/*": "./src/lib/*.ts",
-    "./trpc": "./src/trpc/index.ts",
-    "./utils/*": "./src/utils/*.ts",
-    "./types": "./src/types.ts"
+    "./modules/ai/*": "./dist/modules/ai/*.ts",
+    "./modules/utils/*": "./dist/modules/utils/*.ts",
+    "./modules/base/*": "./dist/modules/base/*.ts",
+    "./modules/billing/*": "./dist/modules/billing/*.ts",
+    "./modules/crypto/*": "./dist/modules/crypto/*.ts",
+    "./modules/auth/*": "./dist/modules/auth/*.ts",
+    "./modules/tag/*": "./dist/modules/tag/*.ts",
+    "./modules/connect/*": "./dist/modules/connect/*.ts",
+    "./modules/workflow/*": "./dist/modules/workflow/*.ts",
+    "./modules/file/*": "./dist/modules/file/*.ts",
+    "./modules/recurrence/*": "./dist/modules/recurrence/*.ts",
+    "./modules/video/*": "./dist/modules/video/*.ts",
+    "./modules/posthog/*": "./dist/modules/posthog/*.ts",
+    "./modules/access/*": "./dist/modules/access/*.ts",
+    "./modules/social/*": "./dist/modules/social/*.ts",
+    "./modules/clay/*": "./dist/modules/clay/*.ts",
+    "./modules/webhook/*": "./dist/modules/webhook/*.ts",
+    "./modules/email/*": "./dist/modules/email/*.ts",
+    "./lib/*": "./dist/lib/*.ts",
+    "./trpc": "./dist/trpc/index.ts",
+    "./utils/*": "./dist/utils/*.ts",
+    "./types": "./dist/types.ts"
   }
 }
