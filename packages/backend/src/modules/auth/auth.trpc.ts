@@ -1,15 +1,18 @@
 import { z } from "zod";
 import {
-  accountClaimOutputSchema,
   accountClaimMagicLinkOutputSchema,
+  accountClaimOutputSchema,
   accountClaimSchema,
   waitlistOutputSchema,
   waitlistSchema,
 } from "#modules/auth/auth.dto";
 import type { AuthService } from "#modules/auth/auth.service";
-import { adminProcedure, handleTRPCResult, procedure, publicProcedure, router } from "#trpc";
+import { handleTRPCResult, type TRPCMethods } from "#utils/trpc";
 
-export function createAuthTRPC(authService: AuthService) {
+export function createAuthTRPC(
+  { router, publicProcedure, privateProcedure: procedure, adminProcedure }: TRPCMethods,
+  authService: AuthService
+) {
   return router({
     getUserWaitlistCount: procedure.output(z.number()).query(async ({ ctx }) => {
       return handleTRPCResult(await authService.getUserWaitlistCount(ctx));
@@ -61,9 +64,11 @@ export function createAuthTRPC(authService: AuthService) {
         return handleTRPCResult(await authService.listAccountClaimMagicLinks(input));
       }),
 
-    getMyAccountClaimStatus: procedure.output(accountClaimSchema.nullable()).query(async ({ ctx }) => {
-      return handleTRPCResult(await authService.getMyAccountClaimStatus(ctx));
-    }),
+    getMyAccountClaimStatus: procedure
+      .output(accountClaimSchema.nullable())
+      .query(async ({ ctx }) => {
+        return handleTRPCResult(await authService.getMyAccountClaimStatus(ctx));
+      }),
 
     setMyAccountClaimEmail: procedure
       .input(

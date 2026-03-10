@@ -1,9 +1,12 @@
 import type { Mastra } from "@mastra/core";
 import { z } from "zod";
 import type { AIService } from "#modules/ai/ai.service";
-import { adminProcedure, handleTRPCResult, router } from "#trpc";
+import { handleTRPCResult, type TRPCMethods } from "#utils/trpc";
 
-export function createAITRPC<MastraInstance extends Mastra>(aiService: AIService<MastraInstance>) {
+export function createAITRPC<MastraInstance extends Mastra>(
+  { router, adminProcedure }: TRPCMethods,
+  aiService: AIService<MastraInstance>
+) {
   return router({
     getUserUsage: adminProcedure
       .input(z.object({ userId: z.string() }))

@@ -1,0 +1,78 @@
+import type { transformer } from "@m5kdev/commons/utils/trpc";
+import type { TRPCRootObject } from "@trpc/server";
+import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
+import { fromNodeHeaders } from "better-auth/node";
+import type { Result } from "neverthrow";
+import type { BetterAuth, Context, Session, User } from "#modules/auth/auth.lib";
+import { ServerError } from "#utils/errors";
+import { logger } from "#utils/logger";
+
+type TRPCCreate = TRPCRootObject<Context, any, { transformer: typeof transformer }>;
+
+export type TRPCMethods = {
+  router: TRPCCreate["router"];
+  publicProcedure: TRPCCreate["procedure"];
+  privateProcedure: TRPCCreate["procedure"];
+  adminProcedure: TRPCCreate["procedure"];
+};
+
+export function createAuthContext(auth: BetterAuth) {
+  return async function createContext({ req }: CreateExpressContextOptions) {
+    const data = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+
+    const user = (data?.user as User) || null;
+    const session = (data?.session as Session) || null;
+
+    return {
+      session,
+      user,
+    };
+  };
+}
+
+export async function handleAsyncTRPCResult<T>(result: Promise<Result<T, ServerError>>) {
+  return handleTRPCResult(await result);
+}
+
+export function handleTRPCResult<T>(result: Result<T, ServerError>) {
+  if (result.isErr()) {
+    logger.debug("Is tRPC Error");
+    logger.error({
+      layer: result.error.layer,
+      layerName: result.error.layerName,
+      error: result.error.toJSON(),
+    });
+    throw result.error.toTRPC();
+  }
+  return result.value;
+}
+
+export function verifyProtectedProcedureContext(ctx: Context) {
+  if (!ctx.user || !ctx.session) {
+    throw new ServerError({
+      code: "UNAUTHORIZED",
+      layer: "controller",
+      layerName: "TRPCController",
+    }).toTRPC();
+  }
+}
+
+export function verifyAdminProcedureContext(ctx: Context) {
+  if (!ctx.user || !ctx.session) {
+    throw new ServerError({
+      code: "UNAUTHORIZED",
+      layer: "controller",
+      layerName: "TRPCController",
+    }).toTRPC();
+  }
+
+  if (ctx.user.role !== "admin") {
+    throw new ServerError({
+      code: "FORBIDDEN",
+      layer: "controller",
+      layerName: "TRPCController",
+    }).toTRPC();
+  }
+}

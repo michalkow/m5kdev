@@ -10,7 +10,7 @@ import {
 import { querySchema } from "@m5kdev/commons/modules/schemas/query.schema";
 import { z } from "zod";
 import type { RecurrenceService } from "#modules/recurrence/recurrence.service";
-import { handleTRPCResult, procedure, router } from "#trpc";
+import { handleTRPCResult, type TRPCMethods } from "#utils/trpc";
 
 const createRecurrenceOutputSchema = z.object({
   recurrence: recurrenceSchema,
@@ -28,7 +28,10 @@ const updateRecurrenceInputSchema = updateRecurrenceSchema.extend({
 
 const deleteRecurrenceOutputSchema = z.object({ id: z.string() });
 
-export function createRecurrenceTRPC(recurrenceService: RecurrenceService) {
+export function createRecurrenceTRPC(
+  { router, privateProcedure: procedure }: TRPCMethods,
+  recurrenceService: RecurrenceService
+) {
   return router({
     list: procedure
       .input(querySchema.optional())

@@ -1,4 +1,4 @@
-import { handleTRPCResult, procedure, router } from "#trpc";
+import { handleTRPCResult, type TRPCMethods } from "#utils/trpc";
 import {
   connectDeleteInputSchema,
   connectDeleteOutputSchema,
@@ -7,7 +7,10 @@ import {
 } from "./connect.dto";
 import type { ConnectService } from "./connect.service";
 
-export function createConnectTRPC(connectService: ConnectService) {
+export function createConnectTRPC(
+  { router, privateProcedure: procedure }: TRPCMethods,
+  connectService: ConnectService
+) {
   return router({
     list: procedure
       .input(connectListInputSchema)

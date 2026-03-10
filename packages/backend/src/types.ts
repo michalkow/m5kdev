@@ -6,17 +6,18 @@ import type { AuthService } from "#modules/auth/auth.service";
 import { createAuthTRPC } from "#modules/auth/auth.trpc";
 import type { BillingService } from "#modules/billing/billing.service";
 import { createBillingTRPC } from "#modules/billing/billing.trpc";
-import { router } from "#trpc";
+import type { TRPCMethods } from "#utils/trpc";
 
 export const createAuthTRPCRouter = <MastraInstance extends Mastra>(
+  trpcMethods: TRPCMethods,
   authService: AuthService,
   aiService: AIService<MastraInstance>,
   billingService: BillingService
 ) =>
-  router({
-    auth: createAuthTRPC(authService),
-    ai: createAITRPC(aiService),
-    billing: createBillingTRPC(billingService),
+  trpcMethods.router({
+    auth: createAuthTRPC(trpcMethods, authService),
+    ai: createAITRPC(trpcMethods, aiService),
+    billing: createBillingTRPC(trpcMethods, billingService),
   });
 
 export type BackendTRPCRouter = ReturnType<typeof createAuthTRPCRouter>;

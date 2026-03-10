@@ -4,6 +4,7 @@
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
     "outDir": "dist",
     "declaration": true,
+    "declarationMap": false,
     "emitDeclarationOnly": false,
     "noEmit": false
   }

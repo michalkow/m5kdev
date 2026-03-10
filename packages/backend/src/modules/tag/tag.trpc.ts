@@ -9,9 +9,12 @@ import {
 } from "@m5kdev/commons/modules/tag/tag.schema";
 import { taggingsSelectOutput, tagsSelectOutput } from "#modules/tag/tag.dto";
 import type { TagService } from "#modules/tag/tag.service";
-import { handleTRPCResult, procedure, router } from "#trpc";
+import { handleTRPCResult, type TRPCMethods } from "#utils/trpc";
 
-export function createTagTRPC(tagService: TagService) {
+export function createTagTRPC(
+  { router, privateProcedure: procedure }: TRPCMethods,
+  tagService: TagService
+) {
   const tagListInput = tagListInputSchema.extend({
     assignableTo: tagListSchema.shape.assignableTo,
   });

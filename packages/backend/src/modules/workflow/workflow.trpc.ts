@@ -5,9 +5,12 @@ import {
   workflowReadOutputSchema,
 } from "@m5kdev/commons/modules/workflow/workflow.schema";
 import type { WorkflowService } from "#modules/workflow/workflow.service";
-import { handleTRPCResult, procedure, router } from "#trpc";
+import { handleTRPCResult, type TRPCMethods } from "#utils/trpc";
 
-export function createWorkflowTRPC(workflowService: WorkflowService) {
+export function createWorkflowTRPC(
+  { router, privateProcedure: procedure }: TRPCMethods,
+  workflowService: WorkflowService
+) {
   return router({
     read: procedure
       .input(workflowReadInputSchema)

@@ -6,6 +6,7 @@
     "importHelpers": true,
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
     "outDir": "dist",
+    "declarationMap": false,
     "emitDeclarationOnly": false,
     "noEmit": false,
     "types": [

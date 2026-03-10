@@ -1,8 +1,11 @@
 import { billingSchema } from "@m5kdev/commons/modules/billing/billing.schema";
 import type { BillingService } from "#modules/billing/billing.service";
-import { handleTRPCResult, procedure, router } from "#trpc";
+import { handleTRPCResult, type TRPCMethods } from "#utils/trpc";
 
-export function createBillingTRPC(billingService: BillingService) {
+export function createBillingTRPC(
+  { router, privateProcedure: procedure }: TRPCMethods,
+  billingService: BillingService
+) {
   return router({
     getActiveSubscription: procedure
       .output(billingSchema.nullable())

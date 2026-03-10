@@ -1,6 +1,6 @@
 import type { QueryFilter, QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import { err, ok } from "neverthrow";
-import type { Session, User } from "#modules/auth/auth.lib";
+import type { Context, Session, User } from "#modules/auth/auth.lib";
 import { Base } from "#modules/base/base.abstract";
 import type { ServerResult, ServerResultAsync } from "#modules/base/base.dto";
 import {
@@ -11,7 +11,7 @@ import {
   type ResourceGrant,
 } from "#modules/base/base.grants";
 import type { BaseExternaRepository, BaseRepository } from "#modules/base/base.repository";
-import type { Context } from "#trpc";
+
 export class BaseService<
   Repositories extends Record<string, BaseRepository<any, any, any> | BaseExternaRepository>,
   Services extends Record<string, BaseService<any, any>>,
@@ -43,7 +43,7 @@ export class BaseService<
   }
 
   addContextFilter(
-    ctx: Awaited<ReturnType<Context>>,
+    ctx: Context,
     include: { user?: boolean; organization?: boolean; team?: boolean } = {
       user: true,
       organization: false,

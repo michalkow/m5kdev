@@ -5,6 +5,7 @@
     "rootDir": ".",
     "outDir": "dist",
     "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo",
+    "declarationMap": false,
     "types": [
       "vite/client"
     ],

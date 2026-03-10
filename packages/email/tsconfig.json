@@ -4,6 +4,7 @@
     "rootDir": ".",
     "outDir": "dist",
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
+    "declarationMap": false,
     "jsx": "react-jsx",
     "emitDeclarationOnly": false,
     "noEmit": false,
