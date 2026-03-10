@@ -105,20 +105,65 @@
     "#types": "./src/types.ts"
   },
   "exports": {
-    "./components/*": "./src/components/*.tsx",
-    "./components/ui/*": "./src/components/ui/*.tsx",
-    "./components/shared/*": "./src/components/ui/shared/*.tsx",
-    "./animations/*": "./src/animations/*.ts",
-    "./modules/auth/components/*": "./src/modules/auth/components/*.tsx",
-    "./modules/auth/types": "./src/modules/auth/types.ts",
-    "./modules/billing/components/*": "./src/modules/billing/components/*.tsx",
-    "./modules/app/components/*": "./src/modules/app/components/*.tsx",
-    "./modules/charts/components/*": "./src/modules/charts/components/*.tsx",
-    "./modules/table/components/*": "./src/modules/table/components/*.tsx",
-    "./modules/table/filterTransformers": "./src/modules/table/filterTransformers.ts",
-    "./hooks/*": "./src/hooks/*.ts",
-    "./icons/*": "./src/icons/*.tsx",
-    "./utils": "./src/lib/utils.ts",
-    "./lib/*": "./src/lib/*.ts"
+    "./components/*": {
+      "types": "./dist/src/components/*.d.ts",
+      "default": "./dist/src/components/*.js"
+    },
+    "./components/ui/*": {
+      "types": "./dist/src/components/ui/*.d.ts",
+      "default": "./dist/src/components/ui/*.js"
+    },
+    "./components/shared/*": {
+      "types": "./dist/src/components/ui/shared/*.d.ts",
+      "default": "./dist/src/components/ui/shared/*.js"
+    },
+    "./animations/*": {
+      "types": "./dist/src/animations/*.d.ts",
+      "default": "./dist/src/animations/*.js"
+    },
+    "./modules/auth/components/*": {
+      "types": "./dist/src/modules/auth/components/*.d.ts",
+      "default": "./dist/src/modules/auth/components/*.js"
+    },
+    "./modules/auth/types": {
+      "types": "./dist/src/modules/auth/types.d.ts",
+      "default": "./dist/src/modules/auth/types.js"
+    },
+    "./modules/billing/components/*": {
+      "types": "./dist/src/modules/billing/components/*.d.ts",
+      "default": "./dist/src/modules/billing/components/*.js"
+    },
+    "./modules/app/components/*": {
+      "types": "./dist/src/modules/app/components/*.d.ts",
+      "default": "./dist/src/modules/app/components/*.js"
+    },
+    "./modules/charts/components/*": {
+      "types": "./dist/src/modules/charts/components/*.d.ts",
+      "default": "./dist/src/modules/charts/components/*.js"
+    },
+    "./modules/table/components/*": {
+      "types": "./dist/src/modules/table/components/*.d.ts",
+      "default": "./dist/src/modules/table/components/*.js"
+    },
+    "./modules/table/filterTransformers": {
+      "types": "./dist/src/modules/table/filterTransformers.d.ts",
+      "default": "./dist/src/modules/table/filterTransformers.js"
+    },
+    "./hooks/*": {
+      "types": "./dist/src/hooks/*.d.ts",
+      "default": "./dist/src/hooks/*.js"
+    },
+    "./icons/*": {
+      "types": "./dist/src/icons/*.d.ts",
+      "default": "./dist/src/icons/*.js"
+    },
+    "./utils": {
+      "types": "./dist/src/lib/utils.d.ts",
+      "default": "./dist/src/lib/utils.js"
+    },
+    "./lib/*": {
+      "types": "./dist/src/lib/*.d.ts",
+      "default": "./dist/src/lib/*.js"
+    }
   }
 }

@@ -23,17 +23,53 @@
     "typescript": "catalog:"
   },
   "exports": {
-    "./utils/*": "./src/utils/*.ts",
-    "./modules/ai/*": "./src/modules/ai/*.ts",
-    "./modules/schemas/*": "./src/modules/schemas/*.ts",
-    "./modules/crypto/*": "./src/modules/crypto/*.ts",
-    "./modules/recurrence/*": "./src/modules/recurrence/*.ts",
-    "./modules/auth/*": "./src/modules/auth/*.ts",
-    "./modules/file/*": "./src/modules/file/*.ts",
-    "./modules/base/*": "./src/modules/base/*.ts",
-    "./modules/tag/*": "./src/modules/tag/*.ts",
-    "./modules/workflow/*": "./src/modules/workflow/*.ts",
-    "./modules/table/*": "./src/modules/table/*.ts",
-    "./modules/billing/*": "./src/modules/billing/*.ts"
+    "./utils/*": {
+      "types": "./dist/src/utils/*.d.ts",
+      "default": "./dist/src/utils/*.js"
+    },
+    "./modules/ai/*": {
+      "types": "./dist/src/modules/ai/*.d.ts",
+      "default": "./dist/src/modules/ai/*.js"
+    },
+    "./modules/schemas/*": {
+      "types": "./dist/src/modules/schemas/*.d.ts",
+      "default": "./dist/src/modules/schemas/*.js"
+    },
+    "./modules/crypto/*": {
+      "types": "./dist/src/modules/crypto/*.d.ts",
+      "default": "./dist/src/modules/crypto/*.js"
+    },
+    "./modules/recurrence/*": {
+      "types": "./dist/src/modules/recurrence/*.d.ts",
+      "default": "./dist/src/modules/recurrence/*.js"
+    },
+    "./modules/auth/*": {
+      "types": "./dist/src/modules/auth/*.d.ts",
+      "default": "./dist/src/modules/auth/*.js"
+    },
+    "./modules/file/*": {
+      "types": "./dist/src/modules/file/*.d.ts",
+      "default": "./dist/src/modules/file/*.js"
+    },
+    "./modules/base/*": {
+      "types": "./dist/src/modules/base/*.d.ts",
+      "default": "./dist/src/modules/base/*.js"
+    },
+    "./modules/tag/*": {
+      "types": "./dist/src/modules/tag/*.d.ts",
+      "default": "./dist/src/modules/tag/*.js"
+    },
+    "./modules/workflow/*": {
+      "types": "./dist/src/modules/workflow/*.d.ts",
+      "default": "./dist/src/modules/workflow/*.js"
+    },
+    "./modules/table/*": {
+      "types": "./dist/src/modules/table/*.d.ts",
+      "default": "./dist/src/modules/table/*.js"
+    },
+    "./modules/billing/*": {
+      "types": "./dist/src/modules/billing/*.d.ts",
+      "default": "./dist/src/modules/billing/*.js"
+    }
   }
 }

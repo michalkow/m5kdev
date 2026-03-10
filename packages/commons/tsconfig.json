@@ -2,6 +2,9 @@
   "extends": "@m5kdev/config/tsconfig.base.json",
   "compilerOptions": {
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
-    "outDir": "dist"
+    "outDir": "dist",
+    "declaration": true,
+    "emitDeclarationOnly": false,
+    "noEmit": false
   }
 }
