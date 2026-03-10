@@ -1,9 +1,9 @@
 import { ok } from "neverthrow";
 import type { ServerResultAsync } from "#modules/base/base.dto";
 import { BaseService } from "#modules/base/base.service";
-import type { ConnectRepository, ConnectRow } from "#modules/modules/connect/connect.repository";
-import type { ConnectService } from "#modules/modules/connect/connect.service";
-import type { FileService } from "#modules/modules/file/file.service";
+import type { ConnectRepository, ConnectRow } from "#modules/connect/connect.repository";
+import type { ConnectService } from "#modules/connect/connect.service";
+import type { FileService } from "#modules/file/file.service";
 import type { SocialPostInput } from "./social.dto";
 import type { SocialPostPayload, SocialPostResult, SocialProvider } from "./social.types";
 
