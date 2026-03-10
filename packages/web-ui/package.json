@@ -14,7 +14,8 @@
   "scripts": {
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "build": "tsc --build"
   },
   "dependencies": {
     "@dnd-kit/core": "catalog:",
