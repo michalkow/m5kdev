@@ -9,9 +9,6 @@
   },
   "homepage": "https://github.com/michalkow/m5kdev#readme",
   "bugs": "https://github.com/michalkow/m5kdev/issues",
-  "files": [
-    "src"
-  ],
   "scripts": {
     "lint": "biome check .",
     "lint:fix": "biome check . --write",

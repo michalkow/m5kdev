@@ -8,10 +8,6 @@
   },
   "homepage": "https://github.com/michalkow/m5kdev#readme",
   "bugs": "https://github.com/michalkow/m5kdev/issues",
-  "files": [
-    "src",
-    "scripts"
-  ],
   "scripts": {
     "build": "tsc --build",
     "push": "node deploy.js",
