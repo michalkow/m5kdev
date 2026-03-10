@@ -1,0 +1,29 @@
+---
+description: Monorepo structure
+alwaysApply: false
+---
+# Project Structure
+
+This monorepo is organized into:
+
+- `packages/`: shared libraries and feature modules (e.g., `packages/backend`, `packages/commons`, `packages/web-ui`, `packages/frontend`).
+
+## Modular structure
+
+Across apps and packages, feature areas live under `src/modules/<feature>/`. Each module follows consistent file conventions to keep responsibilities separated.
+
+### Module file types (brief)
+
+- `.constants.ts`: central constants and configuration flags for the module. 
+- `.schema.ts`: validation and data contracts (e.g., Zod schemas) and derived TypeScript types.
+- `.db.ts`: database layer definitions for the module (tables/models, queries, helpers).
+- `.repository.ts`: data access layer encapsulating persistence operations behind an interface.
+- `.service.ts`: business logic orchestrating repositories and cross-module rules.
+- `.trpc.ts`: tRPC routers/procedures exposing the module's type-safe API surface.
+
+
+### UI folders
+
+- `components/`: presentational and composite UI pieces scoped to the module/package (frontend-only).
+- `hooks/`: reusable React hooks encapsulating client-side state/effects for the module (frontend-only).
+

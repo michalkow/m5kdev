@@ -1,0 +1,29 @@
+---
+globs: apps/*/server/src/modules/**/*.jobs.ts
+alwaysApply: false
+---
+
+# Module Jobs Guide
+
+Use this for workflow jobs (`*.jobs.ts`) in app servers.
+
+## Payload Rules
+
+- Keep job payloads serializable and minimal: IDs, user identifiers, and explicit input.
+- Avoid passing full request/session context objects through queue payloads.
+
+## Dependency Rules
+
+- Prefer job factories that receive required services from workflow bootstrap/composition.
+- Avoid direct imports of global service singletons inside jobs when feasible.
+
+## Responsibility Rules
+
+- Jobs should call service methods and return `ServerResultAsync`.
+- Keep business logic in services, not in worker glue.
+- Use `onFailure` for compensating actions only (cleanup/rollback-like side effects).
+
+## Error Rules
+
+- Return typed errors (`ServerError` / `this.error(...)` from services).
+- Avoid swallowing errors in jobs; propagate failures so workflow status is accurate.

@@ -1,0 +1,38 @@
+---
+alwaysApply: true
+---
+
+# TypeScript Code Style Guidelines
+
+## Type Declarations
+
+- Prefer `interface` over `type` for object definitions unless using union types or utility types
+- Use explicit return types for functions
+- Avoid using `any` - use `unknown` if type is truly unknown
+- Use readonly arrays and properties when data shouldn't be mutated
+- Leverage TypeScript's built-in utility types (Pick, Omit, Partial, etc.)
+
+## Naming Conventions
+
+- Use PascalCase for interfaces, types, and classes
+- Use camelCase for variables, functions, and methods
+- Use UPPER_SNAKE_CASE for constants
+- Prefix interfaces with 'I' only when there's a class implementation
+- Suffix type guards with 'is' (e.g., `isString`)
+
+## Best Practices
+
+- Use type inference where types are obvious
+- Explicitly declare types for function parameters
+- Use union types instead of enums
+- Avoid type assertions (`as`) unless absolutely necessary
+- Use optional chaining (`?.`) and nullish coalescing (`??`) operators
+- Leverage discriminated unions for complex type logic
+- Use object parameters for functions with more than 1 parameter
+
+## Code Organization
+
+- Always use `type` keyword when importing types:
+- Never use default exports; always use named exports.
+- Don't use barrel exports (`index.ts`)
+- Keep type definitions close to where they're used

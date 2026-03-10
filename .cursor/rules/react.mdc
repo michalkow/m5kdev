@@ -1,0 +1,191 @@
+---
+globs: apps/**/webapp/**
+alwaysApply: false
+---
+
+# React Frontend Style Guide
+
+## Scope & Goals
+
+* **Stack**: React + TypeScript (strict), React Router v7, tRPC v11 (TanStack Query integration), Tailwind v4, HeroUI, custom `@m5kdev/web-ui`, i18next.
+* **DX**: Biome for lint + format. Conventional Commits. Playwright for E2E.
+* **Philosophy**: Feature-oriented modules. Small, pure, typed components. Remote state with React Query; local with hooks/reducer. Avoid Suspense for data; use `isLoading`. Prefer CSS transitions; reach for Framer only when needed.
+
+## Project Structure
+
+* Group by **feature** under `modules/`:
+
+```
+src/
+  modules/
+    billing/
+      components/
+      hooks/
+      billing.utils.ts
+    <feature>/
+      components/
+      hooks/
+  components/
+  hooks/
+  utils/
+  app.tsx
+```
+
+* **Imports**: Use alias `@/*`. Deep imports within a feature are allowed. Avoid barrels except a small `modules/<feature>/api/index.ts` if truly helpful.
+
+## Modules & Exports
+
+* **Named exports only** (no default exports).
+* One top-level React component per file; colocate tiny helpers in the same file if used only there.
+
+## Files & Naming
+
+* Components: `PascalCase.tsx`
+* Other files: **camelCase** with suffix: `*.utils.ts`, `*.constants.ts`, `*.types.ts`, `*.hooks.ts`, `*.api.ts`.
+* Test files (when present): `*.test.ts(x)` near source.
+
+## Components & JSX
+
+* **Function components only**. `type Props = { ... }` for props.
+* **Defaults**: use function parameter defaults.
+* **`children`**: **only** for providers or pass-through wrappers; otherwise define explicit props/slots.
+* **Conditionals**: ternary or `&&` allowed; prefer early returns for readability.
+* **Lists/keys**: use **stable IDs only** (never index keys).
+* **Accessibility**: follow HeroUI semantics; add `aria-*`, labels, and keyboard focus states. (We rely on Biome defaults; ensure a PR a11y checklist—see below.)
+
+## Styling & UI
+
+* Tailwind v4 for layout/spacing/typography; theme tokens only.
+* HeroUI as primary component lib; custom design system lives in `@m5kdev/web-ui`.
+* **Class composition**: use `cn()` and `cva` from `@m5kdev/web-ui/utils`.
+* **Icons**: **Tabler icon font** via `ti ti-[name]` classes.
+* **Animations**: CSS transitions first; use Framer Motion only for complex/entrance sequences.
+
+### `cn` example
+
+```tsx
+import { cn } from "@m5kdev/web-ui/utils";
+
+// ...
+
+<div
+  className={cn(
+    "sticky top-0 z-10 bg-background/95 backdrop-blur-sm p-3 text-center border-b",
+    isCurrentDay && "bg-primary/5"
+  )}
+>
+{/* ... */}
+</div>
+```
+
+## State, Data & Effects
+
+* **Remote state**: TanStack Query (via tRPC v11 new integration).
+* **Local state**: `useState` / `useReducer`; reach for Zustand/Jotai only if cross-component state becomes non-trivial (default: not used).
+* **Server calls**: tRPC v11. Coerce/validate with **Zod everywhere** (API, forms, models).
+* **Effects**: follow exhaustive-deps; **selective ignores allowed** with justification comment.
+* **Mutations**:
+
+  * If mutation returns the full created/updated entity → set it into cache.
+  * Otherwise → **invalidate exact keys**.
+
+## Routing & Forms
+
+* **Routing**: React Router v7 in `src/routes/`. Prefer route loaders/actions only for navigation concerns; no data fetching via loaders (use React Query).
+* **Forms**: HeroUI Forms + **Zod schema** with **FormData** validation (per HeroUI docs). Centralize common form components in `@m5kdev/web-ui`.
+
+### HeroUI + Zod (FormData) sketch
+
+```tsx
+function handleRequest(formData: FormData) {
+  const result = schema.safeParse(Object.fromEntries(formData));
+
+  if (!result.success) {
+    return {
+      errors: result.error.flatten().fieldErrors,
+    };
+  }
+
+  return {
+    errors: {},
+  };
+}
+```
+
+## Loading, Errors, UX
+
+* **Loading**: Use **skeletons** for major views; small inline spinners acceptable in buttons.
+* **Suspense**: **Avoid** for data fetching; rely on React Query’s `isLoading`.
+* **Error boundaries**: feature-level (wrap pages/route segments).
+* **Toasts**: central **sonner** API with sane defaults (success, error).
+* **Empty states**: required for list/detail views (icon + primary action).
+
+## i18n
+
+* **i18next** with namespaces. Access via `useTranslation("<ns>")`. Keys are `<ns>:path.to.key`.
+
+```ts
+const { t } = useTranslation("app");
+
+// ...
+
+t("app:sidebar.nav.contentReview");
+```
+
+## Performance
+
+* **React Compiler** as primary optimization. Only use `React.memo/useMemo/useCallback` when you’re certain—add a comment explaining why.
+* **Virtualization**: use `@tanstack/react-virtual` only when lists are large.
+
+## Conventions
+
+* **Hooks**: prefix with `use` only for actual hooks.
+* **Event handlers**: props `onX`, internal callbacks `handleX`.
+* **Import order** (Biome auto-sort): Node core → third-party → `@/*` → relative.
+* **Dates**: **luxon**.
+* **Env**: loose `.env` access (keep it simple, validate where critical).
+
+## Hooks
+
+### When to not create a custom hook
+
+Use standard hooks directly in the component:
+- React built-ins (useState, useEffect, useMemo, etc.)
+- tRPC query/mutation hooks (TanStack integration)
+- i18n (useTranslation)
+- Router/location hooks
+
+If a hook would just wrap one of the above and pass its result through, don’t create it. Keep it inline in the component.
+
+### When a custom hook is allowed / recommended
+
+Create a hook only if at least one is true:
+1. Shared logic: The hook is (or will likely be) reused by multiple components in the same module.
+2. Entangled/composed logic: The hook encapsulates coupled state + effects across multiple hooks, e.g.:
+- Maintains filter/sort/pagination state (with setters),
+- Derives query inputs/keys from that state,
+- Calls one or more tRPC/TanStack queries that depend on those inputs,
+- Merges/combines results or exposes computed selectors,
+- Ensures that changing one part (e.g., a setter) correctly retriggers others.
+
+This is allowed even if currently used by a single component—the key is encapsulating coupled logic so components stay simple.
+
+## Testing & Process
+
+* **Unit tests**: minimal and focused on critical logic.
+* **E2E**: Playwright for main flows (auth, create, edit, publish).
+* **Commits**: Conventional Commits (`feat:`, `fix:`, `chore:`, etc.).
+* **Docs**: TSDoc for public utils/hooks. Add ADRs only for major architectural choices.
+
+## PR Checklist (quick)
+
+* Types accurate, no `any`.
+* No default exports.
+* `children` only in providers/wrappers.
+* React Query keys exact; optimistic update when entity is returned.
+* Skeletons/empty states present.
+* a11y: labels, roles, focus states; keyboard nav OK.
+* i18n: text via `t()`, no hardcoded copy.
+* CSS first for animations; Framer only if needed.
+* Import order OK; no dead code.
+* Tests: key flows covered (E2E where applicable).

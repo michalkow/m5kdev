@@ -1,0 +1,6 @@
+{
+  "extends": "@m5kdev/config/tsconfig.base.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
+  }
+}

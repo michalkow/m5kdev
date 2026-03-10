@@ -1,0 +1,43 @@
+---
+globs: apps/*/server/src/modules/**/*.service.ts
+alwaysApply: false
+---
+
+# Module Service File Style Guide
+
+## Conventions
+
+- Extend `BaseService<Repositories, Services>` or `BasePermissionService<Repositories, Services>`.
+- Declare repository and service dependencies as explicit named maps in generics.
+- Instantiate service classes in `apps/*/server/src/service.ts` (composition root), not inside module files.
+- Keep orchestration/business logic in service; repositories handle persistence only.
+- Accept contextual objects (usually `{ user }` or full app `Context`) where required by auth/business logic.
+- Propagate `ServerResultAsync` consistently and use `err(...)`/`ok(...)` composition.
+- Prefer helper methods for repeated workflows (prompt prep, query assembly, enrichment).
+
+## Method Patterns
+
+- `list/read/status`: usually pass-through with enforced `user.id`.
+- `create/update/delete`: enforce ownership/permission before mutation when module is permissioned.
+- `*_async job trigger` methods: schedule jobs and return IDs; keep queue concerns small.
+- `ai*` methods: isolate AI interactions and keep prompt/model selection centralized.
+
+## Permission and Grants
+
+- If extending `BasePermissionService`, keep all guarded action names aligned with grants (`read`, `write`, `delete`, `publish`, etc.).
+- Do not use undeclared action aliases (e.g., guard `"update"` when grants only define `"write"`).
+- If a module has no effective `accessGuard*` usage, prefer `BaseService` over `BasePermissionService`.
+
+## Example Skeleton
+
+```typescript
+import { BaseService } from "@m5kdev/backend/modules/base/base.service";
+import type { User } from "../../lib/auth";
+
+export class ItemService extends BaseService<{ item: ItemRepository }, { ai: AIService }> {
+  async create(data: CreateInput, { user }: { user: User }) {
+    // Business rules + orchestration
+    return this.repository.item.create({ ...data, userId: user.id });
+  }
+}
+```

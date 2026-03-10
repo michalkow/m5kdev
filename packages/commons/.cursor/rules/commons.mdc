@@ -1,0 +1,27 @@
+---
+alwaysApply: true
+---
+# Commons Package Rules
+
+This is a shared TypeScript utilities library that provides common functionality used across multiple server and frontend applications in the monorepo.
+
+## Package Purpose
+
+The `@m5kdev/commons` package serves as a centralized location for:
+- Shared type definitions and interfaces
+- Common utility functions
+- Shared constants and configurations
+
+## Testing Guidelines
+
+- Every utility function should have unit tests
+- Test edge cases and error conditions
+
+## Do NOT Include
+
+- Application-specific business logic
+- UI components or React hooks
+- Database queries or models
+- API endpoint definitions
+- Environment-specific configurations
+- Side effects or stateful operations

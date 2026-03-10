@@ -1,0 +1,55 @@
+import type { UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
+import { useNuqsQueryParams, type NuqsQueryParams } from "./useNuqsQueryParams";
+import { useQueryWithParams } from "./useQueryWithParams";
+
+export interface DateRangeFilterReturn<TData> {
+  params: NuqsQueryParams;
+  query: UseQueryResult<TData>;
+}
+
+/**
+ * Flexible query options type that accepts both standard TanStack Query options
+ * and tRPC's queryOptions function return type.
+ * Uses permissive generics to handle type differences between TanStack Query and tRPC.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type QueryOptionsLike<TData> = UseQueryOptions<TData, any, TData, any>;
+
+/**
+ * Function type that accepts both standard query options functions and tRPC's queryOptions.
+ * tRPC's queryOptions accepts (input, opts?) while standard functions may only accept (input).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type GetQueryOptionsFn<TInput, TData> = (input: TInput, ...args: any[]) => QueryOptionsLike<TData>;
+
+export interface DateRangeFilterOptions<TInput, TData> {
+  getQueryOptions: GetQueryOptionsFn<TInput, TData>;
+  queryParams?: TInput;
+}
+
+/**
+ * Hook for charts with URL-synced query parameters and data fetching
+ * Similar to useNuqsTable but without rowSelection (not needed for charts)
+ */
+export const useDateRangeFilter = <TInput, TData>({
+  getQueryOptions,
+  queryParams = {} as TInput,
+}: DateRangeFilterOptions<TInput, TData>): DateRangeFilterReturn<TData> => {
+  // Get only filters from URL query state
+  const { filters, setFilters, granularity, setGranularity } = useNuqsQueryParams();
+  
+  
+  // Get query result
+  const queryResult = useQueryWithParams({
+    getQueryOptions,
+    queryParams,
+    queryState: { filters },
+  });
+
+  return {
+    params: { filters, setFilters, granularity, setGranularity },
+    query: queryResult,
+  };
+};
+
+

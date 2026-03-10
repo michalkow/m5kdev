@@ -1,0 +1,49 @@
+---
+alwaysApply: true
+---
+
+# @m5kdev/frontend - Shared Frontend Package
+
+This package contains shared React hooks, utilities, and frontend logic used across multiple React Router v7 applications in the monorepo.
+
+## Package Structure
+
+```
+packages/frontend/
+├── src/
+│   ├── hooks/           # Shared React hooks
+│   ├── utils/           # Shared utility functions (when needed)
+│   └── index.ts         # Main entry point
+├── package.json
+├── tsconfig.json
+└── tsconfig.lib.json
+```
+
+## Dependencies
+
+- Only add dependencies that are truly needed by multiple apps
+- Peer dependencies should include React and other common libraries
+- Keep the package lightweight and focused
+
+## Best Practices
+
+1. **Single Responsibility**: Each hook should have one clear purpose
+2. **Error Handling**: Include proper error handling and error states
+3. **Loading States**: Provide loading/status indicators for async operations
+4. **Type Safety**: Leverage TypeScript for full type safety
+5. **Documentation**: Add JSDoc comments for public APIs
+6. **Testing**: Consider adding tests for complex hooks
+7. **No Side Effects**: Hooks should be pure and not cause side effects on import
+
+## Monorepo Context
+
+This package is part of a larger monorepo structure:
+- Apps: deployable applications under `apps/*` (e.g. apps/myapp/webapp)
+- Shared UI: @m5kdev/web-ui (HeroUI, Radix, Tailwind)
+- Backend: @m5kdev/backend (shared backend utilities)
+- Each app uses React Router v7, tRPC, and TailwindCSS
+
+When adding features, consider:
+- Is this truly shared by multiple apps?
+- Could this be better placed in @m5kdev/web-ui if it's UI-related?
+- Does this maintain the separation of concerns?

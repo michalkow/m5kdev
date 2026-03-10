@@ -1,0 +1,53 @@
+---
+globs: apps/*/server/src/modules/**/*{.trpc.ts,s.trpc.ts}
+alwaysApply: false
+---
+
+# Module tRPC File Style Guide
+
+Reflects current conventions in app and shared backend modules.
+
+## Conventions
+
+- Export a named router constant matching the module name (plural when grouping, e.g., `contexts`).
+- Import input schemas from shared `*.schema.ts` and output schemas from module DTO/shared schema as needed.
+- Use `procedure` and `router` from `@m5kdev/backend/trpc` and `handleTRPCResult` to unwrap `Result` types.
+- Separate queries and mutations; keep resolvers thin and delegate to service.
+- Pass `ctx` (e.g., `{ user }`) as needed to services.
+- Use `z` inline only for simple ad-hoc inputs; prefer shared schemas otherwise.
+- Do not perform business logic or DB access directly in tRPC resolvers.
+
+## Example Skeleton
+
+```typescript
+import { router, procedure, handleTRPCResult } from "@m5kdev/backend/trpc";
+import { itemCreateSchema, itemListSchema } from "./item.schema";
+import { itemCreateOutput, itemListOutput } from "./item.dto";
+import { itemService } from "./item.service";
+
+export const items = router({
+  list: procedure
+    .input(itemListSchema)
+    .output(itemListOutput)
+    .query(async ({ input }) => handleTRPCResult(await itemService.listPublic(input))),
+
+  create: procedure
+    .input(itemCreateSchema)
+    .output(itemCreateOutput)
+    .mutation(async ({ input, ctx }) => handleTRPCResult(await itemService.create(input, ctx))),
+});
+```
+
+## Factory Pattern (Shared Backend Modules)
+
+For reusable modules in `packages/backend`, prefer router factories:
+
+```typescript
+export function createItemTRPC(itemService: ItemService) {
+  return router({
+    list: procedure.query(async () => handleTRPCResult(await itemService.list())),
+  });
+}
+```
+
+This keeps `@m5kdev/backend` transport modules composable across multiple apps.

@@ -1,0 +1,39 @@
+{
+  "name": "@m5kdev/commons",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michalkow/m5kdev.git"
+  },
+  "homepage": "https://github.com/michalkow/m5kdev#readme",
+  "bugs": "https://github.com/michalkow/m5kdev/issues",
+  "scripts": {
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "devalue": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@m5kdev/config": "workspace:*",
+    "typescript": "catalog:"
+  },
+  "exports": {
+    "./utils/*": "./src/utils/*.ts",
+    "./modules/ai/*": "./src/modules/ai/*.ts",
+    "./modules/schemas/*": "./src/modules/schemas/*.ts",
+    "./modules/crypto/*": "./src/modules/crypto/*.ts",
+    "./modules/recurrence/*": "./src/modules/recurrence/*.ts",
+    "./modules/auth/*": "./src/modules/auth/*.ts",
+    "./modules/file/*": "./src/modules/file/*.ts",
+    "./modules/base/*": "./src/modules/base/*.ts",
+    "./modules/tag/*": "./src/modules/tag/*.ts",
+    "./modules/workflow/*": "./src/modules/workflow/*.ts",
+    "./modules/table/*": "./src/modules/table/*.ts",
+    "./modules/billing/*": "./src/modules/billing/*.ts"
+  }
+}

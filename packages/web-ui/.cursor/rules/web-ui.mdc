@@ -1,0 +1,126 @@
+---
+alwaysApply: true
+---
+
+# Web UI Package Structure and Code Style
+
+## Package Overview
+
+The `@m5kdev/web-ui` package is a shared UI component library based on shadcn/ui, Radix UI, and Tailwind CSS. It provides a unified set of components for use across multiple applications in the monorepo.
+
+## Directory Structure
+
+```
+packages/web-ui/
+├── src/
+│   ├── components/
+│   │   ├── ui/           # shadcn/ui components (buttons, cards, dialogs, etc.)
+│   │   ├── auth/         # Authentication-related components
+│   │   ├── shared/       # Shared utility components  
+│   │   └── *.tsx         # Custom extended components
+│   ├── hooks/            # Custom React hooks
+│   ├── lib/              # Utility functions
+│   └── app.css           # Global styles and Tailwind directives
+├── components.json       # shadcn/ui configuration
+├── package.json
+└── tsconfig.json
+```
+
+## Configuration
+
+### shadcn/ui Configuration (`components.json`)
+- Style: `new-york`
+- RSC: `false` (client components)
+- Icon Library: `lucide-react` and `@tabler/icons-react`
+- CSS Variables: `true`
+- Tailwind Prefix: none
+- Path aliases:
+  - `#components` → components directory
+  - `#components/ui` → UI components
+  - `#lib` → library utilities
+  - `#hooks` → custom hooks
+
+### Package Exports
+- Main entry: `./src/index.ts`
+- Types: `./src/index.ts`
+- Individual components can be imported directly
+
+## Component Patterns
+
+### 1. shadcn/ui Components (in `ui/` directory)
+
+Standard shadcn/ui component structure.
+
+### 2. Custom Extended Components
+
+Components that wrap or extend shadcn/ui components.
+
+### 3. Component Groups (e.g., `auth/`)
+
+Grouped components use default exports.
+
+## Code Style Guidelines
+
+### Component Structure
+1. Import statements
+2. Type/Interface definitions
+3. Variant definitions (if using cva)
+4. Component implementation
+5. DisplayName assignment (for forwardRef)
+6. Named exports
+
+### Styling
+- Use Tailwind CSS classes exclusively
+- Utilize `cn()` utility for conditional classes
+- Define variants with `cva` for component variations
+- CSS variables for theming (defined in app.css)
+
+### Props Patterns
+- Extend HTML element props when appropriate
+- Use `VariantProps` for variant typing
+- `asChild` prop for Radix UI Slot pattern
+- Destructure props with defaults
+- Pass remaining props with spread operator
+
+### TypeScript Patterns
+- Explicit prop interfaces
+- Use `React.forwardRef` for DOM element access
+- Generic types where appropriate
+- Avoid `any` - use proper typing
+
+## Custom Hooks
+
+Located in `src/hooks/`.
+
+## Dependencies
+
+### Core Dependencies
+- `react` & `react-dom`: ^19.1.0
+- `@radix-ui/*`: Various Radix UI primitives
+- `class-variance-authority`: Component variants
+- `clsx` & `tailwind-merge`: Class name utilities
+- `tailwindcss-animate`: Animation utilities
+- `lucide-react` & `@tabler/icons-react`: Icon library
+- `motion`: Animation library
+
+### Form & Interaction
+- `react-hook-form`: Form handling
+- `sonner`: Toast notifications
+- `next-themes`: Theme management
+
+## Best Practices
+
+1. **Component Reusability**: Design components to be application-agnostic
+2. **Prop Interfaces**: Always define explicit TypeScript interfaces
+3. **Forwarding Refs**: Use for components that render DOM elements
+4. **Accessibility**: Leverage Radix UI's built-in accessibility
+5. **Styling Consistency**: Use predefined Tailwind classes and CSS variables
+6. **No Barrel Exports**: Import components directly, avoid index.ts exports
+
+## Adding New Components
+
+1. **shadcn/ui components**: Place in `src/components/ui/`
+2. **Custom components**: Place in `src/components/`
+3. **Grouped components**: Create subdirectory (e.g., `src/components/feature/`)
+4. **Hooks**: Add to `src/hooks/`
+5. **Utilities**: Add to `src/lib/`

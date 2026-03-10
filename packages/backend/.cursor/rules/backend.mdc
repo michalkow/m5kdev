@@ -1,0 +1,70 @@
+---
+alwaysApply: true
+---
+
+# Backend Stack Rules (`@m5kdev/backend`)
+
+## Intent
+
+`@m5kdev/backend` is a composable backend stack, not a closed framework.
+
+- Prefer extensible classes and factories.
+- Keep module contracts open for app-level composition.
+- Do not hide wiring behind global initialization.
+
+## Module Shape
+
+For backend modules in `src/modules/<name>/`, prefer:
+
+- `<name>.db.ts` for tables/schema
+- `<name>.dto.ts` for IO contracts/select helpers
+- `<name>.repository.ts` for persistence
+- `<name>.service.ts` for orchestration/business rules
+- `<name>.trpc.ts` and optional `<name>.router.ts` for transport adapters
+- optional `<name>.types.ts`, `<name>.utils.ts`, `<name>.constants.ts`
+
+## Layer Boundaries
+
+- Repository layer is data access only.
+- Service layer orchestrates repositories and other services.
+- Transport layer (`.trpc.ts`, `.router.ts`) validates/authenticates and delegates to services.
+- Worker/job glue should invoke services; business rules stay in services.
+
+Do not import services into repositories.
+
+## Dependency Injection and Composition
+
+- Services should declare explicit dependency maps:
+  - `BaseService<{ ...repositories }, { ...services }>`
+  - `BasePermissionService<{ ...repositories }, { ...services }>`
+- Instantiate repositories/services in app composition roots:
+  - `apps/*/server/src/repository.ts`
+  - `apps/*/server/src/service.ts`
+- Routers should receive service instances via function params; do not instantiate repositories/services inside router files.
+
+## Result and Error Discipline
+
+- Use `ServerResult`/`ServerResultAsync` and `throwable`/`throwableAsync` from base classes.
+- Prefer `this.error(...)`/`ServerError` instead of raw exceptions for expected failures.
+- In tRPC handlers, unwrap results with `handleTRPCResult`.
+
+## Transactions
+
+- Repository methods may accept optional `tx`.
+- Inside transaction blocks, use the transaction handle (`tx`) consistently; avoid mixing `this.orm` calls in the same transactional flow.
+
+## Grants and Permission Services
+
+- Keep grants declarations separate from service logic.
+- If a service extends `BasePermissionService`, action names passed to `accessGuard`/`accessGuardAsync` must match declared grant actions exactly.
+- Prefer canonical actions (`read`, `write`, `delete`, `publish`) unless the module exports a typed action union.
+
+## Jobs and Queue Payloads
+
+- Queue payloads should use stable primitives (e.g., `userId`, entity IDs, typed input), not full HTTP context/session objects.
+- Job modules should avoid importing global service singletons directly when a composed registry can be injected.
+
+## Configuration and Side Effects
+
+- Keep env access and SDK client initialization isolated to infra/lib files.
+- Avoid import-time side effects that crash optional modules for unrelated consumers.

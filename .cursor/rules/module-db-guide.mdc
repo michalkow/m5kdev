@@ -1,0 +1,56 @@
+---
+globs: packages/backend/src/modules/**/*.db.ts
+alwaysApply: false
+---
+
+# Module DB File Style Guide
+
+This guide captures conventions observed in module database files (e.g., `context.db.ts`).
+
+## Conventions
+
+- Import enum-like constants from shared constants: `@appname/shared/modules/[feature]/[feature].constants`.
+- Define tables with Drizzle's `sqliteTable` as `table` alias.
+- Use `uuidv4` as the default for string IDs via `.$default(uuidv4)`.
+- Represent booleans with `integer(..., { mode: "boolean" })` and `.default(false)`.
+- Represent timestamps with `integer(..., { mode: "timestamp" })` and `.$default(() => new Date())`.
+  - `createdAt`: `.$default(() => new Date())`
+  - `updatedAt`: `.notNull().$default(() => new Date())`
+  - Support soft-deletes/archive via optional `deletedAt`/`archivedAt`.
+- JSON columns: `text("col", { mode: "json" }).default([]).$type<string[]>()`.
+- Use `references(() => otherTable.id, { onDelete: "cascade" })` for FKs.
+- Composite join tables define primary keys with `primaryKey({ columns: [t.aId, t.bId] })`.
+- Table names are plural; column names are snake_case at DB level, camelCase in code.
+
+## Example
+
+```typescript
+import { SOME_TYPES } from "@app/shared/modules/feature/feature.constants";
+import { users } from "@m5kdev/backend/modules/auth/auth.db";
+import { integer, primaryKey, sqliteTable as table, text } from "drizzle-orm/sqlite-core";
+import { v4 as uuidv4 } from "uuid";
+
+export const items = table("items", {
+  id: text("id").primaryKey().$default(uuidv4),
+  type: text("type", { enum: SOME_TYPES }).notNull(),
+  title: text("title").notNull(),
+  flags: text("flags", { mode: "json" }).default([]).$type<string[]>(),
+  deletedAt: integer("deleted_at", { mode: "timestamp" }),
+  archivedAt: integer("archived_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$default(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+});
+
+export const itemsUsers = table(
+  "items_users",
+  {
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    itemId: text("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().$default(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.itemId] })]
+);
+```
+

@@ -1,0 +1,18 @@
+{
+  "extends": "@m5kdev/config/tsconfig.node.json",
+  "rootDir": ".",
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "importHelpers": true,
+    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
+    "types": [
+      "jest"
+    ]
+  },
+  "exclude": [
+    "node_modules"
+  ],
+  "include": [
+    "src/**/*.ts"
+  ]
+}

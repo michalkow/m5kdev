@@ -1,0 +1,9 @@
+export const WEBHOOK_STATUS_ENUM = {
+  WAITING: "WAITING",
+  COMPLETED: "COMPLETED",
+  TIMEOUT: "TIMEOUT",
+  ERROR_CALLBACK: "ERROR_CALLBACK",
+  ERROR_DATA: "ERROR_DATA",
+} as const;
+
+export type WebhookStatus = (typeof WEBHOOK_STATUS_ENUM)[keyof typeof WEBHOOK_STATUS_ENUM];

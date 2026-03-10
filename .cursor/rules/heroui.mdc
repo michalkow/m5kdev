@@ -1,0 +1,393 @@
+---
+alwaysApply: false
+---
+# HeroUI + Tailwind v4 + Framer Motion – Developer & LLM Guide
+
+This guide helps developers and language models build beautiful, accessible and animated interfaces using HeroUI, Tailwind CSS v4 and Framer Motion. It summarises the design philosophy behind HeroUI, the major changes in Tailwind v4 and how to leverage Framer Motion for fluid animations. Installation steps are deliberately omitted – this document assumes your project already uses the @heroui/react package globally.
+
+## 1 What is HeroUI?
+
+HeroUI is a React UI library built on top of Tailwind CSS and React Aria. It provides fully‑composed React components (logic, styling and accessibility) rather than just CSS classes, so you can import a component and immediately use it in your application. The library leverages Tailwind's utility classes for styling and React Aria for robust accessibility patterns. You can use HeroUI's styling in other frameworks by composing the underlying styles (for example, via its CSS output), but the full component experience (state management, keyboard navigation, accessibility) is available when used with React.
+
+Unlike TailwindCSS component libraries that offer only markup and classes, HeroUI supplies complete, accessible and customisable components. It integrates a utility library called tailwind‑variants to automatically handle class conflicts so your custom classes override defaults consistently. In short, HeroUI aims to provide a complete design system that combines Tailwind's flexibility with React‑based accessibility and composability.
+
+### 1.1 Design principles
+
+HeroUI is guided by a set of design and API principles:
+
+• **Simplicity & usability** – components are kept simple and intuitive so developers of any level can understand and implement them quickly.
+• **Modular design** – each component is a standalone module that can be imported individually; this modularity keeps your application lightweight.
+• **Customization & flexibility** – HeroUI allows extensive theming and style overrides. Integration with Tailwind CSS and tailwind‑variants simplifies customization and makes it possible to override or extend styles via your own Tailwind classes.
+• **Consistent API** – common props behave the same across components so you can anticipate component behaviour and reduce the learning curve.
+• **Accessibility** – components adhere to accessibility guidelines and work with assistive technologies.
+• **Component slots** – many components expose slots so you can inject custom content or styles into specific areas for fine‑grained control.
+
+HeroUI uses Framer Motion internally to animate some components because complex animations require physics‑based behaviours and performance‑oriented APIs. Framer Motion provides a well‑tested, production‑ready solution for these animations. You can extend this by wrapping HeroUI components in motion elements from Framer Motion to animate them yourself (see examples below).
+
+## 2 Tailwind CSS v4 – principles & changes
+
+Tailwind v4 is a major rewrite of the framework, optimised for performance and modern CSS features. Understanding its principles helps you integrate it effectively with HeroUI.
+
+### 2.1 New engine and unified toolchain
+
+• **High‑performance engine** – Tailwind v4 introduces a new engine written partially in Rust, making builds up to 10× faster and reducing the installed size by over 35%.
+• **Single dependency on Lightning CSS** – the new engine integrates Lightning CSS, eliminating the need for separate PostCSS plugins. This simplifies your CSS pipeline and gives built‑in @import handling, vendor prefixing and nesting support.
+• **Built‑in vendor prefixing and autoprefixer removal** – autoprefixer is no longer needed because Tailwind v4 automatically inserts vendor prefixes.
+
+### 2.2 CSS‑first configuration
+
+Tailwind v4 adopts a CSS‑first approach that makes the framework feel native to CSS rather than a JavaScript library. Instead of using a tailwind.config.js file, you import Tailwind in your CSS and configure your theme using CSS variables:
+
+```css
+/* main.css */
+@import "tailwindcss";
+
+@theme {
+  --font-family-display: 'Satoshi', sans-serif;
+  --breakpoint-3xl: 1920px;
+  --color-neon-pink: oklch(71.7% 0.25 360);
+  --color-neon-lime: oklch(91.5% 0.258 129);
+  --color-neon-cyan: oklch(91.3% 0.139 195.8);
+}
+```
+
+The @theme directive tells Tailwind to generate utilities and variants based on these variables, letting you use classes like 3xl:text-neon-lime in your markup. Adding new variables functions similarly to the extend property in earlier versions; you can clear the default theme with --color-* : initial and define your own palette.
+
+Tailwind v4 exposes all theme values as native CSS variables in the compiled CSS, making them accessible from JavaScript or other libraries. This allows you to animate properties in Framer Motion with variables like var(--spacing-8) instead of using theme() helper functions.
+
+### 2.3 Modern CSS features
+
+Tailwind v4 embraces modern CSS:
+
+• **Native cascade layers** – uses real @layer rules to solve specificity issues.
+• **Container queries** – built‑in support for container queries with @min-* and @max-* variants, enabling responsive design based on component containers.
+• **Composable variants** – variants like group-*, peer-*, has-* and the new not-* can be composed to build complex state‑based classes.
+• **Zero‑configuration content detection** – Tailwind automatically scans your project for template files without needing to specify content paths.
+
+Other notable changes include removal of deprecated utilities, splitting the PostCSS plugin and CLI into separate packages, changing the default border colour to currentColor and reducing the default ring thickness from 3px to 1px. Tailwind v4 still supports tailwind.config.js for backward compatibility, but a CSS‑only configuration is encouraged.
+
+## 3 Using HeroUI with Tailwind v4
+
+HeroUI builds on Tailwind v4 and automatically handles class conflicts using the tailwind‑variants utility. When customising components:
+
+• **Use Tailwind classes directly** – because HeroUI uses Tailwind as its style engine, you can pass Tailwind classes to component className or slots props for fine‑tuned styling. For example, set a button's background colour to your custom CSS variable: `className="bg-[var(--color-neon-pink)]"`.
+• **Define theme variables in your CSS** – configure fonts, breakpoints and colours via the @theme directive (see Section 2.2). HeroUI picks up these variables automatically.
+• **Override styles with slots** – many components expose slots props (e.g., header, body, footer on Card) so you can override specific parts without affecting the entire component.
+• **Dark mode & variants** – Tailwind's built‑in dark mode and variant composability allow you to theme components based on colour schemes or interaction states.
+
+## 4 Framer Motion integration
+
+HeroUI uses Framer Motion for complex animations and you can leverage it to animate your own components. Framer Motion is a physics‑based animation library that produces smooth transitions and is production ready. To animate a HeroUI component:
+
+```tsx
+import { motion } from 'framer-motion';
+import { Card } from '@heroui/react';
+
+export default function AnimatedCard({ children }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
+      transition={{ duration: 0.3 }}
+    >
+      <Card className="p-6 bg-[var(--color-neon-cyan)] rounded-lg shadow-lg">
+        {children}
+      </Card>
+    </motion.div>
+  );
+}
+```
+
+The example above wraps a HeroUI Card in a motion.div. Framer Motion handles the opacity and y transitions, while Tailwind variables define the background colour. Because Tailwind v4 exposes theme variables as CSS variables, you can reference them directly in the transition or initial values.
+
+## 5 HeroUI component overview
+
+HeroUI provides over 200 components. The table below groups notable components by category and summarises their purpose and key features. Each category includes a typical example to get you started. Long descriptions are avoided; detailed usage is provided in subsequent examples.
+
+| Category | Example components | Key features/notes |
+|----------|-------------------|-------------------|
+| Containers & Layout | Card, Accordion, Divider, ScrollShadow | Card wraps content with header/body/footer slots; Accordion presents collapsible sections; Divider inserts horizontal/vertical lines; ScrollShadow adds scroll indicators. |
+| Navigation & Actions | Button, ButtonGroup, Breadcrumbs, Tabs, Pagination, Navbar | Button supports sizes, colours, variants and loading indicators; Tabs organise content into sections with dynamic items; Pagination handles multi‑page navigation; Navbar provides a responsive header. |
+| Form inputs | Input, Textarea, NumberInput, Checkbox, RadioGroup, Select, Slider, Switch, InputOTP | Inputs support disabled/read‑only/required states and sizes; labels can be positioned inside or outside; selects, radio groups and checkboxes provide accessible selection controls; sliders and switches provide continuous/discrete value inputs. |
+| Data display | Table, Avatar, Badge, Chip, Progress, CircularProgress, Skeleton, Spinner, Listbox | Table handles tabular data with dynamic rendering, selection, sorting and virtualisation; Avatar displays user pictures; Badge and Chip highlight small statuses; Progress and CircularProgress show progress; Skeleton and Spinner indicate loading states. |
+| Overlays & Feedback | Modal, Drawer, Popover, Tooltip, Toast, Alert | Modal displays blocking dialogs with focus‑trapping and dismissible options; Drawer slides panels from screen edges; Popover & Tooltip show contextual information; Toast provides non‑blocking notifications; Alert communicates critical information. |
+| Date & Time | Calendar, DatePicker, DateRangePicker, DateInput, TimeInput, RangeCalendar | Built on top of React Aria date components; support localisation and keyboard navigation. |
+| Utilities & Misc | Spacer, Kbd, Tooltip, User, HeroUIProvider | Spacer creates consistent spacing; Kbd displays keyboard shortcuts; User component shows a user's name/avatar/email; HeroUIProvider wraps your app to apply theme context. |
+
+### 5.1 Accordion
+
+**Purpose**: Collapsible sections for showing and hiding content.
+
+**Key props**: selectionMode (single/multiple), isCompact (reduces paddings), and variants light, shadow, bordered, splitted.
+
+**Example**:
+
+```tsx
+import { Accordion, AccordionItem } from '@heroui/react';
+
+export function FAQ() {
+  return (
+    <Accordion selectionMode="multiple" className="space-y-2">
+      <AccordionItem key="q1" title="What is HeroUI?">
+        HeroUI is a React UI library built on Tailwind CSS.
+      </AccordionItem>
+      <AccordionItem key="q2" title="Can multiple sections be open?">
+        Yes – set `selectionMode="multiple"`.
+      </AccordionItem>
+      <AccordionItem key="q3" title="Is it compact?" subtitle="Small paddings">
+        Use `isCompact` to reduce spacing for a denser layout.
+      </AccordionItem>
+    </Accordion>
+  );
+}
+```
+
+### 5.2 Button and ButtonGroup
+
+**Purpose**: Provide clickable actions.
+
+**Features**: Buttons come in various sizes, colours, radii and variants. They support disabled and loading states and can display icons at the start or end. Use ButtonGroup to group multiple buttons.
+
+**Example**:
+
+```tsx
+import { Button, ButtonGroup, Spinner } from '@heroui/react';
+import { MdAdd, MdDelete } from 'react-icons/md';
+
+export function ActionBar() {
+  return (
+    <ButtonGroup className="gap-3">
+      <Button color="primary" startContent={<MdAdd />}>Add</Button>
+      <Button color="danger" isLoading endContent={<Spinner size="sm" />}>
+        Deleting
+      </Button>
+      <Button variant="ghost" isIconOnly title="Delete">
+        <MdDelete />
+      </Button>
+    </ButtonGroup>
+  );
+}
+```
+
+### 5.3 Card
+
+**Purpose**: A container for content such as text, images and actions.
+
+**Slots**: CardHeader, CardBody and CardFooter. Cards can blur their footer (isFooterBlurred) or the entire card (isBlurred).
+
+**Example**:
+
+```tsx
+import { Card, CardHeader, CardBody, CardFooter, Button } from '@heroui/react';
+
+export function ProductCard() {
+  return (
+    <Card className="max-w-xs bg-white dark:bg-black/80 rounded-xl overflow-hidden shadow-lg">
+      <CardHeader className="p-4 font-bold text-lg">Pro Plan</CardHeader>
+      <CardBody className="p-4 space-y-2">
+        <p>Unlimited projects and collaborators.</p>
+        <p className="text-4xl font-semibold">$29/mo</p>
+      </CardBody>
+      <CardFooter className="p-4 flex justify-end">
+        <Button color="primary">Subscribe</Button>
+      </CardFooter>
+    </Card>
+  );
+}
+```
+
+### 5.4 Input
+
+**Purpose**: Capture user text input for forms, search fields or data entry.
+
+**Features**: Inputs support disabled, read‑only and required states, multiple sizes and colours, variants, adjustable radius and configurable label placement.
+
+**Example**:
+
+```tsx
+import { Input } from '@heroui/react';
+
+export function ContactForm() {
+  return (
+    <form className="space-y-4">
+      <Input
+        label="Name"
+        placeholder="Enter your name"
+        isRequired
+        color="primary"
+      />
+      <Input
+        label="Email"
+        placeholder="email@example.com"
+        labelPlacement="outside-left"
+        variant="bordered"
+        radius="sm"
+      />
+      <Input
+        label="Message"
+        placeholder="Your message"
+        variant="flat"
+        minRows={4}
+        isReadOnly={false}
+      />
+    </form>
+  );
+}
+```
+
+### 5.5 Modal
+
+**Purpose**: Display dialogs that require user attention. When a modal opens, focus is trapped inside and content behind the dialog becomes inert.
+
+**Features**: The modal API comprises Modal, ModalContent, ModalHeader, ModalBody and ModalFooter. You can control dismiss behaviour via isDismissable and isKeyboardDismissDisabled props and adjust placement (e.g., top-center, bottom).
+
+**Example with Framer Motion**:
+
+```tsx
+import { useState } from 'react';
+import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button } from '@heroui/react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+export function ConfirmDialog() {
+  const [isOpen, setOpen] = useState(false);
+  
+  return (
+    <>
+      <Button color="primary" onPress={() => setOpen(true)}>Delete item</Button>
+      <AnimatePresence>
+        {isOpen && (
+          <Modal isOpen={isOpen} onOpenChange={setOpen} isDismissable={false} placement="top-center">
+            <ModalContent 
+              as={motion.div} 
+              initial={{ scale: 0.9, opacity: 0 }} 
+              animate={{ scale: 1, opacity: 1 }} 
+              exit={{ scale: 0.9, opacity: 0 }} 
+              transition={{ duration: 0.2 }}
+            >
+              <ModalHeader>Confirm deletion</ModalHeader>
+              <ModalBody>Are you sure you want to delete this item? This action cannot be undone.</ModalBody>
+              <ModalFooter className="flex justify-end space-x-2">
+                <Button variant="ghost" onPress={() => setOpen(false)}>Cancel</Button>
+                <Button color="danger" onPress={() => {/* perform delete */}}>Delete</Button>
+              </ModalFooter>
+            </ModalContent>
+          </Modal>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+```
+
+### 5.6 Table
+
+**Purpose**: Display tabular data with sorting, selection and custom rendering.
+
+**Features**:
+• **Dynamic data via props** – pass a columns array and items data to render a table. Using these props allows React Aria to cache rows, avoiding re‑rendering and improving performance.
+• **Selection** – support single or multiple row selection using selectionMode, with optional default selections and controlled selection via selectedKeys and onSelectionChange.
+• **Sorting** – columns can be sortable by specifying allowsSorting and handling sortDescriptor and onSortChange callbacks.
+• **Row actions, striped rows and custom cells** – customise rows using render functions; enable striped rows (isStriped) and remove the wrapper for minimal tables (removeWrapper).
+• **Empty state and virtualisation** – provide emptyContent for empty tables and use virtualization for large data sets.
+
+**Example**:
+
+```tsx
+import { Table, TableHeader, TableBody, TableColumn, TableRow, TableCell } from '@heroui/react';
+import { useMemo } from 'react';
+
+export function UsersTable() {
+  const columns = useMemo(() => [
+    { key: 'name', label: 'Name' },
+    { key: 'email', label: 'Email' },
+    { key: 'role', label: 'Role', allowsSorting: true },
+  ], []);
+  
+  const items = [
+    { id: 1, name: 'Alice', email: 'alice@example.com', role: 'Admin' },
+    { id: 2, name: 'Bob', email: 'bob@example.com', role: 'User' },
+    { id: 3, name: 'Carol', email: 'carol@example.com', role: 'Moderator' },
+  ];
+  
+  return (
+    <Table
+      aria-label="User table"
+      selectionMode="multiple"
+      defaultSelectedKeys={new Set([2])}
+      sortDescriptor={{ column: 'role', direction: 'ascending' }}
+      onSortChange={desc => console.log(desc)}
+    >
+      <TableHeader columns={columns}>
+        {column => (
+          <TableColumn key={column.key} allowsSorting={column.allowsSorting}>
+            {column.label}
+          </TableColumn>
+        )}
+      </TableHeader>
+      <TableBody items={items} emptyContent={<div className="p-4">No users</div>}>
+        {item => (
+          <TableRow key={item.id}>
+            {columnKey => <TableCell>{item[columnKey]}</TableCell>}
+          </TableRow>
+        )}
+      </TableBody>
+    </Table>
+  );
+}
+```
+
+### 5.7 Tabs
+
+**Purpose**: Organise content into multiple panels and allow users to switch between them.
+
+**Features**: Each Tabs component accepts an items array for dynamic rendering and exposes onSelectionChange and selectedKey for controlled selection. Tabs support sizes, colours, radii, variants and icons.
+
+**Example**:
+
+```tsx
+import { Tabs, Tab } from '@heroui/react';
+import { FiHome, FiUser, FiSettings } from 'react-icons/fi';
+
+export function SettingsTabs() {
+  const tabs = [
+    { key: 'profile', title: 'Profile', icon: <FiUser />, content: <p>Profile settings…</p> },
+    { key: 'account', title: 'Account', icon: <FiHome />, content: <p>Account details…</p> },
+    { key: 'advanced', title: 'Advanced', icon: <FiSettings />, content: <p>Advanced options…</p> },
+  ];
+  
+  return (
+    <Tabs
+      aria-label="Settings tabs"
+      items={tabs}
+      color="primary"
+      variant="bordered"
+      selectedKey="profile"
+      onSelectionChange={key => console.log('selected', key)}
+    >
+      {item => (
+        <Tab key={item.key} title={item.title} startContent={item.icon}>
+          {item.content}
+        </Tab>
+      )}
+    </Tabs>
+  );
+}
+```
+
+## 6 UX & animation guidelines
+
+To create beautiful, user‑friendly and animated UIs, follow these best practices:
+
+• **Keep it simple**: Follow HeroUI's simplicity principle – avoid cluttered layouts and use clear typography. Use card or accordion components to organise information logically.
+• **Use spacing & sizing consistently**: Leverage Tailwind's spacing scale and the Spacer component to maintain consistent margins and paddings. Define custom breakpoints in your CSS variables to support large screens.
+• **Accessibility first**: Ensure all inputs have labels, use aria-label or aria-labelledby when labels are hidden and test keyboard navigation. Modal focus should be trapped inside the dialog.
+• **Animations should aid, not distract**: Use Framer Motion to animate transitions (e.g., opening/closing modals, switching tabs). Use small durations and easing functions to provide feedback without overwhelming users. Avoid animating text colours or sizes that hinder readability.
+• **Responsive & adaptive design**: Use Tailwind v4's container query variants to adjust components based on parent widths. For example, show a Drawer on small screens and a Modal on larger screens.
+• **Customise with variables**: Define colour palettes and spacing in your @theme block so your UI remains cohesive. Use these variables in both CSS and Framer Motion animations.
+• **Leverage component slots and variants**: Slots allow you to override specific parts of components without rewriting them. Use variants (light, shadow, bordered, etc.) to adjust component styles with a single prop.
+• **Handle loading and empty states gracefully**: Use Skeleton or Spinner components and the emptyContent prop on tables to inform users when data is loading or absent.
+
+## 7 Conclusion
+
+HeroUI, Tailwind v4 and Framer Motion together provide a powerful toolkit for building modern web interfaces. HeroUI delivers accessible, composable components, Tailwind v4 offers a high‑performance CSS engine with a CSS‑first configuration, and Framer Motion supplies smooth physics‑based animations. By understanding the underlying principles and using the examples provided, developers and language models can craft responsive, animated and user‑friendly UIs without worrying about boilerplate or installation details.

@@ -1,0 +1,113 @@
+---
+description: File module end-to-end usage
+alwaysApply: false
+---
+
+# File Module Usage Guide
+
+This guide explains how to use the file module across commons, backend, and frontend.
+
+## Overview
+
+- `packages/commons/modules/file/file.constants.ts`: shared `fileTypes` and related constants.
+- `packages/backend/modules/file/`:
+  - `file.lib.ts`: initializes the S3 client.
+  - `file.repository.ts`: S3 operations (presigned upload/download URLs, get object), returns neverthrow `Result`.
+  - `file.service.ts`: thin service delegating to repository.
+  - `file.router.ts`: Express routes for local uploads and S3 presigned URL generation.
+- `packages/frontend/modules/file/hooks/`:
+  - `useUpload.ts`: direct POST to server for local file upload by type.
+  - `useS3Upload.ts`: presigned S3 PUT upload with progress.
+
+## Setup
+
+Backend environment variables:
+
+```bash
+AWS_REGION=...
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_S3_BUCKET=...
+# Optional for S3-compatible providers
+AWS_S3_ENDPOINT=...
+
+# Public server URL for returned links
+VITE_SERVER_URL=http://localhost:PORT
+```
+
+Ensure CORS is configured on your S3 bucket (e.g. add `apps/<your-app>/shared/s3.cors.json` or your app’s equivalent).
+
+## Backend: Register router
+
+Mount the upload router in your Express server:
+
+```ts
+import express from "express";
+import { uploadRouter } from "@m5kdev/backend/modules/file/file.router";
+
+const app = express();
+app.use("/upload", uploadRouter);
+```
+
+Routes exposed:
+
+- `POST /upload/file/:type` — local upload via Multer (validates `:type` against `fileTypes`).
+- `GET /upload/file/:filename` — serve uploaded local file.
+- `POST /upload/s3-presigned-url` — body `{ filename, filetype }` → `{ url }` presigned PUT URL.
+
+## Frontend: Local uploads
+
+Use `useFileUpload` for single file uploads to the server:
+
+```ts
+const { upload, progress, status, error, reset } = useFileUpload();
+// type must be a key from fileTypes (e.g., "image")
+const response = await upload<{ url: string }>("image", file);
+```
+
+For multiple files:
+
+```ts
+const { uploadFiles, overallProgress, uploadQueue, reset } = useMultipartUpload();
+await uploadFiles("image", files);
+```
+
+## Frontend: S3 direct uploads
+
+Use `useS3Upload` to PUT directly to S3 using a presigned URL:
+
+```ts
+const { upload, progress, status, uploadedUrl, error, reset } = useS3Upload(import.meta.env.VITE_SERVER_URL);
+const key = await upload(file);
+// uploadedUrl is the presigned URL without query params (public object URL if bucket policy allows)
+```
+
+Server side handler used by the hook:
+
+- `POST {VITE_SERVER_URL}/upload/s3-presigned-url` with `{ filename, filetype }`.
+
+## Validation and Types
+
+- Allowed MIME types are defined in `fileTypes`. Extend as needed:
+
+```ts
+export const fileTypes = {
+  image: { mimetypes: ["image/jpeg", "image/png", "image/webp"] },
+  // video: { mimetypes: ["video/mp4"] },
+} as const;
+```
+
+Update backend validation in `file.router.ts` if you add new categories.
+
+## Error Handling
+
+- Repository returns `Result` with `RepositoryError` on failures.
+- Router maps errors to HTTP 4xx/5xx JSON responses.
+- Frontend hooks surface `status` and `error` strings and maintain progress state.
+
+## Security Notes
+
+- Validate `:type` on local uploads against allowed `fileTypes`.
+- Presigned URLs expire (`expiresIn` defaults to 5 minutes). Do not store them client-side beyond immediate use.
+- Ensure S3 bucket policies limit public access unless explicitly desired.
+

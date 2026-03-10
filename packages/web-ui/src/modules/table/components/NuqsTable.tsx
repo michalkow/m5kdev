@@ -1,0 +1,396 @@
+import { Checkbox, Popover, PopoverContent, PopoverTrigger } from "@heroui/react";
+import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
+import type { FilterMethods } from "@m5kdev/commons/modules/table/filter.types";
+import type { TableParams } from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
+import type { ColumnDef } from "@tanstack/react-table";
+import {
+  type ColumnOrderState,
+  flexRender,
+  getCoreRowModel,
+  getPaginationRowModel,
+  type Table as ReactTable,
+  useReactTable,
+  type VisibilityState,
+} from "@tanstack/react-table";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Button } from "#components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "#components/ui/table";
+import { ColumnOrderAndVisibility } from "./ColumnOrderAndVisibility";
+import { TableFiltering } from "./TableFiltering";
+import { TablePagination } from "./TablePagination";
+import type { ColumnDataType, ColumnItem } from "./table.types";
+
+function getStorageKey(columnIds: string[]): string {
+  const sortedIds = [...columnIds].sort().join(",");
+  return `table-column-layout-${sortedIds}`;
+}
+
+function loadLayoutFromStorage(
+  columnIds: string[]
+): { order: string[]; visibility: Record<string, boolean> } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const key = getStorageKey(columnIds);
+    const stored = localStorage.getItem(key);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored) as { order: string[]; visibility: Record<string, boolean> };
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveLayoutToStorage(
+  columnIds: string[],
+  order: string[],
+  visibility: Record<string, boolean>
+): void {
+  if (typeof window === "undefined") return;
+  try {
+    const key = getStorageKey(columnIds);
+    localStorage.setItem(key, JSON.stringify({ order, visibility }));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export type NuqsTableColumn<T> = ColumnDef<T> & {
+  visible?: boolean;
+  type?: ColumnDataType;
+  options?: { label: string; value: string }[];
+  endColumnId?: string;
+};
+
+type NuqsTableParams<T> = {
+  data: T[];
+  total?: number;
+  columns: NuqsTableColumn<T>[];
+  tableProps: TableParams;
+  singleFilter?: boolean;
+  filterMethods?: Partial<FilterMethods>;
+};
+
+function applyOrder(prev: ColumnItem[], nextOrder: string[]): ColumnItem[] {
+  const byId = new Map(prev.map((i) => [i.id, i]));
+  const ordered = nextOrder.map((id) => byId.get(id)).filter(Boolean) as ColumnItem[];
+  // append any newly added columns (if any appear later)
+  for (const item of prev) if (!nextOrder.includes(item.id)) ordered.push(item);
+  return ordered;
+}
+
+function applyVisibility(prev: ColumnItem[], visibility: VisibilityState): ColumnItem[] {
+  return prev.map((column) => ({
+    ...column,
+    visibility: visibility[String(column.id)] ?? column.visibility,
+  }));
+}
+
+export const NuqsTable = <T,>({
+  data,
+  total,
+  columns,
+  tableProps,
+  singleFilter = false,
+  filterMethods,
+}: NuqsTableParams<T>) => {
+  const columnIds = useMemo(() => columns.map((col) => String(col.id)), [columns]);
+  console.log("data", data);
+  // const columnsWithId = useMemo(() => {
+  //   const idColumn: NuqsTableColumn<T> = {
+  //     id: "__row_id",
+  //     accessorKey: "id",
+  //     header: "",
+  //     enableSorting: false,
+  //     enableHiding: false,
+  //     visible: false,
+  //   };
+  //   return [idColumn, ...columns];
+  // }, [columns]);
+
+  const initialLayout = useMemo(() => {
+    const defaultLayout = columns.map((column) => ({
+      id: String(column.id),
+      label: column.header as string,
+      visibility: column.visible !== undefined ? column.visible : true,
+      options: column.options ?? [],
+      type: column.type ?? undefined,
+    }));
+
+    const saved = loadLayoutFromStorage(columnIds);
+    if (!saved) return defaultLayout;
+
+    // Merge saved layout with default layout
+    const savedById = new Map<string, { order: number; visibility: boolean }>();
+    saved.order.forEach((id, index) => {
+      savedById.set(id, { order: index, visibility: saved.visibility[id] ?? true });
+    });
+
+    const merged: ColumnItem[] = [];
+    const processedIds = new Set<string>();
+
+    // Add columns in saved order
+    saved.order.forEach((id) => {
+      const defaultCol = defaultLayout.find((col) => col.id === id);
+      if (defaultCol) {
+        merged.push({
+          ...defaultCol,
+          visibility: saved.visibility[id] ?? defaultCol.visibility,
+        });
+        processedIds.add(id);
+      }
+    });
+
+    // Add any new columns that weren't in saved layout
+    defaultLayout.forEach((col) => {
+      if (!processedIds.has(col.id)) {
+        merged.push(col);
+      }
+    });
+
+    return merged;
+  }, [columns, columnIds]);
+
+  const [layout, setLayout] = useState<ColumnItem[]>(initialLayout);
+
+  // Sync layout when columns change
+  useEffect(() => {
+    setLayout(initialLayout);
+  }, [initialLayout]);
+
+  // Save to localStorage whenever layout changes
+  useEffect(() => {
+    const order = layout.map((col) => col.id);
+    const visibility = Object.fromEntries(layout.map((col) => [col.id, col.visibility]));
+    saveLayoutToStorage(columnIds, order, visibility);
+  }, [layout, columnIds]);
+
+  const columnOrder = useMemo(() => layout.map((column) => column.id), [layout]);
+  const columnVisibility = useMemo(
+    () => Object.fromEntries(layout.map((column) => [column.id, column.visibility])),
+    [layout]
+  );
+
+  const {
+    limit = 10,
+    page = 1,
+    sorting,
+    setSorting,
+    setPagination,
+    pagination,
+    rowSelection,
+    setRowSelection,
+    setFilters,
+    filters,
+  } = tableProps;
+
+  // Redirect back if we're on an empty page (past the last page)
+  useEffect(() => {
+    if (data.length === 0 && page > 1 && total !== undefined) {
+      setPagination?.({ pageIndex: page - 2, pageSize: limit });
+    }
+  }, [data.length, page, limit, total, setPagination]);
+
+  // Calculate pageCount from total if available, otherwise use heuristic
+  const pageCount =
+    total !== undefined
+      ? Math.ceil(total / limit) || 1
+      : data.length === limit
+        ? page + 1
+        : Math.max(page, Math.ceil(data.length / limit));
+
+  const table = useReactTable({
+    data,
+    columns,
+    getRowId: (row) => String((row as { id: string | number }).id),
+    manualSorting: true,
+    manualPagination: true,
+    state: { pagination, sorting, rowSelection, columnOrder, columnVisibility },
+    pageCount,
+    manualFiltering: true,
+    onSortingChange: setSorting,
+    onPaginationChange: setPagination,
+    onRowSelectionChange: setRowSelection,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onColumnOrderChange: (updater) => {
+      setLayout((prev) =>
+        applyOrder(prev, typeof updater === "function" ? updater(prev.map((i) => i.id)) : updater)
+      );
+    },
+    onColumnVisibilityChange: (updater) => {
+      setLayout((prev) =>
+        applyVisibility(
+          prev,
+          typeof updater === "function"
+            ? updater(Object.fromEntries(prev.map((i) => [i.id, i.visibility])))
+            : updater
+        )
+      );
+    },
+  }) as ReactTable<T>;
+
+  const onChangeOrder = (order: ColumnOrderState) => {
+    setLayout((prev) => applyOrder(prev, order));
+  };
+  const onChangeVisibility = (visibility: VisibilityState) => {
+    setLayout((prev) => applyVisibility(prev, visibility));
+  };
+
+  const onFiltersChange = (filters: QueryFilters) => {
+    setFilters?.(filters);
+  };
+
+  const filterableColumns = useMemo(() => {
+    const baseColumns = columns
+      .filter((column) => Boolean(column.type))
+      .map((column) => ({
+        id: String(column.id),
+        label: String(column.header),
+        type: column.type,
+        options: column.options ?? [],
+        endColumnId: column.endColumnId,
+        periodStartColumnId: null,
+        periodEndColumnId: null,
+      }));
+
+    // Add Period pseudo-columns for date columns with endColumnId
+    const periodColumns = columns
+      .filter((column) => column.type === "date" && column.endColumnId)
+      .map((column) => ({
+        id: `${String(column.id)}__period`,
+        label: "Period",
+        type: "date" as ColumnDataType,
+        options: [],
+        endColumnId: null,
+        periodStartColumnId: String(column.id),
+        periodEndColumnId: column.endColumnId,
+      }));
+
+    return [...baseColumns, ...periodColumns];
+  }, [columns]);
+
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  const [isColumnsOpen, setIsColumnsOpen] = useState(false);
+
+  return (
+    <>
+      <div className="flex w-full items-center gap-2 justify-end">
+        <Popover
+          placement="bottom"
+          isOpen={isFiltersOpen}
+          onOpenChange={setIsFiltersOpen}
+          portalContainer={document.body}
+        >
+          <PopoverTrigger>
+            <Button variant="outline" size="sm">
+              <div className="flex items-center gap-2">
+                Filters
+                <ChevronDown className="h-4 w-4" />
+              </div>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent>
+            <TableFiltering
+              columns={filterableColumns}
+              onFiltersChange={onFiltersChange}
+              filters={filters ?? []}
+              onClose={() => setIsFiltersOpen(false)}
+              singleFilter={singleFilter}
+              filterMethods={filterMethods}
+            />
+          </PopoverContent>
+        </Popover>
+        <Popover
+          placement="bottom"
+          isOpen={isColumnsOpen}
+          onOpenChange={setIsColumnsOpen}
+          portalContainer={document.body}
+        >
+          <PopoverTrigger>
+            <Button variant="outline" size="sm">
+              <div className="flex items-center gap-2">
+                Columns
+                <ChevronDown className="h-4 w-4" />
+              </div>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent>
+            <ColumnOrderAndVisibility
+              layout={layout}
+              onChangeOrder={onChangeOrder}
+              onChangeVisibility={onChangeVisibility}
+              onClose={() => setIsColumnsOpen(false)}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>
+              <Checkbox
+                isSelected={table.getIsAllRowsSelected()}
+                onValueChange={(checked) => {
+                  table.toggleAllRowsSelected(checked);
+                }}
+              />
+            </TableHead>
+            {table.getHeaderGroups()[0].headers.map((header) => (
+              <TableHead
+                onClick={
+                  header.column.getCanSort() ? header.column.getToggleSortingHandler() : undefined
+                }
+                key={header.id}
+              >
+                {flexRender(header.column.columnDef.header, header.getContext())}
+                {header.column.getCanSort() && (
+                  <>
+                    {header.column.getIsSorted() === "asc" && (
+                      <ChevronUp className="h-4 w-4 inline ml-1" />
+                    )}
+                    {header.column.getIsSorted() === "desc" && (
+                      <ChevronDown className="h-4 w-4 inline ml-1" />
+                    )}
+                  </>
+                )}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {table.getRowModel().rows.map((row) => (
+            <TableRow key={row.id}>
+              <TableCell>
+                <Checkbox
+                  isSelected={row.getIsSelected()}
+                  onValueChange={(checked) => {
+                    row.toggleSelected(checked);
+                  }}
+                />
+              </TableCell>
+              {row.getVisibleCells().map((cell) => (
+                <TableCell key={cell.id}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <TablePagination
+        pageCount={pageCount}
+        page={page}
+        limit={limit}
+        setPagination={setPagination}
+      />
+    </>
+  );
+};

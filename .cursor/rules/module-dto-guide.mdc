@@ -1,0 +1,677 @@
+---
+globs: packages/backend/src/modules/**/*.dto.ts
+alwaysApply: false
+---
+
+# Module DTO File Structure Guide
+
+This guide explains how to create Data Transfer Object (DTO) files for server modules. DTOs define the shape of data returned from the API and handle transformations for complex queries.
+
+## File Location
+```
+src/modules/[module]/[module].dto.ts
+```
+
+## Core Concepts
+
+### 1. DTOs (Data Transfer Objects)
+DTOs define what data is exposed to the client and how it's structured. They act as a contract between the server and client.
+
+### Key Components:
+- **DTOs**: Schema definitions for data shapes
+- **Select Columns**: Database column selections for queries
+- **Output Schemas**: Zod schemas for API responses
+- **Types**: TypeScript types with Result wrappers for error handling
+- **Transformers**: Functions to reshape complex query results
+
+## File Structure Pattern
+
+```typescript
+import type { ServerError } from "@m5kdev/backend/utils/errors";
+import type { Result } from "neverthrow";
+import type { z } from "zod";
+import { createSelectDTO } from "@m5kdev/backend/modules/base/base.dto";
+import { [table] } from "./[module].db";
+// Import related tables if needed
+import { [relatedTable] } from "../[relatedModule]/[relatedModule].db";
+
+// 1. DTOs Section
+// 2. Select Columns Section
+// 3. Output Schemas Section
+// 4. Types Section
+// 5. Transformers Section (if needed)
+```
+
+## Section 1: DTOs
+
+Create DTOs using the `createSelectDTO` helper function:
+
+```typescript
+// Basic DTO - includes all columns
+const moduleSelectDTO = createSelectDTO(moduleTable);
+
+// DTO with specific columns only (using pick)
+const modulePartialSelectDTO = createSelectDTO(moduleTable, {
+  pick: ["id", "name", "status"] as const,
+});
+
+// DTO excluding sensitive columns (using omit)
+const modulePublicSelectDTO = createSelectDTO(moduleTable, {
+  omit: ["internalNotes", "deletedAt"] as const,
+});
+```
+
+### createSelectDTO Function
+- Returns an object with `columns` and `schema` properties
+- `columns`: Database column selection object for Drizzle queries
+- `schema`: Zod schema for validation and type inference
+
+## Section 2: Select Columns
+
+Define column selections for different query scenarios:
+
+```typescript
+// Simple select columns
+export const moduleSelectColumns = moduleSelectDTO.columns;
+
+// Columns for detailed view with relations
+export const moduleReadSelectColumns = {
+  module: moduleSelectColumns,
+  relatedEntity: relatedEntitySelectDTO.columns,
+};
+
+// Columns for list view (minimal data)
+export const moduleListSelectColumns = {
+  module: moduleSelectColumns,
+  relatedEntity: relatedEntityPartialSelectDTO.columns,
+};
+```
+
+### Guidelines:
+- Export column selections for use in repository queries
+- Create different selections for different use cases (list, detail, public)
+- Use object structure for joins/relations
+
+## Section 3: Output Schemas
+
+Define Zod schemas for API responses:
+
+```typescript
+// Single entity output
+export const moduleSelectOutput = moduleSelectDTO.schema;
+
+// Array of entities
+export const moduleSelectManyOutput = moduleSelectDTO.schema.array();
+
+// Entity with relations (using extend)
+export const moduleReadSelectOutput = moduleSelectDTO.schema.extend({
+  relatedEntities: relatedEntitySelectDTO.schema.array(),
+});
+
+// Complex list output
+export const moduleListSelectOutput = moduleSelectDTO.schema
+  .extend({
+    relatedEntity: relatedEntityPartialSelectDTO.schema.array(),
+  })
+  .array();
+
+// Custom output schemas
+export const moduleStatusOutput = z.object({
+  active: z.number(),
+  inactive: z.number(),
+  pending: z.number(),
+});
+```
+
+### Best Practices:
+- Use `.extend()` to add related data to base schemas
+- Create specific output schemas for different endpoints
+- Reuse base DTOs to maintain consistency
+
+## Section 4: Types
+
+Define TypeScript types with Result wrapper for error handling:
+
+```typescript
+// Single entity result
+export type ModuleSelectOutputResult = Result<
+  z.infer<typeof moduleSelectOutput>, 
+  ServerError
+>;
+
+// Multiple entities result
+export type ModuleSelectManyOutputResult = Result<
+  z.infer<typeof moduleSelectManyOutput>,
+  ServerError
+>;
+
+// Complex query result
+export type ModuleReadSelectOutputResult = Result<
+  z.infer<typeof moduleReadSelectOutput>,
+  ServerError
+>;
+
+// List result
+export type ModuleListSelectOutputResult = Result<
+  z.infer<typeof moduleListSelectOutput>,
+  ServerError
+>;
+```
+
+### Key Points:
+- Always wrap in `Result<T, ServerError>` for consistent error handling
+- Use `z.infer<typeof schema>` to derive types from Zod schemas
+- Export all types for use in service and repository layers
+
+## Section 5: Transformers
+
+Create transformer functions for complex query results that need reshaping:
+
+```typescript
+export const moduleReadSelectTransformer = (
+  rows: {
+    module: z.infer<typeof moduleSelectDTO.schema>;
+    relatedEntity: z.infer<typeof relatedEntitySelectDTO.schema> | null;
+  }[]
+): z.infer<typeof moduleReadSelectOutput> => {
+  // Handle single entity with array of relations
+  const result = [];
+  for (const { module, relatedEntity } of rows) {
+    const moduleIndex = result.findIndex((m) => m.id === module.id);
+    if (moduleIndex === -1) {
+      result.push({
+        ...module,
+        relatedEntities: relatedEntity ? [relatedEntity] : [],
+      });
+    } else if (relatedEntity) {
+      result[moduleIndex].relatedEntities.push(relatedEntity);
+    }
+  }
+  return result[0] ?? null;
+};
+
+export const moduleListSelectTransformer = (
+  rows: {
+    module: z.infer<typeof moduleSelectDTO.schema>;
+    relatedEntity: z.infer<typeof relatedEntityPartialSelectDTO.schema> | null;
+  }[]
+): z.infer<typeof moduleListSelectOutput> => {
+  // Handle array of entities with relations
+  const result = [];
+  for (const { module, relatedEntity } of rows) {
+    const moduleIndex = result.findIndex((m) => m.id === module.id);
+    if (moduleIndex === -1) {
+      result.push({
+        ...module,
+        relatedEntities: relatedEntity ? [relatedEntity] : [],
+      });
+    } else if (relatedEntity) {
+      result[moduleIndex].relatedEntities.push(relatedEntity);
+    }
+  }
+  return result;
+};
+```
+
+### When to Use Transformers:
+- When joining tables produces flat rows that need to be nested
+- When the database structure differs from the desired API response
+- For aggregating related data into arrays
+
+## Common Patterns
+
+### 1. Reusing Base DTOs
+```typescript
+import { deleteOutput, deleteManyOutput } from "@m5kdev/backend/modules/base/base.dto";
+
+export const moduleDeleteOutput = deleteOutput;
+export const moduleDeleteManyOutput = deleteManyOutput;
+```
+
+### 2. Status/Summary DTOs
+```typescript
+export const moduleStatsOutput = z.object({
+  total: z.number(),
+  byStatus: z.object({
+    active: z.number(),
+    inactive: z.number(),
+  }),
+  lastUpdated: z.date().nullable(),
+});
+```
+
+### 3. Nested Relations
+```typescript
+const moduleWithFullRelationsDTO = createSelectDTO(moduleTable);
+const userSelectDTO = createSelectDTO(users, { pick: ["id", "name", "email"] as const });
+
+export const moduleDetailOutput = moduleWithFullRelationsDTO.schema.extend({
+  user: userSelectDTO.schema,
+  tags: z.array(z.object({ id: z.string(), name: z.string() })),
+  metadata: z.record(z.unknown()).optional(),
+});
+```
+
+## Integration with Other Layers
+
+### Repository Layer
+Uses select columns for queries:
+```typescript
+const result = await db
+  .select(moduleReadSelectColumns)
+  .from(modules)
+  .leftJoin(relatedTable, eq(modules.id, relatedTable.moduleId));
+```
+
+### Service Layer
+Uses types for return values:
+```typescript
+async getById(id: string): Promise<ModuleReadSelectOutputResult> {
+  // Service logic
+}
+```
+
+### tRPC Layer
+Uses output schemas for validation:
+```typescript
+.output(moduleReadSelectOutput)
+.query(async ({ input }) => {
+  // Returns data matching the output schema
+})
+```
+
+## Best Practices
+
+1. **Consistency**: Follow the same structure across all modules
+2. **Type Safety**: Always export TypeScript types derived from Zod schemas
+3. **Reusability**: Create base DTOs and extend them for specific use cases
+4. **Security**: Use pick/omit to control what data is exposed
+5. **Performance**: Create minimal DTOs for list views
+6. **Documentation**: Comment complex transformers
+7. **Error Handling**: Always use Result wrapper for proper error handling
+
+## Example: Complete DTO File
+
+```typescript
+import type { ServerError } from "@m5kdev/backend/utils/errors";
+import type { Result } from "neverthrow";
+import type { z } from "zod";
+import { createSelectDTO } from "@m5kdev/backend/modules/base/base.dto";
+import { products } from "./products.db";
+import { categories } from "../category/categories.db";
+
+// DTOs
+const productSelectDTO = createSelectDTO(products);
+const productListDTO = createSelectDTO(products, {
+  pick: ["id", "name", "price", "status", "createdAt"] as const,
+});
+const categorySelectDTO = createSelectDTO(categories, {
+  pick: ["id", "name"] as const,
+});
+
+// Select columns
+export const productSelectColumns = productSelectDTO.columns;
+export const productDetailSelectColumns = {
+  product: productSelectColumns,
+  category: categorySelectDTO.columns,
+};
+
+// Output schemas
+export const productSelectOutput = productSelectDTO.schema;
+export const productListOutput = productListDTO.schema.array();
+export const productDetailOutput = productSelectDTO.schema.extend({
+  category: categorySelectDTO.schema.nullable(),
+});
+
+// Types
+export type ProductSelectOutputResult = Result<
+  z.infer<typeof productSelectOutput>,
+  ServerError
+>;
+export type ProductListOutputResult = Result<
+  z.infer<typeof productListOutput>,
+  ServerError
+>;
+export type ProductDetailOutputResult = Result<
+  z.infer<typeof productDetailOutput>,
+  ServerError
+>;
+```
+
+This structure ensures consistent, type-safe data handling across your entire application.
+# Module DTO File Structure Guide
+
+This guide explains how to create Data Transfer Object (DTO) files for server modules. DTOs define the shape of data returned from the API and handle transformations for complex queries.
+
+## File Location
+```
+src/modules/[module]/[module].dto.ts
+```
+
+## Core Concepts
+
+### 1. DTOs (Data Transfer Objects)
+DTOs define what data is exposed to the client and how it's structured. They act as a contract between the server and client.
+
+### Key Components:
+- **DTOs**: Schema definitions for data shapes
+- **Select Columns**: Database column selections for queries
+- **Output Schemas**: Zod schemas for API responses
+- **Types**: TypeScript types with Result wrappers for error handling
+- **Transformers**: Functions to reshape complex query results
+
+## File Structure Pattern
+
+```typescript
+import type { ServerError } from "@m5kdev/backend/utils/errors";
+import type { Result } from "neverthrow";
+import type { z } from "zod";
+import { createSelectDTO } from "@m5kdev/backend/modules/base/base.dto";
+import { [table] } from "./[module].db";
+// Import related tables if needed
+import { [relatedTable] } from "../[relatedModule]/[relatedModule].db";
+
+// 1. DTOs Section
+// 2. Select Columns Section
+// 3. Output Schemas Section
+// 4. Types Section
+// 5. Transformers Section (if needed)
+```
+
+## Section 1: DTOs
+
+Create DTOs using the `createSelectDTO` helper function:
+
+```typescript
+// Basic DTO - includes all columns
+const moduleSelectDTO = createSelectDTO(moduleTable);
+
+// DTO with specific columns only (using pick)
+const modulePartialSelectDTO = createSelectDTO(moduleTable, {
+  pick: ["id", "name", "status"] as const,
+});
+
+// DTO excluding sensitive columns (using omit)
+const modulePublicSelectDTO = createSelectDTO(moduleTable, {
+  omit: ["internalNotes", "deletedAt"] as const,
+});
+```
+
+### createSelectDTO Function
+- Returns an object with `columns` and `schema` properties
+- `columns`: Database column selection object for Drizzle queries
+- `schema`: Zod schema for validation and type inference
+
+## Section 2: Select Columns
+
+Define column selections for different query scenarios:
+
+```typescript
+// Simple select columns
+export const moduleSelectColumns = moduleSelectDTO.columns;
+
+// Columns for detailed view with relations
+export const moduleReadSelectColumns = {
+  module: moduleSelectColumns,
+  relatedEntity: relatedEntitySelectDTO.columns,
+};
+
+// Columns for list view (minimal data)
+export const moduleListSelectColumns = {
+  module: moduleSelectColumns,
+  relatedEntity: relatedEntityPartialSelectDTO.columns,
+};
+```
+
+### Guidelines:
+- Export column selections for use in repository queries
+- Create different selections for different use cases (list, detail, public)
+- Use object structure for joins/relations
+
+## Section 3: Output Schemas
+
+Define Zod schemas for API responses:
+
+```typescript
+// Single entity output
+export const moduleSelectOutput = moduleSelectDTO.schema;
+
+// Array of entities
+export const moduleSelectManyOutput = moduleSelectDTO.schema.array();
+
+// Entity with relations (using extend)
+export const moduleReadSelectOutput = moduleSelectDTO.schema.extend({
+  relatedEntities: relatedEntitySelectDTO.schema.array(),
+});
+
+// Complex list output
+export const moduleListSelectOutput = moduleSelectDTO.schema
+  .extend({
+    relatedEntity: relatedEntityPartialSelectDTO.schema.array(),
+  })
+  .array();
+
+// Custom output schemas
+export const moduleStatusOutput = z.object({
+  active: z.number(),
+  inactive: z.number(),
+  pending: z.number(),
+});
+```
+
+### Best Practices:
+- Use `.extend()` to add related data to base schemas
+- Create specific output schemas for different endpoints
+- Reuse base DTOs to maintain consistency
+
+## Section 4: Types
+
+Define TypeScript types with Result wrapper for error handling:
+
+```typescript
+// Single entity result
+export type ModuleSelectOutputResult = Result<
+  z.infer<typeof moduleSelectOutput>, 
+  ServerError
+>;
+
+// Multiple entities result
+export type ModuleSelectManyOutputResult = Result<
+  z.infer<typeof moduleSelectManyOutput>,
+  ServerError
+>;
+
+// Complex query result
+export type ModuleReadSelectOutputResult = Result<
+  z.infer<typeof moduleReadSelectOutput>,
+  ServerError
+>;
+
+// List result
+export type ModuleListSelectOutputResult = Result<
+  z.infer<typeof moduleListSelectOutput>,
+  ServerError
+>;
+```
+
+### Key Points:
+- Always wrap in `Result<T, ServerError>` for consistent error handling
+- Use `z.infer<typeof schema>` to derive types from Zod schemas
+- Export all types for use in service and repository layers
+
+## Section 5: Transformers
+
+Create transformer functions for complex query results that need reshaping:
+
+```typescript
+export const moduleReadSelectTransformer = (
+  rows: {
+    module: z.infer<typeof moduleSelectDTO.schema>;
+    relatedEntity: z.infer<typeof relatedEntitySelectDTO.schema> | null;
+  }[]
+): z.infer<typeof moduleReadSelectOutput> => {
+  // Handle single entity with array of relations
+  const result = [];
+  for (const { module, relatedEntity } of rows) {
+    const moduleIndex = result.findIndex((m) => m.id === module.id);
+    if (moduleIndex === -1) {
+      result.push({
+        ...module,
+        relatedEntities: relatedEntity ? [relatedEntity] : [],
+      });
+    } else if (relatedEntity) {
+      result[moduleIndex].relatedEntities.push(relatedEntity);
+    }
+  }
+  return result[0] ?? null;
+};
+
+export const moduleListSelectTransformer = (
+  rows: {
+    module: z.infer<typeof moduleSelectDTO.schema>;
+    relatedEntity: z.infer<typeof relatedEntityPartialSelectDTO.schema> | null;
+  }[]
+): z.infer<typeof moduleListSelectOutput> => {
+  // Handle array of entities with relations
+  const result = [];
+  for (const { module, relatedEntity } of rows) {
+    const moduleIndex = result.findIndex((m) => m.id === module.id);
+    if (moduleIndex === -1) {
+      result.push({
+        ...module,
+        relatedEntities: relatedEntity ? [relatedEntity] : [],
+      });
+    } else if (relatedEntity) {
+      result[moduleIndex].relatedEntities.push(relatedEntity);
+    }
+  }
+  return result;
+};
+```
+
+### When to Use Transformers:
+- When joining tables produces flat rows that need to be nested
+- When the database structure differs from the desired API response
+- For aggregating related data into arrays
+
+## Common Patterns
+
+### 1. Reusing Base DTOs
+```typescript
+import { deleteOutput, deleteManyOutput } from "@m5kdev/backend/modules/base/base.dto";
+
+export const moduleDeleteOutput = deleteOutput;
+export const moduleDeleteManyOutput = deleteManyOutput;
+```
+
+### 2. Status/Summary DTOs
+```typescript
+export const moduleStatsOutput = z.object({
+  total: z.number(),
+  byStatus: z.object({
+    active: z.number(),
+    inactive: z.number(),
+  }),
+  lastUpdated: z.date().nullable(),
+});
+```
+
+### 3. Nested Relations
+```typescript
+const moduleWithFullRelationsDTO = createSelectDTO(moduleTable);
+const userSelectDTO = createSelectDTO(users, { pick: ["id", "name", "email"] as const });
+
+export const moduleDetailOutput = moduleWithFullRelationsDTO.schema.extend({
+  user: userSelectDTO.schema,
+  tags: z.array(z.object({ id: z.string(), name: z.string() })),
+  metadata: z.record(z.unknown()).optional(),
+});
+```
+
+## Integration with Other Layers
+
+### Repository Layer
+Uses select columns for queries:
+```typescript
+const result = await db
+  .select(moduleReadSelectColumns)
+  .from(modules)
+  .leftJoin(relatedTable, eq(modules.id, relatedTable.moduleId));
+```
+
+### Service Layer
+Uses types for return values:
+```typescript
+async getById(id: string): Promise<ModuleReadSelectOutputResult> {
+  // Service logic
+}
+```
+
+### tRPC Layer
+Uses output schemas for validation:
+```typescript
+.output(moduleReadSelectOutput)
+.query(async ({ input }) => {
+  // Returns data matching the output schema
+})
+```
+
+## Best Practices
+
+1. **Consistency**: Follow the same structure across all modules
+2. **Type Safety**: Always export TypeScript types derived from Zod schemas
+3. **Reusability**: Create base DTOs and extend them for specific use cases
+4. **Security**: Use pick/omit to control what data is exposed
+5. **Performance**: Create minimal DTOs for list views
+6. **Documentation**: Comment complex transformers
+7. **Error Handling**: Always use Result wrapper for proper error handling
+
+## Example: Complete DTO File
+
+```typescript
+import type { ServerError } from "@m5kdev/backend/utils/errors";
+import type { Result } from "neverthrow";
+import type { z } from "zod";
+import { createSelectDTO } from "@m5kdev/backend/modules/base/base.dto";
+import { products } from "./products.db";
+import { categories } from "../category/categories.db";
+
+// DTOs
+const productSelectDTO = createSelectDTO(products);
+const productListDTO = createSelectDTO(products, {
+  pick: ["id", "name", "price", "status", "createdAt"] as const,
+});
+const categorySelectDTO = createSelectDTO(categories, {
+  pick: ["id", "name"] as const,
+});
+
+// Select columns
+export const productSelectColumns = productSelectDTO.columns;
+export const productDetailSelectColumns = {
+  product: productSelectColumns,
+  category: categorySelectDTO.columns,
+};
+
+// Output schemas
+export const productSelectOutput = productSelectDTO.schema;
+export const productListOutput = productListDTO.schema.array();
+export const productDetailOutput = productSelectDTO.schema.extend({
+  category: categorySelectDTO.schema.nullable(),
+});
+
+// Types
+export type ProductSelectOutputResult = Result<
+  z.infer<typeof productSelectOutput>,
+  ServerError
+>;
+export type ProductListOutputResult = Result<
+  z.infer<typeof productListOutput>,
+  ServerError
+>;
+export type ProductDetailOutputResult = Result<
+  z.infer<typeof productDetailOutput>,
+  ServerError
+>;
+```
+
+This structure ensures consistent, type-safe data handling across your entire application.

@@ -1,0 +1,42 @@
+---
+globs: apps/*/server/src/modules/**/*{.grants.ts,.service.ts}
+alwaysApply: false
+---
+
+# Module Grants and Permission Guide
+
+Use this when working with module grants and `BasePermissionService`.
+
+## Core Rules
+
+- Keep grants in `<module>.grants.ts`.
+- Keep authorization checks in `<module>.service.ts`.
+- Action names in `accessGuard`/`accessGuardAsync` must exactly match action names defined in grants.
+- Prefer canonical action vocabulary: `read`, `write`, `delete`, `publish`.
+
+## Recommended Pattern
+
+Define typed actions once and reuse in both grants and service:
+
+```typescript
+export const contentActions = ["read", "write", "delete", "publish"] as const;
+export type ContentAction = (typeof contentActions)[number];
+```
+
+Use these actions in grants and in service guard calls to avoid string drift.
+
+## Service Choice
+
+- Use `BasePermissionService` only if the module actually performs permission checks.
+- If a module has no `accessGuard*` usage, use `BaseService` instead.
+
+## Guard Placement
+
+- Guard read/update/delete/publish operations at service boundaries.
+- Keep repository methods permission-agnostic.
+
+## Anti-Patterns
+
+- Grant declares `write` while service checks `update`.
+- Decorating a module with grants but never enforcing them in service methods.
+- Doing permission checks in tRPC/router instead of service.

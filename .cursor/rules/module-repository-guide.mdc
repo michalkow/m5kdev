@@ -1,0 +1,53 @@
+---
+globs: apps/*/server/src/modules/**/*.repository.ts
+alwaysApply: false
+---
+
+# Module Repository File Style Guide
+
+Derived from current backend stack patterns.
+
+## Conventions
+
+- Prefer `BaseTableRepository<Orm, Schema, ..., Schema["table"]>` for table-bound modules.
+- Use `BaseRepository` for non-table or multi-table repositories.
+- Keep repositories data-focused: persistence, query composition, and lightweight mapping only.
+- Do not import service classes into repositories.
+- Use `throwableAsync` + `ServerResultAsync` consistently.
+- Use Drizzle operators (`and`, `eq`, `inArray`, `isNull`, etc.) and query helpers from base classes.
+- Keep optional `tx` args on methods that may run inside transactions.
+- When running inside `this.orm.transaction`, use `tx` consistently; avoid mixing `this.orm` calls in the same transaction flow.
+- Leave orchestration (cross-domain workflows, policy decisions, side effects) to services.
+
+## Method Patterns
+
+- `queryList(query)`: use base pagination/sorting/filter helpers where possible.
+- `findById` / `findManyById`: use base table methods unless custom joins are required.
+- `create` / `update` / `softDelete` / `delete`: prefer base table methods, override only for custom behavior.
+- Multi-table list/read methods: use DTO select schemas/transformers to keep output shaping explicit.
+
+## Example Skeleton
+
+```typescript
+import { BaseTableRepository } from "@m5kdev/backend/modules/base/base.repository";
+import { and, eq, inArray, isNull } from "drizzle-orm";
+import { ok } from "neverthrow";
+import type { Orm, Schema } from "#db";
+
+export class ItemRepository extends BaseTableRepository<
+  Orm,
+  Schema,
+  Record<string, never>,
+  Schema["items"]
+> {
+  async listForUser(userId: string) {
+    return this.throwableAsync(async () => {
+      const rows = await this.orm
+        .select()
+        .from(this.schema.items)
+        .where(and(eq(this.schema.items.userId, userId), isNull(this.schema.items.deletedAt)));
+      return ok(rows);
+    });
+  }
+}
+```

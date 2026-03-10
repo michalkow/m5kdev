@@ -1,0 +1,55 @@
+---
+globs: apps/*/server/src/modules/**/*.ts
+alwaysApply: false
+---
+# Server Module Structure Guide
+
+Use this for modules in `apps/*/server/src/modules/**`.
+
+## Preferred Module Layout
+
+Shared contracts:
+
+```
+apps/*/shared/src/modules/<module>/
+├── <module>.constants.ts
+└── <module>.schema.ts
+```
+
+Server module:
+
+```
+apps/*/server/src/modules/<module>/
+├── <module>.db.ts
+├── <module>.dto.ts            # optional for richer selects/outputs
+├── <module>.repository.ts
+├── <module>.service.ts
+├── <module>.trpc.ts           # or *.router.ts for express endpoints
+├── <module>.grants.ts         # when using BasePermissionService
+└── <module>.jobs.ts           # optional workflow jobs
+```
+
+## Layer Boundaries
+
+- `.repository.ts`: persistence only, no service imports.
+- `.service.ts`: business logic and orchestration.
+- `.trpc.ts` / `.router.ts`: transport only, delegate to service.
+- `.jobs.ts`: worker entrypoints calling service methods.
+
+## Composition Pattern
+
+- Define classes in module files.
+- Instantiate repositories in `apps/*/server/src/repository.ts`.
+- Instantiate services in `apps/*/server/src/service.ts`.
+- Keep module files free of global singleton wiring where possible.
+
+## Auth and Permission Pattern
+
+- Use `BasePermissionService` only when permission checks are actually needed.
+- Keep grants in `<module>.grants.ts`.
+- Guard action strings must match grant action names exactly.
+
+## Workflow Pattern
+
+- Queue payloads should be serializable primitives (`userId`, ids, input), not full request context objects.
+- Prefer injecting service registries into workflow bootstrap over importing global service singletons inside jobs.

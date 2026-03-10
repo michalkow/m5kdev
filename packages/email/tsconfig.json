@@ -1,0 +1,13 @@
+{
+  "extends": "@m5kdev/config/tsconfig.react.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "scripts",
+    "src"
+  ]
+}

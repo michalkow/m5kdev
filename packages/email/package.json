@@ -1,0 +1,39 @@
+{
+  "name": "@m5kdev/email",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michalkow/m5kdev.git"
+  },
+  "homepage": "https://github.com/michalkow/m5kdev#readme",
+  "bugs": "https://github.com/michalkow/m5kdev/issues",
+  "files": [
+    "src",
+    "scripts"
+  ],
+  "scripts": {
+    "build": "tsx scripts/build.ts",
+    "push": "node deploy.js",
+    "migrate": "pnpm build && node deploy.js"
+  },
+  "devDependencies": {
+    "dotenv": "catalog:",
+    "resend": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "@m5kdev/config": "workspace:*"
+  },
+  "dependencies": {
+    "@react-email/components": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "exports": {
+    "./components/*": "./src/components/*.tsx",
+    "./types": "./src/types.ts"
+  }
+}

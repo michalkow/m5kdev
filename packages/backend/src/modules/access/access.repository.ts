@@ -1,0 +1,36 @@
+import { and, eq } from "drizzle-orm";
+import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import { ok } from "neverthrow";
+import * as auth from "#modules/auth/auth.db";
+import type { ServerResultAsync } from "#modules/base/base.dto";
+import { BaseRepository } from "#modules/base/base.repository";
+
+const schema = { ...auth };
+type Schema = typeof schema;
+type Orm = LibSQLDatabase<Schema>;
+
+export class AccessRepository extends BaseRepository<Orm, Schema, Record<string, never>> {
+  async getOrganizationRole(userId: string, organizationId: string): ServerResultAsync<string> {
+    return this.throwableAsync(async () => {
+      const [member] = await this.orm
+        .select({ role: schema.members.role })
+        .from(schema.members)
+        .where(
+          and(eq(schema.members.organizationId, organizationId), eq(schema.members.userId, userId))
+        )
+        .limit(1);
+      return ok(member?.role ?? "");
+    });
+  }
+
+  async getTeamRole(userId: string, teamId: string): ServerResultAsync<string> {
+    return this.throwableAsync(async () => {
+      const [member] = await this.orm
+        .select({ role: schema.teamMembers.role })
+        .from(schema.teamMembers)
+        .where(and(eq(schema.teamMembers.teamId, teamId), eq(schema.teamMembers.userId, userId)))
+        .limit(1);
+      return ok(member?.role ?? "");
+    });
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "name": "@m5kdev/frontend",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michalkow/m5kdev.git"
+  },
+  "homepage": "https://github.com/michalkow/m5kdev#readme",
+  "bugs": "https://github.com/michalkow/m5kdev/issues",
+  "scripts": {
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/s3-request-presigner": "catalog:",
+    "@internationalized/date": "catalog:",
+    "@m5kdev/commons": "workspace:*",
+    "@tanstack/react-query": "catalog:",
+    "@trpc/client": "catalog:",
+    "@trpc/tanstack-react-query": "catalog:",
+    "better-auth": "catalog:",
+    "luxon": "catalog:",
+    "nuqs": "catalog:",
+    "posthog-js": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@m5kdev/config": "workspace:*",
+    "@m5kdev/backend": "workspace:*",
+    "@heroui/react": "catalog:",
+    "@tanstack/react-table": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@types/luxon": "catalog:",
+    "globals": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  },
+  "imports": {
+    "#types": "./src/types.ts"
+  },
+  "exports": {
+    "./modules/auth/components/*": "./src/modules/auth/components/*.tsx",
+    "./modules/auth/hooks/*": "./src/modules/auth/hooks/*.ts",
+    "./modules/billing/components/*": "./src/modules/billing/components/*.tsx",
+    "./modules/billing/hooks/*": "./src/modules/billing/hooks/*.ts",
+    "./modules/auth/*": "./src/modules/auth/*.ts",
+    "./modules/charts/hooks/*": "./src/modules/charts/hooks/*.ts",
+    "./modules/file/hooks/*": "./src/modules/file/hooks/*.ts",
+    "./modules/table/hooks/*": "./src/modules/table/hooks/*.ts",
+    "./utils/*": "./src/utils/*.ts"
+  }
+}

@@ -1,0 +1,146 @@
+---
+globs: apps/*/server/src/modules/**/*.prompt.ts
+alwaysApply: false
+---
+
+# Module Prompt File Technical Reference
+
+## File Structure
+
+```typescript
+import { Prompt } from "@m5kdev/backend/modules/ai/ai.prompt";
+import { z } from "zod";
+
+// System prompts (optional)
+export const [action][Module]SystemPrompt = new Prompt<{ variables }>(`...`);
+
+// Output schemas
+export const [action][Module]OutputSchema = z.object({ ... });
+
+// Main prompts
+export const [action][Module]Prompt = new Prompt<{ variables }>(`...`);
+
+// Export inferred types
+export type [Action][Module]Output = z.infer<typeof [action][Module]OutputSchema>;
+```
+
+## Naming Conventions
+
+| Component | Pattern | Example |
+|-----------|---------|---------|
+| System Prompt | `[action][Module]SystemPrompt` | `generateContentSystemPrompt` |
+| Output Schema | `[action][Module]OutputSchema` | `generateContentOutputSchema` |
+| Main Prompt | `[action][Module]Prompt` | `generateContentPrompt` |
+
+## Template Syntax (Mustache)
+
+### Variable Interpolation
+```
+{{variableName}}
+```
+
+### Conditional Sections
+```
+{{#optionalVariable}}
+<section>{{optionalVariable}}</section>
+{{/optionalVariable}}
+```
+
+### Lists/Arrays
+```
+{{#items}}
+- {{name}}: {{description}}
+{{/items}}
+```
+
+## Type Safety
+
+### Prompt Generic Types
+```typescript
+export const myPrompt = new Prompt<{
+  requiredVar: string;
+  optionalVar?: string;
+}>(`...`);
+```
+
+### Output Schema Types
+```typescript
+export const outputSchema = z.object({
+  title: z.string().describe("Description for field"),
+  items: z.array(z.string()),
+  optional: z.string().optional(),
+});
+
+export type OutputType = z.infer<typeof outputSchema>;
+```
+
+## Prompt Configuration
+
+```typescript
+export const advancedPrompt = new Prompt<{...}>(
+  `...prompt text...`,
+  {
+    name: "generate-content",
+    type: "chat", // or "text"
+    config: {
+      model: "gpt-4",
+      temperature: 0.7,
+      supported_languages: ["en", "es", "fr"],
+    },
+    version: 1,
+    labels: ["content", "generation"],
+    tags: ["production", "tested"],
+  }
+);
+```
+
+## Service Integration
+
+```typescript
+// In [module].service.ts
+import { generateContentPrompt, generateContentOutputSchema } from "./[module].prompt";
+
+async function generateContent(data: GenerateContentInput) {
+  const prompt = generateContentPrompt.compile({
+    platform: data.platform,
+    styleContext: data.style,
+    // ... other variables
+  });
+  
+  const result = await aiService.generateObject({
+    model: GPT_5_MINI,
+    system: generateContentSystemPrompt.compile({}),
+    prompt,
+    schema: generateContentOutputSchema,
+  });
+  
+  return result;
+}
+```
+
+## Technical Notes
+
+- The `compile()` method automatically calls `.trim()` on the prompt string
+- All template variables must be defined in the generic type parameter
+- Zod schemas should use `.describe()` for field descriptions
+- Export inferred types for use in services and DTOs
+
+## Common Patterns
+
+### Multi-Step Prompts
+```typescript
+export const analyzeContentPrompt = new Prompt<{...}>(`...`);
+export const refineContentPrompt = new Prompt<{...}>(`...`);
+export const finalizeContentPrompt = new Prompt<{...}>(`...`);
+```
+
+### Shared Context Types
+```typescript
+interface BaseContentContext {
+  platform: string;
+  audience: string;
+}
+
+export const prompt1 = new Prompt<BaseContentContext & { extra: string }>(`...`);
+export const prompt2 = new Prompt<BaseContentContext & { other: string }>(`...`);
+```
