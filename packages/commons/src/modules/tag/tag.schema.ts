@@ -50,6 +50,7 @@ export const tagUpdateSchema = z.object({
   id: z.string(),
   name: z.string().optional(),
   color: z.string().optional(),
+  assignableTo: z.string().array().optional(),
 });
 
 export const tagLinkSchema = z.object({
@@ -58,11 +59,16 @@ export const tagLinkSchema = z.object({
   resourceId: z.string(),
 });
 
+export const tagDeleteSchema = z.object({
+  id: z.string(),
+});
+
 export type TagSchema = z.infer<typeof tagSchema>;
 export type TaggingSchema = z.infer<typeof taggingSchema>;
 export type TagListSchema = z.infer<typeof tagListSchema>;
 export type TagCreateSchema = z.infer<typeof tagCreateSchema>;
 export type TagUpdateSchema = z.infer<typeof tagUpdateSchema>;
 export type TagLinkSchema = z.infer<typeof tagLinkSchema>;
+export type TagDeleteSchema = z.infer<typeof tagDeleteSchema>;
 export type TagListOutputSchema = z.infer<typeof tagListOutputSchema>;
 export type TagListInputSchema = z.infer<typeof tagListInputSchema>;

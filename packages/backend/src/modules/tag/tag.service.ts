@@ -1,5 +1,6 @@
 import type {
   TagCreateSchema,
+  TagDeleteSchema,
   TagLinkSchema,
   TagListInputSchema,
   TagListOutputSchema,
@@ -44,5 +45,9 @@ export class TagService extends BaseService<{ tag: TagRepository }, Record<strin
 
   async unlink(data: TagLinkSchema, { user }: { user: User }): Promise<TagSelectOutputResult> {
     return this.repository.tag.unlink({ ...data, userId: user.id });
+  }
+
+  async delete(data: TagDeleteSchema): ServerResultAsync<{ id: string }> {
+    return this.repository.tag.softDeleteById(data.id);
   }
 }

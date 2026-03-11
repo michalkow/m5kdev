@@ -5,7 +5,7 @@ import type {
   TagListSchema,
   TagSchema,
 } from "@m5kdev/commons/modules/tag/tag.schema";
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray, isNull } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
@@ -205,7 +205,9 @@ export class TagRepository extends BaseTableRepository<
     return this.throwableAsync(async () => {
       const db = tx ?? this.orm;
       const conditions = this.getConditionBuilder(this.table);
+      conditions.push(isNull(this.table.deletedAt));
       conditions.applyFilters(input);
+
       if (input?.assignableTo) {
         conditions.push(this.helpers.arrayContains(this.table.assignableTo, [input.assignableTo]));
       }

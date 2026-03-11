@@ -1,5 +1,6 @@
 import {
   tagCreateSchema,
+  tagDeleteSchema,
   taggingSchema,
   tagLinkSchema,
   tagListInputSchema,
@@ -7,9 +8,9 @@ import {
   tagListSchema,
   tagUpdateSchema,
 } from "@m5kdev/commons/modules/tag/tag.schema";
+import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 import { taggingsSelectOutput, tagsSelectOutput } from "./tag.dto";
 import type { TagService } from "./tag.service";
-import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 
 export function createTagTRPC(
   { router, privateProcedure: procedure }: TRPCMethods,
@@ -60,6 +61,13 @@ export function createTagTRPC(
       .output(tagsSelectOutput)
       .mutation(async ({ ctx, input }) => {
         return handleTRPCResult(await tagService.unlink(input, ctx));
+      }),
+
+    delete: procedure
+      .input(tagDeleteSchema)
+      .output(tagsSelectOutput.pick({ id: true }))
+      .mutation(async ({ input }) => {
+        return handleTRPCResult(await tagService.delete(input));
       }),
   });
 }
