@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.3.2
+
+### Patch Changes
+
+- table
+- Updated dependencies
+  - @m5kdev/commons@0.3.2
+
 ## 0.3.1
 
 ### Patch Changes

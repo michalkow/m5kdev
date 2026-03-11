@@ -14,7 +14,7 @@ import {
   dateFilterToRangeValue,
 } from "@m5kdev/web-ui/modules/table/filterTransformers";
 import { DateTime } from "luxon";
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 type QuickRangeKey =
@@ -84,6 +84,12 @@ export const RangeNuqsDatePicker = ({
   const dateRange = useMemo(() => {
     return dateFilterToRangeValue(filters, columnId);
   }, [filters, columnId]);
+
+  const [localRange, setLocalRange] = useState<RangeValue<DateValue> | null | undefined>(dateRange);
+
+  useEffect(() => {
+    setLocalRange(dateRange);
+  }, [dateRange]);
 
   const todayIso = DateTime.utc().toISODate();
 
@@ -274,13 +280,16 @@ export const RangeNuqsDatePicker = ({
   const handleDateRangeChange = (range: RangeValue<DateValue> | null) => {
     if (!setFilters) return;
 
-    if (!range?.start || !range?.end) {
-      // Remove date filters
+    if (range === null) {
+      // Explicit clear — remove date filters
       const newFilters =
         filters?.filter((f) => f.columnId !== columnId && f.columnId !== endColumnId) ?? [];
-      setFilters(newFilters);
+      startTransition(() => setFilters(newFilters));
       return;
     }
+
+    // Incomplete range (e.g. only start selected mid-calendar-selection) — keep current filters
+    if (!range.start || !range.end) return;
 
     // Use intersect to find records where [startedAt, endedAt] overlaps with the selected range
     // This includes ongoing records (endedAt = NULL) and records that overlap the range
@@ -299,7 +308,7 @@ export const RangeNuqsDatePicker = ({
       },
     ];
 
-    setFilters(newFilters);
+    startTransition(() => setFilters(newFilters));
   };
 
   const handleQuickRangeChange = (key: QuickRangeKey | null) => {
@@ -326,8 +335,14 @@ export const RangeNuqsDatePicker = ({
             t(`${translationNamespace}:reports.dateRange`, { defaultValue: "Date range" })}
         </span>
         <DateRangePicker
-          value={(dateRange as any) ?? undefined}
-          onChange={handleDateRangeChange}
+          aria-label="Date range"
+          value={(localRange as any) ?? undefined}
+          onChange={setLocalRange}
+          onBlur={() => {
+            if (localRange !== undefined) {
+              handleDateRangeChange(localRange);
+            }
+          }}
           className="w-[300px]"
           granularity="day"
           showMonthAndYearPickers

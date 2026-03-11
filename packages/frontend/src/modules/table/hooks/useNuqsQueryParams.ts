@@ -1,7 +1,8 @@
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import { filtersSchema } from "@m5kdev/commons/modules/schemas/query.schema";
-import type { PaginationState, SortingState, Updater } from "@tanstack/react-table";
+import type { GroupingState, PaginationState, SortingState, Updater } from "@tanstack/react-table";
 import {
+  parseAsArrayOf,
   parseAsInteger,
   parseAsJson,
   parseAsString,
@@ -13,6 +14,8 @@ import { useCallback, useEffect, useMemo } from "react";
 const parseAsFilters = parseAsJson<QueryFilters>((value) => filtersSchema.parse(value)).withDefault(
   []
 );
+
+const parseAsGrouping = parseAsArrayOf(parseAsString).withDefault([]);
 
 export type Order = "asc" | "desc";
 
@@ -31,22 +34,36 @@ export interface NuqsQueryParams {
   limit?: number;
   setPagination?: (updater: Updater<PaginationState>) => void;
   pagination?: PaginationState;
+  grouping: GroupingState;
+  setGrouping: (updater: Updater<GroupingState>) => void;
 }
 
 /**
  * Hook to manage all query parameters via nuqs (URL query parameters)
- * Manages: filters, sort, order, page, limit
- * Reusable for any paginated/sorted/filtered lists
+ * Manages: filters, sort, order, page, limit, groupBy, granularity
+ * Accepts an optional prefix to namespace params when multiple tables share a view.
  */
-export const useNuqsQueryParams = (): NuqsQueryParams => {
-  const [sort, setSort] = useQueryState<string>("sort", parseAsString.withDefault(""));
-  const [order, setOrder] = useQueryState<Order>("order", parseAsStringLiteral(["asc", "desc"]));
-  const [page, setPage] = useQueryState<number>("page", parseAsInteger.withDefault(1));
-  const [limit, setLimit] = useQueryState<number>("limit", parseAsInteger.withDefault(10));
-  const [filters, setFilters] = useQueryState<QueryFilters>("filters", parseAsFilters);
+export const useNuqsQueryParams = (prefix?: string): NuqsQueryParams => {
+  const k = (name: string) => (prefix ? `${prefix}_${name}` : name);
+
+  const [sort, setSort] = useQueryState<string>(k("sort"), parseAsString.withDefault(""));
+  const [order, setOrder] = useQueryState<Order>(k("order"), parseAsStringLiteral(["asc", "desc"]));
+  const [page, setPage] = useQueryState<number>(k("page"), parseAsInteger.withDefault(1));
+  const [limit, setLimit] = useQueryState<number>(k("limit"), parseAsInteger.withDefault(10));
+  const [filters, setFilters] = useQueryState<QueryFilters>(k("filters"), parseAsFilters);
   const [granularity, setGranularity] = useQueryState<Granularity>(
-    "granularity",
+    k("granularity"),
     parseAsStringLiteral(["daily", "weekly", "monthly", "yearly"]).withDefault("daily")
+  );
+  const [groupingRaw, setGroupingRaw] = useQueryState<string[]>(k("groupBy"), parseAsGrouping);
+  const grouping: GroupingState = groupingRaw;
+
+  const setGrouping = useCallback(
+    (updater: Updater<GroupingState>) => {
+      const next = typeof updater === "function" ? updater(groupingRaw) : updater;
+      setGroupingRaw(next.length > 0 ? next : null);
+    },
+    [groupingRaw, setGroupingRaw]
   );
 
   const sorting = useMemo(() => {
@@ -115,6 +132,8 @@ export const useNuqsQueryParams = (): NuqsQueryParams => {
       limit,
       setPagination,
       pagination,
+      grouping,
+      setGrouping,
     }),
     [
       filters,
@@ -129,6 +148,8 @@ export const useNuqsQueryParams = (): NuqsQueryParams => {
       limit,
       setPagination,
       pagination,
+      grouping,
+      setGrouping,
     ]
   );
 };

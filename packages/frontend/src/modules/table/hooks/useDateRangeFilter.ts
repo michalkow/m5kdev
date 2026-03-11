@@ -1,5 +1,5 @@
 import type { UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
-import { useNuqsQueryParams, type NuqsQueryParams } from "./useNuqsQueryParams";
+import { type NuqsQueryParams, useNuqsQueryParams } from "./useNuqsQueryParams";
 import { useQueryWithParams } from "./useQueryWithParams";
 
 export interface DateRangeFilterReturn<TData> {
@@ -37,8 +37,7 @@ export const useDateRangeFilter = <TInput, TData>({
 }: DateRangeFilterOptions<TInput, TData>): DateRangeFilterReturn<TData> => {
   // Get only filters from URL query state
   const { filters, setFilters, granularity, setGranularity } = useNuqsQueryParams();
-  
-  
+
   // Get query result
   const queryResult = useQueryWithParams({
     getQueryOptions,
@@ -47,9 +46,15 @@ export const useDateRangeFilter = <TInput, TData>({
   });
 
   return {
-    params: { filters, setFilters, granularity, setGranularity },
+    params: {
+      filters,
+      setFilters,
+      granularity,
+      setGranularity,
+      // TODO: Review - just fixing ts errors for now
+      grouping: [],
+      setGrouping: () => {},
+    },
     query: queryResult,
   };
 };
-
-

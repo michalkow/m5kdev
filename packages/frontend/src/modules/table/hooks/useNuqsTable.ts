@@ -1,3 +1,4 @@
+import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
 import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
@@ -37,26 +38,32 @@ type GetQueryOptionsFn<TInput, TData> = (input: TInput, ...args: any[]) => Query
 export interface NuqsTableOptions<TInput, TData> {
   getQueryOptions: GetQueryOptionsFn<TInput, TData>;
   queryParams?: TInput;
+  prefix?: string;
+  additionalFilters?: QueryFilters;
+  onAdditionalFiltersChange?: (filters: QueryFilters) => void;
 }
 
 const useNuqsTable = <TInput, TData>({
   getQueryOptions,
   queryParams = {} as TInput,
+  prefix,
+  additionalFilters,
+  onAdditionalFiltersChange,
 }: NuqsTableOptions<TInput, TData>): NuqsTableReturn<TData> => {
-  // Get all URL query state
-  const queryState = useNuqsQueryParams();
+  // Get all URL query state (includes grouping)
+  const queryState = useNuqsQueryParams(prefix);
 
-  // Get query result
+  // Get query result — passes grouping so limit can be overridden when grouped
   const queryResult = useQueryWithParams({
     getQueryOptions,
     queryParams,
     queryState,
+    grouping: queryState.grouping,
+    additionalFilters,
   });
 
   // Table-specific row selection state
   const [rowSelection, setRowSelectionRaw] = useState<RowSelectionState>({});
-
-  console.log("rowSelection", rowSelection);
 
   const setRowSelection = useCallback((updater: Updater<RowSelectionState>) => {
     setRowSelectionRaw((prev: RowSelectionState) => {
@@ -65,13 +72,44 @@ const useNuqsTable = <TInput, TData>({
     });
   }, []);
 
+  // Merge additionalFilters into displayed filters so the table UI shows all active filters.
+  // On write, strip the additional filters so only the table's own go to the prefixed URL param.
+  const displayFilters = useMemo<QueryFilters>(() => {
+    if (!additionalFilters?.length) return queryState.filters ?? [];
+    return [...additionalFilters, ...(queryState.filters ?? [])];
+  }, [additionalFilters, queryState.filters]);
+
+  const additionalColumnIds = useMemo(
+    () => new Set(additionalFilters?.map((f) => f.columnId) ?? []),
+    [additionalFilters]
+  );
+
+  const wrappedSetFilters = useCallback(
+    (newFilters: QueryFilters) => {
+      if (!additionalColumnIds.size) {
+        queryState.setFilters?.(newFilters);
+        return;
+      }
+      const ownFilters = newFilters.filter((f) => !additionalColumnIds.has(f.columnId));
+      queryState.setFilters?.(ownFilters);
+
+      if (onAdditionalFiltersChange) {
+        const updatedAdditional = newFilters.filter((f) => additionalColumnIds.has(f.columnId));
+        onAdditionalFiltersChange(updatedAdditional);
+      }
+    },
+    [additionalColumnIds, queryState.setFilters, onAdditionalFiltersChange]
+  );
+
   const params = useMemo(
     () => ({
       ...queryState,
+      filters: displayFilters,
+      setFilters: wrappedSetFilters,
       rowSelection,
       setRowSelection,
     }),
-    [queryState, rowSelection, setRowSelection]
+    [queryState, displayFilters, wrappedSetFilters, rowSelection, setRowSelection]
   );
 
   return {

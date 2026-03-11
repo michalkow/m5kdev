@@ -5,14 +5,17 @@ import type { TableParams } from "@m5kdev/frontend/modules/table/hooks/useNuqsTa
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   type ColumnOrderState,
+  type ExpandedState,
   flexRender,
   getCoreRowModel,
+  getExpandedRowModel,
+  getGroupedRowModel,
   getPaginationRowModel,
   type Table as ReactTable,
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../../components/ui/button";
 import {
@@ -25,6 +28,7 @@ import {
 } from "../../../components/ui/table";
 import { ColumnOrderAndVisibility } from "./ColumnOrderAndVisibility";
 import { TableFiltering } from "./TableFiltering";
+import { TableGroupBy } from "./TableGroupBy";
 import { TablePagination } from "./TablePagination";
 import type { ColumnDataType, ColumnItem } from "./table.types";
 
@@ -67,6 +71,7 @@ export type NuqsTableColumn<T> = ColumnDef<T> & {
   type?: ColumnDataType;
   options?: { label: string; value: string }[];
   endColumnId?: string;
+  groupable?: boolean;
 };
 
 type NuqsTableParams<T> = {
@@ -189,17 +194,22 @@ export const NuqsTable = <T,>({
     setRowSelection,
     setFilters,
     filters,
+    grouping,
+    setGrouping,
   } = tableProps;
+
+  const isGrouped = grouping.length > 0;
+  const [expanded, setExpanded] = useState<ExpandedState>({});
 
   // Redirect back if we're on an empty page (past the last page)
   useEffect(() => {
-    if (data.length === 0 && page > 1 && total !== undefined) {
+    if (!isGrouped && data.length === 0 && page > 1 && total !== undefined) {
       setPagination?.({ pageIndex: page - 2, pageSize: limit });
     }
-  }, [data.length, page, limit, total, setPagination]);
+  }, [data.length, page, limit, total, setPagination, isGrouped]);
 
-  // Calculate pageCount from total if available, otherwise use heuristic
-  const pageCount =
+  // When grouped, TanStack handles pagination client-side; otherwise use server total
+  const serverPageCount =
     total !== undefined
       ? Math.ceil(total / limit) || 1
       : data.length === limit
@@ -211,14 +221,21 @@ export const NuqsTable = <T,>({
     columns,
     getRowId: (row) => String((row as { id: string | number }).id),
     manualSorting: true,
-    manualPagination: true,
-    state: { pagination, sorting, rowSelection, columnOrder, columnVisibility },
-    pageCount,
+    manualPagination: !isGrouped,
+    state: { pagination, sorting, rowSelection, columnOrder, columnVisibility, grouping, expanded },
+    ...(isGrouped ? {} : { pageCount: serverPageCount }),
     manualFiltering: true,
+    enableGrouping: true,
+    groupedColumnMode: false,
+    autoResetExpanded: false,
     onSortingChange: setSorting,
     onPaginationChange: setPagination,
     onRowSelectionChange: setRowSelection,
+    onGroupingChange: setGrouping,
+    onExpandedChange: setExpanded,
     getCoreRowModel: getCoreRowModel(),
+    getGroupedRowModel: getGroupedRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onColumnOrderChange: (updater) => {
       setLayout((prev) =>
@@ -277,8 +294,19 @@ export const NuqsTable = <T,>({
     return [...baseColumns, ...periodColumns];
   }, [columns]);
 
+  const groupableColumns = useMemo(
+    () =>
+      columns
+        .filter((col) => col.groupable)
+        .map((col) => ({ id: String(col.id), label: String(col.header) })),
+    [columns]
+  );
+
+  const hasGrouping = grouping.length > 0;
+
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [isColumnsOpen, setIsColumnsOpen] = useState(false);
+  const [isGroupByOpen, setIsGroupByOpen] = useState(false);
 
   return (
     <>
@@ -308,6 +336,37 @@ export const NuqsTable = <T,>({
             />
           </PopoverContent>
         </Popover>
+        {groupableColumns.length > 0 && (
+          <Popover
+            placement="bottom"
+            isOpen={isGroupByOpen}
+            onOpenChange={setIsGroupByOpen}
+            portalContainer={document.body}
+          >
+            <PopoverTrigger>
+              <Button variant={hasGrouping ? "secondary" : "outline"} size="sm">
+                <div className="flex items-center gap-2">
+                  {hasGrouping
+                    ? `Grouped by: ${grouping.map((id) => groupableColumns.find((c) => c.id === id)?.label ?? id).join(" → ")}`
+                    : "Group by"}
+                  <ChevronDown className="h-4 w-4" />
+                </div>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent>
+              <TableGroupBy
+                columns={groupableColumns}
+                activeGrouping={grouping}
+                onGroupingChange={(columnIds) => {
+                  setGrouping(columnIds);
+                  setExpanded({});
+                  setPagination?.({ pageIndex: 0, pageSize: limit });
+                }}
+                onClose={() => setIsGroupByOpen(false)}
+              />
+            </PopoverContent>
+          </Popover>
+        )}
         <Popover
           placement="bottom"
           isOpen={isColumnsOpen}
@@ -366,28 +425,76 @@ export const NuqsTable = <T,>({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
-              <TableCell>
-                <Checkbox
-                  isSelected={row.getIsSelected()}
-                  onValueChange={(checked) => {
-                    row.toggleSelected(checked);
-                  }}
-                />
-              </TableCell>
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+          {table.getRowModel().rows.map((row) => {
+            if (row.getIsGrouped()) {
+              return (
+                <TableRow
+                  key={row.id}
+                  className="bg-muted/40 font-medium cursor-pointer hover:bg-muted/60"
+                  onClick={() => row.toggleExpanded()}
+                >
+                  <TableCell />
+                  {row.getVisibleCells().map((cell) => {
+                    if (cell.getIsGrouped()) {
+                      return (
+                        <TableCell key={cell.id}>
+                          <span className="flex items-center gap-1.5">
+                            {row.getIsExpanded() ? (
+                              <ChevronDown className="h-4 w-4 shrink-0" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 shrink-0" />
+                            )}
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            <span className="text-muted-foreground font-normal ml-1">
+                              ({row.subRows.length})
+                            </span>
+                          </span>
+                        </TableCell>
+                      );
+                    }
+                    if (cell.getIsAggregated()) {
+                      return (
+                        <TableCell key={cell.id}>
+                          {flexRender(
+                            cell.column.columnDef.aggregatedCell ?? cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
+                        </TableCell>
+                      );
+                    }
+                    return <TableCell key={cell.id} />;
+                  })}
+                </TableRow>
+              );
+            }
+
+            return (
+              <TableRow key={row.id}>
+                <TableCell>
+                  <Checkbox
+                    isSelected={row.getIsSelected()}
+                    onValueChange={(checked) => {
+                      row.toggleSelected(checked);
+                    }}
+                  />
                 </TableCell>
-              ))}
-            </TableRow>
-          ))}
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
       <TablePagination
-        pageCount={pageCount}
-        page={page}
+        pageCount={
+          isGrouped
+            ? Math.ceil(table.getPrePaginationRowModel().rows.length / limit) || 1
+            : serverPageCount
+        }
+        page={isGrouped ? table.getState().pagination.pageIndex + 1 : page}
         limit={limit}
         setPagination={setPagination}
       />

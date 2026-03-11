@@ -1,5 +1,11 @@
 # @m5kdev/web-ui
 
+## 0.3.2
+
+### Patch Changes
+
+- table
+
 ## 0.3.1
 
 ### Patch Changes
