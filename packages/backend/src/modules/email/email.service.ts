@@ -53,7 +53,6 @@ export class EmailService extends BaseService<never, never> {
   constructor(props: EmailServiceProps) {
     super(undefined, undefined);
     this.client = new Resend(props.resendApiKey || process.env.RESEND_API_KEY);
-    this.client = {} as unknown as Resend;
     this.brand = props.brand;
     this.noReplyFrom = props.noReplyFrom;
     this.templates = props.templates;
