@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.3.3
+
+### Patch Changes
+
+- css
+
 ## 0.3.2
 
 ### Patch Changes

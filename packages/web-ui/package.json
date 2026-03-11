@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/web-ui",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -15,7 +15,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
     "check-types": "tsc --noEmit",
-    "build": "tsc --build && cp -r translations dist/"
+    "build": "tsc --build && cp -r translations dist/ && cp src/components/Calendar.css dist/src/components/"
   },
   "dependencies": {
     "@dnd-kit/core": "catalog:",
