@@ -35,7 +35,7 @@ export const taggings = sqliteTable("taggings", {
     .$default(() => new Date()),
   tagId: text("tag_id")
     .notNull()
-    .references(() => tags.id),
+    .references(() => tags.id, { onDelete: "cascade" }),
   resourceType: text("resource_type").notNull(), // e.g., "post", "image"
   resourceId: text("resource_id").notNull(), // id in the resource table
 });

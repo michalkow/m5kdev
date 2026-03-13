@@ -1,0 +1,58 @@
+packages:
+  - apps/**
+
+catalog:
+  '@biomejs/biome': 2.2.0
+  '@heroui/react': 2.8.8
+  '@libsql/client': 0.17.0
+  '@m5kdev/backend': 0.3.3
+  '@m5kdev/commons': 0.3.3
+  '@m5kdev/config': 0.3.3
+  '@m5kdev/frontend': 0.3.3
+  '@m5kdev/web-ui': 0.3.3
+  '@react-email/components': 1.0.1
+  '@tailwindcss/vite': 4.1.11
+  '@tanstack/react-query': 5.83.0
+  '@tanstack/react-query-devtools': 5.83.0
+  '@trpc/client': 11.4.3
+  '@trpc/server': 11.4.3
+  '@trpc/tanstack-react-query': 11.4.3
+  '@types/cors': 2.8.17
+  '@types/express': 4.17.21
+  '@types/node': 20.19.11
+  '@types/react': 19.2.7
+  '@types/react-dom': 19.2.3
+  '@vitejs/plugin-react': 4.2.0
+  babel-plugin-react-compiler: 1.0.0
+  better-auth: 1.4.18
+  cors: 2.8.5
+  dotenv: 16.6.1
+  drizzle-kit: 0.31.4
+  drizzle-orm: 0.44.3
+  express: 4.21.2
+  i18next: 25.3.2
+  lucide-react: 0.488.0
+  neverthrow: 8.2.0
+  nuqs: 2.4.3
+  posthog-js: 1.258.2
+  react: 19.2.1
+  react-dom: 19.2.1
+  react-email: 5.0.5
+  react-hook-form: 7.61.1
+  react-i18next: 15.6.1
+  react-router: 7.10.1
+  sonner: 1.7.4
+  tailwindcss: 4.1.11
+  tslib: 2.8.1
+  tsup: 8.4.0
+  tsx: 4.19.2
+  turbo: 2.5.6
+  tw-animate-css: 1.3.6
+  typescript: 5.9.2
+  uuid: 11.0.5
+  vite: 7.0.4
+  vite-plugin-i18next-loader: 3.1.2
+  vite-tsconfig-paths: 5.1.4
+  zod: 4.2.1
+
+catalogMode: strict

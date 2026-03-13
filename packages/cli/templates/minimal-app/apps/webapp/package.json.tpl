@@ -1,0 +1,52 @@
+{
+  "name": "{{PACKAGE_SCOPE}}/webapp",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write",
+    "check-types": "tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "{{PACKAGE_SCOPE}}/shared": "workspace:*",
+    "@heroui/react": "catalog:",
+    "@m5kdev/commons": "catalog:",
+    "@m5kdev/frontend": "catalog:",
+    "@m5kdev/web-ui": "catalog:",
+    "@tanstack/react-query": "catalog:",
+    "@tanstack/react-query-devtools": "catalog:",
+    "@trpc/client": "catalog:",
+    "@trpc/tanstack-react-query": "catalog:",
+    "better-auth": "catalog:",
+    "i18next": "catalog:",
+    "lucide-react": "catalog:",
+    "nuqs": "catalog:",
+    "posthog-js": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-hook-form": "catalog:",
+    "react-i18next": "catalog:",
+    "react-router": "catalog:",
+    "sonner": "catalog:",
+    "tailwindcss": "catalog:",
+    "tw-animate-css": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "{{PACKAGE_SCOPE}}/server": "workspace:*",
+    "@m5kdev/config": "catalog:",
+    "@tailwindcss/vite": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "babel-plugin-react-compiler": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-i18next-loader": "catalog:",
+    "vite-tsconfig-paths": "catalog:"
+  }
+}

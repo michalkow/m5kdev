@@ -1,0 +1,9 @@
+node_modules
+.turbo
+dist
+coverage
+*.tsbuildinfo
+*.db
+*.db-*
+apps/server/.emails
+apps/shared/.env
