@@ -1,8 +1,4 @@
-import {
-  type AiEmbeddingModel,
-  type AiModel,
-  OPENAI_TEXT_EMBEDDING_3_SMALL,
-} from "@m5kdev/commons/modules/ai/ai.constants";
+import { OPENAI_TEXT_EMBEDDING_3_SMALL } from "@m5kdev/commons/modules/ai/ai.constants";
 import { arrayToPseudoXML } from "@m5kdev/commons/modules/ai/ai.utils";
 import type { Mastra } from "@mastra/core";
 import { RequestContext } from "@mastra/core/request-context";
@@ -13,15 +9,12 @@ import { embed, embedMany, generateObject, generateText } from "ai";
 import { err, ok } from "neverthrow";
 import type Replicate from "replicate";
 import type { ZodType, z } from "zod";
-import type { AiUsageRepository, AiUsageRow } from "./ai.repository";
-import type {
-  IdeogramV3GenerateInput,
-  IdeogramV3GenerateOutput,
-} from "./ideogram/ideogram.dto";
-import type { IdeogramService } from "./ideogram/ideogram.service";
 import type { User } from "../auth/auth.lib";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
+import type { AiUsageRepository, AiUsageRow } from "./ai.repository";
+import type { IdeogramV3GenerateInput, IdeogramV3GenerateOutput } from "./ideogram/ideogram.dto";
+import type { IdeogramService } from "./ideogram/ideogram.service";
 
 type MastraAgent = ReturnType<Mastra["getAgent"]>;
 type MastraAgentGenerateOptions = Parameters<MastraAgent["generate"]>[1];
@@ -57,7 +50,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     return this.mastra;
   }
 
-  prepareModel(model: AiModel): any {
+  prepareModel(model: string): any {
     if (!this.openrouter) {
       throw new Error("OpenRouter is not configured");
     }
@@ -65,7 +58,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     return openrouterModel;
   }
 
-  prepareEmbeddingModel(model: AiEmbeddingModel): any {
+  prepareEmbeddingModel(model: string): any {
     if (!this.openrouter) {
       throw new Error("OpenRouter is not configured");
     }
@@ -175,7 +168,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     value: string,
     options?: Parameters<ReturnType<typeof MDocument.fromText>["chunk"]>[0],
     type: "text" | "markdown" | "html" | "json" = "text",
-    model: AiEmbeddingModel = OPENAI_TEXT_EMBEDDING_3_SMALL
+    model: string = OPENAI_TEXT_EMBEDDING_3_SMALL
   ): ServerResultAsync<{ embeddings: number[][]; chunks: { text: string }[] }> {
     return this.throwableAsync(async () => {
       if (type === "text") {
@@ -198,7 +191,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
 
   async embed(
     text: string,
-    model: AiEmbeddingModel = OPENAI_TEXT_EMBEDDING_3_SMALL
+    model: string = OPENAI_TEXT_EMBEDDING_3_SMALL
   ): ServerResultAsync<{ embedding: number[] }> {
     return this.throwableAsync(async () => {
       const result = await embed({
@@ -211,7 +204,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
 
   async embedMany(
     chunks: { text: string }[],
-    model: AiEmbeddingModel = OPENAI_TEXT_EMBEDDING_3_SMALL
+    model: string = OPENAI_TEXT_EMBEDDING_3_SMALL
   ): ServerResultAsync<{ embeddings: number[][] }> {
     return this.throwableAsync(async () => {
       const result = await embedMany({
@@ -224,7 +217,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
 
   async generateText(
     params: Omit<Parameters<typeof generateText>[0], "model"> & {
-      model: AiModel;
+      model: string;
       removeMDash?: boolean;
     }
   ): ServerResultAsync<string> {
@@ -237,7 +230,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
 
   async generateObject<T extends ZodType>(
     params: Omit<Parameters<typeof generateObject<T>>[0], "model" | "schema"> & {
-      model: AiModel;
+      model: string;
       schema: T;
     }
   ): ServerResultAsync<z.infer<T>> {
