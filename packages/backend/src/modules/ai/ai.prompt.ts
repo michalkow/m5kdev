@@ -1,4 +1,3 @@
-import type { AiModel } from "@m5kdev/commons/modules/ai/ai.constants";
 import mustache from "mustache";
 import { logger } from "../../utils/logger";
 
@@ -7,7 +6,7 @@ export class Prompt<C extends Record<string, string>> {
   public name?: string;
   public type: "text" | "chat";
   public config?: {
-    model?: AiModel;
+    model?: string;
     temperature?: number;
     supported_languages?: string[];
   };
@@ -21,7 +20,7 @@ export class Prompt<C extends Record<string, string>> {
       name?: string;
       type?: "text" | "chat";
       config?: {
-        model?: AiModel;
+        model?: string;
         temperature?: number;
         supported_languages?: string[];
       };
