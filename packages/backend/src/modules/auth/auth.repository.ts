@@ -2,6 +2,8 @@ import { and, count, desc, eq, gte, ne } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseRepository } from "../base/base.repository";
 import * as auth from "./auth.db";
 import type {
   AccountClaim,
@@ -11,15 +13,75 @@ import type {
   Waitlist,
   WaitlistOutput,
 } from "./auth.dto";
-import type { ServerResultAsync } from "../base/base.dto";
-import { BaseRepository } from "../base/base.repository";
 
 const schema = { ...auth };
 type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;
 type UserRow = typeof auth.users.$inferSelect;
+type OrganizationMetadata = Record<string, unknown> & {
+  preferences?: Record<string, unknown>;
+  flags?: string[];
+};
+
+function parseOrganizationMetadata(
+  metadata: string | Record<string, unknown> | null | undefined
+): OrganizationMetadata {
+  if (!metadata) return {};
+  if (typeof metadata === "string") {
+    try {
+      const parsed = JSON.parse(metadata) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as OrganizationMetadata;
+      }
+      return {};
+    } catch {
+      return {};
+    }
+  }
+  if (typeof metadata === "object" && !Array.isArray(metadata)) {
+    return metadata as OrganizationMetadata;
+  }
+  return {};
+}
+
+function normalizeOrganizationPreferences(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function normalizeOrganizationFlags(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+}
 
 export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, never>> {
+  private async getOrganizationMetadataForMember(
+    userId: string,
+    organizationId: string,
+    tx?: Orm
+  ): Promise<OrganizationMetadata | null> {
+    const db = tx ?? this.orm;
+    const [organization] = await db
+      .select({ metadata: this.schema.organizations.metadata })
+      .from(this.schema.organizations)
+      .innerJoin(
+        this.schema.members,
+        eq(this.schema.members.organizationId, this.schema.organizations.id)
+      )
+      .where(
+        and(
+          eq(this.schema.organizations.id, organizationId),
+          eq(this.schema.members.userId, userId)
+        )
+      )
+      .limit(1);
+
+    if (!organization) return null;
+    return parseOrganizationMetadata(organization.metadata);
+  }
+
   async getUserWaitlistCount(userId: string, tx?: Orm): ServerResultAsync<number> {
     return this.throwableAsync(async () => {
       const db = tx ?? this.orm;
@@ -88,6 +150,44 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     });
   }
 
+  async getOrganizationPreferences(
+    userId: string,
+    organizationId: string,
+    tx?: Orm
+  ): ServerResultAsync<Record<string, unknown>> {
+    return this.throwableAsync(async () => {
+      const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
+      if (!metadata) return this.error("FORBIDDEN");
+
+      return ok(normalizeOrganizationPreferences(metadata.preferences));
+    });
+  }
+
+  async setOrganizationPreferences(
+    userId: string,
+    organizationId: string,
+    preferences: Record<string, unknown>,
+    tx?: Orm
+  ): ServerResultAsync<Record<string, unknown>> {
+    return this.throwableAsync(async () => {
+      const db = tx ?? this.orm;
+      const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
+      if (!metadata) return this.error("FORBIDDEN");
+
+      await db
+        .update(this.schema.organizations)
+        .set({
+          metadata: JSON.stringify({
+            ...metadata,
+            preferences,
+          }),
+        })
+        .where(eq(this.schema.organizations.id, organizationId));
+
+      return ok(preferences);
+    });
+  }
+
   async getMetadata(userId: string, tx?: Orm): ServerResultAsync<Record<string, unknown>> {
     return this.throwableAsync(async () => {
       const db = tx ?? this.orm;
@@ -143,6 +243,19 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     });
   }
 
+  async getOrganizationFlags(
+    userId: string,
+    organizationId: string,
+    tx?: Orm
+  ): ServerResultAsync<string[]> {
+    return this.throwableAsync(async () => {
+      const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
+      if (!metadata) return this.error("FORBIDDEN");
+
+      return ok(normalizeOrganizationFlags(metadata.flags));
+    });
+  }
+
   async setFlags(userId: string, flags: string[], tx?: Orm): ServerResultAsync<string[]> {
     return this.throwableAsync(async () => {
       const db = tx ?? this.orm;
@@ -150,6 +263,31 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
         .update(this.schema.users)
         .set({ flags: JSON.stringify(flags) })
         .where(eq(this.schema.users.id, userId));
+      return ok(flags);
+    });
+  }
+
+  async setOrganizationFlags(
+    userId: string,
+    organizationId: string,
+    flags: string[],
+    tx?: Orm
+  ): ServerResultAsync<string[]> {
+    return this.throwableAsync(async () => {
+      const db = tx ?? this.orm;
+      const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
+      if (!metadata) return this.error("FORBIDDEN");
+
+      await db
+        .update(this.schema.organizations)
+        .set({
+          metadata: JSON.stringify({
+            ...metadata,
+            flags,
+          }),
+        })
+        .where(eq(this.schema.organizations.id, organizationId));
+
       return ok(flags);
     });
   }

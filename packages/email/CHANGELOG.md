@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.3.5
+
+### Patch Changes
+
+- organization preferences
+
 ## 0.3.4
 
 ### Patch Changes

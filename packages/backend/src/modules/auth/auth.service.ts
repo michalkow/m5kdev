@@ -1,4 +1,9 @@
 import { err, ok } from "neverthrow";
+import { posthogCapture } from "../../utils/posthog";
+import type { ServerResultAsync } from "../base/base.dto";
+import { BaseService } from "../base/base.service";
+import type { BillingService } from "../billing/billing.service";
+import type { EmailService } from "../email/email.service";
 import type {
   AccountClaim,
   AccountClaimMagicLinkOutput,
@@ -6,13 +11,8 @@ import type {
   Waitlist,
   WaitlistOutput,
 } from "./auth.dto";
-import type { User } from "./auth.lib";
+import type { Context, User } from "./auth.lib";
 import type { AuthRepository } from "./auth.repository";
-import type { ServerResultAsync } from "../base/base.dto";
-import { BaseService } from "../base/base.service";
-import type { BillingService } from "../billing/billing.service";
-import type { EmailService } from "../email/email.service";
-import { posthogCapture } from "../../utils/posthog";
 
 type AuthServiceDependencies =
   | { email: EmailService }
@@ -22,6 +22,14 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
   private getBillingService(): BillingService | null {
     if (!("billing" in this.service)) return null;
     return this.service.billing;
+  }
+
+  private getActiveOrganizationId(ctx: Context) {
+    const organizationId = ctx.session.activeOrganizationId;
+    if (!organizationId) {
+      return this.repository.auth.error("FORBIDDEN", "No active organization");
+    }
+    return ok(organizationId);
   }
 
   async getUserWaitlistCount({ user }: { user: User }): ServerResultAsync<number> {
@@ -59,6 +67,35 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
     return this.repository.auth.setPreferences(user.id, preferences);
   }
 
+  async getOrganizationPreferences(ctx: Context): ServerResultAsync<Record<string, unknown>> {
+    const organizationId = this.getActiveOrganizationId(ctx);
+    if (organizationId.isErr()) return err(organizationId.error);
+
+    return this.repository.auth.getOrganizationPreferences(ctx.user.id, organizationId.value);
+  }
+
+  async setOrganizationPreferences(
+    preferences: Record<string, unknown>,
+    ctx: Context
+  ): ServerResultAsync<Record<string, unknown>> {
+    const organizationId = this.getActiveOrganizationId(ctx);
+    if (organizationId.isErr()) return err(organizationId.error);
+
+    posthogCapture({
+      distinctId: ctx.user.id,
+      event: "organization_preferences_set",
+      properties: {
+        organizationId: organizationId.value,
+      },
+    });
+
+    return this.repository.auth.setOrganizationPreferences(
+      ctx.user.id,
+      organizationId.value,
+      preferences
+    );
+  }
+
   async getMetadata({ user }: { user: User }): ServerResultAsync<Record<string, unknown>> {
     return this.repository.auth.getMetadata(user.id);
   }
@@ -78,12 +115,34 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
     return this.repository.auth.getFlags(user.id);
   }
 
+  async getOrganizationFlags(ctx: Context): ServerResultAsync<string[]> {
+    const organizationId = this.getActiveOrganizationId(ctx);
+    if (organizationId.isErr()) return err(organizationId.error);
+
+    return this.repository.auth.getOrganizationFlags(ctx.user.id, organizationId.value);
+  }
+
   async setFlags(flags: string[], { user }: { user: User }): ServerResultAsync<string[]> {
     posthogCapture({
       distinctId: user.id,
       event: "flags_set",
     });
     return this.repository.auth.setFlags(user.id, flags);
+  }
+
+  async setOrganizationFlags(flags: string[], ctx: Context): ServerResultAsync<string[]> {
+    const organizationId = this.getActiveOrganizationId(ctx);
+    if (organizationId.isErr()) return err(organizationId.error);
+
+    posthogCapture({
+      distinctId: ctx.user.id,
+      event: "organization_flags_set",
+      properties: {
+        organizationId: organizationId.value,
+      },
+    });
+
+    return this.repository.auth.setOrganizationFlags(ctx.user.id, organizationId.value, flags);
   }
 
   async listAdminWaitlist(): ServerResultAsync<WaitlistOutput[]> {

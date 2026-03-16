@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 import {
   accountClaimMagicLinkOutputSchema,
   accountClaimOutputSchema,
@@ -7,7 +8,6 @@ import {
   waitlistSchema,
 } from "./auth.dto";
 import type { AuthService } from "./auth.service";
-import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 
 export function createAuthTRPC(
   { router, publicProcedure, privateProcedure: procedure, adminProcedure }: TRPCMethods,
@@ -173,6 +173,19 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.setPreferences(input, ctx));
       }),
 
+    getOrganizationPreferences: procedure
+      .output(z.record(z.string(), z.unknown()))
+      .query(async ({ ctx }) => {
+        return handleTRPCResult(await authService.getOrganizationPreferences(ctx));
+      }),
+
+    setOrganizationPreferences: procedure
+      .input(z.record(z.string(), z.unknown()))
+      .output(z.record(z.string(), z.unknown()))
+      .mutation(async ({ ctx, input }) => {
+        return handleTRPCResult(await authService.setOrganizationPreferences(input, ctx));
+      }),
+
     getMetadata: procedure.output(z.record(z.string(), z.unknown())).query(async ({ ctx }) => {
       return handleTRPCResult(await authService.getMetadata(ctx));
     }),
@@ -188,11 +201,22 @@ export function createAuthTRPC(
       return handleTRPCResult(await authService.getFlags(ctx));
     }),
 
+    getOrganizationFlags: procedure.output(z.array(z.string())).query(async ({ ctx }) => {
+      return handleTRPCResult(await authService.getOrganizationFlags(ctx));
+    }),
+
     setFlags: procedure
       .input(z.array(z.string()))
       .output(z.array(z.string()))
       .mutation(async ({ ctx, input }) => {
         return handleTRPCResult(await authService.setFlags(input, ctx));
+      }),
+
+    setOrganizationFlags: procedure
+      .input(z.array(z.string()))
+      .output(z.array(z.string()))
+      .mutation(async ({ ctx, input }) => {
+        return handleTRPCResult(await authService.setOrganizationFlags(input, ctx));
       }),
 
     validateWaitlistCode: publicProcedure
