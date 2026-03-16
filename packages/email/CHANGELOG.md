@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.3.4
+
+### Patch Changes
+
+- deps
+
 ## 0.3.3
 
 ### Patch Changes
