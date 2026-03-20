@@ -14,6 +14,9 @@
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "check-types": "turbo run check-types",
+    "cs:add": "pnpm dlx @changesets/cli add",
+    "cs:publish": "pnpm dlx @changesets/cli publish",
+    "cs:version": "pnpm dlx @changesets/cli version",
     "knip": "knip"
   },
   "devDependencies": {
