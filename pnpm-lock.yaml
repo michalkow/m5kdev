@@ -616,12 +616,9 @@ importers:
   packages/cli:
     dependencies:
       tslib:
-        specifier: 'catalog:'
+        specifier: 2.8.1
         version: 2.8.1
     devDependencies:
-      '@m5kdev/config':
-        specifier: workspace:*
-        version: link:../config
       '@types/jest':
         specifier: 'catalog:'
         version: 30.0.0
@@ -783,6 +780,12 @@ importers:
       '@internationalized/date':
         specifier: 'catalog:'
         version: 3.8.2
+      '@m5kdev/commons':
+        specifier: workspace:*
+        version: link:../commons
+      '@m5kdev/frontend':
+        specifier: workspace:*
+        version: link:../frontend
       '@radix-ui/react-alert-dialog':
         specifier: 'catalog:'
         version: 1.1.6(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
@@ -934,15 +937,9 @@ importers:
       '@m5kdev/backend':
         specifier: workspace:*
         version: link:../backend
-      '@m5kdev/commons':
-        specifier: workspace:*
-        version: link:../commons
       '@m5kdev/config':
         specifier: workspace:*
         version: link:../config
-      '@m5kdev/frontend':
-        specifier: workspace:*
-        version: link:../frontend
       '@trpc/server':
         specifier: 'catalog:'
         version: 11.4.3(typescript@5.9.2)

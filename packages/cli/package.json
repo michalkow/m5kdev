@@ -1,6 +1,6 @@
 {
-  "name": "@m5kdev/cli",
-  "version": "0.3.5",
+  "name": "create-m5kdev",
+  "version": "0.4.2",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -13,6 +13,7 @@
     "templates"
   ],
   "bin": {
+    "create-m5kdev": "dist/src/index.js",
     "m5kdev": "dist/src/index.js"
   },
   "scripts": {
@@ -24,10 +25,9 @@
     "test:smoke": "CLI_SMOKE=1 jest -c jest.config.ts src/__tests__/create.smoke.test.ts"
   },
   "dependencies": {
-    "tslib": "catalog:"
+    "tslib": "2.8.1"
   },
   "devDependencies": {
-    "@m5kdev/config": "workspace:*",
     "@types/jest": "catalog:",
     "@types/node": "catalog:",
     "jest": "catalog:",

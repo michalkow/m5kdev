@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.4.0
+
+### Minor Changes
+
+- cli
+
 ## 0.3.5
 
 ### Patch Changes

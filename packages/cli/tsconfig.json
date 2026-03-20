@@ -1,5 +1,5 @@
 {
-  "extends": "@m5kdev/config/tsconfig.node.json",
+  "$schema": "https://json.schemastore.org/tsconfig",
   "rootDir": ".",
   "compilerOptions": {
     "esModuleInterop": true,

@@ -4,13 +4,20 @@ import type { CreateCommandOptions } from "./types";
 interface ParsedCli {
   command?: string;
   directory?: string;
+  help?: boolean;
   options: Record<string, string | boolean>;
 }
 
 export async function runCli(argv: readonly string[]): Promise<void> {
   const parsed = parseCli(argv);
 
-  if (!parsed.command || parsed.command === "--help" || parsed.command === "-h") {
+  if (
+    !parsed.command ||
+    parsed.help ||
+    parsed.command === "--help" ||
+    parsed.command === "-h" ||
+    parsed.command === "help"
+  ) {
     printHelp();
     return;
   }
@@ -34,13 +41,20 @@ export async function runCli(argv: readonly string[]): Promise<void> {
   console.log("  pnpm dev");
 }
 
-function parseCli(argv: readonly string[]): ParsedCli {
-  const [command, ...rest] = argv;
+export function parseCli(argv: readonly string[]): ParsedCli {
+  const normalizedArgv = normalizeCliArgv(argv);
+  const [command, ...rest] = normalizedArgv;
   const options: Record<string, string | boolean> = {};
   let directory: string | undefined;
+  let help = false;
 
   for (let index = 0; index < rest.length; index += 1) {
     const token = rest[index];
+
+    if (token === "--help" || token === "-h") {
+      help = true;
+      continue;
+    }
 
     if (!token.startsWith("--")) {
       directory ??= token;
@@ -65,7 +79,21 @@ function parseCli(argv: readonly string[]): ParsedCli {
     }
   }
 
-  return { command, directory, options };
+  return { command, directory, help, options };
+}
+
+function normalizeCliArgv(argv: readonly string[]): readonly string[] {
+  const [firstToken] = argv;
+
+  if (!firstToken || firstToken === "create" || firstToken === "--help" || firstToken === "-h") {
+    return argv;
+  }
+
+  if (firstToken === "help") {
+    return ["--help"];
+  }
+
+  return ["create", ...argv];
 }
 
 function isBooleanFlag(value: string): boolean {
@@ -96,6 +124,8 @@ function printHelp(): void {
   console.log("m5kdev");
   console.log("");
   console.log("Usage:");
+  console.log("  pnpm create m5kdev [directory] [options]");
+  console.log("  m5kdev [directory] [options]");
   console.log("  m5kdev create [directory] [options]");
   console.log("");
   console.log("Options:");
