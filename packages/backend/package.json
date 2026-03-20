@@ -21,12 +21,12 @@
     "test:watch": "jest -c jest.config.ts --watch"
   },
   "dependencies": {
-    "@m5kdev/commons": "workspace:*",
-    "@m5kdev/config": "workspace:*",
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/client-sts": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
     "@libsql/client": "catalog:",
+    "@m5kdev/commons": "workspace:*",
+    "@m5kdev/config": "workspace:*",
     "@mastra/core": "catalog:",
     "@mastra/rag": "catalog:",
     "@openrouter/ai-sdk-provider": "catalog:",
@@ -49,6 +49,7 @@
     "ffmpeg-ffprobe-static": "catalog:",
     "fluent-ffmpeg": "catalog:",
     "ioredis": "catalog:",
+    "jsonrepair": "catalog:",
     "luxon": "catalog:",
     "multer": "catalog:",
     "mustache": "catalog:",

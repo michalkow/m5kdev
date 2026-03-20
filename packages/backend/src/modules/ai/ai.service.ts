@@ -5,13 +5,22 @@ import { RequestContext } from "@mastra/core/request-context";
 import type { FullOutput, MastraModelOutput } from "@mastra/core/stream";
 import { MDocument } from "@mastra/rag";
 import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
-import { embed, embedMany, generateObject, generateText } from "ai";
+import {
+  embed,
+  embedMany,
+  generateText,
+  type ModelMessage,
+  NoObjectGeneratedError,
+  Output,
+} from "ai";
+import { jsonrepair } from "jsonrepair";
 import { err, ok } from "neverthrow";
 import type Replicate from "replicate";
 import type { ZodType, z } from "zod";
-import type { User } from "../auth/auth.lib";
+import type { Context, User } from "../auth/auth.lib";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
+import { repairJsonPrompt } from "./ai.prompts";
 import type { AiUsageRepository, AiUsageRow } from "./ai.repository";
 import type { IdeogramV3GenerateInput, IdeogramV3GenerateOutput } from "./ideogram/ideogram.dto";
 import type { IdeogramService } from "./ideogram/ideogram.service";
@@ -19,6 +28,27 @@ import type { IdeogramService } from "./ideogram/ideogram.service";
 type MastraAgent = ReturnType<Mastra["getAgent"]>;
 type MastraAgentGenerateOptions = Parameters<MastraAgent["generate"]>[1];
 type MessageListInput = { role: "user" | "assistant" | "system"; content: string }[];
+type GenerateTextParams = Parameters<typeof generateText>[0];
+type GenerateTextInput =
+  | { prompt: string | ModelMessage[]; messages?: never }
+  | { messages: ModelMessage[]; prompt?: never };
+type AIServiceGenerateTextParams = Omit<GenerateTextParams, "model" | "prompt" | "messages"> &
+  GenerateTextInput & {
+    model: string;
+    removeMDash?: boolean;
+    ctx?: Context;
+  };
+type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
+  GenerateTextParams,
+  "model" | "prompt" | "messages" | "output"
+> &
+  GenerateTextInput & {
+    model: string;
+    schema: T;
+    repairAttempts?: number;
+    repairModel?: string;
+    ctx?: Context;
+  };
 
 export class AIService<MastraInstance extends Mastra> extends BaseService<
   { aiUsage?: AiUsageRepository },
@@ -50,20 +80,26 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     return this.mastra;
   }
 
-  prepareModel(model: string): any {
+  prepareModel(model: string): ReturnType<OpenRouterProvider["chat"]> {
     if (!this.openrouter) {
       throw new Error("OpenRouter is not configured");
     }
-    const openrouterModel = this.openrouter.chat(model);
-    return openrouterModel;
+    return this.openrouter.chat(model, {
+      usage: {
+        include: true,
+      },
+    });
   }
 
-  prepareEmbeddingModel(model: string): any {
+  prepareEmbeddingModel(model: string): ReturnType<OpenRouterProvider["textEmbeddingModel"]> {
     if (!this.openrouter) {
       throw new Error("OpenRouter is not configured");
     }
-    const openrouterModel = this.openrouter.textEmbeddingModel(model);
-    return openrouterModel;
+    const openrouter = this.openrouter as OpenRouterProvider & {
+      embeddingModel?: (modelId: string) => unknown;
+    };
+    return (openrouter.embeddingModel?.(model) ??
+      openrouter.textEmbeddingModel(model)) as ReturnType<OpenRouterProvider["textEmbeddingModel"]>;
   }
 
   async agentUse(
@@ -215,34 +251,116 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     });
   }
 
-  async generateText(
-    params: Omit<Parameters<typeof generateText>[0], "model"> & {
-      model: string;
-      removeMDash?: boolean;
-    }
-  ): ServerResultAsync<string> {
+  async generateText(params: AIServiceGenerateTextParams): ServerResultAsync<string> {
     return this.throwableAsync(async () => {
-      const { removeMDash = true, model, ...rest } = params;
-      const result = await generateText({ ...rest, model: this.prepareModel(model) });
+      const { removeMDash = true, model, prompt, messages, ctx, ...rest } = params;
+      const request = messages
+        ? { ...rest, model: this.prepareModel(model), messages }
+        : { ...rest, model: this.prepareModel(model), prompt };
+      const result = await generateText(request);
+      if (this.repository.aiUsage) {
+        const createUsageResult = await this.repository.aiUsage.create({
+          userId: ctx?.user?.id,
+          model,
+          provider: "openrouter",
+          feature: "generateText",
+          traceId: result.providerMetadata?.openrouter?.traceId?.toString(),
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          totalTokens: result.usage.totalTokens,
+          cost: (result?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
+        });
+        if (createUsageResult.isErr()) return err(createUsageResult.error);
+      }
       return ok(removeMDash ? result.text.replace(/\u2013|\u2014/g, "-") : result.text);
     });
   }
 
   async generateObject<T extends ZodType>(
-    params: Omit<Parameters<typeof generateObject<T>>[0], "model" | "schema"> & {
-      model: string;
-      schema: T;
-    }
+    params: AIServiceGenerateObjectParams<T>
   ): ServerResultAsync<z.infer<T>> {
-    return this.throwableAsync(async () => {
-      const model = this.prepareModel(params.model);
-      const result = await generateObject({
-        ...params,
-        model,
-        schema: params.schema,
-      });
-      return ok(result.object as z.infer<T>);
-    });
+    const {
+      model,
+      schema,
+      prompt,
+      messages,
+      repairAttempts = 0,
+      repairModel,
+      ctx,
+      ...rest
+    } = params;
+    const request = messages
+      ? {
+          ...rest,
+          model: this.prepareModel(model),
+          messages,
+          output: Output.object({ schema }),
+        }
+      : {
+          ...rest,
+          model: this.prepareModel(model),
+          prompt,
+          output: Output.object({ schema }),
+        };
+    try {
+      const result = await generateText(request);
+      if (this.repository.aiUsage) {
+        const createUsageResult = await this.repository.aiUsage.create({
+          userId: ctx?.user?.id,
+          model,
+          provider: "openrouter",
+          feature: "generateObject",
+          traceId: result.providerMetadata?.openrouter?.traceId?.toString(),
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          totalTokens: result.usage.totalTokens,
+          cost: (result?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
+        });
+        if (createUsageResult.isErr()) return err(createUsageResult.error);
+      }
+      return ok(result.output as z.infer<T>);
+    } catch (error) {
+      if (NoObjectGeneratedError.isInstance(error)) {
+        if (this.repository.aiUsage) {
+          const createUsageResult = await this.repository.aiUsage.create({
+            userId: ctx?.user?.id,
+            model,
+            provider: "openrouter",
+            feature: "generateObject",
+            traceId: null,
+            inputTokens: error?.usage?.inputTokens,
+            outputTokens: error?.usage?.outputTokens,
+            totalTokens: error?.usage?.totalTokens,
+            cost: 0,
+          });
+          if (createUsageResult.isErr()) return err(createUsageResult.error);
+        }
+        if (error.text) {
+          const repairedText = jsonrepair(error.text);
+          const parsed = schema.safeParse(repairedText);
+          if (parsed.success) return ok(parsed.data);
+
+          if (repairAttempts === 0)
+            return this.error("PARSE_ERROR", "AI: Agent object failed", { cause: error });
+
+          return this.generateObject({
+            ...rest,
+            prompt: repairJsonPrompt.compile({
+              text: error.text,
+              error: JSON.stringify(error.cause ?? "Unknown error"),
+            }),
+            repairAttempts: repairAttempts - 1,
+            model: repairModel ?? model,
+            schema,
+            ctx,
+          });
+        }
+        return this.error("PARSE_ERROR", "AI: Agent object failed without text", {
+          cause: error,
+        });
+      }
+      return this.error("BAD_REQUEST", "AI: Provided failed to generate object", { cause: error });
+    }
   }
 
   async generateReplicate(
