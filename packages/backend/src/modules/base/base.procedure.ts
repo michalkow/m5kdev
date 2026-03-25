@@ -672,7 +672,7 @@ export function createServiceProcedureBuilder<
   }
 
   const builder: ServiceProcedureBuilder<TInput, TCtx, Repositories, Services, State> = {
-    use<StepName extends string, TOutput = undefined>(
+    use<StepName extends string, TOutput = void>(
       stepName: StepName,
       step: ServiceProcedureStep<TInput, TCtx, Repositories, Services, State, TOutput>
     ) {
@@ -808,7 +808,7 @@ export function createPermissionServiceProcedureBuilder<
   }
 
   const builder: PermissionServiceProcedureBuilder<TInput, TCtx, Repositories, Services, State> = {
-    use<StepName extends string, TOutput = undefined>(
+    use<StepName extends string, TOutput = void>(
       stepName: StepName,
       step: ServiceProcedureStep<TInput, TCtx, Repositories, Services, State, TOutput>
     ) {

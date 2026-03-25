@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.6.0
+
+### Minor Changes
+
+- procedures
+
 ## 0.5.0
 
 ### Minor Changes

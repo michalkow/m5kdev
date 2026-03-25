@@ -1,5 +1,17 @@
 # @m5kdev/web-ui
 
+## 0.6.0
+
+### Minor Changes
+
+- procedures
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.6.0
+  - @m5kdev/frontend@0.6.0
+
 ## 0.5.0
 
 ### Minor Changes
