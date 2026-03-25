@@ -184,41 +184,42 @@ export class TagRepository extends BaseTableRepository<
     input: { resourceType: string; resourceIds?: readonly string[] },
     tx?: Orm
   ): ServerResultAsync<TaggingSchema[]> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const filters = [eq(this.schema.taggings.resourceType, input.resourceType)];
-      if (input.resourceIds?.length) {
-        filters.push(inArray(this.schema.taggings.resourceId, input.resourceIds as string[]));
-      }
-      const rows = await db
+    const db = tx ?? this.orm;
+    const filters = [eq(this.schema.taggings.resourceType, input.resourceType)];
+    if (input.resourceIds?.length) {
+      filters.push(inArray(this.schema.taggings.resourceId, input.resourceIds as string[]));
+    }
+    const rows = await this.throwableQuery(() =>
+      db
         .select()
         .from(this.schema.taggings)
-        .where(and(...filters));
-      return ok(rows);
-    });
+        .where(and(...filters))
+    );
+    if (rows.isErr()) return err(rows.error);
+    return ok(rows.value);
   }
 
   async list(
     input: (TagListInputSchema & TagListSchema) | undefined,
     tx?: Orm
   ): ServerResultAsync<{ rows: TagSchema[]; total: number }> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const conditions = this.getConditionBuilder(this.table);
-      conditions.push(isNull(this.table.deletedAt));
-      conditions.applyFilters(input);
+    const db = tx ?? this.orm;
+    const conditions = this.getConditionBuilder(this.table);
+    conditions.push(isNull(this.table.deletedAt));
+    conditions.applyFilters(input);
 
-      if (input?.assignableTo) {
-        conditions.push(this.helpers.arrayContains(this.table.assignableTo, [input.assignableTo]));
-      }
-      const whereClause = conditions.join();
-      const rowsQuery = this.withSortingAndPagination(
-        db.select().from(this.table).where(whereClause),
-        input || {}
-      );
-      const countQuery = db.select({ count: count() }).from(this.table).where(whereClause);
-      const [rows, [totalResult]] = await Promise.all([rowsQuery, countQuery]);
-      return ok({ rows, total: totalResult?.count ?? 0 });
-    });
+    if (input?.assignableTo) {
+      conditions.push(this.helpers.arrayContains(this.table.assignableTo, [input.assignableTo]));
+    }
+    const whereClause = conditions.join();
+    const rowsQuery = this.withSortingAndPagination(
+      db.select().from(this.table).where(whereClause),
+      input || {}
+    );
+    const countQuery = db.select({ count: count() }).from(this.table).where(whereClause);
+    const countResult = await this.throwableQuery(() => Promise.all([rowsQuery, countQuery]));
+    if (countResult.isErr()) return err(countResult.error);
+    const [rows, [totalResult]] = countResult.value;
+    return ok({ rows, total: totalResult?.count ?? 0 });
   }
 }

@@ -18,11 +18,12 @@ import {
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import type { SQLiteColumn, SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
 import { ok } from "neverthrow";
-import { Base } from "./base.abstract";
-import { pickColumns, type ServerResult, type ServerResultAsync } from "./base.dto";
+import { ServerError } from "../../utils/errors";
 import { applyPagination } from "../utils/applyPagination";
 import { applySorting } from "../utils/applySorting";
 import { getConditionsFromFilters } from "../utils/getConditionsFromFilters";
+import { Base } from "./base.abstract";
+import { pickColumns, type ServerResult, type ServerResultAsync } from "./base.dto";
 
 /** Payload for update/updateMany: id key required (string), other table fields optional. */
 export type TableUpdatePayload<
@@ -100,6 +101,19 @@ export class BaseRepository<
       return new ConditionBuilder();
     }
     return new TableConditionBuilder(table);
+  }
+  throwableQuery<T>(fn: () => Promise<T>): ServerResultAsync<T> {
+    return this.throwablePromise(
+      () => fn(),
+      (error) =>
+        new ServerError({
+          code: "INTERNAL_SERVER_ERROR",
+          layer: "repository",
+          layerName: this.constructor.name,
+          message: "Database query failed",
+          cause: error,
+        })
+    );
   }
 
   withPagination<TQuery>(

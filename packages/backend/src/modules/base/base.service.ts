@@ -10,11 +10,33 @@ import {
   type ResourceActionGrant,
   type ResourceGrant,
 } from "./base.grants";
-import type { BaseExternaRepository, BaseRepository } from "./base.repository";
+import {
+  createPermissionServiceProcedureBuilder,
+  createServiceProcedureBuilder,
+  type PermissionServiceProcedureBuilder,
+  type ServiceProcedureBuilder,
+  type ServiceProcedureContext,
+} from "./base.procedure";
+
+export type {
+  PermissionServiceProcedureBuilder,
+  ServiceProcedure,
+  ServiceProcedureAccessConfig,
+  ServiceProcedureAccessEntitiesConfig,
+  ServiceProcedureAccessStateConfig,
+  ServiceProcedureArgs,
+  ServiceProcedureBuilder,
+  ServiceProcedureContext,
+  ServiceProcedureContextFilteredInput,
+  ServiceProcedureContextFilterScope,
+  ServiceProcedureEntityStepName,
+  ServiceProcedureInputMapper,
+} from "./base.procedure";
 
 export class BaseService<
-  Repositories extends Record<string, BaseRepository<any, any, any> | BaseExternaRepository>,
-  Services extends Record<string, BaseService<any, any>>,
+  Repositories extends Record<string, Base>,
+  Services extends Record<string, Base>,
+  DefaultContext extends ServiceProcedureContext = ServiceProcedureContext,
 > extends Base {
   constructor(
     public repository: Repositories = {} as Repositories,
@@ -25,6 +47,18 @@ export class BaseService<
     this.service = service;
   }
 
+  addUserFilter(
+    value: string,
+    query?: undefined,
+    columnId?: string,
+    method?: QueryFilter["method"]
+  ): QueryInput;
+  addUserFilter<TQuery extends QueryInput>(
+    value: string,
+    query: TQuery,
+    columnId?: string,
+    method?: QueryFilter["method"]
+  ): TQuery;
   addUserFilter(
     value: string,
     query?: QueryInput,
@@ -42,6 +76,24 @@ export class BaseService<
       : { filters: [userFilter] };
   }
 
+  protected procedure<TInput, TCtx extends ServiceProcedureContext = DefaultContext>(
+    name: string
+  ): ServiceProcedureBuilder<TInput, TCtx, Repositories, Services> {
+    return createServiceProcedureBuilder(this, { name, steps: [] });
+  }
+
+  addContextFilter(
+    ctx: Context,
+    include?: { user?: boolean; organization?: boolean; team?: boolean },
+    query?: undefined,
+    map?: Record<string, { columnId: string; method: QueryFilter["method"] }>
+  ): QueryInput;
+  addContextFilter<TQuery extends QueryInput>(
+    ctx: Context,
+    include: { user?: boolean; organization?: boolean; team?: boolean } | undefined,
+    query: TQuery,
+    map?: Record<string, { columnId: string; method: QueryFilter["method"] }>
+  ): TQuery;
   addContextFilter(
     ctx: Context,
     include: { user?: boolean; organization?: boolean; team?: boolean } = {
@@ -95,9 +147,10 @@ export class BaseService<
 }
 
 export class BasePermissionService<
-  Repositories extends Record<string, BaseRepository<any, any, any> | BaseExternaRepository>,
-  Services extends Record<string, BaseService<any, any>>,
-> extends BaseService<Repositories, Services> {
+  Repositories extends Record<string, Base>,
+  Services extends Record<string, Base>,
+  DefaultContext extends ServiceProcedureContext = ServiceProcedureContext,
+> extends BaseService<Repositories, Services, DefaultContext> {
   grants: ResourceGrant[];
   constructor(repository: Repositories, service: Services, grants: ResourceGrant[] = []) {
     super(repository, service);
@@ -125,6 +178,12 @@ export class BasePermissionService<
     if (hasPermission.isErr()) return err(hasPermission.error);
     if (!hasPermission.value) return this.error("FORBIDDEN");
     return ok(true);
+  }
+
+  protected override procedure<TInput, TCtx extends ServiceProcedureContext = DefaultContext>(
+    name: string
+  ): PermissionServiceProcedureBuilder<TInput, TCtx, Repositories, Services> {
+    return createPermissionServiceProcedureBuilder(this, { name, steps: [] });
   }
 
   checkPermission<T extends Entity>(

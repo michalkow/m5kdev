@@ -7,7 +7,7 @@ import type {
 } from "@m5kdev/commons/modules/recurrence/recurrence.schema";
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import { err, ok } from "neverthrow";
-import type { Context, User } from "../auth/auth.lib";
+import type { Context } from "../auth/auth.lib";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
 import type {
@@ -50,8 +50,13 @@ function mapRuleToInsert(
 
 export class RecurrenceService extends BaseService<
   { recurrence: RecurrenceRepository; recurrenceRules: RecurrenceRulesRepository },
-  Record<string, never>
+  Record<string, never>,
+  Context
 > {
+  readonly list = this.procedure<QueryInput>("list")
+    .addContextFilter(["user"])
+    .handle(({ input }) => this.repository.recurrence.queryList(input));
+
   async create(
     data: CreateRecurrenceSchema,
     ctx: Context
@@ -67,14 +72,6 @@ export class RecurrenceService extends BaseService<
     };
     const rulesData = data.recurrenceRules.map(mapRuleToInsert);
     return this.repository.recurrence.createWithRules(recurrenceData, rulesData);
-  }
-
-  async list(
-    query?: QueryInput,
-    ctx?: { user?: User }
-  ): ServerResultAsync<{ rows: CreateWithRulesResult["recurrence"][]; total: number }> {
-    const queryWithUser = ctx?.user ? this.addUserFilter(ctx.user.id, query, "userId") : query;
-    return this.repository.recurrence.queryList(queryWithUser);
   }
 
   async findById(id: string): ServerResultAsync<CreateWithRulesResult["recurrence"] | null> {

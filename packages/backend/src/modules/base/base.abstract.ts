@@ -1,9 +1,9 @@
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server";
-import { err } from "neverthrow";
-import type { ServerResult, ServerResultAsync } from "./base.dto";
-import type { ServerErrorLayer } from "./base.types";
+import { err, ok } from "neverthrow";
 import { reportError, ServerError } from "../../utils/errors";
 import { logger } from "../../utils/logger";
+import type { ServerResult, ServerResultAsync } from "./base.dto";
+import type { ServerErrorLayer } from "./base.types";
 
 export abstract class Base {
   public layer: ServerErrorLayer;
@@ -54,9 +54,21 @@ export abstract class Base {
 
   async throwableAsync<T>(fn: () => ServerResultAsync<T>): ServerResultAsync<T> {
     try {
-      return fn();
+      return await fn();
     } catch (error) {
       return err(this.handleUnknownError(error));
+    }
+  }
+
+  async throwablePromise<T>(
+    fn: () => Promise<T>,
+    errorHandler?: (error: unknown) => ServerError
+  ): ServerResultAsync<T> {
+    try {
+      const result = await fn();
+      return ok(result);
+    } catch (error) {
+      return err(errorHandler ? errorHandler(error) : this.handleUnknownError(error));
     }
   }
 }
