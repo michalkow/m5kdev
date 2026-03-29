@@ -1,7 +1,7 @@
 import type { QueryFilter, QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import { err, ok } from "neverthrow";
-import type { Context, Session, User } from "../auth/auth.lib";
 import { Base } from "./base.abstract";
+import { type AuthenticatedActor, validateActor } from "./base.actor";
 import type { ServerResult, ServerResultAsync } from "./base.dto";
 import {
   checkPermissionAsync,
@@ -83,19 +83,19 @@ export class BaseService<
   }
 
   addContextFilter(
-    ctx: Context,
+    actor: AuthenticatedActor,
     include?: { user?: boolean; organization?: boolean; team?: boolean },
     query?: undefined,
     map?: Record<string, { columnId: string; method: QueryFilter["method"] }>
   ): QueryInput;
   addContextFilter<TQuery extends QueryInput>(
-    ctx: Context,
+    actor: AuthenticatedActor,
     include: { user?: boolean; organization?: boolean; team?: boolean } | undefined,
     query: TQuery,
     map?: Record<string, { columnId: string; method: QueryFilter["method"] }>
   ): TQuery;
   addContextFilter(
-    ctx: Context,
+    actor: AuthenticatedActor,
     include: { user?: boolean; organization?: boolean; team?: boolean } = {
       user: true,
       organization: false,
@@ -118,28 +118,35 @@ export class BaseService<
     }
   ): QueryInput {
     const filters: QueryFilter[] = [];
+
     if (include.user) {
       filters.push({
         columnId: map.userId.columnId,
         type: "string",
         method: map.userId.method,
-        value: ctx.user.id,
+        value: actor.userId,
       });
     }
     if (include.organization) {
+      if (!validateActor(actor, "organization")) {
+        throw new Error("Organization-scoped context filter requires an organization actor");
+      }
       filters.push({
         columnId: map.organizationId.columnId,
         type: "string",
         method: map.organizationId.method,
-        value: ctx.session.activeOrganizationId ?? "",
+        value: actor.organizationId!,
       });
     }
     if (include.team) {
+      if (!validateActor(actor, "team")) {
+        throw new Error("Team-scoped context filter requires a team actor");
+      }
       filters.push({
         columnId: map.teamId.columnId,
         type: "string",
         method: map.teamId.method,
-        value: ctx.session.activeTeamId ?? "",
+        value: actor.teamId!,
       });
     }
     return query ? { ...query, filters: [...(query?.filters ?? []), ...filters] } : { filters };
@@ -158,23 +165,23 @@ export class BasePermissionService<
   }
 
   accessGuard<T extends Entity>(
-    ctx: { session: Session; user: User },
+    actor: AuthenticatedActor,
     action: string,
     entities?: T | T[],
     grants?: ResourceActionGrant[]
   ): ServerResult<true> {
-    const hasPermission = this.checkPermission(ctx, action, entities, grants);
+    const hasPermission = this.checkPermission(actor, action, entities, grants);
     if (!hasPermission) return this.error("FORBIDDEN");
     return ok(true);
   }
 
   async accessGuardAsync<T extends Entity>(
-    ctx: { session: Session; user: User },
+    actor: AuthenticatedActor,
     action: string,
     getEntities: () => ServerResultAsync<T | T[] | undefined>,
     grants?: ResourceActionGrant[]
   ): ServerResultAsync<true> {
-    const hasPermission = await this.checkPermissionAsync(ctx, action, getEntities, grants);
+    const hasPermission = await this.checkPermissionAsync(actor, action, getEntities, grants);
     if (hasPermission.isErr()) return err(hasPermission.error);
     if (!hasPermission.value) return this.error("FORBIDDEN");
     return ok(true);
@@ -187,23 +194,23 @@ export class BasePermissionService<
   }
 
   checkPermission<T extends Entity>(
-    ctx: { session: Session; user: User },
+    actor: AuthenticatedActor,
     action: string,
     entities?: T | T[],
     grants?: ResourceActionGrant[]
   ): boolean {
     const actionGrants = grants ?? this.grants.filter((grant) => grant.action === action);
-    return checkPermissionSync(ctx, actionGrants, entities);
+    return checkPermissionSync(actor, actionGrants, entities);
   }
 
   async checkPermissionAsync<T extends Entity>(
-    ctx: { session: Session; user: User },
+    actor: AuthenticatedActor,
     action: string,
     getEntities: () => ServerResultAsync<T | T[] | undefined>,
     grants?: ResourceActionGrant[]
   ): ServerResultAsync<boolean> {
     const actionGrants = grants ?? this.grants.filter((grant) => grant.action === action);
-    const permission = await checkPermissionAsync(ctx, actionGrants, getEntities);
+    const permission = await checkPermissionAsync(actor, actionGrants, getEntities);
     if (permission.isErr())
       return this.error("INTERNAL_SERVER_ERROR", "Failed to check permission", {
         cause: permission.error,

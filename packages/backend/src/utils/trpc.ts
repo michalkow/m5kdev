@@ -3,9 +3,19 @@ import type { TRPCRootObject } from "@trpc/server";
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import { fromNodeHeaders } from "better-auth/node";
 import type { Result } from "neverthrow";
-import type { BetterAuth, Context, Session, User } from "../modules/auth/auth.lib";
+import type { BetterAuth, Session, User } from "../modules/auth/auth.lib";
+import {
+  createActorFromContext,
+  type OrganizationActor,
+  type TeamActor,
+  type UserActor,
+} from "../modules/base/base.actor";
 import { ServerError } from "./errors";
 import { logger } from "./logger";
+
+export type Context = { session: Session; user: User; actor: UserActor };
+export type OrganizationContext = { session: Session; user: User; actor: OrganizationActor };
+export type TeamContext = { session: Session; user: User; actor: TeamActor };
 
 type TRPCCreate = TRPCRootObject<Context, any, { transformer: typeof transformer }>;
 
@@ -24,10 +34,12 @@ export function createAuthContext(auth: BetterAuth) {
 
     const user = (data?.user as User) || null;
     const session = (data?.session as Session) || null;
+    const actor = user && session ? createActorFromContext({ user, session }, "user") : null;
 
     return {
       session,
       user,
+      actor,
     };
   };
 }
@@ -49,7 +61,7 @@ export function handleTRPCResult<T>(result: Result<T, ServerError>) {
   return result.value;
 }
 
-export function verifyProtectedProcedureContext(ctx: Context) {
+export function verifyProtectedProcedureContext(ctx: Context): Context {
   if (!ctx.user || !ctx.session) {
     throw new ServerError({
       code: "UNAUTHORIZED",
@@ -57,9 +69,34 @@ export function verifyProtectedProcedureContext(ctx: Context) {
       layerName: "TRPCController",
     }).toTRPC();
   }
+  return ctx;
 }
 
-export function verifyAdminProcedureContext(ctx: Context) {
+export function verifyOrganizationProcedureContext(ctx: Context): OrganizationContext {
+  if (!ctx.user || !ctx.session) {
+    throw new ServerError({
+      code: "UNAUTHORIZED",
+      layer: "controller",
+      layerName: "TRPCController",
+    }).toTRPC();
+  }
+  const actor = createActorFromContext(ctx, "organization");
+  return { ...ctx, actor };
+}
+
+export function verifyTeamProcedureContext(ctx: Context): TeamContext {
+  if (!ctx.user || !ctx.session) {
+    throw new ServerError({
+      code: "UNAUTHORIZED",
+      layer: "controller",
+      layerName: "TRPCController",
+    }).toTRPC();
+  }
+  const actor = createActorFromContext(ctx, "team");
+  return { ...ctx, actor };
+}
+
+export function verifyAdminProcedureContext(ctx: Context): Context {
   if (!ctx.user || !ctx.session) {
     throw new ServerError({
       code: "UNAUTHORIZED",
@@ -75,4 +112,5 @@ export function verifyAdminProcedureContext(ctx: Context) {
       layerName: "TRPCController",
     }).toTRPC();
   }
+  return ctx;
 }

@@ -3,8 +3,8 @@ import type { TRPC_ERROR_CODE_KEY } from "@trpc/server";
 import { ok } from "neverthrow";
 import type { ServerError } from "../../utils/errors";
 import type { logger } from "../../utils/logger";
-import type { Context, Session, User } from "../auth/auth.lib";
 import type { Base } from "./base.abstract";
+import { type Actor, type ActorScope, type AuthenticatedActor, validateActor } from "./base.actor";
 import type { ServerResult, ServerResultAsync } from "./base.dto";
 import type { Entity, ResourceActionGrant } from "./base.grants";
 
@@ -13,15 +13,26 @@ type RepositoryMap = Record<string, Base>;
 type ServiceMap = Record<string, Base>;
 
 export type ServiceProcedureContext = {
-  user?: User | null;
-  session?: Session | null;
+  actor?: AuthenticatedActor | null;
 } & Record<string, unknown>;
 
 export type ServiceProcedureState = Record<string, unknown>;
 export type ServiceProcedureStoredValue<T> = [T] extends [undefined] ? undefined : Awaited<T>;
 export type ServiceProcedureResultLike<T> = T | ServerResult<T> | Promise<T | ServerResult<T>>;
-export type ServiceProcedureContextFilterScope = "user" | "organization" | "team";
+export type ServiceProcedureContextFilterScope = ActorScope;
 export type ServiceProcedureContextFilteredInput<TInput> = Extract<NonNullable<TInput>, QueryInput>;
+type ServiceProcedureAuthContext<Scope extends ActorScope> = {
+  actor: Actor[Scope];
+};
+type ServiceProcedureRequiredScopeFromFilter<
+  TInclude extends readonly ServiceProcedureContextFilterScope[] | undefined,
+> = TInclude extends readonly ServiceProcedureContextFilterScope[]
+  ? "team" extends TInclude[number]
+    ? "team"
+    : "organization" extends TInclude[number]
+      ? "organization"
+      : "user"
+  : "user";
 
 export type ServiceProcedure<TInput, TCtx extends ServiceProcedureContext, TOutput> = (
   input: TInput,
@@ -159,16 +170,26 @@ export interface ServiceProcedureBuilder<
     Services,
     State & Record<StepName, ServiceProcedureStoredValue<TNextInput>>
   >;
-  addContextFilter(
-    include?: readonly ServiceProcedureContextFilterScope[]
+  addContextFilter<
+    TInclude extends readonly ServiceProcedureContextFilterScope[] | undefined = undefined,
+  >(
+    include?: TInclude
   ): ServiceProcedureBuilder<
     ServiceProcedureContextFilteredInput<TInput>,
-    TCtx & Context,
+    TCtx & ServiceProcedureAuthContext<ServiceProcedureRequiredScopeFromFilter<TInclude>>,
     Repositories,
     Services,
     State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> }
   >;
-  requireAuth(): ServiceProcedureBuilder<TInput, TCtx & Context, Repositories, Services, State>;
+  requireAuth<Scope extends ActorScope = "user">(
+    scope?: Scope
+  ): ServiceProcedureBuilder<
+    TInput,
+    TCtx & ServiceProcedureAuthContext<Scope>,
+    Repositories,
+    Services,
+    State
+  >;
   handle<TOutput>(
     handler: ServiceProcedureHandler<TInput, TCtx, Repositories, Services, State, TOutput>
   ): ServiceProcedure<TInput, TCtx, TOutput>;
@@ -201,25 +222,35 @@ export interface PermissionServiceProcedureBuilder<
     Services,
     State & Record<StepName, ServiceProcedureStoredValue<TNextInput>>
   >;
-  addContextFilter(
-    include?: readonly ServiceProcedureContextFilterScope[]
+  addContextFilter<
+    TInclude extends readonly ServiceProcedureContextFilterScope[] | undefined = undefined,
+  >(
+    include?: TInclude
   ): PermissionServiceProcedureBuilder<
     ServiceProcedureContextFilteredInput<TInput>,
-    TCtx & Context,
+    TCtx & ServiceProcedureAuthContext<ServiceProcedureRequiredScopeFromFilter<TInclude>>,
     Repositories,
     Services,
     State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> }
   >;
-  requireAuth(): PermissionServiceProcedureBuilder<
+  requireAuth<Scope extends ActorScope = "user">(
+    scope?: Scope
+  ): PermissionServiceProcedureBuilder<
     TInput,
-    TCtx & Context,
+    TCtx & ServiceProcedureAuthContext<Scope>,
     Repositories,
     Services,
     State
   >;
   access(
     config: ServiceProcedureAccessEntitiesConfig<TInput, TCtx, Repositories, Services, State>
-  ): PermissionServiceProcedureBuilder<TInput, TCtx & Context, Repositories, Services, State>;
+  ): PermissionServiceProcedureBuilder<
+    TInput,
+    TCtx & ServiceProcedureAuthContext<"user">,
+    Repositories,
+    Services,
+    State
+  >;
   access<TEntities extends Entity | Entity[] | undefined>(
     config: ServiceProcedureAccessEntitiesConfig<
       TInput,
@@ -231,7 +262,7 @@ export interface PermissionServiceProcedureBuilder<
     >
   ): PermissionServiceProcedureBuilder<
     TInput,
-    TCtx & Context,
+    TCtx & ServiceProcedureAuthContext<"user">,
     Repositories,
     Services,
     State & { access: TEntities }
@@ -240,7 +271,7 @@ export interface PermissionServiceProcedureBuilder<
     config: ServiceProcedureAccessStateConfig<State, StepName>
   ): PermissionServiceProcedureBuilder<
     TInput,
-    TCtx & Context,
+    TCtx & ServiceProcedureAuthContext<"user">,
     Repositories,
     Services,
     State & { access: State[StepName] }
@@ -252,7 +283,7 @@ type BaseServiceProcedureHost<Repositories extends RepositoryMap, Services exten
   service: Services;
   logger: ServiceLogger;
   addContextFilter(
-    ctx: Context,
+    actor: AuthenticatedActor,
     include?: { user?: boolean; organization?: boolean; team?: boolean },
     query?: QueryInput
   ): QueryInput;
@@ -270,13 +301,13 @@ type PermissionServiceProcedureHost<
   Services extends ServiceMap,
 > = BaseServiceProcedureHost<Repositories, Services> & {
   checkPermission<T extends Entity>(
-    ctx: { session: Session; user: User },
+    actor: AuthenticatedActor,
     action: string,
     entities?: T | T[],
     grants?: ResourceActionGrant[]
   ): boolean;
   checkPermissionAsync<T extends Entity>(
-    ctx: { session: Session; user: User },
+    actor: AuthenticatedActor,
     action: string,
     getEntities: () => ServerResultAsync<T | T[] | undefined>,
     grants?: ResourceActionGrant[]
@@ -377,23 +408,39 @@ function logProcedureStage<Repositories extends RepositoryMap, Services extends 
     stepName,
     durationMs,
     errorCode,
-    hasUser: Boolean(ctx.user),
-    hasSession: Boolean(ctx.session),
+    hasActor: Boolean(ctx.actor),
   });
 }
 
+function requireProcedureActor<
+  Scope extends ActorScope,
+  Repositories extends RepositoryMap,
+  Services extends ServiceMap,
+>(
+  host: BaseServiceProcedureHost<Repositories, Services>,
+  ctx: ServiceProcedureContext,
+  scope: Scope
+): ServerResult<Actor[Scope]> {
+  if (!ctx.actor) {
+    return host.error("UNAUTHORIZED", "Unauthorized");
+  }
+
+  if (!validateActor(ctx.actor, scope)) {
+    return host.error("FORBIDDEN", "Forbidden");
+  }
+
+  return ok(ctx.actor as Actor[Scope]);
+}
+
 function createRequireAuthStep<Repositories extends RepositoryMap, Services extends ServiceMap>(
-  host: BaseServiceProcedureHost<Repositories, Services>
+  host: BaseServiceProcedureHost<Repositories, Services>,
+  scope: ActorScope = "user"
 ): ProcedureRuntimeStep<Repositories, Services> {
   return {
     stage: "auth",
     stepName: "auth",
     run: async ({ ctx }) => {
-      if (!ctx.user || !ctx.session) {
-        return host.error("UNAUTHORIZED", "Unauthorized");
-      }
-
-      return ok(true);
+      return requireProcedureActor(host, ctx, scope);
     },
   };
 }
@@ -445,12 +492,20 @@ function createContextFilterStep<Repositories extends RepositoryMap, Services ex
   include?: readonly ServiceProcedureContextFilterScope[]
 ): ProcedureRuntimeStep<Repositories, Services> {
   const contextInclude = getContextFilterInclude(include);
+  const requiredScope: ActorScope = contextInclude.team
+    ? "team"
+    : contextInclude.organization
+      ? "organization"
+      : "user";
 
   return {
     stage: "input",
     stepName: "contextFilter",
-    run: async ({ input, ctx }) =>
-      ok(host.addContextFilter(ctx as Context, contextInclude, input as QueryInput)),
+    run: async ({ input, ctx }) => {
+      const actor = requireProcedureActor(host, ctx, requiredScope);
+      if (actor.isErr()) return actor;
+      return ok(host.addContextFilter(actor.value, contextInclude, input as QueryInput));
+    },
   };
 }
 
@@ -470,19 +525,13 @@ function createAccessStep<
     stepName: "access",
     run: async (args) => {
       const typedArgs = args as ServiceProcedureArgs<TInput, TCtx, Repositories, Services, State>;
-      if (!typedArgs.ctx.user || !typedArgs.ctx.session) {
-        return host.error("UNAUTHORIZED", "Unauthorized");
-      }
-
-      const permissionContext = {
-        user: typedArgs.ctx.user,
-        session: typedArgs.ctx.session,
-      };
+      const actor = requireProcedureActor(host, typedArgs.ctx, "user");
+      if (actor.isErr()) return actor;
 
       if ("entityStep" in config && typeof config.entityStep === "string") {
         const entities = typedArgs.state[config.entityStep] as TEntities;
         const hasPermission = host.checkPermission(
-          permissionContext,
+          actor.value,
           config.action,
           entities as Entity | Entity[] | undefined,
           config.grants
@@ -502,7 +551,7 @@ function createAccessStep<
 
         let loadedEntities: TEntities | undefined;
         const permission = await host.checkPermissionAsync(
-          permissionContext,
+          actor.value,
           config.action,
           async () => {
             const entityResult = await normalizeProcedureResult(resolveEntities(typedArgs));
@@ -527,7 +576,7 @@ function createAccessStep<
 
       const entities = config.entities;
       const hasPermission = host.checkPermission(
-        permissionContext,
+        actor.value,
         config.action,
         entities,
         config.grants
@@ -652,16 +701,18 @@ export function createServiceProcedureBuilder<
   host: BaseServiceProcedureHost<Repositories, Services>,
   config: ProcedureBuilderConfig<Repositories, Services>
 ): ServiceProcedureBuilder<TInput, TCtx, Repositories, Services, State> {
-  function addContextFilter(include?: readonly ServiceProcedureContextFilterScope[]) {
+  function addContextFilter<
+    TInclude extends readonly ServiceProcedureContextFilterScope[] | undefined = undefined,
+  >(include?: TInclude) {
     const steps = hasStepName(config.steps, "auth")
       ? config.steps
-      : [...config.steps, createRequireAuthStep(host)];
+      : [...config.steps, createRequireAuthStep(host, "user")];
 
     assertUniqueStepName(steps, "contextFilter");
 
     return createServiceProcedureBuilder<
       ServiceProcedureContextFilteredInput<TInput>,
-      TCtx & Context,
+      TCtx & ServiceProcedureAuthContext<ServiceProcedureRequiredScopeFromFilter<TInclude>>,
       Repositories,
       Services,
       State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> }
@@ -705,15 +756,18 @@ export function createServiceProcedureBuilder<
       });
     },
     addContextFilter,
-    requireAuth() {
+    requireAuth<Scope extends ActorScope = "user">(scope?: Scope) {
       assertUniqueStepName(config.steps, "auth");
-      return createServiceProcedureBuilder<TInput, TCtx & Context, Repositories, Services, State>(
-        host,
-        {
-          ...config,
-          steps: [...config.steps, createRequireAuthStep(host)],
-        }
-      );
+      return createServiceProcedureBuilder<
+        TInput,
+        TCtx & ServiceProcedureAuthContext<Scope>,
+        Repositories,
+        Services,
+        State
+      >(host, {
+        ...config,
+        steps: [...config.steps, createRequireAuthStep(host, scope ?? "user")],
+      });
     },
     handle<TOutput>(
       handler: ServiceProcedureHandler<TInput, TCtx, Repositories, Services, State, TOutput>
@@ -735,16 +789,18 @@ export function createPermissionServiceProcedureBuilder<
   host: PermissionServiceProcedureHost<Repositories, Services>,
   config: ProcedureBuilderConfig<Repositories, Services>
 ): PermissionServiceProcedureBuilder<TInput, TCtx, Repositories, Services, State> {
-  function addContextFilter(include?: readonly ServiceProcedureContextFilterScope[]) {
+  function addContextFilter<
+    TInclude extends readonly ServiceProcedureContextFilterScope[] | undefined = undefined,
+  >(include?: TInclude) {
     const steps = hasStepName(config.steps, "auth")
       ? config.steps
-      : [...config.steps, createRequireAuthStep(host)];
+      : [...config.steps, createRequireAuthStep(host, "user")];
 
     assertUniqueStepName(steps, "contextFilter");
 
     return createPermissionServiceProcedureBuilder<
       ServiceProcedureContextFilteredInput<TInput>,
-      TCtx & Context,
+      TCtx & ServiceProcedureAuthContext<ServiceProcedureRequiredScopeFromFilter<TInclude>>,
       Repositories,
       Services,
       State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> }
@@ -756,7 +812,13 @@ export function createPermissionServiceProcedureBuilder<
 
   function access(
     accessConfig: ServiceProcedureAccessEntitiesConfig<TInput, TCtx, Repositories, Services, State>
-  ): PermissionServiceProcedureBuilder<TInput, TCtx & Context, Repositories, Services, State>;
+  ): PermissionServiceProcedureBuilder<
+    TInput,
+    TCtx & ServiceProcedureAuthContext<"user">,
+    Repositories,
+    Services,
+    State
+  >;
   function access<TEntities extends Entity | Entity[] | undefined>(
     accessConfig: ServiceProcedureAccessEntitiesConfig<
       TInput,
@@ -768,7 +830,7 @@ export function createPermissionServiceProcedureBuilder<
     >
   ): PermissionServiceProcedureBuilder<
     TInput,
-    TCtx & Context,
+    TCtx & ServiceProcedureAuthContext<"user">,
     Repositories,
     Services,
     State & { access: TEntities }
@@ -777,7 +839,7 @@ export function createPermissionServiceProcedureBuilder<
     accessConfig: ServiceProcedureAccessStateConfig<State, StepName>
   ): PermissionServiceProcedureBuilder<
     TInput,
-    TCtx & Context,
+    TCtx & ServiceProcedureAuthContext<"user">,
     Repositories,
     Services,
     State & { access: State[StepName] }
@@ -797,7 +859,7 @@ export function createPermissionServiceProcedureBuilder<
     assertUniqueStepName(config.steps, "access");
     return createPermissionServiceProcedureBuilder<
       TInput,
-      TCtx & Context,
+      TCtx & ServiceProcedureAuthContext<"user">,
       Repositories,
       Services,
       State
@@ -841,17 +903,17 @@ export function createPermissionServiceProcedureBuilder<
       });
     },
     addContextFilter,
-    requireAuth() {
+    requireAuth<Scope extends ActorScope = "user">(scope?: Scope) {
       assertUniqueStepName(config.steps, "auth");
       return createPermissionServiceProcedureBuilder<
         TInput,
-        TCtx & Context,
+        TCtx & ServiceProcedureAuthContext<Scope>,
         Repositories,
         Services,
         State
       >(host, {
         ...config,
-        steps: [...config.steps, createRequireAuthStep(host)],
+        steps: [...config.steps, createRequireAuthStep(host, scope ?? "user")],
       });
     },
     access,
