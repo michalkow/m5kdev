@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.7.0
+
+### Minor Changes
+
+- procedures
+
 ## 0.6.0
 
 ### Minor Changes

@@ -2,10 +2,7 @@ import { err, ok } from "neverthrow";
 import type { User } from "../auth/auth.lib";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
-import type {
-  ConnectDeleteInputSchema,
-  ConnectListInputSchema,
-} from "./connect.dto";
+import type { ConnectDeleteInputSchema, ConnectListInputSchema } from "./connect.dto";
 import {
   buildAuthorizationUrl,
   exchangeCodeForTokens,
@@ -154,18 +151,22 @@ export class ConnectService extends BaseService<{ connect: ConnectRepository }, 
     });
   }
 
-  async list(input: ConnectListInputSchema, { user }: { user: User }) {
-    return this.repository.connect.list({ userId: user.id, ...input });
-  }
+  readonly list = this.procedure<ConnectListInputSchema>("connectList")
+    .requireAuth()
+    .handle(({ input, ctx }) =>
+      this.repository.connect.list({ userId: ctx.actor.userId, ...input })
+    );
 
-  async delete({ id }: ConnectDeleteInputSchema, { user }: { user: User }) {
-    const connection = await this.repository.connect.findById(id);
-    if (connection.isOk()) {
-      if (connection.value?.userId !== user.id) {
-        return this.error("FORBIDDEN", "Not your connection");
+  readonly delete = this.procedure<ConnectDeleteInputSchema>("connectDelete")
+    .requireAuth()
+    .handle(async ({ input, ctx }) => {
+      const connection = await this.repository.connect.findById(input.id);
+      if (connection.isOk()) {
+        if (connection.value?.userId !== ctx.actor.userId) {
+          return this.error("FORBIDDEN", "Not your connection");
+        }
+        return this.repository.connect.deleteById(input.id);
       }
-      return this.repository.connect.deleteById(id);
-    }
-    return err(connection.error);
-  }
+      return err(connection.error);
+    });
 }

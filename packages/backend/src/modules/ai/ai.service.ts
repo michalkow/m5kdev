@@ -17,7 +17,7 @@ import { jsonrepair } from "jsonrepair";
 import { err, ok } from "neverthrow";
 import type Replicate from "replicate";
 import type { ZodType, z } from "zod";
-import type { Context, User } from "../auth/auth.lib";
+import type { RequiredServiceActor } from "../base/base.actor";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
 import { repairJsonPrompt } from "./ai.prompts";
@@ -32,11 +32,12 @@ type GenerateTextParams = Parameters<typeof generateText>[0];
 type GenerateTextInput =
   | { prompt: string | ModelMessage[]; messages?: never }
   | { messages: ModelMessage[]; prompt?: never };
+type AIServiceActorContext = { actor: RequiredServiceActor<"user"> };
 type AIServiceGenerateTextParams = Omit<GenerateTextParams, "model" | "prompt" | "messages"> &
   GenerateTextInput & {
     model: string;
     removeMDash?: boolean;
-    ctx?: Context;
+    ctx?: AIServiceActorContext;
   };
 type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
   GenerateTextParams,
@@ -47,7 +48,7 @@ type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
     schema: T;
     repairAttempts?: number;
     repairModel?: string;
-    ctx?: Context;
+    ctx?: AIServiceActorContext;
   };
 
 export class AIService<MastraInstance extends Mastra> extends BaseService<
@@ -105,7 +106,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   async agentUse(
     agent: string,
     options: MastraAgentGenerateOptions & { prompt?: string; messages?: MessageListInput },
-    ctx?: { user: User; model?: string }
+    ctx?: AIServiceActorContext & { model?: string }
   ): ServerResultAsync<Awaited<ReturnType<MastraModelOutput<any>["getFullOutput"]>>> {
     return this.throwableAsync(async () => {
       this.logger.info("AGENT USE");
@@ -114,8 +115,8 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       if (!payload) return this.error("BAD_REQUEST", "No prompt or messages provided");
       const requestContext = options.requestContext ?? new RequestContext();
 
-      if (ctx?.user) {
-        requestContext.set("userId", ctx.user.id);
+      if (ctx?.actor) {
+        requestContext.set("userId", ctx.actor.userId);
       }
       if (ctx?.model) {
         requestContext.set("model", ctx.model);
@@ -129,7 +130,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       this.logger.info("AGENT USE DONE");
       if (this.repository.aiUsage) {
         const createUsageResult = await this.repository.aiUsage.create({
-          userId: ctx?.user?.id,
+          userId: ctx?.actor?.userId,
           model: ctx?.model ?? "unknown",
           provider: "openrouter",
           feature: agent,
@@ -149,7 +150,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   async agentText(
     agent: string,
     options: MastraAgentGenerateOptions & { prompt?: string; messages?: MessageListInput },
-    ctx?: { user: User; model?: string }
+    ctx?: AIServiceActorContext & { model?: string }
   ): ServerResultAsync<string> {
     const result = await this.agentUse(agent, options, ctx);
     if (result.isErr())
@@ -160,7 +161,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   async agentTextResult(
     agent: string,
     options: MastraAgentGenerateOptions & { prompt?: string; messages?: MessageListInput },
-    ctx?: { user: User; model?: string }
+    ctx?: AIServiceActorContext & { model?: string }
   ): ServerResultAsync<FullOutput<any>> {
     const result = await this.agentUse(agent, options, ctx);
     if (result.isErr()) return err(result.error);
@@ -174,7 +175,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       prompt?: string;
       messages?: MessageListInput;
     },
-    ctx?: { user: User; model?: string }
+    ctx?: AIServiceActorContext & { model?: string }
   ): ServerResultAsync<z.infer<T>> {
     const { schema, ...rest } = options;
     const result = await this.agentUse(agent, { ...rest, structuredOutput: { schema } }, ctx);
@@ -190,7 +191,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       prompt?: string;
       messages?: MessageListInput;
     },
-    ctx?: { user: User; model?: string }
+    ctx?: AIServiceActorContext & { model?: string }
   ): ServerResultAsync<FullOutput<any> & { object: z.infer<T> }> {
     this.logger.info("AGENT OBJECT RESULT");
     const { schema, ...rest } = options;
@@ -260,7 +261,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       const result = await generateText(request);
       if (this.repository.aiUsage) {
         const createUsageResult = await this.repository.aiUsage.create({
-          userId: ctx?.user?.id,
+          userId: ctx?.actor?.userId,
           model,
           provider: "openrouter",
           feature: "generateText",
@@ -306,7 +307,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       const result = await generateText(request);
       if (this.repository.aiUsage) {
         const createUsageResult = await this.repository.aiUsage.create({
-          userId: ctx?.user?.id,
+          userId: ctx?.actor?.userId,
           model,
           provider: "openrouter",
           feature: "generateObject",
@@ -323,7 +324,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       if (NoObjectGeneratedError.isInstance(error)) {
         if (this.repository.aiUsage) {
           const createUsageResult = await this.repository.aiUsage.create({
-            userId: ctx?.user?.id,
+            userId: ctx?.actor?.userId,
             model,
             provider: "openrouter",
             feature: "generateObject",

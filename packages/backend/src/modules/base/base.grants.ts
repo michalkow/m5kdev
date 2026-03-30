@@ -1,5 +1,5 @@
 import { err, ok } from "neverthrow";
-import type { Session, User } from "../auth/auth.lib";
+import type { ServiceActor } from "./base.actor";
 import type { ServerResultAsync } from "./base.dto";
 
 type Level = "user" | "team" | "organization";
@@ -57,11 +57,6 @@ function checkOwnership(
   return Array.isArray(entities)
     ? entities.every((e) => e[entityField] === contextValue)
     : entities[entityField] === contextValue;
-}
-
-interface PermissionContext {
-  session: Session;
-  user: User;
 }
 
 type GrantLevel = "user" | "team" | "organization";
@@ -147,22 +142,22 @@ function checkOwnAccess(
 }
 
 export function checkPermissionSync<T extends Entity>(
-  ctx: PermissionContext,
+  actor: ServiceActor,
   grants: ResourceActionGrant[],
   entities?: T | T[]
 ): boolean {
   if (!grants || grants.length === 0) return false;
 
-  const { id: userId, role: userRole } = ctx.user;
-  const {
-    activeOrganizationRole: organizationRole,
-    activeTeamRole: teamRole,
-    activeOrganizationId: organizationId,
-    activeTeamId: teamId,
-  } = ctx.session;
-
-  const roles = { userRole, teamRole, organizationRole };
-  const contextValues = { userId, teamId, organizationId };
+  const roles = {
+    userRole: actor.userRole,
+    teamRole: actor.teamRole,
+    organizationRole: actor.organizationRole,
+  };
+  const contextValues = {
+    userId: actor.userId,
+    teamId: actor.teamId,
+    organizationId: actor.organizationId,
+  };
 
   // Pass 1: Check for "all" access first (no ownership check needed)
   if (hasAllAccess(grants, roles)) return true;
@@ -172,22 +167,22 @@ export function checkPermissionSync<T extends Entity>(
 }
 
 export async function checkPermissionAsync<T extends Entity>(
-  ctx: PermissionContext,
+  actor: ServiceActor,
   grants: ResourceActionGrant[],
   getEntities: () => ServerResultAsync<T | T[] | undefined>
 ): ServerResultAsync<boolean> {
   if (!grants || grants.length === 0) return ok(false);
 
-  const { id: userId, role: userRole } = ctx.user;
-  const {
-    activeOrganizationRole: organizationRole,
-    activeTeamRole: teamRole,
-    activeOrganizationId: organizationId,
-    activeTeamId: teamId,
-  } = ctx.session;
-
-  const roles = { userRole, teamRole, organizationRole };
-  const contextValues = { userId, teamId, organizationId };
+  const roles = {
+    userRole: actor.userRole,
+    teamRole: actor.teamRole,
+    organizationRole: actor.organizationRole,
+  };
+  const contextValues = {
+    userId: actor.userId,
+    teamId: actor.teamId,
+    organizationId: actor.organizationId,
+  };
 
   // Pass 1: Check for "all" access first (no entity fetch needed)
   if (hasAllAccess(grants, roles)) return ok(true);

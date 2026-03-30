@@ -1,5 +1,6 @@
 import { err, ok } from "neverthrow";
-import type { Session, User } from "../auth/auth.lib";
+import { ServerError } from "../../utils/errors";
+import { createServiceActor } from "./base.actor";
 import {
   checkPermissionAsync,
   checkPermissionSync,
@@ -8,59 +9,46 @@ import {
   type NestedGrants,
   type ResourceActionGrant,
 } from "./base.grants";
-import { ServerError } from "../../utils/errors";
 
 // ============================================
 // Mock Factories
 // ============================================
 
-function createMockUser(overrides: Partial<User> = {}): User {
-  return {
-    id: "user-123",
-    role: "member",
-    email: "test@example.com",
-    emailVerified: true,
-    name: "Test User",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    image: null,
-    onboarding: null,
-    preferences: null,
-    flags: null,
-    stripeCustomerId: null,
-    paymentCustomerId: null,
-    paymentPlanTier: null,
-    paymentPlanExpiresAt: null,
-    ...overrides,
-  } as User;
-}
+type MockUserOverrides = {
+  id?: string;
+  role?: string;
+};
 
-function createMockSession(overrides: Partial<Session> = {}): Session {
-  return {
-    id: "session-123",
-    userId: "user-123",
-    token: "token-123",
-    expiresAt: new Date(Date.now() + 86400000),
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ipAddress: null,
-    userAgent: null,
-    activeOrganizationId: null,
-    activeTeamId: null,
-    activeOrganizationRole: null,
-    activeTeamRole: null,
-    ...overrides,
-  } as Session;
-}
+type MockSessionOverrides = {
+  activeOrganizationId?: string | null;
+  activeTeamId?: string | null;
+  activeOrganizationRole?: string | null;
+  activeTeamRole?: string | null;
+};
 
 function createMockContext(
-  userOverrides: Partial<User> = {},
-  sessionOverrides: Partial<Session> = {}
-): { session: Session; user: User } {
-  return {
-    user: createMockUser(userOverrides),
-    session: createMockSession(sessionOverrides),
-  };
+  userOverrides: MockUserOverrides = {},
+  sessionOverrides: MockSessionOverrides = {}
+) {
+  const organizationId =
+    sessionOverrides.activeOrganizationId ?? (sessionOverrides.activeTeamId ? "org-123" : null);
+  const organizationRole =
+    sessionOverrides.activeOrganizationRole ?? (sessionOverrides.activeTeamRole ? "member" : null);
+
+  const actor = createServiceActor({
+    userId: userOverrides.id ?? "user-123",
+    userRole: userOverrides.role ?? "member",
+    organizationId,
+    organizationRole,
+    teamId: sessionOverrides.activeTeamId ?? null,
+    teamRole: sessionOverrides.activeTeamRole ?? null,
+  });
+
+  if (!actor) {
+    throw new Error("Expected actor");
+  }
+
+  return actor;
 }
 
 function createMockEntity(overrides: Partial<Entity> = {}): Entity {

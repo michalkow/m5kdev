@@ -1,11 +1,12 @@
+import type { BillingSchema } from "@m5kdev/commons/modules/billing/billing.schema";
 import { err, ok } from "neverthrow";
 import type Stripe from "stripe";
+import { posthogCapture } from "../../utils/posthog";
 import type { User } from "../auth/auth.lib";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
+import type { Context } from "../../utils/trpc";
 import { BaseService } from "../base/base.service";
 import type { BillingRepository } from "./billing.repository";
-
-import { posthogCapture } from "../../utils/posthog";
 
 const allowedEvents: Stripe.Event.Type[] = [
   "checkout.session.completed",
@@ -84,13 +85,14 @@ export class BillingService extends BaseService<{ billing: BillingRepository }, 
     return ok(true);
   }
 
-  async getActiveSubscription({ user }: { user: User }) {
-    return this.repository.billing.getActiveSubscription(user.id);
+  async getActiveSubscription(ctx: Context): ServerResultAsync<BillingSchema | null> {
+    return this.repository.billing.getActiveSubscription(ctx.actor.userId);
   }
 
-  async listInvoices({ user }: { user: User }): ServerResultAsync<Stripe.Invoice[]> {
-    if (!user.stripeCustomerId) return this.error("NOT_FOUND", "User has no stripe customer id");
-    return this.repository.billing.listInvoices(user.stripeCustomerId);
+  async listInvoices(ctx: Context): ServerResultAsync<Stripe.Invoice[]> {
+    if (!ctx.user.stripeCustomerId)
+      return this.error("NOT_FOUND", "User has no stripe customer id");
+    return this.repository.billing.listInvoices(ctx.user.stripeCustomerId);
   }
 
   async createCheckoutSession(

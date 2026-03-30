@@ -1,5 +1,6 @@
 import {
   type createAuthContext,
+  verifyAdminProcedureContext,
   verifyProtectedProcedureContext,
 } from "@m5kdev/backend/utils/trpc";
 import { transformer } from "@m5kdev/commons/utils/trpc";
@@ -12,8 +13,11 @@ const t = initTRPC.context<Context>().create({ transformer });
 export const publicProcedure = t.procedure;
 
 export const procedure = t.procedure.use(({ ctx, next }) => {
-  verifyProtectedProcedureContext(ctx);
-  return next({ ctx });
+  return next({ ctx: verifyProtectedProcedureContext(ctx) });
+});
+
+export const adminProcedure = t.procedure.use(({ ctx, next }) => {
+  return next({ ctx: verifyAdminProcedureContext(ctx) });
 });
 
 export const router = t.router;
@@ -22,6 +26,6 @@ export const mergeRouters = t.mergeRouters;
 export const trpcObject = {
   router,
   privateProcedure: procedure,
-  adminProcedure: procedure,
+  adminProcedure,
   publicProcedure,
 };

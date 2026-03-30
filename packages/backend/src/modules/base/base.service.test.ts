@@ -1,51 +1,47 @@
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import { err, ok } from "neverthrow";
 import { ServerError } from "../../utils/errors";
-import type { Context, Session, User } from "../auth/auth.lib";
+import type { ServiceActorClaims, ServiceOrganizationActor, ServiceTeamActor } from "./base.actor";
+import { createServiceActor } from "./base.actor";
 import type { ResourceGrant } from "./base.grants";
 import { BasePermissionService, BaseService } from "./base.service";
 
-function createUser(overrides: Partial<User> = {}): User {
-  return {
-    id: "user-1",
-    role: "member",
-    email: "user@example.com",
-    name: "User",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    banned: false,
-    banReason: null,
-    banExpires: null,
-    emailVerified: true,
-    image: null,
-    onboarding: null,
-    preferences: null,
-    flags: null,
-    stripeCustomerId: null,
-    paymentCustomerId: null,
-    paymentPlanTier: null,
-    paymentPlanExpiresAt: null,
+function createActor(overrides: Partial<ServiceActorClaims> = {}) {
+  const actor = createServiceActor({
+    userId: "user-1",
+    userRole: "member",
+    organizationId: null,
+    organizationRole: null,
+    teamId: null,
+    teamRole: null,
     ...overrides,
-  } as User;
+  });
+
+  if (!actor) {
+    throw new Error("Expected actor");
+  }
+
+  return actor;
 }
 
-function createSession(overrides: Partial<Session> = {}): Session {
-  return {
-    id: "session-1",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60),
-    token: "token",
-    ipAddress: null,
-    userAgent: null,
-    userId: "user-1",
-    activeOrganizationId: null,
-    activeOrganizationRole: null,
-    activeTeamId: null,
-    activeTeamRole: null,
-    impersonatedBy: null,
+function createOrganizationActor(
+  overrides: Partial<ServiceActorClaims> = {}
+): ServiceOrganizationActor {
+  return createActor({
+    organizationId: "org-1",
+    organizationRole: "owner",
     ...overrides,
-  } as Session;
+  }) as ServiceOrganizationActor;
+}
+
+function createTeamActor(overrides: Partial<ServiceActorClaims> = {}): ServiceTeamActor {
+  return createActor({
+    organizationId: "org-1",
+    organizationRole: "owner",
+    teamId: "team-1",
+    teamRole: "member",
+    ...overrides,
+  }) as ServiceTeamActor;
 }
 
 describe("BaseService procedure builder", () => {
@@ -109,10 +105,7 @@ describe("BaseService procedure builder", () => {
     const authorized = await service.run(
       { search: "hello" },
       {
-        user: createUser(),
-        session: createSession({
-          activeOrganizationId: "org-1",
-        }),
+        actor: createOrganizationActor(),
       }
     );
 
@@ -137,6 +130,26 @@ describe("BaseService procedure builder", () => {
     }
   });
 
+  it("addContextFilter returns FORBIDDEN when the actor scope is too small", async () => {
+    type QueryWithSearch = QueryInput & { search?: string };
+
+    class QueryService extends BaseService<Record<string, never>, Record<string, never>> {
+      readonly run = this.procedure<QueryWithSearch>("run")
+        .addContextFilter(["organization"])
+        .handle(({ input }) => ok(input));
+    }
+
+    const service = new QueryService();
+    const result = await service.run({ search: "hello" }, {
+      actor: createActor(),
+    } as never);
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("FORBIDDEN");
+    }
+  });
+
   it("mapInput updates the input seen by later steps and the handler", async () => {
     type QueryWithSearch = QueryInput & { search?: string };
 
@@ -144,7 +157,7 @@ describe("BaseService procedure builder", () => {
       readonly run = this.procedure<QueryWithSearch>("run")
         .requireAuth()
         .mapInput("scopedQuery", ({ input, ctx }) =>
-          this.addContextFilter(ctx, { user: true, organization: true, team: true }, input, {
+          this.addContextFilter(ctx.actor, { user: true, organization: true, team: true }, input, {
             userId: {
               columnId: "authorUserId",
               method: "equals",
@@ -173,11 +186,7 @@ describe("BaseService procedure builder", () => {
     const result = await service.run(
       { search: "hello" },
       {
-        user: createUser(),
-        session: createSession({
-          activeOrganizationId: "org-1",
-          activeTeamId: "team-1",
-        }),
+        actor: createTeamActor(),
       }
     );
 
@@ -210,7 +219,7 @@ describe("BaseService procedure builder", () => {
   });
 
   it("uses the base service default context type for procedures", async () => {
-    type RequestContext = Context & { requestId: string };
+    type RequestContext = { actor: ReturnType<typeof createActor>; requestId: string };
 
     class ContextService extends BaseService<
       Record<string, never>,
@@ -219,7 +228,7 @@ describe("BaseService procedure builder", () => {
     > {
       readonly run = this.procedure<{ value: string }>("run")
         .requireAuth()
-        .handle(({ input, ctx }) => ok(`${ctx.requestId}:${ctx.user.id}:${input.value}`));
+        .handle(({ input, ctx }) => ok(`${ctx.requestId}:${ctx.actor.userId}:${input.value}`));
     }
 
     const service = new ContextService();
@@ -227,8 +236,7 @@ describe("BaseService procedure builder", () => {
       { value: "ok" },
       {
         requestId: "req-1",
-        user: createUser(),
-        session: createSession(),
+        actor: createActor(),
       }
     );
 
@@ -242,7 +250,7 @@ describe("BaseService procedure builder", () => {
     class ProtectedService extends BaseService<Record<string, never>, Record<string, never>> {
       readonly run = this.procedure<{ value: string }>("run")
         .requireAuth()
-        .handle(({ input, ctx }) => ok(`${ctx.user.id}:${input.value}`));
+        .handle(({ input, ctx }) => ok(`${ctx.actor.userId}:${input.value}`));
     }
 
     const service = new ProtectedService();
@@ -258,18 +266,51 @@ describe("BaseService procedure builder", () => {
     class ProtectedService extends BaseService<Record<string, never>, Record<string, never>> {
       readonly run = this.procedure<{ value: string }>("run")
         .requireAuth()
-        .handle(({ input, ctx }) => ok(`${ctx.user.id}:${input.value}`));
+        .handle(({ input, ctx }) => ok(`${ctx.actor.userId}:${input.value}`));
     }
 
     const service = new ProtectedService();
-    const result = await service.run(
-      { value: "ok" },
-      { user: createUser(), session: createSession() }
-    );
+    const result = await service.run({ value: "ok" }, { actor: createActor() });
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value).toBe("user-1:ok");
+    }
+  });
+
+  it("requireAuth accepts organization actors for organization scope", async () => {
+    class ProtectedService extends BaseService<Record<string, never>, Record<string, never>> {
+      readonly run = this.procedure("run")
+        .requireAuth("organization")
+        .handle(({ ctx }) => ok(ctx.actor.organizationId));
+    }
+
+    const service = new ProtectedService();
+    const result = await service.run(undefined, {
+      actor: createOrganizationActor(),
+    } as never);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toBe("org-1");
+    }
+  });
+
+  it("requireAuth rejects actors without the requested team scope", async () => {
+    class ProtectedService extends BaseService<Record<string, never>, Record<string, never>> {
+      readonly run = this.procedure("run")
+        .requireAuth("team")
+        .handle(({ ctx }) => ok(ctx.actor.teamId));
+    }
+
+    const service = new ProtectedService();
+    const result = await service.run(undefined, {
+      actor: createOrganizationActor(),
+    } as never);
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("FORBIDDEN");
     }
   });
 
@@ -294,7 +335,7 @@ describe("BaseService procedure builder", () => {
     class LoggedService extends BaseService<Record<string, never>, Record<string, never>> {
       readonly run = this.procedure<{ secret: string }>("run")
         .requireAuth()
-        .handle(({ ctx }) => ok(ctx.user.id));
+        .handle(({ ctx }) => ok(ctx.actor.userId));
     }
 
     const service = new LoggedService();
@@ -304,8 +345,7 @@ describe("BaseService procedure builder", () => {
     const result = await service.run(
       { secret: "top-secret" },
       {
-        user: createUser(),
-        session: createSession(),
+        actor: createActor(),
         token: "super-token",
       }
     );
@@ -319,6 +359,7 @@ describe("BaseService procedure builder", () => {
     const serializedPayloads = JSON.stringify(payloads);
     expect(serializedPayloads).not.toContain("top-secret");
     expect(serializedPayloads).not.toContain("super-token");
+    expect(payloads.every((payload) => "hasActor" in payload)).toBe(true);
     expect(payloads.every((payload) => !("input" in payload))).toBe(true);
     expect(payloads.every((payload) => !("ctx" in payload))).toBe(true);
   });
@@ -354,10 +395,7 @@ describe("BasePermissionService procedure builder", () => {
     }
 
     const service = new PermissionService();
-    const result = await service.run(
-      { ownerId: "user-1" },
-      { user: createUser(), session: createSession() }
-    );
+    const result = await service.run({ ownerId: "user-1" }, { actor: createActor() });
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
@@ -400,10 +438,7 @@ describe("BasePermissionService procedure builder", () => {
     }
 
     const service = new PermissionService();
-    const result = await service.run(
-      { ownerId: "user-1" },
-      { user: createUser(), session: createSession() }
-    );
+    const result = await service.run({ ownerId: "user-1" }, { actor: createActor() });
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
@@ -440,10 +475,7 @@ describe("BasePermissionService procedure builder", () => {
     }
 
     const service = new PermissionService();
-    const result = await service.run(
-      { ownerId: "other-user" },
-      { user: createUser(), session: createSession() }
-    );
+    const result = await service.run({ ownerId: "other-user" }, { actor: createActor() });
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
@@ -486,10 +518,7 @@ describe("BasePermissionService procedure builder", () => {
     }
 
     const service = new PermissionService();
-    const result = await service.run(
-      { ownerId: "user-1" },
-      { user: createUser(), session: createSession() }
-    );
+    const result = await service.run({ ownerId: "user-1" }, { actor: createActor() });
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
@@ -525,10 +554,7 @@ describe("BasePermissionService procedure builder", () => {
     }
 
     const service = new PermissionService();
-    const result = await service.run(
-      { ownerId: "other-user" },
-      { user: createUser(), session: createSession() }
-    );
+    const result = await service.run({ ownerId: "other-user" }, { actor: createActor() });
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {

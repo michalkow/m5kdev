@@ -5,24 +5,24 @@ import type {
   WorkflowReadOutputSchema,
 } from "@m5kdev/commons/modules/workflow/workflow.schema";
 import type { Job } from "bullmq";
-import type { User } from "../auth/auth.lib";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
 import type { WorkflowRepository } from "./workflow.repository";
-export class WorkflowService extends BaseService<{ workflow: WorkflowRepository }, never> {
-  async read(
-    input: WorkflowReadInputSchema,
-    { user }: { user: User }
-  ): ServerResultAsync<WorkflowReadOutputSchema> {
-    return await this.repository.workflow.read({ ...input, userId: user.id });
-  }
 
-  async list(
-    input: WorkflowListInputSchema,
-    { user }: { user: User }
-  ): ServerResultAsync<WorkflowListOutputSchema> {
-    return await this.repository.workflow.list({ ...input, userId: user.id });
-  }
+export class WorkflowService extends BaseService<{ workflow: WorkflowRepository }, never> {
+  readonly read = this.procedure<WorkflowReadInputSchema>("workflowRead")
+    .requireAuth()
+    .handle(
+      ({ input, ctx }): ServerResultAsync<WorkflowReadOutputSchema> =>
+        this.repository.workflow.read({ ...input, userId: ctx.actor.userId })
+    );
+
+  readonly list = this.procedure<WorkflowListInputSchema>("workflowList")
+    .requireAuth()
+    .handle(
+      ({ input, ctx }): ServerResultAsync<WorkflowListOutputSchema> =>
+        this.repository.workflow.list({ ...input, userId: ctx.actor.userId })
+    );
 
   async added(
     params: Parameters<WorkflowRepository["added"]>[0]

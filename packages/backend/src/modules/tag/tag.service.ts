@@ -25,19 +25,19 @@ export class TagService extends BaseService<{ tag: TagRepository }, Record<strin
   readonly create = this.procedure<TagCreateSchema>("create")
     .requireAuth()
     .handle(({ input, ctx }): Promise<TagSelectOutputResult> => {
-      return this.repository.tag.create({ ...input, userId: ctx.user.id });
+      return this.repository.tag.create({ ...input, userId: ctx.actor.userId });
     });
 
   readonly update = this.procedure<TagUpdateSchema>("update")
     .requireAuth()
     .handle(({ input, ctx }): Promise<TagSelectOutputResult> => {
-      return this.repository.tag.update({ ...input, userId: ctx.user.id });
+      return this.repository.tag.update({ ...input, userId: ctx.actor.userId });
     });
 
   readonly link = this.procedure<TagLinkSchema>("link")
     .requireAuth()
     .handle(({ input, ctx }): Promise<TaggingSelectOutputResult> => {
-      return this.repository.tag.link({ ...input, userId: ctx.user.id });
+      return this.repository.tag.link({ ...input, userId: ctx.actor.userId });
     });
 
   async linkBulk(data: TagLinkSchema[]): ServerResultAsync<TagSchema[]> {
@@ -51,7 +51,7 @@ export class TagService extends BaseService<{ tag: TagRepository }, Record<strin
   readonly unlink = this.procedure<TagLinkSchema>("unlink")
     .requireAuth()
     .handle(({ input, ctx }): Promise<TagSelectOutputResult> => {
-      return this.repository.tag.unlink({ ...input, userId: ctx.user.id });
+      return this.repository.tag.unlink({ ...input, userId: ctx.actor.userId });
     });
 
   async delete(data: TagDeleteSchema): ServerResultAsync<{ id: string }> {

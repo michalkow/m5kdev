@@ -1,20 +1,18 @@
 import { billingSchema } from "@m5kdev/commons/modules/billing/billing.schema";
-import type { BillingService } from "./billing.service";
 import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
+import type { BillingService } from "./billing.service";
 
 export function createBillingTRPC(
   { router, privateProcedure: procedure }: TRPCMethods,
   billingService: BillingService
 ) {
   return router({
-    getActiveSubscription: procedure
-      .output(billingSchema.nullable())
-      .query(async ({ ctx: { user } }) => {
-        return handleTRPCResult(await billingService.getActiveSubscription({ user }));
-      }),
+    getActiveSubscription: procedure.output(billingSchema.nullable()).query(async ({ ctx }) => {
+      return handleTRPCResult(await billingService.getActiveSubscription(ctx));
+    }),
 
-    listInvoices: procedure.query(async ({ ctx: { user } }) => {
-      return handleTRPCResult(await billingService.listInvoices({ user }));
+    listInvoices: procedure.query(async ({ ctx }) => {
+      return handleTRPCResult(await billingService.listInvoices(ctx));
     }),
   });
 }

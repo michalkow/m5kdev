@@ -7,7 +7,6 @@ import type {
 } from "@m5kdev/commons/modules/recurrence/recurrence.schema";
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import { err, ok } from "neverthrow";
-import type { Context } from "../auth/auth.lib";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
 import type {
@@ -50,29 +49,28 @@ function mapRuleToInsert(
 
 export class RecurrenceService extends BaseService<
   { recurrence: RecurrenceRepository; recurrenceRules: RecurrenceRulesRepository },
-  Record<string, never>,
-  Context
+  Record<string, never>
 > {
   readonly list = this.procedure<QueryInput>("list")
     .addContextFilter(["user"])
     .handle(({ input }) => this.repository.recurrence.queryList(input));
 
-  async create(
-    data: CreateRecurrenceSchema,
-    ctx: Context
-  ): ServerResultAsync<CreateWithRulesResult> {
-    const recurrenceData = {
-      name: data.name,
-      kind: data.kind,
-      enabled: data.enabled,
-      metadata: data.metadata ?? null,
-      userId: ctx.user?.id ?? null,
-      organizationId: ctx.session.activeOrganizationId ?? null,
-      teamId: ctx.session.activeTeamId ?? null,
-    };
-    const rulesData = data.recurrenceRules.map(mapRuleToInsert);
-    return this.repository.recurrence.createWithRules(recurrenceData, rulesData);
-  }
+  readonly create = this.procedure<CreateRecurrenceSchema>("create")
+    .requireAuth()
+    .handle(({ input, ctx }): ServerResultAsync<CreateWithRulesResult> => {
+      const { actor } = ctx;
+      const recurrenceData = {
+        name: input.name,
+        kind: input.kind,
+        enabled: input.enabled,
+        metadata: input.metadata ?? null,
+        userId: actor.userId,
+        organizationId: actor.organizationId,
+        teamId: actor.teamId,
+      };
+      const rulesData = input.recurrenceRules.map(mapRuleToInsert);
+      return this.repository.recurrence.createWithRules(recurrenceData, rulesData);
+    });
 
   async findById(id: string): ServerResultAsync<CreateWithRulesResult["recurrence"] | null> {
     const result = await this.repository.recurrence.findById(id);

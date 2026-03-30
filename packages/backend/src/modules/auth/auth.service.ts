@@ -1,6 +1,9 @@
 import { err, ok } from "neverthrow";
 import { posthogCapture } from "../../utils/posthog";
-import type { ServerResultAsync } from "../base/base.dto";
+import { ServerError } from "../../utils/errors";
+import type { Context } from "../../utils/trpc";
+import { createActorFromContext, type OrganizationActor } from "../base/base.actor";
+import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
@@ -11,7 +14,6 @@ import type {
   Waitlist,
   WaitlistOutput,
 } from "./auth.dto";
-import type { Context, User } from "./auth.lib";
 import type { AuthRepository } from "./auth.repository";
 
 type AuthServiceDependencies =
@@ -24,133 +26,135 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
     return this.service.billing;
   }
 
-  private getActiveOrganizationId(ctx: Context) {
-    const organizationId = ctx.session.activeOrganizationId;
-    if (!organizationId) {
-      return this.repository.auth.error("FORBIDDEN", "No active organization");
+  private organizationActorFromCtx(ctx: Context): ServerResult<OrganizationActor> {
+    try {
+      return ok(createActorFromContext({ user: ctx.user, session: ctx.session }, "organization"));
+    } catch (e) {
+      if (e instanceof ServerError) return err(e);
+      throw e;
     }
-    return ok(organizationId);
   }
 
-  async getUserWaitlistCount({ user }: { user: User }): ServerResultAsync<number> {
-    if (user.role === "admin") return ok(0);
-    return this.repository.auth.getUserWaitlistCount(user.id);
+  async getUserWaitlistCount(ctx: Context): ServerResultAsync<number> {
+    if (ctx.actor.userRole === "admin") return ok(0);
+    return this.repository.auth.getUserWaitlistCount(ctx.actor.userId);
   }
 
-  async getOnboarding({ user }: { user: User }): ServerResultAsync<number> {
-    return this.repository.auth.getOnboarding(user.id);
+  async getOnboarding(ctx: Context): ServerResultAsync<number> {
+    return this.repository.auth.getOnboarding(ctx.actor.userId);
   }
 
-  async setOnboarding(onboarding: number, { user }: { user: User }): ServerResultAsync<number> {
+  async setOnboarding(onboarding: number, ctx: Context): ServerResultAsync<number> {
     posthogCapture({
-      distinctId: user.id,
+      distinctId: ctx.actor.userId,
       event: "onboarding_set",
       properties: {
         onboarding,
       },
     });
-    return this.repository.auth.setOnboarding(user.id, onboarding);
+    return this.repository.auth.setOnboarding(ctx.actor.userId, onboarding);
   }
 
-  async getPreferences({ user }: { user: User }): ServerResultAsync<Record<string, unknown>> {
-    return this.repository.auth.getPreferences(user.id);
+  async getPreferences(ctx: Context): ServerResultAsync<Record<string, unknown>> {
+    return this.repository.auth.getPreferences(ctx.actor.userId);
   }
 
   async setPreferences(
     preferences: Record<string, unknown>,
-    { user }: { user: User }
+    ctx: Context
   ): ServerResultAsync<Record<string, unknown>> {
     posthogCapture({
-      distinctId: user.id,
+      distinctId: ctx.actor.userId,
       event: "preferences_set",
     });
-    return this.repository.auth.setPreferences(user.id, preferences);
+    return this.repository.auth.setPreferences(ctx.actor.userId, preferences);
   }
 
   async getOrganizationPreferences(ctx: Context): ServerResultAsync<Record<string, unknown>> {
-    const organizationId = this.getActiveOrganizationId(ctx);
-    if (organizationId.isErr()) return err(organizationId.error);
+    const org = this.organizationActorFromCtx(ctx);
+    if (org.isErr()) return err(org.error);
+    const actor = org.value;
 
-    return this.repository.auth.getOrganizationPreferences(ctx.user.id, organizationId.value);
+    return this.repository.auth.getOrganizationPreferences(actor.userId, actor.organizationId);
   }
 
   async setOrganizationPreferences(
     preferences: Record<string, unknown>,
     ctx: Context
   ): ServerResultAsync<Record<string, unknown>> {
-    const organizationId = this.getActiveOrganizationId(ctx);
-    if (organizationId.isErr()) return err(organizationId.error);
+    const org = this.organizationActorFromCtx(ctx);
+    if (org.isErr()) return err(org.error);
+    const actor = org.value;
 
     posthogCapture({
-      distinctId: ctx.user.id,
+      distinctId: actor.userId,
       event: "organization_preferences_set",
       properties: {
-        organizationId: organizationId.value,
+        organizationId: actor.organizationId,
       },
     });
 
     return this.repository.auth.setOrganizationPreferences(
-      ctx.user.id,
-      organizationId.value,
+      actor.userId,
+      actor.organizationId,
       preferences
     );
   }
 
-  async getMetadata({ user }: { user: User }): ServerResultAsync<Record<string, unknown>> {
-    return this.repository.auth.getMetadata(user.id);
+  async getMetadata(ctx: Context): ServerResultAsync<Record<string, unknown>> {
+    return this.repository.auth.getMetadata(ctx.actor.userId);
   }
 
-  async setMetadata(
-    metadata: Record<string, unknown>,
-    { user }: { user: User }
-  ): ServerResultAsync<Record<string, unknown>> {
+  async setMetadata(metadata: Record<string, unknown>, ctx: Context): ServerResultAsync<Record<string, unknown>> {
     posthogCapture({
-      distinctId: user.id,
+      distinctId: ctx.actor.userId,
       event: "metadata_set",
     });
-    return this.repository.auth.setMetadata(user.id, metadata);
+    return this.repository.auth.setMetadata(ctx.actor.userId, metadata);
   }
 
-  async getFlags({ user }: { user: User }): ServerResultAsync<string[]> {
-    return this.repository.auth.getFlags(user.id);
+  async getFlags(ctx: Context): ServerResultAsync<string[]> {
+    return this.repository.auth.getFlags(ctx.actor.userId);
   }
 
   async getOrganizationFlags(ctx: Context): ServerResultAsync<string[]> {
-    const organizationId = this.getActiveOrganizationId(ctx);
-    if (organizationId.isErr()) return err(organizationId.error);
+    const org = this.organizationActorFromCtx(ctx);
+    if (org.isErr()) return err(org.error);
+    const actor = org.value;
 
-    return this.repository.auth.getOrganizationFlags(ctx.user.id, organizationId.value);
+    return this.repository.auth.getOrganizationFlags(actor.userId, actor.organizationId);
   }
 
-  async setFlags(flags: string[], { user }: { user: User }): ServerResultAsync<string[]> {
+  async setFlags(flags: string[], ctx: Context): ServerResultAsync<string[]> {
     posthogCapture({
-      distinctId: user.id,
+      distinctId: ctx.actor.userId,
       event: "flags_set",
     });
-    return this.repository.auth.setFlags(user.id, flags);
+    return this.repository.auth.setFlags(ctx.actor.userId, flags);
   }
 
   async setOrganizationFlags(flags: string[], ctx: Context): ServerResultAsync<string[]> {
-    const organizationId = this.getActiveOrganizationId(ctx);
-    if (organizationId.isErr()) return err(organizationId.error);
+    const org = this.organizationActorFromCtx(ctx);
+    if (org.isErr()) return err(org.error);
+    const actor = org.value;
 
     posthogCapture({
-      distinctId: ctx.user.id,
+      distinctId: actor.userId,
       event: "organization_flags_set",
       properties: {
-        organizationId: organizationId.value,
+        organizationId: actor.organizationId,
       },
     });
 
-    return this.repository.auth.setOrganizationFlags(ctx.user.id, organizationId.value, flags);
+    return this.repository.auth.setOrganizationFlags(actor.userId, actor.organizationId, flags);
   }
 
   async listAdminWaitlist(): ServerResultAsync<WaitlistOutput[]> {
     return this.repository.auth.listAdminWaitlist();
   }
 
-  async listWaitlist({ user }: { user: User }): ServerResultAsync<Waitlist[]> {
-    return this.repository.auth.listWaitlist(user.id);
+  async listWaitlist(ctx: Context): ServerResultAsync<Waitlist[]> {
+    return this.repository.auth.listWaitlist(ctx.actor.userId);
   }
 
   async addToWaitlist({ email }: { email: string }): ServerResultAsync<WaitlistOutput> {
@@ -168,17 +172,26 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
 
   async inviteToWaitlist(
     { email, name }: { email: string; name?: string },
-    { user }: { user: User }
+    ctx: Context
   ): ServerResultAsync<Waitlist> {
-    const count = await this.repository.auth.getUserWaitlistCount(user.id);
+    const count = await this.repository.auth.getUserWaitlistCount(ctx.user.id);
     if (count.isErr()) return err(count.error);
     if (count.value >= 3) return this.repository.auth.error("BAD_REQUEST", "Run out of invites");
-    const waitlist = await this.repository.auth.inviteToWaitlist({ email, userId: user.id, name });
+    const waitlist = await this.repository.auth.inviteToWaitlist({
+      email,
+      userId: ctx.user.id,
+      name,
+    });
     if (waitlist.isErr()) return err(waitlist.error);
     if (!waitlist.value.code) return this.repository.auth.error("BAD_REQUEST");
-    await this.service.email.sendWaitlistUserInvite(email, waitlist.value.code, user.name, name);
+    await this.service.email.sendWaitlistUserInvite(
+      email,
+      waitlist.value.code,
+      ctx.user.name,
+      name
+    );
     posthogCapture({
-      distinctId: user.id,
+      distinctId: ctx.user.id,
       event: "waitlist_invite_sent",
       properties: {
         email,
@@ -188,18 +201,15 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
     return ok(waitlist.value);
   }
 
-  async createInvitationCode(
-    { name }: { name?: string },
-    { user }: { user: User }
-  ): ServerResultAsync<Waitlist> {
+  async createInvitationCode({ name }: { name?: string }, ctx: Context): ServerResultAsync<Waitlist> {
     posthogCapture({
-      distinctId: user.id,
+      distinctId: ctx.actor.userId,
       event: "waitlist_invitation_code_created",
       properties: {
         name,
       },
     });
-    return this.repository.auth.createInvitationCode({ userId: user.id, name });
+    return this.repository.auth.createInvitationCode({ userId: ctx.actor.userId, name });
   }
 
   async joinWaitlist({ email }: { email: string }): ServerResultAsync<WaitlistOutput> {
@@ -231,28 +241,28 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
     return this.repository.auth.listAccountClaims();
   }
 
-  async getMyAccountClaimStatus({ user }: { user: User }): ServerResultAsync<AccountClaim | null> {
-    return this.repository.auth.findPendingAccountClaimForUser(user.id);
+  async getMyAccountClaimStatus(ctx: Context): ServerResultAsync<AccountClaim | null> {
+    return this.repository.auth.findPendingAccountClaimForUser(ctx.actor.userId);
   }
 
   async setMyAccountClaimEmail(
     { email }: { email: string },
-    { user }: { user: User }
+    ctx: Context
   ): ServerResultAsync<{ status: boolean }> {
-    return this.repository.auth.setAccountClaimEmail({ userId: user.id, email });
+    return this.repository.auth.setAccountClaimEmail({ userId: ctx.actor.userId, email });
   }
 
-  async acceptMyAccountClaim({ user }: { user: User }): ServerResultAsync<{ status: boolean }> {
-    const pendingClaim = await this.repository.auth.findPendingAccountClaimForUser(user.id);
+  async acceptMyAccountClaim(ctx: Context): ServerResultAsync<{ status: boolean }> {
+    const pendingClaim = await this.repository.auth.findPendingAccountClaimForUser(ctx.user.id);
     if (pendingClaim.isErr()) return err(pendingClaim.error);
 
-    const accepted = await this.repository.auth.acceptAccountClaim(user.id);
+    const accepted = await this.repository.auth.acceptAccountClaim(ctx.user.id);
     if (accepted.isErr()) return err(accepted.error);
 
     if (pendingClaim.value) {
       const billingService = this.getBillingService();
       if (billingService) {
-        await billingService.createUserHook({ user });
+        await billingService.createUserHook({ user: ctx.user });
       }
     }
 

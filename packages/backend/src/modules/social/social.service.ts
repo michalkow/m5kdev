@@ -1,4 +1,5 @@
 import { ok } from "neverthrow";
+import type { RequiredServiceActor } from "../base/base.actor";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
 import type { ConnectRepository, ConnectRow } from "../connect/connect.repository";
@@ -34,7 +35,7 @@ export class SocialService extends BaseService<
   async postToProvider(
     providerId: string,
     input: SocialPostInput,
-    { user }: { user: { id: string } }
+    { actor }: { actor: RequiredServiceActor<"user"> }
   ): ServerResultAsync<SocialPostResult> {
     return this.throwableAsync(async () => {
       const provider = this.getProvider(providerId);
@@ -43,7 +44,7 @@ export class SocialService extends BaseService<
       }
 
       const connectionResult = await this.repository.connect.list({
-        userId: user.id,
+        userId: actor.userId,
         providers: [providerId],
       });
 
@@ -78,7 +79,7 @@ export class SocialService extends BaseService<
       const result = await provider.post({
         deps: { fileService: this.service.file },
         context: {
-          userId: user.id,
+          userId: actor.userId,
           connection: connection.value,
           accessToken,
         },
