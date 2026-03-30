@@ -16,7 +16,6 @@ export default defineConfig({
   outDir: "dist",
   platform: "browser",
   fixedExtension: false,
-  outExtensions: () => ({ js: ".js", dts: ".d.ts" }),
   tsconfig: "./tsconfig.json",
   dts: true,
   sourcemap: true,

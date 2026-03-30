@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.8.3
+
+### Patch Changes
+
+- frontend
+
 ## 0.8.2
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.8.3
+
+### Patch Changes
+
+- frontend
+- Updated dependencies
+  - @m5kdev/commons@0.8.3
+  - @m5kdev/config@0.8.3
+
 ## 0.8.2
 
 ### Patch Changes
