@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.8.4
+
+### Patch Changes
+
+- copy dist
+
 ## 0.8.3
 
 ### Patch Changes

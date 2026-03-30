@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.8.4
+
+### Patch Changes
+
+- copy dist
+- Updated dependencies
+  - @m5kdev/commons@0.8.4
+
 ## 0.8.3
 
 ### Patch Changes
