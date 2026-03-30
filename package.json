@@ -29,6 +29,7 @@
     "jest": "catalog:",
     "knip": "catalog:",
     "ts-jest": "catalog:",
+    "tsdown": "catalog:",
     "turbo": "catalog:",
     "typescript": "catalog:"
   },

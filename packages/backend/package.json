@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/backend",
-  "version": "0.7.0",
+  "version": "0.8.2",
   "description": "Composable Express server stack with Drizzle ORM and tRPC.",
   "license": "GPL-3.0-only",
   "repository": {
@@ -15,7 +15,7 @@
   "scripts": {
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
-    "build": "tsc --build",
+    "build": "tsdown",
     "check-types": "tsc --noEmit",
     "test": "jest -c jest.config.ts",
     "test:watch": "jest -c jest.config.ts --watch"
@@ -86,94 +86,95 @@
     "jest": "catalog:",
     "ts-jest": "catalog:",
     "tslib": "catalog:",
+    "tsdown": "catalog:",
     "tsup": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"
   },
   "exports": {
     "./modules/ai/*": {
-      "types": "./dist/src/modules/ai/*.d.ts",
-      "default": "./dist/src/modules/ai/*.js"
+      "types": "./dist/src/modules/ai/*.d.mts",
+      "default": "./dist/src/modules/ai/*.mjs"
     },
     "./modules/utils/*": {
-      "types": "./dist/src/modules/utils/*.d.ts",
-      "default": "./dist/src/modules/utils/*.js"
+      "types": "./dist/src/modules/utils/*.d.mts",
+      "default": "./dist/src/modules/utils/*.mjs"
     },
     "./modules/base/*": {
-      "types": "./dist/src/modules/base/*.d.ts",
-      "default": "./dist/src/modules/base/*.js"
+      "types": "./dist/src/modules/base/*.d.mts",
+      "default": "./dist/src/modules/base/*.mjs"
     },
     "./modules/billing/*": {
-      "types": "./dist/src/modules/billing/*.d.ts",
-      "default": "./dist/src/modules/billing/*.js"
+      "types": "./dist/src/modules/billing/*.d.mts",
+      "default": "./dist/src/modules/billing/*.mjs"
     },
     "./modules/crypto/*": {
-      "types": "./dist/src/modules/crypto/*.d.ts",
-      "default": "./dist/src/modules/crypto/*.js"
+      "types": "./dist/src/modules/crypto/*.d.mts",
+      "default": "./dist/src/modules/crypto/*.mjs"
     },
     "./modules/auth/*": {
-      "types": "./dist/src/modules/auth/*.d.ts",
-      "default": "./dist/src/modules/auth/*.js"
+      "types": "./dist/src/modules/auth/*.d.mts",
+      "default": "./dist/src/modules/auth/*.mjs"
     },
     "./modules/tag/*": {
-      "types": "./dist/src/modules/tag/*.d.ts",
-      "default": "./dist/src/modules/tag/*.js"
+      "types": "./dist/src/modules/tag/*.d.mts",
+      "default": "./dist/src/modules/tag/*.mjs"
     },
     "./modules/connect/*": {
-      "types": "./dist/src/modules/connect/*.d.ts",
-      "default": "./dist/src/modules/connect/*.js"
+      "types": "./dist/src/modules/connect/*.d.mts",
+      "default": "./dist/src/modules/connect/*.mjs"
     },
     "./modules/workflow/*": {
-      "types": "./dist/src/modules/workflow/*.d.ts",
-      "default": "./dist/src/modules/workflow/*.js"
+      "types": "./dist/src/modules/workflow/*.d.mts",
+      "default": "./dist/src/modules/workflow/*.mjs"
     },
     "./modules/file/*": {
-      "types": "./dist/src/modules/file/*.d.ts",
-      "default": "./dist/src/modules/file/*.js"
+      "types": "./dist/src/modules/file/*.d.mts",
+      "default": "./dist/src/modules/file/*.mjs"
     },
     "./modules/recurrence/*": {
-      "types": "./dist/src/modules/recurrence/*.d.ts",
-      "default": "./dist/src/modules/recurrence/*.js"
+      "types": "./dist/src/modules/recurrence/*.d.mts",
+      "default": "./dist/src/modules/recurrence/*.mjs"
     },
     "./modules/video/*": {
-      "types": "./dist/src/modules/video/*.d.ts",
-      "default": "./dist/src/modules/video/*.js"
+      "types": "./dist/src/modules/video/*.d.mts",
+      "default": "./dist/src/modules/video/*.mjs"
     },
     "./modules/posthog/*": {
-      "types": "./dist/src/modules/posthog/*.d.ts",
-      "default": "./dist/src/modules/posthog/*.js"
+      "types": "./dist/src/modules/posthog/*.d.mts",
+      "default": "./dist/src/modules/posthog/*.mjs"
     },
     "./modules/access/*": {
-      "types": "./dist/src/modules/access/*.d.ts",
-      "default": "./dist/src/modules/access/*.js"
+      "types": "./dist/src/modules/access/*.d.mts",
+      "default": "./dist/src/modules/access/*.mjs"
     },
     "./modules/social/*": {
-      "types": "./dist/src/modules/social/*.d.ts",
-      "default": "./dist/src/modules/social/*.js"
+      "types": "./dist/src/modules/social/*.d.mts",
+      "default": "./dist/src/modules/social/*.mjs"
     },
     "./modules/clay/*": {
-      "types": "./dist/src/modules/clay/*.d.ts",
-      "default": "./dist/src/modules/clay/*.js"
+      "types": "./dist/src/modules/clay/*.d.mts",
+      "default": "./dist/src/modules/clay/*.mjs"
     },
     "./modules/webhook/*": {
-      "types": "./dist/src/modules/webhook/*.d.ts",
-      "default": "./dist/src/modules/webhook/*.js"
+      "types": "./dist/src/modules/webhook/*.d.mts",
+      "default": "./dist/src/modules/webhook/*.mjs"
     },
     "./modules/email/*": {
-      "types": "./dist/src/modules/email/*.d.ts",
-      "default": "./dist/src/modules/email/*.js"
+      "types": "./dist/src/modules/email/*.d.mts",
+      "default": "./dist/src/modules/email/*.mjs"
     },
     "./lib/*": {
-      "types": "./dist/src/lib/*.d.ts",
-      "default": "./dist/src/lib/*.js"
+      "types": "./dist/src/lib/*.d.mts",
+      "default": "./dist/src/lib/*.mjs"
     },
     "./utils/*": {
-      "types": "./dist/src/utils/*.d.ts",
-      "default": "./dist/src/utils/*.js"
+      "types": "./dist/src/utils/*.d.mts",
+      "default": "./dist/src/utils/*.mjs"
     },
     "./types": {
-      "types": "./dist/src/types.d.ts",
-      "default": "./dist/src/types.js"
+      "types": "./dist/src/types.d.mts",
+      "default": "./dist/src/types.mjs"
     }
   }
 }

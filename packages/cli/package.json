@@ -1,6 +1,6 @@
 {
   "name": "create-m5kdev",
-  "version": "0.7.0",
+  "version": "0.8.2",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -17,7 +17,7 @@
     "m5kdev": "dist/src/index.js"
   },
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsdown",
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
     "check-types": "tsc --noEmit",
@@ -32,6 +32,7 @@
     "@types/node": "catalog:",
     "jest": "catalog:",
     "ts-jest": "catalog:",
+    "tsdown": "catalog:",
     "typescript": "catalog:"
   }
 }

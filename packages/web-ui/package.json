@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/web-ui",
-  "version": "0.7.0",
+  "version": "0.8.2",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -15,7 +15,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
     "check-types": "tsc --noEmit",
-    "build": "tsc --build && cp -r translations dist/ && cp src/components/Calendar.css dist/src/components/"
+    "build": "tsdown"
   },
   "dependencies": {
     "@m5kdev/commons": "workspace:*",
@@ -77,6 +77,7 @@
     "@trpc/tanstack-react-query": "catalog:"
   },
   "devDependencies": {
+    "@tsdown/css": "catalog:",
     "@m5kdev/backend": "workspace:*",
     "@m5kdev/config": "workspace:*",
     "@trpc/server": "catalog:",
@@ -85,68 +86,69 @@
     "@types/react-big-calendar": "catalog:",
     "@types/react-dom": "catalog:",
     "globals": "catalog:",
+    "tsdown": "catalog:",
     "vite": "catalog:"
   },
   "exports": {
     "./components/*": {
-      "types": "./dist/src/components/*.d.ts",
-      "default": "./dist/src/components/*.js"
+      "types": "./dist/src/components/*.d.mts",
+      "default": "./dist/src/components/*.mjs"
     },
     "./components/ui/*": {
-      "types": "./dist/src/components/ui/*.d.ts",
-      "default": "./dist/src/components/ui/*.js"
+      "types": "./dist/src/components/ui/*.d.mts",
+      "default": "./dist/src/components/ui/*.mjs"
     },
     "./components/shared/*": {
-      "types": "./dist/src/components/ui/shared/*.d.ts",
-      "default": "./dist/src/components/ui/shared/*.js"
+      "types": "./dist/src/components/ui/shared/*.d.mts",
+      "default": "./dist/src/components/ui/shared/*.mjs"
     },
     "./animations/*": {
-      "types": "./dist/src/animations/*.d.ts",
-      "default": "./dist/src/animations/*.js"
+      "types": "./dist/src/animations/*.d.mts",
+      "default": "./dist/src/animations/*.mjs"
     },
     "./modules/auth/components/*": {
-      "types": "./dist/src/modules/auth/components/*.d.ts",
-      "default": "./dist/src/modules/auth/components/*.js"
+      "types": "./dist/src/modules/auth/components/*.d.mts",
+      "default": "./dist/src/modules/auth/components/*.mjs"
     },
     "./modules/auth/types": {
-      "types": "./dist/src/modules/auth/types.d.ts",
-      "default": "./dist/src/modules/auth/types.js"
+      "types": "./dist/src/modules/auth/types.d.mts",
+      "default": "./dist/src/modules/auth/types.mjs"
     },
     "./modules/billing/components/*": {
-      "types": "./dist/src/modules/billing/components/*.d.ts",
-      "default": "./dist/src/modules/billing/components/*.js"
+      "types": "./dist/src/modules/billing/components/*.d.mts",
+      "default": "./dist/src/modules/billing/components/*.mjs"
     },
     "./modules/app/components/*": {
-      "types": "./dist/src/modules/app/components/*.d.ts",
-      "default": "./dist/src/modules/app/components/*.js"
+      "types": "./dist/src/modules/app/components/*.d.mts",
+      "default": "./dist/src/modules/app/components/*.mjs"
     },
     "./modules/charts/components/*": {
-      "types": "./dist/src/modules/charts/components/*.d.ts",
-      "default": "./dist/src/modules/charts/components/*.js"
+      "types": "./dist/src/modules/charts/components/*.d.mts",
+      "default": "./dist/src/modules/charts/components/*.mjs"
     },
     "./modules/table/components/*": {
-      "types": "./dist/src/modules/table/components/*.d.ts",
-      "default": "./dist/src/modules/table/components/*.js"
+      "types": "./dist/src/modules/table/components/*.d.mts",
+      "default": "./dist/src/modules/table/components/*.mjs"
     },
     "./modules/table/filterTransformers": {
-      "types": "./dist/src/modules/table/filterTransformers.d.ts",
-      "default": "./dist/src/modules/table/filterTransformers.js"
+      "types": "./dist/src/modules/table/filterTransformers.d.mts",
+      "default": "./dist/src/modules/table/filterTransformers.mjs"
     },
     "./hooks/*": {
-      "types": "./dist/src/hooks/*.d.ts",
-      "default": "./dist/src/hooks/*.js"
+      "types": "./dist/src/hooks/*.d.mts",
+      "default": "./dist/src/hooks/*.mjs"
     },
     "./icons/*": {
-      "types": "./dist/src/icons/*.d.ts",
-      "default": "./dist/src/icons/*.js"
+      "types": "./dist/src/icons/*.d.mts",
+      "default": "./dist/src/icons/*.mjs"
     },
     "./utils": {
-      "types": "./dist/src/lib/utils.d.ts",
-      "default": "./dist/src/lib/utils.js"
+      "types": "./dist/src/lib/utils.d.mts",
+      "default": "./dist/src/lib/utils.mjs"
     },
     "./lib/*": {
-      "types": "./dist/src/lib/*.d.ts",
-      "default": "./dist/src/lib/*.js"
+      "types": "./dist/src/lib/*.d.mts",
+      "default": "./dist/src/lib/*.mjs"
     }
   }
 }

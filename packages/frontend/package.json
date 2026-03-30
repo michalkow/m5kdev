@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/frontend",
-  "version": "0.7.0",
+  "version": "0.8.2",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -15,7 +15,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
     "check-types": "tsc --noEmit",
-    "build": "tsc --build"
+    "build": "tsdown"
   },
   "dependencies": {
     "@aws-sdk/s3-request-presigner": "catalog:",
@@ -41,45 +41,46 @@
     "@types/react-dom": "catalog:",
     "@types/luxon": "catalog:",
     "globals": "catalog:",
+    "tsdown": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:"
   },
   "exports": {
     "./modules/auth/components/*": {
-      "types": "./dist/src/modules/auth/components/*.d.ts",
-      "default": "./dist/src/modules/auth/components/*.js"
+      "types": "./dist/src/modules/auth/components/*.d.mts",
+      "default": "./dist/src/modules/auth/components/*.mjs"
     },
     "./modules/auth/hooks/*": {
-      "types": "./dist/src/modules/auth/hooks/*.d.ts",
-      "default": "./dist/src/modules/auth/hooks/*.js"
+      "types": "./dist/src/modules/auth/hooks/*.d.mts",
+      "default": "./dist/src/modules/auth/hooks/*.mjs"
     },
     "./modules/billing/components/*": {
-      "types": "./dist/src/modules/billing/components/*.d.ts",
-      "default": "./dist/src/modules/billing/components/*.js"
+      "types": "./dist/src/modules/billing/components/*.d.mts",
+      "default": "./dist/src/modules/billing/components/*.mjs"
     },
     "./modules/billing/hooks/*": {
-      "types": "./dist/src/modules/billing/hooks/*.d.ts",
-      "default": "./dist/src/modules/billing/hooks/*.js"
+      "types": "./dist/src/modules/billing/hooks/*.d.mts",
+      "default": "./dist/src/modules/billing/hooks/*.mjs"
     },
     "./modules/auth/*": {
-      "types": "./dist/src/modules/auth/*.d.ts",
-      "default": "./dist/src/modules/auth/*.js"
+      "types": "./dist/src/modules/auth/*.d.mts",
+      "default": "./dist/src/modules/auth/*.mjs"
     },
     "./modules/charts/hooks/*": {
-      "types": "./dist/src/modules/charts/hooks/*.d.ts",
-      "default": "./dist/src/modules/charts/hooks/*.js"
+      "types": "./dist/src/modules/charts/hooks/*.d.mts",
+      "default": "./dist/src/modules/charts/hooks/*.mjs"
     },
     "./modules/file/hooks/*": {
-      "types": "./dist/src/modules/file/hooks/*.d.ts",
-      "default": "./dist/src/modules/file/hooks/*.js"
+      "types": "./dist/src/modules/file/hooks/*.d.mts",
+      "default": "./dist/src/modules/file/hooks/*.mjs"
     },
     "./modules/table/hooks/*": {
-      "types": "./dist/src/modules/table/hooks/*.d.ts",
-      "default": "./dist/src/modules/table/hooks/*.js"
+      "types": "./dist/src/modules/table/hooks/*.d.mts",
+      "default": "./dist/src/modules/table/hooks/*.mjs"
     },
     "./utils/*": {
-      "types": "./dist/src/utils/*.d.ts",
-      "default": "./dist/src/utils/*.js"
+      "types": "./dist/src/utils/*.d.mts",
+      "default": "./dist/src/utils/*.mjs"
     }
   }
 }

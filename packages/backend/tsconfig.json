@@ -14,7 +14,9 @@
     ]
   },
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "dist",
+    "tsdown.config.ts"
   ],
   "include": [
     "src/**/*.ts"

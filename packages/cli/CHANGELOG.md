@@ -1,5 +1,23 @@
 # create-m5kdev
 
+## 0.8.2
+
+### Patch Changes
+
+- types
+
+## 0.8.1
+
+### Patch Changes
+
+- exports
+
+## 0.8.0
+
+### Minor Changes
+
+- tsdown
+
 ## 0.7.0
 
 ### Minor Changes

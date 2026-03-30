@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/commons",
-  "version": "0.7.0",
+  "version": "0.8.2",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -14,7 +14,7 @@
   "scripts": {
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
-    "build": "tsc --build",
+    "build": "tsdown",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
@@ -23,56 +23,57 @@
   },
   "devDependencies": {
     "@m5kdev/config": "workspace:*",
+    "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "exports": {
     "./utils/*": {
-      "types": "./dist/src/utils/*.d.ts",
-      "default": "./dist/src/utils/*.js"
+      "types": "./dist/src/utils/*.d.mts",
+      "default": "./dist/src/utils/*.mjs"
     },
     "./modules/ai/*": {
-      "types": "./dist/src/modules/ai/*.d.ts",
-      "default": "./dist/src/modules/ai/*.js"
+      "types": "./dist/src/modules/ai/*.d.mts",
+      "default": "./dist/src/modules/ai/*.mjs"
     },
     "./modules/schemas/*": {
-      "types": "./dist/src/modules/schemas/*.d.ts",
-      "default": "./dist/src/modules/schemas/*.js"
+      "types": "./dist/src/modules/schemas/*.d.mts",
+      "default": "./dist/src/modules/schemas/*.mjs"
     },
     "./modules/crypto/*": {
-      "types": "./dist/src/modules/crypto/*.d.ts",
-      "default": "./dist/src/modules/crypto/*.js"
+      "types": "./dist/src/modules/crypto/*.d.mts",
+      "default": "./dist/src/modules/crypto/*.mjs"
     },
     "./modules/recurrence/*": {
-      "types": "./dist/src/modules/recurrence/*.d.ts",
-      "default": "./dist/src/modules/recurrence/*.js"
+      "types": "./dist/src/modules/recurrence/*.d.mts",
+      "default": "./dist/src/modules/recurrence/*.mjs"
     },
     "./modules/auth/*": {
-      "types": "./dist/src/modules/auth/*.d.ts",
-      "default": "./dist/src/modules/auth/*.js"
+      "types": "./dist/src/modules/auth/*.d.mts",
+      "default": "./dist/src/modules/auth/*.mjs"
     },
     "./modules/file/*": {
-      "types": "./dist/src/modules/file/*.d.ts",
-      "default": "./dist/src/modules/file/*.js"
+      "types": "./dist/src/modules/file/*.d.mts",
+      "default": "./dist/src/modules/file/*.mjs"
     },
     "./modules/base/*": {
-      "types": "./dist/src/modules/base/*.d.ts",
-      "default": "./dist/src/modules/base/*.js"
+      "types": "./dist/src/modules/base/*.d.mts",
+      "default": "./dist/src/modules/base/*.mjs"
     },
     "./modules/tag/*": {
-      "types": "./dist/src/modules/tag/*.d.ts",
-      "default": "./dist/src/modules/tag/*.js"
+      "types": "./dist/src/modules/tag/*.d.mts",
+      "default": "./dist/src/modules/tag/*.mjs"
     },
     "./modules/workflow/*": {
-      "types": "./dist/src/modules/workflow/*.d.ts",
-      "default": "./dist/src/modules/workflow/*.js"
+      "types": "./dist/src/modules/workflow/*.d.mts",
+      "default": "./dist/src/modules/workflow/*.mjs"
     },
     "./modules/table/*": {
-      "types": "./dist/src/modules/table/*.d.ts",
-      "default": "./dist/src/modules/table/*.js"
+      "types": "./dist/src/modules/table/*.d.mts",
+      "default": "./dist/src/modules/table/*.mjs"
     },
     "./modules/billing/*": {
-      "types": "./dist/src/modules/billing/*.d.ts",
-      "default": "./dist/src/modules/billing/*.js"
+      "types": "./dist/src/modules/billing/*.d.mts",
+      "default": "./dist/src/modules/billing/*.mjs"
     }
   }
 }

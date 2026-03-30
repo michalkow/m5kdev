@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/email",
-  "version": "0.7.0",
+  "version": "0.8.2",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -12,7 +12,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsdown",
     "push": "node deploy.js",
     "migrate": "pnpm build && node deploy.js"
   },
@@ -22,6 +22,7 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "tsx": "catalog:",
+    "tsdown": "catalog:",
     "typescript": "catalog:",
     "@m5kdev/config": "workspace:*"
   },
@@ -32,12 +33,12 @@
   },
   "exports": {
     "./components/*": {
-      "types": "./dist/src/components/*.d.ts",
-      "default": "./dist/src/components/*.js"
+      "types": "./dist/src/components/*.d.mts",
+      "default": "./dist/src/components/*.mjs"
     },
     "./types": {
-      "types": "./dist/src/types.d.ts",
-      "default": "./dist/src/types.js"
+      "types": "./dist/src/types.d.mts",
+      "default": "./dist/src/types.mjs"
     }
   }
 }

@@ -177,6 +177,8 @@ catalog:
   tiny-secp256k1: 2.2.3
   trpc-to-openapi: 2.3.0
   ts-jest: 29.4.4
+  '@tsdown/css': 0.21.7
+  tsdown: 0.21.7
   tslib: 2.8.1
   tsup: 8.4.0
   tsx: 4.19.2

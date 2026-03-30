@@ -17,6 +17,7 @@
   "exclude": [
     "out-tsc",
     "dist",
+    "tsdown.config.ts",
     "tests/**/*.spec.ts",
     "tests/**/*.test.ts",
     "tests/**/*.spec.tsx",
