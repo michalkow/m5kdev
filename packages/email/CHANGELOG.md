@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.8.5
+
+### Patch Changes
+
+- export
+
 ## 0.8.4
 
 ### Patch Changes
