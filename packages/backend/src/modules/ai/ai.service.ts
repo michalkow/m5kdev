@@ -38,6 +38,8 @@ type AIServiceGenerateTextParams = Omit<GenerateTextParams, "model" | "prompt" |
     model: string;
     removeMDash?: boolean;
     ctx?: AIServiceActorContext;
+    retryAttempts?: number;
+    retryModels?: string[];
   };
 type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
   GenerateTextParams,
@@ -49,7 +51,17 @@ type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
     repairAttempts?: number;
     repairModel?: string;
     ctx?: AIServiceActorContext;
+    retryAttempts?: number;
+    retryModels?: string[];
   };
+
+type AIServiceOptions = {
+  retryAttempts?: number;
+  retryModels?: string[];
+  repairAttempts?: number;
+  repairModel?: string;
+  removeMDash?: boolean;
+};
 
 export class AIService<MastraInstance extends Mastra> extends BaseService<
   { aiUsage?: AiUsageRepository },
@@ -62,16 +74,19 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   mastra?: MastraInstance;
   openrouter?: OpenRouterProvider;
   replicate?: Replicate;
+  options?: AIServiceOptions;
 
   constructor(
     repositories: { aiUsage?: AiUsageRepository },
     services: { ideogram?: IdeogramService },
-    libs: { mastra?: MastraInstance; openrouter?: OpenRouterProvider; replicate?: Replicate }
+    libs: { mastra?: MastraInstance; openrouter?: OpenRouterProvider; replicate?: Replicate },
+    options?: AIServiceOptions
   ) {
     super(repositories, services);
     this.mastra = libs.mastra;
     this.openrouter = libs.openrouter;
     this.replicate = libs.replicate;
+    this.options = options;
   }
 
   getMastra(): MastraInstance {
@@ -254,26 +269,54 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
 
   async generateText(params: AIServiceGenerateTextParams): ServerResultAsync<string> {
     return this.throwableAsync(async () => {
-      const { removeMDash = true, model, prompt, messages, ctx, ...rest } = params;
+      const {
+        removeMDash = true,
+        model,
+        prompt,
+        messages,
+        ctx,
+        retryAttempts = this.options?.retryAttempts ?? 0,
+        retryModels = this.options?.retryModels ?? [],
+        ...rest
+      } = params;
       const request = messages
         ? { ...rest, model: this.prepareModel(model), messages }
         : { ...rest, model: this.prepareModel(model), prompt };
-      const result = await generateText(request);
-      if (this.repository.aiUsage) {
-        const createUsageResult = await this.repository.aiUsage.create({
-          userId: ctx?.actor?.userId,
+      try {
+        const result = await generateText(request);
+        if (this.repository.aiUsage) {
+          const createUsageResult = await this.repository.aiUsage.create({
+            userId: ctx?.actor?.userId,
+            model,
+            provider: "openrouter",
+            feature: "generateText",
+            traceId: result.providerMetadata?.openrouter?.traceId?.toString(),
+            inputTokens: result.usage.inputTokens,
+            outputTokens: result.usage.outputTokens,
+            totalTokens: result.usage.totalTokens,
+            cost: (result?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
+          });
+          if (createUsageResult.isErr()) return err(createUsageResult.error);
+        }
+        return ok(removeMDash ? result.text.replace(/\u2013|\u2014/g, "-") : result.text);
+      } catch (error) {
+        if (retryAttempts <= 0) throw error;
+        this.logger.warn(`generateText failed, retrying (${retryAttempts} attempts left)`, {
           model,
-          provider: "openrouter",
-          feature: "generateText",
-          traceId: result.providerMetadata?.openrouter?.traceId?.toString(),
-          inputTokens: result.usage.inputTokens,
-          outputTokens: result.usage.outputTokens,
-          totalTokens: result.usage.totalTokens,
-          cost: (result?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
+          error,
         });
-        if (createUsageResult.isErr()) return err(createUsageResult.error);
+        const nextModel = retryModels?.[0] ?? model;
+        const nextRetryModels = retryModels ? [...retryModels.slice(1), model] : undefined;
+        return this.generateText({
+          ...rest,
+          ...(messages ? { messages } : { prompt: prompt! }),
+          model: nextModel,
+          removeMDash,
+          ctx,
+          retryAttempts: retryAttempts - 1,
+          retryModels: nextRetryModels,
+        } as AIServiceGenerateTextParams);
       }
-      return ok(removeMDash ? result.text.replace(/\u2013|\u2014/g, "-") : result.text);
     });
   }
 
@@ -285,9 +328,11 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       schema,
       prompt,
       messages,
-      repairAttempts = 0,
-      repairModel,
+      repairAttempts = this.options?.repairAttempts ?? 0,
+      repairModel = this.options?.repairModel ?? model,
       ctx,
+      retryAttempts = this.options?.retryAttempts ?? 0,
+      retryModels = this.options?.retryModels ?? [],
       ...rest
     } = params;
     const request = messages
@@ -360,7 +405,27 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
           cause: error,
         });
       }
-      return this.error("BAD_REQUEST", "AI: Provided failed to generate object", { cause: error });
+      if (retryAttempts <= 0)
+        return this.error("BAD_REQUEST", "AI: Provided failed to generate object", {
+          cause: error,
+        });
+      this.logger.warn(`generateObject failed, retrying (${retryAttempts} attempts left)`, {
+        model,
+        error,
+      });
+      const nextModel = retryModels?.[0] ?? model;
+      const nextRetryModels = retryModels ? [...retryModels.slice(1), model] : undefined;
+      return this.generateObject({
+        ...rest,
+        ...(messages ? { messages } : { prompt: prompt! }),
+        model: nextModel,
+        schema,
+        repairAttempts,
+        repairModel,
+        ctx,
+        retryAttempts: retryAttempts - 1,
+        retryModels: nextRetryModels,
+      } as AIServiceGenerateObjectParams<T>);
     }
   }
 
