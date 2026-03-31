@@ -270,7 +270,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   async generateText(params: AIServiceGenerateTextParams): ServerResultAsync<string> {
     return this.throwableAsync(async () => {
       const {
-        removeMDash = true,
+        removeMDash = this.options?.removeMDash ?? true,
         model,
         prompt,
         messages,
@@ -305,6 +305,12 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
           model,
           error,
         });
+        // Exponential backoff: wait before retrying
+        const delay = Math.min(
+          1000 * 2 ** (this.options?.retryAttempts ?? 3 - retryAttempts),
+          10000
+        );
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
         const nextModel = retryModels?.[0] ?? model;
         const nextRetryModels = retryModels ? [...retryModels.slice(1), model] : undefined;
         return this.generateText({
@@ -406,13 +412,16 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         });
       }
       if (retryAttempts <= 0)
-        return this.error("BAD_REQUEST", "AI: Provided failed to generate object", {
+        return this.error("BAD_REQUEST", "AI: Provider failed to generate object", {
           cause: error,
         });
       this.logger.warn(`generateObject failed, retrying (${retryAttempts} attempts left)`, {
         model,
         error,
       });
+      // Exponential backoff: wait before retrying
+      const delay = Math.min(1000 * 2 ** (this.options?.retryAttempts ?? 3 - retryAttempts), 10000);
+      await new Promise<void>((resolve) => setTimeout(resolve, delay));
       const nextModel = retryModels?.[0] ?? model;
       const nextRetryModels = retryModels ? [...retryModels.slice(1), model] : undefined;
       return this.generateObject({
