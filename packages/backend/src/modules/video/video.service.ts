@@ -1,8 +1,8 @@
 import { closeSync, existsSync, mkdirSync, openSync } from "node:fs";
 import path from "node:path";
+import { spawn } from "node:child_process";
 //
 import ffbin from "ffmpeg-ffprobe-static";
-import ffmpeg from "fluent-ffmpeg";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
 import type { ServerResultAsync } from "../base/base.dto";
@@ -12,13 +12,33 @@ if (!ffbin.ffmpegPath || !ffbin.ffprobePath) {
   throw new Error("FFmpeg or FFprobe not found");
 }
 
-ffmpeg.setFfmpegPath(ffbin.ffmpegPath);
-ffmpeg.setFfprobePath(ffbin.ffprobePath);
-
 const uploadsDir = path.join(__dirname, "..", "uploads");
 if (!existsSync(uploadsDir)) {
   mkdirSync(uploadsDir, { recursive: true });
 }
+
+const runFfmpeg = async (args: readonly string[]): Promise<void> => {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(ffbin.ffmpegPath as string, [...args], {
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+
+    let stderr = "";
+    child.stderr?.setEncoding("utf8");
+    child.stderr?.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+
+    child.on("error", (error) => reject(error));
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(stderr || `ffmpeg exited with code ${code ?? "unknown"}`));
+    });
+  });
+};
 
 export class VideoService extends BaseService<never, never> {
   async cut(file: string, start: number, end: number): ServerResultAsync<string> {
@@ -29,17 +49,24 @@ export class VideoService extends BaseService<never, never> {
         closeSync(openSync(output, "w"));
       }
 
-      await new Promise<void>((resolve, reject) => {
-        ffmpeg(file)
-          .seekOutput(start)
-          .videoCodec("libx264")
-          .audioCodec("copy")
-          .outputOptions(["-y", "-movflags +faststart"])
-          .duration(duration)
-          .on("end", () => resolve())
-          .on("error", (e: Error, _stdout: string | null, _stderr: string | null) => reject(e))
-          .save(output);
-      }).catch((error) => err(this.handleUnknownError(error)));
+      await runFfmpeg([
+        "-i",
+        file,
+        "-ss",
+        String(start),
+        "-t",
+        String(duration),
+        "-c:v",
+        "libx264",
+        "-c:a",
+        "copy",
+        "-movflags",
+        "+faststart",
+        "-y",
+        output,
+      ]).catch((error) => {
+        throw this.handleUnknownError(error);
+      });
 
       return ok(output);
     });
@@ -51,18 +78,24 @@ export class VideoService extends BaseService<never, never> {
       if (!existsSync(output)) {
         closeSync(openSync(output, "w"));
       }
-      await new Promise<void>((resolve, reject) => {
-        ffmpeg(input)
-          .noVideo()
-          .audioCodec("pcm_s16le") // WAV PCM 16-bit
-          .audioFrequency(hz) // 48000 or 44100
-          .audioChannels(2) // down/up-mix as needed
-          .format("wav")
-          .outputOptions(["-y"])
-          .on("end", () => resolve())
-          .on("error", reject)
-          .save(output);
-      }).catch((error) => err(this.handleUnknownError(error)));
+
+      await runFfmpeg([
+        "-i",
+        input,
+        "-vn",
+        "-c:a",
+        "pcm_s16le",
+        "-ar",
+        String(hz),
+        "-ac",
+        "2",
+        "-f",
+        "wav",
+        "-y",
+        output,
+      ]).catch((error) => {
+        throw this.handleUnknownError(error);
+      });
       return ok(output);
     });
   }
@@ -73,15 +106,20 @@ export class VideoService extends BaseService<never, never> {
       if (!existsSync(output)) {
         closeSync(openSync(output, "w"));
       }
-      await new Promise<void>((resolve, reject) => {
-        ffmpeg(input)
-          .outputOptions(["-y", `-map 0:a:${streamIndex}`])
-          .audioCodec("libmp3lame")
-          .audioBitrate(kbps)
-          .on("end", () => resolve())
-          .on("error", reject)
-          .save(output);
-      }).catch((error) => err(this.handleUnknownError(error)));
+      await runFfmpeg([
+        "-i",
+        input,
+        "-map",
+        `0:a:${streamIndex}`,
+        "-c:a",
+        "libmp3lame",
+        "-b:a",
+        `${kbps}k`,
+        "-y",
+        output,
+      ]).catch((error) => {
+        throw this.handleUnknownError(error);
+      });
 
       return ok(output);
     });
