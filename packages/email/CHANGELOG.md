@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.8.6
+
+### Patch Changes
+
+- ai retry
+
 ## 0.8.5
 
 ### Patch Changes

@@ -16,7 +16,7 @@
     "check-types": "turbo run check-types",
     "cs:add": "pnpm dlx @changesets/cli add",
     "cs:patch": "pnpm cs:add && pnpm cs:version",
-    "cs:publish": "pnpm build &&pnpm dlx @changesets/cli publish",
+    "cs:publish": "pnpm build && pnpm dlx @changesets/cli publish && git push --follow-tags",
     "cs:version": "pnpm dlx @changesets/cli version",
     "knip": "knip"
   },

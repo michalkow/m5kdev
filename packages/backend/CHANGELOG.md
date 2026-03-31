@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.8.6
+
+### Patch Changes
+
+- ai retry
+- Updated dependencies
+  - @m5kdev/commons@0.8.6
+  - @m5kdev/config@0.8.6
+
 ## 0.8.5
 
 ### Patch Changes

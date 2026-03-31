@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.8.6
+
+### Patch Changes
+
+- ai retry
+- Updated dependencies
+  - @m5kdev/commons@0.8.6
+
 ## 0.8.5
 
 ### Patch Changes

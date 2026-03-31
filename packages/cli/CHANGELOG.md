@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.8.6
+
+### Patch Changes
+
+- ai retry
+
 ## 0.8.5
 
 ### Patch Changes
