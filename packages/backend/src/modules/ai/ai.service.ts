@@ -307,7 +307,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         });
         // Exponential backoff: wait before retrying
         const delay = Math.min(
-          1000 * 2 ** (this.options?.retryAttempts ?? 3 - retryAttempts),
+          1000 * 2 ** ((this.options?.retryAttempts ?? 3) - retryAttempts),
           10000
         );
         await new Promise<void>((resolve) => setTimeout(resolve, delay));
@@ -420,7 +420,10 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         error,
       });
       // Exponential backoff: wait before retrying
-      const delay = Math.min(1000 * 2 ** (this.options?.retryAttempts ?? 3 - retryAttempts), 10000);
+      const delay = Math.min(
+        1000 * 2 ** ((this.options?.retryAttempts ?? 3) - retryAttempts),
+        10000
+      );
       await new Promise<void>((resolve) => setTimeout(resolve, delay));
       const nextModel = retryModels?.[0] ?? model;
       const nextRetryModels = retryModels ? [...retryModels.slice(1), model] : undefined;
