@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.8.7
+
+### Patch Changes
+
+- rm fluent-ffmpeg
+- Updated dependencies
+  - @m5kdev/commons@0.8.7
+
 ## 0.8.6
 
 ### Patch Changes

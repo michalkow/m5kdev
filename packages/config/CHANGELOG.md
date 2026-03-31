@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.8.7
+
+### Patch Changes
+
+- rm fluent-ffmpeg
+
 ## 0.8.6
 
 ### Patch Changes
