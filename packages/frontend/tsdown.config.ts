@@ -15,7 +15,7 @@ export default defineConfig({
   unbundle: true,
   outDir: "dist",
   platform: "browser",
-  fixedExtension: false,
+  format: ["esm", "cjs"],
   tsconfig: "./tsconfig.json",
   dts: true,
   sourcemap: true,

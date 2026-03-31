@@ -7,7 +7,7 @@ export default defineConfig({
   unbundle: true,
   outDir: "dist",
   platform: "node",
-  fixedExtension: false,
+  format: ["esm", "cjs"],
   tsconfig: "./tsconfig.json",
   dts: true,
   sourcemap: true,

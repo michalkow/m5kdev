@@ -47,40 +47,94 @@
   },
   "exports": {
     "./modules/auth/components/*": {
-      "types": "./dist/src/modules/auth/components/*.d.mts",
-      "default": "./dist/src/modules/auth/components/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/auth/components/*.d.mts",
+        "default": "./dist/src/modules/auth/components/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/auth/components/*.d.ts",
+        "default": "./dist/src/modules/auth/components/*.js"
+      }
     },
     "./modules/auth/hooks/*": {
-      "types": "./dist/src/modules/auth/hooks/*.d.mts",
-      "default": "./dist/src/modules/auth/hooks/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/auth/hooks/*.d.mts",
+        "default": "./dist/src/modules/auth/hooks/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/auth/hooks/*.d.ts",
+        "default": "./dist/src/modules/auth/hooks/*.js"
+      }
     },
     "./modules/billing/components/*": {
-      "types": "./dist/src/modules/billing/components/*.d.mts",
-      "default": "./dist/src/modules/billing/components/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/billing/components/*.d.mts",
+        "default": "./dist/src/modules/billing/components/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/billing/components/*.d.ts",
+        "default": "./dist/src/modules/billing/components/*.js"
+      }
     },
     "./modules/billing/hooks/*": {
-      "types": "./dist/src/modules/billing/hooks/*.d.mts",
-      "default": "./dist/src/modules/billing/hooks/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/billing/hooks/*.d.mts",
+        "default": "./dist/src/modules/billing/hooks/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/billing/hooks/*.d.ts",
+        "default": "./dist/src/modules/billing/hooks/*.js"
+      }
     },
     "./modules/auth/*": {
-      "types": "./dist/src/modules/auth/*.d.mts",
-      "default": "./dist/src/modules/auth/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/auth/*.d.mts",
+        "default": "./dist/src/modules/auth/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/auth/*.d.ts",
+        "default": "./dist/src/modules/auth/*.js"
+      }
     },
     "./modules/charts/hooks/*": {
-      "types": "./dist/src/modules/charts/hooks/*.d.mts",
-      "default": "./dist/src/modules/charts/hooks/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/charts/hooks/*.d.mts",
+        "default": "./dist/src/modules/charts/hooks/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/charts/hooks/*.d.ts",
+        "default": "./dist/src/modules/charts/hooks/*.js"
+      }
     },
     "./modules/file/hooks/*": {
-      "types": "./dist/src/modules/file/hooks/*.d.mts",
-      "default": "./dist/src/modules/file/hooks/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/file/hooks/*.d.mts",
+        "default": "./dist/src/modules/file/hooks/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/file/hooks/*.d.ts",
+        "default": "./dist/src/modules/file/hooks/*.js"
+      }
     },
     "./modules/table/hooks/*": {
-      "types": "./dist/src/modules/table/hooks/*.d.mts",
-      "default": "./dist/src/modules/table/hooks/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/table/hooks/*.d.mts",
+        "default": "./dist/src/modules/table/hooks/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/table/hooks/*.d.ts",
+        "default": "./dist/src/modules/table/hooks/*.js"
+      }
     },
     "./utils/*": {
-      "types": "./dist/src/utils/*.d.mts",
-      "default": "./dist/src/utils/*.mjs"
+      "import": {
+        "types": "./dist/src/utils/*.d.mts",
+        "default": "./dist/src/utils/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/utils/*.d.ts",
+        "default": "./dist/src/utils/*.js"
+      }
     }
   }
 }

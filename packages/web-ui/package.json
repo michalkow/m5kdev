@@ -91,64 +91,154 @@
   },
   "exports": {
     "./components/*": {
-      "types": "./dist/src/components/*.d.mts",
-      "default": "./dist/src/components/*.mjs"
+      "import": {
+        "types": "./dist/src/components/*.d.mts",
+        "default": "./dist/src/components/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/components/*.d.ts",
+        "default": "./dist/src/components/*.js"
+      }
     },
     "./components/ui/*": {
-      "types": "./dist/src/components/ui/*.d.mts",
-      "default": "./dist/src/components/ui/*.mjs"
+      "import": {
+        "types": "./dist/src/components/ui/*.d.mts",
+        "default": "./dist/src/components/ui/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/components/ui/*.d.ts",
+        "default": "./dist/src/components/ui/*.js"
+      }
     },
     "./components/shared/*": {
-      "types": "./dist/src/components/ui/shared/*.d.mts",
-      "default": "./dist/src/components/ui/shared/*.mjs"
+      "import": {
+        "types": "./dist/src/components/ui/shared/*.d.mts",
+        "default": "./dist/src/components/ui/shared/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/components/ui/shared/*.d.ts",
+        "default": "./dist/src/components/ui/shared/*.js"
+      }
     },
     "./animations/*": {
-      "types": "./dist/src/animations/*.d.mts",
-      "default": "./dist/src/animations/*.mjs"
+      "import": {
+        "types": "./dist/src/animations/*.d.mts",
+        "default": "./dist/src/animations/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/animations/*.d.ts",
+        "default": "./dist/src/animations/*.js"
+      }
     },
     "./modules/auth/components/*": {
-      "types": "./dist/src/modules/auth/components/*.d.mts",
-      "default": "./dist/src/modules/auth/components/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/auth/components/*.d.mts",
+        "default": "./dist/src/modules/auth/components/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/auth/components/*.d.ts",
+        "default": "./dist/src/modules/auth/components/*.js"
+      }
     },
     "./modules/auth/types": {
-      "types": "./dist/src/modules/auth/types.d.mts",
-      "default": "./dist/src/modules/auth/types.mjs"
+      "import": {
+        "types": "./dist/src/modules/auth/types.d.mts",
+        "default": "./dist/src/modules/auth/types.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/auth/types.d.ts",
+        "default": "./dist/src/modules/auth/types.js"
+      }
     },
     "./modules/billing/components/*": {
-      "types": "./dist/src/modules/billing/components/*.d.mts",
-      "default": "./dist/src/modules/billing/components/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/billing/components/*.d.mts",
+        "default": "./dist/src/modules/billing/components/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/billing/components/*.d.ts",
+        "default": "./dist/src/modules/billing/components/*.js"
+      }
     },
     "./modules/app/components/*": {
-      "types": "./dist/src/modules/app/components/*.d.mts",
-      "default": "./dist/src/modules/app/components/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/app/components/*.d.mts",
+        "default": "./dist/src/modules/app/components/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/app/components/*.d.ts",
+        "default": "./dist/src/modules/app/components/*.js"
+      }
     },
     "./modules/charts/components/*": {
-      "types": "./dist/src/modules/charts/components/*.d.mts",
-      "default": "./dist/src/modules/charts/components/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/charts/components/*.d.mts",
+        "default": "./dist/src/modules/charts/components/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/charts/components/*.d.ts",
+        "default": "./dist/src/modules/charts/components/*.js"
+      }
     },
     "./modules/table/components/*": {
-      "types": "./dist/src/modules/table/components/*.d.mts",
-      "default": "./dist/src/modules/table/components/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/table/components/*.d.mts",
+        "default": "./dist/src/modules/table/components/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/table/components/*.d.ts",
+        "default": "./dist/src/modules/table/components/*.js"
+      }
     },
     "./modules/table/filterTransformers": {
-      "types": "./dist/src/modules/table/filterTransformers.d.mts",
-      "default": "./dist/src/modules/table/filterTransformers.mjs"
+      "import": {
+        "types": "./dist/src/modules/table/filterTransformers.d.mts",
+        "default": "./dist/src/modules/table/filterTransformers.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/table/filterTransformers.d.ts",
+        "default": "./dist/src/modules/table/filterTransformers.js"
+      }
     },
     "./hooks/*": {
-      "types": "./dist/src/hooks/*.d.mts",
-      "default": "./dist/src/hooks/*.mjs"
+      "import": {
+        "types": "./dist/src/hooks/*.d.mts",
+        "default": "./dist/src/hooks/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/hooks/*.d.ts",
+        "default": "./dist/src/hooks/*.js"
+      }
     },
     "./icons/*": {
-      "types": "./dist/src/icons/*.d.mts",
-      "default": "./dist/src/icons/*.mjs"
+      "import": {
+        "types": "./dist/src/icons/*.d.mts",
+        "default": "./dist/src/icons/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/icons/*.d.ts",
+        "default": "./dist/src/icons/*.js"
+      }
     },
     "./utils": {
-      "types": "./dist/src/lib/utils.d.mts",
-      "default": "./dist/src/lib/utils.mjs"
+      "import": {
+        "types": "./dist/src/lib/utils.d.mts",
+        "default": "./dist/src/lib/utils.mjs"
+      },
+      "require": {
+        "types": "./dist/src/lib/utils.d.ts",
+        "default": "./dist/src/lib/utils.js"
+      }
     },
     "./lib/*": {
-      "types": "./dist/src/lib/*.d.mts",
-      "default": "./dist/src/lib/*.mjs"
+      "import": {
+        "types": "./dist/src/lib/*.d.mts",
+        "default": "./dist/src/lib/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/lib/*.d.ts",
+        "default": "./dist/src/lib/*.js"
+      }
     }
   }
 }

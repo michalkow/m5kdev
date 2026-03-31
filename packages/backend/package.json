@@ -91,88 +91,214 @@
   },
   "exports": {
     "./modules/ai/*": {
-      "types": "./dist/src/modules/ai/*.d.mts",
-      "default": "./dist/src/modules/ai/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/ai/*.d.mts",
+        "default": "./dist/src/modules/ai/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/ai/*.d.cts",
+        "default": "./dist/src/modules/ai/*.cjs"
+      }
     },
     "./modules/utils/*": {
-      "types": "./dist/src/modules/utils/*.d.mts",
-      "default": "./dist/src/modules/utils/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/utils/*.d.mts",
+        "default": "./dist/src/modules/utils/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/utils/*.d.cts",
+        "default": "./dist/src/modules/utils/*.cjs"
+      }
     },
     "./modules/base/*": {
-      "types": "./dist/src/modules/base/*.d.mts",
-      "default": "./dist/src/modules/base/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/base/*.d.mts",
+        "default": "./dist/src/modules/base/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/base/*.d.cts",
+        "default": "./dist/src/modules/base/*.cjs"
+      }
     },
     "./modules/billing/*": {
-      "types": "./dist/src/modules/billing/*.d.mts",
-      "default": "./dist/src/modules/billing/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/billing/*.d.mts",
+        "default": "./dist/src/modules/billing/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/billing/*.d.cts",
+        "default": "./dist/src/modules/billing/*.cjs"
+      }
     },
     "./modules/crypto/*": {
-      "types": "./dist/src/modules/crypto/*.d.mts",
-      "default": "./dist/src/modules/crypto/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/crypto/*.d.mts",
+        "default": "./dist/src/modules/crypto/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/crypto/*.d.cts",
+        "default": "./dist/src/modules/crypto/*.cjs"
+      }
     },
     "./modules/auth/*": {
-      "types": "./dist/src/modules/auth/*.d.mts",
-      "default": "./dist/src/modules/auth/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/auth/*.d.mts",
+        "default": "./dist/src/modules/auth/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/auth/*.d.cts",
+        "default": "./dist/src/modules/auth/*.cjs"
+      }
     },
     "./modules/tag/*": {
-      "types": "./dist/src/modules/tag/*.d.mts",
-      "default": "./dist/src/modules/tag/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/tag/*.d.mts",
+        "default": "./dist/src/modules/tag/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/tag/*.d.cts",
+        "default": "./dist/src/modules/tag/*.cjs"
+      }
     },
     "./modules/connect/*": {
-      "types": "./dist/src/modules/connect/*.d.mts",
-      "default": "./dist/src/modules/connect/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/connect/*.d.mts",
+        "default": "./dist/src/modules/connect/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/connect/*.d.cts",
+        "default": "./dist/src/modules/connect/*.cjs"
+      }
     },
     "./modules/workflow/*": {
-      "types": "./dist/src/modules/workflow/*.d.mts",
-      "default": "./dist/src/modules/workflow/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/workflow/*.d.mts",
+        "default": "./dist/src/modules/workflow/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/workflow/*.d.cts",
+        "default": "./dist/src/modules/workflow/*.cjs"
+      }
     },
     "./modules/file/*": {
-      "types": "./dist/src/modules/file/*.d.mts",
-      "default": "./dist/src/modules/file/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/file/*.d.mts",
+        "default": "./dist/src/modules/file/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/file/*.d.cts",
+        "default": "./dist/src/modules/file/*.cjs"
+      }
     },
     "./modules/recurrence/*": {
-      "types": "./dist/src/modules/recurrence/*.d.mts",
-      "default": "./dist/src/modules/recurrence/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/recurrence/*.d.mts",
+        "default": "./dist/src/modules/recurrence/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/recurrence/*.d.cts",
+        "default": "./dist/src/modules/recurrence/*.cjs"
+      }
     },
     "./modules/video/*": {
-      "types": "./dist/src/modules/video/*.d.mts",
-      "default": "./dist/src/modules/video/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/video/*.d.mts",
+        "default": "./dist/src/modules/video/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/video/*.d.cts",
+        "default": "./dist/src/modules/video/*.cjs"
+      }
     },
     "./modules/posthog/*": {
-      "types": "./dist/src/modules/posthog/*.d.mts",
-      "default": "./dist/src/modules/posthog/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/posthog/*.d.mts",
+        "default": "./dist/src/modules/posthog/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/posthog/*.d.cts",
+        "default": "./dist/src/modules/posthog/*.cjs"
+      }
     },
     "./modules/access/*": {
-      "types": "./dist/src/modules/access/*.d.mts",
-      "default": "./dist/src/modules/access/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/access/*.d.mts",
+        "default": "./dist/src/modules/access/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/access/*.d.cts",
+        "default": "./dist/src/modules/access/*.cjs"
+      }
     },
     "./modules/social/*": {
-      "types": "./dist/src/modules/social/*.d.mts",
-      "default": "./dist/src/modules/social/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/social/*.d.mts",
+        "default": "./dist/src/modules/social/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/social/*.d.cts",
+        "default": "./dist/src/modules/social/*.cjs"
+      }
     },
     "./modules/clay/*": {
-      "types": "./dist/src/modules/clay/*.d.mts",
-      "default": "./dist/src/modules/clay/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/clay/*.d.mts",
+        "default": "./dist/src/modules/clay/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/clay/*.d.cts",
+        "default": "./dist/src/modules/clay/*.cjs"
+      }
     },
     "./modules/webhook/*": {
-      "types": "./dist/src/modules/webhook/*.d.mts",
-      "default": "./dist/src/modules/webhook/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/webhook/*.d.mts",
+        "default": "./dist/src/modules/webhook/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/webhook/*.d.cts",
+        "default": "./dist/src/modules/webhook/*.cjs"
+      }
     },
     "./modules/email/*": {
-      "types": "./dist/src/modules/email/*.d.mts",
-      "default": "./dist/src/modules/email/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/email/*.d.mts",
+        "default": "./dist/src/modules/email/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/email/*.d.cts",
+        "default": "./dist/src/modules/email/*.cjs"
+      }
     },
     "./lib/*": {
-      "types": "./dist/src/lib/*.d.mts",
-      "default": "./dist/src/lib/*.mjs"
+      "import": {
+        "types": "./dist/src/lib/*.d.mts",
+        "default": "./dist/src/lib/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/lib/*.d.cts",
+        "default": "./dist/src/lib/*.cjs"
+      }
     },
     "./utils/*": {
-      "types": "./dist/src/utils/*.d.mts",
-      "default": "./dist/src/utils/*.mjs"
+      "import": {
+        "types": "./dist/src/utils/*.d.mts",
+        "default": "./dist/src/utils/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/utils/*.d.cts",
+        "default": "./dist/src/utils/*.cjs"
+      }
     },
     "./types": {
-      "types": "./dist/src/types.d.mts",
-      "default": "./dist/src/types.mjs"
+      "import": {
+        "types": "./dist/src/types.d.mts",
+        "default": "./dist/src/types.mjs"
+      },
+      "require": {
+        "types": "./dist/src/types.d.cts",
+        "default": "./dist/src/types.cjs"
+      }
     }
   }
 }

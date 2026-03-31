@@ -33,12 +33,24 @@
   },
   "exports": {
     "./components/*": {
-      "types": "./dist/src/components/*.d.mts",
-      "default": "./dist/src/components/*.mjs"
+      "import": {
+        "types": "./dist/src/components/*.d.mts",
+        "default": "./dist/src/components/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/components/*.d.cts",
+        "default": "./dist/src/components/*.cjs"
+      }
     },
     "./types": {
-      "types": "./dist/src/types.d.mts",
-      "default": "./dist/src/types.mjs"
+      "import": {
+        "types": "./dist/src/types.d.mts",
+        "default": "./dist/src/types.mjs"
+      },
+      "require": {
+        "types": "./dist/src/types.d.cts",
+        "default": "./dist/src/types.cjs"
+      }
     }
   }
 }

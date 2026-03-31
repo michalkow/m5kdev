@@ -28,52 +28,124 @@
   },
   "exports": {
     "./utils/*": {
-      "types": "./dist/src/utils/*.d.mts",
-      "default": "./dist/src/utils/*.mjs"
+      "import": {
+        "types": "./dist/src/utils/*.d.mts",
+        "default": "./dist/src/utils/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/utils/*.d.cts",
+        "default": "./dist/src/utils/*.cjs"
+      }
     },
     "./modules/ai/*": {
-      "types": "./dist/src/modules/ai/*.d.mts",
-      "default": "./dist/src/modules/ai/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/ai/*.d.mts",
+        "default": "./dist/src/modules/ai/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/ai/*.d.cts",
+        "default": "./dist/src/modules/ai/*.cjs"
+      }
     },
     "./modules/schemas/*": {
-      "types": "./dist/src/modules/schemas/*.d.mts",
-      "default": "./dist/src/modules/schemas/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/schemas/*.d.mts",
+        "default": "./dist/src/modules/schemas/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/schemas/*.d.cts",
+        "default": "./dist/src/modules/schemas/*.cjs"
+      }
     },
     "./modules/crypto/*": {
-      "types": "./dist/src/modules/crypto/*.d.mts",
-      "default": "./dist/src/modules/crypto/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/crypto/*.d.mts",
+        "default": "./dist/src/modules/crypto/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/crypto/*.d.cts",
+        "default": "./dist/src/modules/crypto/*.cjs"
+      }
     },
     "./modules/recurrence/*": {
-      "types": "./dist/src/modules/recurrence/*.d.mts",
-      "default": "./dist/src/modules/recurrence/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/recurrence/*.d.mts",
+        "default": "./dist/src/modules/recurrence/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/recurrence/*.d.cts",
+        "default": "./dist/src/modules/recurrence/*.cjs"
+      }
     },
     "./modules/auth/*": {
-      "types": "./dist/src/modules/auth/*.d.mts",
-      "default": "./dist/src/modules/auth/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/auth/*.d.mts",
+        "default": "./dist/src/modules/auth/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/auth/*.d.cts",
+        "default": "./dist/src/modules/auth/*.cjs"
+      }
     },
     "./modules/file/*": {
-      "types": "./dist/src/modules/file/*.d.mts",
-      "default": "./dist/src/modules/file/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/file/*.d.mts",
+        "default": "./dist/src/modules/file/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/file/*.d.cts",
+        "default": "./dist/src/modules/file/*.cjs"
+      }
     },
     "./modules/base/*": {
-      "types": "./dist/src/modules/base/*.d.mts",
-      "default": "./dist/src/modules/base/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/base/*.d.mts",
+        "default": "./dist/src/modules/base/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/base/*.d.cts",
+        "default": "./dist/src/modules/base/*.cjs"
+      }
     },
     "./modules/tag/*": {
-      "types": "./dist/src/modules/tag/*.d.mts",
-      "default": "./dist/src/modules/tag/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/tag/*.d.mts",
+        "default": "./dist/src/modules/tag/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/tag/*.d.cts",
+        "default": "./dist/src/modules/tag/*.cjs"
+      }
     },
     "./modules/workflow/*": {
-      "types": "./dist/src/modules/workflow/*.d.mts",
-      "default": "./dist/src/modules/workflow/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/workflow/*.d.mts",
+        "default": "./dist/src/modules/workflow/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/workflow/*.d.cts",
+        "default": "./dist/src/modules/workflow/*.cjs"
+      }
     },
     "./modules/table/*": {
-      "types": "./dist/src/modules/table/*.d.mts",
-      "default": "./dist/src/modules/table/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/table/*.d.mts",
+        "default": "./dist/src/modules/table/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/table/*.d.cts",
+        "default": "./dist/src/modules/table/*.cjs"
+      }
     },
     "./modules/billing/*": {
-      "types": "./dist/src/modules/billing/*.d.mts",
-      "default": "./dist/src/modules/billing/*.mjs"
+      "import": {
+        "types": "./dist/src/modules/billing/*.d.mts",
+        "default": "./dist/src/modules/billing/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/billing/*.d.cts",
+        "default": "./dist/src/modules/billing/*.cjs"
+      }
     }
   }
 }
