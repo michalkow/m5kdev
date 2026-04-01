@@ -229,7 +229,7 @@ export class BaseTableRepository<
         const columns = options.globalSearchColumns.map((c) => {
           const column = this.table[c as keyof TTable] as SQLiteColumn;
           if (!column) {
-            throw new Error(`Column ${column} not found in table ${this.table.name}`);
+            throw new Error(`Column ${c} not found in table ${this.table.name}`);
           }
           return column;
         });

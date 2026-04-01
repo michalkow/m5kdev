@@ -334,7 +334,7 @@ export const NuqsTable = <T,>({
               placeholder="Search…"
               value={q ?? ""}
               onValueChange={(v) => {
-                setQ(v === "" ? null : v);
+                setQ?.(v === "" ? null : v);
               }}
               startContent={<Search className="h-4 w-4 shrink-0 text-default-400" aria-hidden />}
               aria-label="Search table"
