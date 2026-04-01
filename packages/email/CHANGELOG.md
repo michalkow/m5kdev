@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.8.11
+
+### Patch Changes
+
+- short qs
+
 ## 0.8.10
 
 ### Patch Changes

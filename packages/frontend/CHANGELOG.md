@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.8.11
+
+### Patch Changes
+
+- short qs
+- Updated dependencies
+  - @m5kdev/commons@0.8.11
+
 ## 0.8.10
 
 ### Patch Changes

@@ -15,9 +15,10 @@
     "lint:fix": "turbo run lint:fix",
     "check-types": "turbo run check-types",
     "cs:add": "pnpm dlx @changesets/cli add",
-    "cs:patch": "pnpm cs:add && pnpm cs:version",
+    "cs:patch": "pnpm cs:add --all --patch && pnpm cs:version",
     "cs:publish": "pnpm build && pnpm dlx @changesets/cli publish && git push --follow-tags",
     "cs:version": "pnpm dlx @changesets/cli version",
+    "cs:deploy": "read -p 'Message: ' msg && pnpm cs:add --all --patch -m \"$msg\" && pnpm cs:version && pnpm build && pnpm dlx @changesets/cli publish && git push --follow-tags && git add . && git commit -m \"$msg\" && git push",
     "knip": "knip"
   },
   "devDependencies": {
