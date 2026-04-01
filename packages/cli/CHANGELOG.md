@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.8.10
+
+### Patch Changes
+
+- jsonArray support
+
 ## 0.8.9
 
 ### Patch Changes

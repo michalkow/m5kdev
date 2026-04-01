@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.8.10
+
+### Patch Changes
+
+- jsonArray support
+- Updated dependencies
+  - @m5kdev/commons@0.8.10
+
 ## 0.8.9
 
 ### Patch Changes
