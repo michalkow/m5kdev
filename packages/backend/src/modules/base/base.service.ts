@@ -31,6 +31,7 @@ export type {
   ServiceProcedureContextFilterScope,
   ServiceProcedureEntityStepName,
   ServiceProcedureInputMapper,
+  ServiceProcedureLoadedResource,
 } from "./base.procedure";
 
 export class BaseService<

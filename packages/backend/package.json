@@ -82,6 +82,7 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@types/turndown": "catalog:",
     "drizzle-kit": "catalog:",
     "jest": "catalog:",
     "ts-jest": "catalog:",

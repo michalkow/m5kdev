@@ -80,6 +80,60 @@ describe("BaseService procedure builder", () => {
     expect(events).toEqual(["trimmed", "upper", "handler"]);
   });
 
+  it("loadResource propagates Err, maps missing values to NOT_FOUND, and narrows state", async () => {
+    class ResourceService extends BaseService<Record<string, never>, Record<string, never>> {
+      readonly okRun = this.procedure<{ id: string }>("okRun")
+        .loadResource("row", ({ input }) =>
+          input.id === "1" ? ok({ id: "1", name: "a" }) : ok(undefined)
+        )
+        .handle(({ state }) => ok({ id: state.row.id, name: state.row.name }));
+
+      readonly errRun = this.procedure<{ id: string }>("errRun")
+        .loadResource("row", () =>
+          err(
+            new ServerError({
+              code: "INTERNAL_SERVER_ERROR",
+              layer: "service",
+              layerName: "ResourceService",
+              message: "db",
+            })
+          )
+        )
+        .handle(() => ok("skip"));
+
+      readonly customMsg = this.procedure<{ id: string }>("customMsg")
+        .loadResource("row", () => ok(undefined), { notFoundMessage: "Doc missing" })
+        .handle(() => ok("skip"));
+    }
+
+    const service = new ResourceService();
+
+    const success = await service.okRun({ id: "1" }, {});
+    expect(success.isOk()).toBe(true);
+    if (success.isOk()) {
+      expect(success.value).toEqual({ id: "1", name: "a" });
+    }
+
+    const missing = await service.okRun({ id: "2" }, {});
+    expect(missing.isErr()).toBe(true);
+    if (missing.isErr()) {
+      expect(missing.error.code).toBe("NOT_FOUND");
+      expect(missing.error.message).toBe("Resource not found");
+    }
+
+    const failed = await service.errRun({ id: "1" }, {});
+    expect(failed.isErr()).toBe(true);
+    if (failed.isErr()) {
+      expect(failed.error.code).toBe("INTERNAL_SERVER_ERROR");
+    }
+
+    const custom = await service.customMsg({ id: "x" }, {});
+    expect(custom.isErr()).toBe(true);
+    if (custom.isErr()) {
+      expect(custom.error.message).toBe("Doc missing");
+    }
+  });
+
   it("addContextFilter wraps auth and maps query input with the default step name", async () => {
     type QueryWithSearch = QueryInput & { search?: string };
 
@@ -435,6 +489,49 @@ describe("BasePermissionService procedure builder", () => {
           entityStep: "record",
         })
         .handle(({ state }) => ok(state.access === state.record));
+    }
+
+    const service = new PermissionService();
+    const result = await service.run({ ownerId: "user-1" }, { actor: createActor() });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toBe(true);
+    }
+  });
+
+  it("loadResource works before access with entityStep", async () => {
+    const grants: ResourceGrant[] = [
+      {
+        action: "read",
+        level: "user",
+        role: "member",
+        access: "own",
+      },
+    ];
+
+    class PermissionService extends BasePermissionService<
+      Record<string, never>,
+      Record<string, never>
+    > {
+      constructor() {
+        super({} as Record<string, never>, {} as Record<string, never>, grants);
+      }
+
+      readonly run = this.procedure<{ ownerId: string }>("run")
+        .loadResource("record", ({ input }) =>
+          ok({
+            id: "resource-1",
+            userId: input.ownerId,
+            teamId: null,
+            organizationId: null,
+          })
+        )
+        .access({
+          action: "read",
+          entityStep: "record",
+        })
+        .handle(({ state }) => ok(state.record.id === "resource-1"));
     }
 
     const service = new PermissionService();

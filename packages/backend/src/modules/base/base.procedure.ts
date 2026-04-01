@@ -18,6 +18,10 @@ export type ServiceProcedureContext = {
 
 export type ServiceProcedureState = Record<string, unknown>;
 export type ServiceProcedureStoredValue<T> = [T] extends [undefined] ? undefined : Awaited<T>;
+/** Value stored in procedure state after `loadResource` (loader may return null/undefined; state is narrowed). */
+export type ServiceProcedureLoadedResource<TOutput> = NonNullable<
+  ServiceProcedureStoredValue<TOutput>
+>;
 export type ServiceProcedureResultLike<T> = T | ServerResult<T> | Promise<T | ServerResult<T>>;
 export type ServiceProcedureContextFilterScope = ActorScope;
 export type ServiceProcedureContextFilteredInput<TInput> = Extract<NonNullable<TInput>, QueryInput>;
@@ -160,6 +164,22 @@ export interface ServiceProcedureBuilder<
     Services,
     State & Record<StepName, ServiceProcedureStoredValue<TOutput>>
   >;
+  /**
+   * Loads a value from a `ServerResult` (or plain value) and stores it under `stepName`.
+   * Propagates `Err`; if the resolved value is falsy, returns `NOT_FOUND`.
+   * For valid numeric `0` or empty string, use `.use()` instead of this helper.
+   */
+  loadResource<StepName extends string, TOutput>(
+    stepName: StepName,
+    step: ServiceProcedureStep<TInput, TCtx, Repositories, Services, State, TOutput>,
+    options?: { notFoundMessage?: string }
+  ): ServiceProcedureBuilder<
+    TInput,
+    TCtx,
+    Repositories,
+    Services,
+    State & Record<StepName, ServiceProcedureLoadedResource<TOutput>>
+  >;
   mapInput<StepName extends string, TNextInput>(
     stepName: StepName,
     step: ServiceProcedureInputMapper<TInput, TCtx, Repositories, Services, State, TNextInput>
@@ -211,6 +231,17 @@ export interface PermissionServiceProcedureBuilder<
     Repositories,
     Services,
     State & Record<StepName, ServiceProcedureStoredValue<TOutput>>
+  >;
+  loadResource<StepName extends string, TOutput>(
+    stepName: StepName,
+    step: ServiceProcedureStep<TInput, TCtx, Repositories, Services, State, TOutput>,
+    options?: { notFoundMessage?: string }
+  ): PermissionServiceProcedureBuilder<
+    TInput,
+    TCtx,
+    Repositories,
+    Services,
+    State & Record<StepName, ServiceProcedureLoadedResource<TOutput>>
   >;
   mapInput<StepName extends string, TNextInput>(
     stepName: StepName,
@@ -463,6 +494,40 @@ function createUseStep<
       normalizeProcedureResult(
         step(args as ServiceProcedureArgs<TInput, TCtx, Repositories, Services, State>)
       ),
+  };
+}
+
+const DEFAULT_LOAD_RESOURCE_NOT_FOUND_MESSAGE = "Resource not found";
+
+function createLoadResourceStep<
+  TInput,
+  TCtx extends ServiceProcedureContext,
+  Repositories extends RepositoryMap,
+  Services extends ServiceMap,
+  State extends ServiceProcedureState,
+  TOutput,
+>(
+  host: BaseServiceProcedureHost<Repositories, Services>,
+  stepName: string,
+  step: ServiceProcedureStep<TInput, TCtx, Repositories, Services, State, TOutput>,
+  notFoundMessage: string
+): ProcedureRuntimeStep<Repositories, Services> {
+  return {
+    stage: "use",
+    stepName,
+    run: async (args) => {
+      const normalized = await normalizeProcedureResult(
+        step(args as ServiceProcedureArgs<TInput, TCtx, Repositories, Services, State>)
+      );
+      if (normalized.isErr()) {
+        return normalized;
+      }
+      const value = normalized.value;
+      if (!value) {
+        return host.error("NOT_FOUND", notFoundMessage);
+      }
+      return ok(value as ServiceProcedureLoadedResource<TOutput>);
+    },
   };
 }
 
@@ -739,6 +804,24 @@ export function createServiceProcedureBuilder<
         steps: [...config.steps, createUseStep(stepName, step)],
       });
     },
+    loadResource<StepName extends string, TOutput>(
+      stepName: StepName,
+      step: ServiceProcedureStep<TInput, TCtx, Repositories, Services, State, TOutput>,
+      options?: { notFoundMessage?: string }
+    ) {
+      assertUniqueStepName(config.steps, stepName);
+      const notFoundMessage = options?.notFoundMessage ?? DEFAULT_LOAD_RESOURCE_NOT_FOUND_MESSAGE;
+      return createServiceProcedureBuilder<
+        TInput,
+        TCtx,
+        Repositories,
+        Services,
+        State & Record<StepName, ServiceProcedureLoadedResource<TOutput>>
+      >(host, {
+        ...config,
+        steps: [...config.steps, createLoadResourceStep(host, stepName, step, notFoundMessage)],
+      });
+    },
     mapInput<StepName extends string, TNextInput>(
       stepName: StepName,
       step: ServiceProcedureInputMapper<TInput, TCtx, Repositories, Services, State, TNextInput>
@@ -884,6 +967,24 @@ export function createPermissionServiceProcedureBuilder<
       >(host, {
         ...config,
         steps: [...config.steps, createUseStep(stepName, step)],
+      });
+    },
+    loadResource<StepName extends string, TOutput>(
+      stepName: StepName,
+      step: ServiceProcedureStep<TInput, TCtx, Repositories, Services, State, TOutput>,
+      options?: { notFoundMessage?: string }
+    ) {
+      assertUniqueStepName(config.steps, stepName);
+      const notFoundMessage = options?.notFoundMessage ?? DEFAULT_LOAD_RESOURCE_NOT_FOUND_MESSAGE;
+      return createPermissionServiceProcedureBuilder<
+        TInput,
+        TCtx,
+        Repositories,
+        Services,
+        State & Record<StepName, ServiceProcedureLoadedResource<TOutput>>
+      >(host, {
+        ...config,
+        steps: [...config.steps, createLoadResourceStep(host, stepName, step, notFoundMessage)],
       });
     },
     mapInput<StepName extends string, TNextInput>(
