@@ -1,5 +1,16 @@
 # @m5kdev/frontend
 
+## 0.9.0
+
+### Minor Changes
+
+- docx service
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.9.0
+
 ## 0.8.11
 
 ### Patch Changes

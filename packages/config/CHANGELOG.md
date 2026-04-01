@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.9.0
+
+### Minor Changes
+
+- docx service
+
 ## 0.8.11
 
 ### Patch Changes
