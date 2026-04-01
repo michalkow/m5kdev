@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.9.1
+
+### Patch Changes
+
+- loadResource
+
 ## 0.9.0
 
 ### Minor Changes

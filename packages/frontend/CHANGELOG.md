@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.9.1
+
+### Patch Changes
+
+- loadResource
+- Updated dependencies
+  - @m5kdev/commons@0.9.1
+
 ## 0.9.0
 
 ### Minor Changes

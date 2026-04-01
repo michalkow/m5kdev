@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.9.1
+
+### Patch Changes
+
+- loadResource
+- Updated dependencies
+  - @m5kdev/commons@0.9.1
+  - @m5kdev/config@0.9.1
+
 ## 0.9.0
 
 ### Minor Changes
