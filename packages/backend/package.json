@@ -50,6 +50,7 @@
     "ioredis": "catalog:",
     "jsonrepair": "catalog:",
     "luxon": "catalog:",
+    "mammoth": "catalog:",
     "multer": "catalog:",
     "mustache": "catalog:",
     "neverthrow": "catalog:",
@@ -66,6 +67,7 @@
     "stripe": "catalog:",
     "tiny-secp256k1": "catalog:",
     "trpc-to-openapi": "catalog:",
+    "turndown": "catalog:",
     "uuid": "catalog:",
     "zod": "catalog:"
   },
@@ -83,8 +85,8 @@
     "drizzle-kit": "catalog:",
     "jest": "catalog:",
     "ts-jest": "catalog:",
-    "tslib": "catalog:",
     "tsdown": "catalog:",
+    "tslib": "catalog:",
     "tsup": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"

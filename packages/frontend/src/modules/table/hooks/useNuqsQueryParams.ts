@@ -2,9 +2,9 @@ import type { QueryFilter, QueryFilters } from "@m5kdev/commons/modules/schemas/
 import { filterSchema, filtersSchema } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { GroupingState, PaginationState, SortingState, Updater } from "@tanstack/react-table";
 import {
+  createParser,
   parseAsArrayOf,
   parseAsInteger,
-  parseAsJson,
   parseAsString,
   parseAsStringLiteral,
   useQueryState,
@@ -12,12 +12,90 @@ import {
 import { useCallback, useEffect, useMemo } from "react";
 import { z } from "zod";
 
-/** Each row: [columnId, type, method, value, valueTo?, endColumnId?] — all strings in the URL */
+/** Each row: [columnId, type, method, value, valueTo?, endColumnId?] — validated after parse */
 const filtersRawSchema = z.array(z.array(z.string()).min(4).max(6));
 
-const parseAsFilterTuples = parseAsJson<string[][]>((value) =>
-  filtersRawSchema.parse(value)
-).withDefault([]);
+/** Escape `\`, `|`, `;` so we can split filters without JSON quotes/brackets. */
+function escapeFilterField(raw: string): string {
+  return raw.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/;/g, "\\;");
+}
+
+function unescapeFilterField(encoded: string): string {
+  let out = "";
+  for (let i = 0; i < encoded.length; i++) {
+    const c = encoded[i];
+    if (c === "\\" && i + 1 < encoded.length) {
+      const next = encoded[i + 1];
+      if (next === "\\" || next === "|" || next === ";") {
+        out += next;
+        i++;
+        continue;
+      }
+    }
+    out += c;
+  }
+  return out;
+}
+
+/**
+ * Split on `delimiter` only when not escaped as `\` + delimiter.
+ */
+function splitByEscapedDelimiter(s: string, delimiter: string): string[] {
+  if (delimiter.length !== 1) {
+    throw new Error("splitByEscapedDelimiter expects a single-character delimiter");
+  }
+  const parts: string[] = [];
+  let buf = "";
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === "\\" && i + 1 < s.length) {
+      buf += c + s[i + 1];
+      i++;
+      continue;
+    }
+    if (c === delimiter) {
+      parts.push(unescapeFilterField(buf));
+      buf = "";
+      continue;
+    }
+    buf += c;
+  }
+  parts.push(unescapeFilterField(buf));
+  return parts;
+}
+
+function serializeFiltersParam(rows: string[][]): string {
+  if (rows.length === 0) {
+    return "";
+  }
+  return rows.map((row) => row.map(escapeFilterField).join("|")).join(";");
+}
+
+function parseFiltersParam(value: string): string[][] | null {
+  const trimmed = value.trim();
+  if (trimmed === "") {
+    return [];
+  }
+  const rowStrings = splitByEscapedDelimiter(trimmed, ";");
+  const rows: string[][] = [];
+  for (const row of rowStrings) {
+    if (row === "") {
+      continue;
+    }
+    const fields = splitByEscapedDelimiter(row, "|");
+    if (fields.length >= 4 && fields.length <= 6) {
+      rows.push(fields);
+    }
+  }
+  const parsed = filtersRawSchema.safeParse(rows);
+  return parsed.success ? parsed.data : null;
+}
+
+const parseAsFilterTuples = createParser<string[][]>({
+  parse: (value) => parseFiltersParam(value),
+  serialize: (rows) => serializeFiltersParam(rows),
+  eq: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+}).withDefault([]);
 
 const parseAsGrouping = parseAsArrayOf(parseAsString).withDefault([]);
 
