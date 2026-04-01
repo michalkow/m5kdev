@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.8.8
+
+### Patch Changes
+
+- global filter
+
 ## 0.8.7
 
 ### Patch Changes

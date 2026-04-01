@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.8.8
+
+### Patch Changes
+
+- global filter
+- Updated dependencies
+  - @m5kdev/commons@0.8.8
+  - @m5kdev/frontend@0.8.8
+
 ## 0.8.7
 
 ### Patch Changes

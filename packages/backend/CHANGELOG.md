@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.8.8
+
+### Patch Changes
+
+- global filter
+- Updated dependencies
+  - @m5kdev/commons@0.8.8
+  - @m5kdev/config@0.8.8
+
 ## 0.8.7
 
 ### Patch Changes
