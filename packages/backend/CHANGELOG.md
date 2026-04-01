@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.8.9
+
+### Patch Changes
+
+- hero ui ver
+- Updated dependencies
+  - @m5kdev/commons@0.8.9
+  - @m5kdev/config@0.8.9
+
 ## 0.8.8
 
 ### Patch Changes

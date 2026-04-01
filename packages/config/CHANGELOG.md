@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.8.9
+
+### Patch Changes
+
+- hero ui ver
+
 ## 0.8.8
 
 ### Patch Changes
