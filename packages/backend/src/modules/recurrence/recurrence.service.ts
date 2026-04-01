@@ -53,7 +53,11 @@ export class RecurrenceService extends BaseService<
 > {
   readonly list = this.procedure<QueryInput>("list")
     .addContextFilter(["user"])
-    .handle(({ input }) => this.repository.recurrence.queryList(input));
+    .handle(({ input }) =>
+      this.repository.recurrence.queryList(input, {
+        globalSearchColumns: ["name", "kind"],
+      })
+    );
 
   readonly create = this.procedure<CreateRecurrenceSchema>("create")
     .requireAuth()

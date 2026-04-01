@@ -35,6 +35,8 @@ export const querySchema = z.object({
   sort: z.string().optional(),
   order: z.enum(["asc", "desc"]).optional(),
   filters: filtersSchema.optional(),
+  /** Global substring search. Clients should trim; servers treat empty / whitespace-only as no-op. */
+  q: z.string().optional(),
 });
 
 export type QueryListOutput<T> = { rows: T[]; total: number };

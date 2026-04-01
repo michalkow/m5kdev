@@ -1,4 +1,4 @@
-import { Checkbox, Popover, PopoverContent, PopoverTrigger } from "@heroui/react";
+import { Checkbox, Input, Popover, PopoverContent, PopoverTrigger } from "@heroui/react";
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { FilterMethods } from "@m5kdev/commons/modules/table/filter.types";
 import type { TableParams } from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
@@ -15,8 +15,8 @@ import {
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, ChevronUp, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../../components/ui/button";
 import {
   Table,
@@ -79,6 +79,8 @@ type NuqsTableParams<T> = {
   total?: number;
   columns: NuqsTableColumn<T>[];
   tableProps: TableParams;
+  /** When true, shows URL-synced global search; enable only if the list API applies `q` server-side. */
+  showGlobalSearch?: boolean;
   singleFilter?: boolean;
   filterMethods?: Partial<FilterMethods>;
 };
@@ -103,11 +105,11 @@ export const NuqsTable = <T,>({
   total,
   columns,
   tableProps,
+  showGlobalSearch = false,
   singleFilter = false,
   filterMethods,
 }: NuqsTableParams<T>) => {
   const columnIds = useMemo(() => columns.map((col) => String(col.id)), [columns]);
-  console.log("data", data);
   // const columnsWithId = useMemo(() => {
   //   const idColumn: NuqsTableColumn<T> = {
   //     id: "__row_id",
@@ -196,7 +198,20 @@ export const NuqsTable = <T,>({
     filters,
     grouping,
     setGrouping,
+    q,
+    setQ,
   } = tableProps;
+
+  const skipFirstGlobalSearchPageReset = useRef(true);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset page when `q` changes (incl. back/forward)
+  useEffect(() => {
+    if (!showGlobalSearch) return;
+    if (skipFirstGlobalSearchPageReset.current) {
+      skipFirstGlobalSearchPageReset.current = false;
+      return;
+    }
+    setPagination?.({ pageIndex: 0, pageSize: limit });
+  }, [showGlobalSearch, q, limit, setPagination]);
 
   const isGrouped = grouping.length > 0;
   const [expanded, setExpanded] = useState<ExpandedState>({});
@@ -310,86 +325,103 @@ export const NuqsTable = <T,>({
 
   return (
     <>
-      <div className="flex w-full items-center gap-2 justify-end">
-        <Popover
-          placement="bottom"
-          isOpen={isFiltersOpen}
-          onOpenChange={setIsFiltersOpen}
-          portalContainer={document.body}
-        >
-          <PopoverTrigger>
-            <Button variant="outline" size="sm">
-              <div className="flex items-center gap-2">
-                Filters
-                <ChevronDown className="h-4 w-4" />
-              </div>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent>
-            <TableFiltering
-              columns={filterableColumns}
-              onFiltersChange={onFiltersChange}
-              filters={filters ?? []}
-              onClose={() => setIsFiltersOpen(false)}
-              singleFilter={singleFilter}
-              filterMethods={filterMethods}
+      <div className="flex w-full flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-1 items-center">
+          {showGlobalSearch ? (
+            <Input
+              size="sm"
+              className="max-w-xs"
+              placeholder="Search…"
+              value={q ?? ""}
+              onValueChange={(v) => {
+                setQ(v === "" ? null : v);
+              }}
+              startContent={<Search className="h-4 w-4 shrink-0 text-default-400" aria-hidden />}
+              aria-label="Search table"
             />
-          </PopoverContent>
-        </Popover>
-        {groupableColumns.length > 0 && (
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           <Popover
             placement="bottom"
-            isOpen={isGroupByOpen}
-            onOpenChange={setIsGroupByOpen}
+            isOpen={isFiltersOpen}
+            onOpenChange={setIsFiltersOpen}
             portalContainer={document.body}
           >
             <PopoverTrigger>
-              <Button variant={hasGrouping ? "secondary" : "outline"} size="sm">
+              <Button variant="outline" size="sm">
                 <div className="flex items-center gap-2">
-                  {hasGrouping
-                    ? `Grouped by: ${grouping.map((id) => groupableColumns.find((c) => c.id === id)?.label ?? id).join(" → ")}`
-                    : "Group by"}
+                  Filters
                   <ChevronDown className="h-4 w-4" />
                 </div>
               </Button>
             </PopoverTrigger>
             <PopoverContent>
-              <TableGroupBy
-                columns={groupableColumns}
-                activeGrouping={grouping}
-                onGroupingChange={(columnIds) => {
-                  setGrouping(columnIds);
-                  setExpanded({});
-                  setPagination?.({ pageIndex: 0, pageSize: limit });
-                }}
-                onClose={() => setIsGroupByOpen(false)}
+              <TableFiltering
+                columns={filterableColumns}
+                onFiltersChange={onFiltersChange}
+                filters={filters ?? []}
+                onClose={() => setIsFiltersOpen(false)}
+                singleFilter={singleFilter}
+                filterMethods={filterMethods}
               />
             </PopoverContent>
           </Popover>
-        )}
-        <Popover
-          placement="bottom"
-          isOpen={isColumnsOpen}
-          onOpenChange={setIsColumnsOpen}
-          portalContainer={document.body}
-        >
-          <PopoverTrigger>
-            <Button variant="outline" size="sm">
-              <div className="flex items-center gap-2">
-                Columns
-                <ChevronDown className="h-4 w-4" />
-              </div>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent>
-            <ColumnOrderAndVisibility
-              layout={layout}
-              onChangeOrder={onChangeOrder}
-              onChangeVisibility={onChangeVisibility}
-              onClose={() => setIsColumnsOpen(false)}
-            />
-          </PopoverContent>
-        </Popover>
+          {groupableColumns.length > 0 && (
+            <Popover
+              placement="bottom"
+              isOpen={isGroupByOpen}
+              onOpenChange={setIsGroupByOpen}
+              portalContainer={document.body}
+            >
+              <PopoverTrigger>
+                <Button variant={hasGrouping ? "secondary" : "outline"} size="sm">
+                  <div className="flex items-center gap-2">
+                    {hasGrouping
+                      ? `Grouped by: ${grouping.map((id) => groupableColumns.find((c) => c.id === id)?.label ?? id).join(" → ")}`
+                      : "Group by"}
+                    <ChevronDown className="h-4 w-4" />
+                  </div>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent>
+                <TableGroupBy
+                  columns={groupableColumns}
+                  activeGrouping={grouping}
+                  onGroupingChange={(columnIds) => {
+                    setGrouping(columnIds);
+                    setExpanded({});
+                    setPagination?.({ pageIndex: 0, pageSize: limit });
+                  }}
+                  onClose={() => setIsGroupByOpen(false)}
+                />
+              </PopoverContent>
+            </Popover>
+          )}
+          <Popover
+            placement="bottom"
+            isOpen={isColumnsOpen}
+            onOpenChange={setIsColumnsOpen}
+            portalContainer={document.body}
+          >
+            <PopoverTrigger>
+              <Button variant="outline" size="sm">
+                <div className="flex items-center gap-2">
+                  Columns
+                  <ChevronDown className="h-4 w-4" />
+                </div>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent>
+              <ColumnOrderAndVisibility
+                layout={layout}
+                onChangeOrder={onChangeOrder}
+                onChangeVisibility={onChangeVisibility}
+                onClose={() => setIsColumnsOpen(false)}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
       <Table>
         <TableHeader>

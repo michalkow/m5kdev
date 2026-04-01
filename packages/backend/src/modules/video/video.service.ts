@@ -3,7 +3,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 //
 import ffbin from "ffmpeg-ffprobe-static";
-import { err, ok } from "neverthrow";
+import { ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";

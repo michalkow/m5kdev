@@ -35,26 +35,23 @@ export const useDateRangeFilter = <TInput, TData>({
   getQueryOptions,
   queryParams = {} as TInput,
 }: DateRangeFilterOptions<TInput, TData>): DateRangeFilterReturn<TData> => {
-  // Get only filters from URL query state
-  const { filters, setFilters, granularity, setGranularity } = useNuqsQueryParams();
+  const nuqs = useNuqsQueryParams();
 
-  // Get query result
   const queryResult = useQueryWithParams({
     getQueryOptions,
     queryParams,
-    queryState: { filters },
+    queryState: {
+      filters: nuqs.filters,
+      q: nuqs.q,
+      sort: nuqs.sort,
+      order: nuqs.order,
+      page: nuqs.page,
+      limit: nuqs.limit,
+    },
   });
 
   return {
-    params: {
-      filters,
-      setFilters,
-      granularity,
-      setGranularity,
-      // TODO: Review - just fixing ts errors for now
-      grouping: [],
-      setGrouping: () => {},
-    },
+    params: nuqs,
     query: queryResult,
   };
 };

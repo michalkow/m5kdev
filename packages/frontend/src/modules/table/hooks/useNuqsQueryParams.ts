@@ -22,6 +22,9 @@ export type Order = "asc" | "desc";
 export type Granularity = "daily" | "weekly" | "monthly" | "yearly";
 
 export interface NuqsQueryParams {
+  /** Global search string from URL (`q`); absent when not in URL. */
+  q: string | null;
+  setQ: (value: string | null) => void;
   filters?: QueryFilters;
   setFilters?: (filters: QueryFilters) => void;
   granularity?: Granularity;
@@ -40,7 +43,7 @@ export interface NuqsQueryParams {
 
 /**
  * Hook to manage all query parameters via nuqs (URL query parameters)
- * Manages: filters, sort, order, page, limit, groupBy, granularity
+ * Manages: filters, q, sort, order, page, limit, groupBy, granularity
  * Accepts an optional prefix to namespace params when multiple tables share a view.
  */
 export const useNuqsQueryParams = (prefix?: string): NuqsQueryParams => {
@@ -50,7 +53,15 @@ export const useNuqsQueryParams = (prefix?: string): NuqsQueryParams => {
   const [order, setOrder] = useQueryState<Order>(k("order"), parseAsStringLiteral(["asc", "desc"]));
   const [page, setPage] = useQueryState<number>(k("page"), parseAsInteger.withDefault(1));
   const [limit, setLimit] = useQueryState<number>(k("limit"), parseAsInteger.withDefault(10));
+  const [qRaw, setQRaw] = useQueryState(k("q"), parseAsString);
   const [filters, setFilters] = useQueryState<QueryFilters>(k("filters"), parseAsFilters);
+
+  const setQ = useCallback(
+    (value: string | null) => {
+      void setQRaw(value === "" || value == null ? null : value);
+    },
+    [setQRaw]
+  );
   const [granularity, setGranularity] = useQueryState<Granularity>(
     k("granularity"),
     parseAsStringLiteral(["daily", "weekly", "monthly", "yearly"]).withDefault("daily")
@@ -120,6 +131,8 @@ export const useNuqsQueryParams = (prefix?: string): NuqsQueryParams => {
 
   return useMemo(
     () => ({
+      q: qRaw,
+      setQ,
       filters,
       setFilters,
       granularity,
@@ -136,6 +149,8 @@ export const useNuqsQueryParams = (prefix?: string): NuqsQueryParams => {
       setGrouping,
     }),
     [
+      qRaw,
+      setQ,
       filters,
       setFilters,
       granularity,

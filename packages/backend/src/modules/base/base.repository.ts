@@ -22,6 +22,7 @@ import { ServerError } from "../../utils/errors";
 import { applyPagination } from "../utils/applyPagination";
 import { applySorting } from "../utils/applySorting";
 import { getConditionsFromFilters } from "../utils/getConditionsFromFilters";
+import { pushGlobalSearch } from "../utils/getGlobalSearchCondition";
 import { Base } from "./base.abstract";
 import { pickColumns, type ServerResult, type ServerResultAsync } from "./base.dto";
 
@@ -63,6 +64,10 @@ export class TableConditionBuilder<
 
   applyFilters({ filters }: { filters?: QueryFilters } = {}) {
     if (filters && filters.length > 0) getConditionsFromFilters(this, filters, this.table);
+  }
+
+  applyGlobalSearch(q: string | undefined, columns: readonly SQLiteColumn[]) {
+    pushGlobalSearch(this, q, columns);
   }
 }
 
@@ -210,6 +215,7 @@ export class BaseTableRepository<
     options?: {
       conditions?: TableConditionBuilder<TTable>;
       select?: SelectedFields<SQLiteColumn, TTable>;
+      globalSearchColumns?: string[];
     },
     tx?: O
   ): ServerResultAsync<{ rows: InferSelectModel<TTable>[]; total: number }> {
@@ -219,6 +225,16 @@ export class BaseTableRepository<
       const db = tx ?? this.orm;
       const conditions = options?.conditions ?? this.getConditionBuilder(this.table);
       conditions.applyFilters(query);
+      if (options?.globalSearchColumns?.length) {
+        const columns = options.globalSearchColumns.map((c) => {
+          const column = this.table[c as keyof TTable] as SQLiteColumn;
+          if (!column) {
+            throw new Error(`Column ${column} not found in table ${this.table.name}`);
+          }
+          return column;
+        });
+        conditions.applyGlobalSearch(query?.q, columns);
+      }
       const whereClause = conditions.join();
       const rowsQuery = this.withSortingAndPagination(
         (options?.select ? db.select(options.select) : db.select())

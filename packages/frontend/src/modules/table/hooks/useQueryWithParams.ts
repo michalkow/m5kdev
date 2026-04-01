@@ -24,7 +24,7 @@ const FETCH_ALL_LIMIT = 99999;
 export interface QueryWithParamsOptions<TInput, TData> {
   getQueryOptions: GetQueryOptionsFn<TInput, TData>;
   queryParams?: TInput;
-  queryState: Pick<NuqsQueryParams, "filters" | "sort" | "order" | "page" | "limit">;
+  queryState: Pick<NuqsQueryParams, "filters" | "sort" | "order" | "page" | "limit" | "q">;
   grouping?: GroupingState;
   additionalFilters?: QueryFilters;
   enabled?: boolean;
@@ -42,7 +42,7 @@ export const useQueryWithParams = <TInput, TData>({
   additionalFilters,
   enabled = true,
 }: QueryWithParamsOptions<TInput, TData>): UseQueryResult<TData> => {
-  const { filters, sort, order, page, limit } = queryState;
+  const { filters, sort, order, page, limit, q } = queryState;
   const isGrouped = grouping.length > 0;
 
   const input = useMemo(() => {
@@ -55,6 +55,9 @@ export const useQueryWithParams = <TInput, TData>({
       mergedFilters = filters;
     }
 
+    const qTrimmed = q?.trim();
+    const qPayload = qTrimmed && qTrimmed.length > 0 ? qTrimmed : undefined;
+
     return {
       ...queryParams,
       page: isGrouped ? 1 : page,
@@ -62,8 +65,9 @@ export const useQueryWithParams = <TInput, TData>({
       sort,
       order: order ?? undefined,
       filters: mergedFilters,
+      ...(qPayload !== undefined ? { q: qPayload } : {}),
     };
-  }, [queryParams, page, limit, sort, order, filters, isGrouped, additionalFilters]);
+  }, [queryParams, page, limit, sort, order, filters, isGrouped, additionalFilters, q]);
 
   const prevIsGroupedRef = useRef(isGrouped);
 
