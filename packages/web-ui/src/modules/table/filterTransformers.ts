@@ -216,6 +216,23 @@ export const transformFiltersToHeroUI = (
           value = selection;
         }
         break;
+      case "jsonArray":
+        if (filter.method === "oneOf" && Array.isArray(filter.value)) {
+          value = new Set(filter.value) as SharedSelection;
+        } else if (Array.isArray(filter.value) && filter.value.length > 0) {
+          const first = filter.value[0] as string;
+          const selection = new Set([first]) as SharedSelection;
+          Object.defineProperty(selection, "currentKey", {
+            value: first,
+            writable: true,
+            enumerable: false,
+            configurable: true,
+          });
+          value = selection;
+        } else {
+          value = filter.value;
+        }
+        break;
       default:
         value = filter.value;
     }
@@ -295,13 +312,29 @@ export const transformFiltersFromHeroUI = (filters: HeroUIFilter[]): QueryFilter
         }
         break;
       }
+      case "jsonArray": {
+        const selection = filter.value as SharedSelection;
+        if (selection) {
+          value =
+            filter.method?.value === "oneOf"
+              ? Array.from(selection).map(String)
+              : [String(selection.currentKey)];
+        }
+        break;
+      }
       default:
         value = filter.value;
     }
 
     // Skip filters without valid values
     if (!value || value === "" || filter.columnId === "") continue;
-    if (filter.type === "enum" && Array.isArray(value) && value.length === 0) continue;
+    if (
+      (filter.type === "enum" || filter.type === "jsonArray") &&
+      Array.isArray(value) &&
+      value.length === 0
+    ) {
+      continue;
+    }
 
     // For Period columns, always use intersect method
     const actualMethod = isPeriodColumn ? "intersect" : (filter.method as FilterMethod).value;

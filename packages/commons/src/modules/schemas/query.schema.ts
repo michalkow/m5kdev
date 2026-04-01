@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const filterSchema = z.object({
   columnId: z.string(),
-  type: z.enum(["string", "number", "date", "boolean", "enum"]),
+  type: z.enum(["string", "number", "date", "boolean", "enum", "jsonArray"]),
   method: z.enum([
     "contains",
     "equals",

@@ -145,6 +145,10 @@ const defaultFilterMethods: FilterMethods = {
     { value: "oneOf", label: "One Of", component: "multiSelect" },
     { value: "equals", label: "Equals", component: "select" },
   ],
+  jsonArray: [
+    { value: "oneOf", label: "One Of", component: "multiSelect" },
+    { value: "equals", label: "Equals", component: "select" },
+  ],
 };
 
 const SINGLE_FILTER_KEY = "single-filter";
@@ -181,6 +185,10 @@ const mergeFilterMethods = (overrides?: Partial<FilterMethods>): FilterMethods =
       ? overrides.boolean
       : defaultFilterMethods.boolean,
   enum: overrides?.enum && overrides.enum.length > 0 ? overrides.enum : defaultFilterMethods.enum,
+  jsonArray:
+    overrides?.jsonArray && overrides.jsonArray.length > 0
+      ? overrides.jsonArray
+      : defaultFilterMethods.jsonArray,
 });
 
 export const TableFiltering = ({
