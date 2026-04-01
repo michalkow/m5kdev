@@ -9,6 +9,8 @@ node_modules
 
 .pnpm-store
 
+.npmrc
+
 app/
 
 # Local env files
