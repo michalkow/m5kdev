@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/backend",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Composable Express server stack with Drizzle ORM and tRPC.",
   "license": "GPL-3.0-only",
   "repository": {
@@ -272,6 +272,26 @@
       "require": {
         "types": "./dist/src/modules/email/*.d.cts",
         "default": "./dist/src/modules/email/*.cjs"
+      }
+    },
+    "./modules/pdf/*": {
+      "import": {
+        "types": "./dist/src/modules/pdf/*.d.mts",
+        "default": "./dist/src/modules/pdf/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/pdf/*.d.cts",
+        "default": "./dist/src/modules/pdf/*.cjs"
+      }
+    },
+    "./modules/docx/*": {
+      "import": {
+        "types": "./dist/src/modules/docx/*.d.mts",
+        "default": "./dist/src/modules/docx/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/docx/*.d.cts",
+        "default": "./dist/src/modules/docx/*.cjs"
       }
     },
     "./lib/*": {

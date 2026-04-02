@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.9.3
+
+### Patch Changes
+
+- exports
+
 ## 0.9.2
 
 ### Patch Changes
