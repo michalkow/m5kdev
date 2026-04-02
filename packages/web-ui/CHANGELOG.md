@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.9.2
+
+### Patch Changes
+
+- pdf service
+- Updated dependencies
+  - @m5kdev/commons@0.9.2
+  - @m5kdev/frontend@0.9.2
+
 ## 0.9.1
 
 ### Patch Changes

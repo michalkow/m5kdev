@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.9.2
+
+### Patch Changes
+
+- pdf service
+
 ## 0.9.1
 
 ### Patch Changes
