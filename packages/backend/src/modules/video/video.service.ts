@@ -8,18 +8,25 @@ import { v4 as uuidv4 } from "uuid";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
 
-if (!ffbin.ffmpegPath || !ffbin.ffprobePath) {
-  throw new Error("FFmpeg or FFprobe not found");
-}
-
 const uploadsDir = path.join(__dirname, "..", "uploads");
 if (!existsSync(uploadsDir)) {
   mkdirSync(uploadsDir, { recursive: true });
 }
 
+const resolveFfmpegPath = (): string => {
+  const envPath = process.env.FFMPEG_PATH;
+  if (envPath && existsSync(envPath)) return envPath;
+
+  const staticPath = ffbin.ffmpegPath;
+  if (typeof staticPath === "string" && existsSync(staticPath)) return staticPath;
+
+  return "ffmpeg";
+};
+
 const runFfmpeg = async (args: readonly string[]): Promise<void> => {
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(ffbin.ffmpegPath as string, [...args], {
+    const ffmpegPath = resolveFfmpegPath();
+    const child = spawn(ffmpegPath, [...args], {
       stdio: ["ignore", "ignore", "pipe"],
     });
 
@@ -29,7 +36,15 @@ const runFfmpeg = async (args: readonly string[]): Promise<void> => {
       stderr += chunk;
     });
 
-    child.on("error", (error) => reject(error));
+    child.on("error", (error) => {
+      const details = [
+        "Failed to spawn ffmpeg.",
+        `Resolved ffmpeg path: ${ffmpegPath}`,
+        `FFMPEG_PATH: ${process.env.FFMPEG_PATH ?? "(unset)"}`,
+        `ffmpeg-ffprobe-static ffmpegPath: ${ffbin.ffmpegPath ?? "(missing)"}`,
+      ].join("\n");
+      reject(new Error(`${details}\n\n${String(error)}`));
+    });
     child.on("close", (code) => {
       if (code === 0) {
         resolve();
