@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.9.4
+
+### Patch Changes
+
+- video ffmpeg
+
 ## 0.9.3
 
 ### Patch Changes
