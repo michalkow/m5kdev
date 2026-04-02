@@ -55,6 +55,7 @@
     "mustache": "catalog:",
     "neverthrow": "catalog:",
     "openid-client": "catalog:",
+    "pdf-parse": "catalog:",
     "pino": "catalog:",
     "pino-pretty": "catalog:",
     "posthog-node": "catalog:",

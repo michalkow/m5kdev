@@ -142,6 +142,7 @@ catalog:
   nx: 21.3.7
   ogl: 1.0.11
   openid-client: 6.8.1
+  pdf-parse: ^2.4.5
   pdfkit: 0.17.2
   pino: 9.6.0
   pino-pretty: 13.0.0
