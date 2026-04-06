@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.9.6
+
+### Patch Changes
+
+- soft delete
+
 ## 0.9.5
 
 ### Patch Changes

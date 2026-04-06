@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.9.6
+
+### Patch Changes
+
+- soft delete
+- Updated dependencies
+  - @m5kdev/commons@0.9.6
+
 ## 0.9.5
 
 ### Patch Changes
