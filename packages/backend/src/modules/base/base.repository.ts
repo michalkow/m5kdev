@@ -10,6 +10,7 @@ import {
   type InferInsertModel,
   type InferSelectModel,
   inArray,
+  isNull,
   like,
   or,
   type SelectedFields,
@@ -216,6 +217,7 @@ export class BaseTableRepository<
       conditions?: TableConditionBuilder<TTable>;
       select?: SelectedFields<SQLiteColumn, TTable>;
       globalSearchColumns?: string[];
+      showDeleted?: boolean;
     },
     tx?: O
   ): ServerResultAsync<{ rows: InferSelectModel<TTable>[]; total: number }> {
@@ -234,6 +236,9 @@ export class BaseTableRepository<
           return column;
         });
         conditions.applyGlobalSearch(query?.q, columns);
+      }
+      if (this.table.deletedAt && !options?.showDeleted) {
+        conditions.push(isNull(this.table.deletedAt));
       }
       const whereClause = conditions.join();
       const rowsQuery = this.withSortingAndPagination(
