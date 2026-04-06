@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.9.7
+
+### Patch Changes
+
+- log level
+- Updated dependencies
+  - @m5kdev/commons@0.9.7
+  - @m5kdev/config@0.9.7
+
 ## 0.9.6
 
 ### Patch Changes

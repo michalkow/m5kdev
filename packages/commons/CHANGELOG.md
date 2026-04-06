@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.9.7
+
+### Patch Changes
+
+- log level
+
 ## 0.9.6
 
 ### Patch Changes

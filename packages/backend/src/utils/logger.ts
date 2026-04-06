@@ -4,5 +4,5 @@ export const logger = pino({
   transport: {
     target: "pino-pretty",
   },
-  level: "debug",
+  level: process.env.LOG_LEVEL ?? "debug",
 });
