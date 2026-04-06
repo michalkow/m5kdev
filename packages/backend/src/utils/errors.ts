@@ -134,13 +134,13 @@ export function reportError(
     // Merge - don't clobber caller-provided hint
     eventHint = {
       ...hint,
-      captureContext: {
-        ...(hint as any)?.captureContext,
-        extra: {
-          ...((hint as any)?.captureContext?.extra ?? {}),
-          layer: err.layer,
-          layerName: err.layerName,
-        },
+      extra: {
+        ...((hint as any)?.extra ?? {}),
+        layer: err.layer,
+        layerName: err.layerName,
+        code: err.code,
+        message: err.message,
+        clientMessage: err.clientMessage,
       },
     };
   }
