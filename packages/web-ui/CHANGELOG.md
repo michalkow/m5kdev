@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.9.5
+
+### Patch Changes
+
+- error
+- Updated dependencies
+  - @m5kdev/commons@0.9.5
+  - @m5kdev/frontend@0.9.5
+
 ## 0.9.4
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.9.5
+
+### Patch Changes
+
+- error
+
 ## 0.9.4
 
 ### Patch Changes
