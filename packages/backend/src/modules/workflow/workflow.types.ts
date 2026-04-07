@@ -80,14 +80,51 @@ export type WorkflowJobDefinition<Payload, Result = unknown> =
   | AwaitableJobDefinition<Payload, Result>
   | FireAndForgetJobDefinition<Payload>;
 
+/** Definition-time config for scheduled work (BullMQ job schedulers). Handlers take no payload. */
+export interface WorkflowCronConfig {
+  name: string;
+  queue?: string;
+  pattern: string;
+  retries?: number;
+  timeout?: number;
+  jobOptions?: Partial<JobsOptions>;
+  workerOptions?: Partial<WorkerOptions>;
+}
+
+export interface ResolvedCronConfig {
+  name: string;
+  queueName: string;
+  pattern: string;
+  timeout: number;
+  jobOptions: Partial<JobsOptions>;
+  workerOptions: Partial<WorkerOptions>;
+}
+
+export interface WorkflowCronDefinition {
+  readonly cronName: string;
+  readonly queueName: string;
+  readonly pattern: string;
+  readonly _config: ResolvedCronConfig;
+  _handler?: () => Promise<void>;
+  handle(fn: () => Promise<void>): this;
+}
+
 export interface TriggerOverrides {
   jobOptions?: Partial<JobsOptions>;
   userId?: string;
   tags?: string[];
 }
 
-export interface RegisteredHandler {
-  queueName: string;
-  handler: (payload: unknown) => Promise<unknown>;
-  config: ResolvedJobConfig;
-}
+export type RegisteredHandler =
+  | {
+      kind: "job";
+      queueName: string;
+      handler: (payload: unknown) => Promise<unknown>;
+      config: ResolvedJobConfig;
+    }
+  | {
+      kind: "cron";
+      queueName: string;
+      handler: (payload: unknown) => Promise<unknown>;
+      config: ResolvedCronConfig;
+    };

@@ -11,7 +11,7 @@ No database migration is required. The `workflows` table schema is unchanged.
 | Old | New |
 |-----|-----|
 | `createWorkflowTrigger(service, queues, defaultQueue)` | `WorkflowService` constructor creates queues internally |
-| `createWorkflowWorker(service, queueName, opts, jobs)` | `WorkflowRegistry.register()` + `.start()` |
+| `createWorkflowWorker(service, queueName, opts, jobs)` | `WorkflowRegistry.register()` + `await registry.start()` |
 | `WorkflowJob` type with `run`/`onSuccess`/`onFailure` | Plain async handler function `(payload) => Promise<Result>` |
 | Worker-level `completed`/`failed` events for DB logging | `QueueEvents`-based lifecycle logging (survives crashes) |
 | Consumers construct `Queue` and pass it in | `WorkflowService` owns all `Queue`/`QueueEvents` instances |
@@ -245,8 +245,10 @@ registry.register(contentService.analyzeContent, (payload) =>
   contentService.doAnalysis(payload),
 );
 
-registry.start();
+await registry.start();
 ```
+
+`WorkflowRegistry.start()` is **async**: it creates workers, then registers BullMQ job schedulers for each `.cron()` definition and **reconciles** stray schedulers on those queues (removes scheduler keys not present in the registry). Call sites must `await` it and handle rejection.
 
 Changes:
 - One `register()` call per job, not a monolithic job map.
@@ -316,8 +318,8 @@ registry.registerService(contentService);
 
 `registerService()`:
 - Iterates all own enumerable properties via `Object.entries(service)`.
-- Picks up any property that looks like a job definition (has `jobName` and `_config`).
-- Validates that `_handler` is set. If a job is missing `.handle()`, it throws immediately at boot time with the property name in the error message.
+- Picks up job definitions (`jobName`, `_config`) and cron definitions (`cronName`, `pattern`, `_config`).
+- Validates that `_handler` is set. If a job or cron is missing `.handle()`, it throws immediately at boot time with the property name in the error message.
 - Validates name uniqueness, same as `register()`.
 - Ignores non-job properties (strings, numbers, plain objects, methods, etc.).
 
@@ -337,8 +339,38 @@ registry.register(adminService.reindexJob, (p) =>
   searchService.reindex(p),
 );
 
-registry.start();
+await registry.start();
 ```
+
+## Step 5c: Scheduled jobs (`.cron()`)
+
+Use `WorkflowService.cron()` for passive schedules. The **BullMQ job name** for scheduled runs is the cron **`name`** — the same string must be used for worker dispatch, so cron names share the global registry namespace with normal jobs (registering a job and a cron with the same name throws).
+
+```typescript
+readonly nightlyDigest = this.service.workflow
+  .cron({
+    name: "nightlyDigest",
+    queue: "slow",
+    pattern: "0 7 * * *", // cron expression
+    retries: 2,
+    timeout: 120_000,
+    jobOptions: { priority: 1 },
+    workerOptions: { lockDuration: 60_000 },
+  })
+  .handle(async () => {
+    await this.sendDigest();
+  });
+```
+
+- Chain `.handle(() => Promise<void>)` like `.job().handle(...)`; there is no payload (scheduled job data is `{}`).
+- `registerService()` picks up cron definitions the same way as jobs and errors if `.handle()` is missing.
+- On `await registry.start()`, schedulers are **upserted** per queue; any **extra** BullMQ job schedulers on that queue whose key/name/id/template name is not in the registered cron set are **removed** (pagination uses index ranges of 100).
+
+Types for consumers: `WorkflowCronConfig`, `ResolvedCronConfig`, and `WorkflowCronDefinition` are exported from `@m5kdev/backend/modules/workflow/workflow.types`.
+
+### DB lifecycle (cron-spawned jobs)
+
+Scheduled jobs do not go through `repository.added()` at enqueue time. The first **`active`** queue event **upserts** a workflow row via `WorkflowRepository.started` (`jobId`, `jobName`, `queueName`) so `completed` / `failed` updates still apply.
 
 ## Step 6: tRPC
 
@@ -409,7 +441,7 @@ if (mode === "worker" || mode === "all") {
   registry.register(contentService.generateContent, (payload) =>
     contentService.doGeneration(payload),
   );
-  registry.start();
+  await registry.start();
 }
 ```
 
@@ -421,7 +453,7 @@ if (mode === "worker" || mode === "all") {
 | `WorkflowJob.onSuccess` / `onFailure` / `onComplete` | Handle in the handler function. Throw to fail, return to succeed. |
 | `WorkflowDataType<Payload>` wrapper | Raw `Payload` is `job.data`. No wrapper. |
 | `createWorkflowTrigger` | `workflowService.job().trigger()` |
-| `createWorkflowWorker` / `createWorkflowWorkers` | `WorkflowRegistry.register()` + `.start()` |
+| `createWorkflowWorker` / `createWorkflowWorkers` | `WorkflowRegistry.register()` + `await registry.start()` |
 | `worker.on("completed"/"failed")` for DB logging | Automatic via `QueueEvents` in `WorkflowService` constructor |
 
 ## Import Path Changes
@@ -438,6 +470,9 @@ import type {
   WorkflowServiceConfig,
   WorkflowJobConfig,
   WorkflowJobDefinition,
+  WorkflowCronConfig,
+  WorkflowCronDefinition,
+  ResolvedCronConfig,
   AwaitableJobDefinition,
   FireAndForgetJobDefinition,
   TriggerOverrides,

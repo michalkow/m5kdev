@@ -4,6 +4,7 @@ import type {
   WorkflowReadInputSchema,
   WorkflowReadOutputSchema,
 } from "@m5kdev/commons/modules/workflow/workflow.schema";
+import type { Job } from "bullmq";
 import { Queue, QueueEvents, Worker } from "bullmq";
 import type IORedis from "ioredis";
 import { v4 as uuidv4 } from "uuid";
@@ -14,8 +15,11 @@ import type {
   AwaitableJobDefinition,
   FireAndForgetJobDefinition,
   Processor,
+  ResolvedCronConfig,
   ResolvedJobConfig,
   TriggerOverrides,
+  WorkflowCronConfig,
+  WorkflowCronDefinition,
   WorkflowJobConfig,
   WorkflowQueueConfig,
   WorkflowServiceConfig,
@@ -31,6 +35,7 @@ export class WorkflowService extends Base {
   private readonly workers = new Set<Worker>();
   private readonly connection: IORedis;
   private readonly queueConfigs: Record<string, WorkflowQueueConfig>;
+  private readonly cronsByName = new Map<string, WorkflowCronDefinition>();
 
   constructor(
     private readonly workflowRepository: WorkflowRepository,
@@ -50,9 +55,52 @@ export class WorkflowService extends Base {
       const events = new QueueEvents(queueName, {
         connection: this.connection.duplicate(),
       });
-      this.attachLifecycleListeners(events);
+      this.attachLifecycleListeners(events, queueName);
       this.queueEvents.set(queueName, events);
     }
+  }
+
+  // -- Cron definition API --
+
+  cron(config: WorkflowCronConfig): WorkflowCronDefinition {
+    if (this.cronsByName.has(config.name)) {
+      throw new Error(`Cron "${config.name}" is already defined on this WorkflowService`);
+    }
+
+    const queueName = config.queue ?? this.config.defaultQueue;
+    if (!this.queues.has(queueName)) {
+      throw new Error(`Queue "${queueName}" is not configured in WorkflowService`);
+    }
+
+    const timeout = config.timeout ?? this.config.defaults?.timeout ?? DEFAULT_TIMEOUT;
+
+    const resolved: ResolvedCronConfig = {
+      name: config.name,
+      queueName,
+      pattern: config.pattern,
+      timeout,
+      jobOptions: config.jobOptions ?? {},
+      workerOptions: config.workerOptions ?? {},
+    };
+
+    if (config.retries !== undefined && resolved.jobOptions.attempts === undefined) {
+      resolved.jobOptions.attempts = config.retries;
+    }
+
+    const definition = {
+      cronName: config.name,
+      queueName,
+      pattern: config.pattern,
+      _config: resolved,
+      _handler: undefined as (() => Promise<void>) | undefined,
+      handle(fn: () => Promise<void>) {
+        this._handler = fn;
+        return this;
+      },
+    } as WorkflowCronDefinition;
+
+    this.cronsByName.set(config.name, definition);
+    return definition;
   }
 
   // -- Job definition API --
@@ -194,6 +242,46 @@ export class WorkflowService extends Base {
     return worker;
   }
 
+  /**
+   * @internal For {@link WorkflowRegistry} only — activates a BullMQ job scheduler on the queue.
+   */
+  async _upsertCronScheduler(
+    queueName: string,
+    cronName: string,
+    pattern: string,
+    resolved: ResolvedCronConfig,
+  ): Promise<Job | undefined> {
+    const queue = this.getQueue(queueName);
+    const mergedOpts = this.mergeCronTemplateJobOptions(resolved);
+    const job = await queue.upsertJobScheduler(cronName, { pattern }, {
+      name: cronName,
+      data: {},
+      opts: mergedOpts,
+    });
+    return job ?? undefined;
+  }
+
+  /**
+   * @internal For {@link WorkflowRegistry} — list job schedulers (`start` / `end` are index-based).
+   */
+  _getJobSchedulers(
+    queueName: string,
+    start: number,
+    end: number,
+    asc?: boolean,
+  ): ReturnType<Queue["getJobSchedulers"]> {
+    const queue = this.getQueue(queueName);
+    return queue.getJobSchedulers(start, end, asc);
+  }
+
+  /**
+   * @internal For {@link WorkflowRegistry} — remove a scheduler by id.
+   */
+  async _removeJobScheduler(queueName: string, schedulerId: string): Promise<boolean> {
+    const queue = this.getQueue(queueName);
+    return queue.removeJobScheduler(schedulerId);
+  }
+
   // -- Lifecycle --
 
   /**
@@ -261,6 +349,18 @@ export class WorkflowService extends Base {
       ...queueDefaults,
       ...resolved.jobOptions,
       ...overrides?.jobOptions,
+    };
+  }
+
+  private mergeCronTemplateJobOptions(resolved: ResolvedCronConfig): import("bullmq").JobsOptions {
+    const queueDefaults = this.queueConfigs[resolved.queueName]?.defaultJobOptions ?? {};
+
+    return {
+      removeOnComplete: { age: 24 * 3600 },
+      removeOnFail: { age: 7 * 24 * 3600 },
+      ...this.config.defaults?.jobOptions,
+      ...queueDefaults,
+      ...resolved.jobOptions,
     };
   }
 
@@ -406,11 +506,18 @@ export class WorkflowService extends Base {
     return jobs.map((j) => j.id as string);
   }
 
-  private attachLifecycleListeners(events: QueueEvents): void {
+  private attachLifecycleListeners(events: QueueEvents, queueName: string): void {
     events.on("active", ({ jobId }) => {
-      this.workflowRepository.started({ jobId }).catch((error) => {
-        this.logger.error({ jobId, error }, "Failed to log job active event");
-      });
+      void (async () => {
+        try {
+          const queue = this.getQueue(queueName);
+          const job = await queue.getJob(jobId);
+          const jobName = job?.name ?? "__unknown__";
+          await this.workflowRepository.started({ jobId, jobName, queueName });
+        } catch (error) {
+          this.logger.error({ jobId, queueName, error }, "Failed to log job active event");
+        }
+      })();
     });
 
     events.on("completed", ({ jobId, returnvalue }) => {

@@ -124,12 +124,39 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
     });
   }
 
-  async started({ jobId }: { jobId: string }): ServerResultAsync<WorkflowReadOutputSchema> {
+  async started({
+    jobId,
+    jobName,
+    queueName,
+  }: {
+    jobId: string;
+    jobName: string;
+    queueName: string;
+  }): ServerResultAsync<WorkflowReadOutputSchema> {
     return this.throwableAsync(async () => {
+      const now = new Date();
       const [wf] = await this.orm
-        .update(this.schema.workflows)
-        .set({ status: "running", updatedAt: new Date(), processedAt: new Date() })
-        .where(eq(this.schema.workflows.jobId, jobId))
+        .insert(this.schema.workflows)
+        .values({
+          jobId,
+          jobName,
+          queueName,
+          status: "running",
+          retries: 0,
+          tags: [],
+          input: null,
+          processedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: this.schema.workflows.jobId,
+          set: {
+            status: "running",
+            updatedAt: now,
+            processedAt: now,
+          },
+        })
         .returning();
       return ok(wf);
     });

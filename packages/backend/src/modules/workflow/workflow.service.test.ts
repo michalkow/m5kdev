@@ -2,6 +2,10 @@ const mockQueueAdd = jest.fn();
 const mockQueueAddBulk = jest.fn();
 const mockQueueClose = jest.fn().mockResolvedValue(undefined);
 const mockQueueGetJobCounts = jest.fn();
+const mockQueueGetJob = jest.fn();
+const mockUpsertJobScheduler = jest.fn();
+const mockGetJobSchedulers = jest.fn();
+const mockRemoveJobScheduler = jest.fn();
 
 const mockQueueEventsOn = jest.fn();
 const mockQueueEventsClose = jest.fn().mockResolvedValue(undefined);
@@ -20,8 +24,11 @@ jest.mock("bullmq", () => ({
     addBulk: mockQueueAddBulk,
     close: mockQueueClose,
     getJobCounts: mockQueueGetJobCounts,
-    getJob: jest.fn(),
+    getJob: mockQueueGetJob,
     getJobs: jest.fn(),
+    upsertJobScheduler: mockUpsertJobScheduler,
+    getJobSchedulers: mockGetJobSchedulers,
+    removeJobScheduler: mockRemoveJobScheduler,
   })),
   QueueEvents: jest.fn().mockImplementation(() => ({
     on: mockQueueEventsOn,
@@ -48,6 +55,7 @@ jest.mock("uuid", () => ({
   v4: jest.fn().mockReturnValue("test-uuid-1234"),
 }));
 
+import type IORedis from "ioredis";
 import type { WorkflowRepository } from "./workflow.repository";
 import { WorkflowService } from "./workflow.service";
 
@@ -68,7 +76,10 @@ function createMockRepository(): MockedRepo {
 function createService(repo = createMockRepository()) {
   return {
     service: new WorkflowService(repo, {
-      connection: { host: "localhost", port: 6379 },
+      connection: {
+        duplicate: mockDuplicate,
+        disconnect: mockDisconnect,
+      } as unknown as IORedis,
       queues: {
         fast: { concurrency: 10, defaultJobOptions: { attempts: 3 } },
         slow: { concurrency: 2 },
@@ -87,6 +98,10 @@ describe("WorkflowService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     workerCloseMocks.length = 0;
+    mockQueueGetJob.mockResolvedValue({ name: "myJob" });
+    mockUpsertJobScheduler.mockResolvedValue({ id: "sched-1" });
+    mockGetJobSchedulers.mockResolvedValue([]);
+    mockRemoveJobScheduler.mockResolvedValue(true);
     mockQueueAdd.mockResolvedValue({ id: "job-1", waitUntilFinished: mockWaitUntilFinished });
     mockQueueAddBulk.mockResolvedValue([
       { id: "job-1", waitUntilFinished: mockWaitUntilFinished, data: { payload: "a" } },
@@ -184,6 +199,87 @@ describe("WorkflowService", () => {
         { data: "test" },
         expect.objectContaining({ jobId: "test-uuid-1234" })
       );
+    });
+  });
+
+  describe(".cron()", () => {
+    it("creates a cron definition with cronName, pattern, and queue", () => {
+      const { service } = createService();
+      const def = service.cron({ name: "daily", pattern: "0 9 * * *" });
+
+      expect(def.cronName).toBe("daily");
+      expect(def.pattern).toBe("0 9 * * *");
+      expect(def.queueName).toBe("fast");
+    });
+
+    it("throws if the same cron name is defined twice on the service", () => {
+      const { service } = createService();
+      service.cron({ name: "dup", pattern: "* * * * *" });
+      expect(() => service.cron({ name: "dup", pattern: "0 0 * * *" })).toThrow(
+        'Cron "dup" is already defined on this WorkflowService',
+      );
+    });
+
+    it("throws if the queue is not configured", () => {
+      const { service } = createService();
+      expect(() =>
+        service.cron({ name: "x", queue: "missing", pattern: "* * * * *" }),
+      ).toThrow('Queue "missing" is not configured in WorkflowService');
+    });
+
+    it("maps retries to job template attempts when attempts unset", () => {
+      const { service } = createService();
+      const def = service.cron({ name: "c", pattern: "* * * * *", retries: 4 });
+      expect(def._config.jobOptions.attempts).toBe(4);
+    });
+
+    it(".handle() stores the handler and returns the same definition", () => {
+      const { service } = createService();
+      const fn = jest.fn().mockResolvedValue(undefined);
+      const def = service.cron({ name: "h", pattern: "* * * * *" });
+
+      const ret = def.handle(fn);
+
+      expect(ret).toBe(def);
+      expect(def._handler).toBe(fn);
+    });
+  });
+
+  describe("scheduler wrappers", () => {
+    it("_upsertCronScheduler merges template options and calls upsertJobScheduler", async () => {
+      const { service } = createService();
+      await service._upsertCronScheduler("fast", "tick", "*/15 * * * *", {
+        name: "tick",
+        queueName: "fast",
+        pattern: "*/15 * * * *",
+        timeout: 60_000,
+        jobOptions: { priority: 2 },
+        workerOptions: {},
+      });
+
+      expect(mockUpsertJobScheduler).toHaveBeenCalledWith(
+        "tick",
+        { pattern: "*/15 * * * *" },
+        expect.objectContaining({
+          name: "tick",
+          data: {},
+          opts: expect.objectContaining({
+            priority: 2,
+            attempts: 3,
+          }),
+        }),
+      );
+    });
+
+    it("_getJobSchedulers and _removeJobScheduler delegate to the queue", async () => {
+      const { service } = createService();
+      mockGetJobSchedulers.mockResolvedValueOnce([{ key: "a" }]);
+      const listed = await service._getJobSchedulers("slow", 0, 50, true);
+      expect(listed).toEqual([{ key: "a" }]);
+      expect(mockGetJobSchedulers).toHaveBeenCalledWith(0, 50, true);
+
+      await service._removeJobScheduler("fast", "sched-1");
+      expect(mockRemoveJobScheduler).toHaveBeenCalledWith("sched-1");
     });
   });
 
