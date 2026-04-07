@@ -3,6 +3,7 @@ import * as trpcExpress from "@trpc/server/adapters/express";
 import { toNodeHandler } from "better-auth/node";
 import cors from "cors";
 import express from "express";
+import type { Server } from "node:http";
 import { auth } from "./lib/auth";
 import { notificationService } from "./service";
 import { appRouter } from "./trpc";
@@ -12,6 +13,8 @@ workflowRegistry.registerService(notificationService);
 
 const app = express();
 const port = process.env.PORT ? Number.parseInt(process.env.PORT, 10) : 8080;
+
+let httpServer: Server | undefined;
 
 app.use(express.json());
 app.use(
@@ -33,9 +36,31 @@ app.use(
 
 app.all("/api/auth/*", toNodeHandler(auth));
 
+function logError(context: string, error: unknown): void {
+  console.error(`[server] ${context}`, error);
+}
+
 async function shutdown(): Promise<void> {
-  await workflowRegistry.stop();
-  await workflowService.close();
+  try {
+    await workflowRegistry.stop();
+  } catch (e) {
+    logError("workflowRegistry.stop() failed", e);
+  }
+  try {
+    await workflowService.close();
+  } catch (e) {
+    logError("workflowService.close() failed", e);
+  }
+  if (httpServer) {
+    await new Promise<void>((resolve) => {
+      httpServer?.close((err) => {
+        if (err) {
+          logError("HTTP server close failed", err);
+        }
+        resolve();
+      });
+    });
+  }
   process.exit(0);
 }
 
@@ -48,9 +73,20 @@ process.once("SIGTERM", () => {
 
 async function start(): Promise<void> {
   await workflowRegistry.start();
-  app.listen(port, () => {
-    console.info(`Server running at ${process.env.VITE_SERVER_URL ?? `http://localhost:${port}`}`);
+  await new Promise<void>((resolve, reject) => {
+    httpServer = app.listen(port, () => {
+      console.info(`Server running at ${process.env.VITE_SERVER_URL ?? `http://localhost:${port}`}`);
+      resolve();
+    });
+    httpServer.on("error", reject);
   });
 }
 
-void start();
+void (async () => {
+  try {
+    await start();
+  } catch (e) {
+    logError("Fatal: workflowRegistry.start() or HTTP listen failed", e);
+    process.exit(1);
+  }
+})();

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import type { NotificationProvider } from "@m5kdev/commons/modules/notification/notification.constants";
-import apn from "apn";
+import apn from "@parse/node-apn";
 import admin from "firebase-admin";
 import webpush from "web-push";
 
@@ -37,10 +37,17 @@ function getApnProvider(): apn.Provider {
   if (!keyPath || !keyId || !teamId) {
     throw new Error("APNS_KEY_PATH, APNS_KEY_ID, and APNS_TEAM_ID must be set for APNs");
   }
+  let keyMaterial: Buffer;
+  try {
+    keyMaterial = fs.readFileSync(keyPath);
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    throw new Error(`Failed to read APNs auth key file at ${keyPath}: ${message}`, { cause });
+  }
   apnProvider = new apn.Provider({
     production: process.env.APNS_PRODUCTION === "true",
     token: {
-      key: fs.readFileSync(keyPath),
+      key: keyMaterial,
       keyId,
       teamId,
     },
@@ -72,17 +79,47 @@ export async function sendApnNotification(
   }
 }
 
-function getFirebaseMessaging(): admin.messaging.Messaging {
-  if (admin.apps.length === 0) {
-    const credPath =
-      process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    if (credPath && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-      process.env.GOOGLE_APPLICATION_CREDENTIALS = credPath;
-    }
-    admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
-    });
+let firebaseInitPromise: Promise<void> | null = null;
+
+async function ensureFirebaseInitialized(): Promise<void> {
+  if (admin.apps.length > 0) {
+    return;
   }
+  if (!firebaseInitPromise) {
+    firebaseInitPromise = (async () => {
+      const credPath =
+        process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      if (!credPath?.length) {
+        throw new Error(
+          "FIREBASE_SERVICE_ACCOUNT_PATH or GOOGLE_APPLICATION_CREDENTIALS must be set for FCM"
+        );
+      }
+      let serviceAccount: admin.ServiceAccount;
+      try {
+        const raw = fs.readFileSync(credPath, "utf8");
+        serviceAccount = JSON.parse(raw) as admin.ServiceAccount;
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        throw new Error(
+          `Failed to load Firebase service account JSON from ${credPath}: ${message}`,
+          { cause }
+        );
+      }
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+    })();
+  }
+  try {
+    await firebaseInitPromise;
+  } catch (e) {
+    firebaseInitPromise = null;
+    throw e;
+  }
+}
+
+async function getFirebaseMessaging(): Promise<admin.messaging.Messaging> {
+  await ensureFirebaseInitialized();
   return admin.messaging();
 }
 
@@ -91,7 +128,7 @@ export async function sendFcmNotification(
   notification: { title: string; body: string },
   data: Record<string, string>
 ): Promise<void> {
-  const messaging = getFirebaseMessaging();
+  const messaging = await getFirebaseMessaging();
   await messaging.send({
     token,
     notification,

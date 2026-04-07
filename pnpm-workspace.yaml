@@ -30,6 +30,7 @@ catalog:
   '@mastra/posthog': 1.0.0
   '@mastra/rag': 2.0.0
   '@openrouter/ai-sdk-provider': 2.3.3
+  '@parse/node-apn': 8.0.0
   '@playwright/test': 1.57.0
   '@pmmmwh/react-refresh-webpack-plugin': 0.5.7
   '@posthog/ai': 6.2.0
@@ -94,7 +95,6 @@ catalog:
   '@vitejs/plugin-react': 4.2.0
   '@vitest/ui': 3.0.0
   ai: 6.0.0
-  apn: 2.2.0
   apify-client: 2.21.0
   autoprefixer: 10.4.20
   babel-plugin-react-compiler: 1.0.0

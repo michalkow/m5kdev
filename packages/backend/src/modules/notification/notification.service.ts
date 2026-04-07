@@ -57,6 +57,7 @@ export class NotificationService extends BaseService<
     .job<NotificationServiceJobPayload>({
       name: NOTIFICATION_DELIVER_JOB_NAME,
       queue: "fast",
+      id: (p) => p.batchId,
       meta: (p) => ({ userId: p.userId }),
     })
     .handle(async (payload) => {
@@ -192,13 +193,20 @@ export class NotificationService extends BaseService<
     );
     if (insert.isErr()) return err(insert.error);
 
-    const jobId = await this.deliverNotificationJob.trigger({
-      batchId,
-      userId: input.userId,
-    });
-
+    const jobId = batchId;
     const patchJob = await this.repository.notification.updateSendLogJobIdForBatch(batchId, jobId);
     if (patchJob.isErr()) return err(patchJob.error);
+
+    try {
+      await this.deliverNotificationJob.trigger({
+        batchId,
+        userId: input.userId,
+      });
+    } catch (cause) {
+      return this.error("INTERNAL_SERVER_ERROR", "Failed to enqueue notification delivery job", {
+        cause,
+      });
+    }
 
     return ok({ batchId, jobId });
   }
@@ -277,7 +285,17 @@ export class NotificationService extends BaseService<
           status: "sent",
           error: null,
         });
-        if (okUpdate.isErr()) throw new Error(okUpdate.error.message);
+        if (okUpdate.isErr()) {
+          this.logger.error(
+            {
+              err: okUpdate.error,
+              logId: log.id,
+              batchId: payload.batchId,
+              deviceId: log.deviceId,
+            },
+            "Notification was sent but updating send log to sent failed — not retrying send"
+          );
+        }
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         const failUpdate = await this.repository.notification.updateSendLogResult(log.id, {

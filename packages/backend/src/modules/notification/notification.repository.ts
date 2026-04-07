@@ -46,32 +46,8 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
     label: string | null;
   }): ServerResultAsync<NotificationDeviceRow> {
     return this.throwableAsync(async () => {
-      const existing = await this.orm
-        .select()
-        .from(this.schema.notificationDevices)
-        .where(eq(this.schema.notificationDevices.endpoint, input.endpoint))
-        .limit(1);
-
       const now = new Date();
-      if (existing[0]) {
-        await this.orm
-          .update(this.schema.notificationDevices)
-          .set({
-            userId: input.userId,
-            subscription: input.subscription,
-            label: input.label,
-            enabled: true,
-            updatedAt: now,
-          })
-          .where(eq(this.schema.notificationDevices.id, existing[0].id));
-        const [row] = await this.orm
-          .select()
-          .from(this.schema.notificationDevices)
-          .where(eq(this.schema.notificationDevices.id, existing[0].id));
-        return ok(row as NotificationDeviceRow);
-      }
-
-      const [inserted] = await this.orm
+      const [row] = await this.orm
         .insert(this.schema.notificationDevices)
         .values({
           userId: input.userId,
@@ -83,9 +59,19 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
           enabled: true,
           updatedAt: now,
         })
+        .onConflictDoUpdate({
+          target: this.schema.notificationDevices.endpoint,
+          set: {
+            userId: input.userId,
+            subscription: input.subscription,
+            label: input.label,
+            enabled: true,
+            updatedAt: now,
+          },
+        })
         .returning();
 
-      return ok(inserted as NotificationDeviceRow);
+      return ok(row as NotificationDeviceRow);
     });
   }
 
@@ -96,32 +82,8 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
     label: string | null;
   }): ServerResultAsync<NotificationDeviceRow> {
     return this.throwableAsync(async () => {
-      const existing = await this.orm
-        .select()
-        .from(this.schema.notificationDevices)
-        .where(eq(this.schema.notificationDevices.token, input.token))
-        .limit(1);
-
       const now = new Date();
-      if (existing[0]) {
-        await this.orm
-          .update(this.schema.notificationDevices)
-          .set({
-            userId: input.userId,
-            platform: input.platform,
-            label: input.label,
-            enabled: true,
-            updatedAt: now,
-          })
-          .where(eq(this.schema.notificationDevices.id, existing[0].id));
-        const [row] = await this.orm
-          .select()
-          .from(this.schema.notificationDevices)
-          .where(eq(this.schema.notificationDevices.id, existing[0].id));
-        return ok(row as NotificationDeviceRow);
-      }
-
-      const [inserted] = await this.orm
+      const [row] = await this.orm
         .insert(this.schema.notificationDevices)
         .values({
           userId: input.userId,
@@ -133,9 +95,19 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
           enabled: true,
           updatedAt: now,
         })
+        .onConflictDoUpdate({
+          target: this.schema.notificationDevices.token,
+          set: {
+            userId: input.userId,
+            platform: input.platform,
+            label: input.label,
+            enabled: true,
+            updatedAt: now,
+          },
+        })
         .returning();
 
-      return ok(inserted as NotificationDeviceRow);
+      return ok(row as NotificationDeviceRow);
     });
   }
 

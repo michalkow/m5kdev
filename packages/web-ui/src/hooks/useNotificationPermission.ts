@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 function readNotificationPermission(): NotificationPermission {
   if (typeof Notification === "undefined") {
@@ -15,9 +15,11 @@ export function useNotificationPermission(): {
   requestPermission: () => Promise<NotificationPermission>;
   refresh: () => void;
 } {
-  const [permission, setPermission] = useState<NotificationPermission>(() =>
-    readNotificationPermission()
-  );
+  const [permission, setPermission] = useState<NotificationPermission>("denied");
+
+  useEffect(() => {
+    setPermission(readNotificationPermission());
+  }, []);
 
   const requestPermission = useCallback(async (): Promise<NotificationPermission> => {
     if (typeof Notification === "undefined") {

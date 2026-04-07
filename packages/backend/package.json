@@ -35,7 +35,7 @@
     "@trpc/server": "catalog:",
     "@types/multer": "catalog:",
     "ai": "catalog:",
-    "apn": "catalog:",
+    "@parse/node-apn": "catalog:",
     "better-auth": "catalog:",
     "bip32": "catalog:",
     "bip39": "catalog:",
