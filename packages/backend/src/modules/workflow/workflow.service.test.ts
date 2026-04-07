@@ -326,6 +326,13 @@ describe("WorkflowService", () => {
       expect(service.getQueues()).toEqual(expect.arrayContaining(["fast", "slow"]));
     });
 
+    it("getBullMqQueues returns one Queue per configured name in sorted order", () => {
+      const { service } = createService();
+      const names = service.getQueues().sort((a, b) => a.localeCompare(b));
+      const qs = service.getBullMqQueues();
+      expect(qs).toHaveLength(names.length);
+    });
+
     it("getJobCounts delegates to the queue", async () => {
       mockQueueGetJobCounts.mockResolvedValue({ active: 2, waiting: 5 });
       const { service } = createService();

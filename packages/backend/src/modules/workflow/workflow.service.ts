@@ -142,6 +142,16 @@ export class WorkflowService extends Base {
     return [...this.queues.keys()];
   }
 
+  /**
+   * Every BullMQ `Queue` owned by this service, sorted by name for stable ordering.
+   * Use with Bull Board by wrapping each in `BullMQAdapter` from `@bull-board/api/bullMQ`.
+   */
+  getBullMqQueues(): Queue[] {
+    return [...this.queues.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, queue]) => queue);
+  }
+
   async getJobCounts(queueName: string): Promise<Record<string, number>> {
     const queue = this.getQueue(queueName);
     return queue.getJobCounts();
