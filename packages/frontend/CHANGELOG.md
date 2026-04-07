@@ -1,5 +1,16 @@
 # @m5kdev/frontend
 
+## 0.10.0
+
+### Minor Changes
+
+- workflows
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.10.0
+
 ## 0.9.8
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.10.0
+
+### Minor Changes
+
+- workflows
+
 ## 0.9.8
 
 ### Patch Changes
