@@ -128,19 +128,28 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
     jobId,
     jobName,
     queueName,
+    userId,
   }: {
     jobId: string;
     jobName: string;
     queueName: string;
+    userId?: string;
   }): ServerResultAsync<WorkflowReadOutputSchema> {
     return this.throwableAsync(async () => {
       const now = new Date();
+      const conflictSet = {
+        status: "running" as const,
+        updatedAt: now,
+        processedAt: now,
+        ...(userId !== undefined ? { userId } : {}),
+      };
       const [wf] = await this.orm
         .insert(this.schema.workflows)
         .values({
           jobId,
           jobName,
           queueName,
+          userId,
           status: "running",
           retries: 0,
           tags: [],
@@ -151,11 +160,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
         })
         .onConflictDoUpdate({
           target: this.schema.workflows.jobId,
-          set: {
-            status: "running",
-            updatedAt: now,
-            processedAt: now,
-          },
+          set: conflictSet,
         })
         .returning();
       return ok(wf);

@@ -55,14 +55,14 @@ export class WorkflowRegistry {
 
   register<Payload, Result>(
     definition: WorkflowJobDefinition<Payload, Result>,
-    handler: (payload: Payload) => Promise<Result>,
+    handler: (payload: Payload) => Promise<Result>
   ): void;
 
   register(definition: WorkflowCronDefinition, handler: () => Promise<void>): void;
 
   register(
     definition: WorkflowJobDefinition<unknown, unknown> | WorkflowCronDefinition,
-    handler: ((payload: unknown) => Promise<unknown>) | (() => Promise<void>),
+    handler: ((payload: unknown) => Promise<unknown>) | (() => Promise<void>)
   ): void {
     if (this.workers.size > 0) {
       throw new Error("Cannot register handlers after start() has been called");
@@ -106,7 +106,7 @@ export class WorkflowRegistry {
       if (isCronDefinition(value)) {
         if (!value._handler) {
           throw new Error(
-            `Cron "${value.cronName}" on queue "${value.queueName}" (property "${key}") has no .handle() attached`,
+            `Cron "${value.cronName}" on queue "${value.queueName}" (property "${key}") has no .handle() attached`
           );
         }
         if (this.handlers.has(value.cronName)) {
@@ -126,7 +126,7 @@ export class WorkflowRegistry {
 
       if (!value._handler) {
         throw new Error(
-          `Job "${value.jobName}" on queue "${value.queueName}" (property "${key}") has no .handle() attached`,
+          `Job "${value.jobName}" on queue "${value.queueName}" (property "${key}") has no .handle() attached`
         );
       }
       if (this.handlers.has(value.jobName)) {
@@ -190,7 +190,7 @@ export class WorkflowRegistry {
             }
           });
         },
-        workerOptionOverrides,
+        workerOptionOverrides
       );
 
       worker.on("error", (error) => {
@@ -200,7 +200,7 @@ export class WorkflowRegistry {
       this.workers.set(queueName, worker);
       this.logger.info(
         { queue: queueName, jobs: [...handlers.keys()] },
-        `Worker started for queue "${queueName}"`,
+        `Worker started for queue "${queueName}"`
       );
     }
 
@@ -227,7 +227,7 @@ export class WorkflowRegistry {
         const batch = (await this.workflowService._getJobSchedulers(
           queueName,
           start,
-          start + SCHEDULER_LIST_BATCH - 1,
+          start + SCHEDULER_LIST_BATCH - 1
         )) as JobSchedulerRow[];
         for (const scheduler of batch) {
           const sid = scheduler.key;
@@ -259,7 +259,7 @@ export class WorkflowRegistry {
   }
 
   private mergeWorkerOptions(
-    handlers: Map<string, RegisteredHandler>,
+    handlers: Map<string, RegisteredHandler>
   ): Partial<import("bullmq").WorkerOptions> {
     const merged: Partial<import("bullmq").WorkerOptions> = {};
     for (const entry of handlers.values()) {

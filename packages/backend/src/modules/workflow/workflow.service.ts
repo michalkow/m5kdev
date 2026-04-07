@@ -328,6 +328,12 @@ export class WorkflowService extends Base {
 
   // -- Private helpers --
 
+  private static readUserIdFromJobData(data: unknown): string | undefined {
+    if (data === null || typeof data !== "object") return undefined;
+    const v = (data as { userId?: unknown }).userId;
+    return typeof v === "string" && v.length > 0 ? v : undefined;
+  }
+
   private getQueue(queueName: string): Queue {
     const queue = this.queues.get(queueName);
     if (!queue) {
@@ -513,7 +519,8 @@ export class WorkflowService extends Base {
           const queue = this.getQueue(queueName);
           const job = await queue.getJob(jobId);
           const jobName = job?.name ?? "__unknown__";
-          await this.workflowRepository.started({ jobId, jobName, queueName });
+          const userId = WorkflowService.readUserIdFromJobData(job?.data);
+          await this.workflowRepository.started({ jobId, jobName, queueName, userId });
         } catch (error) {
           this.logger.error({ jobId, queueName, error }, "Failed to log job active event");
         }

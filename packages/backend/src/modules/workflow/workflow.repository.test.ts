@@ -51,6 +51,39 @@ describe("WorkflowRepository.started", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.status).toBe("running");
     expect(rows[0]?.jobName).toBe("daily-sync");
+    expect(rows[0]?.userId).toBeNull();
+  });
+
+  it("persists userId when provided so read() can find the row", async () => {
+    const result = await repo.started({
+      jobId: "job-user-1",
+      jobName: "task",
+      queueName: "fast",
+      userId: "user-1",
+    });
+
+    expect(result.isOk()).toBe(true);
+    const readResult = await repo.read({ jobId: "job-user-1", userId: "user-1" });
+    expect(readResult.isOk()).toBe(true);
+  });
+
+  it("on conflict, backfills userId when a second started() supplies it", async () => {
+    await repo.started({
+      jobId: "backfill-1",
+      jobName: "n",
+      queueName: "q",
+    });
+    const missingUser = await repo.read({ jobId: "backfill-1", userId: "u1" });
+    expect(missingUser.isErr()).toBe(true);
+
+    await repo.started({
+      jobId: "backfill-1",
+      jobName: "n",
+      queueName: "q",
+      userId: "u1",
+    });
+    const found = await repo.read({ jobId: "backfill-1", userId: "u1" });
+    expect(found.isOk()).toBe(true);
   });
 
   it("updates to running when row already exists", async () => {

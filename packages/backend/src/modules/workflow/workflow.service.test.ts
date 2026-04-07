@@ -494,5 +494,27 @@ describe("WorkflowService", () => {
       expect(eventNames).toContain("completed");
       expect(eventNames).toContain("failed");
     });
+
+    it("active listener passes userId from job.data to repository.started when present", async () => {
+      const { repo } = createService();
+      mockQueueGetJob.mockResolvedValue({
+        name: "myJob",
+        data: { userId: "user-42", x: 1 },
+      });
+
+      const activeEntry = mockQueueEventsOn.mock.calls.find((c) => c[0] === "active");
+      expect(activeEntry).toBeDefined();
+      const activeHandler = activeEntry?.[1] as (ev: { jobId: string }) => void;
+
+      activeHandler({ jobId: "bull-1" });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(repo.started).toHaveBeenCalledWith({
+        jobId: "bull-1",
+        jobName: "myJob",
+        queueName: "fast",
+        userId: "user-42",
+      });
+    });
   });
 });
