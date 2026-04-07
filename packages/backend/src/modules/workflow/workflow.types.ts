@@ -5,13 +5,13 @@ import type {
   Queue,
   QueueEvents,
   RateLimiterOptions,
-  RedisOptions,
   Worker,
   WorkerOptions,
 } from "bullmq";
 
-export type { Job, JobsOptions, Processor, Queue, QueueEvents, RedisOptions, Worker, WorkerOptions };
+export type { Job, JobsOptions, Processor, Queue, QueueEvents, Worker, WorkerOptions };
 
+import type IORedis from "ioredis";
 export interface WorkflowQueueConfig {
   concurrency?: number;
   limiter?: RateLimiterOptions;
@@ -20,7 +20,7 @@ export interface WorkflowQueueConfig {
 }
 
 export interface WorkflowServiceConfig {
-  connection: RedisOptions;
+  connection: IORedis;
   queues: Record<string, WorkflowQueueConfig>;
   defaultQueue: string;
   defaults?: {
@@ -29,11 +29,7 @@ export interface WorkflowServiceConfig {
   };
 }
 
-export interface WorkflowJobConfig<
-  Payload,
-  Result = unknown,
-  Awaitable extends boolean = false,
-> {
+export interface WorkflowJobConfig<Payload, Result = unknown, Awaitable extends boolean = false> {
   name: string;
   queue?: string;
   awaitable?: Awaitable;

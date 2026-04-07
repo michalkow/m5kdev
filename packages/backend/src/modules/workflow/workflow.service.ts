@@ -5,10 +5,10 @@ import type {
   WorkflowReadOutputSchema,
 } from "@m5kdev/commons/modules/workflow/workflow.schema";
 import { Queue, QueueEvents, Worker } from "bullmq";
-import IORedis from "ioredis";
+import type IORedis from "ioredis";
 import { v4 as uuidv4 } from "uuid";
-import type { ServerResultAsync } from "../base/base.dto";
 import { Base } from "../base/base.abstract";
+import type { ServerResultAsync } from "../base/base.dto";
 import type { WorkflowRepository } from "./workflow.repository";
 import type {
   AwaitableJobDefinition,
@@ -34,16 +34,12 @@ export class WorkflowService extends Base {
 
   constructor(
     private readonly workflowRepository: WorkflowRepository,
-    private readonly config: WorkflowServiceConfig,
+    private readonly config: WorkflowServiceConfig
   ) {
     super("workflow");
     this.queueConfigs = config.queues;
 
-    this.connection = new IORedis({
-      ...config.connection,
-      maxRetriesPerRequest: null,
-      lazyConnect: true,
-    });
+    this.connection = config.connection;
 
     for (const queueName of Object.keys(config.queues)) {
       const queue = new Queue(queueName, {
@@ -62,19 +58,17 @@ export class WorkflowService extends Base {
   // -- Job definition API --
 
   job<Payload, Result>(
-    config: WorkflowJobConfig<Payload, Result, true>,
+    config: WorkflowJobConfig<Payload, Result, true>
   ): AwaitableJobDefinition<Payload, Result>;
 
   job<Payload>(
-    config: WorkflowJobConfig<Payload, unknown, false>,
+    config: WorkflowJobConfig<Payload, unknown, false>
   ): FireAndForgetJobDefinition<Payload>;
 
-  job<Payload>(
-    config: WorkflowJobConfig<Payload>,
-  ): FireAndForgetJobDefinition<Payload>;
+  job<Payload>(config: WorkflowJobConfig<Payload>): FireAndForgetJobDefinition<Payload>;
 
   job<Payload, Result>(
-    config: WorkflowJobConfig<Payload, Result, boolean>,
+    config: WorkflowJobConfig<Payload, Result, boolean>
   ): AwaitableJobDefinition<Payload, Result> | FireAndForgetJobDefinition<Payload> {
     const queueName = config.queue ?? this.config.defaultQueue;
     if (!this.queues.has(queueName)) {
@@ -125,13 +119,13 @@ export class WorkflowService extends Base {
   // -- Read/list (absorbed from old service) --
 
   async read(
-    input: WorkflowReadInputSchema & { userId: string },
+    input: WorkflowReadInputSchema & { userId: string }
   ): ServerResultAsync<WorkflowReadOutputSchema> {
     return this.workflowRepository.read(input);
   }
 
   async list(
-    input: WorkflowListInputSchema & { userId: string },
+    input: WorkflowListInputSchema & { userId: string }
   ): ServerResultAsync<WorkflowListOutputSchema> {
     return this.workflowRepository.list(input);
   }
@@ -166,7 +160,7 @@ export class WorkflowService extends Base {
     queueName: string,
     status: "active" | "waiting" | "delayed" | "completed" | "failed",
     start?: number,
-    end?: number,
+    end?: number
   ) {
     const queue = this.getQueue(queueName);
     return queue.getJobs([status], start, end);
@@ -181,7 +175,7 @@ export class WorkflowService extends Base {
   _createWorker(
     queueName: string,
     processor: Processor,
-    overrides?: Partial<import("bullmq").WorkerOptions>,
+    overrides?: Partial<import("bullmq").WorkerOptions>
   ): Worker {
     const queueConfig = this.queueConfigs[queueName];
     if (!queueConfig) {
@@ -217,10 +211,10 @@ export class WorkflowService extends Base {
         } catch (error) {
           this.logger.error(
             { error: error instanceof Error ? error.message : String(error) },
-            "Failed to close BullMQ worker",
+            "Failed to close BullMQ worker"
           );
         }
-      }),
+      })
     );
   }
 
@@ -256,7 +250,7 @@ export class WorkflowService extends Base {
 
   private mergeJobOptions(
     resolved: ResolvedJobConfig,
-    overrides?: TriggerOverrides,
+    overrides?: TriggerOverrides
   ): import("bullmq").JobsOptions {
     const queueDefaults = this.queueConfigs[resolved.queueName]?.defaultJobOptions ?? {};
 
@@ -273,7 +267,7 @@ export class WorkflowService extends Base {
   private resolveMeta(
     resolved: ResolvedJobConfig,
     payload: unknown,
-    overrides?: TriggerOverrides,
+    overrides?: TriggerOverrides
   ): { userId?: string; tags?: string[] } {
     const metaFromPayload = resolved.metaFn?.(payload) ?? {};
     return {
@@ -285,7 +279,7 @@ export class WorkflowService extends Base {
   private async triggerJob<Payload, Result>(
     resolved: ResolvedJobConfig,
     payload: Payload,
-    overrides?: TriggerOverrides,
+    overrides?: TriggerOverrides
   ): Promise<Result | string> {
     const queue = this.getQueue(resolved.queueName);
     const jobId = resolved.idFn ? resolved.idFn(payload) : uuidv4();
@@ -322,8 +316,8 @@ export class WorkflowService extends Base {
         new Promise<never>((_, reject) =>
           setTimeout(
             () => reject(new Error(`Job "${resolved.name}" timed out after ${resolved.timeout}ms`)),
-            resolved.timeout,
-          ),
+            resolved.timeout
+          )
         ),
       ]);
 
@@ -336,7 +330,7 @@ export class WorkflowService extends Base {
   private async triggerManyJobs<Payload, Result>(
     resolved: ResolvedJobConfig,
     payloads: Payload[],
-    overrides?: TriggerOverrides,
+    overrides?: TriggerOverrides
   ): Promise<Result[] | string[]> {
     const queue = this.getQueue(resolved.queueName);
     const mergedOptions = this.mergeJobOptions(resolved, overrides);
@@ -389,11 +383,9 @@ export class WorkflowService extends Base {
             new Promise<never>((_, reject) =>
               setTimeout(
                 () =>
-                  reject(
-                    new Error(`Job "${resolved.name}" timed out after ${resolved.timeout}ms`),
-                  ),
-                resolved.timeout,
-              ),
+                  reject(new Error(`Job "${resolved.name}" timed out after ${resolved.timeout}ms`)),
+                resolved.timeout
+              )
             ),
           ]);
           results[i] = result as Result;
