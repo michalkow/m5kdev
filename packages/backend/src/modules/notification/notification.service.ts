@@ -203,6 +203,13 @@ export class NotificationService extends BaseService<
         userId: input.userId,
       });
     } catch (cause) {
+      const rollback = await this.repository.notification.clearSendLogJobIdForBatch(batchId, jobId);
+      if (rollback.isErr()) {
+        this.logger.error(
+          { err: rollback.error, batchId, jobId },
+          "Failed to clear send log jobId after notification enqueue failure"
+        );
+      }
       return this.error("INTERNAL_SERVER_ERROR", "Failed to enqueue notification delivery job", {
         cause,
       });

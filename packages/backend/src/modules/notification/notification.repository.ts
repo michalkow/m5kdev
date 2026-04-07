@@ -225,6 +225,22 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
     });
   }
 
+  /** Clears jobId for send logs in a batch when enqueue failed after the job id was persisted. */
+  async clearSendLogJobIdForBatch(batchId: string, jobId: string): ServerResultAsync<void> {
+    return this.throwableAsync(async () => {
+      await this.orm
+        .update(this.schema.notificationSendLogs)
+        .set({ jobId: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(this.schema.notificationSendLogs.batchId, batchId),
+            eq(this.schema.notificationSendLogs.jobId, jobId)
+          )
+        );
+      return ok();
+    });
+  }
+
   async updateSendLogResult(
     logId: string,
     patch: { status: NotificationSendStatus; error: string | null }
