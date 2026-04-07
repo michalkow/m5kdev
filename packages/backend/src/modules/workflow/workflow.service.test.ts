@@ -260,13 +260,13 @@ describe("WorkflowService", () => {
       expect(result).toBe("result-data");
     });
 
-    it("fire-and-forget trigger returns void", async () => {
+    it("fire-and-forget trigger returns job id", async () => {
       const { service } = createService();
       const def = service.job({ name: "fireJob" });
 
       const result = await def.trigger({ data: "test" });
 
-      expect(result).toBeUndefined();
+      expect(result).toBe("job-1");
       expect(mockWaitUntilFinished).not.toHaveBeenCalled();
     });
   });
@@ -276,8 +276,9 @@ describe("WorkflowService", () => {
       const { service, repo } = createService();
       const def = service.job({ name: "batchJob" });
 
-      await def.triggerMany([{ a: 1 }, { a: 2 }]);
+      const jobIds = await def.triggerMany([{ a: 1 }, { a: 2 }]);
 
+      expect(jobIds).toEqual(["job-1", "job-2"]);
       expect(mockQueueAddBulk).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({ name: "batchJob" }),

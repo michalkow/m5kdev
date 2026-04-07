@@ -159,7 +159,7 @@ readonly analyzeContent = this.service.workflow.job<GeneratePayload, AnalysisRes
 });
 ```
 
-When `awaitable: true`, `trigger()` returns `Promise<AnalysisResult>` instead of `Promise<void>`.
+When `awaitable: true`, `trigger()` returns `Promise<AnalysisResult>` instead of `Promise<string>` (the BullMQ job id for fire-and-forget).
 
 ## Step 4: Trigger Jobs
 
@@ -178,18 +178,18 @@ const result = await trigger({
 ### After
 
 ```typescript
-await this.generateContent.trigger(
+const jobId = await this.generateContent.trigger(
   { userId: "u1", contentId: "c1" },
   { tags: ["generation"], jobOptions: { priority: 1 } },
 );
-// returns Promise<void> for fire-and-forget
+// returns Promise<string> (job id) for fire-and-forget
 ```
 
 Changes:
 - The payload is the first argument, not wrapped in `{ name, payload, meta }`.
 - The job name and queue are already set in the definition.
 - `userId` and `tags` are either extracted automatically via the `meta` function or passed in `TriggerOverrides`.
-- The return is `void` (fire-and-forget) or `Result` (awaitable), not `ServerResult<WorkflowReadOutputSchema>`.
+- The return is the BullMQ job id as `string` (fire-and-forget `trigger`), `string[]` (`triggerMany`), or `Result` / `Result[]` when `awaitable: true` — not `ServerResult<WorkflowReadOutputSchema>`.
 
 ### Bulk Trigger
 
@@ -202,10 +202,11 @@ await triggerMany({
 });
 
 // After
-await this.generateContent.triggerMany(
+const jobIds = await this.generateContent.triggerMany(
   [payload1, payload2, payload3],
   { userId: "u1" },
 );
+// jobIds[i] corresponds to payload[i] (fire-and-forget)
 ```
 
 Uses `queue.addBulk` and `repository.addedMany` for batch operations.

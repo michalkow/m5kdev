@@ -272,7 +272,7 @@ export class WorkflowService extends Base {
     resolved: ResolvedJobConfig,
     payload: Payload,
     overrides?: TriggerOverrides,
-  ): Promise<Result | undefined> {
+  ): Promise<Result | string> {
     const queue = this.getQueue(resolved.queueName);
     const jobId = resolved.idFn ? resolved.idFn(payload) : uuidv4();
     const mergedOptions = this.mergeJobOptions(resolved, overrides);
@@ -316,14 +316,14 @@ export class WorkflowService extends Base {
       return result as Result;
     }
 
-    return undefined;
+    return job.id;
   }
 
   private async triggerManyJobs<Payload, Result>(
     resolved: ResolvedJobConfig,
     payloads: Payload[],
     overrides?: TriggerOverrides,
-  ): Promise<Result[] | undefined> {
+  ): Promise<Result[] | string[]> {
     const queue = this.getQueue(resolved.queueName);
     const mergedOptions = this.mergeJobOptions(resolved, overrides);
 
@@ -397,7 +397,7 @@ export class WorkflowService extends Base {
       return results;
     }
 
-    return undefined;
+    return jobs.map((j) => j.id as string);
   }
 
   private attachLifecycleListeners(events: QueueEvents): void {
