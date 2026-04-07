@@ -1,5 +1,16 @@
 # @m5kdev/frontend
 
+## 0.12.0
+
+### Minor Changes
+
+- cron
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.12.0
+
 ## 0.11.0
 
 ### Minor Changes

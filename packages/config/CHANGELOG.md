@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.12.0
+
+### Minor Changes
+
+- cron
+
 ## 0.11.0
 
 ### Minor Changes
