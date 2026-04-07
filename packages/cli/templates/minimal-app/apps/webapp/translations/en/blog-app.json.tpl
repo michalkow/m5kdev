@@ -14,6 +14,20 @@
     "navigation": {
       "posts": "Posts"
     },
+    "push": {
+      "eyebrow": "Browser push",
+      "body": "Enable notifications for this browser profile. Requires HTTPS in production, VAPID keys on the server, Redis for the worker, and a running server process.",
+      "cta": "Enable push for this device",
+      "enabled": "This browser is registered for push.",
+      "denied": "Notification permission was denied.",
+      "unsupported": "Push messaging is not supported in this browser.",
+      "noVapid": "Server is missing VAPID public key configuration.",
+      "badSubscription": "Could not read push subscription from the browser.",
+      "failed": "Could not enable push. Check the console and server logs.",
+      "vapidMissing": "Server did not return a VAPID key — set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY, then restart.",
+      "blockedHint": "Notifications are blocked for this site. Enable them in the browser address bar or site settings, then try again.",
+      "permissionGranted": "Permission granted — tap below to register this browser with the server."
+    },
     "account": {
       "eyebrow": "Signed In As",
       "light": "Light mode",

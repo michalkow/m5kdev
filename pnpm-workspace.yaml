@@ -94,6 +94,7 @@ catalog:
   '@vitejs/plugin-react': 4.2.0
   '@vitest/ui': 3.0.0
   ai: 6.0.0
+  apn: 2.2.0
   apify-client: 2.21.0
   autoprefixer: 10.4.20
   babel-plugin-react-compiler: 1.0.0
@@ -118,6 +119,7 @@ catalog:
   drizzle-zod: 0.8.2
   express: 4.21.2
   ffmpeg-ffprobe-static: 6.1.2-rc.1
+  firebase-admin: 13.6.0
   framer-motion: 12.23.12
   globals: 16.3.0
   i18next: 25.3.2
@@ -195,6 +197,7 @@ catalog:
   vite-plugin-vsharp: 1.8.1
   vite-tsconfig-paths: 5.1.4
   vitest: 3.0.0
+  web-push: 3.6.7
   webpack-cli: 5.1.4
   zod: 4.2.1
 

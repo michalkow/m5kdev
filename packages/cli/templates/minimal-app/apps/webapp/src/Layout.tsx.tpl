@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { NavLink, Outlet } from "react-router";
+import { PushNotificationsPanel } from "./modules/notification/PushNotificationsPanel";
 
 export function Layout() {
   const { data: session } = useSession();
@@ -57,6 +58,8 @@ export function Layout() {
               </Chip>
             </div>
           </div>
+
+          <PushNotificationsPanel />
 
           <nav className="mt-8 grid gap-2">
             <NavLink

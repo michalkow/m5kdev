@@ -1,9 +1,13 @@
 import * as auth from "@m5kdev/backend/modules/auth/auth.db";
+import * as notification from "@m5kdev/backend/modules/notification/notification.db";
+import * as workflow from "@m5kdev/backend/modules/workflow/workflow.db";
 import { drizzle } from "drizzle-orm/libsql";
 import * as posts from "./modules/posts/posts.db";
 
 export const schema = {
   ...auth,
+  ...workflow,
+  ...notification,
   ...posts,
 };
 

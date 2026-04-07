@@ -4,7 +4,11 @@ import { toNodeHandler } from "better-auth/node";
 import cors from "cors";
 import express from "express";
 import { auth } from "./lib/auth";
+import { notificationService } from "./service";
 import { appRouter } from "./trpc";
+import { workflowRegistry, workflowService } from "./workflow";
+
+workflowRegistry.registerService(notificationService);
 
 const app = express();
 const port = process.env.PORT ? Number.parseInt(process.env.PORT, 10) : 8080;
@@ -16,7 +20,7 @@ app.use(
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-  })
+  }),
 );
 
 app.use(
@@ -24,11 +28,29 @@ app.use(
   trpcExpress.createExpressMiddleware({
     router: appRouter,
     createContext: createAuthContext(auth as never),
-  })
+  }),
 );
 
 app.all("/api/auth/*", toNodeHandler(auth));
 
-app.listen(port, () => {
-  console.info(`Server running at ${process.env.VITE_SERVER_URL ?? `http://localhost:${port}`}`);
+async function shutdown(): Promise<void> {
+  await workflowRegistry.stop();
+  await workflowService.close();
+  process.exit(0);
+}
+
+process.once("SIGINT", () => {
+  void shutdown();
 });
+process.once("SIGTERM", () => {
+  void shutdown();
+});
+
+async function start(): Promise<void> {
+  await workflowRegistry.start();
+  app.listen(port, () => {
+    console.info(`Server running at ${process.env.VITE_SERVER_URL ?? `http://localhost:${port}`}`);
+  });
+}
+
+void start();

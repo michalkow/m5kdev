@@ -127,6 +127,16 @@
         "default": "./dist/src/modules/workflow/*.cjs"
       }
     },
+    "./modules/notification/*": {
+      "import": {
+        "types": "./dist/src/modules/notification/*.d.mts",
+        "default": "./dist/src/modules/notification/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/notification/*.d.cts",
+        "default": "./dist/src/modules/notification/*.cjs"
+      }
+    },
     "./modules/table/*": {
       "import": {
         "types": "./dist/src/modules/table/*.d.mts",

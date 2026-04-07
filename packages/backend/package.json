@@ -35,6 +35,7 @@
     "@trpc/server": "catalog:",
     "@types/multer": "catalog:",
     "ai": "catalog:",
+    "apn": "catalog:",
     "better-auth": "catalog:",
     "bip32": "catalog:",
     "bip39": "catalog:",
@@ -47,6 +48,7 @@
     "drizzle-zod": "catalog:",
     "express": "catalog:",
     "ffmpeg-ffprobe-static": "catalog:",
+    "firebase-admin": "catalog:",
     "ioredis": "catalog:",
     "jsonrepair": "catalog:",
     "luxon": "catalog:",
@@ -70,6 +72,7 @@
     "trpc-to-openapi": "catalog:",
     "turndown": "catalog:",
     "uuid": "catalog:",
+    "web-push": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -272,6 +275,16 @@
       "require": {
         "types": "./dist/src/modules/email/*.d.cts",
         "default": "./dist/src/modules/email/*.cjs"
+      }
+    },
+    "./modules/notification/*": {
+      "import": {
+        "types": "./dist/src/modules/notification/*.d.mts",
+        "default": "./dist/src/modules/notification/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/notification/*.d.cts",
+        "default": "./dist/src/modules/notification/*.cjs"
       }
     },
     "./modules/pdf/*": {

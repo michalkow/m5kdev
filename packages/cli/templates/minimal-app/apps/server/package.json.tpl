@@ -25,6 +25,7 @@
     "dotenv": "catalog:",
     "drizzle-orm": "catalog:",
     "express": "catalog:",
+    "ioredis": "catalog:",
     "neverthrow": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
