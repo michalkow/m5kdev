@@ -41,15 +41,15 @@ jest.mock("ioredis", () =>
   jest.fn().mockImplementation(() => ({
     duplicate: mockDuplicate,
     disconnect: mockDisconnect,
-  })),
+  }))
 );
 
 jest.mock("uuid", () => ({
   v4: jest.fn().mockReturnValue("test-uuid-1234"),
 }));
 
-import { WorkflowService } from "./workflow.service";
 import type { WorkflowRepository } from "./workflow.repository";
+import { WorkflowService } from "./workflow.service";
 
 type MockedRepo = WorkflowRepository & Record<string, jest.Mock>;
 
@@ -114,7 +114,7 @@ describe("WorkflowService", () => {
     it("throws if the specified queue does not exist", () => {
       const { service } = createService();
       expect(() => service.job({ name: "testJob", queue: "nonexistent" })).toThrow(
-        'Queue "nonexistent" is not configured',
+        'Queue "nonexistent" is not configured'
       );
     });
 
@@ -171,7 +171,7 @@ describe("WorkflowService", () => {
       expect(def._handler).toBe(handler);
     });
 
-    it(".handle() preserves trigger/triggerMany after chaining", async () => {
+    it(".handle() preserves trigger after chaining", async () => {
       const { service } = createService();
       const handler = jest.fn().mockResolvedValue(undefined);
       const def = service.job({ name: "chainedJob" }).handle(handler);
@@ -182,7 +182,7 @@ describe("WorkflowService", () => {
       expect(mockQueueAdd).toHaveBeenCalledWith(
         "chainedJob",
         { data: "test" },
-        expect.objectContaining({ jobId: "test-uuid-1234" }),
+        expect.objectContaining({ jobId: "test-uuid-1234" })
       );
     });
   });
@@ -197,7 +197,7 @@ describe("WorkflowService", () => {
       expect(mockQueueAdd).toHaveBeenCalledWith(
         "myJob",
         { data: "test" },
-        expect.objectContaining({ jobId: "test-uuid-1234" }),
+        expect.objectContaining({ jobId: "test-uuid-1234" })
       );
     });
 
@@ -216,7 +216,7 @@ describe("WorkflowService", () => {
           jobId: "job-1",
           jobName: "myJob",
           queueName: "fast",
-        }),
+        })
       );
     });
 
@@ -232,7 +232,7 @@ describe("WorkflowService", () => {
       expect(mockQueueAdd).toHaveBeenCalledWith(
         "dedupJob",
         { key: "abc" },
-        expect.objectContaining({ jobId: "dedup-abc" }),
+        expect.objectContaining({ jobId: "dedup-abc" })
       );
     });
 
@@ -249,7 +249,7 @@ describe("WorkflowService", () => {
         expect.objectContaining({
           userId: "override-user",
           tags: ["manual"],
-        }),
+        })
       );
     });
 
@@ -266,7 +266,7 @@ describe("WorkflowService", () => {
       expect(mockQueueAdd).toHaveBeenCalledWith(
         "mergeTest",
         {},
-        expect.objectContaining({ priority: 1 }),
+        expect.objectContaining({ priority: 1 })
       );
     });
 
@@ -309,13 +309,13 @@ describe("WorkflowService", () => {
         expect.arrayContaining([
           expect.objectContaining({ name: "batchJob" }),
           expect.objectContaining({ name: "batchJob" }),
-        ]),
+        ])
       );
       expect(repo.addedMany).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({ jobName: "batchJob", jobId: "job-1" }),
           expect.objectContaining({ jobName: "batchJob", jobId: "job-2" }),
-        ]),
+        ])
       );
     });
   });
@@ -386,9 +386,7 @@ describe("WorkflowService", () => {
     it("attaches active/completed/failed listeners to QueueEvents", () => {
       createService();
 
-      const eventNames = mockQueueEventsOn.mock.calls.map(
-        (call: unknown[]) => call[0],
-      );
+      const eventNames = mockQueueEventsOn.mock.calls.map((call: unknown[]) => call[0]);
       expect(eventNames).toContain("active");
       expect(eventNames).toContain("completed");
       expect(eventNames).toContain("failed");

@@ -13,10 +13,10 @@ function isJobDefinition(value: unknown): value is WorkflowJobDefinitionBase<unk
     typeof value === "object" &&
     value !== null &&
     "jobName" in value &&
+    "queueName" in value &&
     "_config" in value
   );
 }
-
 export class WorkflowRegistry {
   private readonly handlers = new Map<string, RegisteredHandler>();
   private readonly workers = new Map<string, Worker>();
@@ -26,7 +26,7 @@ export class WorkflowRegistry {
 
   register<Payload, Result>(
     definition: WorkflowJobDefinition<Payload, Result>,
-    handler: (payload: Payload) => Promise<Result>,
+    handler: (payload: Payload) => Promise<Result>
   ): void {
     if (this.workers.size > 0) {
       throw new Error("Cannot register handlers after start() has been called");
@@ -53,10 +53,9 @@ export class WorkflowRegistry {
 
       if (!value._handler) {
         throw new Error(
-          `Job "${value.jobName}" on queue "${value.queueName}" (property "${key}") has no .handle() attached`,
+          `Job "${value.jobName}" on queue "${value.queueName}" (property "${key}") has no _handler attached`
         );
       }
-
       if (this.handlers.has(value.jobName)) {
         throw new Error(`Handler already registered for job "${value.jobName}"`);
       }
@@ -114,7 +113,7 @@ export class WorkflowRegistry {
             }
           });
         },
-        workerOptionOverrides,
+        workerOptionOverrides
       );
 
       worker.on("error", (error) => {
@@ -124,7 +123,7 @@ export class WorkflowRegistry {
       this.workers.set(queueName, worker);
       this.logger.info(
         { queue: queueName, jobs: [...handlers.keys()] },
-        `Worker started for queue "${queueName}"`,
+        `Worker started for queue "${queueName}"`
       );
     }
   }
@@ -135,7 +134,7 @@ export class WorkflowRegistry {
   }
 
   private mergeWorkerOptions(
-    handlers: Map<string, RegisteredHandler>,
+    handlers: Map<string, RegisteredHandler>
   ): Partial<import("bullmq").WorkerOptions> {
     const merged: Partial<import("bullmq").WorkerOptions> = {};
     for (const entry of handlers.values()) {
