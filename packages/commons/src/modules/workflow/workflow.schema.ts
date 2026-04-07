@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { WORFLOW_STATUSES } from "./workflow.constants";
+import { WORKFLOW_STATUSES } from "./workflow.constants";
 
 export const workflowSelectSchema = z.object({
   id: z.uuid(),
@@ -10,7 +10,7 @@ export const workflowSelectSchema = z.object({
   tags: z.array(z.string()).nullable(),
   input: z.unknown(),
   output: z.unknown(),
-  status: z.enum(WORFLOW_STATUSES),
+  status: z.enum(WORKFLOW_STATUSES),
   error: z.string().nullable(),
   retries: z.number(),
   finishedAt: z.date().nullable(),
@@ -24,7 +24,7 @@ export const workflowReadInputSchema = z.object({
 });
 
 export const workflowListInputSchema = z.object({
-  status: z.enum(WORFLOW_STATUSES).array().optional(),
+  status: z.enum(WORKFLOW_STATUSES).array().optional(),
   jobName: z.string().optional(),
 });
 

@@ -1,0 +1,345 @@
+const mockQueueAdd = jest.fn();
+const mockQueueAddBulk = jest.fn();
+const mockQueueClose = jest.fn().mockResolvedValue(undefined);
+const mockQueueGetJobCounts = jest.fn();
+
+const mockQueueEventsOn = jest.fn();
+const mockQueueEventsClose = jest.fn().mockResolvedValue(undefined);
+
+const mockWaitUntilFinished = jest.fn();
+
+const mockDuplicate = jest.fn().mockReturnValue({});
+const mockDisconnect = jest.fn();
+
+jest.mock("bullmq", () => ({
+  Queue: jest.fn().mockImplementation(() => ({
+    add: mockQueueAdd,
+    addBulk: mockQueueAddBulk,
+    close: mockQueueClose,
+    getJobCounts: mockQueueGetJobCounts,
+    getJob: jest.fn(),
+    getJobs: jest.fn(),
+  })),
+  QueueEvents: jest.fn().mockImplementation(() => ({
+    on: mockQueueEventsOn,
+    close: mockQueueEventsClose,
+  })),
+  Worker: jest.fn().mockImplementation(() => ({
+    on: jest.fn(),
+    close: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+jest.mock("ioredis", () =>
+  jest.fn().mockImplementation(() => ({
+    duplicate: mockDuplicate,
+    disconnect: mockDisconnect,
+  })),
+);
+
+jest.mock("uuid", () => ({
+  v4: jest.fn().mockReturnValue("test-uuid-1234"),
+}));
+
+import { WorkflowService } from "./workflow.service";
+import type { WorkflowRepository } from "./workflow.repository";
+
+type MockedRepo = WorkflowRepository & Record<string, jest.Mock>;
+
+function createMockRepository(): MockedRepo {
+  return {
+    read: jest.fn().mockResolvedValue({ isOk: () => true, value: {} }),
+    list: jest.fn().mockResolvedValue({ isOk: () => true, value: [] }),
+    added: jest.fn().mockResolvedValue({ isOk: () => true, value: {} }),
+    addedMany: jest.fn().mockResolvedValue({ isOk: () => true, value: [] }),
+    started: jest.fn().mockResolvedValue({ isOk: () => true, value: {} }),
+    completed: jest.fn().mockResolvedValue({ isOk: () => true, value: {} }),
+    failed: jest.fn().mockResolvedValue({ isOk: () => true, value: {} }),
+  } as unknown as MockedRepo;
+}
+
+function createService(repo = createMockRepository()) {
+  return {
+    service: new WorkflowService(repo, {
+      connection: { host: "localhost", port: 6379 },
+      queues: {
+        fast: { concurrency: 10, defaultJobOptions: { attempts: 3 } },
+        slow: { concurrency: 2 },
+      },
+      defaultQueue: "fast",
+      defaults: {
+        timeout: 30_000,
+        jobOptions: { removeOnComplete: { age: 3600 } },
+      },
+    }),
+    repo,
+  };
+}
+
+describe("WorkflowService", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockQueueAdd.mockResolvedValue({ id: "job-1", waitUntilFinished: mockWaitUntilFinished });
+    mockQueueAddBulk.mockResolvedValue([
+      { id: "job-1", waitUntilFinished: mockWaitUntilFinished, data: { payload: "a" } },
+      { id: "job-2", waitUntilFinished: mockWaitUntilFinished, data: { payload: "b" } },
+    ]);
+  });
+
+  describe(".job()", () => {
+    it("creates a fire-and-forget job definition with correct metadata", () => {
+      const { service } = createService();
+      const def = service.job({ name: "testJob", queue: "fast" });
+
+      expect(def.jobName).toBe("testJob");
+      expect(def.queueName).toBe("fast");
+      expect(def._config.awaitable).toBe(false);
+    });
+
+    it("uses the default queue when none is specified", () => {
+      const { service } = createService();
+      const def = service.job({ name: "testJob" });
+
+      expect(def.queueName).toBe("fast");
+    });
+
+    it("throws if the specified queue does not exist", () => {
+      const { service } = createService();
+      expect(() => service.job({ name: "testJob", queue: "nonexistent" })).toThrow(
+        'Queue "nonexistent" is not configured',
+      );
+    });
+
+    it("maps retries shorthand to attempts when attempts is not set", () => {
+      const { service } = createService();
+      const def = service.job({ name: "testJob", queue: "slow", retries: 5 });
+
+      expect(def._config.jobOptions.attempts).toBe(5);
+    });
+
+    it("does not override explicit attempts with retries shorthand", () => {
+      const { service } = createService();
+      const def = service.job({
+        name: "testJob",
+        retries: 5,
+        jobOptions: { attempts: 10 },
+      });
+
+      expect(def._config.jobOptions.attempts).toBe(10);
+    });
+
+    it("creates an awaitable job definition", () => {
+      const { service } = createService();
+      const def = service.job<{ id: string }, string>({
+        name: "awaitableJob",
+        awaitable: true,
+      });
+
+      expect(def._config.awaitable).toBe(true);
+    });
+
+    it("uses service-level default timeout", () => {
+      const { service } = createService();
+      const def = service.job({ name: "testJob" });
+
+      expect(def._config.timeout).toBe(30_000);
+    });
+
+    it("allows per-job timeout override", () => {
+      const { service } = createService();
+      const def = service.job({ name: "testJob", timeout: 5_000 });
+
+      expect(def._config.timeout).toBe(5_000);
+    });
+  });
+
+  describe("trigger()", () => {
+    it("adds the job to the correct queue with merged options", async () => {
+      const { service } = createService();
+      const def = service.job({ name: "myJob", queue: "fast" });
+
+      await def.trigger({ data: "test" });
+
+      expect(mockQueueAdd).toHaveBeenCalledWith(
+        "myJob",
+        { data: "test" },
+        expect.objectContaining({ jobId: "test-uuid-1234" }),
+      );
+    });
+
+    it("calls repository.added with correct metadata", async () => {
+      const { service, repo } = createService();
+      const def = service.job<{ userId: string; data: string }>({
+        name: "myJob",
+        meta: (payload) => ({ userId: payload.userId }),
+      });
+
+      await def.trigger({ userId: "user-1", data: "test" });
+
+      expect(repo.added).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: "user-1",
+          jobId: "job-1",
+          jobName: "myJob",
+          queueName: "fast",
+        }),
+      );
+    });
+
+    it("uses custom id function when provided", async () => {
+      const { service } = createService();
+      const def = service.job<{ key: string }>({
+        name: "dedupJob",
+        id: (payload) => `dedup-${payload.key}`,
+      });
+
+      await def.trigger({ key: "abc" });
+
+      expect(mockQueueAdd).toHaveBeenCalledWith(
+        "dedupJob",
+        { key: "abc" },
+        expect.objectContaining({ jobId: "dedup-abc" }),
+      );
+    });
+
+    it("resolves meta from TriggerOverrides over meta function", async () => {
+      const { service, repo } = createService();
+      const def = service.job({
+        name: "metaJob",
+        meta: () => ({ userId: "from-payload", tags: ["auto"] }),
+      });
+
+      await def.trigger({}, { userId: "override-user", tags: ["manual"] });
+
+      expect(repo.added).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: "override-user",
+          tags: ["manual"],
+        }),
+      );
+    });
+
+    it("merges options in correct priority order", async () => {
+      const { service } = createService();
+      const def = service.job({
+        name: "mergeTest",
+        queue: "fast",
+        jobOptions: { priority: 5 },
+      });
+
+      await def.trigger({}, { jobOptions: { priority: 1 } });
+
+      expect(mockQueueAdd).toHaveBeenCalledWith(
+        "mergeTest",
+        {},
+        expect.objectContaining({ priority: 1 }),
+      );
+    });
+
+    it("awaitable trigger calls waitUntilFinished", async () => {
+      mockWaitUntilFinished.mockResolvedValue("result-data");
+
+      const { service } = createService();
+      const def = service.job<Record<string, never>, string>({
+        name: "awaitJob",
+        awaitable: true,
+        timeout: 5_000,
+      });
+
+      const result = await def.trigger({});
+
+      expect(mockWaitUntilFinished).toHaveBeenCalled();
+      expect(result).toBe("result-data");
+    });
+
+    it("fire-and-forget trigger returns void", async () => {
+      const { service } = createService();
+      const def = service.job({ name: "fireJob" });
+
+      const result = await def.trigger({ data: "test" });
+
+      expect(result).toBeUndefined();
+      expect(mockWaitUntilFinished).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("triggerMany()", () => {
+    it("uses addBulk and repository.addedMany for batch inserts", async () => {
+      const { service, repo } = createService();
+      const def = service.job({ name: "batchJob" });
+
+      await def.triggerMany([{ a: 1 }, { a: 2 }]);
+
+      expect(mockQueueAddBulk).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ name: "batchJob" }),
+          expect.objectContaining({ name: "batchJob" }),
+        ]),
+      );
+      expect(repo.addedMany).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ jobName: "batchJob", jobId: "job-1" }),
+          expect.objectContaining({ jobName: "batchJob", jobId: "job-2" }),
+        ]),
+      );
+    });
+  });
+
+  describe("queue inspection", () => {
+    it("getQueues returns all configured queue names", () => {
+      const { service } = createService();
+      expect(service.getQueues()).toEqual(expect.arrayContaining(["fast", "slow"]));
+    });
+
+    it("getJobCounts delegates to the queue", async () => {
+      mockQueueGetJobCounts.mockResolvedValue({ active: 2, waiting: 5 });
+      const { service } = createService();
+
+      const counts = await service.getJobCounts("fast");
+      expect(counts).toEqual({ active: 2, waiting: 5 });
+    });
+
+    it("getJobCounts throws for unknown queue", async () => {
+      const { service } = createService();
+      await expect(service.getJobCounts("unknown")).rejects.toThrow();
+    });
+  });
+
+  describe("read/list", () => {
+    it("delegates read to repository", async () => {
+      const { service, repo } = createService();
+      await service.read({ jobId: "j1", userId: "u1" });
+      expect(repo.read).toHaveBeenCalledWith({ jobId: "j1", userId: "u1" });
+    });
+
+    it("delegates list to repository", async () => {
+      const { service, repo } = createService();
+      await service.list({ userId: "u1" });
+      expect(repo.list).toHaveBeenCalledWith({ userId: "u1" });
+    });
+  });
+
+  describe("close()", () => {
+    it("closes all queues, events, and disconnects redis", async () => {
+      const { service } = createService();
+      await service.close();
+
+      expect(mockQueueClose).toHaveBeenCalled();
+      expect(mockQueueEventsClose).toHaveBeenCalled();
+      expect(mockDisconnect).toHaveBeenCalled();
+    });
+  });
+
+  describe("lifecycle listeners", () => {
+    it("attaches active/completed/failed listeners to QueueEvents", () => {
+      createService();
+
+      const eventNames = mockQueueEventsOn.mock.calls.map(
+        (call: unknown[]) => call[0],
+      );
+      expect(eventNames).toContain("active");
+      expect(eventNames).toContain("completed");
+      expect(eventNames).toContain("failed");
+    });
+  });
+});

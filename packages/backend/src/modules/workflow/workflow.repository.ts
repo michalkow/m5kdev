@@ -3,7 +3,7 @@ import type {
   WorkflowListOutputSchema,
   WorkflowReadOutputSchema,
 } from "@m5kdev/commons/modules/workflow/workflow.schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
@@ -145,7 +145,13 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
     return this.throwableAsync(async () => {
       const [wf] = await this.orm
         .update(this.schema.workflows)
-        .set({ status: "failed", error, updatedAt: new Date(), finishedAt: new Date() })
+        .set({
+          status: "failed",
+          error,
+          retries: sql`${this.schema.workflows.retries} + 1`,
+          updatedAt: new Date(),
+          finishedAt: new Date(),
+        })
         .where(eq(this.schema.workflows.jobId, jobId))
         .returning();
       return ok(wf);

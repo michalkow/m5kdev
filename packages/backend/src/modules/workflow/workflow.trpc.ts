@@ -8,22 +8,26 @@ import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 import type { WorkflowService } from "./workflow.service";
 
 export function createWorkflowTRPC(
-  { router, privateProcedure: procedure }: TRPCMethods,
-  workflowService: WorkflowService
+  { router, privateProcedure }: TRPCMethods,
+  workflowService: WorkflowService,
 ) {
   return router({
-    read: procedure
+    read: privateProcedure
       .input(workflowReadInputSchema)
       .output(workflowReadOutputSchema)
-      .query(async ({ ctx, input }) => {
-        return handleTRPCResult(await workflowService.read(input, ctx));
-      }),
+      .query(async ({ ctx, input }) =>
+        handleTRPCResult(
+          await workflowService.read({ ...input, userId: ctx.actor.userId }),
+        ),
+      ),
 
-    list: procedure
+    list: privateProcedure
       .input(workflowListInputSchema)
       .output(workflowListOutputSchema)
-      .query(async ({ ctx, input }) => {
-        return handleTRPCResult(await workflowService.list(input, ctx));
-      }),
+      .query(async ({ ctx, input }) =>
+        handleTRPCResult(
+          await workflowService.list({ ...input, userId: ctx.actor.userId }),
+        ),
+      ),
   });
 }
