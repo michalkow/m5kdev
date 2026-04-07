@@ -159,6 +159,32 @@ describe("WorkflowService", () => {
 
       expect(def._config.timeout).toBe(5_000);
     });
+
+    it(".handle() stores the handler and returns the same definition", () => {
+      const { service } = createService();
+      const handler = jest.fn().mockResolvedValue(undefined);
+      const def = service.job({ name: "handleJob" });
+
+      const returned = def.handle(handler);
+
+      expect(returned).toBe(def);
+      expect(def._handler).toBe(handler);
+    });
+
+    it(".handle() preserves trigger/triggerMany after chaining", async () => {
+      const { service } = createService();
+      const handler = jest.fn().mockResolvedValue(undefined);
+      const def = service.job({ name: "chainedJob" }).handle(handler);
+
+      const jobId = await def.trigger({ data: "test" });
+
+      expect(jobId).toBe("job-1");
+      expect(mockQueueAdd).toHaveBeenCalledWith(
+        "chainedJob",
+        { data: "test" },
+        expect.objectContaining({ jobId: "test-uuid-1234" }),
+      );
+    });
   });
 
   describe("trigger()", () => {

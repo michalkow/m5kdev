@@ -71,11 +71,13 @@ export interface AwaitableJobDefinition<Payload, Result>
   extends WorkflowJobDefinitionBase<Payload> {
   trigger(payload: Payload, overrides?: TriggerOverrides): Promise<Result>;
   triggerMany(payloads: Payload[], overrides?: TriggerOverrides): Promise<Result[]>;
+  handle(fn: (payload: Payload) => Promise<Result>): this;
 }
 
 export interface FireAndForgetJobDefinition<Payload> extends WorkflowJobDefinitionBase<Payload> {
   trigger(payload: Payload, overrides?: TriggerOverrides): Promise<string>;
   triggerMany(payloads: Payload[], overrides?: TriggerOverrides): Promise<string[]>;
+  handle(fn: (payload: Payload) => Promise<void>): this;
 }
 
 export type WorkflowJobDefinition<Payload, Result = unknown> =

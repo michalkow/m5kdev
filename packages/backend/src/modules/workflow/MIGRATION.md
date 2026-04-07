@@ -255,6 +255,91 @@ Changes:
 - One BullMQ `Worker` is created per queue (not per job). Multiple jobs on the same queue share a worker.
 - Unknown job names that arrive in the queue fail immediately with a clear error.
 
+## Step 5b: Handler Chaining + Auto-Discovery (Recommended)
+
+The individual `register()` approach works but creates boilerplate. Two features eliminate it:
+
+### `.handle()` chaining
+
+Chain `.handle()` directly onto `.job()` to co-locate the handler with the definition. The handler is stored on `_handler` and `.handle()` returns `this`, so the property type stays the same -- it can still be triggered from other service methods.
+
+**Before (separate handler method + registry call):**
+
+```typescript
+// In service
+readonly generateJob = this.service.workflow.job<GeneratePayload>({
+  name: "generate",
+  meta: (p) => ({ userId: p.userId }),
+});
+
+async handleGenerate(payload: GeneratePayload): Promise<void> {
+  const result = await this.doGeneration(payload);
+  if (result.isErr()) throw result.error;
+}
+
+// In registry
+registry.register(contentService.generateJob, (p) => contentService.handleGenerate(p));
+```
+
+**After (inline handler, no separate method):**
+
+```typescript
+// In service -- one chain
+readonly generateJob = this.service.workflow.job<GeneratePayload>({
+  name: "generate",
+  meta: (p) => ({ userId: p.userId }),
+}).handle(async (payload) => {
+  const result = await this.doGeneration(payload);
+  if (result.isErr()) throw result.error;
+});
+
+// In registry -- no individual register() call needed (see registerService below)
+```
+
+### `registerService()` auto-discovery
+
+Instead of individually registering each job, pass the whole service instance. The registry scans its properties and finds all job definitions that have `.handle()` attached.
+
+**Before:**
+
+```typescript
+registry.register(contentService.generateJob, (p) => contentService.handleGenerate(p));
+registry.register(contentService.analyzeJob, (p) => contentService.handleAnalyze(p));
+registry.register(contentService.embedJob, (p) => contentService.handleEmbed(p));
+```
+
+**After:**
+
+```typescript
+registry.registerService(contentService);
+```
+
+`registerService()`:
+- Iterates all own enumerable properties via `Object.entries(service)`.
+- Picks up any property that looks like a job definition (has `jobName` and `_config`).
+- Validates that `_handler` is set. If a job is missing `.handle()`, it throws immediately at boot time with the property name in the error message.
+- Validates name uniqueness, same as `register()`.
+- Ignores non-job properties (strings, numbers, plain objects, methods, etc.).
+
+### Mixed usage
+
+`register()` and `registerService()` coexist. Use `register()` for edge cases where the handler needs dependencies from a different service than the one defining the job. Use `registerService()` for the common case.
+
+```typescript
+const registry = new WorkflowRegistry(workflowService);
+
+// Auto-discover all jobs with .handle() on these services
+registry.registerService(contentService);
+registry.registerService(storyService);
+
+// Edge case: handler needs a cross-service dependency
+registry.register(adminService.reindexJob, (p) =>
+  searchService.reindex(p),
+);
+
+registry.start();
+```
+
 ## Step 6: tRPC
 
 ### Before

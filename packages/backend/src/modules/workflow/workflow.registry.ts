@@ -2,7 +2,20 @@ import type { Worker } from "bullmq";
 import { logger as rootLogger } from "../../utils/logger";
 import { runWithPosthogRequestState } from "../../utils/posthog";
 import type { WorkflowService } from "./workflow.service";
-import type { RegisteredHandler, WorkflowJobDefinition } from "./workflow.types";
+import type {
+  RegisteredHandler,
+  WorkflowJobDefinition,
+  WorkflowJobDefinitionBase,
+} from "./workflow.types";
+
+function isJobDefinition(value: unknown): value is WorkflowJobDefinitionBase<unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "jobName" in value &&
+    "_config" in value
+  );
+}
 
 export class WorkflowRegistry {
   private readonly handlers = new Map<string, RegisteredHandler>();
@@ -28,6 +41,32 @@ export class WorkflowRegistry {
       handler: handler as (payload: unknown) => Promise<unknown>,
       config: definition._config,
     });
+  }
+
+  registerService(service: Record<string, unknown>): void {
+    if (this.workers.size > 0) {
+      throw new Error("Cannot register handlers after start() has been called");
+    }
+
+    for (const [key, value] of Object.entries(service)) {
+      if (!isJobDefinition(value)) continue;
+
+      if (!value._handler) {
+        throw new Error(
+          `Job "${value.jobName}" on queue "${value.queueName}" (property "${key}") has no .handle() attached`,
+        );
+      }
+
+      if (this.handlers.has(value.jobName)) {
+        throw new Error(`Handler already registered for job "${value.jobName}"`);
+      }
+
+      this.handlers.set(value.jobName, {
+        queueName: value.queueName,
+        handler: value._handler as (payload: unknown) => Promise<unknown>,
+        config: value._config,
+      });
+    }
   }
 
   start(): void {

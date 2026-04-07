@@ -112,6 +112,10 @@ export class WorkflowService extends Base {
         this.triggerJob<Payload, Result>(resolved, payload, overrides),
       triggerMany: (payloads: Payload[], overrides?: TriggerOverrides) =>
         this.triggerManyJobs<Payload, Result>(resolved, payloads, overrides),
+      handle(fn: (payload: Payload) => Promise<unknown>) {
+        this._handler = fn;
+        return this;
+      },
     };
 
     return definition as AwaitableJobDefinition<Payload, Result> &

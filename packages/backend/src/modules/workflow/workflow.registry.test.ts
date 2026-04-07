@@ -30,6 +30,16 @@ function createMockDefinition<P = unknown, R = unknown>(
   } as unknown as WorkflowJobDefinition<P, R>;
 }
 
+function createMockDefinitionWithHandler<P = unknown, R = unknown>(
+  name: string,
+  queueName = "fast",
+  configOverrides?: Partial<ResolvedJobConfig>,
+): WorkflowJobDefinition<P, R> {
+  const def = createMockDefinition<P, R>(name, queueName, configOverrides);
+  def._handler = jest.fn().mockResolvedValue(undefined);
+  return def;
+}
+
 interface MockJob {
   name: string;
   data: unknown;
@@ -195,6 +205,87 @@ describe("WorkflowRegistry", () => {
       expect(capturedProcessor).not.toBeNull();
       const result = await capturedProcessor!({ name: "jobA", data: {}, id: "j1" });
       expect(result).toBeNull();
+    });
+  });
+
+  describe("registerService()", () => {
+    it("discovers job definitions and registers their handlers", () => {
+      const registry = new WorkflowRegistry(mockService as WorkflowService);
+      const fakeService = {
+        jobA: createMockDefinitionWithHandler("jobA", "fast"),
+        jobB: createMockDefinitionWithHandler("jobB", "slow"),
+        notAJob: "just a string",
+      };
+
+      registry.registerService(fakeService);
+      registry.start();
+
+      expect(mockCreateWorker).toHaveBeenCalledTimes(2);
+    });
+
+    it("throws if a job definition has no .handle() attached", () => {
+      const registry = new WorkflowRegistry(mockService as WorkflowService);
+      const fakeService = {
+        myJob: createMockDefinition("myJob", "fast"),
+      };
+
+      expect(() => registry.registerService(fakeService)).toThrow(
+        'Job "myJob" on queue "fast" (property "myJob") has no .handle() attached',
+      );
+    });
+
+    it("throws on duplicate job name across services", () => {
+      const registry = new WorkflowRegistry(mockService as WorkflowService);
+      const serviceA = { jobA: createMockDefinitionWithHandler("jobA") };
+      const serviceB = { duplicateJob: createMockDefinitionWithHandler("jobA") };
+
+      registry.registerService(serviceA);
+      expect(() => registry.registerService(serviceB)).toThrow(
+        'already registered for job "jobA"',
+      );
+    });
+
+    it("throws if called after start()", () => {
+      const registry = new WorkflowRegistry(mockService as WorkflowService);
+      const serviceA = { jobA: createMockDefinitionWithHandler("jobA") };
+
+      registry.registerService(serviceA);
+      registry.start();
+
+      const serviceB = { jobB: createMockDefinitionWithHandler("jobB") };
+      expect(() => registry.registerService(serviceB)).toThrow("after start()");
+    });
+
+    it("ignores non-job properties", () => {
+      const registry = new WorkflowRegistry(mockService as WorkflowService);
+      const fakeService = {
+        aString: "hello",
+        aNumber: 42,
+        aFunction: () => {},
+        anObject: { foo: "bar" },
+        nullValue: null,
+        jobA: createMockDefinitionWithHandler("jobA"),
+      };
+
+      registry.registerService(fakeService);
+      registry.start();
+
+      expect(mockCreateWorker).toHaveBeenCalledTimes(1);
+    });
+
+    it("works alongside manual register() calls", () => {
+      const registry = new WorkflowRegistry(mockService as WorkflowService);
+      const manualDef = createMockDefinition("manualJob", "fast");
+      const manualHandler = jest.fn().mockResolvedValue(undefined);
+
+      registry.register(manualDef, manualHandler);
+      registry.registerService({
+        autoJob: createMockDefinitionWithHandler("autoJob", "fast"),
+      });
+
+      registry.start();
+
+      expect(mockCreateWorker).toHaveBeenCalledTimes(1);
     });
   });
 
