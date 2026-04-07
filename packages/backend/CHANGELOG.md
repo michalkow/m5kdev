@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.10.1
+
+### Patch Changes
+
+- job ids
+- Updated dependencies
+  - @m5kdev/commons@0.10.1
+  - @m5kdev/config@0.10.1
+
 ## 0.10.0
 
 ### Minor Changes

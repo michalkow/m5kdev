@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.10.1
+
+### Patch Changes
+
+- job ids
+
 ## 0.10.0
 
 ### Minor Changes
