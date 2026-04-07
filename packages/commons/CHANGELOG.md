@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.9.8
+
+### Patch Changes
+
+- ownership
+
 ## 0.9.7
 
 ### Patch Changes

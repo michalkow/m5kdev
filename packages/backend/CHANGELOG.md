@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.9.8
+
+### Patch Changes
+
+- ownership
+- Updated dependencies
+  - @m5kdev/commons@0.9.8
+  - @m5kdev/config@0.9.8
+
 ## 0.9.7
 
 ### Patch Changes
