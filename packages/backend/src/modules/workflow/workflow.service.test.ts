@@ -11,6 +11,9 @@ const mockWaitUntilFinished = jest.fn();
 const mockDuplicate = jest.fn().mockReturnValue({});
 const mockDisconnect = jest.fn();
 
+/** Per-instance worker.close mocks (see Worker mock below). */
+const workerCloseMocks: jest.Mock[] = [];
+
 jest.mock("bullmq", () => ({
   Queue: jest.fn().mockImplementation(() => ({
     add: mockQueueAdd,
@@ -24,10 +27,14 @@ jest.mock("bullmq", () => ({
     on: mockQueueEventsOn,
     close: mockQueueEventsClose,
   })),
-  Worker: jest.fn().mockImplementation(() => ({
-    on: jest.fn(),
-    close: jest.fn().mockResolvedValue(undefined),
-  })),
+  Worker: jest.fn().mockImplementation(() => {
+    const close = jest.fn().mockResolvedValue(undefined);
+    workerCloseMocks.push(close);
+    return {
+      on: jest.fn(),
+      close,
+    };
+  }),
 }));
 
 jest.mock("ioredis", () =>
@@ -79,6 +86,7 @@ function createService(repo = createMockRepository()) {
 describe("WorkflowService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    workerCloseMocks.length = 0;
     mockQueueAdd.mockResolvedValue({ id: "job-1", waitUntilFinished: mockWaitUntilFinished });
     mockQueueAddBulk.mockResolvedValue([
       { id: "job-1", waitUntilFinished: mockWaitUntilFinished, data: { payload: "a" } },
@@ -324,6 +332,23 @@ describe("WorkflowService", () => {
       const { service } = createService();
       await service.close();
 
+      expect(mockQueueClose).toHaveBeenCalled();
+      expect(mockQueueEventsClose).toHaveBeenCalled();
+      expect(mockDisconnect).toHaveBeenCalled();
+    });
+
+    it("closes workers created by _createWorker before queues and events", async () => {
+      const { service } = createService();
+      const processor = jest.fn();
+
+      service._createWorker("fast", processor);
+      service._createWorker("slow", processor);
+
+      await service.close();
+
+      expect(workerCloseMocks).toHaveLength(2);
+      expect(workerCloseMocks[0]).toHaveBeenCalled();
+      expect(workerCloseMocks[1]).toHaveBeenCalled();
       expect(mockQueueClose).toHaveBeenCalled();
       expect(mockQueueEventsClose).toHaveBeenCalled();
       expect(mockDisconnect).toHaveBeenCalled();

@@ -109,6 +109,7 @@ export const jobs = {
     },
     onSuccess: async (job) => { /* ... */ },
     onFailure: async (job, error) => { /* ... */ },
+    onComplete: async (job) => { /* ... */ },
   } satisfies WorkflowJob<GenerateData, any, "generate">,
 };
 ```

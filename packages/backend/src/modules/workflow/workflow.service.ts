@@ -27,6 +27,8 @@ const DEFAULT_AWAIT_CONCURRENCY = 10;
 export class WorkflowService extends Base {
   private readonly queues = new Map<string, Queue>();
   private readonly queueEvents = new Map<string, QueueEvents>();
+  /** Workers created via {@link _createWorker}; closed by {@link closeWorkers} / {@link close}. */
+  private readonly workers = new Set<Worker>();
   private readonly connection: IORedis;
   private readonly queueConfigs: Record<string, WorkflowQueueConfig>;
 
@@ -158,7 +160,10 @@ export class WorkflowService extends Base {
 
   // -- Worker creation (internal, for registry only) --
 
-  /** @internal -- intended for WorkflowRegistry only. */
+  /**
+   * @internal Intended for {@link WorkflowRegistry} only. Each worker is added to `this.workers`
+   * and must be shut down via {@link closeWorkers} or {@link close}.
+   */
   _createWorker(
     queueName: string,
     processor: Processor,
@@ -176,12 +181,42 @@ export class WorkflowService extends Base {
       concurrency: overrides?.concurrency ?? queueConfig.concurrency,
     };
 
-    return new Worker(queueName, processor, mergedOptions);
+    const worker = new Worker(queueName, processor, mergedOptions);
+    this.workers.add(worker);
+    return worker;
   }
 
   // -- Lifecycle --
 
+  /**
+   * @internal Closes all BullMQ workers created through {@link _createWorker}. Prefer
+   * {@link close} for full shutdown (workers, queues, events, Redis).
+   */
+  async closeWorkers(): Promise<void> {
+    const snapshot = [...this.workers];
+    this.workers.clear();
+
+    await Promise.allSettled(
+      snapshot.map(async (worker) => {
+        try {
+          await worker.close();
+        } catch (error) {
+          this.logger.error(
+            { error: error instanceof Error ? error.message : String(error) },
+            "Failed to close BullMQ worker",
+          );
+        }
+      }),
+    );
+  }
+
+  /**
+   * Shuts down workers (see {@link closeWorkers}), queue event listeners, queues, and the Redis
+   * connection. Safe to call if no workers were created.
+   */
   async close(): Promise<void> {
+    await this.closeWorkers();
+
     const closePromises: Promise<void>[] = [];
 
     for (const events of this.queueEvents.values()) {
@@ -329,10 +364,11 @@ export class WorkflowService extends Base {
       }
 
       const concurrency = resolved.awaitConcurrency;
-      const results: Result[] = [];
+      const results = new Array<Result>(jobs.length);
       const pending = new Set<Promise<void>>();
 
-      for (const job of jobs) {
+      for (let i = 0; i < jobs.length; i++) {
+        const job = jobs[i];
         const p = (async () => {
           const result = await Promise.race([
             job.waitUntilFinished(events, resolved.timeout),
@@ -346,7 +382,7 @@ export class WorkflowService extends Base {
               ),
             ),
           ]);
-          results.push(result as Result);
+          results[i] = result as Result;
         })();
 
         pending.add(p);

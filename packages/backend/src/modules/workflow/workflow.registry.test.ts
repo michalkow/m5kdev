@@ -40,23 +40,33 @@ describe("WorkflowRegistry", () => {
   let mockCreateWorker: jest.Mock;
   let mockWorkerOn: jest.Mock;
   let mockWorkerClose: jest.Mock;
-  let mockService: Pick<WorkflowService, "_createWorker">;
+  let mockCloseWorkers: jest.Mock;
+  let mockService: Pick<WorkflowService, "_createWorker" | "closeWorkers">;
   let capturedProcessor: ((job: MockJob) => Promise<unknown>) | null;
+  const createdWorkers: Array<{ on: jest.Mock; close: jest.Mock }> = [];
 
   beforeEach(() => {
     capturedProcessor = null;
+    createdWorkers.length = 0;
     mockWorkerOn = jest.fn();
     mockWorkerClose = jest.fn().mockResolvedValue(undefined);
     mockCreateWorker = jest.fn().mockImplementation(
       (_queueName: string, processor: (job: MockJob) => Promise<unknown>) => {
         capturedProcessor = processor;
-        return { on: mockWorkerOn, close: mockWorkerClose };
+        const worker = { on: mockWorkerOn, close: mockWorkerClose };
+        createdWorkers.push(worker);
+        return worker;
       },
     );
 
+    mockCloseWorkers = jest.fn().mockImplementation(async () => {
+      await Promise.all(createdWorkers.map((w) => w.close()));
+    });
+
     mockService = {
       _createWorker: mockCreateWorker,
-    } as unknown as Pick<WorkflowService, "_createWorker">;
+      closeWorkers: mockCloseWorkers,
+    } as unknown as Pick<WorkflowService, "_createWorker" | "closeWorkers">;
   });
 
   describe("register()", () => {
@@ -189,7 +199,7 @@ describe("WorkflowRegistry", () => {
   });
 
   describe("stop()", () => {
-    it("closes all workers", async () => {
+    it("delegates worker shutdown to WorkflowService.closeWorkers", async () => {
       const registry = new WorkflowRegistry(mockService as WorkflowService);
       registry.register(
         createMockDefinition("jobA", "fast"),
@@ -203,6 +213,7 @@ describe("WorkflowRegistry", () => {
       registry.start();
       await registry.stop();
 
+      expect(mockCloseWorkers).toHaveBeenCalledTimes(1);
       expect(mockWorkerClose).toHaveBeenCalledTimes(2);
     });
   });

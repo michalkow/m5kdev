@@ -91,11 +91,7 @@ export class WorkflowRegistry {
   }
 
   async stop(): Promise<void> {
-    const closePromises: Promise<void>[] = [];
-    for (const worker of this.workers.values()) {
-      closePromises.push(worker.close());
-    }
-    await Promise.all(closePromises);
+    await this.workflowService.closeWorkers();
     this.workers.clear();
   }
 

@@ -148,7 +148,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
         .set({
           status: "failed",
           error,
-          retries: sql`${this.schema.workflows.retries} + 1`,
+          retries: sql`COALESCE(${this.schema.workflows.retries}, 0) + 1`,
           updatedAt: new Date(),
           finishedAt: new Date(),
         })
