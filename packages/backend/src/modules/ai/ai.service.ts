@@ -39,6 +39,7 @@ type AIServiceGenerateTextParams = Omit<GenerateTextParams, "model" | "prompt" |
     removeMDash?: boolean;
     ctx?: AIServiceActorContext;
     retryAttempts?: number;
+    initialRetryAttempts?: number;
     retryModels?: string[];
   };
 type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
@@ -52,6 +53,7 @@ type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
     repairModel?: string;
     ctx?: AIServiceActorContext;
     retryAttempts?: number;
+    initialRetryAttempts?: number;
     retryModels?: string[];
   };
 
@@ -284,10 +286,13 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       prompt,
       messages,
       ctx,
-      retryAttempts = this.options?.retryAttempts ?? 0,
+      retryAttempts: retryAttemptsRaw = this.options?.retryAttempts ?? 0,
+      initialRetryAttempts: initialRetryAttemptsRaw,
       retryModels = this.options?.retryModels ?? [],
       ...rest
     } = params;
+    const retryAttempts = retryAttemptsRaw;
+    const initialRetryAttempts = initialRetryAttemptsRaw ?? retryAttemptsRaw;
     const request = messages
       ? { ...rest, model: this.prepareModel(model), messages }
       : { ...rest, model: this.prepareModel(model), prompt };
@@ -317,8 +322,9 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         error,
       });
       // Exponential backoff: wait before retrying
+      const attempt = Math.max(0, initialRetryAttempts - retryAttempts);
       const delay = Math.min(
-        1000 * 2 ** ((this.options?.retryAttempts ?? 3) - retryAttempts),
+        1000 * 2 ** attempt,
         10000
       );
       await new Promise<void>((resolve) => setTimeout(resolve, delay));
@@ -331,6 +337,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         removeMDash,
         ctx,
         retryAttempts: retryAttempts - 1,
+        initialRetryAttempts,
         retryModels: nextRetryModels,
       } as AIServiceGenerateTextParams);
     }
@@ -347,10 +354,13 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       repairAttempts = this.options?.repairAttempts ?? 0,
       repairModel = this.options?.repairModel ?? model,
       ctx,
-      retryAttempts = this.options?.retryAttempts ?? 0,
+      retryAttempts: retryAttemptsRaw = this.options?.retryAttempts ?? 0,
+      initialRetryAttempts: initialRetryAttemptsRaw,
       retryModels = this.options?.retryModels ?? [],
       ...rest
     } = params;
+    const retryAttempts = retryAttemptsRaw;
+    const initialRetryAttempts = initialRetryAttemptsRaw ?? retryAttemptsRaw;
     const request = messages
       ? {
           ...rest,
@@ -430,8 +440,9 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         error,
       });
       // Exponential backoff: wait before retrying
+      const attempt = Math.max(0, initialRetryAttempts - retryAttempts);
       const delay = Math.min(
-        1000 * 2 ** ((this.options?.retryAttempts ?? 3) - retryAttempts),
+        1000 * 2 ** attempt,
         10000
       );
       await new Promise<void>((resolve) => setTimeout(resolve, delay));
@@ -446,6 +457,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         repairModel,
         ctx,
         retryAttempts: retryAttempts - 1,
+        initialRetryAttempts,
         retryModels: nextRetryModels,
       } as AIServiceGenerateObjectParams<T>);
     }

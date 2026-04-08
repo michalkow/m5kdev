@@ -1,6 +1,6 @@
+import { spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync } from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
 //
 import ffbin from "ffmpeg-ffprobe-static";
 import { err, ok } from "neverthrow";
@@ -57,6 +57,9 @@ const runFfmpeg = async (args: readonly string[]): Promise<void> => {
 
 export class VideoService extends BaseService<never, never> {
   async cut(file: string, start: number, end: number): ServerResultAsync<string> {
+    if (start < 0 || end <= start) {
+      return this.error("BAD_REQUEST", "Invalid start/end times");
+    }
     const duration = end - start;
     const output = path.join(uploadsDir, `${uuidv4()}.mp4`);
     if (!existsSync(output)) {

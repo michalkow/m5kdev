@@ -1,10 +1,7 @@
 import { err, ok } from "neverthrow";
-import type {
-  IdeogramV3GenerateInput,
-  IdeogramV3GenerateOutput,
-} from "./ideogram.dto";
 import type { ServerResultAsync } from "../../base/base.dto";
 import { BaseExternaRepository } from "../../base/base.repository";
+import type { IdeogramV3GenerateInput, IdeogramV3GenerateOutput } from "./ideogram.dto";
 
 export class IdeogramRepository extends BaseExternaRepository {
   async generate(input: IdeogramV3GenerateInput): ServerResultAsync<IdeogramV3GenerateOutput> {
@@ -12,7 +9,7 @@ export class IdeogramRepository extends BaseExternaRepository {
       return this.error("INTERNAL_SERVER_ERROR", "IDEOGRAM_API_KEY is not set");
     const formData = new FormData();
     formData.append("prompt", input.prompt);
-    if (input.seed) formData.append("seed", input.seed.toString());
+    if (input.seed !== undefined) formData.append("seed", input.seed.toString());
     if (input.resolution) formData.append("resolution", input.resolution);
     if (input.rendering_speed) formData.append("rendering_speed", input.rendering_speed);
     if (input.magic_prompt) formData.append("magic_prompt", input.magic_prompt);

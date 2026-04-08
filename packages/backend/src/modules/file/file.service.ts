@@ -58,11 +58,11 @@ export class FileService extends BaseService<{ file: FileRepository }, never> {
       png: "image/png",
       webp: "image/webp",
       mp4: "video/mp4",
-      mov: "video/mov",
-      avi: "video/avi",
-      mkv: "video/mkv",
+      mov: "video/quicktime",
+      avi: "video/x-msvideo",
+      mkv: "video/x-matroska",
       webm: "video/webm",
-      mp3: "audio/mp3",
+      mp3: "audio/mpeg",
       wav: "audio/wav",
       m4a: "audio/mp4",
     };
@@ -156,7 +156,10 @@ export class FileService extends BaseService<{ file: FileRepository }, never> {
 
     if (input) {
       const pipelineResult = await this.throwablePromise(() => pipeline(input, writeStream));
-      if (pipelineResult.isErr()) return err(pipelineResult.error);
+      if (pipelineResult.isErr()) {
+        writeStream.destroy();
+        return err(pipelineResult.error);
+      }
       return ok(destinationPath);
     }
 
@@ -169,16 +172,23 @@ export class FileService extends BaseService<{ file: FileRepository }, never> {
       const bufferResult = await this.throwablePromise(async () =>
         Buffer.from(await (unknownBody as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer())
       );
-      if (bufferResult.isErr()) return err(bufferResult.error);
+      if (bufferResult.isErr()) {
+        writeStream.destroy();
+        return err(bufferResult.error);
+      }
 
       const pipelineResult = await this.throwablePromise(() =>
         pipeline(Readable.from(bufferResult.value), writeStream)
       );
-      if (pipelineResult.isErr()) return err(pipelineResult.error);
+      if (pipelineResult.isErr()) {
+        writeStream.destroy();
+        return err(pipelineResult.error);
+      }
 
       return ok(destinationPath);
     }
 
+    writeStream.destroy();
     return this.error("INTERNAL_SERVER_ERROR", "Unsupported S3 body type");
   }
 

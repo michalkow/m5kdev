@@ -1,5 +1,5 @@
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { ok } from "neverthrow";
 import { BaseTableRepository } from "../base/base.repository";
@@ -13,13 +13,18 @@ type Orm = LibSQLDatabase<Schema>;
 export type ConnectRow = InferSelectModel<Schema["connect"]>;
 export type ConnectInsert = InferInsertModel<Schema["connect"]>;
 
-export class ConnectRepository extends BaseTableRepository<Orm, Schema, Record<string, never>, Schema["connect"]> {
+export class ConnectRepository extends BaseTableRepository<
+  Orm,
+  Schema,
+  Record<string, never>,
+  Schema["connect"]
+> {
   async list(data: ConnectListInputSchema & { userId: string }, tx?: Orm) {
     const db = tx ?? this.orm;
     const { ConditionBuilder } = this.helpers;
     const conditions = new ConditionBuilder();
     if (data.providers) conditions.push(inArray(this.schema.connect.provider, data.providers));
-    if (data.inactive) conditions.push(isNull(this.schema.connect.revokedAt));
+    if (data.inactive) conditions.push(isNotNull(this.schema.connect.revokedAt));
     conditions.push(eq(this.schema.connect.userId, data.userId));
 
     const rowsResult = await this.throwableQuery(() =>

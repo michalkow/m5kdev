@@ -68,16 +68,6 @@ export class FileRepository extends BaseExternaRepository {
     return ok(dataResult.value);
   }
 
-  async getS3ObjectT(path: string): ServerResultAsync<GetObjectCommandOutput> {
-    const command = new GetObjectCommand({
-      Bucket: process.env.AWS_S3_BUCKET,
-      Key: path,
-    });
-    const dataResult = await this.throwablePromise(() => this.s3.send(command));
-    if (dataResult.isErr()) return dataResult;
-    return ok(dataResult.value);
-  }
-
   async deleteS3Object(path: string): ServerResultAsync<void> {
     const command = new DeleteObjectCommand({
       Bucket: process.env.AWS_S3_BUCKET,

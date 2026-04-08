@@ -26,6 +26,7 @@ export class PostsRepository extends BaseTableRepository<
     }
 
     if (search) {
+      const escapedSearch = search.replace(/[%_]/g, '\\    if (search) {
       const pattern = `%${search}%`;
       const searchCondition = or(
         like(this.table.title, pattern),
@@ -33,7 +34,14 @@ export class PostsRepository extends BaseTableRepository<
         like(this.table.excerpt, pattern),
         like(this.table.content, pattern)
       );
-
+');
+      const pattern = `%${escapedSearch}%`;
+      const searchCondition = or(
+        like(this.table.title, pattern),
+        like(this.table.slug, pattern),
+        like(this.table.excerpt, pattern),
+        like(this.table.content, pattern)
+      );
       if (searchCondition) {
         conditions.push(searchCondition);
       }

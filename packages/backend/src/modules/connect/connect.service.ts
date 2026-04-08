@@ -35,10 +35,14 @@ export class ConnectService extends BaseService<{ connect: ConnectRepository }, 
       return this.error("BAD_REQUEST", `Unknown provider: ${providerId}`);
     }
 
-    const stateResult = await this.throwablePromise(() => generateOAuthState(sessionId, providerId));
+    const stateResult = await this.throwablePromise(() =>
+      generateOAuthState(sessionId, providerId)
+    );
     if (stateResult.isErr()) return err(stateResult.error);
 
-    const urlResult = await this.throwablePromise(() => buildAuthorizationUrl(provider, stateResult.value));
+    const urlResult = await this.throwablePromise(() =>
+      buildAuthorizationUrl(provider, stateResult.value)
+    );
     if (urlResult.isErr()) return err(urlResult.error);
 
     return ok({ url: urlResult.value });
@@ -67,7 +71,9 @@ export class ConnectService extends BaseService<{ connect: ConnectRepository }, 
     if (tokensResult.isErr()) return err(tokensResult.error);
     const tokens = tokensResult.value;
 
-    const profileResult = await this.throwablePromise(() => provider.mapProfile(tokens.accessToken));
+    const profileResult = await this.throwablePromise(() =>
+      provider.mapProfile(tokens.accessToken)
+    );
     if (profileResult.isErr()) return err(profileResult.error);
     const profile = profileResult.value;
 
@@ -119,7 +125,9 @@ export class ConnectService extends BaseService<{ connect: ConnectRepository }, 
       return this.error("BAD_REQUEST", `Unknown provider: ${conn.provider}`);
     }
 
-    const tokensResult = await this.throwablePromise(() => refreshAccessToken(provider, refreshToken));
+    const tokensResult = await this.throwablePromise(() =>
+      refreshAccessToken(provider, refreshToken)
+    );
     if (tokensResult.isErr()) return err(tokensResult.error);
     const tokens = tokensResult.value;
 
@@ -134,7 +142,7 @@ export class ConnectService extends BaseService<{ connect: ConnectRepository }, 
     } = {
       id: conn.id,
       accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken || null,
+      refreshToken: tokens.refreshToken ?? conn.refreshToken,
       tokenType: tokens.tokenType || conn.tokenType || null,
       scope: tokens.scope || conn.scope || null,
       expiresAt: tokens.expiresAt || null,

@@ -53,8 +53,12 @@ export class SocialService extends BaseService<
       });
     }
 
+    if (connectionResult.value.length === 0) {
+      return this.error("NOT_FOUND", `No connection found for provider: ${providerId}`);
+    }
+
     const activeConnection = connectionResult.value.sort(
-      (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
     )[0];
 
     const connection = await this.ensureFreshConnection(activeConnection);
