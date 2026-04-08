@@ -1,4 +1,4 @@
-import { ok } from "neverthrow";
+import { err, ok } from "neverthrow";
 import type { RequiredServiceActor } from "../base/base.actor";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
@@ -37,46 +37,46 @@ export class SocialService extends BaseService<
     input: SocialPostInput,
     { actor }: { actor: RequiredServiceActor<"user"> }
   ): ServerResultAsync<SocialPostResult> {
-    return this.throwableAsync(async () => {
-      const provider = this.getProvider(providerId);
-      if (!provider) {
-        return this.error("BAD_REQUEST", `Unknown provider: ${providerId}`);
-      }
+    const provider = this.getProvider(providerId);
+    if (!provider) {
+      return this.error("BAD_REQUEST", `Unknown provider: ${providerId}`);
+    }
 
-      const connectionResult = await this.repository.connect.list({
-        userId: actor.userId,
-        providers: [providerId],
+    const connectionResult = await this.repository.connect.list({
+      userId: actor.userId,
+      providers: [providerId],
+    });
+
+    if (connectionResult.isErr()) {
+      return this.error("INTERNAL_SERVER_ERROR", "Failed to load connection", {
+        cause: connectionResult.error,
       });
+    }
 
-      if (connectionResult.isErr()) {
-        return this.error("INTERNAL_SERVER_ERROR", "Failed to load connection", {
-          cause: connectionResult.error,
-        });
-      }
+    const activeConnection = connectionResult.value.sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
+    )[0];
 
-      const activeConnection = connectionResult.value.sort(
-        (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
-      )[0];
+    const connection = await this.ensureFreshConnection(activeConnection);
+    if (connection.isErr()) {
+      return this.error("INTERNAL_SERVER_ERROR", "Failed to refresh connection", {
+        cause: connection.error,
+      });
+    }
 
-      const connection = await this.ensureFreshConnection(activeConnection);
-      if (connection.isErr()) {
-        return this.error("INTERNAL_SERVER_ERROR", "Failed to refresh connection", {
-          cause: connection.error,
-        });
-      }
+    const payload: SocialPostPayload = {
+      text: input.text,
+      media: input.media,
+      visibility: input.visibility ?? "PUBLIC",
+    };
 
-      const payload: SocialPostPayload = {
-        text: input.text,
-        media: input.media,
-        visibility: input.visibility ?? "PUBLIC",
-      };
+    const accessToken = connection.value.accessToken;
+    if (!accessToken) {
+      return this.error("BAD_REQUEST", "Missing access token for connection");
+    }
 
-      const accessToken = connection.value.accessToken;
-      if (!accessToken) {
-        return this.error("BAD_REQUEST", "Missing access token for connection");
-      }
-
-      const result = await provider.post({
+    const result = await this.throwablePromise(() =>
+      provider.post({
         deps: { fileService: this.service.file },
         context: {
           userId: actor.userId,
@@ -84,10 +84,11 @@ export class SocialService extends BaseService<
           accessToken,
         },
         payload,
-      });
+      })
+    );
+    if (result.isErr()) return err(result.error);
 
-      return ok(result);
-    });
+    return ok(result.value);
   }
 
   private async ensureFreshConnection(connection: ConnectRow): ServerResultAsync<ConnectRow> {

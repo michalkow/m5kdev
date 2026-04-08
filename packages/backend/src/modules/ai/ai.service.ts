@@ -123,43 +123,48 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     options: MastraAgentGenerateOptions & { prompt?: string; messages?: MessageListInput },
     ctx?: AIServiceActorContext & { model?: string }
   ): ServerResultAsync<Awaited<ReturnType<MastraModelOutput<any>["getFullOutput"]>>> {
-    return this.throwableAsync(async () => {
-      this.logger.info("AGENT USE");
-      const { prompt, messages, ...rest } = options;
-      const payload = messages || prompt;
-      if (!payload) return this.error("BAD_REQUEST", "No prompt or messages provided");
-      const requestContext = options.requestContext ?? new RequestContext();
+    this.logger.info("AGENT USE");
+    const { prompt, messages, ...rest } = options;
+    const payload = messages || prompt;
+    if (!payload) return this.error("BAD_REQUEST", "No prompt or messages provided");
+    const requestContext = options.requestContext ?? new RequestContext();
 
-      if (ctx?.actor) {
-        requestContext.set("userId", ctx.actor.userId);
-      }
-      if (ctx?.model) {
-        requestContext.set("model", ctx.model);
-      }
-      const mAgent = this.getMastra().getAgent(agent);
+    if (ctx?.actor) {
+      requestContext.set("userId", ctx.actor.userId);
+    }
+    if (ctx?.model) {
+      requestContext.set("model", ctx.model);
+    }
 
-      const result = await mAgent.generate(payload as any, {
+    const mastraResult = this.throwable(() => ok(this.getMastra()));
+    if (mastraResult.isErr()) return err(mastraResult.error);
+    const mAgent = mastraResult.value.getAgent(agent);
+
+    const result = await this.throwablePromise(() =>
+      mAgent.generate(payload as any, {
         ...rest,
         requestContext: rest.requestContext ?? requestContext,
+      })
+    );
+    if (result.isErr()) return err(result.error);
+    this.logger.info("AGENT USE DONE");
+
+    if (this.repository.aiUsage) {
+      const createUsageResult = await this.repository.aiUsage.create({
+        userId: ctx?.actor?.userId,
+        model: ctx?.model ?? "unknown",
+        provider: "openrouter",
+        feature: agent,
+        traceId: result.value.traceId,
+        inputTokens: result.value.usage.inputTokens,
+        outputTokens: result.value.usage.outputTokens,
+        totalTokens: result.value.usage.totalTokens,
+        cost: (result.value?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
       });
-      this.logger.info("AGENT USE DONE");
-      if (this.repository.aiUsage) {
-        const createUsageResult = await this.repository.aiUsage.create({
-          userId: ctx?.actor?.userId,
-          model: ctx?.model ?? "unknown",
-          provider: "openrouter",
-          feature: agent,
-          traceId: result.traceId,
-          inputTokens: result.usage.inputTokens,
-          outputTokens: result.usage.outputTokens,
-          totalTokens: result.usage.totalTokens,
-          cost: (result?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
-        });
-        if (createUsageResult.isErr()) return err(createUsageResult.error);
-      }
-      this.logger.info("AGENT USE CREATED USAGE");
-      return ok(result);
-    });
+      if (createUsageResult.isErr()) return err(createUsageResult.error);
+    }
+    this.logger.info("AGENT USE CREATED USAGE");
+    return ok(result.value);
   }
 
   async agentText(
@@ -222,108 +227,113 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     type: "text" | "markdown" | "html" | "json" = "text",
     model: string = OPENAI_TEXT_EMBEDDING_3_SMALL
   ): ServerResultAsync<{ embeddings: number[][]; chunks: { text: string }[] }> {
-    return this.throwableAsync(async () => {
-      if (type === "text") {
-        const doc = MDocument.fromText(value);
-        const chunks = await doc.chunk(
+    if (type === "text") {
+      const doc = MDocument.fromText(value);
+      const chunksResult = await this.throwablePromise(() =>
+        doc.chunk(
           options ?? {
             strategy: "recursive",
             maxSize: 512,
             overlap: 50,
             separators: ["\n"],
           }
-        );
-        const embeddings = await this.embedMany(chunks, model);
-        if (embeddings.isErr()) return err(embeddings.error);
-        return ok({ embeddings: embeddings.value.embeddings, chunks });
-      }
-      return this.error("BAD_REQUEST", "Unsupported document type");
-    });
+        )
+      );
+      if (chunksResult.isErr()) return err(chunksResult.error);
+      const chunks = chunksResult.value;
+
+      const embeddings = await this.embedMany(chunks, model);
+      if (embeddings.isErr()) return err(embeddings.error);
+      return ok({ embeddings: embeddings.value.embeddings, chunks });
+    }
+    return this.error("BAD_REQUEST", "Unsupported document type");
   }
 
   async embed(
     text: string,
     model: string = OPENAI_TEXT_EMBEDDING_3_SMALL
   ): ServerResultAsync<{ embedding: number[] }> {
-    return this.throwableAsync(async () => {
-      const result = await embed({
+    const result = await this.throwablePromise(() =>
+      embed({
         model: this.prepareEmbeddingModel(model),
         value: text,
-      });
-      return ok(result);
-    });
+      })
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value);
   }
 
   async embedMany(
     chunks: { text: string }[],
     model: string = OPENAI_TEXT_EMBEDDING_3_SMALL
   ): ServerResultAsync<{ embeddings: number[][] }> {
-    return this.throwableAsync(async () => {
-      const result = await embedMany({
+    const result = await this.throwablePromise(() =>
+      embedMany({
         model: this.prepareEmbeddingModel(model),
         values: chunks.map((chunk) => chunk.text),
-      });
-      return ok(result);
-    });
+      })
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value);
   }
 
   async generateText(params: AIServiceGenerateTextParams): ServerResultAsync<string> {
-    return this.throwableAsync(async () => {
-      const {
-        removeMDash = this.options?.removeMDash ?? true,
-        model,
-        prompt,
-        messages,
-        ctx,
-        retryAttempts = this.options?.retryAttempts ?? 0,
-        retryModels = this.options?.retryModels ?? [],
-        ...rest
-      } = params;
-      const request = messages
-        ? { ...rest, model: this.prepareModel(model), messages }
-        : { ...rest, model: this.prepareModel(model), prompt };
-      try {
-        const result = await generateText(request);
-        if (this.repository.aiUsage) {
-          const createUsageResult = await this.repository.aiUsage.create({
-            userId: ctx?.actor?.userId,
-            model,
-            provider: "openrouter",
-            feature: "generateText",
-            traceId: result.providerMetadata?.openrouter?.traceId?.toString(),
-            inputTokens: result.usage.inputTokens,
-            outputTokens: result.usage.outputTokens,
-            totalTokens: result.usage.totalTokens,
-            cost: (result?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
-          });
-          if (createUsageResult.isErr()) return err(createUsageResult.error);
-        }
-        return ok(removeMDash ? result.text.replace(/\u2013|\u2014/g, "-") : result.text);
-      } catch (error) {
-        if (retryAttempts <= 0) throw error;
-        this.logger.warn(`generateText failed, retrying (${retryAttempts} attempts left)`, {
+    const {
+      removeMDash = this.options?.removeMDash ?? true,
+      model,
+      prompt,
+      messages,
+      ctx,
+      retryAttempts = this.options?.retryAttempts ?? 0,
+      retryModels = this.options?.retryModels ?? [],
+      ...rest
+    } = params;
+    const request = messages
+      ? { ...rest, model: this.prepareModel(model), messages }
+      : { ...rest, model: this.prepareModel(model), prompt };
+    try {
+      const result = await generateText(request);
+      if (this.repository.aiUsage) {
+        const createUsageResult = await this.repository.aiUsage.create({
+          userId: ctx?.actor?.userId,
           model,
-          error,
+          provider: "openrouter",
+          feature: "generateText",
+          traceId: result.providerMetadata?.openrouter?.traceId?.toString(),
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          totalTokens: result.usage.totalTokens,
+          cost: (result?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
         });
-        // Exponential backoff: wait before retrying
-        const delay = Math.min(
-          1000 * 2 ** ((this.options?.retryAttempts ?? 3) - retryAttempts),
-          10000
-        );
-        await new Promise<void>((resolve) => setTimeout(resolve, delay));
-        const nextModel = retryModels?.[0] ?? model;
-        const nextRetryModels = retryModels ? [...retryModels.slice(1), model] : undefined;
-        return this.generateText({
-          ...rest,
-          ...(messages ? { messages } : { prompt: prompt! }),
-          model: nextModel,
-          removeMDash,
-          ctx,
-          retryAttempts: retryAttempts - 1,
-          retryModels: nextRetryModels,
-        } as AIServiceGenerateTextParams);
+        if (createUsageResult.isErr()) return err(createUsageResult.error);
       }
-    });
+      return ok(removeMDash ? result.text.replace(/\u2013|\u2014/g, "-") : result.text);
+    } catch (error) {
+      if (retryAttempts <= 0) {
+        return this.error("INTERNAL_SERVER_ERROR", "AI: generateText failed", { cause: error });
+      }
+      this.logger.warn(`generateText failed, retrying (${retryAttempts} attempts left)`, {
+        model,
+        error,
+      });
+      // Exponential backoff: wait before retrying
+      const delay = Math.min(
+        1000 * 2 ** ((this.options?.retryAttempts ?? 3) - retryAttempts),
+        10000
+      );
+      await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      const nextModel = retryModels?.[0] ?? model;
+      const nextRetryModels = retryModels ? [...retryModels.slice(1), model] : undefined;
+      return this.generateText({
+        ...rest,
+        ...(messages ? { messages } : { prompt: prompt! }),
+        model: nextModel,
+        removeMDash,
+        ctx,
+        retryAttempts: retryAttempts - 1,
+        retryModels: nextRetryModels,
+      } as AIServiceGenerateTextParams);
+    }
   }
 
   async generateObject<T extends ZodType>(
@@ -445,16 +455,12 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     model: Parameters<Replicate["run"]>[0],
     options: Parameters<Replicate["run"]>[1]
   ): ServerResultAsync<object> {
-    return this.throwableAsync(async () => {
-      if (!this.replicate) {
-        return this.error("INTERNAL_SERVER_ERROR", "Replicate is not configured");
-      }
-      try {
-        return ok(await this.replicate.run(model, options));
-      } catch (error) {
-        return this.error("INTERNAL_SERVER_ERROR", undefined, { cause: error });
-      }
-    });
+    if (!this.replicate) {
+      return this.error("INTERNAL_SERVER_ERROR", "Replicate is not configured");
+    }
+    const result = await this.throwablePromise(() => this.replicate!.run(model, options));
+    if (result.isErr()) return err(result.error);
+    return ok(result.value as object);
   }
 
   async generateTranscript(

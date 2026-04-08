@@ -11,37 +11,42 @@ type Orm = LibSQLDatabase<Schema>;
 
 export class WebhookRepository extends BaseTableRepository<Orm, Schema, Record<string, never>, Schema["webhook"]> {
   async completed(id: string, payload: unknown, tx?: Orm): ServerResultAsync<void> {
-    return this.throwableAsync(async () => {
-      const webhook = await this.findById(id, tx);
-      if (webhook.isErr()) return err(webhook.error);
-      if (!webhook.value) return this.error("NOT_FOUND");
-      await this.update(
-        {
-          id,
-          status: WEBHOOK_STATUS_ENUM.COMPLETED,
-          payload: JSON.stringify(payload),
-        },
-        tx
-      );
-      return ok();
-    });
+    const webhook = await this.findById(id, tx);
+    if (webhook.isErr()) return err(webhook.error);
+    if (!webhook.value) return this.error("NOT_FOUND");
+
+    const payloadResult = this.throwable(() => ok(JSON.stringify(payload)));
+    if (payloadResult.isErr()) return err(payloadResult.error);
+
+    const updateResult = await this.update(
+      {
+        id,
+        status: WEBHOOK_STATUS_ENUM.COMPLETED,
+        payload: payloadResult.value,
+      },
+      tx
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+
+    return ok();
   }
 
   async timeout(id: string, tx?: Orm): ServerResultAsync<void> {
-    return this.throwableAsync(async () => {
-      const webhook = await this.findById(id, tx);
-      if (webhook.isErr()) return err(webhook.error);
-      if (!webhook.value) return this.error("NOT_FOUND");
-      await this.update(
-        {
-          id,
-          status: WEBHOOK_STATUS_ENUM.TIMEOUT,
-          error: `Timeout of ${webhook.value.timeoutSec} seconds reached`,
-        },
-        tx
-      );
-      return ok();
-    });
+    const webhook = await this.findById(id, tx);
+    if (webhook.isErr()) return err(webhook.error);
+    if (!webhook.value) return this.error("NOT_FOUND");
+
+    const updateResult = await this.update(
+      {
+        id,
+        status: WEBHOOK_STATUS_ENUM.TIMEOUT,
+        error: `Timeout of ${webhook.value.timeoutSec} seconds reached`,
+      },
+      tx
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+
+    return ok();
   }
 
   async registerError(
@@ -50,19 +55,20 @@ export class WebhookRepository extends BaseTableRepository<Orm, Schema, Record<s
     error: string,
     tx?: Orm
   ): ServerResultAsync<void> {
-    return this.throwableAsync(async () => {
-      const webhook = await this.findById(id, tx);
-      if (webhook.isErr()) return err(webhook.error);
-      if (!webhook.value) return this.error("NOT_FOUND");
-      await this.update(
-        {
-          id,
-          status,
-          error,
-        },
-        tx
-      );
-      return ok();
-    });
+    const webhook = await this.findById(id, tx);
+    if (webhook.isErr()) return err(webhook.error);
+    if (!webhook.value) return this.error("NOT_FOUND");
+
+    const updateResult = await this.update(
+      {
+        id,
+        status,
+        error,
+      },
+      tx
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+
+    return ok();
   }
 }

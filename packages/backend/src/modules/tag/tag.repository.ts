@@ -27,29 +27,41 @@ export class TagRepository extends BaseTableRepository<
     { userId, ...data }: TagLinkSchema & { userId: string },
     tx?: Orm
   ): Promise<TaggingSelectOutputResult> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [foundTag] = await db
+    const db = tx ?? this.orm;
+
+    const foundTagResult = await this.throwableQuery(() =>
+      db
         .select({ id: this.schema.tags.id })
         .from(this.schema.tags)
         .where(and(eq(this.schema.tags.id, data.tagId), eq(this.schema.tags.userId, userId)))
-        .limit(1);
-      if (!foundTag) return this.error("FORBIDDEN");
+        .limit(1)
+    );
+    if (foundTagResult.isErr()) return err(foundTagResult.error);
+    const [foundTag] = foundTagResult.value;
+    if (!foundTag) return this.error("FORBIDDEN");
 
-      const [tagging] = await db
+    const taggingResult = await this.throwableQuery(() =>
+      db
         .insert(this.schema.taggings)
         .values({ ...data, tagId: foundTag.id })
-        .returning();
-      if (!tagging) return this.error("NOT_FOUND");
-      return ok(tagging);
-    });
+        .returning()
+    );
+    if (taggingResult.isErr()) return err(taggingResult.error);
+    const [tagging] = taggingResult.value;
+    if (!tagging) return this.error("NOT_FOUND");
+    return ok(tagging);
   }
 
   async linkBulk(data: TagLinkSchema[], tx?: Orm): ServerResultAsync<TagSchema[]> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      await db.insert(this.schema.taggings).values(data);
-      const tags = await db
+    const db = tx ?? this.orm;
+
+    const insertResult = await this.throwableQuery(() =>
+      db.insert(this.schema.taggings).values(data)
+    );
+    if (insertResult.isErr()) return err(insertResult.error);
+
+    const tagsResult = await this.throwableQuery(() =>
+      db
         .select()
         .from(this.schema.tags)
         .where(
@@ -57,21 +69,26 @@ export class TagRepository extends BaseTableRepository<
             this.schema.tags.id,
             data.map((tag) => tag.tagId)
           )
-        );
-      return ok(tags);
-    });
+        )
+    );
+    if (tagsResult.isErr()) return err(tagsResult.error);
+    return ok(tagsResult.value);
   }
 
   async set(data: TagLinkSchema[], tx?: Orm): ServerResultAsync<TagSchema[]> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const result = await db.transaction(async (trx) => {
+    const db = tx ?? this.orm;
+    if (data.length === 0) return ok([]);
+
+    const tagsResult = await this.throwableQuery(() =>
+      db.transaction(async (trx) => {
         // FIXME: We are assuming that all resourceIds are the same, this is not a good assumption.
         await trx
           .delete(this.schema.taggings)
           .where(eq(this.schema.taggings.resourceId, data[0].resourceId));
-        await db.insert(this.schema.taggings).values(data);
-        const tags = await db
+
+        await trx.insert(this.schema.taggings).values(data);
+
+        const tags = await trx
           .select()
           .from(this.schema.tags)
           .where(
@@ -80,26 +97,33 @@ export class TagRepository extends BaseTableRepository<
               data.map((tag) => tag.tagId)
             )
           );
+
         return tags;
-      });
-      return ok(result);
-    });
+      })
+    );
+    if (tagsResult.isErr()) return err(tagsResult.error);
+    return ok(tagsResult.value);
   }
 
   async unlink(
     { userId, ...data }: TagLinkSchema & { userId: string },
     tx?: Orm
   ): Promise<TagSelectOutputResult> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [foundTag] = await db
+    const db = tx ?? this.orm;
+
+    const foundTagResult = await this.throwableQuery(() =>
+      db
         .select()
         .from(this.schema.tags)
         .where(and(eq(this.schema.tags.id, data.tagId), eq(this.schema.tags.userId, userId)))
-        .limit(1);
-      if (!foundTag) return this.error("FORBIDDEN");
+        .limit(1)
+    );
+    if (foundTagResult.isErr()) return err(foundTagResult.error);
+    const [foundTag] = foundTagResult.value;
+    if (!foundTag) return this.error("FORBIDDEN");
 
-      await db
+    const deleteResult = await this.throwableQuery(() =>
+      db
         .delete(this.schema.taggings)
         .where(
           and(
@@ -107,21 +131,22 @@ export class TagRepository extends BaseTableRepository<
             eq(this.schema.taggings.resourceId, data.resourceId),
             eq(this.schema.taggings.resourceType, data.resourceType)
           )
-        );
+        )
+    );
+    if (deleteResult.isErr()) return err(deleteResult.error);
 
-      return ok(foundTag);
-    });
+    return ok(foundTag);
   }
 
   async findTagsForResources(
     data: { resourceType: string; resourceIds: readonly string[] },
     tx?: Orm
   ): ServerResultAsync<Record<string, TagSchema[]>> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      if (data.resourceIds.length === 0) return ok({});
+    const db = tx ?? this.orm;
+    if (data.resourceIds.length === 0) return ok({});
 
-      const taggings = await db
+    const taggingsResult = await this.throwableQuery(() =>
+      db
         .select({
           resourceId: this.schema.taggings.resourceId,
           tagId: this.schema.taggings.tagId,
@@ -132,31 +157,34 @@ export class TagRepository extends BaseTableRepository<
             eq(this.schema.taggings.resourceType, data.resourceType),
             inArray(this.schema.taggings.resourceId, data.resourceIds as string[])
           )
-        );
+        )
+    );
+    if (taggingsResult.isErr()) return err(taggingsResult.error);
+    const taggings = taggingsResult.value;
 
-      if (taggings.length === 0) return ok({});
+    if (taggings.length === 0) return ok({});
 
-      const tagIds = Array.from(new Set(taggings.map((tagging) => tagging.tagId)));
-      const tags = await db
-        .select()
-        .from(this.schema.tags)
-        .where(inArray(this.schema.tags.id, tagIds));
+    const tagIds = Array.from(new Set(taggings.map((tagging) => tagging.tagId)));
+    const tagsResult = await this.throwableQuery(() =>
+      db.select().from(this.schema.tags).where(inArray(this.schema.tags.id, tagIds))
+    );
+    if (tagsResult.isErr()) return err(tagsResult.error);
+    const tags = tagsResult.value;
 
-      const tagById = tags.reduce<Record<string, TagSchema>>((acc, tagRow) => {
-        acc[tagRow.id] = tagRow;
-        return acc;
-      }, {});
+    const tagById = tags.reduce<Record<string, TagSchema>>((acc, tagRow) => {
+      acc[tagRow.id] = tagRow;
+      return acc;
+    }, {});
 
-      const grouped = taggings.reduce<Record<string, TagSchema[]>>((acc, tagging) => {
-        const tagRow = tagById[tagging.tagId];
-        if (!tagRow) return acc;
-        const existing = acc[tagging.resourceId] ?? [];
-        acc[tagging.resourceId] = [...existing, tagRow];
-        return acc;
-      }, {});
+    const grouped = taggings.reduce<Record<string, TagSchema[]>>((acc, tagging) => {
+      const tagRow = tagById[tagging.tagId];
+      if (!tagRow) return acc;
+      const existing = acc[tagging.resourceId] ?? [];
+      acc[tagging.resourceId] = [...existing, tagRow];
+      return acc;
+    }, {});
 
-      return ok(grouped);
-    });
+    return ok(grouped);
   }
 
   async attachTagsToResources<TRow extends { id: string }>(
@@ -164,20 +192,18 @@ export class TagRepository extends BaseTableRepository<
     rows: readonly TRow[],
     tx?: Orm
   ): ServerResultAsync<Array<TRow & { tags: TagSchema[] }>> {
-    return this.throwableAsync(async () => {
-      if (rows.length === 0) return ok([]);
-      const tagsResult = await this.findTagsForResources(
-        { resourceType, resourceIds: rows.map((row) => row.id) },
-        tx
-      );
-      if (tagsResult.isErr()) return err(tagsResult.error);
-      const tagsByResource = tagsResult.value;
-      const withTags = rows.map((row) => ({
-        ...row,
-        tags: tagsByResource[row.id] ?? [],
-      }));
-      return ok(withTags);
-    });
+    if (rows.length === 0) return ok([]);
+    const tagsResult = await this.findTagsForResources(
+      { resourceType, resourceIds: rows.map((row) => row.id) },
+      tx
+    );
+    if (tagsResult.isErr()) return err(tagsResult.error);
+    const tagsByResource = tagsResult.value;
+    const withTags = rows.map((row) => ({
+      ...row,
+      tags: tagsByResource[row.id] ?? [],
+    }));
+    return ok(withTags);
   }
 
   async listTaggings(

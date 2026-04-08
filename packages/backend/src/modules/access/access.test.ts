@@ -1,3 +1,45 @@
+jest.mock("better-auth/plugins/access", () => {
+  type Connector = "AND" | "OR";
+
+  function authorizeRequest(
+    roleStatements: Record<string, unknown>,
+    request: any,
+    connector: Connector
+  ): { success: boolean } {
+    const requestEntries = Object.entries(request ?? {});
+    const checkResource = (resource: string, actions: readonly string[], resourceConnector: Connector) => {
+      const allowed = (roleStatements as any)?.[resource] as readonly string[] | undefined;
+      if (!allowed) return false;
+      return resourceConnector === "OR"
+        ? actions.some((a) => allowed.includes(a))
+        : actions.every((a) => allowed.includes(a));
+    };
+
+    const results = requestEntries.map(([resource, value]) => {
+      if (Array.isArray(value)) {
+        return checkResource(resource, value, connector);
+      }
+      if (value && typeof value === "object" && "actions" in value) {
+        const v = value as { actions: readonly string[]; connector?: Connector };
+        return checkResource(resource, v.actions, v.connector ?? connector);
+      }
+      return false;
+    });
+
+    const success = connector === "OR" ? results.some(Boolean) : results.every(Boolean);
+    return { success };
+  }
+
+  return {
+    createAccessControl: (_statements: unknown) => ({
+      newRole: (roleStatements: Record<string, unknown>) => ({
+        authorize: (request: any, connector: Connector = "AND") =>
+          authorizeRequest(roleStatements, request, connector),
+      }),
+    }),
+  };
+});
+
 import { createClient } from "@libsql/client";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { drizzle } from "drizzle-orm/libsql";

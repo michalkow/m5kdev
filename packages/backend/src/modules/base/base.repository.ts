@@ -18,7 +18,7 @@ import {
 } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import type { SQLiteColumn, SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
-import { ok } from "neverthrow";
+import { err, ok } from "neverthrow";
 import { ServerError } from "../../utils/errors";
 import { applyPagination } from "../utils/applyPagination";
 import { applySorting } from "../utils/applySorting";
@@ -221,243 +221,273 @@ export class BaseTableRepository<
     },
     tx?: O
   ): ServerResultAsync<{ rows: InferSelectModel<TTable>[]; total: number }> {
-    return this.throwableAsync(async () => {
-      type Row = InferSelectModel<TTable>;
+    type Row = InferSelectModel<TTable>;
 
-      const db = tx ?? this.orm;
-      const conditions = options?.conditions ?? this.getConditionBuilder(this.table);
-      conditions.applyFilters(query);
-      if (options?.globalSearchColumns?.length) {
-        const columns = options.globalSearchColumns.map((c) => {
-          const column = this.table[c as keyof TTable] as SQLiteColumn;
-          if (!column) {
-            throw new Error(`Column ${c} not found in table ${this.table.name}`);
-          }
-          return column;
-        });
-        conditions.applyGlobalSearch(query?.q, columns);
+    const db = tx ?? this.orm;
+    const conditions = options?.conditions ?? this.getConditionBuilder(this.table);
+    conditions.applyFilters(query);
+
+    if (options?.globalSearchColumns?.length) {
+      const columns: SQLiteColumn[] = [];
+      for (const columnId of options.globalSearchColumns) {
+        const column = this.table[columnId as keyof TTable] as SQLiteColumn | undefined;
+        if (!column) {
+          return this.error(
+            "BAD_REQUEST",
+            `Column ${columnId} not found in table ${this.table.name}`
+          );
+        }
+        columns.push(column);
       }
-      if (this.table.deletedAt && !options?.showDeleted) {
-        conditions.push(isNull(this.table.deletedAt));
-      }
-      const whereClause = conditions.join();
-      const rowsQuery = this.withSortingAndPagination(
-        (options?.select ? db.select(options.select) : db.select())
-          .from(this.table as any)
-          .where(whereClause),
-        query || {}
-      );
-      const countQuery = db
-        .select({ count: count() })
+      conditions.applyGlobalSearch(query?.q, columns);
+    }
+
+    if (this.table.deletedAt && !options?.showDeleted) {
+      conditions.push(isNull(this.table.deletedAt));
+    }
+
+    const whereClause = conditions.join();
+    const rowsQuery = this.withSortingAndPagination(
+      (options?.select ? db.select(options.select) : db.select())
         .from(this.table as any)
-        .where(whereClause);
-      const [rows, [totalResult]] = await Promise.all([rowsQuery, countQuery]);
+        .where(whereClause),
+      query || {}
+    );
+    const countQuery = db
+      .select({ count: count() })
+      .from(this.table as any)
+      .where(whereClause);
 
-      return ok({ rows: rows as Row[], total: totalResult?.count ?? 0 });
+    const queryResult = await this.throwableQuery(async () => {
+      const [rows, [totalResult]] = await Promise.all([rowsQuery, countQuery]);
+      return { rows, totalResult };
+    });
+    if (queryResult.isErr()) return err(queryResult.error);
+
+    return ok({
+      rows: queryResult.value.rows as Row[],
+      total: queryResult.value.totalResult?.count ?? 0,
     });
   }
 
   async findById(id: string, tx?: O): ServerResultAsync<InferSelectModel<TTable> | undefined> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      type Row = InferSelectModel<TTable>;
+    const db = tx ?? this.orm;
+    type Row = InferSelectModel<TTable>;
 
-      const rows = (await db
+    const rowsResult = await this.throwableQuery(() =>
+      db
         .select()
         .from(this.table as any)
-        .where(eq(this.idColumn as SQLiteColumn, id))) as Row[];
+        .where(eq(this.idColumn as SQLiteColumn, id))
+    );
+    if (rowsResult.isErr()) return err(rowsResult.error);
 
-      return ok(rows[0]);
-    });
+    return ok((rowsResult.value as Row[])[0]);
   }
 
   async findManyById(
     ids: readonly string[],
     tx?: O
   ): ServerResultAsync<Array<InferSelectModel<TTable>>> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      type Row = InferSelectModel<TTable>;
+    const db = tx ?? this.orm;
+    type Row = InferSelectModel<TTable>;
 
-      if (ids.length === 0) {
-        return ok<Row[]>([]);
-      }
+    if (ids.length === 0) {
+      return ok<Row[]>([]);
+    }
 
-      const rows = (await db
+    const rowsResult = await this.throwableQuery(() =>
+      db
         .select()
         .from(this.table as any)
-        .where(inArray(this.idColumn as SQLiteColumn, ids as string[]))) as Row[];
+        .where(inArray(this.idColumn as SQLiteColumn, ids as string[]))
+    );
+    if (rowsResult.isErr()) return err(rowsResult.error);
 
-      return ok(rows);
-    });
+    return ok(rowsResult.value as Row[]);
   }
 
   async create(
     data: InferInsertModel<TTable>,
     tx?: O
   ): ServerResultAsync<InferSelectModel<TTable>> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      type Row = InferSelectModel<TTable>;
+    const db = tx ?? this.orm;
+    type Row = InferSelectModel<TTable>;
 
-      const rows = (await db
+    const rowsResult = await this.throwableQuery(() =>
+      db
         .insert(this.table as any)
         .values(data as any)
-        .returning()) as unknown as Row[];
+        .returning()
+    );
+    if (rowsResult.isErr()) return err(rowsResult.error);
 
-      if (rows.length === 0) return this.error("UNPROCESSABLE_CONTENT");
-      return ok(rows[0] as Row);
-    });
+    const rows = rowsResult.value as unknown as Row[];
+    if (rows.length === 0) return this.error("UNPROCESSABLE_CONTENT");
+    return ok(rows[0] as Row);
   }
 
   async createMany(
     data: readonly InferInsertModel<TTable>[],
     tx?: O
   ): ServerResultAsync<Array<InferSelectModel<TTable>>> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      type Row = InferSelectModel<TTable>;
+    const db = tx ?? this.orm;
+    type Row = InferSelectModel<TTable>;
 
-      if (data.length === 0) {
-        return ok<Row[]>([]);
-      }
+    if (data.length === 0) {
+      return ok<Row[]>([]);
+    }
 
-      const rows = (await db
+    const rowsResult = await this.throwableQuery(() =>
+      db
         .insert(this.table as any)
         .values(data as any)
-        .returning()) as unknown as Row[];
+        .returning()
+    );
+    if (rowsResult.isErr()) return err(rowsResult.error);
 
-      return ok(rows as Row[]);
-    });
+    return ok(rowsResult.value as unknown as Row[]);
   }
 
   async update(
     data: TableUpdatePayload<TTable, TIdKey>,
     tx?: O
   ): ServerResultAsync<InferSelectModel<TTable>> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      type Row = InferSelectModel<TTable>;
+    const db = tx ?? this.orm;
+    type Row = InferSelectModel<TTable>;
 
-      const single = data as Record<string, unknown>;
-      const id = String(single[this.idKey]);
-      const { [this.idKey]: _removed, ...rest } = single;
-      const update = rest;
-      if (this.table.updatedAt) (update as any).updatedAt = new Date();
-      const rows = (await db
+    const single = data as Record<string, unknown>;
+    const id = String(single[this.idKey]);
+    const { [this.idKey]: _removed, ...rest } = single;
+    const update = rest;
+    if (this.table.updatedAt) (update as any).updatedAt = new Date();
+
+    const rowsResult = await this.throwableQuery(() =>
+      db
         .update(this.table as any)
         .set(update as unknown as Partial<InferInsertModel<TTable>>)
         .where(eq(this.idColumn as SQLiteColumn, id))
-        .returning()) as unknown as Row[];
-      const [row] = rows;
+        .returning()
+    );
+    if (rowsResult.isErr()) return err(rowsResult.error);
 
-      if (!row) return this.error("NOT_FOUND");
-      return ok(row) as ServerResult<Row>;
-    });
+    const rows = rowsResult.value as unknown as Row[];
+    const [row] = rows;
+    if (!row) return this.error("NOT_FOUND");
+    return ok(row) as ServerResult<Row>;
   }
 
   async updateMany(
     data: readonly TableUpdatePayload<TTable, TIdKey>[],
     tx?: O
   ): ServerResultAsync<Array<InferSelectModel<TTable>>> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      type Row = InferSelectModel<TTable>;
+    const db = tx ?? this.orm;
+    type Row = InferSelectModel<TTable>;
 
-      if (data.length === 0) {
-        return ok<Row[]>([]);
-      }
+    if (data.length === 0) {
+      return ok<Row[]>([]);
+    }
 
-      const results: Row[] = [];
-      for (const item of data) {
-        const record = item as Record<string, unknown>;
-        const id = String(record[this.idKey]);
-        const { [this.idKey]: _removed, ...rest } = record;
-        const update = rest;
-        if (this.table.updatedAt) (update as any).updatedAt = new Date();
-        const rows = (await db
+    const results: Row[] = [];
+    for (const item of data) {
+      const record = item as Record<string, unknown>;
+      const id = String(record[this.idKey]);
+      const { [this.idKey]: _removed, ...rest } = record;
+      const update = rest;
+      if (this.table.updatedAt) (update as any).updatedAt = new Date();
+
+      const rowsResult = await this.throwableQuery(() =>
+        db
           .update(this.table as any)
           .set(update as unknown as Partial<InferInsertModel<TTable>>)
           .where(eq(this.idColumn as SQLiteColumn, id))
-          .returning()) as unknown as Row[];
-        if (rows[0]) results.push(rows[0]);
-      }
+          .returning()
+      );
+      if (rowsResult.isErr()) return err(rowsResult.error);
 
-      return ok(results) as ServerResult<Row[]>;
-    });
+      const rows = rowsResult.value as unknown as Row[];
+      if (rows[0]) results.push(rows[0]);
+    }
+
+    return ok(results) as ServerResult<Row[]>;
   }
 
   async softDeleteById(id: string, tx?: O): ServerResultAsync<{ id: string }> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      if (!this.table.deletedAt) return this.error("METHOD_NOT_SUPPORTED");
+    const db = tx ?? this.orm;
+    if (!this.table.deletedAt) return this.error("METHOD_NOT_SUPPORTED");
 
-      const rows = await db
+    const rowsResult = await this.throwableQuery(() =>
+      db
         .update(this.table as any)
         .set({ deletedAt: new Date() })
         .where(eq(this.idColumn as SQLiteColumn, id))
         .returning({
           id: this.idColumn as SQLiteColumn,
-        });
+        })
+    );
+    if (rowsResult.isErr()) return err(rowsResult.error);
 
-      if (rows.length === 0) return this.error("NOT_FOUND");
-      return ok(rows[0] as { id: string });
-    });
+    const rows = rowsResult.value as Array<{ id: string }>;
+    if (rows.length === 0) return this.error("NOT_FOUND");
+    return ok(rows[0] as { id: string });
   }
 
   async softDeleteManyById(
     ids: readonly string[],
     tx?: O
   ): ServerResultAsync<Array<{ id: string }>> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      if (!this.table.deletedAt) return this.error("METHOD_NOT_SUPPORTED");
+    const db = tx ?? this.orm;
+    if (!this.table.deletedAt) return this.error("METHOD_NOT_SUPPORTED");
 
-      const rows = await db
+    const rowsResult = await this.throwableQuery(() =>
+      db
         .update(this.table as any)
         .set({ deletedAt: new Date() })
         .where(inArray(this.idColumn as SQLiteColumn, ids as string[]))
         .returning({
           id: this.idColumn as SQLiteColumn,
-        });
-      if (rows.length === 0) return this.error("NOT_FOUND");
-      return ok(rows as { id: string }[]);
-    });
+        })
+    );
+    if (rowsResult.isErr()) return err(rowsResult.error);
+
+    const rows = rowsResult.value as Array<{ id: string }>;
+    if (rows.length === 0) return this.error("NOT_FOUND");
+    return ok(rows as { id: string }[]);
   }
 
   async deleteById(id: string, tx?: O): ServerResultAsync<{ id: string }> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
+    const db = tx ?? this.orm;
 
-      const rows = await db
-        .delete(this.table as any)
-        .where(eq(this.idColumn as SQLiteColumn, id))
-        .returning({
-          id: this.idColumn as SQLiteColumn,
-        });
+    const rowsResult = await this.throwableQuery(() =>
+      db.delete(this.table as any).where(eq(this.idColumn as SQLiteColumn, id)).returning({
+        id: this.idColumn as SQLiteColumn,
+      })
+    );
+    if (rowsResult.isErr()) return err(rowsResult.error);
 
-      if (rows.length === 0) return this.error("NOT_FOUND");
-      return ok(rows[0] as { id: string });
-    });
+    const rows = rowsResult.value as Array<{ id: string }>;
+    if (rows.length === 0) return this.error("NOT_FOUND");
+    return ok(rows[0] as { id: string });
   }
 
   async deleteManyById(ids: readonly string[], tx?: O): ServerResultAsync<Array<{ id: string }>> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
+    const db = tx ?? this.orm;
 
-      if (ids.length === 0) {
-        return ok<{ id: string }[]>([]);
-      }
+    if (ids.length === 0) {
+      return ok<{ id: string }[]>([]);
+    }
 
-      const rows = await db
+    const rowsResult = await this.throwableQuery(() =>
+      db
         .delete(this.table as any)
         .where(inArray(this.idColumn as SQLiteColumn, ids as string[]))
         .returning({
           id: this.idColumn as SQLiteColumn,
-        });
+        })
+    );
+    if (rowsResult.isErr()) return err(rowsResult.error);
 
-      return ok(rows as { id: string }[]);
-    });
+    return ok(rowsResult.value as { id: string }[]);
   }
 }
 

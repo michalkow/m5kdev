@@ -6,7 +6,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { ok } from "neverthrow";
+import { err, ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseExternaRepository } from "../base/base.repository";
 
@@ -38,58 +38,53 @@ export class FileRepository extends BaseExternaRepository {
     filetype: string,
     expiresIn = 60 * 5
   ): ServerResultAsync<string> {
-    return this.throwableAsync(async () => {
-      const command = new PutObjectCommand({
-        Bucket: process.env.AWS_S3_BUCKET,
-        Key: filename,
-        ContentType: filetype,
-      });
-      const url = await getSignedUrl(this.s3, command, { expiresIn });
-      return ok(url);
+    const command = new PutObjectCommand({
+      Bucket: process.env.AWS_S3_BUCKET,
+      Key: filename,
+      ContentType: filetype,
     });
+    const urlResult = await this.throwablePromise(() => getSignedUrl(this.s3, command, { expiresIn }));
+    if (urlResult.isErr()) return urlResult;
+    return ok(urlResult.value);
   }
 
   async getS3DownloadUrl(path: string, expiresIn = 60 * 5): ServerResultAsync<string> {
-    return this.throwableAsync(async () => {
-      const command = new GetObjectCommand({
-        Bucket: process.env.AWS_S3_BUCKET,
-        Key: path,
-      });
-      const url = await getSignedUrl(this.s3, command, { expiresIn });
-      return ok(url);
+    const command = new GetObjectCommand({
+      Bucket: process.env.AWS_S3_BUCKET,
+      Key: path,
     });
+    const urlResult = await this.throwablePromise(() => getSignedUrl(this.s3, command, { expiresIn }));
+    if (urlResult.isErr()) return urlResult;
+    return ok(urlResult.value);
   }
 
   async getS3Object(path: string): ServerResultAsync<GetObjectCommandOutput> {
-    return this.throwableAsync(async () => {
-      const command = new GetObjectCommand({
-        Bucket: process.env.AWS_S3_BUCKET,
-        Key: path,
-      });
-      const data = await this.s3.send(command);
-      return ok(data);
+    const command = new GetObjectCommand({
+      Bucket: process.env.AWS_S3_BUCKET,
+      Key: path,
     });
+    const dataResult = await this.throwablePromise(() => this.s3.send(command));
+    if (dataResult.isErr()) return dataResult;
+    return ok(dataResult.value);
   }
 
   async getS3ObjectT(path: string): ServerResultAsync<GetObjectCommandOutput> {
-    return this.throwableAsync(async () => {
-      const command = new GetObjectCommand({
-        Bucket: process.env.AWS_S3_BUCKET,
-        Key: path,
-      });
-      const data = await this.s3.send(command);
-      return ok(data);
+    const command = new GetObjectCommand({
+      Bucket: process.env.AWS_S3_BUCKET,
+      Key: path,
     });
+    const dataResult = await this.throwablePromise(() => this.s3.send(command));
+    if (dataResult.isErr()) return dataResult;
+    return ok(dataResult.value);
   }
 
   async deleteS3Object(path: string): ServerResultAsync<void> {
-    return this.throwableAsync(async () => {
-      const command = new DeleteObjectCommand({
-        Bucket: process.env.AWS_S3_BUCKET,
-        Key: path,
-      });
-      await this.s3.send(command);
-      return ok(undefined);
+    const command = new DeleteObjectCommand({
+      Bucket: process.env.AWS_S3_BUCKET,
+      Key: path,
     });
+    const result = await this.throwablePromise(() => this.s3.send(command));
+    if (result.isErr()) return err(result.error);
+    return ok(undefined);
   }
 }

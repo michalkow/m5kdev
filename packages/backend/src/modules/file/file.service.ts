@@ -49,126 +49,137 @@ export class FileService extends BaseService<{ file: FileRepository }, never> {
   }
 
   async uploadFileToS3(localPath: string, returnDownloadUrl = false): ServerResultAsync<string> {
-    return this.throwableAsync(async () => {
-      const extension = localPath.split(".").pop()?.toLowerCase();
-      const filename = `${uuidv4()}${extension ? `.${extension}` : ""}`;
+    const extension = localPath.split(".").pop()?.toLowerCase();
+    const filename = `${uuidv4()}${extension ? `.${extension}` : ""}`;
 
-      const mimeByExt: Record<string, string> = {
-        jpg: "image/jpeg",
-        jpeg: "image/jpeg",
-        png: "image/png",
-        webp: "image/webp",
-        mp4: "video/mp4",
-        mov: "video/mov",
-        avi: "video/avi",
-        mkv: "video/mkv",
-        webm: "video/webm",
-        mp3: "audio/mp3",
-        wav: "audio/wav",
-        m4a: "audio/m4a",
-      };
-      const filetype = (extension && mimeByExt[extension]) || "application/octet-stream";
+    const mimeByExt: Record<string, string> = {
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      webp: "image/webp",
+      mp4: "video/mp4",
+      mov: "video/mov",
+      avi: "video/avi",
+      mkv: "video/mkv",
+      webm: "video/webm",
+      mp3: "audio/mp3",
+      wav: "audio/wav",
+      m4a: "audio/mp4",
+    };
+    const filetype = (extension && mimeByExt[extension]) || "application/octet-stream";
 
-      const presigned = await this.getS3UploadUrl(filename, filetype);
-      if (presigned.isErr()) return err(presigned.error);
+    const presigned = await this.getS3UploadUrl(filename, filetype);
+    if (presigned.isErr()) return err(presigned.error);
 
-      const file = await readFile(localPath);
-      const res = await fetch(presigned.value, {
+    const fileResult = await this.throwablePromise(() => readFile(localPath));
+    if (fileResult.isErr()) return err(fileResult.error);
+
+    const resResult = await this.throwablePromise(() =>
+      fetch(presigned.value, {
         method: "PUT",
-        body: file,
+        body: fileResult.value,
         headers: { "Content-Type": filetype },
-      });
-      if (!res.ok) {
-        return this.error("INTERNAL_SERVER_ERROR", `Failed to upload to S3: ${res.status}`);
-      }
-      if (returnDownloadUrl) {
-        const downloadUrl = await this.getS3DownloadUrl(filename);
-        if (downloadUrl.isErr()) return err(downloadUrl.error);
-        return ok(downloadUrl.value);
-      }
+      })
+    );
+    if (resResult.isErr()) return err(resResult.error);
 
-      return ok(filename);
-    });
+    if (!resResult.value.ok) {
+      return this.error("INTERNAL_SERVER_ERROR", `Failed to upload to S3: ${resResult.value.status}`);
+    }
+
+    if (returnDownloadUrl) {
+      const downloadUrl = await this.getS3DownloadUrl(filename);
+      if (downloadUrl.isErr()) return err(downloadUrl.error);
+      return ok(downloadUrl.value);
+    }
+
+    return ok(filename);
   }
 
   async downloadS3ToFile(s3Path: string): ServerResultAsync<string> {
-    return this.throwableAsync(async () => {
-      const extension = s3Path.split(".").pop();
-      const destinationPath = path.join(
-        tmpdir(),
-        "s3-downloads",
-        `${uuidv4()}${extension ? `.${extension}` : ""}`
+    const extension = s3Path.split(".").pop();
+    const destinationPath = path.join(
+      tmpdir(),
+      "s3-downloads",
+      `${uuidv4()}${extension ? `.${extension}` : ""}`
+    );
+
+    const result = await this.repository.file.getS3Object(s3Path);
+    if (result.isErr()) return err(result.error);
+
+    const body = result.value.Body;
+    if (!body) return this.error("NOT_FOUND", "S3 object body is empty");
+
+    const mkdirResult = await this.throwablePromise(() => mkdir(dirname(destinationPath), { recursive: true }));
+    if (mkdirResult.isErr()) return err(mkdirResult.error);
+
+    if (
+      typeof body === "object" &&
+      "transformToByteArray" in body &&
+      typeof body.transformToByteArray === "function"
+    ) {
+      const bytesResult = await this.throwablePromise(() => body.transformToByteArray());
+      if (bytesResult.isErr()) return err(bytesResult.error);
+
+      const writeResult = await this.throwablePromise(() => writeFile(destinationPath, bytesResult.value));
+      if (writeResult.isErr()) return err(writeResult.error);
+
+      return ok(destinationPath);
+    }
+
+    const writeStream = createWriteStream(destinationPath);
+    let input: NodeJS.ReadableStream | null = null;
+    const unknownBody: unknown = body;
+
+    if (
+      typeof unknownBody === "object" &&
+      unknownBody !== null &&
+      "pipe" in unknownBody &&
+      typeof (unknownBody as { pipe?: unknown }).pipe === "function"
+    ) {
+      input = unknownBody as NodeJS.ReadableStream;
+    } else if (
+      typeof unknownBody === "object" &&
+      unknownBody !== null &&
+      "getReader" in unknownBody &&
+      typeof (unknownBody as { getReader?: unknown }).getReader === "function"
+    ) {
+      input = Readable.fromWeb(unknownBody as unknown as globalThis.ReadableStream);
+    } else if (
+      typeof unknownBody === "object" &&
+      unknownBody !== null &&
+      "stream" in unknownBody &&
+      typeof (unknownBody as { stream?: unknown }).stream === "function"
+    ) {
+      input = Readable.fromWeb((unknownBody as { stream: () => globalThis.ReadableStream }).stream());
+    }
+
+    if (input) {
+      const pipelineResult = await this.throwablePromise(() => pipeline(input, writeStream));
+      if (pipelineResult.isErr()) return err(pipelineResult.error);
+      return ok(destinationPath);
+    }
+
+    if (
+      typeof unknownBody === "object" &&
+      unknownBody !== null &&
+      "arrayBuffer" in unknownBody &&
+      typeof (unknownBody as { arrayBuffer?: unknown }).arrayBuffer === "function"
+    ) {
+      const bufferResult = await this.throwablePromise(async () =>
+        Buffer.from(await (unknownBody as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer())
       );
+      if (bufferResult.isErr()) return err(bufferResult.error);
 
-      const result = await this.repository.file.getS3Object(s3Path);
-      if (result.isErr()) return err(result.error);
+      const pipelineResult = await this.throwablePromise(() =>
+        pipeline(Readable.from(bufferResult.value), writeStream)
+      );
+      if (pipelineResult.isErr()) return err(pipelineResult.error);
 
-      const body = result.value.Body;
-      if (!body) return this.error("NOT_FOUND", "S3 object body is empty");
+      return ok(destinationPath);
+    }
 
-      await mkdir(dirname(destinationPath), { recursive: true });
-
-      // AWS SDK v3 SdkStream has transformToByteArray method - use it for reliable handling
-      if (
-        typeof body === "object" &&
-        "transformToByteArray" in body &&
-        typeof body.transformToByteArray === "function"
-      ) {
-        const bytes = await body.transformToByteArray();
-        await writeFile(destinationPath, bytes);
-        return ok(destinationPath);
-      }
-
-      // Fallback: try streaming approaches
-      const writeStream = createWriteStream(destinationPath);
-      let input: NodeJS.ReadableStream | null = null;
-      const unknownBody: unknown = body;
-
-      if (
-        typeof unknownBody === "object" &&
-        unknownBody !== null &&
-        "pipe" in unknownBody &&
-        typeof (unknownBody as { pipe?: unknown }).pipe === "function"
-      ) {
-        input = unknownBody as NodeJS.ReadableStream;
-      } else if (
-        typeof unknownBody === "object" &&
-        unknownBody !== null &&
-        "getReader" in unknownBody &&
-        typeof (unknownBody as { getReader?: unknown }).getReader === "function"
-      ) {
-        input = Readable.fromWeb(unknownBody as unknown as globalThis.ReadableStream);
-      } else if (
-        typeof unknownBody === "object" &&
-        unknownBody !== null &&
-        "stream" in unknownBody &&
-        typeof (unknownBody as { stream?: unknown }).stream === "function"
-      ) {
-        input = Readable.fromWeb(
-          (unknownBody as { stream: () => globalThis.ReadableStream }).stream()
-        );
-      }
-
-      if (input) {
-        await pipeline(input, writeStream);
-        return ok(destinationPath);
-      }
-
-      if (
-        typeof unknownBody === "object" &&
-        unknownBody !== null &&
-        "arrayBuffer" in unknownBody &&
-        typeof (unknownBody as { arrayBuffer?: unknown }).arrayBuffer === "function"
-      ) {
-        const buffer = Buffer.from(
-          await (unknownBody as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer()
-        );
-        await pipeline(Readable.from(buffer), writeStream);
-        return ok(destinationPath);
-      }
-
-      return this.error("INTERNAL_SERVER_ERROR", "Unsupported S3 body type");
-    });
+    return this.error("INTERNAL_SERVER_ERROR", "Unsupported S3 body type");
   }
 
   getFileType(path: string): { fileType: keyof typeof fileTypes; extension: string } | undefined {

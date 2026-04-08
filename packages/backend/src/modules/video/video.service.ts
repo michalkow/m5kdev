@@ -3,7 +3,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 //
 import ffbin from "ffmpeg-ffprobe-static";
-import { ok } from "neverthrow";
+import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
@@ -57,14 +57,14 @@ const runFfmpeg = async (args: readonly string[]): Promise<void> => {
 
 export class VideoService extends BaseService<never, never> {
   async cut(file: string, start: number, end: number): ServerResultAsync<string> {
-    return this.throwableAsync(async () => {
-      const duration = end - start;
-      const output = path.join(uploadsDir, `${uuidv4()}.mp4`);
-      if (!existsSync(output)) {
-        closeSync(openSync(output, "w"));
-      }
+    const duration = end - start;
+    const output = path.join(uploadsDir, `${uuidv4()}.mp4`);
+    if (!existsSync(output)) {
+      closeSync(openSync(output, "w"));
+    }
 
-      await runFfmpeg([
+    const ffmpegResult = await this.throwablePromise(() =>
+      runFfmpeg([
         "-i",
         file,
         "-ss",
@@ -79,22 +79,21 @@ export class VideoService extends BaseService<never, never> {
         "+faststart",
         "-y",
         output,
-      ]).catch((error) => {
-        throw this.handleUnknownError(error);
-      });
+      ])
+    );
+    if (ffmpegResult.isErr()) return err(ffmpegResult.error);
 
-      return ok(output);
-    });
+    return ok(output);
   }
 
   async webmToWav(input: string, hz = 48000): ServerResultAsync<string> {
-    return this.throwableAsync(async () => {
-      const output = path.join(uploadsDir, `${uuidv4()}.wav`);
-      if (!existsSync(output)) {
-        closeSync(openSync(output, "w"));
-      }
+    const output = path.join(uploadsDir, `${uuidv4()}.wav`);
+    if (!existsSync(output)) {
+      closeSync(openSync(output, "w"));
+    }
 
-      await runFfmpeg([
+    const ffmpegResult = await this.throwablePromise(() =>
+      runFfmpeg([
         "-i",
         input,
         "-vn",
@@ -108,20 +107,20 @@ export class VideoService extends BaseService<never, never> {
         "wav",
         "-y",
         output,
-      ]).catch((error) => {
-        throw this.handleUnknownError(error);
-      });
-      return ok(output);
-    });
+      ])
+    );
+    if (ffmpegResult.isErr()) return err(ffmpegResult.error);
+    return ok(output);
   }
 
   async extractAudioMp3(input: string, kbps = 192, streamIndex = 0): ServerResultAsync<string> {
-    return this.throwableAsync(async () => {
-      const output = path.join(uploadsDir, `${uuidv4()}.mp3`);
-      if (!existsSync(output)) {
-        closeSync(openSync(output, "w"));
-      }
-      await runFfmpeg([
+    const output = path.join(uploadsDir, `${uuidv4()}.mp3`);
+    if (!existsSync(output)) {
+      closeSync(openSync(output, "w"));
+    }
+
+    const ffmpegResult = await this.throwablePromise(() =>
+      runFfmpeg([
         "-i",
         input,
         "-map",
@@ -132,11 +131,10 @@ export class VideoService extends BaseService<never, never> {
         `${kbps}k`,
         "-y",
         output,
-      ]).catch((error) => {
-        throw this.handleUnknownError(error);
-      });
+      ])
+    );
+    if (ffmpegResult.isErr()) return err(ffmpegResult.error);
 
-      return ok(output);
-    });
+    return ok(output);
   }
 }

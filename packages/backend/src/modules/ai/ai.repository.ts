@@ -1,7 +1,7 @@
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import { eq, sql } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
-import { ok } from "neverthrow";
+import { err, ok } from "neverthrow";
 import * as ai from "./ai.db";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseTableRepository } from "../base/base.repository";
@@ -34,11 +34,11 @@ export class AiUsageRepository extends BaseTableRepository<
   Record<string, never>,
   Schema["aiUsage"]
 > {
-  getUsage(
+  async getUsage(
     userId: string
   ): ServerResultAsync<Pick<AiUsageRow, "inputTokens" | "outputTokens" | "totalTokens" | "cost">> {
-    return this.throwableAsync(async () => {
-      const [usage] = await this.orm
+    const usageResult = await this.throwableQuery(() =>
+      this.orm
         .select({
           inputTokens: sql<number>`SUM(${this.table.inputTokens})`,
           outputTokens: sql<number>`SUM(${this.table.outputTokens})`,
@@ -46,8 +46,10 @@ export class AiUsageRepository extends BaseTableRepository<
           cost: sql<number>`SUM(${this.table.cost})`,
         })
         .from(this.table)
-        .where(eq(this.table.userId, userId));
-      return ok(usage);
-    });
+        .where(eq(this.table.userId, userId))
+    );
+    if (usageResult.isErr()) return err(usageResult.error);
+    const [usage] = usageResult.value;
+    return ok(usage);
   }
 }

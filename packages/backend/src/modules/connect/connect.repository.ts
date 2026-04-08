@@ -15,22 +15,25 @@ export type ConnectInsert = InferInsertModel<Schema["connect"]>;
 
 export class ConnectRepository extends BaseTableRepository<Orm, Schema, Record<string, never>, Schema["connect"]> {
   async list(data: ConnectListInputSchema & { userId: string }, tx?: Orm) {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const { ConditionBuilder } = this.helpers;
-      const conditions = new ConditionBuilder();
-      if (data.providers) conditions.push(inArray(this.schema.connect.provider, data.providers));
-      if (data.inactive) conditions.push(isNull(this.schema.connect.revokedAt));
-      conditions.push(eq(this.schema.connect.userId, data.userId));
-      const rows = await db.select().from(this.schema.connect).where(conditions.join());
-      return ok(rows);
-    });
+    const db = tx ?? this.orm;
+    const { ConditionBuilder } = this.helpers;
+    const conditions = new ConditionBuilder();
+    if (data.providers) conditions.push(inArray(this.schema.connect.provider, data.providers));
+    if (data.inactive) conditions.push(isNull(this.schema.connect.revokedAt));
+    conditions.push(eq(this.schema.connect.userId, data.userId));
+
+    const rowsResult = await this.throwableQuery(() =>
+      db.select().from(this.schema.connect).where(conditions.join())
+    );
+    if (rowsResult.isErr()) return rowsResult;
+    return ok(rowsResult.value);
   }
 
   async upsert(data: ConnectInsert, tx?: Orm) {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [existing] = await db
+    const db = tx ?? this.orm;
+
+    const existingResult = await this.throwableQuery(() =>
+      db
         .select()
         .from(this.schema.connect)
         .where(
@@ -40,11 +43,14 @@ export class ConnectRepository extends BaseTableRepository<Orm, Schema, Record<s
             eq(this.schema.connect.providerAccountId, data.providerAccountId)
           )
         )
-        .limit(1);
+        .limit(1)
+    );
+    if (existingResult.isErr()) return existingResult;
+    const [existing] = existingResult.value;
 
-      if (existing) {
-        // Update existing
-        const [updated] = await db
+    if (existing) {
+      const updatedResult = await this.throwableQuery(() =>
+        db
           .update(this.schema.connect)
           .set({
             ...data,
@@ -52,14 +58,19 @@ export class ConnectRepository extends BaseTableRepository<Orm, Schema, Record<s
             lastRefreshedAt: new Date(),
           })
           .where(eq(this.schema.connect.id, existing.id))
-          .returning();
-        return ok(updated);
-      }
+          .returning()
+      );
+      if (updatedResult.isErr()) return updatedResult;
+      const [updated] = updatedResult.value;
+      return ok(updated);
+    }
 
-      // Create new
-      const [created] = await db.insert(this.schema.connect).values(data).returning();
-      if (!created) return this.error("UNPROCESSABLE_CONTENT");
-      return ok(created);
-    });
+    const createdResult = await this.throwableQuery(() =>
+      db.insert(this.schema.connect).values(data).returning()
+    );
+    if (createdResult.isErr()) return createdResult;
+    const [created] = createdResult.value;
+    if (!created) return this.error("UNPROCESSABLE_CONTENT");
+    return ok(created);
   }
 }

@@ -33,9 +33,10 @@ export class RecurrenceRepository extends BaseTableRepository<
     rulesData: CreateRecurrenceRuleInput[],
     tx?: Orm
   ): ServerResultAsync<CreateWithRulesResult> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const result = await db.transaction(async (trx) => {
+    const db = tx ?? this.orm;
+
+    const txResult = await this.throwableQuery(() =>
+      db.transaction(async (trx) => {
         const [createdRecurrence] = await trx
           .insert(this.table)
           .values(recurrenceData)
@@ -55,10 +56,11 @@ export class RecurrenceRepository extends BaseTableRepository<
                 .returning()
             : [];
 
-        return ok({ recurrence: createdRecurrence, rules: insertedRules });
-      });
-      return result;
-    });
+        return { recurrence: createdRecurrence, rules: insertedRules };
+      })
+    );
+    if (txResult.isErr()) return txResult;
+    return ok(txResult.value);
   }
 }
 

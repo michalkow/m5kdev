@@ -154,26 +154,24 @@ export class BillingService extends BaseService<{ billing: BillingRepository }, 
   }
 
   async processEvent(event: Stripe.Event): ServerResultAsync<boolean> {
-    return this.throwableAsync(async () => {
-      // Skip processing if the event isn't one I'm tracking (list of all events below)
-      if (!allowedEvents.includes(event.type)) return ok(false);
+    // Skip processing if the event isn't one I'm tracking (list of all events below)
+    if (!allowedEvents.includes(event.type)) return ok(false);
 
-      // All the events I track have a customerId
-      const { customer: customerId } = event?.data?.object as {
-        customer: string; // Sadly TypeScript does not know this
-      };
+    // All the events I track have a customerId
+    const { customer: customerId } = event?.data?.object as {
+      customer: string; // Sadly TypeScript does not know this
+    };
 
-      // This helps make it typesafe and also lets me know if my assumption is wrong
-      if (typeof customerId !== "string") {
-        return this.error(
-          "INTERNAL_SERVER_ERROR",
-          `[STRIPE HOOK] Unexpected event structure: customer ID is not a string. Event type: ${event.type}`
-        );
-      }
+    // This helps make it typesafe and also lets me know if my assumption is wrong
+    if (typeof customerId !== "string") {
+      return this.error(
+        "INTERNAL_SERVER_ERROR",
+        `[STRIPE HOOK] Unexpected event structure: customer ID is not a string. Event type: ${event.type}`
+      );
+    }
 
-      const result = await this.syncStripeData(customerId, event.type);
-      if (result.isErr()) return err(result.error);
-      return ok(true);
-    });
+    const result = await this.syncStripeData(customerId, event.type);
+    if (result.isErr()) return err(result.error);
+    return ok(true);
   }
 }

@@ -1,6 +1,6 @@
 import { and, count, desc, eq, gte, ne } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
-import { ok } from "neverthrow";
+import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseRepository } from "../base/base.repository";
@@ -83,56 +83,60 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
   }
 
   async getUserWaitlistCount(userId: string, tx?: Orm): ServerResultAsync<number> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [waitlist] = await db
+    const db = tx ?? this.orm;
+    const result = await this.throwableQuery(() =>
+      db
         .select({ count: count() })
         .from(this.schema.waitlist)
-        .where(eq(this.schema.waitlist.userId, userId));
-
-      return ok(waitlist.count ?? 0);
-    });
+        .where(eq(this.schema.waitlist.userId, userId))
+    );
+    if (result.isErr()) return err(result.error);
+    const [waitlist] = result.value;
+    return ok(waitlist.count ?? 0);
   }
 
   async getOnboarding(userId: string, tx?: Orm): ServerResultAsync<number> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [user] = await db
+    const db = tx ?? this.orm;
+    const result = await this.throwableQuery(() =>
+      db
         .select({ onboarding: this.schema.users.onboarding })
         .from(this.schema.users)
         .where(eq(this.schema.users.id, userId))
-        .limit(1);
-      if (!user) return this.error("FORBIDDEN");
-
-      return ok(user.onboarding ?? 0);
-    });
+        .limit(1)
+    );
+    if (result.isErr()) return err(result.error);
+    const [user] = result.value;
+    if (!user) return this.error("FORBIDDEN");
+    return ok(user.onboarding ?? 0);
   }
 
   async setOnboarding(userId: string, onboarding: number, tx?: Orm): ServerResultAsync<number> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      await db
-        .update(this.schema.users)
-        .set({ onboarding })
-        .where(eq(this.schema.users.id, userId));
-      return ok(onboarding);
-    });
+    const db = tx ?? this.orm;
+    const updateResult = await this.throwableQuery(() =>
+      db.update(this.schema.users).set({ onboarding }).where(eq(this.schema.users.id, userId))
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+    return ok(onboarding);
   }
 
   async getPreferences(userId: string, tx?: Orm): ServerResultAsync<Record<string, unknown>> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [user] = await db
+    const db = tx ?? this.orm;
+    const userResult = await this.throwableQuery(() =>
+      db
         .select({ preferences: this.schema.users.preferences })
         .from(this.schema.users)
         .where(eq(this.schema.users.id, userId))
-        .limit(1);
-      if (!user) return this.error("FORBIDDEN");
-      const json = user.preferences
-        ? (JSON.parse(user.preferences) as Record<string, unknown>)
-        : {};
-      return ok(json);
-    });
+        .limit(1)
+    );
+    if (userResult.isErr()) return err(userResult.error);
+    const [user] = userResult.value;
+    if (!user) return this.error("FORBIDDEN");
+
+    const preferences = user.preferences;
+    if (!preferences) return ok({});
+    const parsed = this.throwable(() => ok(JSON.parse(preferences) as Record<string, unknown>));
+    if (parsed.isErr()) return err(parsed.error);
+    return ok(parsed.value);
   }
 
   async setPreferences(
@@ -140,14 +144,18 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     preferences: Record<string, unknown>,
     tx?: Orm
   ): ServerResultAsync<Record<string, unknown>> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      await db
+    const db = tx ?? this.orm;
+    const jsonResult = this.throwable(() => ok(JSON.stringify(preferences)));
+    if (jsonResult.isErr()) return err(jsonResult.error);
+
+    const updateResult = await this.throwableQuery(() =>
+      db
         .update(this.schema.users)
-        .set({ preferences: JSON.stringify(preferences) })
-        .where(eq(this.schema.users.id, userId));
-      return ok(preferences);
-    });
+        .set({ preferences: jsonResult.value })
+        .where(eq(this.schema.users.id, userId))
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+    return ok(preferences);
   }
 
   async getOrganizationPreferences(
@@ -155,12 +163,9 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     organizationId: string,
     tx?: Orm
   ): ServerResultAsync<Record<string, unknown>> {
-    return this.throwableAsync(async () => {
-      const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
-      if (!metadata) return this.error("FORBIDDEN");
-
-      return ok(normalizeOrganizationPreferences(metadata.preferences));
-    });
+    const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
+    if (!metadata) return this.error("FORBIDDEN");
+    return ok(normalizeOrganizationPreferences(metadata.preferences));
   }
 
   async setOrganizationPreferences(
@@ -169,37 +174,43 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     preferences: Record<string, unknown>,
     tx?: Orm
   ): ServerResultAsync<Record<string, unknown>> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
-      if (!metadata) return this.error("FORBIDDEN");
+    const db = tx ?? this.orm;
+    const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
+    if (!metadata) return this.error("FORBIDDEN");
 
-      await db
-        .update(this.schema.organizations)
-        .set({
-          metadata: JSON.stringify({
-            ...metadata,
-            preferences,
-          }),
+    const jsonResult = this.throwable(() =>
+      ok(
+        JSON.stringify({
+          ...metadata,
+          preferences,
         })
-        .where(eq(this.schema.organizations.id, organizationId));
+      )
+    );
+    if (jsonResult.isErr()) return err(jsonResult.error);
 
-      return ok(preferences);
-    });
+    const updateResult = await this.throwableQuery(() =>
+      db
+        .update(this.schema.organizations)
+        .set({ metadata: jsonResult.value })
+        .where(eq(this.schema.organizations.id, organizationId))
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+    return ok(preferences);
   }
 
   async getMetadata(userId: string, tx?: Orm): ServerResultAsync<Record<string, unknown>> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [user] = await db
+    const db = tx ?? this.orm;
+    const userResult = await this.throwableQuery(() =>
+      db
         .select({ metadata: this.schema.users.metadata })
         .from(this.schema.users)
         .where(eq(this.schema.users.id, userId))
-        .limit(1);
-      if (!user) return this.error("FORBIDDEN");
-
-      return ok(user.metadata);
-    });
+        .limit(1)
+    );
+    if (userResult.isErr()) return err(userResult.error);
+    const [user] = userResult.value;
+    if (!user) return this.error("FORBIDDEN");
+    return ok(user.metadata);
   }
 
   async setMetadata(
@@ -207,15 +218,20 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     metadata: Record<string, unknown>,
     tx?: Orm
   ): ServerResultAsync<Record<string, unknown>> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [user] = await db
+    const db = tx ?? this.orm;
+    const userResult = await this.throwableQuery(() =>
+      db
         .select({ metadata: this.schema.users.metadata })
         .from(this.schema.users)
         .where(eq(this.schema.users.id, userId))
-        .limit(1);
-      if (!user) return this.error("FORBIDDEN");
-      await db
+        .limit(1)
+    );
+    if (userResult.isErr()) return err(userResult.error);
+    const [user] = userResult.value;
+    if (!user) return this.error("FORBIDDEN");
+
+    const updateResult = await this.throwableQuery(() =>
+      db
         .update(this.schema.users)
         .set({
           metadata: {
@@ -223,24 +239,30 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
             ...metadata,
           },
         })
-        .where(eq(this.schema.users.id, userId));
-      return ok(metadata);
-    });
+        .where(eq(this.schema.users.id, userId))
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+    return ok(metadata);
   }
 
   async getFlags(userId: string, tx?: Orm): ServerResultAsync<string[]> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [user] = await db
+    const db = tx ?? this.orm;
+    const userResult = await this.throwableQuery(() =>
+      db
         .select({ flags: this.schema.users.flags })
         .from(this.schema.users)
         .where(eq(this.schema.users.id, userId))
-        .limit(1);
-      if (!user) return this.error("FORBIDDEN");
-      const json = user.flags ? (JSON.parse(user.flags) as string[]) : [];
+        .limit(1)
+    );
+    if (userResult.isErr()) return err(userResult.error);
+    const [user] = userResult.value;
+    if (!user) return this.error("FORBIDDEN");
+    const flags = user.flags;
+    if (!flags) return ok([]);
 
-      return ok(json);
-    });
+    const parsed = this.throwable(() => ok(JSON.parse(flags) as string[]));
+    if (parsed.isErr()) return err(parsed.error);
+    return ok(parsed.value);
   }
 
   async getOrganizationFlags(
@@ -248,23 +270,21 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     organizationId: string,
     tx?: Orm
   ): ServerResultAsync<string[]> {
-    return this.throwableAsync(async () => {
-      const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
-      if (!metadata) return this.error("FORBIDDEN");
-
-      return ok(normalizeOrganizationFlags(metadata.flags));
-    });
+    const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
+    if (!metadata) return this.error("FORBIDDEN");
+    return ok(normalizeOrganizationFlags(metadata.flags));
   }
 
   async setFlags(userId: string, flags: string[], tx?: Orm): ServerResultAsync<string[]> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      await db
-        .update(this.schema.users)
-        .set({ flags: JSON.stringify(flags) })
-        .where(eq(this.schema.users.id, userId));
-      return ok(flags);
-    });
+    const db = tx ?? this.orm;
+    const jsonResult = this.throwable(() => ok(JSON.stringify(flags)));
+    if (jsonResult.isErr()) return err(jsonResult.error);
+
+    const updateResult = await this.throwableQuery(() =>
+      db.update(this.schema.users).set({ flags: jsonResult.value }).where(eq(this.schema.users.id, userId))
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+    return ok(flags);
   }
 
   async setOrganizationFlags(
@@ -273,29 +293,27 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     flags: string[],
     tx?: Orm
   ): ServerResultAsync<string[]> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
-      if (!metadata) return this.error("FORBIDDEN");
+    const db = tx ?? this.orm;
+    const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
+    if (!metadata) return this.error("FORBIDDEN");
 
-      await db
+    const jsonResult = this.throwable(() => ok(JSON.stringify({ ...metadata, flags })));
+    if (jsonResult.isErr()) return err(jsonResult.error);
+
+    const updateResult = await this.throwableQuery(() =>
+      db
         .update(this.schema.organizations)
-        .set({
-          metadata: JSON.stringify({
-            ...metadata,
-            flags,
-          }),
-        })
-        .where(eq(this.schema.organizations.id, organizationId));
-
-      return ok(flags);
-    });
+        .set({ metadata: jsonResult.value })
+        .where(eq(this.schema.organizations.id, organizationId))
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+    return ok(flags);
   }
 
   async listAdminWaitlist(tx?: Orm): ServerResultAsync<WaitlistOutput[]> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const waitlist = await db
+    const db = tx ?? this.orm;
+    const waitlistResult = await this.throwableQuery(() =>
+      db
         .select({
           id: this.schema.waitlist.id,
           name: this.schema.waitlist.name,
@@ -306,36 +324,38 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
         })
         .from(this.schema.waitlist)
         .where(eq(this.schema.waitlist.type, "WAITLIST"))
-        .orderBy(desc(this.schema.waitlist.createdAt));
-      return ok(waitlist);
-    });
+        .orderBy(desc(this.schema.waitlist.createdAt))
+    );
+    if (waitlistResult.isErr()) return err(waitlistResult.error);
+    return ok(waitlistResult.value);
   }
 
   async listWaitlist(userId: string, tx?: Orm): ServerResultAsync<Waitlist[]> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const waitlist = await db
+    const db = tx ?? this.orm;
+    const waitlistResult = await this.throwableQuery(() =>
+      db
         .select()
         .from(this.schema.waitlist)
-        .where(
-          and(eq(this.schema.waitlist.userId, userId), eq(this.schema.waitlist.type, "WAITLIST"))
-        );
-      return ok(waitlist);
-    });
+        .where(and(eq(this.schema.waitlist.userId, userId), eq(this.schema.waitlist.type, "WAITLIST")))
+    );
+    if (waitlistResult.isErr()) return err(waitlistResult.error);
+    return ok(waitlistResult.value);
   }
 
   async addToWaitlist(email: string, tx?: Orm): ServerResultAsync<WaitlistOutput> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [waitlist] = await db.insert(this.schema.waitlist).values({ email }).returning();
-      return ok(waitlist);
-    });
+    const db = tx ?? this.orm;
+    const waitlistResult = await this.throwableQuery(() =>
+      db.insert(this.schema.waitlist).values({ email }).returning()
+    );
+    if (waitlistResult.isErr()) return err(waitlistResult.error);
+    const [waitlist] = waitlistResult.value;
+    return ok(waitlist);
   }
 
   async inviteFromWaitlist(id: string, tx?: Orm): ServerResultAsync<Waitlist> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [waitlist] = await db
+    const db = tx ?? this.orm;
+    const waitlistResult = await this.throwableQuery(() =>
+      db
         .update(this.schema.waitlist)
         .set({
           status: "INVITED",
@@ -343,18 +363,20 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
           expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
         })
         .where(eq(this.schema.waitlist.id, id))
-        .returning();
-      return ok(waitlist);
-    });
+        .returning()
+    );
+    if (waitlistResult.isErr()) return err(waitlistResult.error);
+    const [waitlist] = waitlistResult.value;
+    return ok(waitlist);
   }
 
   async inviteToWaitlist(
     { email, userId, name }: { email: string; userId: string; name?: string },
     tx?: Orm
   ): ServerResultAsync<Waitlist> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [waitlist] = await db
+    const db = tx ?? this.orm;
+    const waitlistResult = await this.throwableQuery(() =>
+      db
         .insert(this.schema.waitlist)
         .values({
           email,
@@ -364,18 +386,20 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
           expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
           userId: userId,
         })
-        .returning();
-      return ok(waitlist);
-    });
+        .returning()
+    );
+    if (waitlistResult.isErr()) return err(waitlistResult.error);
+    const [waitlist] = waitlistResult.value;
+    return ok(waitlist);
   }
 
   async createInvitationCode(
     { userId, name }: { userId: string; name?: string },
     tx?: Orm
   ): ServerResultAsync<Waitlist> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [waitlist] = await db
+    const db = tx ?? this.orm;
+    const waitlistResult = await this.throwableQuery(() =>
+      db
         .insert(this.schema.waitlist)
         .values({
           name,
@@ -384,53 +408,57 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
           expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
           userId: userId,
         })
-        .returning();
-      return ok(waitlist);
-    });
+        .returning()
+    );
+    if (waitlistResult.isErr()) return err(waitlistResult.error);
+    const [waitlist] = waitlistResult.value;
+    return ok(waitlist);
   }
 
   async joinWaitlist(email: string, tx?: Orm): ServerResultAsync<WaitlistOutput> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [waitlist] = await db.insert(this.schema.waitlist).values({ email }).returning();
-      return ok(waitlist);
-    });
+    const db = tx ?? this.orm;
+    const waitlistResult = await this.throwableQuery(() =>
+      db.insert(this.schema.waitlist).values({ email }).returning()
+    );
+    if (waitlistResult.isErr()) return err(waitlistResult.error);
+    const [waitlist] = waitlistResult.value;
+    return ok(waitlist);
   }
 
   async removeFromWaitlist(id: string, tx?: Orm): ServerResultAsync<WaitlistOutput> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [waitlist] = await db
-        .update(this.schema.waitlist)
-        .set({ status: "REMOVED" })
-        .where(eq(this.schema.waitlist.id, id))
-        .returning();
-      return ok(waitlist);
-    });
+    const db = tx ?? this.orm;
+    const waitlistResult = await this.throwableQuery(() =>
+      db.update(this.schema.waitlist).set({ status: "REMOVED" }).where(eq(this.schema.waitlist.id, id)).returning()
+    );
+    if (waitlistResult.isErr()) return err(waitlistResult.error);
+    const [waitlist] = waitlistResult.value;
+    return ok(waitlist);
   }
 
   async validateWaitlistCode(code: string, tx?: Orm): ServerResultAsync<{ status: string }> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [waitlist] = await db
+    const db = tx ?? this.orm;
+    const waitlistResult = await this.throwableQuery(() =>
+      db
         .select()
         .from(this.schema.waitlist)
         .where(and(eq(this.schema.waitlist.code, code), eq(this.schema.waitlist.type, "WAITLIST")))
-        .limit(1);
-      if (!waitlist) return ok({ status: "NOT_FOUND" });
-      if (waitlist.expiresAt && waitlist.expiresAt < new Date()) return ok({ status: "EXPIRED" });
-      if (waitlist.status !== "INVITED") return ok({ status: "INVALID" });
-      return ok({ status: "VALID" });
-    });
+        .limit(1)
+    );
+    if (waitlistResult.isErr()) return err(waitlistResult.error);
+    const [waitlist] = waitlistResult.value;
+    if (!waitlist) return ok({ status: "NOT_FOUND" });
+    if (waitlist.expiresAt && waitlist.expiresAt < new Date()) return ok({ status: "EXPIRED" });
+    if (waitlist.status !== "INVITED") return ok({ status: "INVALID" });
+    return ok({ status: "VALID" });
   }
 
   async createAccountClaimCode(
     { userId, expiresInHours = 24 * 14 }: { userId: string; expiresInHours?: number },
     tx?: Orm
   ): ServerResultAsync<AccountClaim> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [claim] = await db
+    const db = tx ?? this.orm;
+    const claimResult = await this.throwableQuery(() =>
+      db
         .insert(this.schema.waitlist)
         .values({
           type: "ACCOUNT_CLAIM",
@@ -439,9 +467,11 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
           status: "INVITED",
           expiresAt: new Date(Date.now() + 1000 * 60 * 60 * expiresInHours),
         })
-        .returning();
-      return ok(claim);
-    });
+        .returning()
+    );
+    if (claimResult.isErr()) return err(claimResult.error);
+    const [claim] = claimResult.value;
+    return ok(claim);
   }
 
   async createClaimableProvisionedUser({
@@ -459,18 +489,22 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     role?: "user" | "admin" | "agent";
     expiresInHours?: number;
   }): ServerResultAsync<{ user: UserRow; claim: AccountClaim }> {
-    return this.throwableAsync(async () => {
-      const normalizedEmail = email.toLowerCase();
-      const [existingUser] = await this.orm
+    const normalizedEmail = email.toLowerCase();
+    const existingUserResult = await this.throwableQuery(() =>
+      this.orm
         .select({ id: this.schema.users.id })
         .from(this.schema.users)
         .where(eq(this.schema.users.email, normalizedEmail))
-        .limit(1);
-      if (existingUser) {
-        return this.error("CONFLICT", "Email already in use");
-      }
+        .limit(1)
+    );
+    if (existingUserResult.isErr()) return err(existingUserResult.error);
+    const [existingUser] = existingUserResult.value;
+    if (existingUser) {
+      return this.error("CONFLICT", "Email already in use");
+    }
 
-      const created = await this.orm.transaction(async (tx) => {
+    const createdResult = await this.throwableQuery(() =>
+      this.orm.transaction(async (tx) => {
         const [user] = await tx
           .insert(this.schema.users)
           .values({
@@ -537,16 +571,16 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
         if (!claim) throw new Error("Failed to create account claim");
 
         return { user, claim };
-      });
-
-      return ok(created);
-    });
+      })
+    );
+    if (createdResult.isErr()) return err(createdResult.error);
+    return ok(createdResult.value);
   }
 
   async listAccountClaims(tx?: Orm): ServerResultAsync<AccountClaimOutput[]> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const claims = await db
+    const db = tx ?? this.orm;
+    const claimsResult = await this.throwableQuery(() =>
+      db
         .select({
           id: this.schema.waitlist.id,
           claimUserId: this.schema.waitlist.claimUserId,
@@ -559,32 +593,33 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
         })
         .from(this.schema.waitlist)
         .where(eq(this.schema.waitlist.type, "ACCOUNT_CLAIM"))
-        .orderBy(desc(this.schema.waitlist.createdAt));
-      return ok(claims);
-    });
+        .orderBy(desc(this.schema.waitlist.createdAt))
+    );
+    if (claimsResult.isErr()) return err(claimsResult.error);
+    return ok(claimsResult.value);
   }
 
   async validateAccountClaimCode(code: string, tx?: Orm): ServerResultAsync<{ status: string }> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [claim] = await db
+    const db = tx ?? this.orm;
+    const claimResult = await this.throwableQuery(() =>
+      db
         .select()
         .from(this.schema.waitlist)
-        .where(
-          and(eq(this.schema.waitlist.code, code), eq(this.schema.waitlist.type, "ACCOUNT_CLAIM"))
-        )
-        .limit(1);
-      if (!claim) return ok({ status: "NOT_FOUND" });
-      if (claim.expiresAt && claim.expiresAt < new Date()) return ok({ status: "EXPIRED" });
-      if (claim.status !== "INVITED") return ok({ status: "INVALID" });
-      return ok({ status: "VALID" });
-    });
+        .where(and(eq(this.schema.waitlist.code, code), eq(this.schema.waitlist.type, "ACCOUNT_CLAIM")))
+        .limit(1)
+    );
+    if (claimResult.isErr()) return err(claimResult.error);
+    const [claim] = claimResult.value;
+    if (!claim) return ok({ status: "NOT_FOUND" });
+    if (claim.expiresAt && claim.expiresAt < new Date()) return ok({ status: "EXPIRED" });
+    if (claim.status !== "INVITED") return ok({ status: "INVALID" });
+    return ok({ status: "VALID" });
   }
 
   async findAccountClaimByCode(code: string, tx?: Orm): ServerResultAsync<AccountClaim | null> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [claim] = await db
+    const db = tx ?? this.orm;
+    const claimResult = await this.throwableQuery(() =>
+      db
         .select()
         .from(this.schema.waitlist)
         .where(
@@ -595,30 +630,34 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
             gte(this.schema.waitlist.expiresAt, new Date())
           )
         )
-        .limit(1);
-      return ok(claim ?? null);
-    });
+        .limit(1)
+    );
+    if (claimResult.isErr()) return err(claimResult.error);
+    const [claim] = claimResult.value;
+    return ok(claim ?? null);
   }
 
   async findAccountClaimById(id: string, tx?: Orm): ServerResultAsync<AccountClaim | null> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [claim] = await db
+    const db = tx ?? this.orm;
+    const claimResult = await this.throwableQuery(() =>
+      db
         .select()
         .from(this.schema.waitlist)
         .where(and(eq(this.schema.waitlist.id, id), eq(this.schema.waitlist.type, "ACCOUNT_CLAIM")))
-        .limit(1);
-      return ok(claim ?? null);
-    });
+        .limit(1)
+    );
+    if (claimResult.isErr()) return err(claimResult.error);
+    const [claim] = claimResult.value;
+    return ok(claim ?? null);
   }
 
   async findPendingAccountClaimForUser(
     userId: string,
     tx?: Orm
   ): ServerResultAsync<AccountClaim | null> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [claim] = await db
+    const db = tx ?? this.orm;
+    const claimResult = await this.throwableQuery(() =>
+      db
         .select()
         .from(this.schema.waitlist)
         .where(
@@ -630,28 +669,35 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
           )
         )
         .orderBy(desc(this.schema.waitlist.createdAt))
-        .limit(1);
-      return ok(claim ?? null);
-    });
+        .limit(1)
+    );
+    if (claimResult.isErr()) return err(claimResult.error);
+    const [claim] = claimResult.value;
+    return ok(claim ?? null);
   }
 
   async setAccountClaimEmail(
     { userId, email }: { userId: string; email: string },
     tx?: Orm
   ): ServerResultAsync<{ status: boolean }> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const normalizedEmail = email.toLowerCase();
-      const [existingUser] = await db
+    const db = tx ?? this.orm;
+    const normalizedEmail = email.toLowerCase();
+
+    const existingUserResult = await this.throwableQuery(() =>
+      db
         .select({ id: this.schema.users.id })
         .from(this.schema.users)
         .where(and(eq(this.schema.users.email, normalizedEmail), ne(this.schema.users.id, userId)))
-        .limit(1);
-      if (existingUser) {
-        return this.error("BAD_REQUEST", "Email is already in use");
-      }
+        .limit(1)
+    );
+    if (existingUserResult.isErr()) return err(existingUserResult.error);
+    const [existingUser] = existingUserResult.value;
+    if (existingUser) {
+      return this.error("BAD_REQUEST", "Email is already in use");
+    }
 
-      const [claim] = await db
+    const claimResult = await this.throwableQuery(() =>
+      db
         .select({ id: this.schema.waitlist.id })
         .from(this.schema.waitlist)
         .where(
@@ -663,36 +709,44 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
           )
         )
         .orderBy(desc(this.schema.waitlist.createdAt))
-        .limit(1);
-      if (!claim) {
-        return this.error("BAD_REQUEST", "No pending claim found");
-      }
+        .limit(1)
+    );
+    if (claimResult.isErr()) return err(claimResult.error);
+    const [claim] = claimResult.value;
+    if (!claim) {
+      return this.error("BAD_REQUEST", "No pending claim found");
+    }
 
-      await db
+    const updateUserResult = await this.throwableQuery(() =>
+      db
         .update(this.schema.users)
         .set({
           email: normalizedEmail,
           emailVerified: false,
           updatedAt: new Date(),
         })
-        .where(eq(this.schema.users.id, userId));
+        .where(eq(this.schema.users.id, userId))
+    );
+    if (updateUserResult.isErr()) return err(updateUserResult.error);
 
-      await db
+    const updateClaimResult = await this.throwableQuery(() =>
+      db
         .update(this.schema.waitlist)
         .set({
           claimedEmail: normalizedEmail,
           updatedAt: new Date(),
         })
-        .where(eq(this.schema.waitlist.id, claim.id));
+        .where(eq(this.schema.waitlist.id, claim.id))
+    );
+    if (updateClaimResult.isErr()) return err(updateClaimResult.error);
 
-      return ok({ status: true });
-    });
+    return ok({ status: true });
   }
 
   async acceptAccountClaim(userId: string, tx?: Orm): ServerResultAsync<{ status: boolean }> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [claim] = await db
+    const db = tx ?? this.orm;
+    const claimResult = await this.throwableQuery(() =>
+      db
         .select({ id: this.schema.waitlist.id })
         .from(this.schema.waitlist)
         .where(
@@ -704,16 +758,24 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
           )
         )
         .orderBy(desc(this.schema.waitlist.createdAt))
-        .limit(1);
-      if (!claim) return ok({ status: true });
+        .limit(1)
+    );
+    if (claimResult.isErr()) return err(claimResult.error);
+    const [claim] = claimResult.value;
+    if (!claim) return ok({ status: true });
 
-      const [user] = await db
+    const userResult = await this.throwableQuery(() =>
+      db
         .select({ email: this.schema.users.email })
         .from(this.schema.users)
         .where(eq(this.schema.users.id, userId))
-        .limit(1);
+        .limit(1)
+    );
+    if (userResult.isErr()) return err(userResult.error);
+    const [user] = userResult.value;
 
-      await db
+    const updateResult = await this.throwableQuery(() =>
+      db
         .update(this.schema.waitlist)
         .set({
           status: "ACCEPTED",
@@ -721,9 +783,10 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
           claimedEmail: user?.email ?? null,
           updatedAt: new Date(),
         })
-        .where(eq(this.schema.waitlist.id, claim.id));
-      return ok({ status: true });
-    });
+        .where(eq(this.schema.waitlist.id, claim.id))
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+    return ok({ status: true });
   }
 
   async createAccountClaimMagicLink(
@@ -744,9 +807,9 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     },
     tx?: Orm
   ): ServerResultAsync<AccountClaimMagicLink> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [link] = await db
+    const db = tx ?? this.orm;
+    const linkResult = await this.throwableQuery(() =>
+      db
         .insert(this.schema.accountClaimMagicLinks)
         .values({
           claimId,
@@ -756,41 +819,20 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
           url,
           expiresAt: expiresAt ?? null,
         })
-        .returning();
-      return ok(link);
-    });
+        .returning()
+    );
+    if (linkResult.isErr()) return err(linkResult.error);
+    const [link] = linkResult.value;
+    return ok(link);
   }
 
   async listAccountClaimMagicLinks(
     claimId: string,
     tx?: Orm
   ): ServerResultAsync<AccountClaimMagicLinkOutput[]> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const links = await db
-        .select({
-          id: this.schema.accountClaimMagicLinks.id,
-          claimId: this.schema.accountClaimMagicLinks.claimId,
-          userId: this.schema.accountClaimMagicLinks.userId,
-          email: this.schema.accountClaimMagicLinks.email,
-          url: this.schema.accountClaimMagicLinks.url,
-          expiresAt: this.schema.accountClaimMagicLinks.expiresAt,
-          createdAt: this.schema.accountClaimMagicLinks.createdAt,
-        })
-        .from(this.schema.accountClaimMagicLinks)
-        .where(eq(this.schema.accountClaimMagicLinks.claimId, claimId))
-        .orderBy(desc(this.schema.accountClaimMagicLinks.createdAt));
-      return ok(links);
-    });
-  }
-
-  async latestAccountClaimMagicLink(
-    claimId: string,
-    tx?: Orm
-  ): ServerResultAsync<AccountClaimMagicLinkOutput | null> {
-    return this.throwableAsync(async () => {
-      const db = tx ?? this.orm;
-      const [link] = await db
+    const db = tx ?? this.orm;
+    const linksResult = await this.throwableQuery(() =>
+      db
         .select({
           id: this.schema.accountClaimMagicLinks.id,
           claimId: this.schema.accountClaimMagicLinks.claimId,
@@ -803,8 +845,34 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
         .from(this.schema.accountClaimMagicLinks)
         .where(eq(this.schema.accountClaimMagicLinks.claimId, claimId))
         .orderBy(desc(this.schema.accountClaimMagicLinks.createdAt))
-        .limit(1);
-      return ok(link ?? null);
-    });
+    );
+    if (linksResult.isErr()) return err(linksResult.error);
+    return ok(linksResult.value);
+  }
+
+  async latestAccountClaimMagicLink(
+    claimId: string,
+    tx?: Orm
+  ): ServerResultAsync<AccountClaimMagicLinkOutput | null> {
+    const db = tx ?? this.orm;
+    const linkResult = await this.throwableQuery(() =>
+      db
+        .select({
+          id: this.schema.accountClaimMagicLinks.id,
+          claimId: this.schema.accountClaimMagicLinks.claimId,
+          userId: this.schema.accountClaimMagicLinks.userId,
+          email: this.schema.accountClaimMagicLinks.email,
+          url: this.schema.accountClaimMagicLinks.url,
+          expiresAt: this.schema.accountClaimMagicLinks.expiresAt,
+          createdAt: this.schema.accountClaimMagicLinks.createdAt,
+        })
+        .from(this.schema.accountClaimMagicLinks)
+        .where(eq(this.schema.accountClaimMagicLinks.claimId, claimId))
+        .orderBy(desc(this.schema.accountClaimMagicLinks.createdAt))
+        .limit(1)
+    );
+    if (linkResult.isErr()) return err(linkResult.error);
+    const [link] = linkResult.value;
+    return ok(link ?? null);
   }
 }

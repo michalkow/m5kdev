@@ -5,7 +5,7 @@ import type {
 } from "@m5kdev/commons/modules/workflow/workflow.schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
-import { ok } from "neverthrow";
+import { err, ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseRepository } from "../base/base.repository";
 import * as workflow from "./workflow.db";
@@ -23,16 +23,16 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
     jobId: string;
     userId: string;
   }): ServerResultAsync<WorkflowReadOutputSchema> {
-    return this.throwableAsync(async () => {
-      const [wf] = await this.orm
+    const wfResult = await this.throwableQuery(() =>
+      this.orm
         .select()
         .from(this.schema.workflows)
-        .where(
-          and(eq(this.schema.workflows.jobId, jobId), eq(this.schema.workflows.userId, userId))
-        );
-      if (!wf) return this.error("NOT_FOUND");
-      return ok(wf);
-    });
+        .where(and(eq(this.schema.workflows.jobId, jobId), eq(this.schema.workflows.userId, userId)))
+    );
+    if (wfResult.isErr()) return err(wfResult.error);
+    const [wf] = wfResult.value;
+    if (!wf) return this.error("NOT_FOUND");
+    return ok(wf);
   }
 
   async list({
@@ -42,16 +42,16 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
   }: WorkflowListInputSchema & {
     userId: string;
   }): ServerResultAsync<WorkflowListOutputSchema> {
-    return this.throwableAsync(async () => {
-      const { ConditionBuilder } = this.helpers;
-      const condition = new ConditionBuilder([eq(this.schema.workflows.userId, userId)]);
-      if (status) condition.push(inArray(this.schema.workflows.status, status));
-      if (jobName) condition.push(eq(this.schema.workflows.jobName, jobName));
+    const { ConditionBuilder } = this.helpers;
+    const condition = new ConditionBuilder([eq(this.schema.workflows.userId, userId)]);
+    if (status) condition.push(inArray(this.schema.workflows.status, status));
+    if (jobName) condition.push(eq(this.schema.workflows.jobName, jobName));
 
-      const workflows = await this.orm.select().from(this.schema.workflows).where(condition.join());
-
-      return ok(workflows);
-    });
+    const workflowsResult = await this.throwableQuery(() =>
+      this.orm.select().from(this.schema.workflows).where(condition.join())
+    );
+    if (workflowsResult.isErr()) return err(workflowsResult.error);
+    return ok(workflowsResult.value);
   }
 
   async added({
@@ -71,8 +71,8 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
     tags?: string[];
     input: unknown;
   }): ServerResultAsync<WorkflowReadOutputSchema> {
-    return this.throwableAsync(async () => {
-      const [wf] = await this.orm
+    const wfResult = await this.throwableQuery(() =>
+      this.orm
         .insert(this.schema.workflows)
         .values({
           userId,
@@ -86,9 +86,11 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
           createdAt: new Date(),
           updatedAt: new Date(),
         })
-        .returning();
-      return ok(wf);
-    });
+        .returning()
+    );
+    if (wfResult.isErr()) return err(wfResult.error);
+    const [wf] = wfResult.value;
+    return ok(wf);
   }
 
   async addedMany(
@@ -102,8 +104,8 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
       input: unknown;
     }[]
   ): ServerResultAsync<WorkflowReadOutputSchema[]> {
-    return this.throwableAsync(async () => {
-      const wfs = await this.orm
+    const wfsResult = await this.throwableQuery(() =>
+      this.orm
         .insert(this.schema.workflows)
         .values(
           data.map((d) => ({
@@ -119,9 +121,10 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
             updatedAt: new Date(),
           }))
         )
-        .returning();
-      return ok(wfs);
-    });
+        .returning()
+    );
+    if (wfsResult.isErr()) return err(wfsResult.error);
+    return ok(wfsResult.value);
   }
 
   async started({
@@ -135,15 +138,16 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
     queueName: string;
     userId?: string;
   }): ServerResultAsync<WorkflowReadOutputSchema> {
-    return this.throwableAsync(async () => {
-      const now = new Date();
-      const conflictSet = {
-        status: "running" as const,
-        updatedAt: now,
-        processedAt: now,
-        ...(userId !== undefined ? { userId } : {}),
-      };
-      const [wf] = await this.orm
+    const now = new Date();
+    const conflictSet = {
+      status: "running" as const,
+      updatedAt: now,
+      processedAt: now,
+      ...(userId !== undefined ? { userId } : {}),
+    };
+
+    const wfResult = await this.throwableQuery(() =>
+      this.orm
         .insert(this.schema.workflows)
         .values({
           jobId,
@@ -162,9 +166,11 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
           target: this.schema.workflows.jobId,
           set: conflictSet,
         })
-        .returning();
-      return ok(wf);
-    });
+        .returning()
+    );
+    if (wfResult.isErr()) return err(wfResult.error);
+    const [wf] = wfResult.value;
+    return ok(wf);
   }
 
   async failed({
@@ -174,8 +180,8 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
     jobId: string;
     error: string;
   }): ServerResultAsync<WorkflowReadOutputSchema> {
-    return this.throwableAsync(async () => {
-      const [wf] = await this.orm
+    const wfResult = await this.throwableQuery(() =>
+      this.orm
         .update(this.schema.workflows)
         .set({
           status: "failed",
@@ -185,9 +191,11 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
           finishedAt: new Date(),
         })
         .where(eq(this.schema.workflows.jobId, jobId))
-        .returning();
-      return ok(wf);
-    });
+        .returning()
+    );
+    if (wfResult.isErr()) return err(wfResult.error);
+    const [wf] = wfResult.value;
+    return ok(wf);
   }
 
   async completed({
@@ -197,13 +205,15 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
     jobId: string;
     output: unknown;
   }): ServerResultAsync<WorkflowReadOutputSchema> {
-    return this.throwableAsync(async () => {
-      const [wf] = await this.orm
+    const wfResult = await this.throwableQuery(() =>
+      this.orm
         .update(this.schema.workflows)
         .set({ status: "completed", updatedAt: new Date(), finishedAt: new Date(), output })
         .where(eq(this.schema.workflows.jobId, jobId))
-        .returning();
-      return ok(wf);
-    });
+        .returning()
+    );
+    if (wfResult.isErr()) return err(wfResult.error);
+    const [wf] = wfResult.value;
+    return ok(wf);
   }
 }
