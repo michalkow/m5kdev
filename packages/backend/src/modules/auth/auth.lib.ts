@@ -35,7 +35,8 @@ type CreateBetterAuthParams<
   hooks?: {
     onError?: (error: unknown) => void;
     afterCreateUser?: (
-      user: Pick<User, "id" | "email" | "emailVerified" | "name" | "createdAt" | "updatedAt">
+      user: Pick<User, "id" | "email" | "emailVerified" | "name" | "createdAt" | "updatedAt">,
+      membership: { organizationId: string; teamId: string }
     ) => Promise<void>;
   };
   options?: BetterAuthOptions;
@@ -308,7 +309,7 @@ export function createBetterAuth<
             return;
           },
           after: async (user) => {
-            await createOrganizationAndTeam(orm, schema, user);
+            const membership = await createOrganizationAndTeam(orm, schema, user);
             if (!isProvisionedAccountEmail(user.email)) {
               await billingService?.createUserHook({ user });
             }
@@ -322,7 +323,7 @@ export function createBetterAuth<
                 image: user.image,
               },
             });
-            if (hooks?.afterCreateUser) await hooks.afterCreateUser(user);
+            if (hooks?.afterCreateUser) await hooks.afterCreateUser(user, membership);
           },
         },
       },

@@ -68,9 +68,9 @@ export async function createOrganizationAndTeam<O extends Orm, S extends Schema>
   orm: O,
   schema: S,
   user: { id: string; email: string }
-): Promise<void> {
+): Promise<{ organizationId: string; teamId: string }> {
   const organizationId = uuidv4();
-  await orm.transaction(async (tx) => {
+  return await orm.transaction(async (tx) => {
     const [organization] = await tx
       .insert(schema.organizations)
       .values({
@@ -113,5 +113,6 @@ export async function createOrganizationAndTeam<O extends Orm, S extends Schema>
       .returning();
 
     if (!teamMember) throw new Error("createOrganizationAndTeam: Failed to create team member");
+    return { organizationId, teamId: team.id };
   });
 }

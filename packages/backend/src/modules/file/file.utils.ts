@@ -15,6 +15,23 @@ function sanitizePathHint(hint: string): string {
     .join("/");
 }
 
+/** Allowed S3 object key suffix segment only: no path chars, dots, or empty/traversal-like pieces. */
+const SAFE_FILE_EXTENSION = /^[A-Za-z0-9_-]+$/;
+
+function normalizeS3FileExtension(extension: string | undefined): string {
+  if (extension === undefined || extension.length === 0) {
+    return "";
+  }
+  let ext = extension;
+  while (ext.startsWith(".")) {
+    ext = ext.slice(1);
+  }
+  if (ext.length === 0 || !SAFE_FILE_EXTENSION.test(ext)) {
+    return "";
+  }
+  return ext;
+}
+
 export function buildS3ObjectKey(input: {
   readonly userId: string;
   readonly organizationId?: string;
@@ -22,11 +39,7 @@ export function buildS3ObjectKey(input: {
   readonly extension?: string;
   readonly pathHint?: string;
 }): string {
-  const ext = input.extension
-    ? input.extension.startsWith(".")
-      ? input.extension.slice(1)
-      : input.extension
-    : "";
+  const ext = normalizeS3FileExtension(input.extension);
   const id = uuidv4();
   const parts: string[] = [];
   if (input.organizationId) {

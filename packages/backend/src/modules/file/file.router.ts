@@ -4,6 +4,7 @@ import bodyParser from "body-parser";
 import express, { type Request, type Response, type Router } from "express";
 import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
+import type { AuthMiddleware, AuthRequest } from "../auth/auth.middleware";
 import type { FileService } from "./file.service";
 
 function validateMimeType(type: string, file: Express.Multer.File): boolean {
@@ -41,6 +42,7 @@ function createMulter(): multer.Multer {
 }
 
 export interface CreateUploadRouterOptions {
+  readonly authMiddleware: AuthMiddleware;
   readonly fileService: FileService;
 }
 
@@ -48,7 +50,10 @@ export interface CreateUploadRouterOptions {
  * Express routes for local disk uploads and S3 (presigned URLs, inventory-backed upload lifecycle).
  * Mount at `/upload` (or your chosen prefix).
  */
-export function createUploadRouter({ fileService }: CreateUploadRouterOptions): Router {
+export function createUploadRouter({
+  authMiddleware,
+  fileService,
+}: CreateUploadRouterOptions): Router {
   const upload = createMulter();
   const router: Router = express.Router();
 
@@ -91,59 +96,85 @@ export function createUploadRouter({ fileService }: CreateUploadRouterOptions): 
     }
   });
 
-  router.post("/s3/initiate", bodyParser.json(), async (req: Request, res: Response) => {
-    const {
-      userId,
-      organizationId,
-      teamId,
-      contentType,
-      originalName,
-      sizeBytes,
-      pathHint,
-      metadata,
-    } = req.body ?? {};
+  router.post(
+    "/s3/initiate",
+    authMiddleware,
+    bodyParser.json(),
+    async (req: AuthRequest, res: Response) => {
+      const user = req.user;
+      const session = req.session;
+      if (!user || !session) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const userId = user.id;
+      const {
+        organizationId,
+        teamId,
+        contentType,
+        originalName,
+        sizeBytes,
+        pathHint,
+        metadata,
+      } = req.body ?? {};
 
-    if (!userId || !contentType || !originalName) {
-      return res.status(400).json({ error: "Missing userId, contentType, or originalName" });
+      if (!contentType || !originalName) {
+        return res.status(400).json({ error: "Missing contentType or originalName" });
+      }
+
+      const result = await fileService.initiateS3Upload({
+        userId,
+        organizationId,
+        teamId,
+        contentType,
+        originalName,
+        sizeBytes,
+        pathHint,
+        metadata,
+      });
+      if (result.isErr()) {
+        return res.status(500).json({ error: result.error.message });
+      }
+      return res.json(result.value);
     }
+  );
 
-    const result = await fileService.initiateS3Upload({
-      userId,
-      organizationId,
-      teamId,
-      contentType,
-      originalName,
-      sizeBytes,
-      pathHint,
-      metadata,
-    });
-    if (result.isErr()) {
-      return res.status(500).json({ error: result.error.message });
+  router.post(
+    "/s3/finalize",
+    authMiddleware,
+    bodyParser.json(),
+    async (req: AuthRequest, res: Response) => {
+      const user = req.user;
+      const session = req.session;
+      if (!user || !session) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const userId = user.id;
+      const { fileId, etag } = req.body ?? {};
+      if (!fileId) {
+        return res.status(400).json({ error: "Missing fileId" });
+      }
+
+      const result = await fileService.finalizeS3Upload({ userId, fileId, etag });
+      if (result.isErr()) {
+        const status =
+          result.error.code === "NOT_FOUND" ? 404 : result.error.code === "BAD_REQUEST" ? 400 : 500;
+        return res.status(status).json({ error: result.error.message });
+      }
+      return res.json({ success: true });
     }
-    return res.json(result.value);
-  });
+  );
 
-  router.post("/s3/finalize", bodyParser.json(), async (req: Request, res: Response) => {
-    const { userId, fileId, etag } = req.body ?? {};
-    if (!userId || !fileId) {
-      return res.status(400).json({ error: "Missing userId or fileId" });
+  /** Deletes the inventory row and the S3 object. Authenticated owner only. */
+  router.delete("/files/by-id/:fileId", authMiddleware, async (req: AuthRequest, res: Response) => {
+    const user = req.user;
+    const session = req.session;
+    if (!user || !session) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
-
-    const result = await fileService.finalizeS3Upload({ userId, fileId, etag });
-    if (result.isErr()) {
-      const status =
-        result.error.code === "NOT_FOUND" ? 404 : result.error.code === "BAD_REQUEST" ? 400 : 500;
-      return res.status(status).json({ error: result.error.message });
-    }
-    return res.json({ success: true });
-  });
-
-  /** Deletes the inventory row and the S3 object. Requires `userId` query (owner). */
-  router.delete("/files/by-id/:fileId", async (req: Request, res: Response) => {
-    const userId = typeof req.query.userId === "string" ? req.query.userId : undefined;
+    const userId = user.id;
     const { fileId } = req.params;
-    if (!userId || !fileId) {
-      return res.status(400).json({ error: "Missing userId query or fileId" });
+    if (!fileId) {
+      return res.status(400).json({ error: "Missing fileId" });
     }
 
     const result = await fileService.deleteUploadedFileById(fileId, userId);
