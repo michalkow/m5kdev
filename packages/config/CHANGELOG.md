@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.13.1
+
+### Patch Changes
+
+- throwable
+
 ## 0.13.0
 
 ### Minor Changes
