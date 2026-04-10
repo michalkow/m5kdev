@@ -8,9 +8,9 @@ import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseRepository } from "../base/base.repository";
-import * as workflow from "./workflow.db";
+import { workflows } from "./workflow.db";
 
-const schema = { ...workflow };
+const schema = { workflows };
 
 type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;

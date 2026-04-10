@@ -1,19 +1,7 @@
-import { AuthService } from "@m5kdev/backend/modules/auth/auth.service";
-import { NotificationService } from "@m5kdev/backend/modules/notification/notification.service";
-import { LocalEmailService } from "./lib/localEmailService";
-import { postsGrants } from "./modules/posts/posts.grants";
-import { PostsService } from "./modules/posts/posts.service";
-import { authRepository, notificationRepository, postsRepository } from "./repository";
-import { workflowService } from "./workflow";
+import { builtBackendApp, emailService } from "./app";
 
-export const emailService = new LocalEmailService({
-  appName: "{{APP_NAME}}",
-  appUrl: process.env.VITE_APP_URL ?? "http://localhost:5173",
-});
+export { emailService };
 
-export const authService = new AuthService({ auth: authRepository }, { email: emailService });
-export const postsService = new PostsService({ posts: postsRepository }, {}, postsGrants);
-export const notificationService = new NotificationService(
-  { notification: notificationRepository },
-  { workflow: workflowService },
-);
+export const authService = builtBackendApp.modules.auth.services.auth;
+export const postsService = builtBackendApp.modules.posts.services.posts;
+export const notificationService = builtBackendApp.modules.notification.services.notification;

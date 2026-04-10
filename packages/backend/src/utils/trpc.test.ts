@@ -9,6 +9,13 @@ import {
   verifyAdminProcedureContext,
 } from "./trpc";
 
+jest.mock("@m5kdev/commons/utils/trpc", () => ({
+  transformer: {
+    serialize: (value: unknown) => value,
+    deserialize: (value: unknown) => value,
+  },
+}));
+
 jest.mock("better-auth/node", () => ({
   fromNodeHeaders: (headers: unknown) => headers,
 }));

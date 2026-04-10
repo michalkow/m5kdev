@@ -1,31 +1,8 @@
-import {
-  type createAuthContext,
-  verifyAdminProcedureContext,
-  verifyProtectedProcedureContext,
-} from "@m5kdev/backend/utils/trpc";
-import { transformer } from "@m5kdev/commons/utils/trpc";
-import { initTRPC } from "@trpc/server";
+import { builtBackendApp } from "../app";
 
-type Context = Awaited<ReturnType<ReturnType<typeof createAuthContext>>>;
+export const router = builtBackendApp.trpc.methods.router;
+export const publicProcedure = builtBackendApp.trpc.methods.publicProcedure;
+export const procedure = builtBackendApp.trpc.methods.privateProcedure;
+export const adminProcedure = builtBackendApp.trpc.methods.adminProcedure;
 
-const t = initTRPC.context<Context>().create({ transformer });
-
-export const publicProcedure = t.procedure;
-
-export const procedure = t.procedure.use(({ ctx, next }) => {
-  return next({ ctx: verifyProtectedProcedureContext(ctx) });
-});
-
-export const adminProcedure = t.procedure.use(({ ctx, next }) => {
-  return next({ ctx: verifyAdminProcedureContext(ctx) });
-});
-
-export const router = t.router;
-export const mergeRouters = t.mergeRouters;
-
-export const trpcObject = {
-  router,
-  privateProcedure: procedure,
-  adminProcedure,
-  publicProcedure,
-};
+export const trpcObject = builtBackendApp.trpc.methods;

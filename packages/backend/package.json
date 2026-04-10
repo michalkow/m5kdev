@@ -327,6 +327,16 @@
         "default": "./dist/src/utils/*.cjs"
       }
     },
+    "./app": {
+      "import": {
+        "types": "./dist/src/app.d.mts",
+        "default": "./dist/src/app.mjs"
+      },
+      "require": {
+        "types": "./dist/src/app.d.cts",
+        "default": "./dist/src/app.cjs"
+      }
+    },
     "./types": {
       "import": {
         "types": "./dist/src/types.d.mts",

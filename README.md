@@ -6,7 +6,7 @@ Monorepo with shared backend, frontend, and UI packages. Built with [pnpm](https
 
 ### Packages
 
-- **`packages/backend`** (`@m5kdev/backend`) – Composable Express server stack with Drizzle ORM, tRPC, and feature modules (auth, billing, file, AI, etc.).
+- **`packages/backend`** (`@m5kdev/backend`) – Composable Express backend stack and app kernel for Drizzle ORM, Better Auth, tRPC, workflows, and feature modules.
 - **`packages/frontend`** (`@m5kdev/frontend`) – Shared React hooks, utilities, and frontend logic (tRPC, auth, billing, table).
 - **`packages/web-ui`** (`@m5kdev/web-ui`) – Shared UI component library (HeroUI, Radix, Tailwind).
 - **`packages/commons`** (`@m5kdev/commons`) – Shared types, schemas, and utilities used by backend and frontend.
@@ -66,6 +66,45 @@ pnpm check-types
 
 This repository is intended to be **cloned and used as a monorepo**. Add it as a workspace or clone it and build your apps under `apps/` that consume `@m5kdev/backend`, `@m5kdev/frontend`, and `@m5kdev/web-ui`. See [AGENTS.md](AGENTS.md) and package READMEs for architecture and conventions.
 
+## Backend app kernel
+
+`@m5kdev/backend` now ships a first-class backend composition root for Express apps:
+
+- `createBackendApp(...)` owns backend wiring for DB, Drizzle, Redis, Better Auth, workflows, tRPC, startup, and shutdown.
+- `defineBackendModule(...)` is the backend module contract for tables, repositories, services, router fragments, Express hooks, and workflow hooks.
+- App-specific backend types still live in the app. Export `AppRouter` from the built backend app and consume that from your client.
+
+Minimal shape:
+
+```ts
+import { createBackendApp, type InferBackendAppRouter } from "@m5kdev/backend/app";
+import express from "express";
+import { postsModule } from "./modules/posts/posts.module";
+
+const app = express();
+
+export const backendApp = createBackendApp({
+  db: { url: process.env.DATABASE_URL! },
+  express: app,
+})
+  .use(postsModule);
+
+export const builtBackendApp = backendApp.build();
+export const appRouter = builtBackendApp.trpc.router;
+export type AppRouter = InferBackendAppRouter<typeof backendApp>;
+```
+
+First-party modules such as `auth`, `workflow`, `notification`, and `email` register the same way with `.use(...)`.
+
+The framework still works with a user-owned Express app. Pass `express` into `createBackendApp(...)`, keep mounting your own middleware, and let backend modules contribute tRPC namespaces and route hooks.
+
+Shared app metadata such as public URLs and email transport should be treated as backend app-level infrastructure rather than module-local configuration.
+
+## Migration
+
+- Apps still using manual backend composition should follow [MIGRATING_APPS_TO_BACKEND_KERNEL.md](MIGRATING_APPS_TO_BACKEND_KERNEL.md).
+- Apps that already use the backend but still expose request-bound service methods as plain async functions should also review [packages/backend/MIGRATING_TO_SERVICE_PROCEDURES.md](packages/backend/MIGRATING_TO_SERVICE_PROCEDURES.md).
+
 ## Modular structure
 
 Feature areas live under `src/modules/<feature>/` with consistent file conventions:
@@ -76,6 +115,8 @@ Feature areas live under `src/modules/<feature>/` with consistent file conventio
 - **`.repository.ts`** – Data access layer.
 - **`.service.ts`** – Business logic and orchestration.
 - **`.trpc.ts`** / **`.router.ts`** – tRPC procedures and HTTP routes.
+
+Backend app composition should now live in `apps/*/server/src/app.ts`. App modules should use `defineBackendModule(...)` instead of ad hoc import-time wiring in app roots.
 
 UI modules add:
 

@@ -10,9 +10,9 @@ import type {
   PostUpdateInputSchema,
   PostUpdateOutputSchema,
 } from "{{PACKAGE_SCOPE}}/shared/modules/posts/posts.schema";
-import type { Context } from "@m5kdev/backend/modules/auth/auth.lib";
 import { BasePermissionService } from "@m5kdev/backend/modules/base/base.service";
 import type { ServerResultAsync } from "@m5kdev/backend/utils/types";
+import type { Context } from "@m5kdev/backend/utils/trpc";
 import { err, ok } from "neverthrow";
 import type { PostsRepository } from "./posts.repository";
 

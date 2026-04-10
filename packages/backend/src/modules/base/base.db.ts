@@ -1,6 +1,15 @@
-import { integer, text } from "drizzle-orm/sqlite-core";
+import { type AnySQLiteColumn, integer, text } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
-import { organizations, teams, users } from "../auth/auth.db";
+
+type DbReferenceTable = {
+  id: AnySQLiteColumn;
+};
+
+export type DbOwnershipReferences = {
+  users: DbReferenceTable;
+  organizations: DbReferenceTable;
+  teams: DbReferenceTable;
+};
 
 export function createDbId() {
   return text("id").primaryKey().$default(uuidv4);
@@ -20,20 +29,20 @@ export function createDbDeletedAt() {
   return integer("deleted_at", { mode: "timestamp" });
 }
 
-export function createDbUserId() {
+export function createDbUserId(usersTable: DbReferenceTable) {
   return text("user_id")
     .notNull()
-    .references(() => users.id, { onDelete: "cascade" });
+    .references(() => usersTable.id, { onDelete: "cascade" });
 }
 
-export function createDbOrganizationId() {
-  return text("organization_id").references(() => organizations.id, {
+export function createDbOrganizationId(organizationsTable: DbReferenceTable) {
+  return text("organization_id").references(() => organizationsTable.id, {
     onDelete: "cascade",
   });
 }
 
-export function createDbTeamId() {
-  return text("team_id").references(() => teams.id, { onDelete: "set null" });
+export function createDbTeamId(teamsTable: DbReferenceTable) {
+  return text("team_id").references(() => teamsTable.id, { onDelete: "set null" });
 }
 
 export function createDbDates() {
@@ -44,18 +53,18 @@ export function createDbDates() {
   };
 }
 
-export function createDbReferences() {
+export function createDbReferences(references: DbOwnershipReferences) {
   return {
-    userId: createDbUserId(),
-    organizationId: createDbOrganizationId(),
-    teamId: createDbTeamId(),
+    userId: createDbUserId(references.users),
+    organizationId: createDbOrganizationId(references.organizations),
+    teamId: createDbTeamId(references.teams),
   };
 }
 
-export function createDbColumns() {
+export function createDbColumns(references: DbOwnershipReferences) {
   return {
     id: createDbId(),
     ...createDbDates(),
-    ...createDbReferences(),
+    ...createDbReferences(references),
   };
 }

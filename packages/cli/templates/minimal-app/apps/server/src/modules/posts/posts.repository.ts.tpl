@@ -6,8 +6,13 @@ import type {
 import { BaseTableRepository } from "@m5kdev/backend/modules/base/base.repository";
 import type { ServerResultAsync } from "@m5kdev/backend/utils/types";
 import { and, asc, count, desc, eq, isNull, like, ne, or } from "drizzle-orm";
+import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
-import type { Orm, Schema } from "../../db";
+import { posts } from "./posts.db";
+
+const schema = { posts };
+type Schema = typeof schema;
+type Orm = LibSQLDatabase<Schema>;
 
 export class PostsRepository extends BaseTableRepository<
   Orm,
@@ -26,15 +31,7 @@ export class PostsRepository extends BaseTableRepository<
     }
 
     if (search) {
-      const escapedSearch = search.replace(/[%_]/g, '\\    if (search) {
-      const pattern = `%${search}%`;
-      const searchCondition = or(
-        like(this.table.title, pattern),
-        like(this.table.slug, pattern),
-        like(this.table.excerpt, pattern),
-        like(this.table.content, pattern)
-      );
-');
+      const escapedSearch = search.replace(/[%_]/g, "\\$&");
       const pattern = `%${escapedSearch}%`;
       const searchCondition = or(
         like(this.table.title, pattern),

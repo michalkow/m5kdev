@@ -10,10 +10,10 @@ import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseTableRepository } from "../base/base.repository";
-import * as tag from "./tag.db";
+import { taggings, tags } from "./tag.db";
 import type { TaggingSelectOutputResult, TagSelectOutputResult } from "./tag.dto";
 
-const schema = { ...tag };
+const schema = { tags, taggings };
 type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;
 
@@ -219,6 +219,39 @@ export class TagRepository extends BaseTableRepository<
       db
         .select()
         .from(this.schema.taggings)
+        .where(and(...filters))
+    );
+    if (rows.isErr()) return err(rows.error);
+    return ok(rows.value);
+  }
+
+  async listTaggingsForUser(
+    input: { resourceType: string; resourceIds?: readonly string[] },
+    userId: string,
+    tx?: Orm
+  ): ServerResultAsync<TaggingSchema[]> {
+    const db = tx ?? this.orm;
+    const filters = [
+      eq(this.schema.taggings.resourceType, input.resourceType),
+      eq(this.schema.tags.userId, userId),
+      isNull(this.schema.tags.deletedAt),
+    ];
+
+    if (input.resourceIds?.length) {
+      filters.push(inArray(this.schema.taggings.resourceId, input.resourceIds as string[]));
+    }
+
+    const rows = await this.throwableQuery(() =>
+      db
+        .select({
+          id: this.schema.taggings.id,
+          createdAt: this.schema.taggings.createdAt,
+          tagId: this.schema.taggings.tagId,
+          resourceType: this.schema.taggings.resourceType,
+          resourceId: this.schema.taggings.resourceId,
+        })
+        .from(this.schema.taggings)
+        .innerJoin(this.schema.tags, eq(this.schema.tags.id, this.schema.taggings.tagId))
         .where(and(...filters))
     );
     if (rows.isErr()) return err(rows.error);

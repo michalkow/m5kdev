@@ -1,5 +1,5 @@
-import type { transformer } from "@m5kdev/commons/utils/trpc";
-import type { TRPCRootObject } from "@trpc/server";
+import { transformer } from "@m5kdev/commons/utils/trpc";
+import { initTRPC } from "@trpc/server";
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import { fromNodeHeaders } from "better-auth/node";
 import type { Result } from "neverthrow";
@@ -40,14 +40,37 @@ export type TeamContext = {
   actor: TeamActor;
 };
 
-type TRPCCreate = TRPCRootObject<Context, any, { transformer: typeof transformer }>;
+export function createRequestContext() {
+  return async function createContext(): Promise<RequestContext> {
+    return {
+      session: null,
+      user: null,
+      actor: null,
+    };
+  };
+}
 
-export type TRPCMethods = {
-  router: TRPCCreate["router"];
-  publicProcedure: TRPCCreate["procedure"];
-  privateProcedure: TRPCCreate["procedure"];
-  adminProcedure: TRPCCreate["procedure"];
-};
+export function createTRPCMethods() {
+  const t = initTRPC.context<RequestContext>().create({ transformer });
+  const baseProcedure = t.procedure;
+  const publicProcedure = baseProcedure;
+  const privateProcedure = baseProcedure.use(({ ctx, next }) => {
+    return next({ ctx: verifyProtectedProcedureContext(ctx) });
+  });
+  const adminProcedure = baseProcedure.use(({ ctx, next }) => {
+    return next({ ctx: verifyAdminProcedureContext(ctx) });
+  });
+
+  return {
+    router: t.router,
+    baseProcedure,
+    publicProcedure,
+    privateProcedure,
+    adminProcedure,
+  };
+}
+
+export type TRPCMethods = ReturnType<typeof createTRPCMethods>;
 
 export function createAuthContext(auth: BetterAuth) {
   return async function createContext({ req }: CreateExpressContextOptions): Promise<RequestContext> {

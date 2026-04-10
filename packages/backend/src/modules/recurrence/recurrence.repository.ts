@@ -3,9 +3,9 @@ import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseTableRepository } from "../base/base.repository";
-import * as recurrence from "./recurrence.db";
+import { recurrence, recurrenceRules } from "./recurrence.db";
 
-const schema = { ...recurrence };
+const schema = { recurrence, recurrenceRules };
 type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;
 type RecurrenceInsert = InferInsertModel<Schema["recurrence"]>;

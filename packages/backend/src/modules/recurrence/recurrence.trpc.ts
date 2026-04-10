@@ -50,36 +50,36 @@ export function createRecurrenceTRPC(
     findById: procedure
       .input(z.object({ id: z.string() }))
       .output(recurrenceSchema.nullable())
-      .query(async ({ input }) => {
-        return handleTRPCResult(await recurrenceService.findById(input.id));
+      .query(async ({ ctx, input }) => {
+        return handleTRPCResult(await recurrenceService.findById(input, ctx));
       }),
 
     update: procedure
       .input(updateRecurrenceInputSchema)
       .output(recurrenceSchema)
-      .mutation(async ({ input }) => {
-        return handleTRPCResult(await recurrenceService.update(input));
+      .mutation(async ({ ctx, input }) => {
+        return handleTRPCResult(await recurrenceService.update(input, ctx));
       }),
 
     updateRule: procedure
       .input(updateRecurrenceRulesSchema)
       .output(recurrenceRulesSchema)
-      .mutation(async ({ input }) => {
-        return handleTRPCResult(await recurrenceService.updateRule(input));
+      .mutation(async ({ ctx, input }) => {
+        return handleTRPCResult(await recurrenceService.updateRule(input, ctx));
       }),
 
     delete: procedure
       .input(deleteRecurrenceSchema)
       .output(deleteRecurrenceOutputSchema)
-      .mutation(async ({ input }) => {
-        return handleTRPCResult(await recurrenceService.delete(input));
+      .mutation(async ({ ctx, input }) => {
+        return handleTRPCResult(await recurrenceService.delete(input, ctx));
       }),
 
     deleteRule: procedure
       .input(deleteRecurrenceRulesSchema)
       .output(deleteRecurrenceOutputSchema)
-      .mutation(async ({ input }) => {
-        return handleTRPCResult(await recurrenceService.deleteRule(input));
+      .mutation(async ({ ctx, input }) => {
+        return handleTRPCResult(await recurrenceService.deleteRule(input, ctx));
       }),
   });
 }

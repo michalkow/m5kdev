@@ -12,13 +12,12 @@ import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseExternaRepository, BaseTableRepository } from "../base/base.repository";
-import type { FileUploadStatus } from "./file.db";
-import * as file from "./file.db";
+import { files, type FileUploadStatus } from "./file.db";
 
-const schema = { ...file };
+const schema = { files };
 type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;
-export type FileRow = InferSelectModel<typeof file.files>;
+export type FileRow = InferSelectModel<typeof files>;
 
 export class FileRepository extends BaseTableRepository<
   Orm,

@@ -4,6 +4,7 @@ import { getOAuthState } from "better-auth/api";
 import { admin, apiKey, lastLoginMethod, magicLink, organization } from "better-auth/plugins";
 import { and, desc, eq, gte, type InferSelectModel } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { BackendAppMetadata } from "../../app";
 import { logger as rootLogger } from "../../utils/logger";
 import { posthogCapture } from "../../utils/posthog";
 import type { BillingService } from "../billing/billing.service";
@@ -40,6 +41,7 @@ type CreateBetterAuthParams<
     ) => Promise<void>;
   };
   options?: BetterAuthOptions;
+  app?: BackendAppMetadata;
   config?: {
     waitlist: boolean;
     provisionedAccountEmailDomain?: string;
@@ -51,9 +53,11 @@ export function createBetterAuth<
   S extends Schema,
   E extends EmailService,
   B extends BillingService,
->({ orm, schema, services, hooks, options, config }: CreateBetterAuthParams<O, S, E, B>) {
+>({ orm, schema, services, hooks, options, app, config }: CreateBetterAuthParams<O, S, E, B>) {
   const { email: emailService, billing: billingService } = services;
   const { waitlist = false, provisionedAccountEmailDomain } = config ?? {};
+  const webUrl = app?.urls?.web ?? process.env.VITE_APP_URL;
+  const apiUrl = app?.urls?.api ?? process.env.VITE_SERVER_URL;
   const normalizedProvisionedAccountEmailDomain = provisionedAccountEmailDomain
     ? provisionedAccountEmailDomain.toLowerCase().replace(/^@/, "")
     : null;
@@ -77,7 +81,7 @@ export function createBetterAuth<
 
   return betterAuth({
     ...options,
-    baseURL: process.env.VITE_SERVER_URL!,
+    baseURL: apiUrl!,
     session: {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,
@@ -226,7 +230,7 @@ export function createBetterAuth<
           allowRemovingAllTeams: false,
         },
         sendInvitationEmail: async (data) => {
-          const invitationUrl = `${process.env.VITE_APP_URL}/organization/accept-invitation?id=${data.id}`;
+          const invitationUrl = `${webUrl}/organization/accept-invitation?id=${data.id}`;
           const inviterName = data.inviter.user.name || data.inviter.user.email;
           const result = await emailService?.sendOrganizationInvite(
             data.email,
@@ -267,7 +271,7 @@ export function createBetterAuth<
       }),
       apiKey(),
     ],
-    trustedOrigins: [process.env.VITE_APP_URL!, process.env.VITE_SERVER_URL!],
+    trustedOrigins: [webUrl!, apiUrl!],
 
     databaseHooks: {
       user: {

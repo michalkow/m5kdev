@@ -24,7 +24,7 @@ export function createTagTRPC(
     list: procedure
       .input(tagListInput)
       .output(tagListOutputSchema)
-      .query(async ({ input }) => handleTRPCResult(await tagService.list(input))),
+      .query(async ({ ctx, input }) => handleTRPCResult(await tagService.list(input, ctx))),
 
     listTaggings: procedure
       .input(
@@ -33,7 +33,9 @@ export function createTagTRPC(
           .extend({ resourceIds: tagListInputSchema.shape.filters.optional() })
       )
       .output(taggingsSelectOutput.array())
-      .query(async ({ input }) => handleTRPCResult(await tagService.listTaggings(input as any))),
+      .query(async ({ ctx, input }) =>
+        handleTRPCResult(await tagService.listTaggings(input as any, ctx))
+      ),
 
     create: procedure
       .input(tagCreateSchema)
@@ -66,8 +68,8 @@ export function createTagTRPC(
     delete: procedure
       .input(tagDeleteSchema)
       .output(tagsSelectOutput.pick({ id: true }))
-      .mutation(async ({ input }) => {
-        return handleTRPCResult(await tagService.delete(input));
+      .mutation(async ({ ctx, input }) => {
+        return handleTRPCResult(await tagService.delete(input, ctx));
       }),
   });
 }

@@ -2,9 +2,10 @@ import { createClient } from "@libsql/client";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
-import * as workflowSchema from "./workflow.db";
+import { workflows } from "./workflow.db";
 import { WorkflowRepository } from "./workflow.repository";
 
+const workflowSchema = { workflows };
 type Schema = typeof workflowSchema;
 type Orm = LibSQLDatabase<Schema>;
 

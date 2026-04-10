@@ -76,29 +76,63 @@ export class RecurrenceService extends BaseService<
       return this.repository.recurrence.createWithRules(recurrenceData, rulesData);
     });
 
-  async findById(id: string): ServerResultAsync<CreateWithRulesResult["recurrence"] | null> {
-    const result = await this.repository.recurrence.findById(id);
-    if (result.isErr()) return err(result.error);
-    return ok(result.value ?? null);
-  }
+  readonly findById = this.procedure<{ id: string }>("findById")
+    .requireAuth()
+    .handle(async ({ input, ctx }): ServerResultAsync<CreateWithRulesResult["recurrence"] | null> => {
+      const result = await this.repository.recurrence.findById(input.id);
+      if (result.isErr()) return err(result.error);
+      if (!result.value) return ok(null);
+      if (result.value.userId !== ctx.actor.userId) return this.error("FORBIDDEN");
+      return ok(result.value);
+    });
 
-  async update(
-    data: UpdateRecurrenceSchema & { id: string }
-  ): ServerResultAsync<CreateWithRulesResult["recurrence"]> {
-    return this.repository.recurrence.update(data);
-  }
+  readonly update = this.procedure<UpdateRecurrenceSchema & { id: string }>("update")
+    .requireAuth()
+    .loadResource("recurrence", ({ input }) => this.repository.recurrence.findById(input.id))
+    .use("owner", ({ ctx, state }) => {
+      if (state.recurrence.userId !== ctx.actor.userId) return this.error("FORBIDDEN");
+      return true;
+    })
+    .handle(({ input }): ServerResultAsync<CreateWithRulesResult["recurrence"]> => {
+      return this.repository.recurrence.update(input);
+    });
 
-  async updateRule(
-    data: UpdateRecurrenceRulesSchema
-  ): ServerResultAsync<CreateWithRulesResult["rules"][number]> {
-    return this.repository.recurrenceRules.update(data);
-  }
+  readonly updateRule = this.procedure<UpdateRecurrenceRulesSchema>("updateRule")
+    .requireAuth()
+    .loadResource("rule", ({ input }) => this.repository.recurrenceRules.findById(input.id))
+    .loadResource("recurrence", ({ state }) =>
+      this.repository.recurrence.findById(state.rule.recurrenceId!)
+    )
+    .use("owner", ({ ctx, state }) => {
+      if (state.recurrence.userId !== ctx.actor.userId) return this.error("FORBIDDEN");
+      return true;
+    })
+    .handle(({ input }): ServerResultAsync<CreateWithRulesResult["rules"][number]> => {
+      return this.repository.recurrenceRules.update(input);
+    });
 
-  async delete(data: DeleteRecurrenceSchema): ServerResultAsync<{ id: string }> {
-    return this.repository.recurrence.deleteById(data.id);
-  }
+  readonly delete = this.procedure<DeleteRecurrenceSchema>("delete")
+    .requireAuth()
+    .loadResource("recurrence", ({ input }) => this.repository.recurrence.findById(input.id))
+    .use("owner", ({ ctx, state }) => {
+      if (state.recurrence.userId !== ctx.actor.userId) return this.error("FORBIDDEN");
+      return true;
+    })
+    .handle(({ input }): ServerResultAsync<{ id: string }> => {
+      return this.repository.recurrence.deleteById(input.id);
+    });
 
-  async deleteRule(data: DeleteRecurrenceRulesSchema): ServerResultAsync<{ id: string }> {
-    return this.repository.recurrenceRules.deleteById(data.id);
-  }
+  readonly deleteRule = this.procedure<DeleteRecurrenceRulesSchema>("deleteRule")
+    .requireAuth()
+    .loadResource("rule", ({ input }) => this.repository.recurrenceRules.findById(input.id))
+    .loadResource("recurrence", ({ state }) =>
+      this.repository.recurrence.findById(state.rule.recurrenceId!)
+    )
+    .use("owner", ({ ctx, state }) => {
+      if (state.recurrence.userId !== ctx.actor.userId) return this.error("FORBIDDEN");
+      return true;
+    })
+    .handle(({ input }): ServerResultAsync<{ id: string }> => {
+      return this.repository.recurrenceRules.deleteById(input.id);
+    });
 }
