@@ -1,14 +1,15 @@
 import { createBackendApp, type InferBackendAppRouter } from "@m5kdev/backend/app";
 import { createBetterAuth } from "@m5kdev/backend/modules/auth/auth.lib";
-import { createAuthBackendModule } from "@m5kdev/backend/modules/auth/auth.module";
-import { createEmailBackendModule } from "@m5kdev/backend/modules/email/email.module";
-import { createNotificationBackendModule } from "@m5kdev/backend/modules/notification/notification.module";
-import { createWorkflowBackendModule } from "@m5kdev/backend/modules/workflow/workflow.module";
-import { templates } from "{{PACKAGE_SCOPE}}/email";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import cors from "cors";
 import express from "express";
-import { postsModule } from "./modules/posts/posts.module";
+import {
+  authBackendModule,
+  emailBackendModule,
+  notificationBackendModule,
+  postsBackendModule,
+  workflowBackendModule,
+} from "./modules";
 
 const app = express();
 const appUrl = process.env.VITE_APP_URL ?? "http://localhost:5173";
@@ -80,30 +81,11 @@ export const backendApp = createBackendApp({
     },
   },
 })
-  .use(
-    createEmailBackendModule({
-      templates: templates as never,
-    })
-  )
-  .use(
-    createAuthBackendModule({
-      emailModuleId: "email",
-    })
-  )
-  .use(
-    createWorkflowBackendModule({
-      queues: {
-        fast: { concurrency: 5 },
-      },
-      defaultQueue: "fast",
-      defaults: {
-        timeout: 60_000,
-        jobOptions: { removeOnComplete: { age: 3600 } },
-      },
-    })
-  )
-  .use(createNotificationBackendModule())
-  .use(postsModule);
+  .use(emailBackendModule)
+  .use(authBackendModule)
+  .use(workflowBackendModule)
+  .use(notificationBackendModule)
+  .use(postsBackendModule);
 
 export const builtBackendApp = backendApp.build();
 export const appRouter = builtBackendApp.trpc.router;

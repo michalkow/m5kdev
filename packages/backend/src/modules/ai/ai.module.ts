@@ -1,7 +1,7 @@
 import type { Mastra } from "@mastra/core";
 import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import type Replicate from "replicate";
-import { defineBackendModule } from "../../app";
+import { createBackendRouterMap, defineBackendModule } from "../../app";
 import { createAITables } from "./ai.db";
 import { AiUsageRepository } from "./ai.repository";
 import { AIService } from "./ai.service";
@@ -9,9 +9,12 @@ import { IdeogramRepository } from "./ideogram/ideogram.repository";
 import { IdeogramService } from "./ideogram/ideogram.service";
 import { createAITRPC } from "./ai.trpc";
 
-export type CreateAIBackendModuleOptions<MastraInstance extends Mastra> = {
+export type CreateAIBackendModuleOptions<
+  MastraInstance extends Mastra,
+  Namespace extends string = string,
+> = {
   id?: string;
-  namespace?: string;
+  namespace?: Namespace;
   authModuleId?: string;
   enableIdeogram?: boolean;
   libs: {
@@ -28,11 +31,12 @@ export type CreateAIBackendModuleOptions<MastraInstance extends Mastra> = {
   };
 };
 
-export function createAIBackendModule<MastraInstance extends Mastra>(
-  options: CreateAIBackendModuleOptions<MastraInstance>
-) {
+export function createAIBackendModule<
+  MastraInstance extends Mastra,
+  const Namespace extends string = "ai",
+>(options: CreateAIBackendModuleOptions<MastraInstance, Namespace>) {
   const id = options.id ?? "ai";
-  const namespace = options.namespace ?? "ai";
+  const namespace = (options.namespace ?? "ai") as Namespace;
   const authModuleId = options.authModuleId ?? "auth";
 
   return defineBackendModule({
@@ -75,8 +79,7 @@ export function createAIBackendModule<MastraInstance extends Mastra>(
         ),
       };
     },
-    trpc: ({ trpc, services }) => ({
-      [namespace]: createAITRPC(trpc, services.ai),
-    }),
+    trpc: ({ trpc, services }) =>
+      createBackendRouterMap(namespace, createAITRPC(trpc, services.ai)),
   });
 }

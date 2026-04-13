@@ -1,18 +1,20 @@
-import { defineBackendModule } from "../../app";
+import { createBackendRouterMap, defineBackendModule } from "../../app";
 import { createTagTables } from "./tag.db";
 import { TagRepository } from "./tag.repository";
 import { TagService } from "./tag.service";
 import { createTagTRPC } from "./tag.trpc";
 
-export type CreateTagBackendModuleOptions = {
+export type CreateTagBackendModuleOptions<Namespace extends string = string> = {
   id?: string;
-  namespace?: string;
+  namespace?: Namespace;
   authModuleId?: string;
 };
 
-export function createTagBackendModule(options: CreateTagBackendModuleOptions = {}) {
+export function createTagBackendModule<const Namespace extends string = "tag">(
+  options: CreateTagBackendModuleOptions<Namespace> = {}
+) {
   const id = options.id ?? "tag";
-  const namespace = options.namespace ?? "tag";
+  const namespace = (options.namespace ?? "tag") as Namespace;
   const authModuleId = options.authModuleId ?? "auth";
 
   return defineBackendModule({
@@ -41,8 +43,7 @@ export function createTagBackendModule(options: CreateTagBackendModuleOptions = 
     services: ({ repositories }) => ({
       tag: new TagService({ tag: repositories.tag }, {}),
     }),
-    trpc: ({ trpc, services }) => ({
-      [namespace]: createTagTRPC(trpc, services.tag),
-    }),
+    trpc: ({ trpc, services }) =>
+      createBackendRouterMap(namespace, createTagTRPC(trpc, services.tag)),
   });
 }

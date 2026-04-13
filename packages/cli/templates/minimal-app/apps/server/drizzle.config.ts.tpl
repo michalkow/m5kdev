@@ -5,10 +5,7 @@ dotenv.config({ path: "../shared/.env" });
 
 const url = process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL;
 const authToken = process.env.TURSO_AUTH_TOKEN;
-const schema = [
-  "./src/modules/**/*.db.ts",
-  "./node_modules/@m5kdev/backend/dist/src/modules/auth/*.db.js",
-];
+const schema = "./src/generated/schema.ts";
 
 if (!url) {
   throw new Error("DATABASE_URL or TURSO_DATABASE_URL must be set");

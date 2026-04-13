@@ -1,19 +1,24 @@
-import { defineBackendModule } from "../../app";
+import { createBackendRouterMap, defineBackendModule } from "../../app";
 import { createWorkflowTables } from "./workflow.db";
 import { WorkflowRepository } from "./workflow.repository";
 import { WorkflowService } from "./workflow.service";
 import { createWorkflowTRPC } from "./workflow.trpc";
 import type { WorkflowServiceConfig } from "./workflow.types";
 
-export type CreateWorkflowBackendModuleOptions = Omit<WorkflowServiceConfig, "connection"> & {
+export type CreateWorkflowBackendModuleOptions<Namespace extends string = string> = Omit<
+  WorkflowServiceConfig,
+  "connection"
+> & {
   id?: string;
-  namespace?: string;
+  namespace?: Namespace;
   authModuleId?: string;
 };
 
-export function createWorkflowBackendModule(options: CreateWorkflowBackendModuleOptions) {
+export function createWorkflowBackendModule<const Namespace extends string = "workflow">(
+  options: CreateWorkflowBackendModuleOptions<Namespace>
+) {
   const id = options.id ?? "workflow";
-  const namespace = options.namespace ?? "workflow";
+  const namespace = (options.namespace ?? "workflow") as Namespace;
   const authModuleId = options.authModuleId ?? "auth";
 
   return defineBackendModule({
@@ -45,8 +50,7 @@ export function createWorkflowBackendModule(options: CreateWorkflowBackendModule
         }),
       };
     },
-    trpc: ({ trpc, services }) => ({
-      [namespace]: createWorkflowTRPC(trpc, services.workflow),
-    }),
+    trpc: ({ trpc, services }) =>
+      createBackendRouterMap(namespace, createWorkflowTRPC(trpc, services.workflow)),
   });
 }

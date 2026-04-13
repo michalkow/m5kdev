@@ -97,7 +97,7 @@ export class EmailService extends BaseService<never, never> {
       logo:
         props.brand?.logo ??
         appConfig.brand?.logo ??
-        (webUrl ? buildAppUrl(webUrl, "/mark.svg") ?? undefined : undefined),
+        (webUrl ? (buildAppUrl(webUrl, "/mark.svg") ?? undefined) : undefined),
       tagline:
         props.brand?.tagline ??
         appConfig.brand?.tagline ??
@@ -129,7 +129,8 @@ export class EmailService extends BaseService<never, never> {
 
     try {
       html = renderToStaticMarkup(createElement(template.react, reactProps));
-    } catch {
+    } catch (error) {
+      this.logger.warn({ error, templateId: template.id }, "Failed to render email template HTML");
       html = undefined;
     }
 
@@ -145,7 +146,10 @@ export class EmailService extends BaseService<never, never> {
     };
   }
 
-  private async deliverPayload(payload: EmailDeliveryPayload, react: ReturnType<typeof createElement>) {
+  private async deliverPayload(
+    payload: EmailDeliveryPayload,
+    react: ReturnType<typeof createElement>
+  ) {
     if (this.mode === "send") {
       if (!this.client) {
         return this.error(
@@ -258,7 +262,8 @@ export class EmailService extends BaseService<never, never> {
   }
 
   async sendWaitlistInvite(email: string, code: string, overrideOptions?: OverrideOptions) {
-    const url = buildAppUrl(this.appConfig.urls?.web, `/signup?code=${code}&email=${email}`);
+    const params = new URLSearchParams({ code, email });
+    const url = buildAppUrl(this.appConfig.urls?.web, `/signup?${params.toString()}`);
     if (!url) {
       return this.error("INTERNAL_SERVER_ERROR", "App web URL is not configured for email links");
     }

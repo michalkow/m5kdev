@@ -10,6 +10,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
     "check-types": "tsc --noEmit",
+    "generate:schema": "tsx --env-file=../shared/.env drizzle/generate-schema.ts",
     "sync": "tsx --env-file=../shared/.env drizzle/sync.ts",
     "seed": "tsx --env-file=../shared/.env drizzle/seed.ts"
   },

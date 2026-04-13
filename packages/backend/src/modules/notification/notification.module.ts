@@ -1,21 +1,21 @@
-import { defineBackendModule } from "../../app";
+import { createBackendRouterMap, defineBackendModule } from "../../app";
 import { createNotificationTables } from "./notification.db";
 import { NotificationRepository } from "./notification.repository";
 import { NotificationService } from "./notification.service";
 import { createNotificationTRPC } from "./notification.trpc";
 
-export type CreateNotificationBackendModuleOptions = {
+export type CreateNotificationBackendModuleOptions<Namespace extends string = string> = {
   id?: string;
-  namespace?: string;
+  namespace?: Namespace;
   authModuleId?: string;
   workflowModuleId?: string;
 };
 
-export function createNotificationBackendModule(
-  options: CreateNotificationBackendModuleOptions = {}
+export function createNotificationBackendModule<const Namespace extends string = "notification">(
+  options: CreateNotificationBackendModuleOptions<Namespace> = {}
 ) {
   const id = options.id ?? "notification";
-  const namespace = options.namespace ?? "notification";
+  const namespace = (options.namespace ?? "notification") as Namespace;
   const authModuleId = options.authModuleId ?? "auth";
   const workflowModuleId = options.workflowModuleId ?? "workflow";
 
@@ -42,8 +42,7 @@ export function createNotificationBackendModule(
         { workflow: deps[workflowModuleId].services.workflow }
       ),
     }),
-    trpc: ({ trpc, services }) => ({
-      [namespace]: createNotificationTRPC(trpc, services.notification),
-    }),
+    trpc: ({ trpc, services }) =>
+      createBackendRouterMap(namespace, createNotificationTRPC(trpc, services.notification)),
   });
 }

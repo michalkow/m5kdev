@@ -1,5 +1,24 @@
 # @m5kdev/frontend
 
+## 0.15.1
+
+### Patch Changes
+
+- cli
+- Updated dependencies
+  - @m5kdev/commons@0.15.1
+
+## 0.15.0
+
+### Minor Changes
+
+- framework
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.15.0
+
 ## 0.14.0
 
 ### Minor Changes

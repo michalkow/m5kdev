@@ -19,6 +19,7 @@ pnpm dev
 ```
 
 The starter uses a local LibSQL file by default and writes local auth emails to `apps/server/.emails`.
+Before running `drizzle-kit`, the starter generates `apps/server/src/generated/schema.ts` from the registered backend modules.
 
 ## Demo Credentials
 

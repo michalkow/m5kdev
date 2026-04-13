@@ -1,20 +1,20 @@
-import { defineBackendModule } from "../../app";
+import { createBackendRouterMap, defineBackendModule } from "../../app";
 import { createRecurrenceTables } from "./recurrence.db";
 import { RecurrenceRepository, RecurrenceRulesRepository } from "./recurrence.repository";
 import { RecurrenceService } from "./recurrence.service";
 import { createRecurrenceTRPC } from "./recurrence.trpc";
 
-export type CreateRecurrenceBackendModuleOptions = {
+export type CreateRecurrenceBackendModuleOptions<Namespace extends string = string> = {
   id?: string;
-  namespace?: string;
+  namespace?: Namespace;
   authModuleId?: string;
 };
 
-export function createRecurrenceBackendModule(
-  options: CreateRecurrenceBackendModuleOptions = {}
+export function createRecurrenceBackendModule<const Namespace extends string = "recurrence">(
+  options: CreateRecurrenceBackendModuleOptions<Namespace> = {}
 ) {
   const id = options.id ?? "recurrence";
-  const namespace = options.namespace ?? "recurrence";
+  const namespace = (options.namespace ?? "recurrence") as Namespace;
   const authModuleId = options.authModuleId ?? "auth";
 
   return defineBackendModule({
@@ -54,8 +54,7 @@ export function createRecurrenceBackendModule(
         {}
       ),
     }),
-    trpc: ({ trpc, services }) => ({
-      [namespace]: createRecurrenceTRPC(trpc, services.recurrence),
-    }),
+    trpc: ({ trpc, services }) =>
+      createBackendRouterMap(namespace, createRecurrenceTRPC(trpc, services.recurrence)),
   });
 }

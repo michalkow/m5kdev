@@ -324,13 +324,14 @@ That is why `createBackendApp(...)` takes:
 
 ```ts
 auth: {
-  factory({ db, services }) {
+  factory({ db, services, appConfig }) {
     return createBetterAuth({
       orm: db.orm as never,
       schema: db.schema as never,
       services: {
         email: services.email.email,
       },
+      app: appConfig,
     });
   },
 },
@@ -412,9 +413,24 @@ Recommended pattern:
 
 1. Keep the app module list in a static manifest.
 2. Use that manifest in `app.ts` to register modules.
-3. Use the same manifest in a small script that writes a generated schema file for `drizzle-kit`.
+3. Create a schema-only module manifest for Drizzle tooling.
+4. Use that schema manifest in a small script that calls `collectBackendSchema(...)`.
+5. Generate a `src/generated/schema.ts` file that exports every collected table as a top-level named export.
+6. Point `drizzle.config.ts` at that generated file.
 
-The framework does not currently ship a one-command generator for app schemas. Apps are expected to own that small generation script.
+The important constraints are:
+
+- DrizzleKit scans top-level exports from the schema module. Exporting a nested `schema` object alone is not enough.
+- The full runtime module graph may pull in unrelated dependencies such as email templates or other non-DB code.
+- The schema manifest should contain only modules needed for `db` resolution, plus lightweight stubs for required runtime-only dependencies.
+
+The minimal starter now includes this flow:
+
+- `src/modules.ts`
+- `src/schema-modules.ts`
+- `drizzle/generate-schema.ts`
+- `src/generated/schema.ts`
+- `drizzle.config.ts` pointing to `./src/generated/schema.ts`
 
 This keeps runtime and migration tooling aligned without going back to one giant hand-written schema import file.
 

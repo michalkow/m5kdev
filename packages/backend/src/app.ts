@@ -1,6 +1,6 @@
 import { createClient, type Client, type Config as LibSQLClientConfig } from "@libsql/client";
 import { transformer } from "@m5kdev/commons/utils/trpc";
-import type { AnyRouter } from "@trpc/server";
+import type { AnyRouter, TRPCCreateRouterOptions } from "@trpc/server";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
 import { getTableName } from "drizzle-orm";
@@ -39,9 +39,18 @@ type BuiltModuleRouters<Modules extends readonly BackendModuleDefinition[]> = Si
   UnionToIntersection<
     Modules[number] extends BackendModuleDefinition<any, any, any, any, infer TRouters>
       ? TRouters
-      : Record<string, never>
+      : {}
   >
->;
+> extends infer TRouters
+  ? TRouters extends TRPCCreateRouterOptions
+    ? TRouters
+    : never
+  : never;
+
+type DefinedBackendModule<T extends BackendModuleDefinition> =
+  T extends BackendModuleDefinition<infer Id, infer Tables, infer Repositories, infer Services, infer TRouters>
+    ? BackendModuleDefinition<Id, Tables, Repositories, Services, TRouters>
+    : never;
 
 type BuiltModuleRuntime = {
   id: string;
@@ -194,7 +203,7 @@ export type BackendModuleDefinition<
   Tables extends TableMap = TableMap,
   Repositories extends AnyRecord = AnyRecord,
   Services extends AnyRecord = AnyRecord,
-  TRouters extends RouterMap = RouterMap,
+  TRouters extends RouterMap = {},
 > = {
   id: Id;
   dependsOn?: readonly string[];
@@ -263,8 +272,23 @@ export type BackendAppConfig = {
   };
 };
 
-export function defineBackendModule<const T extends BackendModuleDefinition>(definition: T): T {
-  return definition;
+export function defineBackendModule<const T extends BackendModuleDefinition>(
+  definition: T
+): DefinedBackendModule<T> {
+  return definition as unknown as DefinedBackendModule<T>;
+}
+
+export function defineBackendModules<const T extends readonly BackendModuleDefinition[]>(
+  modules: T
+): T {
+  return modules;
+}
+
+export function createBackendRouterMap<const Namespace extends string, Router extends AnyRouter>(
+  namespace: Namespace,
+  router: Router
+): { [K in Namespace]: Router } {
+  return { [namespace]: router } as { [K in Namespace]: Router };
 }
 
 function isWorkflowService(value: unknown): value is WorkflowService {
@@ -738,7 +762,7 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
         state.routers = routers;
       }
 
-      const appRouter = trpcMethods.router(routerFragments as BuiltModuleRouters<Modules> & RouterMap);
+      const appRouter = trpcMethods.router(routerFragments as BuiltModuleRouters<Modules>);
       const authMiddleware = auth ? createAuthMiddleware(auth) : undefined;
       const roleAuthMiddleware = auth ? createRoleAuthMiddleware(auth) : undefined;
 
@@ -911,25 +935,29 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
 export type InferBackendAppRouter<TApp extends { build(): { trpc: { router: AnyRouter } } }> =
   ReturnType<TApp["build"]>["trpc"]["router"];
 
-export type BackendSchemaSourceImport = {
-  from: string;
-  names: string[];
-};
-
 export function generateBackendSchemaSource({
-  imports,
+  schema,
+  schemaExpression = "collected.schema",
   exportName = "schema",
 }: {
-  imports: readonly BackendSchemaSourceImport[];
+  schema: AppDbSchema;
+  schemaExpression?: string;
   exportName?: string;
 }) {
-  const importLines = imports
-    .map(({ from, names }) => `import { ${names.join(", ")} } from "${from}";`)
-    .join("\n");
-  const schemaLines = imports
-    .flatMap(({ names }) => names)
-    .map((name) => `  ...${name},`)
-    .join("\n");
+  const tableNames = Object.keys(schema).sort();
 
-  return `${importLines}\n\nexport const ${exportName} = {\n${schemaLines}\n};\n`;
+  for (const name of tableNames) {
+    if (!/^[$A-Z_][0-9A-Z_$]*$/i.test(name)) {
+      throw new Error(
+        `Backend schema key "${name}" cannot be emitted as a top-level TypeScript export`
+      );
+    }
+  }
+
+  const exportLines = tableNames
+    .map((name) => `export const ${name} = ${schemaExpression}.${name};`)
+    .join("\n");
+  const schemaLines = tableNames.map((name) => `  ${name},`).join("\n");
+
+  return `${exportLines}\n\nexport const ${exportName} = {\n${schemaLines}\n} as const;\n`;
 }

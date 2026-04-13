@@ -40,6 +40,24 @@ export type TeamContext = {
   actor: TeamActor;
 };
 
+const t = initTRPC.context<RequestContext>().create({ transformer });
+const baseProcedure = t.procedure;
+const publicProcedure = baseProcedure;
+const privateProcedure = baseProcedure.use(({ ctx, next }) => {
+  return next({ ctx: verifyProtectedProcedureContext(ctx) });
+});
+const adminProcedure = baseProcedure.use(({ ctx, next }) => {
+  return next({ ctx: verifyAdminProcedureContext(ctx) });
+});
+
+export type TRPCMethods = {
+  router: typeof t.router;
+  baseProcedure: typeof baseProcedure;
+  publicProcedure: typeof publicProcedure;
+  privateProcedure: typeof privateProcedure;
+  adminProcedure: typeof adminProcedure;
+};
+
 export function createRequestContext() {
   return async function createContext(): Promise<RequestContext> {
     return {
@@ -51,16 +69,6 @@ export function createRequestContext() {
 }
 
 export function createTRPCMethods() {
-  const t = initTRPC.context<RequestContext>().create({ transformer });
-  const baseProcedure = t.procedure;
-  const publicProcedure = baseProcedure;
-  const privateProcedure = baseProcedure.use(({ ctx, next }) => {
-    return next({ ctx: verifyProtectedProcedureContext(ctx) });
-  });
-  const adminProcedure = baseProcedure.use(({ ctx, next }) => {
-    return next({ ctx: verifyAdminProcedureContext(ctx) });
-  });
-
   return {
     router: t.router,
     baseProcedure,
@@ -69,8 +77,6 @@ export function createTRPCMethods() {
     adminProcedure,
   };
 }
-
-export type TRPCMethods = ReturnType<typeof createTRPCMethods>;
 
 export function createAuthContext(auth: BetterAuth) {
   return async function createContext({ req }: CreateExpressContextOptions): Promise<RequestContext> {

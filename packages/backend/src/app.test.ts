@@ -1,6 +1,11 @@
 import { createClient, type Client } from "@libsql/client";
 import { sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { collectBackendSchema, createBackendApp, defineBackendModule } from "./app";
+import {
+  collectBackendSchema,
+  createBackendApp,
+  defineBackendModule,
+  generateBackendSchemaSource,
+} from "./app";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {
@@ -214,5 +219,37 @@ describe("createBackendApp", () => {
 
     expect(Object.keys(collected.schema)).toEqual(["parity"]);
     expect(Object.keys(built.db.schema)).toEqual(["parity"]);
+  });
+
+  it("generates DrizzleKit-consumable source with top-level table exports", () => {
+    const users = sqliteTable("users", {
+      id: text("id").primaryKey(),
+    });
+    const posts = sqliteTable("posts", {
+      id: text("id").primaryKey(),
+    });
+
+    const collected = collectBackendSchema([
+      defineBackendModule({
+        id: "schema",
+        db: () => ({
+          tables: {
+            users,
+            posts,
+          },
+        }),
+      }),
+    ]);
+
+    const source = generateBackendSchemaSource({
+      schema: collected.schema,
+      schemaExpression: "collected.schema",
+    });
+
+    expect(source).toContain("export const posts = collected.schema.posts;");
+    expect(source).toContain("export const users = collected.schema.users;");
+    expect(source).toContain("export const schema = {");
+    expect(source).toContain("  posts,");
+    expect(source).toContain("  users,");
   });
 });
