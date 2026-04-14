@@ -1,17 +1,17 @@
-import { createClient, type Client, type Config as LibSQLClientConfig } from "@libsql/client";
+import { type Client, createClient, type Config as LibSQLClientConfig } from "@libsql/client";
 import { transformer } from "@m5kdev/commons/utils/trpc";
 import type { AnyRouter, TRPCCreateRouterOptions } from "@trpc/server";
 import * as trpcExpress from "@trpc/server/adapters/express";
-import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
-import { getTableName } from "drizzle-orm";
-import type { SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
 import { toNodeHandler } from "better-auth/node";
+import { getTableName } from "drizzle-orm";
+import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
+import type { SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
 import express, { type Express } from "express";
 import IORedis, { type RedisOptions } from "ioredis";
 import type { Logger } from "pino";
 import { Resend } from "resend";
-import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/auth.middleware";
 import type { BetterAuth } from "./modules/auth/auth.lib";
+import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/auth.middleware";
 import { WorkflowRegistry } from "./modules/workflow/workflow.registry";
 import { WorkflowService } from "./modules/workflow/workflow.service";
 import { logger as rootLogger } from "./utils/logger";
@@ -27,9 +27,9 @@ type AnyRecord = Record<string, any>;
 type TableMap = Record<string, SQLiteTableWithColumns<any>>;
 type RouterMap = Record<string, AnyRouter>;
 
-type UnionToIntersection<T> = (
-  T extends unknown ? (value: T) => void : never
-) extends (value: infer I) => void
+type UnionToIntersection<T> = (T extends unknown ? (value: T) => void : never) extends (
+  value: infer I
+) => void
   ? I
   : never;
 
@@ -47,10 +47,15 @@ type BuiltModuleRouters<Modules extends readonly BackendModuleDefinition[]> = Si
     : never
   : never;
 
-type DefinedBackendModule<T extends BackendModuleDefinition> =
-  T extends BackendModuleDefinition<infer Id, infer Tables, infer Repositories, infer Services, infer TRouters>
-    ? BackendModuleDefinition<Id, Tables, Repositories, Services, TRouters>
-    : never;
+type DefinedBackendModule<T extends BackendModuleDefinition> = T extends BackendModuleDefinition<
+  infer Id,
+  infer Tables,
+  infer Repositories,
+  infer Services,
+  infer TRouters
+>
+  ? BackendModuleDefinition<Id, Tables, Repositories, Services, TRouters>
+  : never;
 
 type BuiltModuleRuntime = {
   id: string;
@@ -63,6 +68,20 @@ type BuiltModuleRuntime = {
 type ModuleRuntimeMap = Record<string, BuiltModuleRuntime>;
 
 type AppDbSchema = Record<string, SQLiteTableWithColumns<any>>;
+
+type BackendModuleRouterMap<Module> = Module extends BackendModuleDefinition<
+  any,
+  any,
+  any,
+  any,
+  infer Routers
+>
+  ? Routers
+  : never;
+
+export type BackendAppRouterMap<Modules extends readonly BackendModuleDefinition[]> = Simplify<
+  UnionToIntersection<BackendModuleRouterMap<Modules[number]>>
+>;
 
 export type BackendAppMetadata = {
   name?: string;
@@ -350,9 +369,7 @@ function createDbClient(config: BackendAppConfig["db"]): { client: Client; owned
   };
 }
 
-function createRedisClient(
-  config: BackendAppConfig["redis"]
-): { redis?: IORedis; owned: boolean } {
+function createRedisClient(config: BackendAppConfig["redis"]): { redis?: IORedis; owned: boolean } {
   if (!config) {
     return {
       redis: undefined,
@@ -380,9 +397,10 @@ function createRedisClient(
   };
 }
 
-function createResendClient(
-  config: BackendAppConfig["resend"]
-): { resend?: Resend; owned: boolean } {
+function createResendClient(config: BackendAppConfig["resend"]): {
+  resend?: Resend;
+  owned: boolean;
+} {
   if (!config) {
     return {
       resend: undefined,
@@ -403,7 +421,9 @@ function createResendClient(
   };
 }
 
-function resolveModuleOrder(modules: readonly BackendModuleDefinition[]): BackendModuleDefinition[] {
+function resolveModuleOrder(
+  modules: readonly BackendModuleDefinition[]
+): BackendModuleDefinition[] {
   const modulesById = new Map<string, BackendModuleDefinition>();
 
   for (const module of modules) {
@@ -428,7 +448,9 @@ function resolveModuleOrder(modules: readonly BackendModuleDefinition[]): Backen
   const visit = (module: BackendModuleDefinition, path: string[] = []) => {
     if (permanent.has(module.id)) return;
     if (temporary.has(module.id)) {
-      throw new Error(`Circular backend module dependency detected: ${[...path, module.id].join(" -> ")}`);
+      throw new Error(
+        `Circular backend module dependency detected: ${[...path, module.id].join(" -> ")}`
+      );
     }
 
     temporary.add(module.id);
@@ -488,9 +510,7 @@ export function collectBackendSchema<const Modules extends readonly BackendModul
 
     for (const [tableKey, table] of Object.entries(tables)) {
       if (schema[tableKey]) {
-        throw new Error(
-          `Duplicate backend schema key "${tableKey}" from module "${module.id}"`
-        );
+        throw new Error(`Duplicate backend schema key "${tableKey}" from module "${module.id}"`);
       }
       const tableName = getTableName(table);
       const owner = tableNameOwners.get(tableName);
@@ -590,7 +610,7 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
         const deps = createDependencyMap(module, moduleStates);
         const state = moduleStates.get(module.id)!;
         const repositories =
-          (module.repositories?.({
+          module.repositories?.({
             env,
             logger,
             appConfig,
@@ -606,7 +626,7 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
               redis: redisState.redis,
               resend: resendState.resend,
             },
-          })) ?? {};
+          }) ?? {};
         state.repositories = repositories;
         repositoryModules[module.id] = repositories;
       }
@@ -615,7 +635,7 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
         const deps = createDependencyMap(module, moduleStates);
         const state = moduleStates.get(module.id)!;
         const services =
-          (module.services?.({
+          module.services?.({
             env,
             logger,
             appConfig,
@@ -633,7 +653,7 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
               redis: redisState.redis,
               resend: resendState.resend,
             },
-          })) ?? {};
+          }) ?? {};
         state.services = services;
         serviceModules[module.id] = services;
       }
@@ -700,7 +720,7 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
         for (const service of Object.values(state.services)) {
           if (isWorkflowService(service)) {
             if (workflowRuntime) {
-              throw new Error(`Multiple WorkflowService instances detected; only one is supported`);
+              throw new Error("Multiple WorkflowService instances detected; only one is supported");
             }
             workflowRuntime = {
               service,
@@ -727,7 +747,7 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
       for (const module of orderedModules) {
         const state = moduleStates.get(module.id)!;
         const routers =
-          (module.trpc?.({
+          module.trpc?.({
             env,
             logger,
             appConfig,
@@ -748,7 +768,7 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
             },
             trpc: trpcMethods,
             auth,
-          })) ?? {};
+          }) ?? {};
 
         for (const [routerKey, router] of Object.entries(routers)) {
           if ((routerFragments as Record<string, unknown>)[routerKey]) {
