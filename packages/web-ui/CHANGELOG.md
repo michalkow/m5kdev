@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.15.2
+
+### Patch Changes
+
+- trpc types
+- Updated dependencies
+  - @m5kdev/frontend@0.15.2
+  - @m5kdev/commons@0.15.2
+
 ## 0.15.1
 
 ### Patch Changes

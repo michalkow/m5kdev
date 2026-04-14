@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.15.2
+
+### Patch Changes
+
+- trpc types
+
 ## 0.15.1
 
 ### Patch Changes
