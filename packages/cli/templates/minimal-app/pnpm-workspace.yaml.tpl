@@ -3,7 +3,8 @@ packages:
 
 catalog:
   '@biomejs/biome': 2.2.0
-  '@heroui/react': 2.8.8
+  '@heroui/react': 3.0.2
+  '@heroui/styles': 3.0.2
   '@libsql/client': 0.17.0
   '@m5kdev/backend': 0.3.3
   '@m5kdev/commons': 0.3.3

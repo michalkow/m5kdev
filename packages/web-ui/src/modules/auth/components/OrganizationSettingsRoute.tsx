@@ -1,4 +1,4 @@
-import { Button, Card, CardBody, CardHeader, Chip, Input, Spinner, Textarea } from "@heroui/react";
+import { Button, Card, Chip, Input, Label, Spinner, TextArea } from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -39,8 +39,8 @@ function OrganizationStateCard({ title, message }: { title: string; message: str
   return (
     <div className="p-6">
       <Card>
-        <CardHeader className="text-lg font-semibold">{title}</CardHeader>
-        <CardBody>{message}</CardBody>
+        <Card.Header className="text-lg font-semibold">{title}</Card.Header>
+        <Card.Content>{message}</Card.Content>
       </Card>
     </div>
   );
@@ -240,40 +240,49 @@ export function OrganizationSettingsRoute({
   return (
     <div className="p-6">
       <Card>
-        <CardHeader className="flex items-center justify-between">
+        <Card.Header className="flex items-center justify-between">
           <div className="flex flex-col">
             <h2 className="text-xl font-semibold">{resolvedLabels.settingsTitle}</h2>
             <p className="text-sm text-default-500">{resolvedLabels.settingsDescription}</p>
           </div>
-          <Chip variant="flat" color="primary">
+          <Chip variant="soft" color="accent">
             {resolvedRoleLabels[activeOrganizationRole] ??
               activeOrganizationRole ??
               resolvedRoleLabels.member}
           </Chip>
-        </CardHeader>
-        <CardBody className="grid gap-3">
-          <Input
-            label={resolvedLabels.formName}
-            value={organizationName}
-            onValueChange={setOrganizationName}
-          />
-          <Input
-            label={resolvedLabels.formSlug}
-            value={organizationSlug}
-            onValueChange={setOrganizationSlug}
-          />
-          <Textarea
-            label={resolvedLabels.formMetadata}
-            value={organizationMetadata}
-            onValueChange={setOrganizationMetadata}
-            minRows={4}
-          />
+        </Card.Header>
+        <Card.Content className="grid gap-3">
+          <div className="grid gap-2">
+            <Label className="text-sm font-medium">{resolvedLabels.formName}</Label>
+            <Input
+              value={organizationName}
+              onChange={(e) => setOrganizationName(e.target.value)}
+              variant="secondary"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label className="text-sm font-medium">{resolvedLabels.formSlug}</Label>
+            <Input
+              value={organizationSlug}
+              onChange={(e) => setOrganizationSlug(e.target.value)}
+              variant="secondary"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label className="text-sm font-medium">{resolvedLabels.formMetadata}</Label>
+            <TextArea
+              value={organizationMetadata}
+              onChange={(e) => setOrganizationMetadata(e.target.value)}
+              variant="secondary"
+              rows={4}
+            />
+          </div>
           <div className="flex justify-end">
-            <Button color="primary" isLoading={isSavingOrganization} onPress={onUpdateOrganization}>
+            <Button variant="primary" isPending={isSavingOrganization} onPress={onUpdateOrganization}>
               {resolvedLabels.saveButton}
             </Button>
           </div>
-        </CardBody>
+        </Card.Content>
       </Card>
     </div>
   );

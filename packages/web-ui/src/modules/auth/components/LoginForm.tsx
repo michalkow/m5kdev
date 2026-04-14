@@ -61,8 +61,8 @@ export function LoginForm({ providers }: { providers?: string[] }) {
             <Input
               type="email"
               placeholder={t("web-ui:auth.login.placeholder.email")}
-              variant="bordered"
-              isRequired
+              variant="secondary"
+              required
               {...register("email", { required: true })}
             />
           </div>
@@ -82,12 +82,12 @@ export function LoginForm({ providers }: { providers?: string[] }) {
             <Input
               placeholder={t("web-ui:auth.login.password")}
               type="password"
-              variant="bordered"
-              isRequired
+              variant="secondary"
+              required
               {...register("password", { required: true })}
             />
           </div>
-          <Button type="submit" className="w-full" color="primary">
+          <Button type="submit" className="w-full" variant="primary">
             {t("web-ui:auth.login.button")}
           </Button>
         </div>

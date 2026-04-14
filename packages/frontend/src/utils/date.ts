@@ -1,4 +1,5 @@
-import type { DateValue, RangeValue } from "@heroui/react";
+import type { DateValue } from "@react-types/calendar";
+import type { RangeValue } from "@react-types/shared";
 import { CalendarDate, getLocalTimeZone, parseAbsolute } from "@internationalized/date";
 import type { QueryFilter } from "@m5kdev/commons/modules/schemas/query.schema";
 import { DateTime } from "luxon";

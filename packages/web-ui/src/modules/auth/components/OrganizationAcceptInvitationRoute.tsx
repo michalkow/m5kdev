@@ -1,4 +1,4 @@
-import { Card, CardBody, CardHeader, Spinner } from "@heroui/react";
+import {Card, Spinner} from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useEffect, useMemo, useState } from "react";
@@ -132,10 +132,10 @@ export function OrganizationAcceptInvitationRoute({
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
         <Card className="w-full max-w-lg">
-          <CardHeader className="text-lg font-semibold">
+          <Card.Header className="text-lg font-semibold">
             {t("web-ui:organization.invitation.error")}
-          </CardHeader>
-          <CardBody>{errorMessage ?? t("web-ui:organization.invitation.unableAccept")}</CardBody>
+          </Card.Header>
+          <Card.Content>{errorMessage ?? t("web-ui:organization.invitation.unableAccept")}</Card.Content>
         </Card>
       </div>
     );
@@ -144,17 +144,17 @@ export function OrganizationAcceptInvitationRoute({
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
       <Card className="w-full max-w-lg">
-        <CardHeader className="text-lg font-semibold">
+        <Card.Header className="text-lg font-semibold">
           {t("web-ui:organization.invitation.accepting")}
-        </CardHeader>
-        <CardBody className="flex items-center gap-3">
+        </Card.Header>
+        <Card.Content className="flex items-center gap-3">
           <Spinner size="sm" />
           <span>
             {phase === "success"
               ? t("web-ui:organization.invitation.redirecting")
               : t("web-ui:organization.invitation.pleaseWait")}
           </span>
-        </CardBody>
+        </Card.Content>
       </Card>
     </div>
   );

@@ -1,4 +1,11 @@
-import type { DateValue, RangeValue, SharedSelection } from "@heroui/react";
+import type { DateValue } from "@react-types/calendar";
+import type { RangeValue, Selection } from "@react-types/shared";
+
+function firstSelectedKey(selection: Selection): string | undefined {
+  if (selection == null || selection === "all") return undefined;
+  const first = (selection as Set<unknown>).values().next().value;
+  return first == null ? undefined : String(first);
+}
 import { CalendarDate, getLocalTimeZone, today } from "@internationalized/date";
 import type { QueryFilter, QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { ColumnDataType, FilterMethod } from "@m5kdev/commons/modules/table/filter.types";
@@ -11,7 +18,7 @@ export type FilterValue =
   | DateValue
   | RangeValue<DateValue>
   | boolean
-  | SharedSelection
+  | Selection
   | null;
 
 export interface HeroUIFilter {
@@ -201,11 +208,11 @@ export const transformFiltersToHeroUI = (
         break;
       case "enum":
         if (filter.method === "oneOf" && Array.isArray(filter.value)) {
-          // Multi-select: array of strings to SharedSelection (Set)
-          value = new Set(filter.value) as SharedSelection;
+          // Multi-select: array of strings to Selection (Set)
+          value = new Set(filter.value) as Selection;
         } else {
-          // Single select: string to SharedSelection with currentKey
-          const selection = new Set([filter.value as string]) as SharedSelection;
+          // Single select: string to Selection with currentKey
+          const selection = new Set([filter.value as string]) as Selection;
           // Set currentKey property
           Object.defineProperty(selection, "currentKey", {
             value: filter.value as string,
@@ -218,10 +225,10 @@ export const transformFiltersToHeroUI = (
         break;
       case "jsonArray":
         if (filter.method === "oneOf" && Array.isArray(filter.value)) {
-          value = new Set(filter.value) as SharedSelection;
+          value = new Set(filter.value) as Selection;
         } else if (Array.isArray(filter.value) && filter.value.length > 0) {
           const first = filter.value[0] as string;
-          const selection = new Set([first]) as SharedSelection;
+          const selection = new Set([first]) as Selection;
           Object.defineProperty(selection, "currentKey", {
             value: first,
             writable: true,
@@ -303,22 +310,22 @@ export const transformFiltersFromHeroUI = (filters: HeroUIFilter[]): QueryFilter
         }
         break;
       case "enum": {
-        const selection = filter.value as SharedSelection;
+        const selection = filter.value as Selection;
         if (selection) {
           value =
             filter.method?.value === "oneOf"
               ? Array.from(selection).map(String)
-              : String(selection.currentKey);
+              : String(firstSelectedKey(selection) ?? "");
         }
         break;
       }
       case "jsonArray": {
-        const selection = filter.value as SharedSelection;
+        const selection = filter.value as Selection;
         if (selection) {
           value =
             filter.method?.value === "oneOf"
               ? Array.from(selection).map(String)
-              : [String(selection.currentKey)];
+              : [String(firstSelectedKey(selection) ?? "")];
         }
         break;
       }

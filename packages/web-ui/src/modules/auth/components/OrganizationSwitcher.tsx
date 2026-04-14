@@ -1,4 +1,4 @@
-import { Button, Select, SelectItem } from "@heroui/react";
+import { Button, Label, ListBox, Select } from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useQuery } from "@tanstack/react-query";
@@ -92,16 +92,16 @@ export function OrganizationSwitcher({
 
   if (!open) {
     return (
-      <Button
-        as={Link}
+      <Link
         to={canManageOrganization ? managerPath : fallbackPath}
-        variant="light"
-        size="sm"
-        isIconOnly
+        className={cn(
+          "inline-flex size-9 items-center justify-center rounded-md text-sm font-medium",
+          "text-default-600 transition-colors hover:bg-default-100"
+        )}
         aria-label={t("web-ui:organization.switcher.label")}
       >
         <Building2 className="h-4 w-4" />
-      </Button>
+      </Link>
     );
   }
 
@@ -113,7 +113,7 @@ export function OrganizationSwitcher({
             ? error.message
             : t("web-ui:organization.switcher.failedToLoadOrganizations")}
         </p>
-        <Button size="sm" variant="flat" onPress={() => void refetch()}>
+        <Button size="sm" variant="secondary" onPress={() => void refetch()}>
           {t("web-ui:organization.switcher.retry")}
         </Button>
       </div>
@@ -121,27 +121,37 @@ export function OrganizationSwitcher({
   }
 
   return (
-    <div className="mb-4">
+    <div className="mb-4 grid gap-2">
+      <Label className="text-sm font-medium">{t("web-ui:organization.switcher.label")}</Label>
       <Select
-        size="sm"
-        label={t("web-ui:organization.switcher.label")}
-        selectedKeys={activeOrganizationId ? [activeOrganizationId] : []}
-        disallowEmptySelection
+        className="min-h-10"
+        selectedKey={activeOrganizationId ?? undefined}
         isDisabled={isSwitching || organizations.length === 0}
-        onSelectionChange={(keys) => {
-          const selectedOrganizationId = Array.from(keys as Set<string>)[0];
+        onSelectionChange={(key) => {
+          const selectedOrganizationId = key == null ? undefined : String(key);
           if (selectedOrganizationId) {
             void handleSwitchOrganization(selectedOrganizationId);
           }
         }}
-        classNames={{
-          trigger: cn("min-h-10"),
-          value: cn("text-sm"),
-        }}
       >
-        {organizations.map((organization) => (
-          <SelectItem key={organization.id}>{organization.name}</SelectItem>
-        ))}
+        <Select.Trigger className="min-h-10">
+          <Select.Value />
+          <Select.Indicator />
+        </Select.Trigger>
+        <Select.Popover>
+          <ListBox>
+            {organizations.map((organization) => (
+              <ListBox.Item
+                key={organization.id}
+                id={organization.id}
+                textValue={organization.name}
+              >
+                {organization.name}
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Select.Popover>
       </Select>
     </div>
   );

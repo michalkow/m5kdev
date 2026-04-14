@@ -1,4 +1,4 @@
-import { Alert, Button, Card, CardBody, CardHeader, Input } from "@heroui/react";
+import { Alert, Button, Card, Description, Input, Label } from "@heroui/react";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -74,21 +74,17 @@ export function ClaimAccountRoute({ useTRPC }: { useTRPC?: UseBackendTRPC }) {
 
   if (!trpc) {
     return (
-      <Alert
-        color="warning"
-        variant="faded"
-        title="Claim flow is unavailable because backend TRPC is not configured."
-      />
+      <Alert status="warning">
+        <Alert.Title>Claim flow is unavailable because backend TRPC is not configured.</Alert.Title>
+      </Alert>
     );
   }
 
   if (!session?.user) {
     return (
-      <Alert
-        color="warning"
-        variant="faded"
-        title="You need to sign in with your magic link before claiming this account."
-      />
+      <Alert status="warning">
+        <Alert.Title>You need to sign in with your magic link before claiming this account.</Alert.Title>
+      </Alert>
     );
   }
 
@@ -165,31 +161,34 @@ export function ClaimAccountRoute({ useTRPC }: { useTRPC?: UseBackendTRPC }) {
 
   return (
     <Card>
-      <CardHeader className="flex flex-col gap-1">
+      <Card.Header className="flex flex-col gap-1">
         <p className="text-xl font-semibold">Claim your account</p>
         <p className="text-sm text-default-600">
           You are signed in and can now set your permanent login methods.
         </p>
-      </CardHeader>
-      <CardBody className="grid gap-6">
+      </Card.Header>
+      <Card.Content className="grid gap-6">
         {claimStatusQuery.isLoading ? (
-          <Alert color="default" variant="faded" title="Loading claim status..." />
+          <Alert status="default">
+            <Alert.Title>Loading claim status...</Alert.Title>
+          </Alert>
         ) : !claim ? (
-          <Alert
-            color="warning"
-            variant="faded"
-            title="No pending account claim was found for your user."
-          />
+          <Alert status="warning">
+            <Alert.Title>No pending account claim was found for your user.</Alert.Title>
+          </Alert>
         ) : null}
 
         <div className="grid gap-2">
+          <Label className="text-sm font-medium">Email</Label>
           <Input
             type="email"
-            label="Email"
             value={email}
-            onValueChange={setEmail}
-            description="Set your real email before linking providers and password."
+            onChange={(e) => setEmail(e.target.value)}
+            variant="secondary"
           />
+          <Description className="text-sm text-default-500">
+            Set your real email before linking providers and password.
+          </Description>
           <Button onPress={onSetEmail} isDisabled={!email || busy !== "none" || !claim}>
             {busy === "email" ? "Saving..." : "Save Email"}
           </Button>
@@ -199,21 +198,21 @@ export function ClaimAccountRoute({ useTRPC }: { useTRPC?: UseBackendTRPC }) {
           <p className="text-sm font-medium">Link a provider</p>
           <div className="grid gap-3 sm:grid-cols-3">
             <Button
-              variant="bordered"
+              variant="outline"
               onPress={() => onLinkProvider("google")}
               isDisabled={busy !== "none" || !hasClaimEmail || !claim}
             >
               <GoogleIcon className="h-4 w-4" /> Google
             </Button>
             <Button
-              variant="bordered"
+              variant="outline"
               onPress={() => onLinkProvider("linkedin")}
               isDisabled={busy !== "none" || !hasClaimEmail || !claim}
             >
               <LinkedInIcon className="h-4 w-4" /> LinkedIn
             </Button>
             <Button
-              variant="bordered"
+              variant="outline"
               onPress={() => onLinkProvider("microsoft")}
               isDisabled={busy !== "none" || !hasClaimEmail || !claim}
             >
@@ -223,11 +222,12 @@ export function ClaimAccountRoute({ useTRPC }: { useTRPC?: UseBackendTRPC }) {
         </div>
 
         <div className="grid gap-2">
+          <Label className="text-sm font-medium">Set password</Label>
           <Input
             type="password"
-            label="Set password"
             value={newPassword}
-            onValueChange={setNewPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            variant="secondary"
           />
           <Button
             onPress={onSetPassword}
@@ -236,7 +236,7 @@ export function ClaimAccountRoute({ useTRPC }: { useTRPC?: UseBackendTRPC }) {
             {busy === "password" ? "Saving..." : "Set Password and Claim"}
           </Button>
         </div>
-      </CardBody>
+      </Card.Content>
     </Card>
   );
 }

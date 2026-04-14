@@ -17,8 +17,10 @@ catalog:
   '@dnd-kit/core': 6.3.1
   '@dnd-kit/sortable': 10.0.0
   '@dnd-kit/utilities': 3.2.2
-  '@heroui/react': 2.8.10
-  '@heroui/theme': 2.4.23
+  '@heroui/react': 3.0.2
+  '@heroui/styles': 3.0.2
+  '@react-types/calendar': 3.8.3
+  '@react-types/shared': 3.33.1
   '@internationalized/date': 3.8.2
   '@jest/globals': 30.2.0
   '@libsql/client': 0.17.0

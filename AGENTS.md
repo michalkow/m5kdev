@@ -91,7 +91,7 @@ Do not import services into repositories.
 
 Frontend code in this repo is standardized around:
 
-- `@heroui/react` for UI primitives.
+- `@heroui/react` and `@heroui/styles` for UI primitives and Tailwind v4 styling.
 - `react-router` v7 for routing.
 - `nuqs` for URL query state.
 - Tailwind CSS v4 for styling and design tokens.
@@ -101,7 +101,7 @@ Do not introduce alternate core libraries for these concerns without explicit re
 ## Frontend Providers and App Shell
 
 - Keep the app shell pattern: `NuqsAdapter` + `BrowserRouter` + `Providers`.
-- Keep `HeroUIProvider` wired with router integration (`navigate` and `useHref`).
+- HeroUI v3 does **not** use `HeroUIProvider`; compose other global providers in `Providers.tsx` only.
 - Do not bypass `Providers` to mount feature-level global providers ad hoc.
 - New global providers must be composed in `Providers.tsx`, not scattered across routes.
 
@@ -128,8 +128,8 @@ Do not introduce alternate core libraries for these concerns without explicit re
 ## Tailwind v4 and Theme Rules
 
 - Use Tailwind utilities as the default styling approach.
-- Keep Tailwind v4 setup centralized in app `index.css` (`@import`, `@plugin`, `@source`, `@theme`, `@layer`).
-- Keep HeroUI theme/plugin config in `hero.ts` (or equivalent theme module), not inline in random files.
+- Keep Tailwind v4 setup centralized in app `index.css` (`@import`, `@source`, `@theme`, `@layer`).
+- Wire HeroUI v3 with `@import "@heroui/styles"` and `@source` entries for `@heroui/react` / `@heroui/styles` so utilities are generated; keep app-specific tokens in `@theme`, not scattered overrides.
 - Prefer token-based colors/spacing/radius over hardcoded values when a token exists.
 
 ## Frontend Data and UX Consistency

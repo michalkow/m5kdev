@@ -20,40 +20,37 @@ export function WaitlistCodeValidation({ useTRPC, code }: WaitlistCodeValidation
 
   if (isLoading) {
     return (
-      <Alert
-        className={className}
-        color="default"
-        variant="faded"
-        title={t("web-ui:auth.waitlist.validatingCode", {
-          defaultValue: "Validating the invitation code...",
-        })}
-      />
+      <Alert className={className} status="default">
+        <Alert.Title>
+          {t("web-ui:auth.waitlist.validatingCode", {
+            defaultValue: "Validating the invitation code...",
+          })}
+        </Alert.Title>
+      </Alert>
     );
   }
 
   if (error) {
     return (
-      <Alert
-        className={className}
-        color="danger"
-        variant="faded"
-        title={t("web-ui:auth.waitlist.codeError", {
-          defaultValue: "An error occurred while validating the invitation code.",
-        })}
-      />
+      <Alert className={className} status="danger">
+        <Alert.Title>
+          {t("web-ui:auth.waitlist.codeError", {
+            defaultValue: "An error occurred while validating the invitation code.",
+          })}
+        </Alert.Title>
+      </Alert>
     );
   }
 
   if (status === "VALID") {
     return (
-      <Alert
-        className={className}
-        color="success"
-        variant="faded"
-        title={t("web-ui:auth.waitlist.codeValid", {
-          defaultValue: "Invitation code is valid. You can proceed.",
-        })}
-      />
+      <Alert className={className} status="success">
+        <Alert.Title>
+          {t("web-ui:auth.waitlist.codeValid", {
+            defaultValue: "Invitation code is valid. You can proceed.",
+          })}
+        </Alert.Title>
+      </Alert>
     );
   }
 
@@ -72,7 +69,11 @@ export function WaitlistCodeValidation({ useTRPC, code }: WaitlistCodeValidation
       });
     }
 
-    return <Alert className={className} color="danger" variant="faded" title={message} />;
+    return (
+      <Alert className={className} status="danger">
+        <Alert.Title>{message}</Alert.Title>
+      </Alert>
+    );
   }
 
   return null;

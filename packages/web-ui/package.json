@@ -24,7 +24,9 @@
     "@dnd-kit/sortable": "catalog:",
     "@dnd-kit/utilities": "catalog:",
     "@heroui/react": "catalog:",
-    "@heroui/theme": "catalog:",
+    "@heroui/styles": "catalog:",
+    "@react-types/calendar": "catalog:",
+    "@react-types/shared": "catalog:",
     "@radix-ui/react-alert-dialog": "catalog:",
     "@radix-ui/react-avatar": "catalog:",
     "@radix-ui/react-checkbox": "catalog:",
@@ -77,6 +79,7 @@
     "@trpc/tanstack-react-query": "catalog:"
   },
   "devDependencies": {
+    "tailwindcss": "catalog:",
     "@tsdown/css": "catalog:",
     "@m5kdev/backend": "workspace:*",
     "@m5kdev/config": "workspace:*",

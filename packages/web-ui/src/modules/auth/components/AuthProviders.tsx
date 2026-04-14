@@ -35,7 +35,7 @@ export function AuthProviders({
           <LastUsedBadge lastMethod={lastMethod} method="google">
             <Button
               type="button"
-              variant="bordered"
+              variant="outline"
               className="w-full gap-2"
               onPress={() => {
                 authClient.signIn
@@ -56,7 +56,7 @@ export function AuthProviders({
           <LastUsedBadge lastMethod={lastMethod} method="linkedin">
             <Button
               type="button"
-              variant="bordered"
+              variant="outline"
               className="w-full"
               onPress={() => {
                 authClient.signIn
@@ -77,7 +77,7 @@ export function AuthProviders({
           <LastUsedBadge lastMethod={lastMethod} method="microsoft">
             <Button
               type="button"
-              variant="bordered"
+              variant="outline"
               className="w-full"
               onPress={() => {
                 authClient.signIn

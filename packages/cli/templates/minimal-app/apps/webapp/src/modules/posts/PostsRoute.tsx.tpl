@@ -13,19 +13,14 @@ import type {
 import {
   Button,
   Card,
-  CardBody,
-  CardHeader,
   Chip,
   Input,
+  Label,
+  ListBox,
   Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
   Select,
-  SelectItem,
   Skeleton,
-  Textarea,
+  TextArea,
 } from "@heroui/react";
 import { useDialog } from "@m5kdev/web-ui/components/DialogProvider";
 import { type UseQueryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -45,6 +40,7 @@ import {
   startTransition,
   useDeferredValue,
   useEffect,
+  useId,
   useMemo,
   useState,
 } from "react";
@@ -86,6 +82,13 @@ export function PostsRoute() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const showDialog = useDialog();
+
+  const editorTitleId = useId();
+  const editorSlugId = useId();
+  const editorExcerptId = useId();
+  const editorContentId = useId();
+  const searchFieldId = useId();
+  const statusFieldId = useId();
 
   const [search, setSearch] = useQueryState("search", parseAsString.withDefault(""));
   const [status, setStatus] = useQueryState<PostStatusFilter>("status", STATUS_PARSER);
@@ -266,14 +269,16 @@ export function PostsRoute() {
           <p className="mt-4 max-w-2xl text-sm leading-7 text-muted-ink">{t("posts.hero.body")}</p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button
-              radius="full"
-              color="primary"
-              startContent={<PlusIcon className="h-4 w-4" />}
+              className="rounded-full"
+              variant="primary"
               onPress={openCreate}
             >
-              {t("posts.hero.new")}
+              <span className="inline-flex items-center gap-2">
+                <PlusIcon className="h-4 w-4" />
+                {t("posts.hero.new")}
+              </span>
             </Button>
-            <Chip radius="full" variant="flat" color="secondary">
+            <Chip className="rounded-full" variant="soft" color="default">
               {isFetching ? t("posts.hero.syncing") : t("posts.hero.synced")}
             </Chip>
           </div>
@@ -286,38 +291,72 @@ export function PostsRoute() {
             <StatCard label={t("posts.stats.drafts")} value={stats.drafts} accent="stone" />
           </div>
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
-            <Input
-              aria-label={t("posts.filters.searchLabel")}
-              radius="lg"
-              variant="bordered"
-              label={t("posts.filters.searchLabel")}
-              placeholder={t("posts.filters.searchPlaceholder")}
-              value={search}
-              onValueChange={(value) => {
-                startTransition(() => {
-                  void setSearch(value || null);
-                  void setPage(1);
-                });
-              }}
-            />
-            <Select
-              aria-label={t("posts.filters.statusLabel")}
-              label={t("posts.filters.statusLabel")}
-              radius="lg"
-              variant="bordered"
-              selectedKeys={[status]}
-              onSelectionChange={(keys) => {
-                const nextValue = Array.from(keys)[0] as PostStatusFilter | undefined;
-                startTransition(() => {
-                  void setStatus(nextValue ?? "all");
-                  void setPage(1);
-                });
-              }}
-            >
-              <SelectItem key="all">{t("posts.filters.all")}</SelectItem>
-              <SelectItem key="draft">{t("posts.filters.draft")}</SelectItem>
-              <SelectItem key="published">{t("posts.filters.published")}</SelectItem>
-            </Select>
+            <div className="grid gap-2">
+              <Label className="text-sm font-medium" htmlFor={searchFieldId}>
+                {t("posts.filters.searchLabel")}
+              </Label>
+              <Input
+                id={searchFieldId}
+                aria-label={t("posts.filters.searchLabel")}
+                className="rounded-lg"
+                variant="secondary"
+                placeholder={t("posts.filters.searchPlaceholder")}
+                value={search}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  startTransition(() => {
+                    void setSearch(value || null);
+                    void setPage(1);
+                  });
+                }}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label className="text-sm font-medium" htmlFor={statusFieldId}>
+                {t("posts.filters.statusLabel")}
+              </Label>
+              <Select
+                aria-label={t("posts.filters.statusLabel")}
+                className="w-full"
+                variant="secondary"
+                selectedKey={status}
+                onSelectionChange={(key) => {
+                  if (key === null) {
+                    return;
+                  }
+                  const nextValue = String(key) as PostStatusFilter;
+                  startTransition(() => {
+                    void setStatus(nextValue);
+                    void setPage(1);
+                  });
+                }}
+              >
+                <Select.Trigger id={statusFieldId} className="rounded-lg w-full">
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    <ListBox.Item className="text-sm" id="all" textValue={t("posts.filters.all")}>
+                      {t("posts.filters.all")}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                    <ListBox.Item className="text-sm" id="draft" textValue={t("posts.filters.draft")}>
+                      {t("posts.filters.draft")}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                    <ListBox.Item
+                      className="text-sm"
+                      id="published"
+                      textValue={t("posts.filters.published")}
+                    >
+                      {t("posts.filters.published")}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            </div>
           </div>
         </div>
       </section>
@@ -326,14 +365,14 @@ export function PostsRoute() {
         <section className="grid gap-4">
           {isLoading ? (
             <>
-              <Skeleton className="h-44 rounded-[28px]" />
-              <Skeleton className="h-44 rounded-[28px]" />
-              <Skeleton className="h-44 rounded-[28px]" />
+              <Skeleton className="h-44 rounded-[28px]" animationType="pulse" />
+              <Skeleton className="h-44 rounded-[28px]" animationType="pulse" />
+              <Skeleton className="h-44 rounded-[28px]" animationType="pulse" />
             </>
           ) : rows.length === 0 ? (
             <Card className="rounded-[30px] border border-dashed border-amber-300/70 bg-panel shadow-[0_18px_40px_rgba(81,50,24,0.1)]">
-              <CardBody className="items-start gap-4 px-6 py-10">
-                <Chip color="secondary" variant="flat">
+              <Card.Content className="flex flex-col items-start gap-4 px-6 py-10">
+                <Chip color="default" variant="soft">
                   {t("posts.empty.eyebrow")}
                 </Chip>
                 <div>
@@ -342,10 +381,10 @@ export function PostsRoute() {
                     {t("posts.empty.body")}
                   </p>
                 </div>
-                <Button color="primary" radius="full" onPress={openCreate}>
+                <Button className="rounded-full" variant="primary" onPress={openCreate}>
                   {t("posts.empty.action")}
                 </Button>
-              </CardBody>
+              </Card.Content>
             </Card>
           ) : (
             rows.map((row) => {
@@ -358,21 +397,33 @@ export function PostsRoute() {
               return (
                 <Card
                   key={row.id}
-                  isPressable
-                  onPress={() => setSelectedPostId(row.id)}
+                  role="button"
+                  tabIndex={0}
+                  onClick={(event) => {
+                    if ((event.target as HTMLElement).closest("button")) {
+                      return;
+                    }
+                    setSelectedPostId(row.id);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedPostId(row.id);
+                    }
+                  }}
                   className={
                     isSelected
-                      ? "rounded-[30px] border border-emerald-300 bg-emerald-950 text-emerald-50 shadow-[0_20px_44px_rgba(31,79,70,0.24)]"
-                      : "rounded-[30px] border border-white/70 bg-panel shadow-[0_18px_40px_rgba(81,50,24,0.1)]"
+                      ? "cursor-pointer rounded-[30px] border border-emerald-300 bg-emerald-950 text-emerald-50 shadow-[0_20px_44px_rgba(31,79,70,0.24)]"
+                      : "cursor-pointer rounded-[30px] border border-white/70 bg-panel shadow-[0_18px_40px_rgba(81,50,24,0.1)]"
                   }
                 >
-                  <CardHeader className="flex items-start justify-between gap-4 px-5 pt-5">
+                  <Card.Header className="flex items-start justify-between gap-4 px-5 pt-5">
                     <div className="space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <Chip
                           size="sm"
-                          color={row.status === "published" ? "success" : "secondary"}
-                          variant={isSelected ? "solid" : "flat"}
+                          color={row.status === "published" ? "success" : "default"}
+                          variant={isSelected ? "primary" : "soft"}
                         >
                           {row.status === "published"
                             ? t("posts.filters.published")
@@ -397,16 +448,13 @@ export function PostsRoute() {
                     </div>
                     <Button
                       isIconOnly
-                      radius="full"
-                      variant={isSelected ? "solid" : "flat"}
-                      className={
-                        isSelected ? "bg-emerald-100 text-emerald-950" : "bg-white/80 text-ink"
-                      }
+                      className={`rounded-full ${isSelected ? "bg-emerald-100 text-emerald-950" : "bg-white/80 text-ink"}`}
+                      variant={isSelected ? "secondary" : "ghost"}
                     >
                       <EyeIcon className="h-4 w-4" />
                     </Button>
-                  </CardHeader>
-                  <CardBody className="gap-4 px-5 pb-5">
+                  </Card.Header>
+                  <Card.Content className="flex flex-col gap-4 px-5 pb-5">
                     <div className="flex flex-wrap items-center gap-3 text-sm">
                       <span className={isSelected ? "text-emerald-100/80" : "text-muted-ink"}>
                         {t("posts.meta.updated")}: {formatDate(row.updatedAt ?? row.createdAt)}
@@ -419,38 +467,41 @@ export function PostsRoute() {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button
-                        radius="full"
-                        variant={isSelected ? "solid" : "flat"}
-                        className={isSelected ? "bg-emerald-100 text-emerald-950" : ""}
-                        startContent={<PencilLineIcon className="h-4 w-4" />}
+                        className={`rounded-full ${isSelected ? "bg-emerald-100 text-emerald-950" : ""}`}
+                        variant={isSelected ? "secondary" : "ghost"}
                         onPress={() => openEdit(row)}
                       >
-                        {t("posts.actions.edit")}
+                        <span className="inline-flex items-center gap-2">
+                          <PencilLineIcon className="h-4 w-4" />
+                          {t("posts.actions.edit")}
+                        </span>
                       </Button>
                       {row.status === "draft" ? (
                         <Button
-                          radius="full"
-                          color="secondary"
-                          variant={isSelected ? "solid" : "flat"}
-                          isLoading={isPublishing}
-                          startContent={<SendHorizontalIcon className="h-4 w-4" />}
+                          className="rounded-full"
+                          variant="secondary"
+                          isPending={isPublishing}
                           onPress={() => void onPublish(row.id)}
                         >
-                          {t("posts.actions.publish")}
+                          <span className="inline-flex items-center gap-2">
+                            <SendHorizontalIcon className="h-4 w-4" />
+                            {t("posts.actions.publish")}
+                          </span>
                         </Button>
                       ) : null}
                       <Button
-                        radius="full"
-                        color="danger"
-                        variant="flat"
-                        isLoading={isDeleting}
-                        startContent={<Trash2Icon className="h-4 w-4" />}
+                        className="rounded-full"
+                        variant="danger"
+                        isPending={isDeleting}
                         onPress={() => onDelete(row.id)}
                       >
-                        {t("posts.actions.delete")}
+                        <span className="inline-flex items-center gap-2">
+                          <Trash2Icon className="h-4 w-4" />
+                          {t("posts.actions.delete")}
+                        </span>
                       </Button>
                     </div>
-                  </CardBody>
+                  </Card.Content>
                 </Card>
               );
             })
@@ -466,30 +517,34 @@ export function PostsRoute() {
               </p>
               <div className="flex items-center gap-2">
                 <Button
-                  radius="full"
-                  variant="flat"
+                  className="rounded-full"
+                  variant="ghost"
                   isDisabled={page <= 1}
-                  startContent={<ArrowLeftIcon className="h-4 w-4" />}
                   onPress={() => {
                     startTransition(() => {
                       void setPage(Math.max(1, page - 1));
                     });
                   }}
                 >
-                  {t("posts.pagination.previous")}
+                  <span className="inline-flex items-center gap-2">
+                    <ArrowLeftIcon className="h-4 w-4" />
+                    {t("posts.pagination.previous")}
+                  </span>
                 </Button>
                 <Button
-                  radius="full"
-                  variant="flat"
+                  className="rounded-full"
+                  variant="ghost"
                   isDisabled={page >= pageCount}
-                  endContent={<ArrowRightIcon className="h-4 w-4" />}
                   onPress={() => {
                     startTransition(() => {
                       void setPage(Math.min(pageCount, page + 1));
                     });
                   }}
                 >
-                  {t("posts.pagination.next")}
+                  <span className="inline-flex items-center gap-2">
+                    {t("posts.pagination.next")}
+                    <ArrowRightIcon className="h-4 w-4" />
+                  </span>
                 </Button>
               </div>
             </div>
@@ -498,7 +553,7 @@ export function PostsRoute() {
 
         <aside className="sticky top-6 h-fit">
           <Card className="rounded-[30px] border border-white/70 bg-panel shadow-[0_20px_44px_rgba(81,50,24,0.1)]">
-            <CardHeader className="items-start justify-between px-5 pt-5">
+            <Card.Header className="flex items-start justify-between px-5 pt-5">
               <div>
                 <p className="text-[0.68rem] font-semibold uppercase tracking-[0.28em] text-amber-700/80">
                   {t("posts.preview.eyebrow")}
@@ -509,26 +564,26 @@ export function PostsRoute() {
               </div>
               {selectedPost ? (
                 <Chip
-                  color={selectedPost.status === "published" ? "success" : "secondary"}
-                  variant="flat"
+                  color={selectedPost.status === "published" ? "success" : "default"}
+                  variant="soft"
                 >
                   {selectedPost.status === "published"
                     ? t("posts.filters.published")
                     : t("posts.filters.draft")}
                 </Chip>
               ) : null}
-            </CardHeader>
-            <CardBody className="gap-5 px-5 pb-5">
+            </Card.Header>
+            <Card.Content className="flex flex-col gap-5 px-5 pb-5">
               {selectedPost ? (
                 <>
                   <div className="rounded-[26px] border border-amber-200/70 bg-amber-50/80 p-4">
                     <p className="text-sm leading-7 text-ink/80">{selectedPost.excerpt}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Chip variant="flat" color="secondary">
+                    <Chip variant="soft" color="default">
                       {getReadingTime(selectedPost.content)}
                     </Chip>
-                    <Chip variant="flat">
+                    <Chip variant="soft">
                       {t("posts.preview.updated")}:{" "}
                       {formatDate(selectedPost.updatedAt ?? selectedPost.createdAt)}
                     </Chip>
@@ -537,12 +592,14 @@ export function PostsRoute() {
                     <p>{selectedPost.content}</p>
                   </div>
                   <Button
-                    radius="full"
-                    variant="flat"
-                    startContent={<FilePenLineIcon className="h-4 w-4" />}
+                    className="rounded-full"
+                    variant="ghost"
                     onPress={() => openEdit(selectedPost)}
                   >
-                    {t("posts.preview.openEditor")}
+                    <span className="inline-flex items-center gap-2">
+                      <FilePenLineIcon className="h-4 w-4" />
+                      {t("posts.preview.openEditor")}
+                    </span>
                   </Button>
                 </>
               ) : (
@@ -550,76 +607,117 @@ export function PostsRoute() {
                   {t("posts.preview.emptyBody")}
                 </div>
               )}
-            </CardBody>
+            </Card.Content>
           </Card>
         </aside>
       </div>
 
       <Modal
         isOpen={isEditorOpen}
-        onOpenChange={setIsEditorOpen}
-        size="4xl"
-        scrollBehavior="inside"
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsEditorOpen(false);
+          }
+        }}
       >
-        <ModalContent>
-          <form onSubmit={onSubmit}>
-            <ModalHeader className="flex flex-col gap-2">
-              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.28em] text-amber-700/80">
-                {editorState.id ? t("posts.editor.editEyebrow") : t("posts.editor.newEyebrow")}
-              </p>
-              <h3 className="font-editorial text-4xl leading-none text-ink">
-                {editorState.id ? t("posts.editor.editTitle") : t("posts.editor.newTitle")}
-              </h3>
-            </ModalHeader>
-            <ModalBody className="grid gap-4 pb-2">
-              <Input
-                label={t("posts.editor.fields.title")}
-                radius="lg"
-                variant="bordered"
-                value={editorState.title}
-                onValueChange={(value) => setEditorState((state) => ({ ...state, title: value }))}
-                isRequired
-              />
-              <Input
-                label={t("posts.editor.fields.slug")}
-                radius="lg"
-                variant="bordered"
-                value={editorState.slug}
-                onValueChange={(value) => setEditorState((state) => ({ ...state, slug: value }))}
-              />
-              <Textarea
-                label={t("posts.editor.fields.excerpt")}
-                radius="lg"
-                variant="bordered"
-                minRows={3}
-                value={editorState.excerpt}
-                onValueChange={(value) => setEditorState((state) => ({ ...state, excerpt: value }))}
-              />
-              <Textarea
-                label={t("posts.editor.fields.content")}
-                radius="lg"
-                variant="bordered"
-                minRows={10}
-                value={editorState.content}
-                onValueChange={(value) => setEditorState((state) => ({ ...state, content: value }))}
-                isRequired
-              />
-            </ModalBody>
-            <ModalFooter>
-              <Button radius="full" variant="light" onPress={() => setIsEditorOpen(false)}>
-                {t("posts.editor.cancel")}
-              </Button>
-              <Button
-                radius="full"
-                color="primary"
-                type="submit"
-                isLoading={createMutation.isPending || updateMutation.isPending}
-              >
-                {editorState.id ? t("posts.editor.save") : t("posts.editor.create")}
-              </Button>
-            </ModalFooter>
-          </form>
-        </ModalContent>
+        <Modal.Backdrop />
+        <Modal.Container scroll="inside" size="lg" className="max-w-5xl">
+          <Modal.Dialog>
+            <form
+              className="contents"
+              onSubmit={onSubmit}
+            >
+              <Modal.Header className="flex flex-col gap-2 px-6 pt-6">
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.28em] text-amber-700/80">
+                  {editorState.id ? t("posts.editor.editEyebrow") : t("posts.editor.newEyebrow")}
+                </p>
+                <Modal.Heading className="font-editorial text-4xl leading-none text-ink">
+                  {editorState.id ? t("posts.editor.editTitle") : t("posts.editor.newTitle")}
+                </Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="grid gap-4 px-6 pb-2">
+                <div className="grid gap-2">
+                  <Label className="text-sm font-medium" htmlFor={editorTitleId}>
+                    {t("posts.editor.fields.title")}
+                  </Label>
+                  <Input
+                    id={editorTitleId}
+                    className="rounded-lg"
+                    variant="secondary"
+                    value={editorState.title}
+                    onChange={(event) =>
+                      setEditorState((state) => ({ ...state, title: event.target.value }))
+                    }
+                    isRequired
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-sm font-medium" htmlFor={editorSlugId}>
+                    {t("posts.editor.fields.slug")}
+                  </Label>
+                  <Input
+                    id={editorSlugId}
+                    className="rounded-lg"
+                    variant="secondary"
+                    value={editorState.slug}
+                    onChange={(event) =>
+                      setEditorState((state) => ({ ...state, slug: event.target.value }))
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-sm font-medium" htmlFor={editorExcerptId}>
+                    {t("posts.editor.fields.excerpt")}
+                  </Label>
+                  <TextArea
+                    id={editorExcerptId}
+                    className="rounded-lg min-h-[5.5rem]"
+                    variant="secondary"
+                    rows={3}
+                    value={editorState.excerpt}
+                    onChange={(event) =>
+                      setEditorState((state) => ({ ...state, excerpt: event.target.value }))
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-sm font-medium" htmlFor={editorContentId}>
+                    {t("posts.editor.fields.content")}
+                  </Label>
+                  <TextArea
+                    id={editorContentId}
+                    className="rounded-lg min-h-[12rem]"
+                    variant="secondary"
+                    rows={10}
+                    value={editorState.content}
+                    onChange={(event) =>
+                      setEditorState((state) => ({ ...state, content: event.target.value }))
+                    }
+                    isRequired
+                  />
+                </div>
+              </Modal.Body>
+              <Modal.Footer className="px-6 pb-6">
+                <Button
+                  className="rounded-full"
+                  variant="tertiary"
+                  type="button"
+                  onPress={() => setIsEditorOpen(false)}
+                >
+                  {t("posts.editor.cancel")}
+                </Button>
+                <Button
+                  className="rounded-full"
+                  variant="primary"
+                  type="submit"
+                  isPending={createMutation.isPending || updateMutation.isPending}
+                >
+                  {editorState.id ? t("posts.editor.save") : t("posts.editor.create")}
+                </Button>
+              </Modal.Footer>
+            </form>
+          </Modal.Dialog>
+        </Modal.Container>
       </Modal>
     </div>
   );

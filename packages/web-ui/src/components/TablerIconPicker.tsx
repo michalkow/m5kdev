@@ -1,29 +1,4 @@
-import { Select, SelectItem, type SelectProps } from "@heroui/react";
-
-export function TablerIconPicker({
-  value,
-  onSelectionChange,
-  isVirtualized = true,
-  ...props
-}: Omit<SelectProps, "children">) {
-  return (
-    <Select
-      {...props}
-      items={tiIcons.map((icon) => ({ key: icon, value: icon }))}
-      renderValue={(items) =>
-        items.map((item) => <i className={`ti ${item.data?.value} text-2xl`} />)
-      }
-    >
-      {(icon) => (
-        <SelectItem hideSelectedIcon key={icon.key} textValue={icon.value}>
-          <span className="flex justify-center items-center">
-            <i className={`ti ${icon.value} text-2xl`} />
-          </span>
-        </SelectItem>
-      )}
-    </Select>
-  );
-}
+import { ListBox, Select, type SelectRootProps } from "@heroui/react";
 
 const tiIcons = [
   "ti-123",
@@ -4258,3 +4233,54 @@ const tiIcons = [
   "ti-zzz",
   "ti-zzz-off",
 ];
+
+const TABLER_ICON_ITEMS = tiIcons.map((icon) => ({ id: icon, textValue: icon }));
+
+export function TablerIconPicker({
+  value,
+  onSelectionChange,
+  isVirtualized: _isVirtualized,
+  ...props
+}: Omit<
+  SelectRootProps<{ id: string; textValue: string }, "single">,
+  "children" | "items" | "onChange" | "validate"
+> & {
+  isVirtualized?: boolean;
+}) {
+  return (
+    <Select
+      {...props}
+      items={TABLER_ICON_ITEMS as Iterable<{ id: string; textValue: string }>}
+      selectedKey={value ?? undefined}
+      onSelectionChange={(key) => {
+        if (key === null) return;
+        onSelectionChange?.(key);
+      }}
+    >
+      <Select.Trigger>
+        <Select.Value>
+          {value ? (
+            <span className="flex items-center justify-center">
+              <i className={`ti ${String(value)} text-2xl`} />
+            </span>
+          ) : null}
+        </Select.Value>
+        <Select.Indicator />
+      </Select.Trigger>
+      <Select.Popover>
+        <ListBox>
+          {(item: { id: string; textValue: string }) => (
+            <ListBox.Item
+              className="flex justify-center items-center"
+              id={item.id}
+              textValue={item.textValue}
+            >
+              <i className={`ti ${item.id} text-2xl`} />
+              <ListBox.ItemIndicator />
+            </ListBox.Item>
+          )}
+        </ListBox>
+      </Select.Popover>
+    </Select>
+  );
+}

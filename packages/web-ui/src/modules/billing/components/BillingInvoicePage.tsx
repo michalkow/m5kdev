@@ -1,21 +1,9 @@
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  Chip,
-  Link,
-  Spinner,
-  Table,
-  TableBody,
-  TableCell,
-  TableColumn,
-  TableHeader,
-  TableRow,
-} from "@heroui/react";
+import { Button, Card, Chip, Spinner, Table } from "@heroui/react";
 import { useSubscription } from "@m5kdev/frontend/modules/billing/hooks/useSubscription";
+import { cn } from "@m5kdev/web-ui/utils";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, ExternalLink } from "lucide-react";
+import { Link } from "react-router";
 
 import type { UseBackendTRPC } from "../../../types";
 
@@ -46,14 +34,16 @@ export function BillingInvoicePage({ useTRPC, serverUrl }: BillingInvoicePagePro
   };
 
   const cancelAt = activeSubscription?.cancelAt || activeSubscription?.cancelAtPeriodEnd;
+  const invoiceRows = invoices ?? [];
+
   return (
     <div className="container mx-auto p-10 space-y-8">
       <Card>
-        <CardHeader className="flex flex-col items-start gap-1 px-6 pt-6">
+        <Card.Header className="flex flex-col items-start gap-1 px-6 pt-6">
           <h1 className="text-xl font-bold">Active Subscription</h1>
           <p className="text-small text-default-500">Manage your active subscription.</p>
-        </CardHeader>
-        <CardBody className="px-6 pb-6">
+        </Card.Header>
+        <Card.Content className="px-6 pb-6">
           {isLoadingSubscriptions ? (
             <div className="flex justify-center py-8">
               <Spinner />
@@ -69,9 +59,15 @@ export function BillingInvoicePage({ useTRPC, serverUrl }: BillingInvoicePagePro
                   You are currently on the free tier. Upgrade to access premium features.
                 </p>
               </div>
-              <Button as={Link} href="/pricing" color="primary">
+              <Link
+                to="/pricing"
+                className={cn(
+                  "inline-flex h-10 items-center justify-center rounded-md px-4 text-sm font-medium",
+                  "bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+                )}
+              >
                 View Plans
-              </Button>
+              </Link>
             </div>
           ) : (
             <div className="space-y-6">
@@ -90,10 +86,11 @@ export function BillingInvoicePage({ useTRPC, serverUrl }: BillingInvoicePagePro
                             ? "success"
                             : "warning"
                       }
-                      variant="flat"
+                      variant="soft"
                       size="sm"
-                      startContent={<CheckCircle2 className="w-3 h-3 ml-1" />}
+                      className="inline-flex items-center gap-1 capitalize"
                     >
+                      <CheckCircle2 className="w-3 h-3" />
                       {cancelAt ? "Cancelled" : activeSubscription.status}
                     </Chip>
                   </div>
@@ -110,70 +107,83 @@ export function BillingInvoicePage({ useTRPC, serverUrl }: BillingInvoicePagePro
                   </p>
                 </div>
                 <div className="flex gap-3">
-                  <Button variant="bordered" as="a" href={`${serverUrl}/stripe/portal`}>
+                  <Button
+                    variant="outline"
+                    onPress={() => {
+                      window.location.assign(`${serverUrl}/stripe/portal`);
+                    }}
+                  >
                     Manage Subscription
                   </Button>
                 </div>
               </div>
             </div>
           )}
-        </CardBody>
+        </Card.Content>
       </Card>
       <Card>
-        <CardHeader className="flex flex-col items-start gap-1 px-6 pt-6">
+        <Card.Header className="flex flex-col items-start gap-1 px-6 pt-6">
           <h1 className="text-xl font-bold">Invoices</h1>
           <p className="text-small text-default-500">
             View your invoice history and download past invoices.
           </p>
-        </CardHeader>
-        <CardBody className="px-6 pb-6">
+        </Card.Header>
+        <Card.Content className="px-6 pb-6">
           {isLoading ? (
             <div className="flex justify-center py-8">
               <Spinner />
             </div>
+          ) : invoiceRows.length === 0 ? (
+            <div className="py-10 text-center text-sm text-default-500">No invoices found.</div>
           ) : (
-            <Table aria-label="Invoices table" removeWrapper>
-              <TableHeader>
-                <TableColumn>Date</TableColumn>
-                <TableColumn>Amount</TableColumn>
-                <TableColumn>Status</TableColumn>
-                <TableColumn align="end">Action</TableColumn>
-              </TableHeader>
-              <TableBody emptyContent="No invoices found.">
-                {(invoices || []).map((invoice) => (
-                  <TableRow key={invoice.id}>
-                    <TableCell>{formatDate(invoice.created)}</TableCell>
-                    <TableCell>{formatCurrency(invoice.total, invoice.currency)}</TableCell>
-                    <TableCell>
-                      <Chip
-                        color={invoice.status === "paid" ? "success" : "default"}
-                        variant="flat"
-                        size="sm"
-                      >
-                        {invoice.status}
-                      </Chip>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {invoice.hosted_invoice_url && (
-                        <Button
-                          as={Link}
-                          href={invoice.hosted_invoice_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          variant="light"
-                          size="sm"
-                          endContent={<ExternalLink className="h-4 w-4" />}
-                        >
-                          View
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
+            <Table aria-label="Invoices table">
+              <Table.ScrollContainer>
+                <Table.Content>
+                  <Table.Header>
+                    <Table.Column>Date</Table.Column>
+                    <Table.Column>Amount</Table.Column>
+                    <Table.Column>Status</Table.Column>
+                    <Table.Column className="text-right">Action</Table.Column>
+                  </Table.Header>
+                  <Table.Body items={invoiceRows}>
+                    {(invoice) => (
+                      <Table.Row id={invoice.id}>
+                        <Table.Cell>{formatDate(invoice.created)}</Table.Cell>
+                        <Table.Cell>{formatCurrency(invoice.total, invoice.currency)}</Table.Cell>
+                        <Table.Cell>
+                          <Chip
+                            color={invoice.status === "paid" ? "success" : "default"}
+                            variant="soft"
+                            size="sm"
+                            className="capitalize"
+                          >
+                            {invoice.status}
+                          </Chip>
+                        </Table.Cell>
+                        <Table.Cell className="text-right">
+                          {invoice.hosted_invoice_url ? (
+                            <a
+                              href={invoice.hosted_invoice_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={cn(
+                                "inline-flex items-center gap-1 text-sm font-medium text-primary",
+                                "underline-offset-4 hover:underline"
+                              )}
+                            >
+                              View
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          ) : null}
+                        </Table.Cell>
+                      </Table.Row>
+                    )}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
             </Table>
           )}
-        </CardBody>
+        </Card.Content>
       </Card>
     </div>
   );

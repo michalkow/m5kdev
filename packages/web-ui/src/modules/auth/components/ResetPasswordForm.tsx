@@ -1,4 +1,4 @@
-import { Button, Card, CardBody, CardHeader, Input } from "@heroui/react";
+import { Button, Card, Input, Label } from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { type SubmitHandler, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
@@ -48,20 +48,22 @@ export function ResetPasswordForm() {
   return (
     <div className="flex flex-col gap-6">
       <Card>
-        <CardHeader className="text-center flex flex-col gap-1">
+        <Card.Header className="text-center flex flex-col gap-1">
           <h2 className="text-xl font-semibold">{t("web-ui:auth.resetPassword.title")}</h2>
           <p className="text-sm text-default-600">{t("web-ui:auth.resetPassword.description")}</p>
-        </CardHeader>
-        <CardBody className="gap-6">
+        </Card.Header>
+        <Card.Content className="gap-6">
           <form onSubmit={handleSubmit(onSubmit)} className="grid gap-6">
             <div className="grid gap-2">
+              <Label className="text-sm font-medium" htmlFor="reset-password-new">
+                {t("web-ui:auth.resetPassword.newPassword")}
+              </Label>
               <Input
-                labelPlacement="outside"
-                label={t("web-ui:auth.resetPassword.newPassword")}
+                id="reset-password-new"
                 placeholder={t("web-ui:auth.resetPassword.newPassword")}
                 type="password"
-                variant="bordered"
-                isRequired
+                variant="secondary"
+                required
                 {...register("password", {
                   required: t("web-ui:auth.resetPassword.passwordRequired"),
                 })}
@@ -71,13 +73,15 @@ export function ResetPasswordForm() {
               )}
             </div>
             <div className="grid gap-2">
+              <Label className="text-sm font-medium" htmlFor="reset-password-confirm">
+                {t("web-ui:auth.resetPassword.confirmPassword")}
+              </Label>
               <Input
-                labelPlacement="outside"
-                label={t("web-ui:auth.resetPassword.confirmPassword")}
+                id="reset-password-confirm"
                 placeholder={t("web-ui:auth.resetPassword.confirmPassword")}
                 type="password"
-                variant="bordered"
-                isRequired
+                variant="secondary"
+                required
                 {...register("confirmPassword", {
                   required: t("web-ui:auth.resetPassword.confirmPasswordRequired"),
                 })}
@@ -86,11 +90,11 @@ export function ResetPasswordForm() {
                 <span className="text-red-500 text-xs">{errors.confirmPassword.message}</span>
               )}
             </div>
-            <Button type="submit" className="w-full" color="primary">
+            <Button type="submit" className="w-full" variant="primary">
               {t("web-ui:auth.resetPassword.button")}
             </Button>
           </form>
-        </CardBody>
+        </Card.Content>
       </Card>
       <div className="text-center text-xs text-muted-foreground">
         {t("web-ui:auth.forgotPassword.rememberPassword")}{" "}

@@ -1,10 +1,6 @@
-import {
-  DateRangePicker,
-  type DateValue,
-  type RangeValue,
-  Select,
-  SelectItem,
-} from "@heroui/react";
+import type { DateValue } from "@react-types/calendar";
+import type { RangeValue } from "@react-types/shared";
+import { ListBox, Select } from "@heroui/react";
 import { CalendarDate, getLocalTimeZone, today } from "@internationalized/date";
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import { useNuqsQueryParams } from "@m5kdev/frontend/modules/table/hooks/useNuqsQueryParams";
@@ -16,6 +12,7 @@ import {
 import { DateTime } from "luxon";
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { FilterHeroDateRangePicker } from "../../table/components/FilterHeroDateControls";
 
 type QuickRangeKey =
   | "today"
@@ -334,22 +331,15 @@ export const RangeNuqsDatePicker = ({
           {dateRangeLabel ??
             t(`${translationNamespace}:reports.dateRange`, { defaultValue: "Date range" })}
         </span>
-        <DateRangePicker
-          aria-label="Date range"
-          value={(localRange as any) ?? undefined}
-          onChange={setLocalRange}
+        <FilterHeroDateRangePicker
+          className="w-[300px]"
+          maxValue={today(getLocalTimeZone()) as unknown as DateValue}
+          value={(localRange as RangeValue<DateValue> | null | undefined) ?? null}
+          onChange={(next: RangeValue<DateValue> | null) => setLocalRange(next ?? undefined)}
           onBlur={() => {
             if (localRange !== undefined) {
               handleDateRangeChange(localRange);
             }
-          }}
-          className="w-[300px]"
-          granularity="day"
-          showMonthAndYearPickers
-          maxValue={today(getLocalTimeZone()) as unknown as DateValue}
-          popoverProps={{
-            portalContainer: document.body,
-            disableAnimation: true,
           }}
         />
       </div>
@@ -362,16 +352,27 @@ export const RangeNuqsDatePicker = ({
               })}
           </span>
           <Select
-            selectedKeys={quickRange ? [quickRange] : []}
-            onChange={(e) => handleQuickRangeChange((e.target.value as QuickRangeKey) ?? null)}
+            aria-label="Quick range"
             className="w-[300px]"
-            popoverProps={{
-              portalContainer: document.body,
-            }}
+            selectedKey={quickRange ?? undefined}
+            onSelectionChange={(key) =>
+              handleQuickRangeChange(key == null ? null : (key as QuickRangeKey))
+            }
           >
-            {quickRangeOptions.map((option) => (
-              <SelectItem key={option.key}>{option.label}</SelectItem>
-            ))}
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {quickRangeOptions.map((option) => (
+                  <ListBox.Item key={option.key} id={option.key} textValue={option.label}>
+                    {option.label}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
           </Select>
         </div>
       )}

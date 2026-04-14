@@ -1,4 +1,4 @@
-import { Button, Card, CardBody, CardHeader, Input } from "@heroui/react";
+import {Button, Card, Input} from "@heroui/react";
 
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
@@ -52,11 +52,11 @@ export function ProfileRoute() {
   return (
     <div className="container py-10 px-4">
       <Card>
-        <CardHeader className="flex flex-col gap-1">
+        <Card.Header className="flex flex-col gap-1">
           <p className="text-xl font-semibold">{t("web-ui:profile.settings.title")}</p>
           <p className="text-sm text-default-600">{t("web-ui:profile.settings.description")}</p>
-        </CardHeader>
-        <CardBody>
+        </Card.Header>
+        <Card.Content>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <div className="flex justify-center">
@@ -97,7 +97,7 @@ export function ProfileRoute() {
               <Button type="submit">Save Changes</Button>
             </form>
           </Form>
-        </CardBody>
+        </Card.Content>
       </Card>
     </div>
   );

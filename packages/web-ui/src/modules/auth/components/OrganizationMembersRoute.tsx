@@ -1,19 +1,14 @@
+import type { Key } from "@react-types/shared";
 import {
   Button,
   Card,
-  CardBody,
-  CardHeader,
   Chip,
   Input,
+  Label,
+  ListBox,
   Select,
-  SelectItem,
   Spinner,
   Table,
-  TableBody,
-  TableCell,
-  TableColumn,
-  TableHeader,
-  TableRow,
 } from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
@@ -135,8 +130,8 @@ function OrganizationStateCard({ title, message }: { title: string; message: str
   return (
     <div className="p-6">
       <Card>
-        <CardHeader className="text-lg font-semibold">{title}</CardHeader>
-        <CardBody>{message}</CardBody>
+        <Card.Header className="text-lg font-semibold">{title}</Card.Header>
+        <Card.Content>{message}</Card.Content>
       </Card>
     </div>
   );
@@ -579,7 +574,7 @@ export function OrganizationMembersRoute({
   return (
     <div className="p-6 space-y-6">
       <Card>
-        <CardHeader className="flex items-center justify-between">
+        <Card.Header className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             <div className="flex flex-col">
@@ -591,139 +586,177 @@ export function OrganizationMembersRoute({
               </p>
             </div>
           </div>
-          <Chip variant="flat" color="primary">
+          <Chip variant="soft" color="accent">
             {getRoleLabel(activeOrganizationRole || "member")}
           </Chip>
-        </CardHeader>
-        <CardBody className="space-y-4">
+        </Card.Header>
+        <Card.Content className="space-y-4">
           <div className="grid gap-3 md:grid-cols-[1fr_160px_auto]">
-            <Input
-              type="email"
-              label={resolvedLabels.emailLabel}
-              value={inviteEmail}
-              onValueChange={setInviteEmail}
-              placeholder={resolvedLabels.emailPlaceholder}
-            />
-            <Select
-              label={resolvedLabels.roleLabel}
-              selectedKeys={[inviteRole]}
-              disallowEmptySelection
-              onSelectionChange={(keys) => {
-                const role = Array.from(keys as Set<string>)[0];
-                if (role && isOrganizationRole(role) && resolvedAssignableRoles.includes(role)) {
-                  setInviteRole(role);
-                }
-              }}
-            >
-              {resolvedAssignableRoles.map((role) => (
-                <SelectItem key={role}>{getRoleLabel(role)}</SelectItem>
-              ))}
-            </Select>
-            <Button
-              color="primary"
-              startContent={<UserPlus className="h-4 w-4" />}
-              onPress={onCreateInvitation}
-              isLoading={createInvitationMutation.isPending}
-            >
-              {resolvedLabels.inviteButton}
-            </Button>
+            <div className="grid gap-2">
+              <Label className="text-sm font-medium">{resolvedLabels.emailLabel}</Label>
+              <Input
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder={resolvedLabels.emailPlaceholder}
+                variant="secondary"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label className="text-sm font-medium">{resolvedLabels.roleLabel}</Label>
+              <Select
+                aria-label={resolvedLabels.roleLabel}
+                selectedKey={inviteRole}
+                onSelectionChange={(key) => {
+                  const role = key == null ? undefined : String(key);
+                  if (role && isOrganizationRole(role) && resolvedAssignableRoles.includes(role)) {
+                    setInviteRole(role);
+                  }
+                }}
+              >
+                <Select.Trigger className="min-h-10">
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    {resolvedAssignableRoles.map((role) => (
+                      <ListBox.Item key={role} id={role} textValue={getRoleLabel(role)}>
+                        {getRoleLabel(role)}
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <Button
+                variant="primary"
+                className="w-full"
+                onPress={onCreateInvitation}
+                isPending={createInvitationMutation.isPending}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <UserPlus className="h-4 w-4" />
+                  {resolvedLabels.inviteButton}
+                </span>
+              </Button>
+            </div>
           </div>
 
-          <Table aria-label={resolvedLabels.tableTitle}>
-            <TableHeader>
-              <TableColumn>{resolvedLabels.columnName}</TableColumn>
-              <TableColumn>{resolvedLabels.columnEmail}</TableColumn>
-              <TableColumn>{resolvedLabels.columnRole}</TableColumn>
-              <TableColumn>{resolvedLabels.columnStatus}</TableColumn>
-              <TableColumn className="text-right">{resolvedLabels.columnActions}</TableColumn>
-            </TableHeader>
-            <TableBody emptyContent={resolvedLabels.tableEmpty}>
-              {rows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{row.displayName}</TableCell>
-                  <TableCell>{row.email}</TableCell>
-                  <TableCell>
-                    {row.kind === "member" ? (
-                      <Select
-                        size="sm"
-                        selectedKeys={[row.role]}
-                        disallowEmptySelection
-                        isDisabled={updatingMemberId === row.memberId}
-                        aria-label={resolvedLabels.roleFor(row.displayName)}
-                        onSelectionChange={(keys) => {
-                          const role = Array.from(keys as Set<string>)[0];
-                          if (
-                            role &&
-                            role !== row.role &&
-                            isOrganizationRole(role) &&
-                            resolvedAssignableRoles.includes(role)
-                          ) {
-                            void onUpdateMemberRole(row.memberId, role);
-                          }
-                        }}
-                      >
-                        {resolvedAssignableRoles.map((role) => (
-                          <SelectItem key={role}>{getRoleLabel(role)}</SelectItem>
-                        ))}
-                      </Select>
-                    ) : (
-                      getRoleLabel(row.role)
+          {rows.length === 0 ? (
+            <div className="py-10 text-center text-sm text-default-500">{resolvedLabels.tableEmpty}</div>
+          ) : (
+            <Table aria-label={resolvedLabels.tableTitle}>
+              <Table.ScrollContainer>
+                <Table.Content>
+                  <Table.Header>
+                    <Table.Column>{resolvedLabels.columnName}</Table.Column>
+                    <Table.Column>{resolvedLabels.columnEmail}</Table.Column>
+                    <Table.Column>{resolvedLabels.columnRole}</Table.Column>
+                    <Table.Column>{resolvedLabels.columnStatus}</Table.Column>
+                    <Table.Column className="text-right">{resolvedLabels.columnActions}</Table.Column>
+                  </Table.Header>
+                  <Table.Body items={rows}>
+                    {(row) => (
+                      <Table.Row id={row.id}>
+                        <Table.Cell>{row.displayName}</Table.Cell>
+                        <Table.Cell>{row.email}</Table.Cell>
+                        <Table.Cell>
+                          {row.kind === "member" ? (
+                            <Select
+                              aria-label={resolvedLabels.roleFor(row.displayName)}
+                              selectedKey={row.role}
+                              isDisabled={updatingMemberId === row.memberId}
+                              onSelectionChange={(key: Key | null) => {
+                                const role = key == null ? undefined : String(key);
+                                if (
+                                  role &&
+                                  role !== row.role &&
+                                  isOrganizationRole(role) &&
+                                  resolvedAssignableRoles.includes(role)
+                                ) {
+                                  void onUpdateMemberRole(row.memberId, role);
+                                }
+                              }}
+                            >
+                              <Select.Trigger className="min-h-9">
+                                <Select.Value />
+                                <Select.Indicator />
+                              </Select.Trigger>
+                              <Select.Popover>
+                                <ListBox>
+                                  {resolvedAssignableRoles.map((role) => (
+                                    <ListBox.Item key={role} id={role} textValue={getRoleLabel(role)}>
+                                      {getRoleLabel(role)}
+                                      <ListBox.ItemIndicator />
+                                    </ListBox.Item>
+                                  ))}
+                                </ListBox>
+                              </Select.Popover>
+                            </Select>
+                          ) : (
+                            getRoleLabel(row.role)
+                          )}
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Chip
+                            size="sm"
+                            variant="soft"
+                            color={row.status === "active" ? "success" : "warning"}
+                          >
+                            {row.status === "active"
+                              ? resolvedLabels.statusActive
+                              : resolvedLabels.statusInvited}
+                          </Chip>
+                        </Table.Cell>
+                        <Table.Cell className="text-right">
+                          {row.kind === "member" ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              isIconOnly
+                              onPress={() => void onRemoveMember(row.memberId)}
+                              isDisabled={removingMemberId === row.memberId}
+                              aria-label={resolvedLabels.removeMember}
+                              className="text-danger"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                isIconOnly
+                                onPress={() => void onCopyInvitationLink(row.invitationId)}
+                                aria-label={resolvedLabels.copyInviteLink}
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                isIconOnly
+                                onPress={() => void onCancelInvitation(row.invitationId)}
+                                isDisabled={cancelingInvitationId === row.invitationId}
+                                aria-label={resolvedLabels.cancelInvitation}
+                                className="text-danger"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </Table.Cell>
+                      </Table.Row>
                     )}
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      size="sm"
-                      variant="flat"
-                      color={row.status === "active" ? "success" : "warning"}
-                    >
-                      {row.status === "active"
-                        ? resolvedLabels.statusActive
-                        : resolvedLabels.statusInvited}
-                    </Chip>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {row.kind === "member" ? (
-                      <Button
-                        size="sm"
-                        color="danger"
-                        variant="light"
-                        isIconOnly
-                        onPress={() => void onRemoveMember(row.memberId)}
-                        isDisabled={removingMemberId === row.memberId}
-                        aria-label={resolvedLabels.removeMember}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    ) : (
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="light"
-                          isIconOnly
-                          onPress={() => void onCopyInvitationLink(row.invitationId)}
-                          aria-label={resolvedLabels.copyInviteLink}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          color="danger"
-                          variant="light"
-                          isIconOnly
-                          onPress={() => void onCancelInvitation(row.invitationId)}
-                          isDisabled={cancelingInvitationId === row.invitationId}
-                          aria-label={resolvedLabels.cancelInvitation}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardBody>
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          )}
+        </Card.Content>
       </Card>
     </div>
   );

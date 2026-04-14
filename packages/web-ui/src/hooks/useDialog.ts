@@ -6,7 +6,7 @@ export const useConfirmDialog = () => {
   const dialog = useDialog();
   return (props: DialogProps) => {
     dialog({
-      color: "danger",
+      intent: "danger",
       cancelable: true,
       ...props,
     });
@@ -17,7 +17,7 @@ export const useAlertDialog = () => {
   const dialog = useDialog();
   return (props: DialogProps) => {
     dialog({
-      color: "warning",
+      intent: "warning",
       cancelable: false,
       ...props,
     });

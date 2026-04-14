@@ -1,19 +1,11 @@
-import {
-  Button,
-  type ButtonProps,
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-} from "@heroui/react";
-import { semanticColors } from "@heroui/theme";
+import { Button, type ButtonRootProps, Modal } from "@heroui/react";
 import { createContext, useContext, useRef, useState } from "react";
 
 export type DialogProps = {
   title: React.ReactNode;
   description: React.ReactNode;
-  color?: ButtonProps["color"];
+  /** Maps to button variant for the confirm action and modal border emphasis. */
+  intent?: "danger" | "primary" | "warning";
   cancelable?: boolean;
   onCancel?: () => void;
   onConfirm?: () => void;
@@ -24,6 +16,21 @@ export type DialogProps = {
 const DialogContext = createContext<(dialog: DialogProps) => void>(() => {
   console.warn("DialogProvider is not initialized");
 });
+
+const intentBorderClass: Record<NonNullable<DialogProps["intent"]>, string> = {
+  danger: "border-danger",
+  primary: "border-primary",
+  warning: "border-warning",
+};
+
+const intentButtonVariant: Record<
+  NonNullable<DialogProps["intent"]>,
+  ButtonRootProps["variant"]
+> = {
+  danger: "danger",
+  primary: "primary",
+  warning: "secondary",
+};
 
 export function useDialog() {
   const context = useContext(DialogContext);
@@ -38,12 +45,12 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
   const [dialog, setDialog] = useState<DialogProps | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleSetDialog = (dialog: DialogProps) => {
+  const handleSetDialog = (next: DialogProps) => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
-    setDialog(dialog);
+    setDialog(next);
     setIsOpen(true);
   };
 
@@ -68,38 +75,36 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
     handleUnsetDialog();
   };
 
+  const intent = dialog?.intent ?? "danger";
+
   return (
     <DialogContext.Provider value={handleSetDialog}>
-      <>
-        {children}
-        {dialog && (
-          <Modal
-            isOpen={isOpen}
-            onOpenChange={handleUnsetDialog}
-            style={{
-              borderColor: semanticColors.light[dialog.color || "danger"][600],
-            }}
-            classNames={{
-              base: "border-1",
-            }}
-          >
-            <ModalContent>
-              <ModalHeader>{dialog.title}</ModalHeader>
-              <ModalBody>{dialog.description}</ModalBody>
-              <ModalFooter>
+      {children}
+      {dialog && (
+        <Modal isOpen={isOpen} onOpenChange={(open) => !open && handleUnsetDialog()}>
+          <Modal.Backdrop />
+          <Modal.Container className={`border ${intentBorderClass[intent]}`}>
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>{dialog.title}</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>{dialog.description}</Modal.Body>
+              <Modal.Footer>
                 <div className="flex flex-row gap-2">
                   {(dialog.cancelable || dialog.onCancel) && (
-                    <Button onPress={handleCancel}>{dialog.cancelLabel ?? "Cancel"}</Button>
+                    <Button variant="tertiary" onPress={handleCancel}>
+                      {dialog.cancelLabel ?? "Cancel"}
+                    </Button>
                   )}
-                  <Button color={dialog.color} onPress={handleConfirm}>
+                  <Button variant={intentButtonVariant[intent]} onPress={handleConfirm}>
                     {dialog.confirmLabel ?? "Confirm"}
                   </Button>
                 </div>
-              </ModalFooter>
-            </ModalContent>
-          </Modal>
-        )}
-      </>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal>
+      )}
     </DialogContext.Provider>
   );
 }

@@ -14,6 +14,7 @@
   "dependencies": {
     "{{PACKAGE_SCOPE}}/shared": "workspace:*",
     "@heroui/react": "catalog:",
+    "@heroui/styles": "catalog:",
     "@m5kdev/commons": "catalog:",
     "@m5kdev/frontend": "catalog:",
     "@m5kdev/web-ui": "catalog:",

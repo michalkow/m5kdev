@@ -1,4 +1,5 @@
-import { Button, Card, CardBody, CardHeader } from "@heroui/react";
+import { Card } from "@heroui/react";
+import { cn } from "@m5kdev/web-ui/utils";
 import { AlertCircle } from "lucide-react";
 import { useQueryState } from "nuqs";
 import { useTranslation } from "react-i18next";
@@ -96,25 +97,37 @@ export function ErrorAuthRoute() {
   return (
     <div className="flex flex-col gap-6">
       <Card>
-        <CardHeader className="text-center flex flex-col gap-2 items-center">
+        <Card.Header className="text-center flex flex-col gap-2 items-center">
           <AlertCircle className="w-10 h-10 text-red-500" />
           <p className="text-xl font-semibold">{title}</p>
           <p className="text-sm text-default-600">{description}</p>
-        </CardHeader>
-        <CardBody className="flex flex-col gap-4">
+        </Card.Header>
+        <Card.Content className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             {buttons.includes("login") && (
-              <Button as={Link} to="/login" variant="bordered">
+              <Link
+                to="/login"
+                className={cn(
+                  "inline-flex h-10 w-full items-center justify-center rounded-md border border-default-200",
+                  "bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-default-100"
+                )}
+              >
                 {t("web-ui:auth.error.backToLogin")}
-              </Button>
+              </Link>
             )}
             {buttons.includes("signup") && (
-              <Button as={Link} to="/signup" variant="bordered">
+              <Link
+                to="/signup"
+                className={cn(
+                  "inline-flex h-10 w-full items-center justify-center rounded-md border border-default-200",
+                  "bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-default-100"
+                )}
+              >
                 {signupLabel || t("web-ui:auth.error.backToSignup")}
-              </Button>
+              </Link>
             )}
           </div>
-        </CardBody>
+        </Card.Content>
       </Card>
     </div>
   );

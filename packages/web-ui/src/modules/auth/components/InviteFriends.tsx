@@ -1,4 +1,4 @@
-import { Button, Card, CardBody, CardHeader, Chip, Input } from "@heroui/react";
+import { Button, Card, Chip, Input, Label } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Link2Icon, Mail, Send, Ticket, Users, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -113,13 +113,11 @@ export function InviteFriends({ useTRPC }: InviteFriendsProps) {
         <div className="flex justify-center mt-4">
           <Chip
             color={invitesAvailable > 0 ? "warning" : "default"}
-            variant="flat"
+            variant="soft"
             size="lg"
-            startContent={
-              <Zap size={16} className={invitesAvailable > 0 ? "text-warning-600" : ""} />
-            }
-            className="font-medium"
+            className="font-medium inline-flex items-center gap-1.5"
           >
+            <Zap size={16} className={invitesAvailable > 0 ? "text-warning-600" : ""} />
             {invitesAvailable} {invitesAvailable === 1 ? "Invite" : "Invites"} Remaining
           </Chip>
         </div>
@@ -128,65 +126,71 @@ export function InviteFriends({ useTRPC }: InviteFriendsProps) {
       <div className="grid gap-6">
         {/* Invite Form */}
         <Card className="shadow-sm border border-default-200">
-          <CardHeader className="flex flex-col items-start gap-1 px-6 pt-6 pb-2">
+          <Card.Header className="flex flex-col items-start gap-1 px-6 pt-6 pb-2">
             <h3 className="text-xl font-semibold">Send an Invitation via Email</h3>
             <p className="text-small text-default-600">
               They'll receive a unique code to join instantly.
             </p>
-          </CardHeader>
-          <CardBody className="px-6 pb-6">
+          </Card.Header>
+          <Card.Content className="px-6 pb-6">
             <form onSubmit={handleInvite} className="flex flex-col gap-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input
-                  label="Friend's Name (Optional)"
-                  placeholder="e.g. Alex"
-                  value={name}
-                  onValueChange={setName}
-                  variant="bordered"
-                  labelPlacement="outside"
-                />
-                <Input
-                  type="email"
-                  label="Email Address (Required for sending)"
-                  placeholder="friend@example.com"
-                  value={email}
-                  onValueChange={setEmail}
-                  variant="bordered"
-                  labelPlacement="outside"
-                  startContent={
+                <div className="grid gap-2">
+                  <Label className="text-sm font-medium">Friend&apos;s Name (Optional)</Label>
+                  <Input
+                    placeholder="e.g. Alex"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    variant="secondary"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-sm font-medium">Email Address (Required for sending)</Label>
+                  <div className="relative">
                     <Mail
-                      className="text-default-400 pointer-events-none flex-shrink-0"
+                      className="text-default-400 pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 flex-shrink-0"
                       size={16}
                     />
-                  }
-                />
+                    <Input
+                      type="email"
+                      className="pl-9"
+                      placeholder="friend@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      variant="secondary"
+                    />
+                  </div>
+                </div>
               </div>
               <div className="flex justify-end pt-2 gap-2">
                 <Button
-                  color="primary"
-                  variant="bordered"
+                  variant="outline"
                   type="button"
-                  isLoading={isLoading}
+                  isPending={isLoading}
                   isDisabled={invitesAvailable <= 0}
                   onPress={handleCreateCode}
                   className="font-medium"
-                  endContent={!isLoading && <Link2Icon size={16} />}
                 >
-                  Create Invitation Link
+                  <span className="inline-flex items-center gap-2">
+                    Create Invitation Link
+                    {!isLoading ? <Link2Icon size={16} /> : null}
+                  </span>
                 </Button>
                 <Button
-                  color="primary"
+                  variant="primary"
                   type="submit"
-                  isLoading={isLoading}
+                  isPending={isLoading}
                   isDisabled={invitesAvailable <= 0 || !isEmailValid}
                   className="font-medium"
-                  endContent={!isLoading && <Send size={16} />}
                 >
-                  Send Invitation
+                  <span className="inline-flex items-center gap-2">
+                    Send Invitation
+                    {!isLoading ? <Send size={16} /> : null}
+                  </span>
                 </Button>
               </div>
             </form>
-          </CardBody>
+          </Card.Content>
         </Card>
 
         {/* Created Invitations Section */}
@@ -211,7 +215,7 @@ export function InviteFriends({ useTRPC }: InviteFriendsProps) {
                     <Chip
                       size="sm"
                       color={getStatusColor(item.status)}
-                      variant="flat"
+                      variant="soft"
                       className="capitalize"
                     >
                       {item.status.toLowerCase()}
@@ -221,9 +225,9 @@ export function InviteFriends({ useTRPC }: InviteFriendsProps) {
                   <div className="flex items-center gap-3">
                     {item.code && (
                       <CopyButton
-                        variant="flat"
-                        color="success"
+                        variant="ghost"
                         size="sm"
+                        className="text-success-600"
                         text={`${import.meta.env.VITE_APP_URL}/signup?code=${item.code}`}
                         isIconOnly
                       />

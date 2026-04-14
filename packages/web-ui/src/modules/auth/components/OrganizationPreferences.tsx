@@ -1,4 +1,4 @@
-import { Card, CardBody, CardHeader } from "@heroui/react";
+import {Card} from "@heroui/react";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactElement, useCallback, useMemo } from "react";
@@ -32,8 +32,8 @@ function OrganizationStateCard({ title, message }: { title: string; message: str
   return (
     <div className="p-6">
       <Card>
-        <CardHeader className="text-lg font-semibold">{title}</CardHeader>
-        <CardBody>{message}</CardBody>
+        <Card.Header className="text-lg font-semibold">{title}</Card.Header>
+        <Card.Content>{message}</Card.Content>
       </Card>
     </div>
   );

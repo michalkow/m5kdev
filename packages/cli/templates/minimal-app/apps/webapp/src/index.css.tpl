@@ -3,11 +3,11 @@
 @import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
-
-@plugin './hero.ts';
+@import "@heroui/styles";
 
 @source "./src/**/*.{ts,tsx}";
-@source "../../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}";
+@source "../../node_modules/@heroui/react/dist/**/*.{js,mjs}";
+@source "../../node_modules/@heroui/styles/dist/**/*.{js,mjs}";
 @source "../../node_modules/@m5kdev/web-ui/dist/src/**/*.{js,ts,jsx,tsx}";
 
 @custom-variant dark (&:is(.dark *));

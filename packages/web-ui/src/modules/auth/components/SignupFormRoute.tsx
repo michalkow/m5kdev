@@ -1,4 +1,4 @@
-import { Alert, Button, Input } from "@heroui/react";
+import { Alert, Button, Input, Label } from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useState } from "react";
@@ -125,26 +125,25 @@ export function SignupForm({
     const emailProviderUrl = userEmail ? getEmailProviderUrl(userEmail) : null;
 
     return (
-      <Alert
-        color="primary"
-        variant="faded"
-        title={t("web-ui:auth.signup.verificationEmailSent.title")}
-      >
-        <div className="mt-2">
-          {t("web-ui:auth.signup.verificationEmailSent.description")}
-          {emailProviderUrl && (
-            <div className="mt-3">
-              <a
-                href={emailProviderUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium underline underline-offset-4 hover:opacity-80 transition-opacity"
-              >
-                {t("web-ui:auth.signup.verificationEmailSent.openEmail")}
-              </a>
-            </div>
-          )}
-        </div>
+      <Alert status="accent">
+        <Alert.Title>{t("web-ui:auth.signup.verificationEmailSent.title")}</Alert.Title>
+        <Alert.Description>
+          <div className="mt-2">
+            {t("web-ui:auth.signup.verificationEmailSent.description")}
+            {emailProviderUrl && (
+              <div className="mt-3">
+                <a
+                  href={emailProviderUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium underline underline-offset-4 hover:opacity-80 transition-opacity"
+                >
+                  {t("web-ui:auth.signup.verificationEmailSent.openEmail")}
+                </a>
+              </div>
+            )}
+          </div>
+        </Alert.Description>
       </Alert>
     );
   }
@@ -152,15 +151,17 @@ export function SignupForm({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="grid gap-6">
       <div className="grid gap-2">
+        <Label className="text-sm font-medium" htmlFor="signup-email">
+          {t("web-ui:auth.login.email")}
+        </Label>
         <Input
-          labelPlacement="outside"
-          label={t("web-ui:auth.login.email")}
+          id="signup-email"
           type="email"
           placeholder={t("web-ui:auth.login.placeholder.email")}
-          variant="bordered"
-          isRequired
-          isDisabled={!!email}
+          variant="secondary"
+          required
           defaultValue={email ?? ""}
+          disabled={!!email}
           {...register("email", { required: true })}
         />
         {errors.email && (
@@ -168,20 +169,22 @@ export function SignupForm({
         )}
       </div>
       <div className="grid gap-2">
+        <Label className="text-sm font-medium" htmlFor="signup-password">
+          {t("web-ui:auth.login.password")}
+        </Label>
         <Input
-          labelPlacement="outside"
-          label={t("web-ui:auth.login.password")}
+          id="signup-password"
           placeholder={t("web-ui:auth.login.password")}
           type="password"
-          variant="bordered"
-          isRequired
+          variant="secondary"
+          required
           {...register("password", { required: true })}
         />
         {errors.password && (
           <span className="text-red-500 text-xs">{t("web-ui:auth.signup.passwordRequired")}</span>
         )}
       </div>
-      <Button type="submit" className="w-full" color="primary" isDisabled={status === "busy"}>
+      <Button type="submit" className="w-full" variant="primary" isDisabled={status === "busy"}>
         {status === "busy" ? t("web-ui:auth.signup.signingUp") : t("web-ui:auth.signup.button")}
       </Button>
     </form>

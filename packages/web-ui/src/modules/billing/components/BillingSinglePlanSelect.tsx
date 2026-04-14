@@ -1,10 +1,10 @@
-import { Button } from "@heroui/react";
 import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { Check, LogOut } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router";
+import { Button, buttonVariants } from "../../../components/ui/button";
 import {
   Card,
   CardContent,
@@ -140,15 +140,12 @@ export function BillingSinglePlanSelect({
           </CardContent>
 
           <CardFooter>
-            <Button
-              className="w-full"
-              color="primary"
-              size="lg"
-              as="a"
+            <a
+              className={cn(buttonVariants({ variant: "default", size: "lg" }), "w-full")}
               href={`${import.meta.env.VITE_SERVER_URL}/stripe/checkout/${currentPriceId}`}
             >
               {isAnnual ? "Subscribe Annually" : "Subscribe Monthly"}
-            </Button>
+            </a>
           </CardFooter>
         </Card>
 
@@ -162,7 +159,7 @@ export function BillingSinglePlanSelect({
       </div>
 
       <div className="fixed bottom-4 left-4">
-        <Button variant="light" onPress={handleLogout} className="gap-2">
+        <Button variant="ghost" onClick={handleLogout} className="gap-2">
           <LogOut className="h-4 w-4" />
           {t("sidebar.user.logout", "Log out")}
         </Button>

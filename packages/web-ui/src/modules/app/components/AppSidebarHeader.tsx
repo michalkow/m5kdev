@@ -41,7 +41,7 @@ export function AppSidebarHeader({
       </Link>
       <Button
         isIconOnly
-        variant="faded"
+        variant="secondary"
         size="sm"
         className="w-4 h-6"
         onPress={() => toggleSidebar()}

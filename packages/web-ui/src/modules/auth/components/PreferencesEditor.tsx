@@ -1,4 +1,4 @@
-import { Button, Form, Input, Select, SelectItem, Switch } from "@heroui/react";
+import { Button, Form, Input, Label, ListBox, Select, Switch } from "@heroui/react";
 import type { FormEvent, ReactElement } from "react";
 import { toast } from "sonner";
 import type { z } from "zod";
@@ -116,37 +116,58 @@ export function PreferencesEditor<S extends z.ZodObject<z.ZodRawShape>>({
             );
           case "select":
             return (
-              <Select
-                key={String(key)}
-                name={String(key)}
-                label={control.label}
-                labelPlacement="outside-top"
-                defaultSelectedKeys={value == null || value === "" ? [] : [String(value)]}
-              >
-                {(control.options ?? []).map((option) => (
-                  <SelectItem key={option.value}>{option.label}</SelectItem>
-                ))}
-              </Select>
+              <div key={String(key)} className="grid gap-2">
+                <Label className="text-sm font-medium">{control.label}</Label>
+                <Select
+                  name={String(key)}
+                  defaultSelectedKey={
+                    value == null || value === "" ? undefined : String(value as string)
+                  }
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {(control.options ?? []).map((option) => (
+                        <ListBox.Item
+                          key={option.value}
+                          id={option.value}
+                          textValue={option.label}
+                        >
+                          {option.label}
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              </div>
             );
           case "number":
             return (
-              <Input
-                key={String(key)}
-                name={String(key)}
-                type="number"
-                label={control.label}
-                labelPlacement="outside-top"
-                defaultValue={value == null ? "" : String(value)}
-                min={control.min}
-                max={control.max}
-                step={control.step}
-              />
+              <div key={String(key)} className="grid gap-2">
+                <Label className="text-sm font-medium" htmlFor={`pref-${String(key)}`}>
+                  {control.label}
+                </Label>
+                <Input
+                  id={`pref-${String(key)}`}
+                  name={String(key)}
+                  type="number"
+                  defaultValue={value == null ? "" : String(value)}
+                  min={control.min}
+                  max={control.max}
+                  step={control.step}
+                  variant="secondary"
+                />
+              </div>
             );
           default:
             return <div key={String(key)}>Invalid control</div>;
         }
       })}
-      <Button type="submit" color="success" isLoading={isPending}>
+      <Button type="submit" variant="primary" isPending={isPending}>
         {labels.submit}
       </Button>
     </Form>

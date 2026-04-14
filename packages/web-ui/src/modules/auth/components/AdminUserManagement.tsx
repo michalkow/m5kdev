@@ -1,28 +1,18 @@
 import {
   Button,
   Dropdown,
-  DropdownItem,
-  DropdownMenu,
-  DropdownTrigger,
   Input,
+  Label,
+  ListBox,
   Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
   Select,
-  SelectItem,
   Spinner,
   Table,
-  TableBody,
-  TableCell,
-  TableColumn,
-  TableHeader,
-  TableRow,
   Tooltip,
 } from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import * as authAdmin from "@m5kdev/frontend/modules/auth/hooks/useAuthAdmin";
+import type { Key } from "@react-types/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
@@ -47,6 +37,13 @@ import type { UseBackendTRPC } from "../../../types";
 type SortField = "name" | "email" | "role" | "createdAt";
 type SortOrder = "asc" | "desc";
 type StatusFilter = "all" | "banned" | "active";
+
+interface UserAiUsage {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  cost: number | null;
+}
 
 interface AdminUserManagementProps {
   useTRPC?: UseBackendTRPC;
@@ -99,19 +96,20 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
   const trpc = useTRPC?.();
   const queryClient = useQueryClient();
   const usageQueryEnabled = !!userForUsage && !!trpc;
+  // @ts-expect-error optional ai router
   const usageQueryOptions = trpc?.ai.getUserUsage.queryOptions({ userId: userForUsage?.id ?? "" });
   const usageQuery = useQuery({
     ...(usageQueryOptions ?? {
       queryKey: [["ai", "getUserUsage"], { input: { userId: "" } }] as const,
-      queryFn: () =>
+      queryFn: (): Promise<UserAiUsage> =>
         Promise.resolve({ inputTokens: null, outputTokens: null, totalTokens: null, cost: null }),
     }),
     enabled: usageQueryEnabled,
   });
-  const usageData = usageQuery.data;
+  const usageData = usageQuery.data as UserAiUsage | undefined;
   const isLoadingUsage = usageQuery.isLoading;
 
-  const refetchUsage = () => {
+  const refetchUsage = (): void => {
     if (usageQueryOptions) {
       queryClient.invalidateQueries({ queryKey: usageQueryOptions.queryKey });
     }
@@ -188,7 +186,7 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
     setUserToDelete(userId);
   };
 
-  const handleDelete = () => {
+  const handleDelete = (): void => {
     if (userToDelete) {
       deleteUser({ id: userToDelete });
       setUserToDelete(null);
@@ -202,7 +200,7 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
     setCustomBanDays(1);
   };
 
-  const getBanExpiryInSeconds = () => {
+  const getBanExpiryInSeconds = (): number | undefined => {
     switch (banExpiry) {
       case "never":
         return undefined; // No expiry
@@ -283,7 +281,7 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
 
   const handleSetOnboardingUser = async (userId: string) => {
     const onboardingStep = window.prompt(`Set onboarding step for user ${userId}`, "4");
-    const onboardingStepNumber = Number.parseInt(onboardingStep || "0");
+    const onboardingStepNumber = Number.parseInt(onboardingStep || "0", 10);
     if (onboardingStepNumber) {
       updateUser({
         userId,
@@ -387,6 +385,16 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
     }));
   };
 
+  const handleStatusSelectChange = (key: Key | null): void => {
+    if (key === null) return;
+    handleStatusFilterChange(String(key) as StatusFilter);
+  };
+
+  const handleRoleSelectChange = (key: Key | null): void => {
+    if (key === null) return;
+    handleNewUserDataChange("role", String(key));
+  };
+
   const openUsageModal = (userId: string, userName: string) => {
     setUserForUsage({ id: userId, name: userName });
     refetchUsage();
@@ -479,6 +487,12 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
     }
   };
 
+  const closeMagicLinkModal = (): void => {
+    setUserForMagicLink(null);
+    setGeneratedMagicLink(null);
+    setClaimEmail("");
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center p-8">
@@ -496,6 +510,8 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
     statusFilter !== "all" ||
     sortField !== "createdAt" ||
     sortOrder !== "desc";
+
+  const usersList = users ?? [];
 
   return (
     <div className="space-y-4 p-4">
@@ -531,7 +547,7 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
             className="pl-8 w-full"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            variant="bordered"
+            variant="secondary"
           />
           {searchQuery && (
             <button
@@ -548,20 +564,38 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
         <div className="flex gap-2">
           <Select
             aria-label="Status filter"
-            selectedKeys={new Set([statusFilter])}
-            onSelectionChange={(keys) =>
-              handleStatusFilterChange(Array.from(keys)[0] as StatusFilter)
-            }
             className="w-[160px]"
-            startContent={<Filter className="mr-1 h-4 w-4" />}
+            selectedKey={statusFilter}
+            onSelectionChange={handleStatusSelectChange}
           >
-            <SelectItem key="all">All Users</SelectItem>
-            <SelectItem key="active">Active Only</SelectItem>
-            <SelectItem key="banned">Banned Only</SelectItem>
+            <Select.Trigger>
+              <Filter className="mr-1 h-4 w-4 shrink-0" />
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {/* biome-ignore lint/correctness/useUniqueElementIds: id is the Select option key */}
+                <ListBox.Item className="text-sm" id="all" textValue="All Users">
+                  All Users
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                {/* biome-ignore lint/correctness/useUniqueElementIds: id is the Select option key */}
+                <ListBox.Item className="text-sm" id="active" textValue="Active Only">
+                  Active Only
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                {/* biome-ignore lint/correctness/useUniqueElementIds: id is the Select option key */}
+                <ListBox.Item className="text-sm" id="banned" textValue="Banned Only">
+                  Banned Only
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              </ListBox>
+            </Select.Popover>
           </Select>
 
           {hasActiveFilters && (
-            <Button variant="bordered" size="sm" onPress={clearFilters}>
+            <Button variant="outline" size="sm" onPress={clearFilters}>
               <X className="mr-1 h-4 w-4" />
               Clear Filters
             </Button>
@@ -570,162 +604,181 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
       </div>
 
       <div className="border rounded-lg overflow-hidden">
-        <Table aria-label="Users table" removeWrapper>
-          <TableHeader>
-            <TableColumn>ID</TableColumn>
-            <TableColumn className="cursor-pointer" onClick={() => handleSort("name")}>
-              Name {renderSortIcon("name")}
-            </TableColumn>
-            <TableColumn className="cursor-pointer" onClick={() => handleSort("email")}>
-              Email {renderSortIcon("email")}
-            </TableColumn>
-            <TableColumn className="cursor-pointer" onClick={() => handleSort("role")}>
-              Role {renderSortIcon("role")}
-            </TableColumn>
-            <TableColumn>Status</TableColumn>
-            <TableColumn>Onboarding</TableColumn>
-            <TableColumn className="cursor-pointer" onClick={() => handleSort("createdAt")}>
-              Created At {renderSortIcon("createdAt")}
-            </TableColumn>
-            <TableColumn className="text-right">Actions</TableColumn>
-          </TableHeader>
-          <TableBody
-            items={users ?? []}
-            emptyContent={
-              hasActiveFilters ? "No users found matching your filters" : "No users found"
-            }
-          >
-            {(user) => {
-              const onboarding = (user as { onboarding?: string | number }).onboarding;
-              return (
-                <TableRow key={user.id}>
-                  <TableCell className="font-mono text-xs">{user.id}</TableCell>
-                  <TableCell>{user.name}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>{user.role || "user"}</TableCell>
-                  <TableCell>
-                    {user.banned ? (
-                      <Tooltip
-                        content={
-                          <div className="space-y-1 text-xs">
-                            <p>
-                              <strong>Reason:</strong> {user.banReason || "No reason provided"}
-                            </p>
-                            {user.banExpires && (
-                              <p className="flex items-center gap-1">
-                                <CalendarClock className="h-3 w-3" />
-                                <span>
-                                  <strong>Expires:</strong>{" "}
-                                  {formatBanExpiry(user.banExpires.getTime())}
+        {usersList.length === 0 ? (
+          <div className="py-12 text-center text-sm text-muted-foreground">
+            {hasActiveFilters ? "No users found matching your filters" : "No users found"}
+          </div>
+        ) : (
+          <Table aria-label="Users table">
+            <Table.ScrollContainer>
+              <Table.Content>
+                <Table.Header>
+                  <Table.Column>ID</Table.Column>
+                  <Table.Column className="cursor-pointer" onClick={() => handleSort("name")}>
+                    Name {renderSortIcon("name")}
+                  </Table.Column>
+                  <Table.Column className="cursor-pointer" onClick={() => handleSort("email")}>
+                    Email {renderSortIcon("email")}
+                  </Table.Column>
+                  <Table.Column className="cursor-pointer" onClick={() => handleSort("role")}>
+                    Role {renderSortIcon("role")}
+                  </Table.Column>
+                  <Table.Column>Status</Table.Column>
+                  <Table.Column>Onboarding</Table.Column>
+                  <Table.Column className="cursor-pointer" onClick={() => handleSort("createdAt")}>
+                    Created At {renderSortIcon("createdAt")}
+                  </Table.Column>
+                  <Table.Column className="text-right">Actions</Table.Column>
+                </Table.Header>
+                <Table.Body items={usersList}>
+                  {(user) => {
+                    const onboarding = (user as { onboarding?: string | number }).onboarding;
+                    return (
+                      <Table.Row id={user.id}>
+                        <Table.Cell className="font-mono text-xs">{user.id}</Table.Cell>
+                        <Table.Cell>{user.name}</Table.Cell>
+                        <Table.Cell>{user.email}</Table.Cell>
+                        <Table.Cell>{user.role || "user"}</Table.Cell>
+                        <Table.Cell>
+                          {user.banned ? (
+                            <Tooltip>
+                              <Tooltip.Trigger>
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                  Banned
+                                  {user.banReason && <Info className="h-3 w-3" />}
                                 </span>
-                              </p>
-                            )}
-                          </div>
-                        }
-                      >
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          Banned
-                          {user.banReason && <Info className="h-3 w-3" />}
-                        </span>
-                      </Tooltip>
-                    ) : (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        Active
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell>{onboarding ?? "—"}</TableCell>
-                  <TableCell>
-                    {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "N/A"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Dropdown placement="bottom-end">
-                      <DropdownTrigger>
-                        <Button variant="light" size="sm" isIconOnly>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownTrigger>
-                      <DropdownMenu aria-label="User actions">
-                        <DropdownItem
-                          key="onboarding"
-                          onClick={() => handleSetOnboardingUser(user.id)}
-                        >
-                          Set Onboarding
-                        </DropdownItem>
-                        <DropdownItem
-                          key="usage"
-                          onClick={() => openUsageModal(user.id, user.name)}
-                          className={useTRPC ? "" : "hidden"}
-                        >
-                          <span className="flex items-center gap-2">
-                            <BarChart3 className="h-4 w-4" />
-                            View AI Usage
-                          </span>
-                        </DropdownItem>
-                        <DropdownItem
-                          key="impersonate"
-                          onClick={() => handleImpersonateUser(user.id)}
-                          isDisabled={user.banned || isImpersonatingUser}
-                        >
-                          {isImpersonatingUser ? (
-                            <>
-                              <Spinner className="mr-2 h-3 w-3" />
-                              Impersonating...
-                            </>
+                              </Tooltip.Trigger>
+                              <Tooltip.Content>
+                                <div className="space-y-1 text-xs">
+                                  <p>
+                                    <strong>Reason:</strong>{" "}
+                                    {user.banReason || "No reason provided"}
+                                  </p>
+                                  {user.banExpires && (
+                                    <p className="flex items-center gap-1">
+                                      <CalendarClock className="h-3 w-3" />
+                                      <span>
+                                        <strong>Expires:</strong>{" "}
+                                        {formatBanExpiry(user.banExpires.getTime())}
+                                      </span>
+                                    </p>
+                                  )}
+                                </div>
+                              </Tooltip.Content>
+                            </Tooltip>
                           ) : (
-                            "Impersonate"
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              Active
+                            </span>
                           )}
-                        </DropdownItem>
-                        <DropdownItem
-                          key="magic-link"
-                          onClick={() => openMagicLinkModal(user.id, user.name, user.email ?? null)}
-                          className={trpc ? "" : "hidden"}
-                        >
-                          <span className="flex items-center gap-2">
-                            <Link2 className="h-4 w-4" />
-                            Generate Magic Login Link
-                          </span>
-                        </DropdownItem>
-                        {user.banned ? (
-                          <DropdownItem
-                            key="unban"
-                            onClick={() => handleUnbanUser(user.id)}
-                            isDisabled={isUnbanningUser[user.id]}
-                          >
-                            {isUnbanningUser[user.id] ? (
-                              <>
-                                <Spinner className="mr-2 h-3 w-3" />
-                                Unbanning...
-                              </>
-                            ) : (
-                              "Unban"
-                            )}
-                          </DropdownItem>
-                        ) : (
-                          <DropdownItem key="ban" onClick={() => openBanModal(user.id, user.name)}>
-                            Ban
-                          </DropdownItem>
-                        )}
-                        <DropdownItem key="remove" onClick={() => confirmDelete(user.id)}>
-                          Remove
-                        </DropdownItem>
-                      </DropdownMenu>
-                    </Dropdown>
-                  </TableCell>
-                </TableRow>
-              );
-            }}
-          </TableBody>
-        </Table>
+                        </Table.Cell>
+                        <Table.Cell>{onboarding ?? "—"}</Table.Cell>
+                        <Table.Cell>
+                          {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "N/A"}
+                        </Table.Cell>
+                        <Table.Cell className="text-right">
+                          <Dropdown>
+                            <Dropdown.Trigger>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                isIconOnly
+                                aria-label="User actions"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </Dropdown.Trigger>
+                            <Dropdown.Popover placement="bottom end">
+                              <Dropdown.Menu aria-label="User actions">
+                                <Dropdown.Item
+                                  key="onboarding"
+                                  onPress={() => handleSetOnboardingUser(user.id)}
+                                >
+                                  Set Onboarding
+                                </Dropdown.Item>
+                                <Dropdown.Item
+                                  key="usage"
+                                  onPress={() => openUsageModal(user.id, user.name)}
+                                  className={useTRPC ? "" : "hidden"}
+                                >
+                                  <span className="flex items-center gap-2">
+                                    <BarChart3 className="h-4 w-4" />
+                                    View AI Usage
+                                  </span>
+                                </Dropdown.Item>
+                                <Dropdown.Item
+                                  key="impersonate"
+                                  onPress={() => handleImpersonateUser(user.id)}
+                                  isDisabled={user.banned || isImpersonatingUser}
+                                >
+                                  {isImpersonatingUser ? (
+                                    <>
+                                      <Spinner className="mr-2 h-3 w-3" />
+                                      Impersonating...
+                                    </>
+                                  ) : (
+                                    "Impersonate"
+                                  )}
+                                </Dropdown.Item>
+                                <Dropdown.Item
+                                  key="magic-link"
+                                  onPress={() =>
+                                    openMagicLinkModal(user.id, user.name, user.email ?? null)
+                                  }
+                                  className={trpc ? "" : "hidden"}
+                                >
+                                  <span className="flex items-center gap-2">
+                                    <Link2 className="h-4 w-4" />
+                                    Generate Magic Login Link
+                                  </span>
+                                </Dropdown.Item>
+                                {user.banned ? (
+                                  <Dropdown.Item
+                                    key="unban"
+                                    onPress={() => handleUnbanUser(user.id)}
+                                    isDisabled={isUnbanningUser[user.id]}
+                                  >
+                                    {isUnbanningUser[user.id] ? (
+                                      <>
+                                        <Spinner className="mr-2 h-3 w-3" />
+                                        Unbanning...
+                                      </>
+                                    ) : (
+                                      "Unban"
+                                    )}
+                                  </Dropdown.Item>
+                                ) : (
+                                  <Dropdown.Item
+                                    key="ban"
+                                    onPress={() => openBanModal(user.id, user.name)}
+                                  >
+                                    Ban
+                                  </Dropdown.Item>
+                                )}
+                                <Dropdown.Item key="remove" onPress={() => confirmDelete(user.id)}>
+                                  Remove
+                                </Dropdown.Item>
+                              </Dropdown.Menu>
+                            </Dropdown.Popover>
+                          </Dropdown>
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  }}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+        )}
       </div>
 
       {/* Pagination */}
       {totalPages > 0 && (
         <div className="flex items-center justify-end space-x-2 py-4">
           <Button
-            variant="bordered"
+            variant="outline"
             size="sm"
-            onClick={() => handlePageChange(page - 1)}
+            onPress={() => handlePageChange(page - 1)}
             isDisabled={page === 0}
           >
             Previous
@@ -734,9 +787,9 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
             Page {page + 1} of {totalPages}
           </div>
           <Button
-            variant="bordered"
+            variant="outline"
             size="sm"
-            onClick={() => handlePageChange(page + 1)}
+            onPress={() => handlePageChange(page + 1)}
             isDisabled={page === totalPages - 1}
           >
             Next
@@ -751,27 +804,29 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
           if (!open) setUserToDelete(null);
         }}
       >
-        <ModalContent>
-          {(onClose) => (
-            <>
-              <ModalHeader className="flex flex-col gap-1">
-                <p className="text-lg font-semibold">Are you sure?</p>
-                <p className="text-sm text-default-600">
-                  This action cannot be undone. This will permanently delete the user and all their
-                  data.
-                </p>
-              </ModalHeader>
-              <ModalFooter>
-                <Button variant="bordered" onPress={onClose}>
-                  Cancel
-                </Button>
-                <Button color="danger" onPress={handleDelete} isLoading={isDeleting}>
-                  Delete
-                </Button>
-              </ModalFooter>
-            </>
-          )}
-        </ModalContent>
+        <Modal.Backdrop />
+        <Modal.Container>
+          <Modal.Dialog>
+            <Modal.Header>
+              <Modal.Heading className="text-lg font-semibold">Are you sure?</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body>
+              <p className="text-sm text-muted-foreground">
+                This action cannot be undone. This will permanently delete the user and all their
+                data.
+              </p>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="outline" onPress={() => setUserToDelete(null)}>
+                Cancel
+              </Button>
+              <Button variant="danger" onPress={handleDelete} isDisabled={isDeleting}>
+                {isDeleting ? <Spinner className="mr-2 h-4 w-4" /> : null}
+                Delete
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
       </Modal>
 
       {/* Ban user modal */}
@@ -781,36 +836,33 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
           if (!open) setUserToBan(null);
         }}
       >
-        <ModalContent>
-          {(onClose) => (
+        <Modal.Backdrop />
+        <Modal.Container>
+          <Modal.Dialog>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                handleBanUser();
+                void handleBanUser();
               }}
-              className="space-y-4"
+              className="contents"
             >
-              <ModalHeader className="flex flex-col gap-1">
-                <p className="text-lg font-semibold">Ban User</p>
-                <p className="text-sm text-default-600">
+              <Modal.Header>
+                <Modal.Heading className="text-lg font-semibold">Ban User</Modal.Heading>
+              </Modal.Header>
+
+              <Modal.Body className="space-y-4">
+                <p className="text-sm text-muted-foreground">
                   {userToBan &&
                     `You are about to ban ${userToBan.name}. This will prevent them from signing in.`}
                 </p>
-              </ModalHeader>
-
-              <ModalBody className="space-y-4">
                 <div className="space-y-2">
-                  <label htmlFor={banReasonInputId} className="text-sm font-medium">
-                    Ban Reason
-                  </label>
+                  <Label htmlFor={banReasonInputId}>Ban Reason</Label>
                   <Input
                     id={banReasonInputId}
                     placeholder="Enter reason for ban"
                     value={banReason}
                     onChange={(e) => setBanReason(e.target.value)}
-                    variant="bordered"
-                    labelPlacement="outside"
-                    label="Ban Reason"
+                    variant="secondary"
                   />
                 </div>
 
@@ -819,29 +871,29 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       type="button"
-                      variant={banExpiry === "never" ? "solid" : "bordered"}
-                      onClick={() => setBanExpiry("never")}
+                      variant={banExpiry === "never" ? "primary" : "outline"}
+                      onPress={() => setBanExpiry("never")}
                     >
                       Permanent
                     </Button>
                     <Button
                       type="button"
-                      variant={banExpiry === "1d" ? "solid" : "bordered"}
-                      onClick={() => setBanExpiry("1d")}
+                      variant={banExpiry === "1d" ? "primary" : "outline"}
+                      onPress={() => setBanExpiry("1d")}
                     >
                       1 Day
                     </Button>
                     <Button
                       type="button"
-                      variant={banExpiry === "7d" ? "solid" : "bordered"}
-                      onClick={() => setBanExpiry("7d")}
+                      variant={banExpiry === "7d" ? "primary" : "outline"}
+                      onPress={() => setBanExpiry("7d")}
                     >
                       7 Days
                     </Button>
                     <Button
                       type="button"
-                      variant={banExpiry === "30d" ? "solid" : "bordered"}
-                      onClick={() => setBanExpiry("30d")}
+                      variant={banExpiry === "30d" ? "primary" : "outline"}
+                      onPress={() => setBanExpiry("30d")}
                     >
                       30 Days
                     </Button>
@@ -864,34 +916,36 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
                   </div>
 
                   {banExpiry === "custom" && (
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        min="1"
-                        value={customBanDays.toString()}
-                        onChange={(e) => setCustomBanDays(Number(e.target.value))}
-                        variant="bordered"
-                        labelPlacement="outside"
-                        label="Custom duration (days)"
-                      />
-                      <span className="text-sm">Days</span>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <div className="flex flex-1 flex-col gap-2">
+                        <Label htmlFor={`${customDurationId}-days`}>Custom duration (days)</Label>
+                        <Input
+                          id={`${customDurationId}-days`}
+                          type="number"
+                          min={1}
+                          value={customBanDays.toString()}
+                          onChange={(e) => setCustomBanDays(Number(e.target.value))}
+                          variant="secondary"
+                        />
+                      </div>
+                      <span className="text-sm sm:pt-8">Days</span>
                     </div>
                   )}
                 </div>
-              </ModalBody>
+              </Modal.Body>
 
-              <ModalFooter>
-                <Button variant="bordered" type="button" onPress={onClose}>
+              <Modal.Footer>
+                <Button variant="outline" type="button" onPress={() => setUserToBan(null)}>
                   Cancel
                 </Button>
-                <Button color="danger" type="submit" isDisabled={isBanningUser}>
+                <Button variant="danger" type="submit" isDisabled={isBanningUser}>
                   {isBanningUser ? <Spinner className="mr-2 h-4 w-4" /> : null}
                   {isBanningUser ? "Banning..." : "Ban User"}
                 </Button>
-              </ModalFooter>
+              </Modal.Footer>
             </form>
-          )}
-        </ModalContent>
+          </Modal.Dialog>
+        </Modal.Container>
       </Modal>
 
       {/* Create user modal */}
@@ -901,58 +955,56 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
           if (!open) setIsCreateUserModalOpen(false);
         }}
       >
-        <ModalContent>
-          {(onClose) => (
+        <Modal.Backdrop />
+        <Modal.Container>
+          <Modal.Dialog>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                handleCreateUser();
+                void handleCreateUser();
               }}
-              className="space-y-4"
+              className="contents"
             >
-              <ModalHeader className="flex flex-col gap-1">
-                <p className="text-lg font-semibold">Create New User</p>
-                <p className="text-sm text-default-600">
+              <Modal.Header>
+                <Modal.Heading className="text-lg font-semibold">Create New User</Modal.Heading>
+              </Modal.Header>
+
+              <Modal.Body className="space-y-4">
+                <p className="text-sm text-muted-foreground">
                   Fill in the details below to create a new user account.
                 </p>
-              </ModalHeader>
-
-              <ModalBody className="space-y-4">
                 <div className="space-y-2">
+                  <Label htmlFor={nameInputId}>Name *</Label>
                   <Input
                     id={nameInputId}
-                    label="Name *"
-                    labelPlacement="outside"
                     placeholder="Enter user's name"
                     value={newUserData.name}
                     onChange={(e) => handleNewUserDataChange("name", e.target.value)}
-                    variant="bordered"
+                    variant="secondary"
                   />
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor={emailInputId}>Email *</Label>
                   <Input
                     id={emailInputId}
-                    label="Email *"
-                    labelPlacement="outside"
                     type="email"
                     placeholder="Enter user's email"
                     value={newUserData.email}
                     onChange={(e) => handleNewUserDataChange("email", e.target.value)}
-                    variant="bordered"
+                    variant="secondary"
                   />
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor={passwordInputId}>Password *</Label>
                   <Input
                     id={passwordInputId}
-                    label="Password *"
-                    labelPlacement="outside"
                     type="password"
                     placeholder="Enter password"
                     value={newUserData.password}
                     onChange={(e) => handleNewUserDataChange("password", e.target.value)}
-                    variant="bordered"
+                    variant="secondary"
                   />
                 </div>
 
@@ -963,29 +1015,47 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
                   <Select
                     aria-label="Select role"
                     aria-labelledby={roleSelectId}
-                    selectedKeys={new Set([newUserData.role])}
-                    onSelectionChange={(keys) =>
-                      handleNewUserDataChange("role", Array.from(keys)[0] as string)
-                    }
+                    selectedKey={newUserData.role}
+                    onSelectionChange={handleRoleSelectChange}
                   >
-                    <SelectItem key="user">User</SelectItem>
-                    <SelectItem key="admin">Admin</SelectItem>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        {/* biome-ignore lint/correctness/useUniqueElementIds: id is the Select option key */}
+                        <ListBox.Item className="text-sm" id="user" textValue="User">
+                          User
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                        {/* biome-ignore lint/correctness/useUniqueElementIds: id is the Select option key */}
+                        <ListBox.Item className="text-sm" id="admin" textValue="Admin">
+                          Admin
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
                   </Select>
                 </div>
-              </ModalBody>
+              </Modal.Body>
 
-              <ModalFooter>
-                <Button variant="bordered" type="button" onPress={onClose}>
+              <Modal.Footer>
+                <Button
+                  variant="outline"
+                  type="button"
+                  onPress={() => setIsCreateUserModalOpen(false)}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" color="primary" isDisabled={isCreatingUser}>
+                <Button type="submit" variant="primary" isDisabled={isCreatingUser}>
                   {isCreatingUser ? <Spinner className="mr-2 h-4 w-4" /> : null}
                   {isCreatingUser ? "Creating..." : "Create User"}
                 </Button>
-              </ModalFooter>
+              </Modal.Footer>
             </form>
-          )}
-        </ModalContent>
+          </Modal.Dialog>
+        </Modal.Container>
       </Modal>
 
       {/* AI Usage modal */}
@@ -995,66 +1065,65 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
           if (!open) setUserForUsage(null);
         }}
       >
-        <ModalContent>
-          {(onClose) => (
-            <>
-              <ModalHeader className="flex flex-col gap-1">
-                <p className="text-lg font-semibold flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  AI Usage
-                </p>
-                <p className="text-sm text-default-600">
-                  {userForUsage && `Usage statistics for ${userForUsage.name}`}
-                </p>
-              </ModalHeader>
+        <Modal.Backdrop />
+        <Modal.Container>
+          <Modal.Dialog>
+            <Modal.Header className="flex flex-col gap-1">
+              <Modal.Heading className="text-lg font-semibold flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                AI Usage
+              </Modal.Heading>
+              <p className="text-sm text-default-600">
+                {userForUsage && `Usage statistics for ${userForUsage.name}`}
+              </p>
+            </Modal.Header>
 
-              <ModalBody>
-                {isLoadingUsage ? (
-                  <div className="flex justify-center py-8">
-                    <Spinner />
-                  </div>
-                ) : usageData ? (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-4 rounded-lg bg-default-100">
-                        <p className="text-sm text-default-600">Input Tokens</p>
-                        <p className="text-2xl font-semibold">
-                          {formatTokenCount(usageData.inputTokens)}
-                        </p>
-                      </div>
-                      <div className="p-4 rounded-lg bg-default-100">
-                        <p className="text-sm text-default-600">Output Tokens</p>
-                        <p className="text-2xl font-semibold">
-                          {formatTokenCount(usageData.outputTokens)}
-                        </p>
-                      </div>
-                      <div className="p-4 rounded-lg bg-default-100">
-                        <p className="text-sm text-default-600">Total Tokens</p>
-                        <p className="text-2xl font-semibold">
-                          {formatTokenCount(usageData.totalTokens)}
-                        </p>
-                      </div>
-                      <div className="p-4 rounded-lg bg-primary-100">
-                        <p className="text-sm text-primary-600">Estimated Cost</p>
-                        <p className="text-2xl font-semibold text-primary">
-                          {formatCost(usageData.cost)}
-                        </p>
-                      </div>
+            <Modal.Body>
+              {isLoadingUsage ? (
+                <div className="flex justify-center py-8">
+                  <Spinner />
+                </div>
+              ) : usageData ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 rounded-lg bg-default-100">
+                      <p className="text-sm text-default-600">Input Tokens</p>
+                      <p className="text-2xl font-semibold">
+                        {formatTokenCount(usageData.inputTokens)}
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-default-100">
+                      <p className="text-sm text-default-600">Output Tokens</p>
+                      <p className="text-2xl font-semibold">
+                        {formatTokenCount(usageData.outputTokens)}
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-default-100">
+                      <p className="text-sm text-default-600">Total Tokens</p>
+                      <p className="text-2xl font-semibold">
+                        {formatTokenCount(usageData.totalTokens)}
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-primary-100">
+                      <p className="text-sm text-primary-600">Estimated Cost</p>
+                      <p className="text-2xl font-semibold text-primary">
+                        {formatCost(usageData.cost)}
+                      </p>
                     </div>
                   </div>
-                ) : (
-                  <div className="text-center py-8 text-default-600">No usage data available</div>
-                )}
-              </ModalBody>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-default-600">No usage data available</div>
+              )}
+            </Modal.Body>
 
-              <ModalFooter>
-                <Button variant="bordered" onPress={onClose}>
-                  Close
-                </Button>
-              </ModalFooter>
-            </>
-          )}
-        </ModalContent>
+            <Modal.Footer>
+              <Button variant="outline" onPress={() => setUserForUsage(null)}>
+                Close
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
       </Modal>
 
       {/* Magic login link modal */}
@@ -1068,68 +1137,75 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
           }
         }}
       >
-        <ModalContent>
-          {(onClose) => (
+        <Modal.Backdrop />
+        <Modal.Container>
+          <Modal.Dialog>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                handleGenerateMagicLink();
+                void handleGenerateMagicLink();
               }}
-              className="space-y-4"
+              className="contents"
             >
-              <ModalHeader className="flex flex-col gap-1">
-                <p className="text-lg font-semibold">Generate Magic Login Link</p>
-                <p className="text-sm text-default-600">
+              <Modal.Header>
+                <Modal.Heading className="text-lg font-semibold">
+                  Generate Magic Login Link
+                </Modal.Heading>
+              </Modal.Header>
+
+              <Modal.Body className="space-y-4">
+                <p className="text-sm text-muted-foreground">
                   {userForMagicLink &&
                     `Generate a one-time claim sign-in link for ${userForMagicLink.name}.`}
                 </p>
-              </ModalHeader>
+                <div className="space-y-2">
+                  <Label htmlFor={magicLinkEmailInputId}>Claim email</Label>
+                  <Input
+                    id={magicLinkEmailInputId}
+                    type="email"
+                    placeholder="person@example.com"
+                    value={claimEmail}
+                    onChange={(e) => setClaimEmail(e.target.value)}
+                    variant="secondary"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    This email is used for provider linking and future sign-ins.
+                  </p>
+                </div>
 
-              <ModalBody className="space-y-4">
-                <Input
-                  id={magicLinkEmailInputId}
-                  label="Claim email"
-                  labelPlacement="outside"
-                  type="email"
-                  placeholder="person@example.com"
-                  value={claimEmail}
-                  onChange={(e) => setClaimEmail(e.target.value)}
-                  variant="bordered"
-                  description="This email is used for provider linking and future sign-ins."
-                />
+                <div className="space-y-2">
+                  <Label htmlFor={generatedMagicLinkInputId}>Generated link</Label>
+                  <Input
+                    id={generatedMagicLinkInputId}
+                    value={generatedMagicLink ?? ""}
+                    readOnly
+                    variant="secondary"
+                    placeholder="Generate link to see it here"
+                  />
+                </div>
+              </Modal.Body>
 
-                <Input
-                  id={generatedMagicLinkInputId}
-                  label="Generated link"
-                  labelPlacement="outside"
-                  value={generatedMagicLink ?? ""}
-                  readOnly
-                  variant="bordered"
-                  placeholder="Generate link to see it here"
-                />
-              </ModalBody>
-
-              <ModalFooter>
-                <Button variant="bordered" type="button" onPress={onClose}>
+              <Modal.Footer>
+                <Button variant="outline" type="button" onPress={closeMagicLinkModal}>
                   Close
                 </Button>
                 <Button
-                  variant="bordered"
+                  variant="outline"
                   type="button"
-                  onPress={copyGeneratedMagicLink}
+                  onPress={() => void copyGeneratedMagicLink()}
                   isDisabled={!generatedMagicLink}
                 >
                   <Copy className="h-4 w-4 mr-2" />
                   Copy Link
                 </Button>
-                <Button color="primary" type="submit" isDisabled={isGeneratingMagicLink}>
+                <Button variant="primary" type="submit" isDisabled={isGeneratingMagicLink}>
                   {isGeneratingMagicLink ? <Spinner className="mr-2 h-4 w-4" /> : null}
                   {isGeneratingMagicLink ? "Generating..." : "Generate Link"}
                 </Button>
-              </ModalFooter>
+              </Modal.Footer>
             </form>
-          )}
-        </ModalContent>
+          </Modal.Dialog>
+        </Modal.Container>
       </Modal>
     </div>
   );

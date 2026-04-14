@@ -1,4 +1,4 @@
-import { Button, Input } from "@heroui/react";
+import { Button, Input, Label } from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useState } from "react";
 import { type SubmitHandler, useForm } from "react-hook-form";
@@ -37,20 +37,22 @@ export function ForgotPasswordForm() {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="grid gap-6">
       <div className="grid gap-2">
+        <Label className="text-sm font-medium" htmlFor="forgot-password-email">
+          {t("web-ui:auth.login.email")}
+        </Label>
         <Input
-          labelPlacement="outside"
-          label={t("web-ui:auth.login.email")}
+          id="forgot-password-email"
           type="email"
           placeholder={t("web-ui:auth.login.placeholder.email")}
-          variant="bordered"
-          isRequired
+          variant="secondary"
+          required
           {...register("email", { required: true })}
         />
         {errors.email && (
           <span className="text-red-500 text-xs">{t("web-ui:auth.signup.emailRequired")}</span>
         )}
       </div>
-      <Button type="submit" className="w-full" color="primary" isDisabled={isBusy}>
+      <Button type="submit" className="w-full" variant="primary" isDisabled={isBusy}>
         {t("web-ui:auth.forgotPassword.button")}
       </Button>
     </form>

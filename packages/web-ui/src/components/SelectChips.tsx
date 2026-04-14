@@ -1,4 +1,5 @@
 import { Button, type ButtonProps, Checkbox } from "@heroui/react";
+import { cn } from "../lib/utils";
 
 export function SelectChips({
   items,
@@ -11,19 +12,14 @@ export function SelectChips({
   onSelectionChange: (items: string[]) => void;
   buttonProps?: ButtonProps;
 }) {
+  const { className: buttonClassName, ...restButtonProps } = buttonProps ?? {};
   return items.map((item) => {
     const value = typeof item === "string" ? item : item.value;
     const label = typeof item === "string" ? item : item.label;
     return (
       <Button
         key={value}
-        startContent={
-          <Checkbox
-            isSelected={selectedItems.includes(value)}
-            isReadOnly
-            style={{ pointerEvents: "none" }}
-          />
-        }
+        className={cn("inline-flex items-center gap-2", buttonClassName)}
         onPress={() =>
           onSelectionChange(
             selectedItems.includes(value)
@@ -31,8 +27,13 @@ export function SelectChips({
               : [...selectedItems, value]
           )
         }
-        {...buttonProps}
+        {...restButtonProps}
       >
+        <Checkbox
+          isSelected={selectedItems.includes(value)}
+          isReadOnly
+          style={{ pointerEvents: "none" }}
+        />
         {label}
       </Button>
     );

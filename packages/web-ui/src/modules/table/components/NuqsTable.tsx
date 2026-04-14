@@ -1,4 +1,4 @@
-import { Checkbox, Input, Popover, PopoverContent, PopoverTrigger } from "@heroui/react";
+import { Checkbox, Input, Popover } from "@heroui/react";
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { FilterMethods } from "@m5kdev/commons/modules/table/filter.types";
 import type { TableParams } from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
@@ -328,35 +328,35 @@ export const NuqsTable = <T,>({
       <div className="flex w-full flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-center">
           {showGlobalSearch ? (
-            <Input
-              size="sm"
-              className="max-w-xs"
-              placeholder="Search…"
-              value={q ?? ""}
-              onValueChange={(v) => {
-                setQ?.(v === "" ? null : v);
-              }}
-              startContent={<Search className="h-4 w-4 shrink-0 text-default-400" aria-hidden />}
-              aria-label="Search table"
-            />
+            <div className="relative max-w-xs w-full">
+              <Search
+                className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden
+              />
+              <Input
+                className="max-w-xs pl-8"
+                placeholder="Search…"
+                value={q ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setQ?.(v === "" ? null : v);
+                }}
+                aria-label="Search table"
+              />
+            </div>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Popover
-            placement="bottom"
-            isOpen={isFiltersOpen}
-            onOpenChange={setIsFiltersOpen}
-            portalContainer={document.body}
-          >
-            <PopoverTrigger>
+          <Popover isOpen={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
+            <Popover.Trigger>
               <Button variant="outline" size="sm">
                 <div className="flex items-center gap-2">
                   Filters
                   <ChevronDown className="h-4 w-4" />
                 </div>
               </Button>
-            </PopoverTrigger>
-            <PopoverContent>
+            </Popover.Trigger>
+            <Popover.Content placement="bottom">
               <TableFiltering
                 columns={filterableColumns}
                 onFiltersChange={onFiltersChange}
@@ -365,16 +365,11 @@ export const NuqsTable = <T,>({
                 singleFilter={singleFilter}
                 filterMethods={filterMethods}
               />
-            </PopoverContent>
+            </Popover.Content>
           </Popover>
           {groupableColumns.length > 0 && (
-            <Popover
-              placement="bottom"
-              isOpen={isGroupByOpen}
-              onOpenChange={setIsGroupByOpen}
-              portalContainer={document.body}
-            >
-              <PopoverTrigger>
+            <Popover isOpen={isGroupByOpen} onOpenChange={setIsGroupByOpen}>
+              <Popover.Trigger>
                 <Button variant={hasGrouping ? "secondary" : "outline"} size="sm">
                   <div className="flex items-center gap-2">
                     {hasGrouping
@@ -383,8 +378,8 @@ export const NuqsTable = <T,>({
                     <ChevronDown className="h-4 w-4" />
                   </div>
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent>
+              </Popover.Trigger>
+              <Popover.Content placement="bottom">
                 <TableGroupBy
                   columns={groupableColumns}
                   activeGrouping={grouping}
@@ -395,31 +390,26 @@ export const NuqsTable = <T,>({
                   }}
                   onClose={() => setIsGroupByOpen(false)}
                 />
-              </PopoverContent>
+              </Popover.Content>
             </Popover>
           )}
-          <Popover
-            placement="bottom"
-            isOpen={isColumnsOpen}
-            onOpenChange={setIsColumnsOpen}
-            portalContainer={document.body}
-          >
-            <PopoverTrigger>
+          <Popover isOpen={isColumnsOpen} onOpenChange={setIsColumnsOpen}>
+            <Popover.Trigger>
               <Button variant="outline" size="sm">
                 <div className="flex items-center gap-2">
                   Columns
                   <ChevronDown className="h-4 w-4" />
                 </div>
               </Button>
-            </PopoverTrigger>
-            <PopoverContent>
+            </Popover.Trigger>
+            <Popover.Content placement="bottom">
               <ColumnOrderAndVisibility
                 layout={layout}
                 onChangeOrder={onChangeOrder}
                 onChangeVisibility={onChangeVisibility}
                 onClose={() => setIsColumnsOpen(false)}
               />
-            </PopoverContent>
+            </Popover.Content>
           </Popover>
         </div>
       </div>
@@ -429,8 +419,8 @@ export const NuqsTable = <T,>({
             <TableHead>
               <Checkbox
                 isSelected={table.getIsAllRowsSelected()}
-                onValueChange={(checked) => {
-                  table.toggleAllRowsSelected(checked);
+                onChange={(isSelected) => {
+                  table.toggleAllRowsSelected(Boolean(isSelected));
                 }}
               />
             </TableHead>
@@ -505,8 +495,8 @@ export const NuqsTable = <T,>({
                 <TableCell>
                   <Checkbox
                     isSelected={row.getIsSelected()}
-                    onValueChange={(checked) => {
-                      row.toggleSelected(checked);
+                    onChange={(isSelected) => {
+                      row.toggleSelected(Boolean(isSelected));
                     }}
                   />
                 </TableCell>

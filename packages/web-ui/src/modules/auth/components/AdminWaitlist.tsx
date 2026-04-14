@@ -1,23 +1,4 @@
-import {
-  Button,
-  Dropdown,
-  DropdownItem,
-  DropdownMenu,
-  DropdownTrigger,
-  Input,
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  Spinner,
-  Table,
-  TableBody,
-  TableCell,
-  TableColumn,
-  TableHeader,
-  TableRow,
-} from "@heroui/react";
+import { Button, Dropdown, Input, Label, Modal, Spinner, Table } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mail, MoreHorizontal, Search, Trash2, UserPlus, X } from "lucide-react";
 import { useEffect, useId, useState } from "react";
@@ -193,7 +174,7 @@ export function AdminWaitlist({ useTRPC }: AdminWaitlistProps) {
             className="pl-8 w-full"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            variant="bordered"
+            variant="secondary"
           />
           {searchQuery && (
             <button
@@ -209,68 +190,80 @@ export function AdminWaitlist({ useTRPC }: AdminWaitlistProps) {
       </div>
 
       <div className="border rounded-lg overflow-hidden">
-        <Table aria-label="Waitlist table" removeWrapper>
-          <TableHeader>
-            <TableColumn>Email</TableColumn>
-            <TableColumn>Status</TableColumn>
-            <TableColumn>Created At</TableColumn>
-            <TableColumn>Updated At</TableColumn>
-            <TableColumn className="text-right">Actions</TableColumn>
-          </TableHeader>
-          <TableBody
-            items={filteredWaitlist}
-            emptyContent={
-              searchQuery
-                ? "No waitlist entries found matching your search"
-                : "No waitlist entries found"
-            }
-          >
-            {(item) => (
-              <TableRow key={item.id}>
-                <TableCell className="font-medium">{item.email}</TableCell>
-                <TableCell>{getStatusBadge(item.status)}</TableCell>
-                <TableCell>{formatDate(item.createdAt)}</TableCell>
-                <TableCell>{formatDate(item.updatedAt)}</TableCell>
-                <TableCell className="text-right">
-                  <Dropdown placement="bottom-end">
-                    <DropdownTrigger>
-                      <Button variant="light" size="sm" isIconOnly>
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownTrigger>
-                    <DropdownMenu aria-label="Waitlist actions">
-                      <DropdownItem
-                        key="invite"
-                        onPress={() => handleInvite(item.id)}
-                        isDisabled={isInviting}
-                      >
-                        {isInviting ? (
-                          <>
-                            <Spinner className="mr-2 h-3 w-3" />
-                            Inviting...
-                          </>
-                        ) : (
-                          <>
-                            <Mail className="mr-2 h-4 w-4" />
-                            Send Invitation
-                          </>
-                        )}
-                      </DropdownItem>
-                      <DropdownItem
-                        key="remove"
-                        className="text-danger"
-                        onClick={() => setItemToDelete(item.id)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Remove
-                      </DropdownItem>
-                    </DropdownMenu>
-                  </Dropdown>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+        {filteredWaitlist.length === 0 ? (
+          <div className="py-12 text-center text-sm text-muted-foreground">
+            {searchQuery
+              ? "No waitlist entries found matching your search"
+              : "No waitlist entries found"}
+          </div>
+        ) : (
+          <Table aria-label="Waitlist table">
+            <Table.ScrollContainer>
+              <Table.Content>
+                <Table.Header>
+                  <Table.Column>Email</Table.Column>
+                  <Table.Column>Status</Table.Column>
+                  <Table.Column>Created At</Table.Column>
+                  <Table.Column>Updated At</Table.Column>
+                  <Table.Column className="text-right">Actions</Table.Column>
+                </Table.Header>
+                <Table.Body items={filteredWaitlist}>
+                  {(item) => (
+                    <Table.Row id={item.id}>
+                      <Table.Cell className="font-medium">{item.email}</Table.Cell>
+                      <Table.Cell>{getStatusBadge(item.status)}</Table.Cell>
+                      <Table.Cell>{formatDate(item.createdAt)}</Table.Cell>
+                      <Table.Cell>{formatDate(item.updatedAt)}</Table.Cell>
+                      <Table.Cell className="text-right">
+                        <Dropdown>
+                          <Dropdown.Trigger>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              isIconOnly
+                              aria-label="Waitlist row actions"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </Dropdown.Trigger>
+                          <Dropdown.Popover placement="bottom end">
+                            <Dropdown.Menu aria-label="Waitlist actions">
+                              <Dropdown.Item
+                                key="invite"
+                                onPress={() => handleInvite(item.id)}
+                                isDisabled={isInviting}
+                              >
+                                {isInviting ? (
+                                  <>
+                                    <Spinner className="mr-2 h-3 w-3" />
+                                    Inviting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Mail className="mr-2 h-4 w-4" />
+                                    Send Invitation
+                                  </>
+                                )}
+                              </Dropdown.Item>
+                              <Dropdown.Item
+                                key="remove"
+                                className="text-danger"
+                                onPress={() => setItemToDelete(item.id)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Remove
+                              </Dropdown.Item>
+                            </Dropdown.Menu>
+                          </Dropdown.Popover>
+                        </Dropdown>
+                      </Table.Cell>
+                    </Table.Row>
+                  )}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+        )}
       </div>
 
       {/* Remove confirmation modal */}
@@ -280,27 +273,28 @@ export function AdminWaitlist({ useTRPC }: AdminWaitlistProps) {
           if (!open) setItemToDelete(null);
         }}
       >
-        <ModalContent>
-          {(onClose) => (
-            <>
-              <ModalHeader className="flex flex-col gap-1">
-                <p className="text-lg font-semibold">Are you sure?</p>
-                <p className="text-sm text-default-600">
-                  This action cannot be undone. This will permanently remove this entry from the
-                  waitlist.
-                </p>
-              </ModalHeader>
-              <ModalFooter>
-                <Button variant="bordered" onPress={onClose}>
-                  Cancel
-                </Button>
-                <Button color="danger" onPress={handleRemove} isLoading={isRemoving}>
-                  Remove
-                </Button>
-              </ModalFooter>
-            </>
-          )}
-        </ModalContent>
+        <Modal.Backdrop />
+        <Modal.Container>
+          <Modal.Dialog>
+            <Modal.Header>
+              <Modal.Heading className="text-lg font-semibold">Are you sure?</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body>
+              <p className="text-sm text-muted-foreground">
+                This action cannot be undone. This will permanently remove this entry from the
+                waitlist.
+              </p>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="outline" onPress={() => setItemToDelete(null)}>
+                Cancel
+              </Button>
+              <Button variant="danger" onPress={handleRemove} isPending={isRemoving}>
+                Remove
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
       </Modal>
 
       {/* Add to waitlist modal */}
@@ -310,48 +304,48 @@ export function AdminWaitlist({ useTRPC }: AdminWaitlistProps) {
           if (!open) setIsAddModalOpen(false);
         }}
       >
-        <ModalContent>
-          {(onClose) => (
+        <Modal.Backdrop />
+        <Modal.Container>
+          <Modal.Dialog>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 handleAdd();
               }}
-              className="space-y-4"
+              className="contents"
             >
-              <ModalHeader className="flex flex-col gap-1">
-                <p className="text-lg font-semibold">Add to Waitlist</p>
-                <p className="text-sm text-default-600">
+              <Modal.Header>
+                <Modal.Heading className="text-lg font-semibold">Add to Waitlist</Modal.Heading>
+              </Modal.Header>
+
+              <Modal.Body className="space-y-4">
+                <p className="text-sm text-muted-foreground">
                   Enter an email address to add someone to the waitlist.
                 </p>
-              </ModalHeader>
-
-              <ModalBody className="space-y-4">
                 <div className="space-y-2">
+                  <Label htmlFor={emailInputId}>Email *</Label>
                   <Input
                     id={emailInputId}
-                    label="Email *"
-                    labelPlacement="outside"
                     type="email"
                     placeholder="Enter email address"
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
-                    variant="bordered"
+                    variant="secondary"
                   />
                 </div>
-              </ModalBody>
+              </Modal.Body>
 
-              <ModalFooter>
-                <Button variant="bordered" type="button" onPress={onClose}>
+              <Modal.Footer>
+                <Button variant="outline" type="button" onPress={() => setIsAddModalOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" color="primary" isDisabled={isAdding} isLoading={isAdding}>
+                <Button type="submit" variant="primary" isDisabled={isAdding} isPending={isAdding}>
                   {isAdding ? "Adding..." : "Add to Waitlist"}
                 </Button>
-              </ModalFooter>
+              </Modal.Footer>
             </form>
-          )}
-        </ModalContent>
+          </Modal.Dialog>
+        </Modal.Container>
       </Modal>
     </div>
   );

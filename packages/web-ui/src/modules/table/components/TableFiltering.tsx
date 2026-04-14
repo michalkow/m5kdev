@@ -1,12 +1,6 @@
-import {
-  DatePicker,
-  DateRangePicker,
-  type DateValue,
-  Input,
-  Select,
-  SelectItem,
-  type SharedSelection,
-} from "@heroui/react";
+import type { DateValue } from "@react-types/calendar";
+import type { Key, RangeValue, Selection } from "@react-types/shared";
+import { Input, ListBox, Select } from "@heroui/react";
 import { getLocalTimeZone, today } from "@internationalized/date";
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import type {
@@ -25,6 +19,7 @@ import {
   transformFiltersFromHeroUI,
   transformFiltersToHeroUI,
 } from "../filterTransformers";
+import { FilterHeroDatePicker, FilterHeroDateRangePicker } from "./FilterHeroDateControls";
 
 type ComponentRenderer = (
   value: FilterValue,
@@ -35,90 +30,152 @@ type ComponentRenderer = (
 const componentForFilterMethod: Record<ComponentForFilterMethod, ComponentRenderer> = {
   text: (value, onChange) => (
     <Input
-      size="sm"
       aria-label="Select Value"
       className="flex-1 min-w-0 text-sm"
+      variant="secondary"
       value={(value as string) ?? ""}
       onChange={(e) => onChange(e.target.value)}
     />
   ),
   number: (value, onChange) => (
     <Input
-      size="sm"
       aria-label="Select Value"
       type="number"
       className="flex-1 min-w-0 text-sm"
+      variant="secondary"
       value={(value as number | null)?.toString() ?? ""}
       onChange={(e) => onChange(Number.parseFloat(e.target.value) || 0)}
     />
   ),
   date: (value, onChange) => (
-    <DatePicker
-      size="sm"
-      aria-label="Select Value"
+    <FilterHeroDatePicker
       className="flex-1 min-w-0 text-sm"
-      value={(value as any) ?? undefined}
-      onChange={(date) => date && onChange(date as FilterValue)}
       maxValue={today(getLocalTimeZone()) as unknown as DateValue}
+      value={(value as DateValue | null | undefined) ?? null}
+      onChange={(date) => date && onChange(date as FilterValue)}
     />
   ),
   range: (value, onChange) => (
-    <DateRangePicker
-      size="sm"
-      aria-label="Select Value"
+    <FilterHeroDateRangePicker
       className="flex-1 min-w-0 text-sm"
-      value={(value as any) ?? undefined}
-      onChange={(range) => range && onChange(range as FilterValue)}
       maxValue={today(getLocalTimeZone()) as unknown as DateValue}
+      value={(value as RangeValue<DateValue> | null | undefined) ?? null}
+      onChange={(range) => range && onChange(range as FilterValue)}
     />
   ),
   radio: (value, onChange) => (
     <Select
-      size="sm"
       aria-label="Select Value"
       className="flex-1 min-w-0 text-sm"
-      selectedKeys={(value as boolean | null) ? ["true"] : ["false"]}
-      onSelectionChange={(keys) => onChange(keys.currentKey === "true")}
+      selectedKey={(value as boolean | null) ? "true" : "false"}
+      onSelectionChange={(key) => onChange(key === "true")}
     >
-      <SelectItem key="true" className="text-sm">
-        True
-      </SelectItem>
-      <SelectItem key="false" className="text-sm">
-        False
-      </SelectItem>
+      <Select.Trigger>
+        <Select.Value />
+        <Select.Indicator />
+      </Select.Trigger>
+      <Select.Popover>
+        <ListBox>
+          <ListBox.Item className="text-sm" id="true" textValue="True">
+            True
+            <ListBox.ItemIndicator />
+          </ListBox.Item>
+          <ListBox.Item className="text-sm" id="false" textValue="False">
+            False
+            <ListBox.ItemIndicator />
+          </ListBox.Item>
+        </ListBox>
+      </Select.Popover>
     </Select>
   ),
-  select: (value, onChange, options = []) => (
-    <Select
-      size="sm"
-      aria-label="Select Value"
-      className="flex-1 min-w-0 text-sm"
-      selectedKeys={(value as SharedSelection) ?? new Set()}
-      onSelectionChange={(keys) => keys && onChange(keys as FilterValue)}
-    >
-      {options.map((option) => (
-        <SelectItem key={option.value} className="text-sm">
-          {option.label}
-        </SelectItem>
-      ))}
-    </Select>
-  ),
-  multiSelect: (value, onChange, options = []) => (
-    <Select
-      size="sm"
-      aria-label="Select Value"
-      selectionMode="multiple"
-      className="flex-1 min-w-0 text-sm"
-      selectedKeys={value ? new Set(value as SharedSelection) : new Set()}
-      onSelectionChange={(keys) => onChange(keys as FilterValue)}
-    >
-      {options.map((option) => (
-        <SelectItem key={option.value} className="text-sm">
-          {option.label}
-        </SelectItem>
-      ))}
-    </Select>
-  ),
+  select: (value, onChange, options = []) => {
+    const selection = (value as Selection | undefined) ?? new Set<string>();
+    const selectedKey =
+      selection === "all"
+        ? undefined
+        : selection.size > 0
+          ? String([...selection][0])
+          : undefined;
+    return (
+      <Select
+        aria-label="Select Value"
+        className="flex-1 min-w-0 text-sm"
+        selectedKey={selectedKey}
+        onSelectionChange={(key) => {
+          if (key === null) return;
+          onChange(new Set([String(key)]) as FilterValue);
+        }}
+      >
+        <Select.Trigger>
+          <Select.Value />
+          <Select.Indicator />
+        </Select.Trigger>
+        <Select.Popover>
+          <ListBox>
+            {options.map((option) => (
+              <ListBox.Item
+                key={option.value}
+                className="text-sm"
+                id={option.value}
+                textValue={option.label}
+              >
+                {option.label}
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Select.Popover>
+      </Select>
+    );
+  },
+  multiSelect: (value, onChange, options = []) => {
+    const selectedKeys: Selection =
+      value === "all"
+        ? "all"
+        : value instanceof Set
+          ? (value as Set<Key>)
+          : new Set<Key>();
+    const selectValue: readonly Key[] =
+      selectedKeys === "all" ? options.map((o) => o.value) : [...selectedKeys];
+    return (
+      <Select<object, "multiple">
+        aria-label="Select Value"
+        className="flex-1 min-w-0 text-sm"
+        selectionMode="multiple"
+        value={selectValue}
+        onChange={(keys) => {
+          if (options.length > 0 && keys.length === options.length) {
+            const keySet = new Set(keys.map(String));
+            if (options.every((o) => keySet.has(o.value))) {
+              onChange("all" as FilterValue);
+              return;
+            }
+          }
+          onChange(new Set(keys) as FilterValue);
+        }}
+      >
+        <Select.Trigger>
+          <Select.Value />
+          <Select.Indicator />
+        </Select.Trigger>
+        <Select.Popover>
+          <ListBox>
+            {options.map((option) => (
+              <ListBox.Item
+                key={option.value}
+                className="text-sm"
+                id={option.value}
+                textValue={option.label}
+              >
+                {option.label}
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Select.Popover>
+      </Select>
+    );
+  },
 };
 
 const defaultFilterMethods: FilterMethods = {
@@ -408,9 +465,9 @@ const TableFilteringItem = ({
   filterMethods: FilterMethods;
 }) => {
   const handleColumnChange = useCallback(
-    (keys: any) => {
-      const columnId = String(keys.currentKey);
-      selectColumn(id, columnId);
+    (key: Key | null) => {
+      if (key === null) return;
+      selectColumn(id, String(key));
     },
     [id, selectColumn]
   );
@@ -439,11 +496,10 @@ const TableFilteringItem = ({
   }, [filter.type, filter.columnId, filter.method?.value, filterMethods]);
 
   const handleMethodChange = useCallback(
-    (keys: any) => {
-      if (!filter.type) return;
-      // Use methodsForType instead of filterMethods to include dynamically added methods
+    (key: Key | null) => {
+      if (!filter.type || key === null) return;
       const method = methodsForType.find(
-        (currentMethod: FilterMethod) => currentMethod.value === String(keys.currentKey)
+        (currentMethod: FilterMethod) => currentMethod.value === String(key)
       );
       if (method) {
         selectMethod(id, method);
@@ -463,20 +519,30 @@ const TableFilteringItem = ({
     if (!filter.type) return null;
     return (
       <Select
-        size="sm"
         aria-label="Select Method"
         className="w-40 flex-shrink-0 text-sm"
-        selectedKeys={filter.method?.value ? [filter.method.value] : []}
+        selectedKey={filter.method?.value ?? undefined}
         onSelectionChange={handleMethodChange}
-        popoverProps={{
-          className: "w-auto min-w-max",
-        }}
       >
-        {methodsForType.map((method: FilterMethod) => (
-          <SelectItem key={method.value} className="text-sm">
-            {method.label}
-          </SelectItem>
-        ))}
+        <Select.Trigger className="min-h-8 text-sm">
+          <Select.Value />
+          <Select.Indicator />
+        </Select.Trigger>
+        <Select.Popover className="w-auto min-w-max">
+          <ListBox>
+            {methodsForType.map((method: FilterMethod) => (
+              <ListBox.Item
+                key={method.value}
+                className="text-sm"
+                id={method.value}
+                textValue={method.label}
+              >
+                {method.label}
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Select.Popover>
       </Select>
     );
   }, [filter.type, filter.method?.value, methodsForType, handleMethodChange]);
@@ -492,30 +558,34 @@ const TableFilteringItem = ({
     return ComponentFn(filter.value as any, handleValueChange, filter.options ?? []);
   }, [filter.method?.component, filter.value, filter.options, handleValueChange]);
 
-  const columnSelectItems = useMemo(
-    () =>
-      columns.map((column) => (
-        <SelectItem key={column.id} className="text-sm">
-          {String(column.label)}
-        </SelectItem>
-      )),
-    [columns]
-  );
-
   return (
     <div className="flex items-center gap-2 w-full">
       <div className="flex flex-1 items-center gap-2 min-w-0">
         <Select
-          size="sm"
           aria-label="Select Column"
           className="w-40 flex-shrink-0 text-sm"
-          selectedKeys={filter.columnId ? [filter.columnId] : []}
+          selectedKey={filter.columnId || undefined}
           onSelectionChange={handleColumnChange}
-          popoverProps={{
-            className: "w-auto min-w-max",
-          }}
         >
-          {columnSelectItems}
+          <Select.Trigger className="min-h-8 text-sm">
+            <Select.Value />
+            <Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover className="w-auto min-w-max">
+            <ListBox>
+              {columns.map((column) => (
+                <ListBox.Item
+                  key={column.id}
+                  className="text-sm"
+                  id={column.id}
+                  textValue={String(column.label)}
+                >
+                  {String(column.label)}
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </Select.Popover>
         </Select>
         {methodSelect}
         {filterValueComponent}
