@@ -60,26 +60,21 @@ export function AppSidebarUser({ user, onSignOut, organizationSettingsPath }: Ap
       <SidebarMenuItem>
         <Dropdown>
           <Dropdown.Trigger className="w-full">
-            <SidebarMenuButton
-              size="lg"
-              className="data-[state=open]:bg-default-100 data-[state=open]:text-neutral-900 w-full"
-              aria-label={menuLabel}
-            >
+            <SidebarMenuButton size="lg" className="w-full" aria-label={menuLabel}>
               <Avatar size="sm" className="shrink-0 rounded-lg">
                 {image ? <Avatar.Image src={image} alt={name} /> : null}
                 <Avatar.Fallback className="rounded-lg">{initials}</Avatar.Fallback>
               </Avatar>
               <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">{name}</span>
-                <span className="truncate text-xs">{email}</span>
+                <span className="truncate font-semibold text-surface-foreground">{name}</span>
+                <span className="truncate text-xs text-default-600">{email}</span>
               </div>
-              <ChevronsUpDown className="ml-auto size-4 shrink-0" />
+              <ChevronsUpDown className="ml-auto size-4 shrink-0 text-default-500" />
             </SidebarMenuButton>
           </Dropdown.Trigger>
           <Dropdown.Popover
-            placement={isMobile ? "bottom end" : "right"}
+            placement={isMobile ? "bottom end" : "right bottom"}
             className="min-w-56 p-0"
-            maxHeight={300}
             offset={4}
           >
             <div className="flex items-center gap-2 border-b border-default-200 px-3 py-2">
@@ -88,7 +83,7 @@ export function AppSidebarUser({ user, onSignOut, organizationSettingsPath }: Ap
                 <Avatar.Fallback className="rounded-lg">{initials}</Avatar.Fallback>
               </Avatar>
               <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">{name}</span>
+                <span className="truncate font-semibold text-foreground">{name}</span>
                 <span className="truncate text-xs text-default-600">{email}</span>
               </div>
             </div>

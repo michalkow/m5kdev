@@ -14,7 +14,8 @@
     "allowImportingTsExtensions": false,
   },
   "include": [
-    "src"
+    "src",
+    ".storybook"
   ],
   "exclude": [
     "out-tsc",

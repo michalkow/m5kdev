@@ -1,0 +1,4 @@
+/* biome-ignore-all lint/suspicious/noUnknownAtRules: Tailwind v4 */
+
+@import "tailwindcss";
+@import "@heroui/styles";

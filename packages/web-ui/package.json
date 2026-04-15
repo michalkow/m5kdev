@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/web-ui",
-  "version": "0.16.2",
+  "version": "0.16.4",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -15,7 +15,9 @@
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
     "check-types": "tsc --noEmit",
-    "build": "tsdown && cp -r translations dist/ && cp src/components/Calendar.css dist/src/components/"
+    "build": "tsdown && cp -r translations dist/ && cp src/components/Calendar.css dist/src/components/",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "@m5kdev/commons": "workspace:*",
@@ -80,17 +82,24 @@
     "@trpc/tanstack-react-query": "catalog:"
   },
   "devDependencies": {
-    "tailwindcss": "catalog:",
-    "@tsdown/css": "catalog:",
     "@m5kdev/backend": "workspace:*",
     "@m5kdev/config": "workspace:*",
+    "@storybook/addon-docs": "catalog:",
+    "@storybook/react": "catalog:",
+    "@storybook/react-vite": "catalog:",
+    "@tailwindcss/vite": "catalog:",
     "@trpc/server": "catalog:",
     "@types/luxon": "catalog:",
     "@types/react": "catalog:",
     "@types/react-big-calendar": "catalog:",
     "@types/react-dom": "catalog:",
+    "@tsdown/css": "catalog:",
     "globals": "catalog:",
+    "i18next": "catalog:",
+    "storybook": "catalog:",
+    "tailwindcss": "catalog:",
     "tsdown": "catalog:",
+    "typescript": "catalog:",
     "vite": "catalog:"
   },
   "exports": {

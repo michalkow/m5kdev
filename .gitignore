@@ -10,9 +10,6 @@ node_modules
 .pnpm-store
 
 .npmrc
-
-app/
-
 # Local env files
 .env
 .env.local
@@ -39,6 +36,8 @@ out/
 build
 dist
 
+# Storybook
+storybook-static
 
 # Debug
 npm-debug.log*

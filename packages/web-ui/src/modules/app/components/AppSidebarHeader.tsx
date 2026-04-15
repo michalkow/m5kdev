@@ -35,7 +35,7 @@ export function AppSidebarHeader({
           alt={logo.alt}
           style={{ width: size, height: size }}
         />
-        <span className="group-data-[collapsible=icon]:hidden font-semibold text-lg text-neutral-900">
+        <span className="group-data-[collapsible=icon]:hidden font-semibold text-lg text-surface-foreground">
           {title}
         </span>
       </Link>

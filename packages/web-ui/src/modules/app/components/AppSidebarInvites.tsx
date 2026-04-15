@@ -14,12 +14,12 @@ export function AppSidebarInvites({ count }: { count: number }) {
         to="/invites"
         className={cn(
           "inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium transition-colors",
-          "text-neutral-600 hover:bg-default-100 hover:text-neutral-900",
+          "text-default-600 hover:bg-default-100 hover:text-surface-foreground",
           open ? "w-full justify-start" : "size-8 justify-center p-0"
         )}
       >
-        <GiftIcon className="w-4 h-4 shrink-0 text-neutral-500" />
-        <span className="group-data-[collapsible=icon]:hidden text-sm text-neutral-500">
+        <GiftIcon className="w-4 h-4 shrink-0 text-default-500" />
+        <span className="group-data-[collapsible=icon]:hidden text-sm text-default-500">
           {t("sidebar.invites.title")}
         </span>
       </Link>
