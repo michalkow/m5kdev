@@ -1,5 +1,23 @@
 # create-m5kdev
 
+## 0.16.2
+
+### Patch Changes
+
+- sidebar
+
+## 0.16.1
+
+### Patch Changes
+
+- sidebar
+
+## 0.16.0
+
+### Minor Changes
+
+- heroui v3
+
 ## 0.15.3
 
 ### Patch Changes

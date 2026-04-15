@@ -1,6 +1,6 @@
-import { SidebarInset, SidebarProvider } from "@m5kdev/web-ui/components/ui/sidebar";
 import type { ReactNode } from "react";
 import { Outlet } from "react-router";
+import { SidebarInset, SidebarProvider } from "../../../components/Sidebar";
 import { AppSidebar, type AppSidebarProps } from "./AppSidebar";
 
 export type AppShellProps = {

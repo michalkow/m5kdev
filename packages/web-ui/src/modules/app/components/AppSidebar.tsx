@@ -5,7 +5,7 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
-} from "../../../components/ui/sidebar";
+} from "../../../components/Sidebar";
 
 export type AppSidebarProps = {
   header: ReactNode;

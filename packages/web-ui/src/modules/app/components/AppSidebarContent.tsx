@@ -5,7 +5,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "../../../components/ui/sidebar";
+} from "../../../components/Sidebar";
 
 type NavigationItem = {
   label: string;
@@ -35,14 +35,14 @@ export function AppSidebarContent({
           item.subItems ? (
             <CollapsibleSidebarMenuItem
               key={item.label}
-              defaultOpen={item.defaultOpen}
-              open={navigationState[item.label]}
+              defaultExpanded={item.defaultOpen}
+              isExpanded={navigationState[item.label]}
               label={item.label}
               icon={item.icon}
               link={item.link}
               badge={item.badge}
-              onOpenChange={(open) =>
-                onNavigationStateChange({ ...navigationState, [item.label]: open })
+              onExpandedChange={(expanded) =>
+                onNavigationStateChange({ ...navigationState, [item.label]: expanded })
               }
             >
               {item.subItems.map((subItem) => (

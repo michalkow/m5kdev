@@ -1,24 +1,24 @@
-import { Building2, ChevronsUpDown, CreditCard, LogOut, Settings, Sparkles, User } from "lucide-react";
-import { useTranslation } from "react-i18next";
-import { Link } from "react-router";
-import { Avatar, AvatarFallback, AvatarImage } from "../../../components/ui/avatar";
+import { Avatar, Dropdown, Separator } from "@heroui/react";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "../../../components/ui/dropdown-menu";
+  Building2,
+  ChevronsUpDown,
+  CreditCard,
+  LogOut,
+  Settings,
+  Sparkles,
+  User,
+} from "lucide-react";
+import { useId } from "react";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router";
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from "../../../components/ui/sidebar";
+} from "../../../components/Sidebar";
 
-export type AppSidebarUserProps = {
+export interface AppSidebarUserProps {
   user?: {
     name: string;
     email: string;
@@ -27,101 +27,152 @@ export type AppSidebarUserProps = {
   };
   onSignOut: () => void;
   organizationSettingsPath?: string;
-};
+}
+
+function getUserInitials(displayName: string): string {
+  const trimmed = displayName.trim();
+  if (!trimmed) {
+    return "U";
+  }
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const first = parts[0]?.charAt(0) ?? "";
+    const last = parts[parts.length - 1]?.charAt(0) ?? "";
+    return `${first}${last}`.toUpperCase();
+  }
+  return trimmed.slice(0, 2).toUpperCase();
+}
 
 export function AppSidebarUser({ user, onSignOut, organizationSettingsPath }: AppSidebarUserProps) {
   const { name = "User", email = "email@example.com", image, role } = user || {};
+  const initials = getUserInitials(name);
   const isAdmin = role === "admin";
   const { isMobile } = useSidebar();
   const { t } = useTranslation("web-ui");
+  const navigate = useNavigate();
+  const menuInstanceId = useId();
+
+  const menuLabel = t("web-ui:sidebar.user.account", { defaultValue: "User menu" });
+  const itemId = (suffix: string): string => `${menuInstanceId}-${suffix}`;
 
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        <Dropdown>
+          <Dropdown.Trigger className="w-full">
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              className="data-[state=open]:bg-default-100 data-[state=open]:text-neutral-900 w-full"
+              aria-label={menuLabel}
             >
-              <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarImage src={image ?? undefined} alt={name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+              <Avatar size="sm" className="shrink-0 rounded-lg">
+                {image ? <Avatar.Image src={image} alt={name} /> : null}
+                <Avatar.Fallback className="rounded-lg">{initials}</Avatar.Fallback>
               </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
+              <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">{name}</span>
                 <span className="truncate text-xs">{email}</span>
               </div>
-              <ChevronsUpDown className="ml-auto size-4" />
+              <ChevronsUpDown className="ml-auto size-4 shrink-0" />
             </SidebarMenuButton>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
-            side={isMobile ? "bottom" : "right"}
-            align="end"
-            sideOffset={4}
+          </Dropdown.Trigger>
+          <Dropdown.Popover
+            placement={isMobile ? "bottom end" : "right"}
+            className="min-w-56 p-0"
+            maxHeight={300}
+            offset={4}
           >
-            <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={image ?? undefined} alt={name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
-                </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">{name}</span>
-                  <span className="truncate text-xs">{email}</span>
-                </div>
+            <div className="flex items-center gap-2 border-b border-default-200 px-3 py-2">
+              <Avatar size="sm" className="shrink-0 rounded-lg">
+                {image ? <Avatar.Image src={image} alt={name} /> : null}
+                <Avatar.Fallback className="rounded-lg">{initials}</Avatar.Fallback>
+              </Avatar>
+              <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-semibold">{name}</span>
+                <span className="truncate text-xs text-default-600">{email}</span>
               </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <Link to="/billing">
-                <DropdownMenuItem className="cursor-pointer">
-                  <Sparkles />
+            </div>
+            <Dropdown.Menu aria-label={menuLabel}>
+              <Dropdown.Item
+                key="upgrade"
+                id={itemId("upgrade")}
+                textValue={t("web-ui:sidebar.user.upgradeToPro")}
+                onPress={() => navigate("/billing")}
+              >
+                <span className="flex items-center gap-2">
+                  <Sparkles className="size-4 shrink-0" />
                   {t("web-ui:sidebar.user.upgradeToPro")}
-                </DropdownMenuItem>
-              </Link>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              {isAdmin && (
-                <Link to="/admin">
-                  <DropdownMenuItem className="cursor-pointer">
-                    <Settings />
+                </span>
+              </Dropdown.Item>
+              <Separator className="my-1" />
+              {isAdmin ? (
+                <Dropdown.Item
+                  key="admin"
+                  id={itemId("admin")}
+                  textValue={t("web-ui:sidebar.user.adminDashboard")}
+                  onPress={() => navigate("/admin")}
+                >
+                  <span className="flex items-center gap-2">
+                    <Settings className="size-4 shrink-0" />
                     {t("web-ui:sidebar.user.adminDashboard")}
-                  </DropdownMenuItem>
-                </Link>
-              )}
-              {organizationSettingsPath && (
-                <Link to={organizationSettingsPath}>
-                  <DropdownMenuItem className="cursor-pointer">
-                    <Building2 />
+                  </span>
+                </Dropdown.Item>
+              ) : null}
+              {organizationSettingsPath ? (
+                <Dropdown.Item
+                  key="organization"
+                  id={itemId("organization")}
+                  textValue={t("web-ui:sidebar.user.organizationSettings", {
+                    defaultValue: "Organization settings",
+                  })}
+                  onPress={() => navigate(organizationSettingsPath)}
+                >
+                  <span className="flex items-center gap-2">
+                    <Building2 className="size-4 shrink-0" />
                     {t("web-ui:sidebar.user.organizationSettings", {
                       defaultValue: "Organization settings",
                     })}
-                  </DropdownMenuItem>
-                </Link>
-              )}
-              <Link to="/profile">
-                <DropdownMenuItem className="cursor-pointer">
-                  <User />
+                  </span>
+                </Dropdown.Item>
+              ) : null}
+              <Dropdown.Item
+                key="profile"
+                id={itemId("profile")}
+                textValue={t("web-ui:sidebar.user.account")}
+                onPress={() => navigate("/profile")}
+              >
+                <span className="flex items-center gap-2">
+                  <User className="size-4 shrink-0" />
                   {t("web-ui:sidebar.user.account")}
-                </DropdownMenuItem>
-              </Link>
-              <Link to="/billing">
-                <DropdownMenuItem className="cursor-pointer">
-                  <CreditCard />
+                </span>
+              </Dropdown.Item>
+              <Dropdown.Item
+                key="billing"
+                id={itemId("billing")}
+                textValue={t("web-ui:sidebar.user.billing")}
+                onPress={() => navigate("/billing")}
+              >
+                <span className="flex items-center gap-2">
+                  <CreditCard className="size-4 shrink-0" />
                   {t("web-ui:sidebar.user.billing")}
-                </DropdownMenuItem>
-              </Link>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="cursor-pointer" onClick={onSignOut}>
-              <LogOut />
-              {t("web-ui:sidebar.user.logout")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+                </span>
+              </Dropdown.Item>
+              <Separator className="my-1" />
+              <Dropdown.Item
+                key="logout"
+                id={itemId("logout")}
+                textValue={t("web-ui:sidebar.user.logout")}
+                variant="danger"
+                onPress={onSignOut}
+              >
+                <span className="flex items-center gap-2">
+                  <LogOut className="size-4 shrink-0" />
+                  {t("web-ui:sidebar.user.logout")}
+                </span>
+              </Dropdown.Item>
+            </Dropdown.Menu>
+          </Dropdown.Popover>
+        </Dropdown>
       </SidebarMenuItem>
     </SidebarMenu>
   );

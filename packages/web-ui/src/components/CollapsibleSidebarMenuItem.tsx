@@ -1,14 +1,18 @@
-import type { CollapsibleProps } from "@radix-ui/react-collapsible";
+"use client";
+
+import { Disclosure, type DisclosureProps } from "@heroui/react";
 import { ChevronRight } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { Link } from "react-router";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
-import {
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSub,
-  useSidebar,
-} from "./ui/sidebar";
+import { SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, useSidebar } from "./Sidebar";
+
+interface CollapsibleSidebarMenuItemOwnProps {
+  children: ReactNode;
+  label: string;
+  icon: ReactNode;
+  link: string;
+  badge?: ReactNode;
+}
 
 export function CollapsibleSidebarMenuItem({
   children,
@@ -16,17 +20,12 @@ export function CollapsibleSidebarMenuItem({
   icon,
   link,
   badge,
-  ...props
-}: {
-  children: ReactNode;
-  label: string;
-  icon: ReactNode;
-  link: string;
-  badge?: ReactNode;
-} & CollapsibleProps) {
+  className,
+  ...disclosureProps
+}: CollapsibleSidebarMenuItemOwnProps & DisclosureProps): ReactElement {
   const { open } = useSidebar();
 
-  if (!open)
+  if (!open) {
     return (
       <SidebarMenuItem>
         <SidebarMenuButton asChild tooltip={label}>
@@ -37,21 +36,24 @@ export function CollapsibleSidebarMenuItem({
         </SidebarMenuButton>
       </SidebarMenuItem>
     );
+  }
 
   return (
-    <Collapsible asChild className="group/collapsible" {...props}>
-      <SidebarMenuItem>
-        <CollapsibleTrigger asChild>
-          <SidebarMenuButton>
+    <SidebarMenuItem>
+      <Disclosure className={className} {...disclosureProps}>
+        <Disclosure.Heading className="w-full min-w-0">
+          <SidebarMenuButton slot="trigger">
             {icon}
-            {badge ? badge : <span>{label}</span>}
-            <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+            {badge ?? <span>{label}</span>}
+            <Disclosure.Indicator className="ml-auto shrink-0">
+              <ChevronRight className="size-4 transition-transform duration-200 data-[expanded=true]:rotate-90" />
+            </Disclosure.Indicator>
           </SidebarMenuButton>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
+        </Disclosure.Heading>
+        <Disclosure.Content>
           <SidebarMenuSub>{children}</SidebarMenuSub>
-        </CollapsibleContent>
-      </SidebarMenuItem>
-    </Collapsible>
+        </Disclosure.Content>
+      </Disclosure>
+    </SidebarMenuItem>
   );
 }

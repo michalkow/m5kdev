@@ -1,5 +1,35 @@
 # @m5kdev/backend
 
+## 0.16.2
+
+### Patch Changes
+
+- sidebar
+- Updated dependencies
+  - @m5kdev/commons@0.16.2
+  - @m5kdev/config@0.16.2
+
+## 0.16.1
+
+### Patch Changes
+
+- sidebar
+- Updated dependencies
+  - @m5kdev/commons@0.16.1
+  - @m5kdev/config@0.16.1
+
+## 0.16.0
+
+### Minor Changes
+
+- heroui v3
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.16.0
+  - @m5kdev/config@0.16.0
+
 ## 0.15.3
 
 ### Patch Changes

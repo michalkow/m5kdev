@@ -1,9 +1,9 @@
 import { Badge, Tooltip } from "@heroui/react";
-import { useSidebar } from "@m5kdev/web-ui/components/ui/sidebar";
 import { cn } from "@m5kdev/web-ui/utils";
 import { GiftIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
+import { useSidebar } from "../../../components/Sidebar";
 
 export function AppSidebarInvites({ count }: { count: number }) {
   const { open } = useSidebar();
