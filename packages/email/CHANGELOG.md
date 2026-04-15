@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.16.7
+
+### Patch Changes
+
+- login redirect
+
 ## 0.16.6
 
 ### Patch Changes
