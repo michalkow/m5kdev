@@ -75,7 +75,7 @@ export function AppSidebarUser({ user, onSignOut, organizationSettingsPath }: Ap
           <Dropdown.Popover
             placement={isMobile ? "bottom end" : "right bottom"}
             className="min-w-56 p-0"
-            offset={4}
+            offset={16}
           >
             <div className="flex items-center gap-2 border-b border-default-200 px-3 py-2">
               <Avatar size="sm" className="shrink-0 rounded-lg">

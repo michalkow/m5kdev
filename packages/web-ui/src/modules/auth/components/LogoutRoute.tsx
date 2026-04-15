@@ -1,9 +1,9 @@
-import { Spinner } from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useEffect } from "react";
 import { useNavigate } from "react-router";
+import { AppLoader } from "../../app/components/AppLoader";
 
-export default function Logout() {
+export default function Logout({ loader = <AppLoader /> }: { loader?: React.ReactNode }) {
   const navigate = useNavigate();
 
   // biome-ignore lint/correctness/useExhaustiveDependencies(authClient): authClient is a singleton
@@ -13,9 +13,5 @@ export default function Logout() {
     navigate("/login");
   }, []);
 
-  return (
-    <div className="flex-1 justify-center align-center">
-      <Spinner />
-    </div>
-  );
+  return loader;
 }

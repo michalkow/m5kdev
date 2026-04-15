@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.16.6
+
+### Patch Changes
+
+- sidbar fixes
+- Updated dependencies
+  - @m5kdev/commons@0.16.6
+  - @m5kdev/frontend@0.16.6
+
 ## 0.16.5
 
 ### Patch Changes

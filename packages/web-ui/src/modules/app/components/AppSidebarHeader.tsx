@@ -1,8 +1,8 @@
 import { Button } from "@heroui/react";
-import { cn } from "@m5kdev/web-ui/utils";
 import { ChevronsLeftIcon, ChevronsRightIcon } from "lucide-react";
 import { Link } from "react-router";
 import { useSidebar } from "../../../components/Sidebar";
+import { cn } from "../../../lib/utils";
 
 export function AppSidebarHeader({
   logo,

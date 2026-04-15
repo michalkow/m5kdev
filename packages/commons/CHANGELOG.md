@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.16.6
+
+### Patch Changes
+
+- sidbar fixes
+
 ## 0.16.5
 
 ### Patch Changes

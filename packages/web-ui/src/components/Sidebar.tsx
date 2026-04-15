@@ -13,7 +13,7 @@ import {
 } from "@heroui/react";
 import { mergeProps } from "@react-aria/utils";
 import { cva, type VariantProps } from "class-variance-authority";
-import { PanelLeft } from "lucide-react";
+import { Menu, PanelLeft, X } from "lucide-react";
 import * as React from "react";
 
 import { useIsMobile } from "../hooks/use-mobile";
@@ -25,8 +25,6 @@ const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
 /** Expanded rail width (16rem) — keep spacer + fixed column in sync. */
 const SIDEBAR_W_EXPANDED = "w-64";
-/** Mobile drawer width (18rem). */
-const SIDEBAR_W_MOBILE = "w-72";
 
 interface SidebarContextValue {
   state: "expanded" | "collapsed";
@@ -143,6 +141,25 @@ const SidebarProvider = React.forwardRef<
           ref={ref}
           {...props}
         >
+          {isMobile && !openMobile ? (
+            <Button
+              type="button"
+              aria-label="Open navigation menu"
+              data-sidebar="mobile-menu-button"
+              isIconOnly
+              size="md"
+              variant="secondary"
+              className={cn(
+                "fixed z-40 h-11 min-w-11 touch-manipulation border border-border shadow-md",
+                "end-[max(1rem,env(safe-area-inset-right,0px))] top-[max(1rem,env(safe-area-inset-top,0px))]"
+              )}
+              onPress={() => {
+                setOpenMobile(true);
+              }}
+            >
+              <Menu className="size-5" aria-hidden />
+            </Button>
+          ) : null}
           {children}
         </div>
       </SidebarContext.Provider>
@@ -191,28 +208,49 @@ const Sidebar = React.forwardRef<
     if (isMobile) {
       return (
         <Modal isOpen={openMobile} onOpenChange={setOpenMobile}>
-          <Modal.Backdrop className="z-50" />
-          <Modal.Container
-            className={cn(
-              "fixed inset-0 z-50 flex max-h-none max-w-none items-stretch justify-start bg-transparent p-0 shadow-none",
-              "data-[placement]:p-0"
-            )}
-          >
-            <Modal.Dialog
+          <Modal.Backdrop>
+            <Modal.Container
+              size="full"
               className={cn(
-                "m-0 flex h-full max-h-full max-w-[min(100vw,18rem)] flex-col rounded-none border-0 bg-surface p-0 text-surface-foreground shadow-none outline-none",
-                SIDEBAR_W_MOBILE
+                "fixed inset-0 z-50 flex max-h-none max-w-none items-stretch justify-stretch bg-transparent p-0 shadow-none",
+                "data-[placement]:p-0"
               )}
             >
-              <div
-                data-sidebar="sidebar"
-                data-mobile="true"
-                className="flex h-full w-full flex-col"
+              <Modal.Dialog
+                className={cn(
+                  "m-0 flex h-[100dvh] max-h-[100dvh] min-h-0 w-full max-w-none flex-col rounded-none border-0 bg-surface p-0 text-surface-foreground shadow-none outline-none"
+                )}
               >
-                {children}
-              </div>
-            </Modal.Dialog>
-          </Modal.Container>
+                <div
+                  className={cn(
+                    "flex shrink-0 justify-end border-b border-border px-2 py-2",
+                    "pe-[max(0.5rem,env(safe-area-inset-right,0px))] pt-[max(0.5rem,env(safe-area-inset-top,0px))]"
+                  )}
+                >
+                  <Button
+                    type="button"
+                    aria-label="Close navigation menu"
+                    isIconOnly
+                    size="md"
+                    variant="ghost"
+                    className="h-10 min-w-10 text-surface-foreground"
+                    onPress={() => {
+                      setOpenMobile(false);
+                    }}
+                  >
+                    <X className="size-5" aria-hidden />
+                  </Button>
+                </div>
+                <div
+                  data-sidebar="sidebar"
+                  data-mobile="true"
+                  className="flex min-h-0 flex-1 flex-col overflow-auto"
+                >
+                  {children}
+                </div>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
         </Modal>
       );
     }

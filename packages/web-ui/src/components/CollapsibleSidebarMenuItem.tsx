@@ -42,12 +42,12 @@ export function CollapsibleSidebarMenuItem({
     <SidebarMenuItem>
       <Disclosure className={className} {...disclosureProps}>
         <Disclosure.Heading className="w-full min-w-0">
-          <SidebarMenuButton slot="trigger">
-            {icon}
-            {badge ?? <span>{label}</span>}
-            <Disclosure.Indicator className="ml-auto shrink-0">
-              <ChevronRight className="size-4 transition-transform duration-200 data-[expanded=true]:rotate-90" />
-            </Disclosure.Indicator>
+          <SidebarMenuButton asChild>
+            <Disclosure.Trigger>
+              {icon}
+              {badge ?? <span>{label}</span>}
+              <Disclosure.Indicator />
+            </Disclosure.Trigger>
           </SidebarMenuButton>
         </Disclosure.Heading>
         <Disclosure.Content>

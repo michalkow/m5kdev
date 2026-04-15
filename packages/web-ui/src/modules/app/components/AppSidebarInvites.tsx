@@ -1,9 +1,9 @@
 import { Chip, Tooltip } from "@heroui/react";
-import { cn } from "@m5kdev/web-ui/utils";
 import { GiftIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { useSidebar } from "../../../components/Sidebar";
+import { cn } from "../../../lib/utils";
 
 export function AppSidebarInvites({ count }: { count: number }) {
   const { open } = useSidebar();
@@ -15,7 +15,7 @@ export function AppSidebarInvites({ count }: { count: number }) {
         className={cn(
           "inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium transition-colors",
           "text-default-600 hover:bg-default-100 hover:text-surface-foreground",
-          open ? "w-full justify-start" : "size-8 justify-center p-0"
+          open ? "w-full justify-start" : "size-6 justify-center p-0"
         )}
       >
         <GiftIcon className="w-4 h-4 shrink-0 text-default-500" />

@@ -1,7 +1,15 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { Home, Settings, Users } from "lucide-react";
 import type { ReactElement } from "react";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { Link, MemoryRouter, Route, Routes } from "react-router";
 
+import { CollapsibleSidebarMenuItem } from "../../../components/CollapsibleSidebarMenuItem";
+import {
+  SidebarGroup,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "../../../components/Sidebar";
 import { AppShell, type AppShellProps } from "./AppShell";
 import { AppSidebarInvites } from "./AppSidebarInvites";
 import { AppSidebarUser } from "./AppSidebarUser";
@@ -23,6 +31,8 @@ function AppShellStory(props: AppShellProps): ReactElement {
       <Routes>
         <Route element={<AppShell {...props} />}>
           <Route path="/" element={<OutletDemo />} />
+          <Route path="/team/*" element={<OutletDemo />} />
+          <Route path="/settings" element={<OutletDemo />} />
         </Route>
       </Routes>
     </MemoryRouter>
@@ -45,10 +55,47 @@ const sidebar: AppShellProps["sidebar"] = {
     </div>
   ),
   content: (
-    <div className="flex flex-col gap-1 px-2 py-2 text-sm text-zinc-600 dark:text-zinc-400">
-      <span>Home</span>
-      <span>Settings</span>
-    </div>
+    <SidebarGroup>
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton asChild>
+            <Link to="/">
+              <Home className="size-4" />
+              <span>Home</span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <CollapsibleSidebarMenuItem
+          defaultExpanded
+          icon={<Users className="size-4" />}
+          label="Team"
+          link="/team"
+        >
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild>
+              <Link to="/team/members">
+                <span>Members</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild>
+              <Link to="/team/settings">
+                <span>Team settings</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </CollapsibleSidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton asChild>
+            <Link to="/settings">
+              <Settings className="size-4" />
+              <span>Settings</span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    </SidebarGroup>
   ),
   footer: (
     <>
