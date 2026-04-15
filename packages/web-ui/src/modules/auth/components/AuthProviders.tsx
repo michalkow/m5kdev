@@ -12,13 +12,13 @@ export function AuthProviders({
   lastMethod,
   code,
   requestSignUp = false,
-  returnTo,
+  callbackURL = "/",
 }: {
   providers?: string[];
   code?: string | null;
   requestSignUp?: boolean;
   lastMethod?: string | null;
-  returnTo?: string | null;
+  callbackURL?: string;
 }) {
   const { t } = useTranslation();
   if (!providers || providers.length === 0) return null;
@@ -45,7 +45,7 @@ export function AuthProviders({
                     provider: "google",
                     requestSignUp,
                     additionalData,
-                    ...(returnTo ? { callbackURL: returnTo } : {}),
+                    callbackURL,
                   })
                   .then(handleSignIn);
               }}
@@ -67,7 +67,7 @@ export function AuthProviders({
                     provider: "linkedin",
                     requestSignUp,
                     additionalData,
-                    ...(returnTo ? { callbackURL: returnTo } : {}),
+                    callbackURL,
                   })
                   .then(handleSignIn);
               }}
@@ -89,7 +89,7 @@ export function AuthProviders({
                     provider: "microsoft",
                     requestSignUp,
                     additionalData,
-                    ...(returnTo ? { callbackURL: returnTo } : {}),
+                    callbackURL,
                   })
                   .then(handleSignIn);
               }}
