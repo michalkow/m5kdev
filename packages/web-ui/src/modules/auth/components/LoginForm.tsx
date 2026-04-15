@@ -53,7 +53,7 @@ export function LoginForm({ providers }: { providers?: string[] }) {
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <div className="grid gap-6">
-        <AuthProviders providers={providers} lastMethod={lastMethod} callbackURL={returnTo} />
+        <AuthProviders providers={providers} lastMethod={lastMethod} returnTo={returnTo} />
 
         <div className="grid gap-6">
           <div className="grid gap-2">

@@ -12,18 +12,19 @@ export function AuthProviders({
   lastMethod,
   code,
   requestSignUp = false,
-  callbackURL = "/",
+  returnTo = "/",
 }: {
   providers?: string[];
   code?: string | null;
   requestSignUp?: boolean;
   lastMethod?: string | null;
-  callbackURL?: string;
+  returnTo?: string;
 }) {
   const { t } = useTranslation();
   if (!providers || providers.length === 0) return null;
   const additionalData = code ? { waitlistInvitationCode: code } : {};
 
+  const callbackURL = `${import.meta.env.VITE_APP_URL}${returnTo}`;
   const handleSignIn = (result: any) => {
     if (result.error) {
       toast.error(t("web-ui:auth.errors.invitationCodeInvalid"));
