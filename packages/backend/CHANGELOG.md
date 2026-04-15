@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.16.9
+
+### Patch Changes
+
+- absolute callback url
+- Updated dependencies
+  - @m5kdev/commons@0.16.9
+  - @m5kdev/config@0.16.9
+
 ## 0.16.8
 
 ### Patch Changes

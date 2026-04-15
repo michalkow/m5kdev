@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.16.9
+
+### Patch Changes
+
+- absolute callback url
+
 ## 0.16.8
 
 ### Patch Changes
