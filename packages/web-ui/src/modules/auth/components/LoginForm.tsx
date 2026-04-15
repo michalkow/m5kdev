@@ -20,7 +20,9 @@ export function LoginForm({ providers }: { providers?: string[] }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
-  const returnTo = searchParams.get("returnTo");
+  const returnToPath = searchParams.get("returnTo");
+  const returnTo =
+    !returnToPath?.startsWith("//") && returnToPath?.startsWith("/") ? returnToPath : undefined;
 
   const onSubmit: SubmitHandler<Inputs> = (data) => {
     console.log(data);
