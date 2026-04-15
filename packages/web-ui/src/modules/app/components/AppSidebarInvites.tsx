@@ -1,4 +1,4 @@
-import { Badge, Tooltip } from "@heroui/react";
+import { Chip, Tooltip } from "@heroui/react";
 import { cn } from "@m5kdev/web-ui/utils";
 import { GiftIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -9,7 +9,7 @@ export function AppSidebarInvites({ count }: { count: number }) {
   const { open } = useSidebar();
   const { t } = useTranslation("web-ui");
   const badge = (
-    <Badge color="accent" variant="soft" content={String(count)} size="sm">
+    <Chip color="default" variant="secondary" content={String(count)} size="sm">
       <Link
         to="/invites"
         className={cn(
@@ -23,7 +23,7 @@ export function AppSidebarInvites({ count }: { count: number }) {
           {t("sidebar.invites.title")}
         </span>
       </Link>
-    </Badge>
+    </Chip>
   );
 
   return (

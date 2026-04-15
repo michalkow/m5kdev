@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.16.5
+
+### Patch Changes
+
+- badges fix
+- Updated dependencies
+  - @m5kdev/commons@0.16.5
+
 ## 0.16.4
 
 ### Patch Changes

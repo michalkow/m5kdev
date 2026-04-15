@@ -10,13 +10,11 @@ export function LastUsedBadge({
   const { t } = useTranslation();
   if (lastMethod !== method) return children;
   return (
-    <Badge
-      {...props}
-      content={t("web-ui:auth.login.lastUsed")}
-      color="warning"
-      className="px-2 !right-[10%]"
-    >
+    <Badge.Anchor>
       {children}
-    </Badge>
+      <Badge color="warning" className="px-2 !right-[5%]" {...props}>
+        {t("web-ui:auth.login.lastUsed")}
+      </Badge>
+    </Badge.Anchor>
   );
 }

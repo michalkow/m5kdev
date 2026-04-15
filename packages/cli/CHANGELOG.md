@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.16.5
+
+### Patch Changes
+
+- badges fix
+
 ## 0.16.4
 
 ### Patch Changes
