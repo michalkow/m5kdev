@@ -153,6 +153,16 @@
         "default": "./dist/src/modules/auth/components/*.js"
       }
     },
+    "./modules/auth/hooks/*": {
+      "import": {
+        "types": "./dist/src/modules/auth/hooks/*.d.mts",
+        "default": "./dist/src/modules/auth/hooks/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/auth/hooks/*.d.ts",
+        "default": "./dist/src/modules/auth/hooks/*.js"
+      }
+    },
     "./modules/auth/types": {
       "import": {
         "types": "./dist/src/modules/auth/types.d.mts",

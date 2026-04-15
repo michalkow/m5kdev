@@ -3,7 +3,7 @@ import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { type SubmitHandler, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { AuthProviders } from "./AuthProviders";
 import { LastUsedBadge } from "./LastUsedBadge";
@@ -19,6 +19,8 @@ export function LoginForm({ providers }: { providers?: string[] }) {
   const { registerSession } = useSession();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get("returnTo");
 
   const onSubmit: SubmitHandler<Inputs> = (data) => {
     console.log(data);
@@ -31,7 +33,7 @@ export function LoginForm({ providers }: { providers?: string[] }) {
         console.log(res);
         if (res.data?.user) {
           registerSession(() => {
-            navigate("/");
+            navigate(returnTo ?? "/");
           });
         } else if (res.error) {
           toast.error(t("web-ui:auth.errors.authentication"), {
@@ -49,7 +51,7 @@ export function LoginForm({ providers }: { providers?: string[] }) {
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <div className="grid gap-6">
-        <AuthProviders providers={providers} lastMethod={lastMethod} />
+        <AuthProviders providers={providers} lastMethod={lastMethod} returnTo={returnTo} />
 
         <div className="grid gap-6">
           <div className="grid gap-2">
