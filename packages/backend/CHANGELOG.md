@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.17.1
+
+### Patch Changes
+
+- app types fix trpc
+- Updated dependencies
+  - @m5kdev/commons@0.17.1
+  - @m5kdev/config@0.17.1
+
 ## 0.17.0
 
 ### Minor Changes

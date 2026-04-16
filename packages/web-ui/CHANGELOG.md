@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.17.1
+
+### Patch Changes
+
+- app types fix trpc
+- Updated dependencies
+  - @m5kdev/commons@0.17.1
+  - @m5kdev/frontend@0.17.1
+
 ## 0.17.0
 
 ### Minor Changes
