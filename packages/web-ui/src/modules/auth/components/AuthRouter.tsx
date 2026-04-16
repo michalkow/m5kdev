@@ -7,22 +7,21 @@ import { ForgotPasswordRoute } from "./ForgotPasswordRoute";
 import { LoginRoute } from "./LoginRoute";
 import { ResetPasswordRoute } from "./ResetPasswordRoute";
 import { SignupRoute } from "./SignupRoute";
-import type { UseBackendTRPC } from "../../../types";
 
 interface AuthRouterProps {
   header: ReactNode;
   providers?: string[];
-  useTRPC?: UseBackendTRPC;
+  waitlist?: boolean;
 }
 
-export function AuthRouter({ header, providers, useTRPC }: AuthRouterProps) {
+export function AuthRouter({ header, providers, waitlist }: AuthRouterProps) {
   return (
     <Route element={<AuthLayout header={header} />}>
       <Route path="/login" element={<LoginRoute providers={providers} />} />
-      <Route path="/signup" element={<SignupRoute providers={providers} useTRPC={useTRPC} />} />
+      <Route path="/signup" element={<SignupRoute providers={providers} waitlist={waitlist} />} />
       <Route path="/forgot-password" element={<ForgotPasswordRoute />} />
       <Route path="/reset-password" element={<ResetPasswordRoute />} />
-      <Route path="/claim-account" element={<ClaimAccountRoute useTRPC={useTRPC} />} />
+      <Route path="/claim-account" element={<ClaimAccountRoute />} />
       <Route path="/error-auth" element={<ErrorAuthRoute />} />
     </Route>
   );

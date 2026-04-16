@@ -1,7 +1,8 @@
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import type { BillingSchema } from "@m5kdev/commons/modules/billing/billing.schema";
 import { useQuery } from "@tanstack/react-query";
 import { createContext } from "react";
-import type { UseBackendTRPC } from "../../../types";
+import { useAppTRPC } from "../../app/hooks/useAppTrpc";
 
 export const billingProviderContext = createContext<{
   isLoading: boolean;
@@ -12,19 +13,17 @@ export const billingProviderContext = createContext<{
 });
 
 export function BillingProvider({
-  useTRPC,
   children,
   loader,
   planPage,
   skipPlanCheck = false,
 }: {
-  useTRPC: UseBackendTRPC;
   children: React.ReactNode;
   loader?: React.ReactNode;
   planPage: React.ReactNode;
   skipPlanCheck?: boolean;
 }) {
-  const trpc = useTRPC();
+  const trpc = useAppTRPC<BackendTRPCRouter>();
 
   const { data: activeSubscription, isLoading } = useQuery(
     trpc.billing.getActiveSubscription.queryOptions(undefined, {

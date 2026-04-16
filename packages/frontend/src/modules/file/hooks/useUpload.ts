@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useAppConfig } from "../../app/hooks/useAppConfig";
 
 export type UploadStatus = "pending" | "uploading" | "completed" | "error";
 
@@ -22,7 +23,8 @@ interface UploadCallbacks {
 const createUploadPromise = <T>(
   type: string,
   file: File,
-  callbacks: UploadCallbacks
+  callbacks: UploadCallbacks,
+  serverUrl: string
 ): Promise<T> => {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -56,7 +58,7 @@ const createUploadPromise = <T>(
       reject(new Error(errorMessage));
     };
 
-    xhr.open("POST", `${import.meta.env.VITE_SERVER_URL}/upload/file/${type}`);
+    xhr.open("POST", `${serverUrl}/upload/file/${type}`);
     const formData = new FormData();
     formData.append("file", file);
     xhr.send(formData);
@@ -78,44 +80,48 @@ const createUploadTask = (file: File): UploadFileTask => ({
 
 // Hook for single file upload
 export function useFileUpload() {
+  const { serverUrl } = useAppConfig();
   const [uploadTask, setUploadTask] = useState<UploadFileTask | null>(null);
 
-  const upload = useCallback(async <T>(type: string, file: File): Promise<T> => {
-    const task = createUploadTask(file);
-    setUploadTask(task);
+  const upload = useCallback(
+    async <T>(type: string, file: File): Promise<T> => {
+      const task = createUploadTask(file);
+      setUploadTask(task);
 
-    const callbacks: UploadCallbacks = {
-      onProgress: (progress, bytesUploaded) => {
-        setUploadTask((prev) =>
-          prev
-            ? {
-                ...prev,
-                progress,
-                bytesUploaded,
-                status: "uploading",
-              }
-            : null
-        );
-      },
-      onComplete: () => {
-        setUploadTask((prev) => (prev ? { ...prev, status: "completed", progress: 100 } : null));
-      },
-      onError: (errorMessage) => {
-        setUploadTask((prev) =>
-          prev
-            ? {
-                ...prev,
-                status: "error",
-                errorMessage,
-                progress: 0,
-              }
-            : null
-        );
-      },
-    };
+      const callbacks: UploadCallbacks = {
+        onProgress: (progress, bytesUploaded) => {
+          setUploadTask((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  progress,
+                  bytesUploaded,
+                  status: "uploading",
+                }
+              : null
+          );
+        },
+        onComplete: () => {
+          setUploadTask((prev) => (prev ? { ...prev, status: "completed", progress: 100 } : null));
+        },
+        onError: (errorMessage) => {
+          setUploadTask((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  status: "error",
+                  errorMessage,
+                  progress: 0,
+                }
+              : null
+          );
+        },
+      };
 
-    return createUploadPromise<T>(type, file, callbacks);
-  }, []);
+      return createUploadPromise<T>(type, file, callbacks, serverUrl);
+    },
+    [serverUrl]
+  );
 
   const reset = useCallback(() => {
     setUploadTask(null);
@@ -130,6 +136,7 @@ export function useFileUpload() {
 
 // Hook for multiple file uploads
 export function useMultipartUpload() {
+  const { serverUrl } = useAppConfig();
   const [uploadQueue, setUploadQueue] = useState<UploadFileTask[]>([]);
   const [overallProgress, setOverallProgress] = useState<number>(0);
 
@@ -184,9 +191,9 @@ export function useMultipartUpload() {
         },
       };
 
-      return createUploadPromise<T>(type, task.file, callbacks);
+      return createUploadPromise<T>(type, task.file, callbacks, serverUrl);
     },
-    [updateTask, updateOverallProgress]
+    [serverUrl, updateTask, updateOverallProgress]
   );
 
   const uploadFiles = useCallback(

@@ -10,6 +10,8 @@ import {
   Table,
   Tooltip,
 } from "@heroui/react";
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import * as authAdmin from "@m5kdev/frontend/modules/auth/hooks/useAuthAdmin";
 import type { Key } from "@react-types/shared";
@@ -32,7 +34,6 @@ import {
 import { useCallback, useEffect, useId, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import type { UseBackendTRPC } from "../../../types";
 
 type SortField = "name" | "email" | "role" | "createdAt";
 type SortOrder = "asc" | "desc";
@@ -46,10 +47,14 @@ interface UserAiUsage {
 }
 
 interface AdminUserManagementProps {
-  useTRPC?: UseBackendTRPC;
+  enableAccountClaimActions?: boolean;
+  enableAiUsage?: boolean;
 }
 
-export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
+export function AdminUserManagement({
+  enableAccountClaimActions = true,
+  enableAiUsage = false,
+}: AdminUserManagementProps) {
   const banReasonInputId = useId();
   const customDurationId = useId();
   const nameInputId = useId();
@@ -93,11 +98,13 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
   const generatedMagicLinkInputId = useId();
 
   // AI Usage query
-  const trpc = useTRPC?.();
+  const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();
-  const usageQueryEnabled = !!userForUsage && !!trpc;
-  // @ts-expect-error optional ai router
-  const usageQueryOptions = trpc?.ai.getUserUsage.queryOptions({ userId: userForUsage?.id ?? "" });
+  const usageQueryEnabled = enableAiUsage && !!userForUsage;
+  const usageQueryOptions = enableAiUsage
+    ? // @ts-expect-error optional ai router
+      trpc.ai.getUserUsage.queryOptions({ userId: userForUsage?.id ?? "" })
+    : undefined;
   const usageQuery = useQuery({
     ...(usageQueryOptions ?? {
       queryKey: [["ai", "getUserUsage"], { input: { userId: "" } }] as const,
@@ -411,23 +418,11 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
   };
 
   const createAccountClaimCodeMutation = useMutation(
-    trpc
-      ? trpc.auth.createAccountClaimCode.mutationOptions()
-      : {
-          mutationFn: async () => {
-            throw new Error("Account claim actions are not available in this app");
-          },
-        }
+    trpc.auth.createAccountClaimCode.mutationOptions()
   );
 
   const generateAccountClaimMagicLinkMutation = useMutation(
-    trpc
-      ? trpc.auth.generateAccountClaimMagicLink.mutationOptions()
-      : {
-          mutationFn: async () => {
-            throw new Error("Account claim actions are not available in this app");
-          },
-        }
+    trpc.auth.generateAccountClaimMagicLink.mutationOptions()
   );
 
   const openMagicLinkModal = (userId: string, userName: string, userEmail: string | null) => {
@@ -437,7 +432,7 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
   };
 
   const handleGenerateMagicLink = async () => {
-    if (!trpc) {
+    if (!enableAccountClaimActions) {
       toast.error("Account claim actions are not available in this app");
       return;
     }
@@ -699,7 +694,7 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
                                 <Dropdown.Item
                                   key="usage"
                                   onPress={() => openUsageModal(user.id, user.name)}
-                                  className={useTRPC ? "" : "hidden"}
+                                  className={enableAiUsage ? "" : "hidden"}
                                 >
                                   <span className="flex items-center gap-2">
                                     <BarChart3 className="h-4 w-4" />
@@ -725,7 +720,7 @@ export function AdminUserManagement({ useTRPC }: AdminUserManagementProps) {
                                   onPress={() =>
                                     openMagicLinkModal(user.id, user.name, user.email ?? null)
                                   }
-                                  className={trpc ? "" : "hidden"}
+                                  className={enableAccountClaimActions ? "" : "hidden"}
                                 >
                                   <span className="flex items-center gap-2">
                                     <Link2 className="h-4 w-4" />

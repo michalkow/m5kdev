@@ -1,4 +1,5 @@
 import { Button } from "@heroui/react";
+import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -21,11 +22,12 @@ export function AuthProviders({
   returnTo?: string;
 }) {
   const { t } = useTranslation();
+  const { appUrl } = useAppConfig();
   if (!providers || providers.length === 0) return null;
   const additionalData = code ? { waitlistInvitationCode: code } : {};
 
-  const callbackURL = `${import.meta.env.VITE_APP_URL}${returnTo}`;
-  const handleSignIn = (result: any) => {
+  const callbackURL = `${appUrl}${returnTo}`;
+  const handleSignIn = (result: { error?: unknown }) => {
     if (result.error) {
       toast.error(t("web-ui:auth.errors.invitationCodeInvalid"));
     }

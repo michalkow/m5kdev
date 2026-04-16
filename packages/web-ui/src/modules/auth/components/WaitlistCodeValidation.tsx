@@ -1,16 +1,16 @@
 import { Alert } from "@heroui/react";
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import type { UseBackendTRPC } from "../../../types";
 
 interface WaitlistCodeValidationProps {
-  useTRPC: UseBackendTRPC;
   code: string;
 }
 
-export function WaitlistCodeValidation({ useTRPC, code }: WaitlistCodeValidationProps) {
+export function WaitlistCodeValidation({ code }: WaitlistCodeValidationProps) {
   const { t } = useTranslation();
-  const trpc = useTRPC();
+  const trpc = useAppTRPC<BackendTRPCRouter>();
   const { data, isLoading, error } = useQuery(
     trpc.auth.validateWaitlistCode.queryOptions({ code })
   );

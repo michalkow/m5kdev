@@ -1,4 +1,7 @@
 import { Alert, Button, Card, Description, Input, Label } from "@heroui/react";
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
+import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -7,9 +10,9 @@ import { toast } from "sonner";
 import { GoogleIcon } from "../../../icons/GoogleIcon";
 import { LinkedInIcon } from "../../../icons/LinkedInIcon";
 import { MicrosoftIcon } from "../../../icons/MicrosoftIcon";
-import type { UseBackendTRPC } from "../../../types";
 
-export function ClaimAccountRoute({ useTRPC }: { useTRPC?: UseBackendTRPC }) {
+export function ClaimAccountRoute() {
+  const { serverUrl } = useAppConfig();
   const { data: session, registerSession } = useSession();
   const navigate = useNavigate();
   const location = useLocation();
@@ -18,7 +21,7 @@ export function ClaimAccountRoute({ useTRPC }: { useTRPC?: UseBackendTRPC }) {
   const [newPassword, setNewPassword] = useState("");
   const [busy, setBusy] = useState<"none" | "email" | "password" | "link">("none");
 
-  const trpc = useTRPC?.();
+  const trpc = useAppTRPC<BackendTRPCRouter>();
 
   const linkedProvider = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -27,28 +30,15 @@ export function ClaimAccountRoute({ useTRPC }: { useTRPC?: UseBackendTRPC }) {
 
   const claimStatusQuery = useQuery({
     queryKey: ["auth", "claim-status", session?.user?.id ?? null],
-    enabled: !!trpc && !!session?.user,
+    enabled: !!session?.user,
     queryFn: async () => {
-      if (!trpc) return null;
       return queryClient.fetchQuery(trpc.auth.getMyAccountClaimStatus.queryOptions());
     },
   });
 
-  const setEmailMutation = useMutation(
-    trpc
-      ? trpc.auth.setMyAccountClaimEmail.mutationOptions()
-      : {
-          mutationFn: async () => ({ status: false }),
-        }
-  );
+  const setEmailMutation = useMutation(trpc.auth.setMyAccountClaimEmail.mutationOptions());
 
-  const acceptClaimMutation = useMutation(
-    trpc
-      ? trpc.auth.acceptMyAccountClaim.mutationOptions()
-      : {
-          mutationFn: async () => ({ status: false }),
-        }
-  );
+  const acceptClaimMutation = useMutation(trpc.auth.acceptMyAccountClaim.mutationOptions());
 
   useEffect(() => {
     if (session?.user?.email) {
@@ -57,7 +47,7 @@ export function ClaimAccountRoute({ useTRPC }: { useTRPC?: UseBackendTRPC }) {
   }, [session?.user?.email]);
 
   useEffect(() => {
-    if (!linkedProvider || !trpc) return;
+    if (!linkedProvider) return;
     acceptClaimMutation
       .mutateAsync(undefined)
       .then(() => {
@@ -72,18 +62,12 @@ export function ClaimAccountRoute({ useTRPC }: { useTRPC?: UseBackendTRPC }) {
       });
   }, [acceptClaimMutation, linkedProvider, navigate, queryClient, trpc]);
 
-  if (!trpc) {
-    return (
-      <Alert status="warning">
-        <Alert.Title>Claim flow is unavailable because backend TRPC is not configured.</Alert.Title>
-      </Alert>
-    );
-  }
-
   if (!session?.user) {
     return (
       <Alert status="warning">
-        <Alert.Title>You need to sign in with your magic link before claiming this account.</Alert.Title>
+        <Alert.Title>
+          You need to sign in with your magic link before claiming this account.
+        </Alert.Title>
       </Alert>
     );
   }
@@ -110,7 +94,7 @@ export function ClaimAccountRoute({ useTRPC }: { useTRPC?: UseBackendTRPC }) {
   const onSetPassword = async () => {
     setBusy("password");
     try {
-      const response = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/auth/set-password`, {
+      const response = await fetch(`${serverUrl}/api/auth/set-password`, {
         method: "POST",
         credentials: "include",
         headers: {
@@ -139,7 +123,7 @@ export function ClaimAccountRoute({ useTRPC }: { useTRPC?: UseBackendTRPC }) {
   const onLinkProvider = async (provider: "google" | "linkedin" | "microsoft") => {
     setBusy("link");
     try {
-      const response = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/auth/link-social`, {
+      const response = await fetch(`${serverUrl}/api/auth/link-social`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

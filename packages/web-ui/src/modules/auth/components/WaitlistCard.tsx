@@ -1,17 +1,15 @@
 import { Alert, Button, Card, Input, Label } from "@heroui/react";
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import type { UseBackendTRPC } from "../../../types";
 
-interface WaitlistCardProps {
-  useTRPC: UseBackendTRPC;
-}
-
-export function WaitlistCard({ useTRPC }: WaitlistCardProps) {
+export function WaitlistCard() {
   const { t } = useTranslation();
-  const trpc = useTRPC();
+  const trpc = useAppTRPC<BackendTRPCRouter>();
+  const emailInputId = useId();
   const [email, setEmail] = useState("");
   const [joined, setJoined] = useState(false);
 
@@ -59,11 +57,11 @@ export function WaitlistCard({ useTRPC }: WaitlistCardProps) {
       <Card.Content>
         <form onSubmit={handleSubmit} className="grid gap-6">
           <div className="grid gap-2">
-            <Label className="text-sm font-medium" htmlFor="waitlist-email">
+            <Label className="text-sm font-medium" htmlFor={emailInputId}>
               {t("web-ui:auth.waitlist.email")}
             </Label>
             <Input
-              id="waitlist-email"
+              id={emailInputId}
               type="email"
               placeholder={t("web-ui:auth.waitlist.placeholder.email")}
               required

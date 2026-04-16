@@ -1,16 +1,13 @@
 import { Button, Dropdown, Input, Label, Modal, Spinner, Table } from "@heroui/react";
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mail, MoreHorizontal, Search, Trash2, UserPlus, X } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { toast } from "sonner";
-import type { UseBackendTRPC } from "../../../types";
 
-interface AdminWaitlistProps {
-  useTRPC: UseBackendTRPC;
-}
-
-export function AdminWaitlist({ useTRPC }: AdminWaitlistProps) {
-  const trpc = useTRPC();
+export function AdminWaitlist() {
+  const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();
 
   const { data: waitlist = [], isLoading } = useQuery(trpc.auth.listAdminWaitlist.queryOptions());

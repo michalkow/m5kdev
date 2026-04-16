@@ -1,30 +1,29 @@
-import {Card} from "@heroui/react";
+import { Card } from "@heroui/react";
 import { useQueryState } from "nuqs";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
-import { SignupForm } from "./SignupFormRoute";
-import type { UseBackendTRPC } from "../../../types";
 import { AuthProviders } from "./AuthProviders";
+import { SignupForm } from "./SignupFormRoute";
 import { WaitlistCard } from "./WaitlistCard";
 import { WaitlistCodeValidation } from "./WaitlistCodeValidation";
 
 interface SignupRouteProps {
   providers?: string[];
-  useTRPC?: UseBackendTRPC;
+  waitlist?: boolean;
 }
 
-export function SignupRoute({ providers, useTRPC }: SignupRouteProps) {
+export function SignupRoute({ providers, waitlist = false }: SignupRouteProps) {
   const { t } = useTranslation();
 
   const [code] = useQueryState("code");
   const [email] = useQueryState("email");
 
-  const hasWaitlist = !!useTRPC;
+  const hasWaitlist = waitlist;
 
   return (
     <div className="flex flex-col gap-6">
       {hasWaitlist && !code ? (
-        <WaitlistCard useTRPC={useTRPC} />
+        <WaitlistCard />
       ) : (
         <Card>
           <Card.Header className="text-center flex flex-col gap-1">
@@ -33,9 +32,7 @@ export function SignupRoute({ providers, useTRPC }: SignupRouteProps) {
           </Card.Header>
           <Card.Content>
             <div className="grid gap-6">
-              {hasWaitlist && code && useTRPC && (
-                <WaitlistCodeValidation code={code} useTRPC={useTRPC} />
-              )}
+              {hasWaitlist && code && <WaitlistCodeValidation code={code} />}
               <AuthProviders providers={providers} code={code} requestSignUp />
               <SignupForm code={code} email={email} waitlist={hasWaitlist} />
             </div>

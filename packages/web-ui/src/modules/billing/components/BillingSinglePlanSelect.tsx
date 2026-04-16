@@ -1,4 +1,5 @@
 import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
+import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { Check, LogOut } from "lucide-react";
 import { useState } from "react";
@@ -35,6 +36,7 @@ export function BillingSinglePlanSelect({
   ],
 }: BillingSinglePlanSelectProps) {
   const { t } = useTranslation("web-ui");
+  const { serverUrl } = useAppConfig();
   const navigate = useNavigate();
   const [billingInterval, setBillingInterval] = useState<"monthly" | "annually">("annually");
 
@@ -142,7 +144,7 @@ export function BillingSinglePlanSelect({
           <CardFooter>
             <a
               className={cn(buttonVariants({ variant: "default", size: "lg" }), "w-full")}
-              href={`${import.meta.env.VITE_SERVER_URL}/stripe/checkout/${currentPriceId}`}
+              href={`${serverUrl}/stripe/checkout/${currentPriceId}`}
             >
               {isAnnual ? "Subscribe Annually" : "Subscribe Monthly"}
             </a>

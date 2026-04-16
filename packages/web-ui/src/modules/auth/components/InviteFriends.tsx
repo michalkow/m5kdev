@@ -1,18 +1,17 @@
 import { Button, Card, Chip, Input, Label } from "@heroui/react";
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
+import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Link2Icon, Mail, Send, Ticket, Users, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { CopyButton } from "../../../components/CopyButton";
-import type { UseBackendTRPC } from "../../../types";
 
-export interface InviteFriendsProps {
-  useTRPC: UseBackendTRPC;
-}
-
-export function InviteFriends({ useTRPC }: InviteFriendsProps) {
-  const trpc = useTRPC();
+export function InviteFriends() {
+  const { appUrl } = useAppConfig();
+  const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();
 
   const { data: waitlist = [] } = useQuery(trpc.auth.listWaitlist.queryOptions());
@@ -145,7 +144,9 @@ export function InviteFriends({ useTRPC }: InviteFriendsProps) {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label className="text-sm font-medium">Email Address (Required for sending)</Label>
+                  <Label className="text-sm font-medium">
+                    Email Address (Required for sending)
+                  </Label>
                   <div className="relative">
                     <Mail
                       className="text-default-400 pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 flex-shrink-0"
@@ -228,7 +229,7 @@ export function InviteFriends({ useTRPC }: InviteFriendsProps) {
                         variant="ghost"
                         size="sm"
                         className="text-success-600"
-                        text={`${import.meta.env.VITE_APP_URL}/signup?code=${item.code}`}
+                        text={`${appUrl}/signup?code=${item.code}`}
                         isIconOnly
                       />
                     )}

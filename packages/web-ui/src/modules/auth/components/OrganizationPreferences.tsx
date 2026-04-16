@@ -1,10 +1,11 @@
-import {Card} from "@heroui/react";
+import { Card } from "@heroui/react";
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactElement, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { z } from "zod";
-import type { UseBackendTRPC } from "../../../types";
 import {
   type ControlsFor,
   type PreferenceEditorLabels,
@@ -20,7 +21,6 @@ type OrganizationPreferenceLabels = PreferenceEditorLabels & {
 export type OrganizationPreferencesTarget = "preferences" | "flags";
 
 export type OrganizationPreferencesProps<S extends z.ZodObject<z.ZodRawShape>> = {
-  useTRPC: UseBackendTRPC;
   schema: S;
   controls: ControlsFor<z.infer<S>>;
   target?: OrganizationPreferencesTarget;
@@ -57,7 +57,6 @@ function getFlagsFromValues(values: Record<string, unknown>): string[] {
 }
 
 export function OrganizationPreferences<S extends z.ZodObject<z.ZodRawShape>>({
-  useTRPC,
   schema,
   controls,
   target = "preferences",
@@ -66,7 +65,7 @@ export function OrganizationPreferences<S extends z.ZodObject<z.ZodRawShape>>({
 }: OrganizationPreferencesProps<S>): ReactElement {
   const { data: session, isLoading: isSessionLoading } = useSession();
   const { t } = useTranslation("web-ui");
-  const trpc = useTRPC();
+  const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();
 
   const activeOrganizationId = session?.session.activeOrganizationId ?? "";

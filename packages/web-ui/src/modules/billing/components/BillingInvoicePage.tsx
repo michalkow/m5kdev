@@ -1,19 +1,16 @@
 import { Button, Card, Chip, Spinner, Table } from "@heroui/react";
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
+import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useSubscription } from "@m5kdev/frontend/modules/billing/hooks/useSubscription";
 import { cn } from "@m5kdev/web-ui/utils";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, ExternalLink } from "lucide-react";
 import { Link } from "react-router";
 
-import type { UseBackendTRPC } from "../../../types";
-
-interface BillingInvoicePageProps {
-  useTRPC: UseBackendTRPC;
-  serverUrl: string;
-}
-
-export function BillingInvoicePage({ useTRPC, serverUrl }: BillingInvoicePageProps) {
-  const trpc = useTRPC();
+export function BillingInvoicePage() {
+  const { serverUrl } = useAppConfig();
+  const trpc = useAppTRPC<BackendTRPCRouter>();
   const { data: invoices, isLoading } = useQuery(trpc.billing.listInvoices.queryOptions());
 
   const { data: activeSubscription, isLoading: isLoadingSubscriptions } = useSubscription();
