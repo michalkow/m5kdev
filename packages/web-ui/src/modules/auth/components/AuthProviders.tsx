@@ -12,6 +12,7 @@ export function AuthProviders({
   providers,
   lastMethod,
   code,
+  invitation,
   requestSignUp = false,
   returnTo = "/",
 }: {
@@ -20,11 +21,16 @@ export function AuthProviders({
   requestSignUp?: boolean;
   lastMethod?: string | null;
   returnTo?: string;
+  invitation?: string | null;
 }) {
   const { t } = useTranslation();
   const { appUrl } = useAppConfig();
   if (!providers || providers.length === 0) return null;
-  const additionalData = code ? { waitlistInvitationCode: code } : {};
+  const additionalData = code
+    ? { waitlistInvitationCode: code }
+    : invitation
+      ? { organizationInvitationCode: invitation }
+      : {};
 
   const callbackURL = `${appUrl}${returnTo}`;
   const handleSignIn = (result: { error?: unknown }) => {

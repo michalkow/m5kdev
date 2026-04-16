@@ -1,15 +1,16 @@
-import {Card, Spinner} from "@heroui/react";
+import { Card, Spinner } from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useLocation, useNavigate, useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
 type Phase = "idle" | "accepting" | "success" | "error";
 
 export type OrganizationAcceptInvitationRouteProps = {
   loginPath?: string;
+  signupPath?: string;
   defaultRedirectPath?: string;
   managerRedirectPath?: string;
   managerRoles?: string[];
@@ -17,7 +18,7 @@ export type OrganizationAcceptInvitationRouteProps = {
 };
 
 export function OrganizationAcceptInvitationRoute({
-  loginPath = "/login",
+  signupPath = "/signup",
   defaultRedirectPath = "/",
   managerRedirectPath = "/organization/members",
   managerRoles = ["admin", "owner"],
@@ -27,7 +28,6 @@ export function OrganizationAcceptInvitationRoute({
   const [searchParams] = useSearchParams();
   const { data: session, registerSession } = useSession();
   const navigate = useNavigate();
-  const location = useLocation();
   const invitationId = searchParams.get("id");
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -41,19 +41,10 @@ export function OrganizationAcceptInvitationRoute({
     }
 
     if (!session) {
-      const returnTo = `${location.pathname}${location.search}`;
-      const search = new URLSearchParams({ returnTo }).toString();
-      navigate(`${loginPath}?${search}`, { replace: true });
+      const search = new URLSearchParams({ invitation: invitationId }).toString();
+      navigate(`${signupPath}?${search}`, { replace: true });
     }
-  }, [
-    invitationId,
-    location.pathname,
-    location.search,
-    loginPath,
-    navigate,
-    session,
-    t,
-  ]);
+  }, [invitationId, signupPath, navigate, session]);
 
   useEffect(() => {
     if (!session || !invitationId || phase !== "idle") {
@@ -133,7 +124,9 @@ export function OrganizationAcceptInvitationRoute({
           <Card.Header className="text-lg font-semibold">
             {t("web-ui:organization.invitation.error")}
           </Card.Header>
-          <Card.Content>{errorMessage ?? t("web-ui:organization.invitation.unableAccept")}</Card.Content>
+          <Card.Content>
+            {errorMessage ?? t("web-ui:organization.invitation.unableAccept")}
+          </Card.Content>
         </Card>
       </div>
     );

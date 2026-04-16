@@ -47,10 +47,12 @@ function getEmailProviderUrl(email: string): string | null {
 
 export function SignupForm({
   code,
+  invitation,
   email,
   waitlist,
 }: {
   code?: string | null;
+  invitation?: string | null;
   email?: string | null;
   waitlist?: boolean;
 }) {
@@ -80,6 +82,7 @@ export function SignupForm({
         {
           headers: {
             "Waitlist-Invitation-Code": code || "",
+            "Organization-Invitation-Code": invitation || "",
           },
         }
       )

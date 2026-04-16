@@ -16,6 +16,7 @@ export function SignupRoute({ providers, waitlist = false }: SignupRouteProps) {
   const { t } = useTranslation();
 
   const [code] = useQueryState("code");
+  const [invitation] = useQueryState("invitation");
   const [email] = useQueryState("email");
 
   const hasWaitlist = waitlist;
@@ -33,8 +34,18 @@ export function SignupRoute({ providers, waitlist = false }: SignupRouteProps) {
           <Card.Content>
             <div className="grid gap-6">
               {hasWaitlist && code && <WaitlistCodeValidation code={code} />}
-              <AuthProviders providers={providers} code={code} requestSignUp />
-              <SignupForm code={code} email={email} waitlist={hasWaitlist} />
+              <AuthProviders
+                providers={providers}
+                code={code}
+                invitation={invitation}
+                requestSignUp
+              />
+              <SignupForm
+                code={code}
+                invitation={invitation}
+                email={email}
+                waitlist={hasWaitlist}
+              />
             </div>
           </Card.Content>
         </Card>

@@ -37,7 +37,7 @@ type CreateBetterAuthParams<
     onError?: (error: unknown) => void;
     afterCreateUser?: (
       user: Pick<User, "id" | "email" | "emailVerified" | "name" | "createdAt" | "updatedAt">,
-      membership: { organizationId: string; teamId: string }
+      membership: { organizationId: string; teamId?: string }
     ) => Promise<void>;
   };
   options?: BetterAuthOptions;
@@ -70,6 +70,16 @@ export function createBetterAuth<
     const oauthState = await getOAuthState();
     if (oauthState) {
       code = oauthState.waitlistInvitationCode;
+    }
+    return code;
+  };
+
+  const getOrganizationInvitationCode = async (ctx?: { headers?: Headers | null } | null) => {
+    let code = ctx?.headers?.get("organization-invitation-code");
+    if (code) return code;
+    const oauthState = await getOAuthState();
+    if (oauthState) {
+      code = oauthState.organizationInvitationCode;
     }
     return code;
   };
@@ -278,6 +288,23 @@ export function createBetterAuth<
         create: {
           before: async (_user, ctx) => {
             if (waitlist) {
+              const organizationInvitationCode = await getOrganizationInvitationCode(ctx);
+              if (organizationInvitationCode) {
+                const [invitation] = await orm
+                  .select()
+                  .from(schema.invitations)
+                  .where(
+                    and(
+                      eq(schema.invitations.email, _user.email),
+                      eq(schema.invitations.id, organizationInvitationCode),
+                      eq(schema.invitations.status, "pending"),
+                      gte(schema.invitations.expiresAt, new Date())
+                    )
+                  )
+                  .limit(1);
+                if (!invitation) return false;
+                return;
+              }
               const waitlistCode = await getWaitlistInvitationCode(ctx);
               if (waitlistCode) {
                 const [waitlistInvitation] = await orm
@@ -305,15 +332,48 @@ export function createBetterAuth<
                   .where(eq(schema.waitlist.id, waitlistInvitation.id));
                 return;
               }
-            }
 
-            if (waitlist) {
               return false;
             }
             return;
           },
-          after: async (user) => {
-            const membership = await createOrganizationAndTeam(orm, schema, user);
+          after: async (user, ctx) => {
+            const organizationInvitationCode = await getOrganizationInvitationCode(ctx);
+            if (organizationInvitationCode) {
+              const [invitation] = await orm
+                .select()
+                .from(schema.invitations)
+                .where(
+                  and(
+                    eq(schema.invitations.email, user.email),
+                    eq(schema.invitations.id, organizationInvitationCode),
+                    eq(schema.invitations.status, "pending"),
+                    gte(schema.invitations.expiresAt, new Date())
+                  )
+                )
+                .limit(1);
+              const [member] = await orm
+                .insert(schema.members)
+                .values({
+                  userId: user.id,
+                  organizationId: invitation.organizationId,
+                  role: invitation.role || "member",
+                })
+                .returning();
+              if (!member) throw new Error("addToOrganization: Failed to add user to organization");
+              await orm
+                .update(schema.invitations)
+                .set({
+                  status: "accepted",
+                })
+                .where(eq(schema.invitations.id, organizationInvitationCode));
+              if (hooks?.afterCreateUser)
+                await hooks.afterCreateUser(user, { organizationId: invitation.organizationId });
+            } else {
+              const membership = await createOrganizationAndTeam(orm, schema, user);
+              if (hooks?.afterCreateUser) await hooks.afterCreateUser(user, membership);
+            }
+
             if (!isProvisionedAccountEmail(user.email)) {
               await billingService?.createUserHook({ user });
             }
@@ -327,7 +387,6 @@ export function createBetterAuth<
                 image: user.image,
               },
             });
-            if (hooks?.afterCreateUser) await hooks.afterCreateUser(user, membership);
           },
         },
       },
