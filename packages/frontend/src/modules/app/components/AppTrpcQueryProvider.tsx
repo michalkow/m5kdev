@@ -67,14 +67,8 @@ export function AppTrpcQueryProvider({
   children: ReactNode;
   trpcClient?: TRPCClient<AnyTRPCRouter>;
 }) {
-  if (!trpcConfig && !trpcClient)
-    throw new Error("AppTrpcQueryProvider: trpcConfig or trpcClient is required");
-
-  if (!queryClient && !queryClientConfig)
-    throw new Error("AppTrpcQueryProvider: queryClient or queryClientConfig is required");
-
   const { serverUrl } = useAppConfig();
-  const resolvedQueryClient = queryClient ?? getQueryClient(queryClientConfig);
+  const [resolvedQueryClient] = useState(() => queryClient ?? getQueryClient(queryClientConfig));
   const [resolvedTrpcClient] = useState(
     () => trpcClient ?? createTRPCClientFromConfig(serverUrl, trpcConfig)
   );

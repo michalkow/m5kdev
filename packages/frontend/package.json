@@ -25,6 +25,7 @@
     "@m5kdev/commons": "workspace:*",
     "@tanstack/react-query": "catalog:",
     "@trpc/client": "catalog:",
+
     "@trpc/tanstack-react-query": "catalog:",
     "better-auth": "catalog:",
     "luxon": "catalog:",
@@ -48,6 +49,26 @@
     "vite": "catalog:"
   },
   "exports": {
+    "./modules/app/components/*": {
+      "import": {
+        "types": "./dist/src/modules/app/components/*.d.mts",
+        "default": "./dist/src/modules/app/components/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/app/components/*.d.ts",
+        "default": "./dist/src/modules/app/components/*.js"
+      }
+    },
+    "./modules/app/hooks/*": {
+      "import": {
+        "types": "./dist/src/modules/app/hooks/*.d.mts",
+        "default": "./dist/src/modules/app/hooks/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/app/hooks/*.d.ts",
+        "default": "./dist/src/modules/app/hooks/*.js"
+      }
+    },
     "./modules/auth/components/*": {
       "import": {
         "types": "./dist/src/modules/auth/components/*.d.mts",
