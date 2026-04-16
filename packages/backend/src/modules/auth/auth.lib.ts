@@ -352,6 +352,8 @@ export function createBetterAuth<
                   )
                 )
                 .limit(1);
+              if (!invitation) throw new Error("Invalid or expired organization invitation code");
+
               const [member] = await orm
                 .insert(schema.members)
                 .values({
