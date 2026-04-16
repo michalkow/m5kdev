@@ -9,7 +9,6 @@ import { toast } from "sonner";
 type Phase = "idle" | "accepting" | "success" | "error";
 
 export type OrganizationAcceptInvitationRouteProps = {
-  authReturnKey?: string;
   loginPath?: string;
   defaultRedirectPath?: string;
   managerRedirectPath?: string;
@@ -18,7 +17,6 @@ export type OrganizationAcceptInvitationRouteProps = {
 };
 
 export function OrganizationAcceptInvitationRoute({
-  authReturnKey = "org-auth-return",
   loginPath = "/login",
   defaultRedirectPath = "/",
   managerRedirectPath = "/organization/members",
@@ -43,11 +41,11 @@ export function OrganizationAcceptInvitationRoute({
     }
 
     if (!session) {
-      sessionStorage.setItem(authReturnKey, `${location.pathname}${location.search}`);
-      navigate(loginPath, { replace: true });
+      const returnTo = `${location.pathname}${location.search}`;
+      const search = new URLSearchParams({ returnTo }).toString();
+      navigate(`${loginPath}?${search}`, { replace: true });
     }
   }, [
-    authReturnKey,
     invitationId,
     location.pathname,
     location.search,
