@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/frontend",
-  "version": "0.16.9",
+  "version": "0.17.0",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -25,7 +25,6 @@
     "@m5kdev/commons": "workspace:*",
     "@tanstack/react-query": "catalog:",
     "@trpc/client": "catalog:",
-
     "@trpc/tanstack-react-query": "catalog:",
     "better-auth": "catalog:",
     "luxon": "catalog:",

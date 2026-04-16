@@ -1,5 +1,16 @@
 # @m5kdev/frontend
 
+## 0.17.0
+
+### Minor Changes
+
+- app provider
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.17.0
+
 ## 0.16.9
 
 ### Patch Changes

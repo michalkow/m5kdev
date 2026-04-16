@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.17.0
+
+### Minor Changes
+
+- app provider
+
 ## 0.16.9
 
 ### Patch Changes

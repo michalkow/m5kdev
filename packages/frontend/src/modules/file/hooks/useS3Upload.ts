@@ -36,7 +36,9 @@ export function useS3Upload(serverUrlOverride?: string) {
         const originalFilename = file instanceof File ? file.name : `upload-${Date.now()}`;
         const extension = originalFilename.split(".").pop() || "";
         const uuid = crypto.randomUUID();
-        const filename = prefix ? `${prefix}/${uuid}.${extension}` : `${uuid}.${extension}`;
+        const filename = prefix
+          ? `${prefix}/${uuid}${extension ? `.${extension}` : ""}`
+          : `${uuid}${extension ? `.${extension}` : ""}`;
         const filetype = file instanceof File ? file.type : "application/octet-stream";
         const presignedUrl = await getPresignedUrl(filename, filetype, resolvedServerUrl);
 
