@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.17.2
+
+### Patch Changes
+
+- org invitation
+- Updated dependencies
+  - @m5kdev/commons@0.17.2
+  - @m5kdev/config@0.17.2
+
 ## 0.17.1
 
 ### Patch Changes

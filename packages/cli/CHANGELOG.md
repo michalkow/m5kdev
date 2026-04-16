@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.17.2
+
+### Patch Changes
+
+- org invitation
+
 ## 0.17.1
 
 ### Patch Changes
