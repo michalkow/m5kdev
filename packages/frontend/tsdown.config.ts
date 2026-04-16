@@ -16,6 +16,9 @@ export default defineConfig({
   outDir: "dist",
   platform: "browser",
   format: ["esm", "cjs"],
+  deps: {
+    skipNodeModulesBundle: true,
+  },
   tsconfig: "./tsconfig.json",
   dts: true,
   sourcemap: true,

@@ -205,5 +205,6 @@
   "organization.switcher.failedToLoadOrganizations": "Failed to load organizations",
   "organization.switcher.failedToSwitchOrganization": "Failed to switch organization",
   "organization.switcher.organizationSwitched": "Organization switched",
-  "organization.switcher.retry": "Retry"
+  "organization.switcher.retry": "Retry",
+  "impersonating.unknownUser": "Unknown user"
 }

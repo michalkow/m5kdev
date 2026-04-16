@@ -34,6 +34,9 @@
     "react-dom": "catalog:",
     "zod": "catalog:"
   },
+  "peerDependencies": {
+    "@trpc/server": "catalog:"
+  },
   "devDependencies": {
     "@m5kdev/config": "workspace:*",
     "@m5kdev/backend": "workspace:*",
