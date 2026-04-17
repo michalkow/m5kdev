@@ -10,6 +10,7 @@
   "bugs": "https://github.com/michalkow/m5kdev/issues",
   "scripts": {
     "build": "turbo run build",
+    "packall": "pnpm version --filter=@m5kdev/* patch  &&pnpm build && pnpm pack --filter=@m5kdev/*",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",

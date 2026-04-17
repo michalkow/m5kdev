@@ -297,7 +297,8 @@ export function createBetterAuth<
     databaseHooks: {
       user: {
         create: {
-          before: async (_user, ctx) => {
+          before: async (user, ctx) => {
+            logger.info({ step: "before create user", user, ctx });
             const organizationInvitationCode = await getOrganizationInvitationCode(ctx);
             if (organizationInvitationCode) {
               const [invitation] = await orm
@@ -305,7 +306,7 @@ export function createBetterAuth<
                 .from(schema.invitations)
                 .where(
                   and(
-                    eq(schema.invitations.email, _user.email),
+                    eq(schema.invitations.email, user.email),
                     eq(schema.invitations.id, organizationInvitationCode),
                     eq(schema.invitations.status, "pending"),
                     gte(schema.invitations.expiresAt, new Date())
@@ -321,7 +322,7 @@ export function createBetterAuth<
               }
               return {
                 data: {
-                  ..._user,
+                  ...user,
                   emailVerified: true,
                 },
               };
@@ -356,7 +357,7 @@ export function createBetterAuth<
                   .where(eq(schema.waitlist.id, waitlistInvitation.id));
                 return {
                   data: {
-                    ..._user,
+                    ...user,
                     emailVerified: true,
                   },
                 };
