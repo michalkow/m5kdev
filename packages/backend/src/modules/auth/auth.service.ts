@@ -7,6 +7,7 @@ import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
+import type * as auth from "./auth.db";
 import type {
   AccountClaim,
   AccountClaimMagicLinkOutput,
@@ -16,6 +17,8 @@ import type {
   WaitlistOutput,
 } from "./auth.dto";
 import type { AuthRepository } from "./auth.repository";
+
+type OrganizationRow = typeof auth.organizations.$inferSelect;
 
 type AuthServiceDependencies =
   | { email: EmailService }
@@ -337,5 +340,38 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
     claimId: string;
   }): ServerResultAsync<AccountClaimMagicLinkOutput[]> {
     return this.repository.auth.listAccountClaimMagicLinks(claimId);
+  }
+
+  async createOrganization(
+    { name }: { name: string },
+    ctx: Context
+  ): ServerResultAsync<OrganizationRow> {
+    const organizationType = ctx.session.activeOrganizationType ?? "organization";
+    const parentId = ctx.session.activeOrganizationId ?? null;
+    if (!parentId) {
+      return this.error(
+        "FORBIDDEN",
+        "You are not allowed to create an organization without a parent organization"
+      );
+    }
+    if (!["enterprise", "agency"].includes(organizationType)) {
+      return this.error(
+        "FORBIDDEN",
+        "You are not allowed to create an organization with this type"
+      );
+    }
+    const role = ctx.session.activeOrganizationRole ?? "member";
+    if (!["admin", "owner"].includes(role)) {
+      return this.error(
+        "FORBIDDEN",
+        "You are not allowed to create an organization with this role"
+      );
+    }
+    return this.repository.auth.createOrganization({
+      name,
+      parentId,
+      userId: ctx.actor.userId,
+      role: organizationType === "agency" ? "agent" : "owner",
+    });
   }
 }

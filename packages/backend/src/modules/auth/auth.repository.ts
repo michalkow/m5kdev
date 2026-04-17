@@ -23,6 +23,7 @@ type OrganizationMetadata = Record<string, unknown> & {
   preferences?: Record<string, unknown>;
   flags?: string[];
 };
+type OrganizationRow = typeof auth.organizations.$inferSelect;
 
 function parseOrganizationMetadata(
   metadata: string | Record<string, unknown> | null | undefined
@@ -913,5 +914,34 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     if (linkResult.isErr()) return err(linkResult.error);
     const [link] = linkResult.value;
     return ok(link ?? null);
+  }
+
+  async createOrganization(
+    {
+      name,
+      parentId,
+      userId,
+      role,
+    }: { name: string; parentId: string | null; userId: string; role: string },
+    tx?: Orm
+  ): ServerResultAsync<OrganizationRow> {
+    const db = tx ?? this.orm;
+    const organizationResult = await this.throwableQuery(() =>
+      db
+        .insert(this.schema.organizations)
+        .values({ name, slug: uuidv4(), type: "organization", parentId })
+        .returning()
+    );
+    if (organizationResult.isErr()) return err(organizationResult.error);
+    const [organization] = organizationResult.value;
+    const memberResult = await this.throwableQuery(() =>
+      db
+        .insert(this.schema.members)
+        .values({ userId, organizationId: organization.id, role })
+        .returning()
+    );
+    if (memberResult.isErr()) return err(memberResult.error);
+
+    return ok(organization);
   }
 }
