@@ -1,6 +1,6 @@
 import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { getOAuthState } from "better-auth/api";
+import { APIError, getOAuthState } from "better-auth/api";
 import { admin, apiKey, lastLoginMethod, magicLink, organization } from "better-auth/plugins";
 import { and, desc, eq, gte, type InferSelectModel } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
@@ -234,6 +234,17 @@ export function createBetterAuth<
       admin(),
       lastLoginMethod(),
       organization({
+        organizationHooks: {
+          beforeCreateInvitation: async ({ invitation }) => {
+            const customExpiration = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7 days
+            return {
+              data: {
+                ...invitation,
+                expiresAt: customExpiration,
+              },
+            };
+          },
+        },
         allowUserToCreateOrganization: false,
         teams: {
           enabled: true,
@@ -287,24 +298,32 @@ export function createBetterAuth<
       user: {
         create: {
           before: async (_user, ctx) => {
-            if (waitlist) {
-              const organizationInvitationCode = await getOrganizationInvitationCode(ctx);
-              if (organizationInvitationCode) {
-                const [invitation] = await orm
-                  .select()
-                  .from(schema.invitations)
-                  .where(
-                    and(
-                      eq(schema.invitations.email, _user.email),
-                      eq(schema.invitations.id, organizationInvitationCode),
-                      eq(schema.invitations.status, "pending"),
-                      gte(schema.invitations.expiresAt, new Date())
-                    )
+            const organizationInvitationCode = await getOrganizationInvitationCode(ctx);
+            if (organizationInvitationCode) {
+              const [invitation] = await orm
+                .select()
+                .from(schema.invitations)
+                .where(
+                  and(
+                    eq(schema.invitations.email, _user.email),
+                    eq(schema.invitations.id, organizationInvitationCode),
+                    eq(schema.invitations.status, "pending"),
+                    gte(schema.invitations.expiresAt, new Date())
                   )
-                  .limit(1);
-                if (!invitation) return false;
-                return;
-              }
+                )
+                .limit(1);
+              if (!invitation)
+                throw new APIError("NOT_FOUND", {
+                  message: "Invalid or expired organization invitation code",
+                });
+              return {
+                data: {
+                  ..._user,
+                  emailVerified: true,
+                },
+              };
+            }
+            if (waitlist) {
               const waitlistCode = await getWaitlistInvitationCode(ctx);
               if (waitlistCode) {
                 const [waitlistInvitation] = await orm
@@ -320,9 +339,10 @@ export function createBetterAuth<
                   )
                   .limit(1);
 
-                if (!waitlistInvitation) {
-                  return false;
-                }
+                if (!waitlistInvitation)
+                  throw new APIError("NOT_FOUND", {
+                    message: "Invalid or expired waitlist invitation code",
+                  });
                 await orm
                   .update(schema.waitlist)
                   .set({
@@ -330,10 +350,16 @@ export function createBetterAuth<
                     updatedAt: new Date(),
                   })
                   .where(eq(schema.waitlist.id, waitlistInvitation.id));
-                return;
+                return {
+                  data: {
+                    ..._user,
+                    emailVerified: true,
+                  },
+                };
               }
-
-              return false;
+              throw new APIError("NOT_FOUND", {
+                message: "Waitlist invitation code not found",
+              });
             }
             return;
           },
@@ -352,7 +378,10 @@ export function createBetterAuth<
                   )
                 )
                 .limit(1);
-              if (!invitation) throw new Error("Invalid or expired organization invitation code");
+              if (!invitation)
+                throw new APIError("NOT_FOUND", {
+                  message: "Invalid or expired organization invitation code (after)",
+                });
 
               const [member] = await orm
                 .insert(schema.members)
@@ -362,7 +391,10 @@ export function createBetterAuth<
                   role: invitation.role || "member",
                 })
                 .returning();
-              if (!member) throw new Error("addToOrganization: Failed to add user to organization");
+              if (!member)
+                throw new APIError("INTERNAL_SERVER_ERROR", {
+                  message: "Failed to add user to organization",
+                });
               await orm
                 .update(schema.invitations)
                 .set({
