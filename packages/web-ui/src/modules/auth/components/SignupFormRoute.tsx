@@ -93,7 +93,7 @@ export function SignupForm({
           setStatus("start");
           return;
         }
-        if (waitlist) {
+        if (waitlist || invitation) {
           authClient.signIn
             .email({
               email: data.email,
@@ -128,7 +128,7 @@ export function SignupForm({
     const emailProviderUrl = userEmail ? getEmailProviderUrl(userEmail) : null;
 
     return (
-      <Alert status="accent">
+      <Alert status="success" className="surface surface--secondary">
         <Alert.Title>{t("web-ui:auth.signup.verificationEmailSent.title")}</Alert.Title>
         <Alert.Description>
           <div className="mt-2">
