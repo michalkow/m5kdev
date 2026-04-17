@@ -11,7 +11,7 @@
   "scripts": {
     "build": "turbo run build",
     "patch:all": "pnpm --filter=@m5kdev/* version:patch",
-    "pack:all": "pnpm version --filter=@m5kdev/* patch  &&pnpm build && pnpm pack --filter=@m5kdev/*",
+    "pack:all": "pnpm patch:all && pnpm build && pnpm pack --filter=@m5kdev/*",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
