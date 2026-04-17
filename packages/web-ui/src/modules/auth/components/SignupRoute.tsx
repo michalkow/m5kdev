@@ -49,7 +49,7 @@ export function SignupRoute({ providers, waitlist = false }: SignupRouteProps) {
                     {t("web-ui:auth.signup.invitation.title", {
                       organizationName:
                         invitationData.name ??
-                        t("web-ui:auth.signup.invitation.unamedOrganization"),
+                        t("web-ui:auth.signup.invitation.unnamedOrganization"),
                     })}
                   </Alert.Title>
                   <Alert.Description>

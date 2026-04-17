@@ -25,7 +25,7 @@
   "auth.signup.verificationEmailSent.openEmail": "Open your email",
   "auth.signup.invitation.title": "You're joining organization \"{{organizationName}}\"",
   "auth.signup.invitation.description": "When you create your account, you'll be added to this organization. Sign up using {{email}}.",
-  "auth.signup.invitation.unamedOrganization": "Unnamed organization",
+  "auth.signup.invitation.unnamedOrganization": "Unnamed organization",
   "auth.errors.authentication": "Authentication Error",
   "auth.errors.server": "Server Error",
   "common.termsOfService": "Terms of Service",
