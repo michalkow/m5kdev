@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.17.3
+
+### Patch Changes
+
+- invitation ui
+- Updated dependencies
+  - @m5kdev/commons@0.17.3
+  - @m5kdev/frontend@0.17.3
+
 ## 0.17.2
 
 ### Patch Changes
