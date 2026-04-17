@@ -105,6 +105,11 @@ export function createBetterAuth<
           required: false,
           defaultValue: null,
         },
+        activeOrganizationType: {
+          type: "string",
+          required: false,
+          defaultValue: null,
+        },
         activeTeamRole: {
           type: "string",
           required: false,
@@ -287,6 +292,18 @@ export function createBetterAuth<
           },
           organization: {
             modelName: "organization",
+            additionalFields: {
+              parentId: {
+                type: "string",
+                required: false,
+                defaultValue: null,
+              },
+              type: {
+                type: "string",
+                required: false,
+                defaultValue: "organization",
+              },
+            },
           },
         },
       }),
@@ -434,13 +451,14 @@ export function createBetterAuth<
       session: {
         create: {
           before: async (session) => {
-            const { organizationId, teamId, organizationRole, teamRole } =
+            const { organizationId, teamId, organizationRole, teamRole, organizationType } =
               await getActiveOrganizationAndTeam(orm, schema, session.userId);
             return {
               data: {
                 ...session,
                 activeOrganizationId: organizationId,
                 activeTeamId: teamId,
+                activeOrganizationType: organizationType,
                 activeOrganizationRole: organizationRole,
                 activeTeamRole: teamRole,
               },

@@ -16,17 +16,20 @@ export async function getActiveOrganizationAndTeam<O extends Orm, S extends Sche
   teamId: string | undefined;
   organizationRole: string | undefined;
   teamRole: string | undefined;
+  organizationType: string | undefined;
 }> {
   let organizationId: string | undefined;
   let teamId: string | undefined;
   let organizationRole: string | undefined;
   let teamRole: string | undefined;
+  let organizationType: string | undefined;
   const [lastSession] = await orm
     .select({
       activeOrganizationId: schema.sessions.activeOrganizationId,
       activeTeamId: schema.sessions.activeTeamId,
       activeOrganizationRole: schema.sessions.activeOrganizationRole,
       activeTeamRole: schema.sessions.activeTeamRole,
+      activeOrganizationType: schema.sessions.activeOrganizationType,
     })
     .from(schema.sessions)
     .where(eq(schema.sessions.userId, userId))
@@ -37,6 +40,7 @@ export async function getActiveOrganizationAndTeam<O extends Orm, S extends Sche
     teamId = lastSession.activeTeamId ?? undefined;
     organizationRole = lastSession.activeOrganizationRole ?? undefined;
     teamRole = lastSession.activeTeamRole ?? undefined;
+    organizationType = lastSession.activeOrganizationType ?? undefined;
   }
 
   if (!organizationId || !organizationRole) {
@@ -61,7 +65,16 @@ export async function getActiveOrganizationAndTeam<O extends Orm, S extends Sche
     teamRole = teamMember?.role;
   }
 
-  return { organizationId, teamId, organizationRole, teamRole };
+  if (!organizationType && organizationId) {
+    const [organization] = await orm
+      .select({ type: schema.organizations.type })
+      .from(schema.organizations)
+      .where(eq(schema.organizations.id, organizationId))
+      .limit(1);
+    organizationType = organization?.type ?? undefined;
+  }
+
+  return { organizationId, teamId, organizationRole, teamRole, organizationType };
 }
 
 export async function createOrganizationAndTeam<O extends Orm, S extends Schema>(

@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { type AnySQLiteColumn, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
 
 export const users = sqliteTable("users", {
@@ -50,6 +50,7 @@ export const sessions = sqliteTable("sessions", {
   impersonatedBy: text("impersonated_by"),
   activeOrganizationId: text("active_organization_id"),
   activeOrganizationRole: text("active_organization_role"),
+  activeOrganizationType: text("active_organization_type"),
   activeTeamId: text("active_team_id"),
   activeTeamRole: text("active_team_role"),
 });
@@ -94,6 +95,10 @@ export const organizations = sqliteTable("organizations", {
   name: text("name").notNull(),
   slug: text("slug").unique(),
   logo: text("logo"),
+  type: text("type"),
+  parentId: text("parent_id").references((): AnySQLiteColumn => organizations.id, {
+    onDelete: "set null",
+  }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$default(() => new Date()),
