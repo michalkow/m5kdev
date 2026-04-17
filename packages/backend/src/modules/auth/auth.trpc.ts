@@ -20,7 +20,7 @@ export function createAuthTRPC(
       return handleTRPCResult(await authService.getUserWaitlistCount(ctx));
     }),
 
-    readInvitation: procedure
+    readInvitation: publicProcedure
       .input(readInvitationInputSchema)
       .output(readInvitationOutputSchema)
       .query(async ({ input }) => {

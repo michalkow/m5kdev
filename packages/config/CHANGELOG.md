@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.17.4
+
+### Patch Changes
+
+- procedure fix
+
 ## 0.17.3
 
 ### Patch Changes
