@@ -1,6 +1,9 @@
 import { Card, Spinner } from "@heroui/react";
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router";
@@ -32,6 +35,10 @@ export function OrganizationAcceptInvitationRoute({
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const managerRoleSet = useMemo(() => new Set(managerRoles), [managerRoles]);
+  const trpc = useAppTRPC<BackendTRPCRouter>();
+  const { data: invitationData } = useQuery(
+    trpc.auth.readInvitation.queryOptions({ id: invitationId || "" }, { enabled: !!invitationId })
+  );
 
   useEffect(() => {
     if (!invitationId) {
@@ -40,11 +47,14 @@ export function OrganizationAcceptInvitationRoute({
       return;
     }
 
-    if (!session) {
-      const search = new URLSearchParams({ invitation: invitationId }).toString();
+    if (!session && invitationData) {
+      const search = new URLSearchParams({
+        invitation: invitationId,
+        email: invitationData.email,
+      }).toString();
       navigate(`${signupPath}?${search}`, { replace: true });
     }
-  }, [invitationId, signupPath, navigate, session]);
+  }, [invitationId, signupPath, navigate, session, invitationData]);
 
   useEffect(() => {
     if (!session || !invitationId || phase !== "idle") {

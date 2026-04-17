@@ -11,6 +11,21 @@ export const waitlistSchema = z.object({
   expiresAt: z.date().nullable(),
 });
 
+export const readInvitationInputSchema = z.object({
+  id: z.string(),
+});
+
+export const readInvitationOutputSchema = z.object({
+  organizationId: z.string(),
+  email: z.string(),
+  name: z.string().nullable(),
+  slug: z.string().nullable(),
+  logo: z.string().nullable(),
+});
+
+export type ReadInvitationOutput = z.infer<typeof readInvitationOutputSchema>;
+export type ReadInvitationInput = z.infer<typeof readInvitationInputSchema>;
+
 export const waitlistOutputSchema = waitlistSchema.omit({ code: true, expiresAt: true });
 export type WaitlistOutput = z.infer<typeof waitlistOutputSchema>;
 export type Waitlist = z.infer<typeof waitlistSchema>;

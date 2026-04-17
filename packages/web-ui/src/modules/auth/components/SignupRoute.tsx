@@ -1,4 +1,7 @@
-import { Card } from "@heroui/react";
+import { Alert, Card } from "@heroui/react";
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
+import { useQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
@@ -13,13 +16,19 @@ interface SignupRouteProps {
 }
 
 export function SignupRoute({ providers, waitlist = false }: SignupRouteProps) {
-  const { t } = useTranslation();
+  const { t } = useTranslation("web-ui");
 
   const [code] = useQueryState("code");
   const [invitation] = useQueryState("invitation");
   const [email] = useQueryState("email");
 
   const hasWaitlist = waitlist;
+  const hasInvitation = !!invitation;
+
+  const trpc = useAppTRPC<BackendTRPCRouter>();
+  const { data: invitationData } = useQuery(
+    trpc.auth.readInvitation.queryOptions({ id: invitation || "" }, { enabled: hasInvitation })
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -32,6 +41,25 @@ export function SignupRoute({ providers, waitlist = false }: SignupRouteProps) {
             <p className="text-sm text-default-600">{t("web-ui:auth.signup.description")}</p>
           </Card.Header>
           <Card.Content>
+            {hasInvitation && invitationData && (
+              <Alert status="warning">
+                <Alert.Indicator />
+                <Alert.Content>
+                  <Alert.Title>
+                    {t("web-ui:auth.signup.invitation.title", {
+                      organizationName:
+                        invitationData.name ??
+                        t("web-ui:auth.signup.invitation.unamedOrganization"),
+                    })}
+                  </Alert.Title>
+                  <Alert.Description>
+                    {t("web-ui:auth.signup.invitation.description", {
+                      email: invitationData.email,
+                    })}
+                  </Alert.Description>
+                </Alert.Content>
+              </Alert>
+            )}
             <div className="grid gap-6">
               {hasWaitlist && code && <WaitlistCodeValidation code={code} />}
               <AuthProviders

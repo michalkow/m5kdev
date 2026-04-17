@@ -1,6 +1,6 @@
 import { err, ok } from "neverthrow";
-import { posthogCapture } from "../../utils/posthog";
 import { ServerError } from "../../utils/errors";
+import { posthogCapture } from "../../utils/posthog";
 import type { Context } from "../../utils/trpc";
 import { createActorFromContext, type OrganizationActor } from "../base/base.actor";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
@@ -11,6 +11,7 @@ import type {
   AccountClaim,
   AccountClaimMagicLinkOutput,
   AccountClaimOutput,
+  ReadInvitationOutput,
   Waitlist,
   WaitlistOutput,
 } from "./auth.dto";
@@ -24,6 +25,10 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
   private getBillingService(): BillingService | null {
     if (!("billing" in this.service)) return null;
     return this.service.billing;
+  }
+
+  async readInvitation({ id }: { id: string }): ServerResultAsync<ReadInvitationOutput> {
+    return this.repository.auth.readInvitation(id);
   }
 
   private organizationActorFromCtx(ctx: Context): ServerResult<OrganizationActor> {
@@ -105,7 +110,10 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
     return this.repository.auth.getMetadata(ctx.actor.userId);
   }
 
-  async setMetadata(metadata: Record<string, unknown>, ctx: Context): ServerResultAsync<Record<string, unknown>> {
+  async setMetadata(
+    metadata: Record<string, unknown>,
+    ctx: Context
+  ): ServerResultAsync<Record<string, unknown>> {
     posthogCapture({
       distinctId: ctx.actor.userId,
       event: "metadata_set",
@@ -201,7 +209,10 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
     return ok(waitlist.value);
   }
 
-  async createInvitationCode({ name }: { name?: string }, ctx: Context): ServerResultAsync<Waitlist> {
+  async createInvitationCode(
+    { name }: { name?: string },
+    ctx: Context
+  ): ServerResultAsync<Waitlist> {
     posthogCapture({
       distinctId: ctx.actor.userId,
       event: "waitlist_invitation_code_created",

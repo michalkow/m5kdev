@@ -10,6 +10,7 @@ import type {
   AccountClaimMagicLink,
   AccountClaimMagicLinkOutput,
   AccountClaimOutput,
+  ReadInvitationOutput,
   Waitlist,
   WaitlistOutput,
 } from "./auth.dto";
@@ -281,7 +282,10 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     if (jsonResult.isErr()) return err(jsonResult.error);
 
     const updateResult = await this.throwableQuery(() =>
-      db.update(this.schema.users).set({ flags: jsonResult.value }).where(eq(this.schema.users.id, userId))
+      db
+        .update(this.schema.users)
+        .set({ flags: jsonResult.value })
+        .where(eq(this.schema.users.id, userId))
     );
     if (updateResult.isErr()) return err(updateResult.error);
     return ok(flags);
@@ -330,13 +334,42 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     return ok(waitlistResult.value);
   }
 
+  async readInvitation(id: string, tx?: Orm): ServerResultAsync<ReadInvitationOutput> {
+    const db = tx ?? this.orm;
+    const invitationResult = await this.throwableQuery(() =>
+      db.select().from(this.schema.invitations).where(eq(this.schema.invitations.id, id)).limit(1)
+    );
+    if (invitationResult.isErr()) return err(invitationResult.error);
+    const [invitation] = invitationResult.value;
+    if (!invitation) return this.error("NOT_FOUND");
+    const organizationResult = await this.throwableQuery(() =>
+      db
+        .select()
+        .from(this.schema.organizations)
+        .where(eq(this.schema.organizations.id, invitation.organizationId))
+        .limit(1)
+    );
+    if (organizationResult.isErr()) return err(organizationResult.error);
+    const [organization] = organizationResult.value;
+    if (!organization) return this.error("NOT_FOUND");
+    return ok({
+      organizationId: invitation.organizationId,
+      email: invitation.email,
+      name: organization.name,
+      slug: organization.slug,
+      logo: organization.logo,
+    });
+  }
+
   async listWaitlist(userId: string, tx?: Orm): ServerResultAsync<Waitlist[]> {
     const db = tx ?? this.orm;
     const waitlistResult = await this.throwableQuery(() =>
       db
         .select()
         .from(this.schema.waitlist)
-        .where(and(eq(this.schema.waitlist.userId, userId), eq(this.schema.waitlist.type, "WAITLIST")))
+        .where(
+          and(eq(this.schema.waitlist.userId, userId), eq(this.schema.waitlist.type, "WAITLIST"))
+        )
     );
     if (waitlistResult.isErr()) return err(waitlistResult.error);
     return ok(waitlistResult.value);
@@ -428,7 +461,11 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
   async removeFromWaitlist(id: string, tx?: Orm): ServerResultAsync<WaitlistOutput> {
     const db = tx ?? this.orm;
     const waitlistResult = await this.throwableQuery(() =>
-      db.update(this.schema.waitlist).set({ status: "REMOVED" }).where(eq(this.schema.waitlist.id, id)).returning()
+      db
+        .update(this.schema.waitlist)
+        .set({ status: "REMOVED" })
+        .where(eq(this.schema.waitlist.id, id))
+        .returning()
     );
     if (waitlistResult.isErr()) return err(waitlistResult.error);
     const [waitlist] = waitlistResult.value;
@@ -605,7 +642,9 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
       db
         .select()
         .from(this.schema.waitlist)
-        .where(and(eq(this.schema.waitlist.code, code), eq(this.schema.waitlist.type, "ACCOUNT_CLAIM")))
+        .where(
+          and(eq(this.schema.waitlist.code, code), eq(this.schema.waitlist.type, "ACCOUNT_CLAIM"))
+        )
         .limit(1)
     );
     if (claimResult.isErr()) return err(claimResult.error);

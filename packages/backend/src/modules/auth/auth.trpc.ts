@@ -4,6 +4,8 @@ import {
   accountClaimMagicLinkOutputSchema,
   accountClaimOutputSchema,
   accountClaimSchema,
+  readInvitationInputSchema,
+  readInvitationOutputSchema,
   waitlistOutputSchema,
   waitlistSchema,
 } from "./auth.dto";
@@ -17,6 +19,13 @@ export function createAuthTRPC(
     getUserWaitlistCount: procedure.output(z.number()).query(async ({ ctx }) => {
       return handleTRPCResult(await authService.getUserWaitlistCount(ctx));
     }),
+
+    readInvitation: procedure
+      .input(readInvitationInputSchema)
+      .output(readInvitationOutputSchema)
+      .query(async ({ input }) => {
+        return handleTRPCResult(await authService.readInvitation(input));
+      }),
 
     createInvitationCode: procedure
       .input(z.object({ name: z.string().optional() }))
