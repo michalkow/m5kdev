@@ -12,6 +12,7 @@
     "dist"
   ],
   "scripts": {
+    "version:patch": "npm version patch",
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
     "check-types": "tsc --noEmit",

@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/backend",
-  "version": "0.17.7",
+  "version": "0.17.8",
   "description": "Composable Express server stack with Drizzle ORM and tRPC.",
   "license": "GPL-3.0-only",
   "repository": {
@@ -13,6 +13,7 @@
     "dist"
   ],
   "scripts": {
+    "version:patch": "npm version patch",
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
     "build": "tsdown",
