@@ -312,10 +312,13 @@ export function createBetterAuth<
                   )
                 )
                 .limit(1);
-              if (!invitation)
+              if (!invitation) {
+                const message = "Invalid or expired organization invitation code";
+                logger.error({ message, organizationInvitationCode });
                 throw new APIError("NOT_FOUND", {
-                  message: "Invalid or expired organization invitation code",
+                  message,
                 });
+              }
               return {
                 data: {
                   ..._user,
@@ -339,10 +342,11 @@ export function createBetterAuth<
                   )
                   .limit(1);
 
-                if (!waitlistInvitation)
-                  throw new APIError("NOT_FOUND", {
-                    message: "Invalid or expired waitlist invitation code",
-                  });
+                if (!waitlistInvitation) {
+                  const message = "Invalid or expired waitlist invitation code";
+                  logger.error({ message, waitlistCode });
+                  throw new APIError("NOT_FOUND", { message });
+                }
                 await orm
                   .update(schema.waitlist)
                   .set({
@@ -357,9 +361,9 @@ export function createBetterAuth<
                   },
                 };
               }
-              throw new APIError("NOT_FOUND", {
-                message: "Waitlist invitation code not found",
-              });
+              const message = "Waitlist invitation code not found";
+              logger.error({ message, waitlistCode });
+              throw new APIError("NOT_FOUND", { message });
             }
             return;
           },
@@ -378,10 +382,11 @@ export function createBetterAuth<
                   )
                 )
                 .limit(1);
-              if (!invitation)
-                throw new APIError("NOT_FOUND", {
-                  message: "Invalid or expired organization invitation code (after)",
-                });
+              if (!invitation) {
+                const message = "Invalid or expired organization invitation code (after)";
+                logger.error({ message, organizationInvitationCode });
+                throw new APIError("NOT_FOUND", { message });
+              }
 
               const [member] = await orm
                 .insert(schema.members)
@@ -391,10 +396,11 @@ export function createBetterAuth<
                   role: invitation.role || "member",
                 })
                 .returning();
-              if (!member)
-                throw new APIError("INTERNAL_SERVER_ERROR", {
-                  message: "Failed to add user to organization",
-                });
+              if (!member) {
+                const message = "Failed to add user to organization";
+                logger.error({ message });
+                throw new APIError("INTERNAL_SERVER_ERROR", { message });
+              }
               await orm
                 .update(schema.invitations)
                 .set({

@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.17.7
+
+### Patch Changes
+
+- debug 2
+
 ## 0.17.6
 
 ### Patch Changes
