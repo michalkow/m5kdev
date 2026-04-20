@@ -142,7 +142,7 @@ export class AuthUserRepository extends BaseTableRepository<
     if (userResult.isErr()) return err(userResult.error);
     const [user] = userResult.value;
     if (!user) return this.error("FORBIDDEN");
-    return ok(user.metadata);
+    return ok(user.metadata ?? {});
   }
 
   async setMetadata(

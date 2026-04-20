@@ -24,10 +24,7 @@ export const users = sqliteTable("users", {
     mode: "timestamp",
   }),
   preferences: text("preferences"),
-  metadata: text("metadata", { mode: "json" })
-    .notNull()
-    .default({})
-    .$type<Record<string, unknown>>(),
+  metadata: text("metadata", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
   onboarding: integer("onboarding"),
   flags: text("flags"),
 });
@@ -102,10 +99,7 @@ export const organizations = sqliteTable("organizations", {
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$default(() => new Date()),
-  metadata: text("metadata", { mode: "json" })
-    .notNull()
-    .default({})
-    .$type<Record<string, unknown>>(),
+  metadata: text("metadata", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
 });
 
 export const members = sqliteTable("members", {
