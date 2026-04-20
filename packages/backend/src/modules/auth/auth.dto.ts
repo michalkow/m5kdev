@@ -3,6 +3,19 @@ import { z } from "zod";
 export const organizationTypeSchema = z.enum(["solo", "organization", "agency", "enterprise"]);
 export type OrganizationType = z.infer<typeof organizationTypeSchema>;
 
+export const organizationSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string().nullable(),
+  logo: z.string().nullable(),
+  type: z.string().nullable(),
+  parentId: z.string().nullable(),
+  metadata: z.record(z.string(), z.unknown()).nullable(),
+  createdAt: z.date(),
+});
+
+export type Organization = z.infer<typeof organizationSchema>;
+
 export const waitlistSchema = z.object({
   id: z.string(),
   name: z.string().nullable(),

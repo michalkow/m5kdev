@@ -22,32 +22,7 @@ const schema = { ...auth };
 type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;
 type UserRow = typeof auth.users.$inferSelect;
-type OrganizationMetadata = Record<string, unknown> & {
-  preferences?: Record<string, unknown>;
-  flags?: string[];
-};
 type OrganizationRow = typeof auth.organizations.$inferSelect;
-
-function parseOrganizationMetadata(
-  metadata: string | Record<string, unknown> | null | undefined
-): OrganizationMetadata {
-  if (!metadata) return {};
-  if (typeof metadata === "string") {
-    try {
-      const parsed = JSON.parse(metadata) as unknown;
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return parsed as OrganizationMetadata;
-      }
-      return {};
-    } catch {
-      return {};
-    }
-  }
-  if (typeof metadata === "object" && !Array.isArray(metadata)) {
-    return metadata as OrganizationMetadata;
-  }
-  return {};
-}
 
 function normalizeOrganizationPreferences(value: unknown): Record<string, unknown> {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -59,6 +34,13 @@ function normalizeOrganizationPreferences(value: unknown): Record<string, unknow
 function normalizeOrganizationFlags(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string");
+}
+
+function normalizeRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
 }
 
 export class AuthUserRepository extends BaseTableRepository<
@@ -93,6 +75,7 @@ export class AuthUserRepository extends BaseTableRepository<
 
   async getPreferences(userId: string, tx?: Orm): ServerResultAsync<Record<string, unknown>> {
     const db = tx ?? this.orm;
+    this.logger.info({ userId });
     const userResult = await this.throwableQuery(() =>
       db
         .select({ preferences: this.schema.users.preferences })
@@ -100,15 +83,12 @@ export class AuthUserRepository extends BaseTableRepository<
         .where(eq(this.schema.users.id, userId))
         .limit(1)
     );
+    this.logger.info({ userResult });
     if (userResult.isErr()) return err(userResult.error);
     const [user] = userResult.value;
     if (!user) return this.error("FORBIDDEN");
 
-    const preferences = user.preferences;
-    if (!preferences) return ok({});
-    const parsed = this.throwable(() => ok(JSON.parse(preferences) as Record<string, unknown>));
-    if (parsed.isErr()) return err(parsed.error);
-    return ok(parsed.value);
+    return ok(normalizeRecord(user.preferences));
   }
 
   async setPreferences(
@@ -117,14 +97,9 @@ export class AuthUserRepository extends BaseTableRepository<
     tx?: Orm
   ): ServerResultAsync<Record<string, unknown>> {
     const db = tx ?? this.orm;
-    const jsonResult = this.throwable(() => ok(JSON.stringify(preferences)));
-    if (jsonResult.isErr()) return err(jsonResult.error);
 
     const updateResult = await this.throwableQuery(() =>
-      db
-        .update(this.schema.users)
-        .set({ preferences: jsonResult.value })
-        .where(eq(this.schema.users.id, userId))
+      db.update(this.schema.users).set({ preferences }).where(eq(this.schema.users.id, userId))
     );
     if (updateResult.isErr()) return err(updateResult.error);
     return ok(preferences);
@@ -167,7 +142,7 @@ export class AuthUserRepository extends BaseTableRepository<
         .update(this.schema.users)
         .set({
           metadata: {
-            ...user.metadata,
+            ...(user.metadata ?? {}),
             ...metadata,
           },
         })
@@ -189,24 +164,14 @@ export class AuthUserRepository extends BaseTableRepository<
     if (userResult.isErr()) return err(userResult.error);
     const [user] = userResult.value;
     if (!user) return this.error("FORBIDDEN");
-    const flags = user.flags;
-    if (!flags) return ok([]);
-
-    const parsed = this.throwable(() => ok(JSON.parse(flags) as string[]));
-    if (parsed.isErr()) return err(parsed.error);
-    return ok(parsed.value);
+    return ok(normalizeOrganizationFlags(user.flags));
   }
 
   async setFlags(userId: string, flags: string[], tx?: Orm): ServerResultAsync<string[]> {
     const db = tx ?? this.orm;
-    const jsonResult = this.throwable(() => ok(JSON.stringify(flags)));
-    if (jsonResult.isErr()) return err(jsonResult.error);
 
     const updateResult = await this.throwableQuery(() =>
-      db
-        .update(this.schema.users)
-        .set({ flags: jsonResult.value })
-        .where(eq(this.schema.users.id, userId))
+      db.update(this.schema.users).set({ flags }).where(eq(this.schema.users.id, userId))
     );
     if (updateResult.isErr()) return err(updateResult.error);
     return ok(flags);
@@ -219,14 +184,22 @@ export class AuthOrganizationRepository extends BaseTableRepository<
   Record<string, never>,
   Schema["organizations"]
 > {
-  private async getOrganizationMetadataForMember(
+  private async getOrganizationJsonFieldsForMember(
     userId: string,
     organizationId: string,
     tx?: Orm
-  ): Promise<OrganizationMetadata | null> {
+  ): Promise<{
+    preferences: Record<string, unknown>;
+    metadata: Record<string, unknown>;
+    flags: string[];
+  } | null> {
     const db = tx ?? this.orm;
-    const [organization] = await db
-      .select({ metadata: this.schema.organizations.metadata })
+    const [row] = await db
+      .select({
+        preferences: this.schema.organizations.preferences,
+        metadata: this.schema.organizations.metadata,
+        flags: this.schema.organizations.flags,
+      })
       .from(this.schema.organizations)
       .innerJoin(
         this.schema.members,
@@ -240,8 +213,12 @@ export class AuthOrganizationRepository extends BaseTableRepository<
       )
       .limit(1);
 
-    if (!organization) return null;
-    return parseOrganizationMetadata(organization.metadata);
+    if (!row) return null;
+    return {
+      preferences: normalizeOrganizationPreferences(row.preferences),
+      metadata: normalizeRecord(row.metadata),
+      flags: normalizeOrganizationFlags(row.flags),
+    };
   }
 
   async getOrganizationFlags(
@@ -249,9 +226,9 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     organizationId: string,
     tx?: Orm
   ): ServerResultAsync<string[]> {
-    const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
-    if (!metadata) return this.error("FORBIDDEN");
-    return ok(normalizeOrganizationFlags(metadata.flags));
+    const fields = await this.getOrganizationJsonFieldsForMember(userId, organizationId, tx);
+    if (!fields) return this.error("FORBIDDEN");
+    return ok(fields.flags);
   }
 
   async setOrganizationFlags(
@@ -261,13 +238,13 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     tx?: Orm
   ): ServerResultAsync<string[]> {
     const db = tx ?? this.orm;
-    const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
-    if (!metadata) return this.error("FORBIDDEN");
+    const fields = await this.getOrganizationJsonFieldsForMember(userId, organizationId, tx);
+    if (!fields) return this.error("FORBIDDEN");
 
     const updateResult = await this.throwableQuery(() =>
       db
         .update(this.schema.organizations)
-        .set({ metadata: { ...metadata, flags } })
+        .set({ flags })
         .where(eq(this.schema.organizations.id, organizationId))
     );
     if (updateResult.isErr()) return err(updateResult.error);
@@ -279,9 +256,9 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     organizationId: string,
     tx?: Orm
   ): ServerResultAsync<Record<string, unknown>> {
-    const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
-    if (!metadata) return this.error("FORBIDDEN");
-    return ok(normalizeOrganizationPreferences(metadata.preferences));
+    const fields = await this.getOrganizationJsonFieldsForMember(userId, organizationId, tx);
+    if (!fields) return this.error("FORBIDDEN");
+    return ok(fields.preferences);
   }
 
   async setOrganizationPreferences(
@@ -291,13 +268,13 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     tx?: Orm
   ): ServerResultAsync<Record<string, unknown>> {
     const db = tx ?? this.orm;
-    const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
-    if (!metadata) return this.error("FORBIDDEN");
+    const fields = await this.getOrganizationJsonFieldsForMember(userId, organizationId, tx);
+    if (!fields) return this.error("FORBIDDEN");
 
     const updateResult = await this.throwableQuery(() =>
       db
         .update(this.schema.organizations)
-        .set({ metadata: { ...metadata, preferences } })
+        .set({ preferences })
         .where(eq(this.schema.organizations.id, organizationId))
     );
     if (updateResult.isErr()) return err(updateResult.error);
@@ -357,7 +334,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     return ok(
       result.value.map((org) => ({
         ...org,
-        metadata: parseOrganizationMetadata(org.metadata),
+        metadata: normalizeRecord(org.metadata),
       }))
     );
   }

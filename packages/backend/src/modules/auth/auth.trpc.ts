@@ -1,4 +1,3 @@
-import { organizationSchema } from "better-auth/plugins/organization";
 import { z } from "zod";
 import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 import {
@@ -7,6 +6,7 @@ import {
   accountClaimSchema,
   adminOrganizationSchema,
   childOrganizationSchema,
+  organizationSchema,
   organizationTypeSchema,
   readInvitationInputSchema,
   readInvitationOutputSchema,
@@ -288,14 +288,7 @@ export function createAuthTRPC(
 
     createOrganization: procedure
       .input(z.object({ name: z.string() }))
-      .output(
-        organizationSchema.extend({
-          type: z.string().nullable(),
-          parentId: z.string().nullable(),
-          slug: z.string().nullable(),
-          metadata: z.record(z.string(), z.unknown()).nullable(),
-        })
-      )
+      .output(organizationSchema)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.createOrganization(input, ctx));
       }),

@@ -23,10 +23,10 @@ export const users = sqliteTable("users", {
   paymentPlanExpiresAt: integer("payment_plan_expires_at", {
     mode: "timestamp",
   }),
-  preferences: text("preferences"),
+  preferences: text("preferences", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
   metadata: text("metadata", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
   onboarding: integer("onboarding"),
-  flags: text("flags"),
+  flags: text("flags", { mode: "json" }).default([]).$type<string[]>(),
 });
 
 export const sessions = sqliteTable("sessions", {
@@ -99,7 +99,9 @@ export const organizations = sqliteTable("organizations", {
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$default(() => new Date()),
+  preferences: text("preferences", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
   metadata: text("metadata", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
+  flags: text("flags", { mode: "json" }).default([]).$type<string[]>(),
 });
 
 export const members = sqliteTable("members", {
