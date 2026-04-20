@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+export const organizationTypeSchema = z.enum(["solo", "organization", "agency", "enterprise"]);
+export type OrganizationType = z.infer<typeof organizationTypeSchema>;
+
 export const waitlistSchema = z.object({
   id: z.string(),
   name: z.string().nullable(),
@@ -73,6 +76,17 @@ export const childOrganizationSchema = z.object({
 });
 
 export type ChildOrganization = z.infer<typeof childOrganizationSchema>;
+
+export const adminOrganizationSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string().nullable(),
+  type: z.string().nullable(),
+  parentId: z.string().nullable(),
+  createdAt: z.date(),
+});
+
+export type AdminOrganization = z.infer<typeof adminOrganizationSchema>;
 
 export const updateChildOrganizationInputSchema = z.object({
   id: z.string(),

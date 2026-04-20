@@ -1,6 +1,12 @@
 import { createBackendRouterMap, defineBackendModule } from "../../app";
 import * as authTables from "./auth.db";
-import { AuthRepository } from "./auth.repository";
+import {
+  AuthInvitationRepository,
+  AuthOrganizationRepository,
+  AuthRepository,
+  AuthUserRepository,
+  AuthWaitlistRepository,
+} from "./auth.repository";
 import { AuthService } from "./auth.service";
 import { createAuthTRPC } from "./auth.trpc";
 
@@ -31,6 +37,26 @@ export function createAuthBackendModule<const Namespace extends string = "auth">
         orm: db.orm as never,
         schema: db.schema as never,
       }),
+      user: new AuthUserRepository({
+        orm: db.orm as never,
+        schema: db.schema as never,
+        table: db.schema.users as never,
+      }),
+      invitation: new AuthInvitationRepository({
+        orm: db.orm as never,
+        schema: db.schema as never,
+        table: db.schema.invitations as never,
+      }),
+      waitlist: new AuthWaitlistRepository({
+        orm: db.orm as never,
+        schema: db.schema as never,
+        table: db.schema.waitlist as never,
+      }),
+      organization: new AuthOrganizationRepository({
+        orm: db.orm as never,
+        schema: db.schema as never,
+        table: db.schema.organizations as never,
+      }),
     }),
     services: ({ repositories, deps }) => {
       const emailService = deps[emailModuleId]?.services.email;
@@ -44,7 +70,13 @@ export function createAuthBackendModule<const Namespace extends string = "auth">
 
       return {
         auth: new AuthService(
-          { auth: repositories.auth },
+          {
+            auth: repositories.auth,
+            user: repositories.user,
+            invitation: repositories.invitation,
+            waitlist: repositories.waitlist,
+            organization: repositories.organization,
+          },
           billingService
             ? { email: emailService, billing: billingService }
             : { email: emailService }

@@ -5,7 +5,9 @@ import {
   accountClaimMagicLinkOutputSchema,
   accountClaimOutputSchema,
   accountClaimSchema,
+  adminOrganizationSchema,
   childOrganizationSchema,
+  organizationTypeSchema,
   readInvitationInputSchema,
   readInvitationOutputSchema,
   updateChildOrganizationInputSchema,
@@ -106,6 +108,31 @@ export function createAuthTRPC(
     listAdminWaitlist: adminProcedure.output(z.array(waitlistOutputSchema)).query(async () => {
       return handleTRPCResult(await authService.listAdminWaitlist());
     }),
+
+    listAdminOrganizations: adminProcedure
+      .input(
+        z.object({
+          search: z.string().optional(),
+          limit: z.number().int().min(1).max(200).optional(),
+          offset: z.number().int().min(0).optional(),
+        })
+      )
+      .output(z.array(adminOrganizationSchema))
+      .query(async ({ input }) => {
+        return handleTRPCResult(await authService.listAdminOrganizations(input));
+      }),
+
+    updateAdminOrganizationType: adminProcedure
+      .input(
+        z.object({
+          organizationId: z.string(),
+          type: organizationTypeSchema,
+        })
+      )
+      .output(adminOrganizationSchema)
+      .mutation(async ({ input }) => {
+        return handleTRPCResult(await authService.updateAdminOrganizationType(input));
+      }),
 
     addToWaitlist: adminProcedure
       .input(
