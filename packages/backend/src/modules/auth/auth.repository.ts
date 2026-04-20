@@ -926,22 +926,20 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     tx?: Orm
   ): ServerResultAsync<OrganizationRow> {
     const db = tx ?? this.orm;
-    const organizationResult = await this.throwableQuery(() =>
-      db
-        .insert(this.schema.organizations)
-        .values({ name, slug: uuidv4(), type: "organization", parentId })
-        .returning()
+    return await this.throwableQuery(() =>
+      db.transaction(async (t) => {
+        const [organization] = await t
+          .insert(this.schema.organizations)
+          .values({ name, slug: uuidv4(), type: "organization", parentId })
+          .returning();
+        await this.throwableQuery(() =>
+          db
+            .insert(this.schema.members)
+            .values({ userId, organizationId: organization.id, role })
+            .returning()
+        );
+        return organization;
+      })
     );
-    if (organizationResult.isErr()) return err(organizationResult.error);
-    const [organization] = organizationResult.value;
-    const memberResult = await this.throwableQuery(() =>
-      db
-        .insert(this.schema.members)
-        .values({ userId, organizationId: organization.id, role })
-        .returning()
-    );
-    if (memberResult.isErr()) return err(memberResult.error);
-
-    return ok(organization);
   }
 }
