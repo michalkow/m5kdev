@@ -932,12 +932,15 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
           .insert(this.schema.organizations)
           .values({ name, slug: uuidv4(), type: "organization", parentId })
           .returning();
-        await this.throwableQuery(() =>
-          db
-            .insert(this.schema.members)
-            .values({ userId, organizationId: organization.id, role })
-            .returning()
-        );
+
+        if (!organization) throw new Error("Failed to create organization");
+
+        const [member] = await t
+          .insert(this.schema.members)
+          .values({ userId, organizationId: organization.id, role })
+          .returning();
+        if (!member) throw new Error("Failed to create member");
+
         return organization;
       })
     );
