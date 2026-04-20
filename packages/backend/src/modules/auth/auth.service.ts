@@ -18,7 +18,13 @@ import type {
   Waitlist,
   WaitlistOutput,
 } from "./auth.dto";
-import type { AuthRepository } from "./auth.repository";
+import type {
+  AuthInvitationRepository,
+  AuthOrganizationRepository,
+  AuthRepository,
+  AuthUserRepository,
+  AuthWaitlistRepository,
+} from "./auth.repository";
 
 type OrganizationRow = typeof auth.organizations.$inferSelect;
 
@@ -26,14 +32,19 @@ type AuthServiceDependencies =
   | { email: EmailService }
   | { email: EmailService; billing: BillingService };
 
-export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServiceDependencies> {
+export class AuthService extends BaseService<
+  {
+    auth: AuthRepository;
+    user: AuthUserRepository;
+    invitation: AuthInvitationRepository;
+    waitlist: AuthWaitlistRepository;
+    organization: AuthOrganizationRepository;
+  },
+  AuthServiceDependencies
+> {
   private getBillingService(): BillingService | null {
     if (!("billing" in this.service)) return null;
     return this.service.billing;
-  }
-
-  async readInvitation({ id }: { id: string }): ServerResultAsync<ReadInvitationOutput> {
-    return this.repository.auth.readInvitation(id);
   }
 
   private organizationActorFromCtx(ctx: Context): ServerResult<OrganizationActor> {
@@ -45,13 +56,17 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
     }
   }
 
+  async readInvitation({ id }: { id: string }): ServerResultAsync<ReadInvitationOutput> {
+    return this.repository.invitation.read(id);
+  }
+
   async getUserWaitlistCount(ctx: Context): ServerResultAsync<number> {
     if (ctx.actor.userRole === "admin") return ok(0);
-    return this.repository.auth.getUserWaitlistCount(ctx.actor.userId);
+    return this.repository.waitlist.getUserWaitlistCount(ctx.actor.userId);
   }
 
   async getOnboarding(ctx: Context): ServerResultAsync<number> {
-    return this.repository.auth.getOnboarding(ctx.actor.userId);
+    return this.repository.user.getOnboarding(ctx.actor.userId);
   }
 
   async setOnboarding(onboarding: number, ctx: Context): ServerResultAsync<number> {
@@ -62,11 +77,11 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
         onboarding,
       },
     });
-    return this.repository.auth.setOnboarding(ctx.actor.userId, onboarding);
+    return this.repository.user.setOnboarding(ctx.actor.userId, onboarding);
   }
 
   async getPreferences(ctx: Context): ServerResultAsync<Record<string, unknown>> {
-    return this.repository.auth.getPreferences(ctx.actor.userId);
+    return this.repository.user.getPreferences(ctx.actor.userId);
   }
 
   async setPreferences(
@@ -77,7 +92,7 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
       distinctId: ctx.actor.userId,
       event: "preferences_set",
     });
-    return this.repository.auth.setPreferences(ctx.actor.userId, preferences);
+    return this.repository.user.setPreferences(ctx.actor.userId, preferences);
   }
 
   async getOrganizationPreferences(ctx: Context): ServerResultAsync<Record<string, unknown>> {
@@ -85,7 +100,10 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
     if (org.isErr()) return err(org.error);
     const actor = org.value;
 
-    return this.repository.auth.getOrganizationPreferences(actor.userId, actor.organizationId);
+    return this.repository.organization.getOrganizationPreferences(
+      actor.userId,
+      actor.organizationId
+    );
   }
 
   async setOrganizationPreferences(
@@ -104,7 +122,7 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
       },
     });
 
-    return this.repository.auth.setOrganizationPreferences(
+    return this.repository.organization.setOrganizationPreferences(
       actor.userId,
       actor.organizationId,
       preferences
@@ -112,7 +130,7 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
   }
 
   async getMetadata(ctx: Context): ServerResultAsync<Record<string, unknown>> {
-    return this.repository.auth.getMetadata(ctx.actor.userId);
+    return this.repository.user.getMetadata(ctx.actor.userId);
   }
 
   async setMetadata(
@@ -123,11 +141,11 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
       distinctId: ctx.actor.userId,
       event: "metadata_set",
     });
-    return this.repository.auth.setMetadata(ctx.actor.userId, metadata);
+    return this.repository.user.setMetadata(ctx.actor.userId, metadata);
   }
 
   async getFlags(ctx: Context): ServerResultAsync<string[]> {
-    return this.repository.auth.getFlags(ctx.actor.userId);
+    return this.repository.user.getFlags(ctx.actor.userId);
   }
 
   async getOrganizationFlags(ctx: Context): ServerResultAsync<string[]> {
@@ -135,7 +153,7 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
     if (org.isErr()) return err(org.error);
     const actor = org.value;
 
-    return this.repository.auth.getOrganizationFlags(actor.userId, actor.organizationId);
+    return this.repository.organization.getOrganizationFlags(actor.userId, actor.organizationId);
   }
 
   async setFlags(flags: string[], ctx: Context): ServerResultAsync<string[]> {
@@ -143,7 +161,7 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
       distinctId: ctx.actor.userId,
       event: "flags_set",
     });
-    return this.repository.auth.setFlags(ctx.actor.userId, flags);
+    return this.repository.user.setFlags(ctx.actor.userId, flags);
   }
 
   async setOrganizationFlags(flags: string[], ctx: Context): ServerResultAsync<string[]> {
@@ -159,23 +177,27 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
       },
     });
 
-    return this.repository.auth.setOrganizationFlags(actor.userId, actor.organizationId, flags);
+    return this.repository.organization.setOrganizationFlags(
+      actor.userId,
+      actor.organizationId,
+      flags
+    );
   }
 
   async listAdminWaitlist(): ServerResultAsync<WaitlistOutput[]> {
-    return this.repository.auth.listAdminWaitlist();
+    return this.repository.waitlist.listAdminWaitlist();
   }
 
   async listWaitlist(ctx: Context): ServerResultAsync<Waitlist[]> {
-    return this.repository.auth.listWaitlist(ctx.actor.userId);
+    return this.repository.waitlist.listWaitlist(ctx.actor.userId);
   }
 
   async addToWaitlist({ email }: { email: string }): ServerResultAsync<WaitlistOutput> {
-    return this.repository.auth.addToWaitlist(email);
+    return this.repository.waitlist.addToWaitlist(email);
   }
 
   async inviteFromWaitlist({ id }: { id: string }): ServerResultAsync<Waitlist> {
-    const waitlist = await this.repository.auth.inviteFromWaitlist(id);
+    const waitlist = await this.repository.waitlist.inviteFromWaitlist(id);
     if (waitlist.isErr()) return err(waitlist.error);
     if (!waitlist.value.code) return this.repository.auth.error("BAD_REQUEST");
     if (!waitlist.value.email) return this.repository.auth.error("BAD_REQUEST");
@@ -187,10 +209,10 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
     { email, name }: { email: string; name?: string },
     ctx: Context
   ): ServerResultAsync<Waitlist> {
-    const count = await this.repository.auth.getUserWaitlistCount(ctx.user.id);
+    const count = await this.repository.waitlist.getUserWaitlistCount(ctx.user.id);
     if (count.isErr()) return err(count.error);
     if (count.value >= 3) return this.repository.auth.error("BAD_REQUEST", "Run out of invites");
-    const waitlist = await this.repository.auth.inviteToWaitlist({
+    const waitlist = await this.repository.waitlist.inviteToWaitlist({
       email,
       userId: ctx.user.id,
       name,
@@ -225,22 +247,22 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
         name,
       },
     });
-    return this.repository.auth.createInvitationCode({ userId: ctx.actor.userId, name });
+    return this.repository.waitlist.createInvitationCode({ userId: ctx.actor.userId, name });
   }
 
   async joinWaitlist({ email }: { email: string }): ServerResultAsync<WaitlistOutput> {
-    const waitlist = await this.repository.auth.joinWaitlist(email);
+    const waitlist = await this.repository.waitlist.joinWaitlist(email);
     if (waitlist.isErr()) return err(waitlist.error);
     await this.service.email.sendWaitlistConfirmation(email);
     return ok(waitlist.value);
   }
 
   async removeFromWaitlist({ id }: { id: string }): ServerResultAsync<WaitlistOutput> {
-    return this.repository.auth.removeFromWaitlist(id);
+    return this.repository.waitlist.removeFromWaitlist(id);
   }
 
   async validateWaitlistCode(code: string): ServerResultAsync<{ status: string }> {
-    return this.repository.auth.validateWaitlistCode(code);
+    return this.repository.waitlist.validateWaitlistCode(code);
   }
 
   async createAccountClaimCode({
@@ -250,7 +272,7 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
     userId: string;
     expiresInHours?: number;
   }): ServerResultAsync<AccountClaim> {
-    return this.repository.auth.createAccountClaimCode({ userId, expiresInHours });
+    return this.repository.waitlist.createAccountClaimCode({ userId, expiresInHours });
   }
 
   async listAccountClaims(): ServerResultAsync<AccountClaimOutput[]> {
@@ -381,7 +403,7 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
   async listChildOrganizations(ctx: Context): ServerResultAsync<ChildOrganization[]> {
     const access = this.assertCanManageChildOrganizations(ctx);
     if (access.isErr()) return err(access.error);
-    return this.repository.auth.listChildOrganizations(access.value.parentId);
+    return this.repository.organization.listChildOrganizations(access.value.parentId);
   }
 
   async updateChildOrganization(
@@ -391,16 +413,7 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
     const access = this.assertCanManageChildOrganizations(ctx);
     if (access.isErr()) return err(access.error);
 
-    return this.repository.auth.updateChildOrganization(
-      {
-        parentId: access.value.parentId,
-        organizationId: input.organizationId,
-        name: input.name,
-        slug: input.slug ?? null,
-        metadata: input.metadata,
-      },
-      undefined
-    );
+    return this.repository.organization.update(input);
   }
 
   async createOrganization(
@@ -409,7 +422,7 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
   ): ServerResultAsync<OrganizationRow> {
     const access = this.assertCanManageChildOrganizations(ctx, "create");
     if (access.isErr()) return err(access.error);
-    return this.repository.auth.createOrganization({
+    return this.repository.organization.createOrganization({
       name,
       parentId: access.value.parentId,
       userId: ctx.actor.userId,

@@ -102,7 +102,10 @@ export const organizations = sqliteTable("organizations", {
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$default(() => new Date()),
-  metadata: text("metadata"),
+  metadata: text("metadata", { mode: "json" })
+    .notNull()
+    .default({})
+    .$type<Record<string, unknown>>(),
 });
 
 export const members = sqliteTable("members", {

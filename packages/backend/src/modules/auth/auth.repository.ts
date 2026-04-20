@@ -3,7 +3,7 @@ import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
 import type { ServerResultAsync } from "../base/base.dto";
-import { BaseRepository } from "../base/base.repository";
+import { BaseRepository, BaseTableRepository } from "../base/base.repository";
 import * as auth from "./auth.db";
 import type {
   AccountClaim,
@@ -59,127 +59,12 @@ function normalizeOrganizationFlags(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string");
 }
 
-export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, never>> {
-  async listChildOrganizations(parentId: string, tx?: Orm): ServerResultAsync<ChildOrganization[]> {
-    const db = tx ?? this.orm;
-    const result = await this.throwableQuery(() =>
-      db
-        .select({
-          id: this.schema.organizations.id,
-          name: this.schema.organizations.name,
-          slug: this.schema.organizations.slug,
-          logo: this.schema.organizations.logo,
-          type: this.schema.organizations.type,
-          parentId: this.schema.organizations.parentId,
-          metadata: this.schema.organizations.metadata,
-          createdAt: this.schema.organizations.createdAt,
-        })
-        .from(this.schema.organizations)
-        .where(eq(this.schema.organizations.parentId, parentId))
-        .orderBy(this.schema.organizations.name)
-    );
-    if (result.isErr()) return err(result.error);
-
-    return ok(
-      result.value.map((org) => ({
-        ...org,
-        metadata: parseOrganizationMetadata(org.metadata),
-      }))
-    );
-  }
-
-  async updateChildOrganization(
-    {
-      parentId,
-      organizationId,
-      name,
-      slug,
-      metadata,
-    }: {
-      parentId: string;
-      organizationId: string;
-      name: string;
-      slug?: string | null;
-      metadata?: Record<string, unknown>;
-    },
-    tx?: Orm
-  ): ServerResultAsync<ChildOrganization> {
-    const db = tx ?? this.orm;
-    const jsonResult = this.throwable(() => ok(JSON.stringify(metadata ?? {})));
-    if (jsonResult.isErr()) return err(jsonResult.error);
-
-    const updateResult = await this.throwableQuery(() =>
-      db
-        .update(this.schema.organizations)
-        .set({
-          name,
-          slug: slug ?? null,
-          metadata: jsonResult.value,
-        })
-        .where(
-          and(
-            eq(this.schema.organizations.id, organizationId),
-            eq(this.schema.organizations.parentId, parentId)
-          )
-        )
-        .returning({
-          id: this.schema.organizations.id,
-          name: this.schema.organizations.name,
-          slug: this.schema.organizations.slug,
-          logo: this.schema.organizations.logo,
-          type: this.schema.organizations.type,
-          parentId: this.schema.organizations.parentId,
-          metadata: this.schema.organizations.metadata,
-          createdAt: this.schema.organizations.createdAt,
-        })
-    );
-    if (updateResult.isErr()) return err(updateResult.error);
-    const [org] = updateResult.value;
-    if (!org) return this.error("NOT_FOUND");
-
-    return ok({
-      ...org,
-      metadata: parseOrganizationMetadata(org.metadata),
-    });
-  }
-  private async getOrganizationMetadataForMember(
-    userId: string,
-    organizationId: string,
-    tx?: Orm
-  ): Promise<OrganizationMetadata | null> {
-    const db = tx ?? this.orm;
-    const [organization] = await db
-      .select({ metadata: this.schema.organizations.metadata })
-      .from(this.schema.organizations)
-      .innerJoin(
-        this.schema.members,
-        eq(this.schema.members.organizationId, this.schema.organizations.id)
-      )
-      .where(
-        and(
-          eq(this.schema.organizations.id, organizationId),
-          eq(this.schema.members.userId, userId)
-        )
-      )
-      .limit(1);
-
-    if (!organization) return null;
-    return parseOrganizationMetadata(organization.metadata);
-  }
-
-  async getUserWaitlistCount(userId: string, tx?: Orm): ServerResultAsync<number> {
-    const db = tx ?? this.orm;
-    const result = await this.throwableQuery(() =>
-      db
-        .select({ count: count() })
-        .from(this.schema.waitlist)
-        .where(eq(this.schema.waitlist.userId, userId))
-    );
-    if (result.isErr()) return err(result.error);
-    const [waitlist] = result.value;
-    return ok(waitlist.count ?? 0);
-  }
-
+export class AuthUserRepository extends BaseTableRepository<
+  Orm,
+  Schema,
+  Record<string, never>,
+  Schema["users"]
+> {
   async getOnboarding(userId: string, tx?: Orm): ServerResultAsync<number> {
     const db = tx ?? this.orm;
     const result = await this.throwableQuery(() =>
@@ -238,46 +123,6 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
         .update(this.schema.users)
         .set({ preferences: jsonResult.value })
         .where(eq(this.schema.users.id, userId))
-    );
-    if (updateResult.isErr()) return err(updateResult.error);
-    return ok(preferences);
-  }
-
-  async getOrganizationPreferences(
-    userId: string,
-    organizationId: string,
-    tx?: Orm
-  ): ServerResultAsync<Record<string, unknown>> {
-    const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
-    if (!metadata) return this.error("FORBIDDEN");
-    return ok(normalizeOrganizationPreferences(metadata.preferences));
-  }
-
-  async setOrganizationPreferences(
-    userId: string,
-    organizationId: string,
-    preferences: Record<string, unknown>,
-    tx?: Orm
-  ): ServerResultAsync<Record<string, unknown>> {
-    const db = tx ?? this.orm;
-    const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
-    if (!metadata) return this.error("FORBIDDEN");
-
-    const jsonResult = this.throwable(() =>
-      ok(
-        JSON.stringify({
-          ...metadata,
-          preferences,
-        })
-      )
-    );
-    if (jsonResult.isErr()) return err(jsonResult.error);
-
-    const updateResult = await this.throwableQuery(() =>
-      db
-        .update(this.schema.organizations)
-        .set({ metadata: jsonResult.value })
-        .where(eq(this.schema.organizations.id, organizationId))
     );
     if (updateResult.isErr()) return err(updateResult.error);
     return ok(preferences);
@@ -350,16 +195,6 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     return ok(parsed.value);
   }
 
-  async getOrganizationFlags(
-    userId: string,
-    organizationId: string,
-    tx?: Orm
-  ): ServerResultAsync<string[]> {
-    const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
-    if (!metadata) return this.error("FORBIDDEN");
-    return ok(normalizeOrganizationFlags(metadata.flags));
-  }
-
   async setFlags(userId: string, flags: string[], tx?: Orm): ServerResultAsync<string[]> {
     const db = tx ?? this.orm;
     const jsonResult = this.throwable(() => ok(JSON.stringify(flags)));
@@ -374,6 +209,48 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     if (updateResult.isErr()) return err(updateResult.error);
     return ok(flags);
   }
+}
+
+export class AuthOrganizationRepository extends BaseTableRepository<
+  Orm,
+  Schema,
+  Record<string, never>,
+  Schema["organizations"]
+> {
+  private async getOrganizationMetadataForMember(
+    userId: string,
+    organizationId: string,
+    tx?: Orm
+  ): Promise<OrganizationMetadata | null> {
+    const db = tx ?? this.orm;
+    const [organization] = await db
+      .select({ metadata: this.schema.organizations.metadata })
+      .from(this.schema.organizations)
+      .innerJoin(
+        this.schema.members,
+        eq(this.schema.members.organizationId, this.schema.organizations.id)
+      )
+      .where(
+        and(
+          eq(this.schema.organizations.id, organizationId),
+          eq(this.schema.members.userId, userId)
+        )
+      )
+      .limit(1);
+
+    if (!organization) return null;
+    return parseOrganizationMetadata(organization.metadata);
+  }
+
+  async getOrganizationFlags(
+    userId: string,
+    organizationId: string,
+    tx?: Orm
+  ): ServerResultAsync<string[]> {
+    const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
+    if (!metadata) return this.error("FORBIDDEN");
+    return ok(normalizeOrganizationFlags(metadata.flags));
+  }
 
   async setOrganizationFlags(
     userId: string,
@@ -385,17 +262,154 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
     if (!metadata) return this.error("FORBIDDEN");
 
-    const jsonResult = this.throwable(() => ok(JSON.stringify({ ...metadata, flags })));
-    if (jsonResult.isErr()) return err(jsonResult.error);
-
     const updateResult = await this.throwableQuery(() =>
       db
         .update(this.schema.organizations)
-        .set({ metadata: jsonResult.value })
+        .set({ metadata: { ...metadata, flags } })
         .where(eq(this.schema.organizations.id, organizationId))
     );
     if (updateResult.isErr()) return err(updateResult.error);
     return ok(flags);
+  }
+
+  async getOrganizationPreferences(
+    userId: string,
+    organizationId: string,
+    tx?: Orm
+  ): ServerResultAsync<Record<string, unknown>> {
+    const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
+    if (!metadata) return this.error("FORBIDDEN");
+    return ok(normalizeOrganizationPreferences(metadata.preferences));
+  }
+
+  async setOrganizationPreferences(
+    userId: string,
+    organizationId: string,
+    preferences: Record<string, unknown>,
+    tx?: Orm
+  ): ServerResultAsync<Record<string, unknown>> {
+    const db = tx ?? this.orm;
+    const metadata = await this.getOrganizationMetadataForMember(userId, organizationId, tx);
+    if (!metadata) return this.error("FORBIDDEN");
+
+    const updateResult = await this.throwableQuery(() =>
+      db
+        .update(this.schema.organizations)
+        .set({ metadata: { ...metadata, preferences } })
+        .where(eq(this.schema.organizations.id, organizationId))
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+    return ok(preferences);
+  }
+
+  async createOrganization(
+    {
+      name,
+      parentId,
+      userId,
+      role,
+    }: { name: string; parentId: string | null; userId: string; role: string },
+    tx?: Orm
+  ): ServerResultAsync<OrganizationRow> {
+    const db = tx ?? this.orm;
+    return await this.throwableQuery(() =>
+      db.transaction(async (t) => {
+        const [organization] = await t
+          .insert(this.schema.organizations)
+          .values({ name, slug: uuidv4(), type: "organization", parentId })
+          .returning();
+
+        if (!organization) throw new Error("Failed to create organization");
+
+        const [member] = await t
+          .insert(this.schema.members)
+          .values({ userId, organizationId: organization.id, role })
+          .returning();
+        if (!member) throw new Error("Failed to create member");
+
+        return organization;
+      })
+    );
+  }
+
+  async listChildOrganizations(parentId: string, tx?: Orm): ServerResultAsync<ChildOrganization[]> {
+    const db = tx ?? this.orm;
+    const result = await this.throwableQuery(() =>
+      db
+        .select({
+          id: this.schema.organizations.id,
+          name: this.schema.organizations.name,
+          slug: this.schema.organizations.slug,
+          logo: this.schema.organizations.logo,
+          type: this.schema.organizations.type,
+          parentId: this.schema.organizations.parentId,
+          metadata: this.schema.organizations.metadata,
+          createdAt: this.schema.organizations.createdAt,
+        })
+        .from(this.schema.organizations)
+        .where(eq(this.schema.organizations.parentId, parentId))
+        .orderBy(this.schema.organizations.name)
+    );
+    if (result.isErr()) return err(result.error);
+
+    return ok(
+      result.value.map((org) => ({
+        ...org,
+        metadata: parseOrganizationMetadata(org.metadata),
+      }))
+    );
+  }
+}
+
+export class AuthInvitationRepository extends BaseTableRepository<
+  Orm,
+  Schema,
+  Record<string, never>,
+  Schema["invitations"]
+> {
+  async read(id: string, tx?: Orm): ServerResultAsync<ReadInvitationOutput> {
+    const db = tx ?? this.orm;
+    const invitationResult = await this.findById(id, tx);
+    if (invitationResult.isErr()) return err(invitationResult.error);
+    const invitation = invitationResult.value;
+    if (!invitation) return this.error("NOT_FOUND");
+    const organizationResult = await this.throwableQuery(() =>
+      db
+        .select()
+        .from(this.schema.organizations)
+        .where(eq(this.schema.organizations.id, invitation.organizationId))
+        .limit(1)
+    );
+    if (organizationResult.isErr()) return err(organizationResult.error);
+    const [organization] = organizationResult.value;
+    if (!organization) return this.error("NOT_FOUND");
+    return ok({
+      organizationId: invitation.organizationId,
+      email: invitation.email,
+      name: organization.name,
+      slug: organization.slug,
+      logo: organization.logo,
+    });
+  }
+}
+
+export class AuthWaitlistRepository extends BaseTableRepository<
+  Orm,
+  Schema,
+  Record<string, never>,
+  Schema["waitlist"]
+> {
+  async getUserWaitlistCount(userId: string, tx?: Orm): ServerResultAsync<number> {
+    const db = tx ?? this.orm;
+    const result = await this.throwableQuery(() =>
+      db
+        .select({ count: count() })
+        .from(this.schema.waitlist)
+        .where(eq(this.schema.waitlist.userId, userId))
+    );
+    if (result.isErr()) return err(result.error);
+    const [waitlist] = result.value;
+    return ok(waitlist.count ?? 0);
   }
 
   async listAdminWaitlist(tx?: Orm): ServerResultAsync<WaitlistOutput[]> {
@@ -416,33 +430,6 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     );
     if (waitlistResult.isErr()) return err(waitlistResult.error);
     return ok(waitlistResult.value);
-  }
-
-  async readInvitation(id: string, tx?: Orm): ServerResultAsync<ReadInvitationOutput> {
-    const db = tx ?? this.orm;
-    const invitationResult = await this.throwableQuery(() =>
-      db.select().from(this.schema.invitations).where(eq(this.schema.invitations.id, id)).limit(1)
-    );
-    if (invitationResult.isErr()) return err(invitationResult.error);
-    const [invitation] = invitationResult.value;
-    if (!invitation) return this.error("NOT_FOUND");
-    const organizationResult = await this.throwableQuery(() =>
-      db
-        .select()
-        .from(this.schema.organizations)
-        .where(eq(this.schema.organizations.id, invitation.organizationId))
-        .limit(1)
-    );
-    if (organizationResult.isErr()) return err(organizationResult.error);
-    const [organization] = organizationResult.value;
-    if (!organization) return this.error("NOT_FOUND");
-    return ok({
-      organizationId: invitation.organizationId,
-      email: invitation.email,
-      name: organization.name,
-      slug: organization.slug,
-      logo: organization.logo,
-    });
   }
 
   async listWaitlist(userId: string, tx?: Orm): ServerResultAsync<Waitlist[]> {
@@ -594,7 +581,9 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     const [claim] = claimResult.value;
     return ok(claim);
   }
+}
 
+export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, never>> {
   async createClaimableProvisionedUser({
     name,
     email,
@@ -997,35 +986,5 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     if (linkResult.isErr()) return err(linkResult.error);
     const [link] = linkResult.value;
     return ok(link ?? null);
-  }
-
-  async createOrganization(
-    {
-      name,
-      parentId,
-      userId,
-      role,
-    }: { name: string; parentId: string | null; userId: string; role: string },
-    tx?: Orm
-  ): ServerResultAsync<OrganizationRow> {
-    const db = tx ?? this.orm;
-    return await this.throwableQuery(() =>
-      db.transaction(async (t) => {
-        const [organization] = await t
-          .insert(this.schema.organizations)
-          .values({ name, slug: uuidv4(), type: "organization", parentId })
-          .returning();
-
-        if (!organization) throw new Error("Failed to create organization");
-
-        const [member] = await t
-          .insert(this.schema.members)
-          .values({ userId, organizationId: organization.id, role })
-          .returning();
-        if (!member) throw new Error("Failed to create member");
-
-        return organization;
-      })
-    );
   }
 }

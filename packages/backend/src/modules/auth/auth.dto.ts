@@ -75,10 +75,8 @@ export const childOrganizationSchema = z.object({
 export type ChildOrganization = z.infer<typeof childOrganizationSchema>;
 
 export const updateChildOrganizationInputSchema = z.object({
-  organizationId: z.string(),
+  id: z.string(),
   name: z.string().min(1),
-  slug: z.string().nullable().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type UpdateChildOrganizationInput = z.infer<typeof updateChildOrganizationInputSchema>;

@@ -266,7 +266,7 @@ export function createAuthTRPC(
           type: z.string().nullable(),
           parentId: z.string().nullable(),
           slug: z.string().nullable(),
-          metadata: z.string().nullable(),
+          metadata: z.record(z.string(), z.unknown()).nullable(),
         })
       )
       .mutation(async ({ input, ctx }) => {
