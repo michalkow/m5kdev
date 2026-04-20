@@ -12,7 +12,9 @@ import type {
   AccountClaim,
   AccountClaimMagicLinkOutput,
   AccountClaimOutput,
+  ChildOrganization,
   ReadInvitationOutput,
+  UpdateChildOrganizationInput,
   Waitlist,
   WaitlistOutput,
 } from "./auth.dto";
@@ -342,36 +344,76 @@ export class AuthService extends BaseService<{ auth: AuthRepository }, AuthServi
     return this.repository.auth.listAccountClaimMagicLinks(claimId);
   }
 
-  async createOrganization(
-    { name }: { name: string },
-    ctx: Context
-  ): ServerResultAsync<OrganizationRow> {
+  private assertCanManageChildOrganizations(
+    ctx: Context,
+    action: "create" | "manage" = "manage"
+  ): ServerResult<{ parentId: string; organizationType: string }> {
     const organizationType = ctx.session.activeOrganizationType ?? "organization";
     const parentId = ctx.session.activeOrganizationId ?? null;
     if (!parentId) {
       return this.error(
         "FORBIDDEN",
-        "You are not allowed to create an organization without a parent organization"
+        action === "create"
+          ? "You are not allowed to create an organization without a parent organization"
+          : "You are not allowed to manage child organizations without a parent organization"
       );
     }
     if (!["enterprise", "agency"].includes(organizationType)) {
       return this.error(
         "FORBIDDEN",
-        "You are not allowed to create an organization with this type"
+        action === "create"
+          ? "You are not allowed to create an organization with this type"
+          : "You are not allowed to manage child organizations"
       );
     }
     const role = ctx.session.activeOrganizationRole ?? "member";
     if (!["admin", "owner"].includes(role)) {
       return this.error(
         "FORBIDDEN",
-        "You are not allowed to create an organization with this role"
+        action === "create"
+          ? "You are not allowed to create an organization with this role"
+          : "You are not allowed to manage child organizations"
       );
     }
+    return ok({ parentId, organizationType });
+  }
+
+  async listChildOrganizations(ctx: Context): ServerResultAsync<ChildOrganization[]> {
+    const access = this.assertCanManageChildOrganizations(ctx);
+    if (access.isErr()) return err(access.error);
+    return this.repository.auth.listChildOrganizations(access.value.parentId);
+  }
+
+  async updateChildOrganization(
+    input: UpdateChildOrganizationInput,
+    ctx: Context
+  ): ServerResultAsync<ChildOrganization> {
+    const access = this.assertCanManageChildOrganizations(ctx);
+    if (access.isErr()) return err(access.error);
+
+    return this.repository.auth.updateChildOrganization(
+      {
+        parentId: access.value.parentId,
+        organizationId: input.organizationId,
+        name: input.name,
+        slug: input.slug ?? null,
+        metadata: input.metadata,
+      },
+      undefined
+    );
+  }
+
+  async createOrganization(
+    { name }: { name: string },
+    ctx: Context
+  ): ServerResultAsync<OrganizationRow> {
+    const access = this.assertCanManageChildOrganizations(ctx, "create");
+    if (access.isErr()) return err(access.error);
     return this.repository.auth.createOrganization({
       name,
-      parentId,
+      parentId: access.value.parentId,
       userId: ctx.actor.userId,
-      role: organizationType === "agency" ? "agent" : "owner",
+      role: access.value.organizationType === "agency" ? "agent" : "owner",
     });
   }
 }

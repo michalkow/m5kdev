@@ -10,6 +10,7 @@ import type {
   AccountClaimMagicLink,
   AccountClaimMagicLinkOutput,
   AccountClaimOutput,
+  ChildOrganization,
   ReadInvitationOutput,
   Waitlist,
   WaitlistOutput,
@@ -59,6 +60,88 @@ function normalizeOrganizationFlags(value: unknown): string[] {
 }
 
 export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, never>> {
+  async listChildOrganizations(parentId: string, tx?: Orm): ServerResultAsync<ChildOrganization[]> {
+    const db = tx ?? this.orm;
+    const result = await this.throwableQuery(() =>
+      db
+        .select({
+          id: this.schema.organizations.id,
+          name: this.schema.organizations.name,
+          slug: this.schema.organizations.slug,
+          logo: this.schema.organizations.logo,
+          type: this.schema.organizations.type,
+          parentId: this.schema.organizations.parentId,
+          metadata: this.schema.organizations.metadata,
+          createdAt: this.schema.organizations.createdAt,
+        })
+        .from(this.schema.organizations)
+        .where(eq(this.schema.organizations.parentId, parentId))
+        .orderBy(this.schema.organizations.name)
+    );
+    if (result.isErr()) return err(result.error);
+
+    return ok(
+      result.value.map((org) => ({
+        ...org,
+        metadata: parseOrganizationMetadata(org.metadata),
+      }))
+    );
+  }
+
+  async updateChildOrganization(
+    {
+      parentId,
+      organizationId,
+      name,
+      slug,
+      metadata,
+    }: {
+      parentId: string;
+      organizationId: string;
+      name: string;
+      slug?: string | null;
+      metadata?: Record<string, unknown>;
+    },
+    tx?: Orm
+  ): ServerResultAsync<ChildOrganization> {
+    const db = tx ?? this.orm;
+    const jsonResult = this.throwable(() => ok(JSON.stringify(metadata ?? {})));
+    if (jsonResult.isErr()) return err(jsonResult.error);
+
+    const updateResult = await this.throwableQuery(() =>
+      db
+        .update(this.schema.organizations)
+        .set({
+          name,
+          slug: slug ?? null,
+          metadata: jsonResult.value,
+        })
+        .where(
+          and(
+            eq(this.schema.organizations.id, organizationId),
+            eq(this.schema.organizations.parentId, parentId)
+          )
+        )
+        .returning({
+          id: this.schema.organizations.id,
+          name: this.schema.organizations.name,
+          slug: this.schema.organizations.slug,
+          logo: this.schema.organizations.logo,
+          type: this.schema.organizations.type,
+          parentId: this.schema.organizations.parentId,
+          metadata: this.schema.organizations.metadata,
+          createdAt: this.schema.organizations.createdAt,
+        })
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+    const [org] = updateResult.value;
+    if (!org) return this.error("NOT_FOUND");
+
+    return ok({
+      ...org,
+      metadata: parseOrganizationMetadata(org.metadata),
+    });
+  }
   private async getOrganizationMetadataForMember(
     userId: string,
     organizationId: string,

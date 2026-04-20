@@ -5,8 +5,10 @@ import {
   accountClaimMagicLinkOutputSchema,
   accountClaimOutputSchema,
   accountClaimSchema,
+  childOrganizationSchema,
   readInvitationInputSchema,
   readInvitationOutputSchema,
+  updateChildOrganizationInputSchema,
   waitlistOutputSchema,
   waitlistSchema,
 } from "./auth.dto";
@@ -242,6 +244,19 @@ export function createAuthTRPC(
       )
       .query(async ({ input }) => {
         return handleTRPCResult(await authService.validateWaitlistCode(input.code));
+      }),
+
+    listChildOrganizations: procedure
+      .output(z.array(childOrganizationSchema))
+      .query(async ({ ctx }) => {
+        return handleTRPCResult(await authService.listChildOrganizations(ctx));
+      }),
+
+    updateChildOrganization: procedure
+      .input(updateChildOrganizationInputSchema)
+      .output(childOrganizationSchema)
+      .mutation(async ({ ctx, input }) => {
+        return handleTRPCResult(await authService.updateChildOrganization(input, ctx));
       }),
 
     createOrganization: procedure

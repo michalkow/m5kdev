@@ -1,7 +1,6 @@
 "use client";
 
 import { Disclosure, type DisclosureProps } from "@heroui/react";
-import { ChevronRight } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 import { Link } from "react-router";
 import { SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, useSidebar } from "./Sidebar";

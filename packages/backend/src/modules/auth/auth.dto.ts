@@ -60,3 +60,25 @@ export const accountClaimMagicLinkSchema = z.object({
 export const accountClaimMagicLinkOutputSchema = accountClaimMagicLinkSchema.omit({ token: true });
 export type AccountClaimMagicLink = z.infer<typeof accountClaimMagicLinkSchema>;
 export type AccountClaimMagicLinkOutput = z.infer<typeof accountClaimMagicLinkOutputSchema>;
+
+export const childOrganizationSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string().nullable(),
+  logo: z.string().nullable(),
+  type: z.string().nullable(),
+  parentId: z.string().nullable(),
+  metadata: z.record(z.string(), z.unknown()).nullable(),
+  createdAt: z.date(),
+});
+
+export type ChildOrganization = z.infer<typeof childOrganizationSchema>;
+
+export const updateChildOrganizationInputSchema = z.object({
+  organizationId: z.string(),
+  name: z.string().min(1),
+  slug: z.string().nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export type UpdateChildOrganizationInput = z.infer<typeof updateChildOrganizationInputSchema>;
