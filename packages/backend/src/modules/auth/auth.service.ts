@@ -27,6 +27,7 @@ import type {
   AuthUserRepository,
   AuthWaitlistRepository,
 } from "./auth.repository";
+import { createBetterAuth, type CreateBetterAuthConfigParams } from "./auth.lib";
 
 type OrganizationRow = typeof auth.organizations.$inferSelect;
 

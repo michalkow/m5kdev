@@ -21,18 +21,7 @@ export type Session = InferSelectModel<typeof auth.sessions>;
 
 export type BetterAuth = ReturnType<typeof betterAuth>;
 
-type CreateBetterAuthParams<
-  O extends Orm,
-  S extends Schema,
-  E extends EmailService,
-  B extends BillingService,
-> = {
-  orm: O;
-  schema: S;
-  services: {
-    email?: E;
-    billing?: B;
-  };
+export type CreateBetterAuthConfigParams = {
   hooks?: {
     onError?: (error: unknown) => void;
     afterCreateUser?: (
@@ -45,8 +34,23 @@ type CreateBetterAuthParams<
   config?: {
     waitlist: boolean;
     provisionedAccountEmailDomain?: string;
+  }
+}
+
+type CreateBetterAuthParams<
+  O extends Orm,
+  S extends Schema,
+  E extends EmailService,
+  B extends BillingService,
+> = {
+  orm: O;
+  schema: S;
+  services: {
+    email?: E;
+    billing?: B;
   };
-};
+  
+} & CreateBetterAuthConfigParams;
 
 export function createBetterAuth<
   O extends Orm,

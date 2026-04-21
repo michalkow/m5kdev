@@ -631,6 +631,15 @@ export class AuthWaitlistRepository extends BaseTableRepository<
 }
 
 export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, never>> {
+
+  getOrm(): Orm {
+    return this.orm;
+  }
+  
+  getSchema(): Schema {
+    return this.schema;
+  }
+
   async createClaimableProvisionedUser({
     name,
     email,

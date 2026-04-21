@@ -10,6 +10,7 @@ import express, { type Express } from "express";
 import IORedis, { type RedisOptions } from "ioredis";
 import type { Logger } from "pino";
 import { Resend } from "resend";
+import type * as authTables from "./modules/auth/auth.db";
 import type { BetterAuth } from "./modules/auth/auth.lib";
 import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/auth.middleware";
 import { WorkflowRegistry } from "./modules/workflow/workflow.registry";
@@ -67,7 +68,7 @@ type BuiltModuleRuntime = {
 
 type ModuleRuntimeMap = Record<string, BuiltModuleRuntime>;
 
-type AppDbSchema = Record<string, SQLiteTableWithColumns<any>>;
+type AppDbSchema<Tables extends TableMap = TableMap> = Tables & typeof authTables;
 
 type BackendModuleRouterMap<Module> = Module extends BackendModuleDefinition<
   any,
@@ -141,7 +142,7 @@ export type BackendModuleDbContext = {
   deps: BackendModuleDependencyMap;
 };
 
-export type BackendModuleRepositoriesContext = {
+export type BackendModuleRepositoriesContext<Tables extends TableMap = TableMap> = {
   env: Record<string, string | undefined>;
   logger: Logger;
   appConfig: ResolvedBackendAppMetadata;
@@ -150,7 +151,7 @@ export type BackendModuleRepositoriesContext = {
   db: {
     client: Client;
     orm: LibSQLDatabase<any>;
-    schema: AppDbSchema;
+    schema: AppDbSchema<Tables>;
   };
   infra: {
     express: Express;
