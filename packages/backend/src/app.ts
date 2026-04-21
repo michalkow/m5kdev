@@ -13,6 +13,7 @@ import { Resend } from "resend";
 import type * as authTables from "./modules/auth/auth.db";
 import type { BetterAuth } from "./modules/auth/auth.lib";
 import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/auth.middleware";
+import type { BaseModule } from "./modules/base/base.module";
 import { WorkflowRegistry } from "./modules/workflow/workflow.registry";
 import { WorkflowService } from "./modules/workflow/workflow.service";
 import { logger as rootLogger } from "./utils/logger";
@@ -36,9 +37,11 @@ type UnionToIntersection<T> = (T extends unknown ? (value: T) => void : never) e
 
 type Simplify<T> = { [K in keyof T]: T[K] } & {};
 
-type BuiltModuleRouters<Modules extends readonly BackendModuleDefinition[]> = Simplify<
+export type BackendAppModule = BaseModule<any, any, any, any, any>;
+
+type BuiltModuleRouters<Modules extends readonly BackendAppModule[]> = Simplify<
   UnionToIntersection<
-    Modules[number] extends BackendModuleDefinition<any, any, any, any, infer TRouters>
+    Modules[number] extends BaseModule<any, any, any, any, infer TRouters>
       ? TRouters
       : {}
   >
@@ -70,17 +73,11 @@ type ModuleRuntimeMap = Record<string, BuiltModuleRuntime>;
 
 type AppDbSchema<Tables extends TableMap = TableMap> = Tables & typeof authTables;
 
-type BackendModuleRouterMap<Module> = Module extends BackendModuleDefinition<
-  any,
-  any,
-  any,
-  any,
-  infer Routers
->
+type BackendModuleRouterMap<Module> = Module extends BaseModule<any, any, any, any, infer Routers>
   ? Routers
   : never;
 
-export type BackendAppRouterMap<Modules extends readonly BackendModuleDefinition[]> = Simplify<
+export type BackendAppRouterMap<Modules extends readonly BackendAppModule[]> = Simplify<
   UnionToIntersection<BackendModuleRouterMap<Modules[number]>>
 >;
 
@@ -422,10 +419,8 @@ function createResendClient(config: BackendAppConfig["resend"]): {
   };
 }
 
-function resolveModuleOrder(
-  modules: readonly BackendModuleDefinition[]
-): BackendModuleDefinition[] {
-  const modulesById = new Map<string, BackendModuleDefinition>();
+function resolveModuleOrder(modules: readonly BackendAppModule[]): BackendAppModule[] {
+  const modulesById = new Map<string, BackendAppModule>();
 
   for (const module of modules) {
     if (modulesById.has(module.id)) {
@@ -442,11 +437,11 @@ function resolveModuleOrder(
     }
   }
 
-  const ordered: BackendModuleDefinition[] = [];
+  const ordered: BackendAppModule[] = [];
   const temporary = new Set<string>();
   const permanent = new Set<string>();
 
-  const visit = (module: BackendModuleDefinition, path: string[] = []) => {
+  const visit = (module: BackendAppModule, path: string[] = []) => {
     if (permanent.has(module.id)) return;
     if (temporary.has(module.id)) {
       throw new Error(
@@ -474,7 +469,7 @@ function resolveModuleOrder(
 }
 
 function createDependencyMap(
-  module: BackendModuleDefinition,
+  module: BackendAppModule,
   moduleStates: Map<string, BuiltModuleRuntime>
 ): BackendModuleDependencyMap {
   const deps: BackendModuleDependencyMap = {};
@@ -491,7 +486,7 @@ function createDependencyMap(
   return deps;
 }
 
-export function collectBackendSchema<const Modules extends readonly BackendModuleDefinition[]>(
+export function collectBackendSchema<const Modules extends readonly BackendAppModule[]>(
   modules: Modules,
   options?: Pick<BackendAppConfig, "env" | "logger" | "app" | "email">
 ) {
@@ -501,12 +496,12 @@ export function collectBackendSchema<const Modules extends readonly BackendModul
   const emailConfig = normalizeEmailConfig(options?.email, env);
   const ordered = resolveModuleOrder(modules);
   const moduleStates = new Map<string, BuiltModuleRuntime>();
-  const schema: AppDbSchema = {};
+  const schema: AppDbSchema = {} as unknown as AppDbSchema;
   const tableNameOwners = new Map<string, string>();
 
   for (const module of ordered) {
     const deps = createDependencyMap(module, moduleStates);
-    const dbResult = module.db?.({ env, logger, appConfig, emailConfig, deps });
+    const dbResult = module.db?.({ env, logger, appConfig, emailConfig, deps } as any);
     const tables = (dbResult?.tables ?? {}) as TableMap;
 
     for (const [tableKey, table] of Object.entries(tables)) {
@@ -540,7 +535,7 @@ export function collectBackendSchema<const Modules extends readonly BackendModul
   };
 }
 
-export function createBackendApp<const Modules extends readonly BackendModuleDefinition[] = []>(
+export function createBackendApp<const Modules extends readonly BackendAppModule[] = []>(
   config: BackendAppConfig,
   registeredModules = [] as unknown as Modules
 ) {
@@ -550,7 +545,7 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
   const emailConfig = normalizeEmailConfig(config.email, env);
 
   return {
-    use<const Module extends BackendModuleDefinition>(module: Module) {
+    use<const Module extends BackendAppModule>(module: Module) {
       return createBackendApp(config, [...registeredModules, module] as [...Modules, Module]);
     },
 
@@ -563,7 +558,7 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
       const redisState = createRedisClient(config.redis);
       const resendState = createResendClient(config.resend);
       const moduleStates = new Map<string, BuiltModuleRuntime>();
-      const schema: AppDbSchema = {};
+      const schema: AppDbSchema = {} as unknown as AppDbSchema;
       const tableNameOwners = new Map<string, string>();
 
       for (const module of orderedModules) {
@@ -574,10 +569,10 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
           appConfig,
           emailConfig,
           deps,
-        });
-        const tables = dbResult?.tables ?? {};
+        } as any);
+        const tables = (dbResult?.tables ?? {}) as TableMap;
 
-        for (const [tableKey, table] of Object.entries(tables)) {
+        for (const [tableKey, table] of Object.entries(tables) as [string, SQLiteTableWithColumns<any>][]) {
           if (schema[tableKey]) {
             throw new Error(
               `Duplicate backend schema key "${tableKey}" from module "${module.id}"`
@@ -627,7 +622,7 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
               redis: redisState.redis,
               resend: resendState.resend,
             },
-          }) ?? {};
+          } as any) ?? {};
         state.repositories = repositories;
         repositoryModules[module.id] = repositories;
       }
@@ -654,7 +649,7 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
               redis: redisState.redis,
               resend: resendState.resend,
             },
-          }) ?? {};
+          } as any) ?? {};
         state.services = services;
         serviceModules[module.id] = services;
       }
@@ -698,7 +693,7 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
             resend: resendState.resend,
           },
           auth,
-        });
+        } as any);
 
         if (!candidate) continue;
         if (auth && auth !== candidate) {
@@ -769,7 +764,7 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
             },
             trpc: trpcMethods,
             auth,
-          }) ?? {};
+          } as any) ?? {};
 
         for (const [routerKey, router] of Object.entries(routers)) {
           if ((routerFragments as Record<string, unknown>)[routerKey]) {
@@ -825,7 +820,7 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
           auth,
           authMiddleware,
           roleAuthMiddleware,
-        });
+        } as any);
       }
 
       if (workflowRuntime) {
@@ -851,7 +846,7 @@ export function createBackendApp<const Modules extends readonly BackendModuleDef
               resend: resendState.resend,
             },
             workflow: workflowRuntime,
-          });
+          } as any);
         }
       }
 

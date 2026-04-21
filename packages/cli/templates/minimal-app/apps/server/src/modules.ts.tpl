@@ -1,20 +1,16 @@
 import { defineBackendModules } from "@m5kdev/backend/app";
-import { createAuthBackendModule } from "@m5kdev/backend/modules/auth/auth.module";
-import { createEmailBackendModule } from "@m5kdev/backend/modules/email/email.module";
-import { createNotificationBackendModule } from "@m5kdev/backend/modules/notification/notification.module";
-import { createWorkflowBackendModule } from "@m5kdev/backend/modules/workflow/workflow.module";
+import { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
+import { EmailModule } from "@m5kdev/backend/modules/email/email.module";
+import { NotificationModule } from "@m5kdev/backend/modules/notification/notification.module";
+import { WorkflowModule } from "@m5kdev/backend/modules/workflow/workflow.module";
 import { templates } from "{{PACKAGE_SCOPE}}/email";
 import { postsModule } from "./modules/posts/posts.module";
 
-export const emailBackendModule = createEmailBackendModule({
-  templates: templates as never,
-});
+export const emailBackendModule = new EmailModule(templates as never);
 
-export const authBackendModule = createAuthBackendModule({
-  emailModuleId: "email",
-});
+export const authBackendModule = new AuthModule();
 
-export const workflowBackendModule = createWorkflowBackendModule({
+export const workflowBackendModule = new WorkflowModule({
   queues: {
     fast: { concurrency: 5 },
   },
@@ -25,7 +21,7 @@ export const workflowBackendModule = createWorkflowBackendModule({
   },
 });
 
-export const notificationBackendModule = createNotificationBackendModule();
+export const notificationBackendModule = new NotificationModule();
 export const postsBackendModule = postsModule;
 
 export const backendModules = defineBackendModules([

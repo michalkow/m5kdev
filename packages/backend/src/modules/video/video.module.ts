@@ -1,11 +1,26 @@
-import { defineBackendModule } from "../../app";
+import { BaseModule, type TableMap } from "../base/base.module";
 import { VideoService } from "./video.service";
 
-export function createVideoBackendModule(options: { id?: string } = {}) {
-  return defineBackendModule({
-    id: options.id ?? "video",
-    services: () => ({
+type VideoModuleDeps = never;
+type VideoModuleTables = TableMap;
+type VideoModuleRepositories = {};
+type VideoModuleServices = {
+  video: VideoService;
+};
+type VideoModuleRouters = never;
+
+export class VideoModule extends BaseModule<
+  VideoModuleDeps,
+  VideoModuleTables,
+  VideoModuleRepositories,
+  VideoModuleServices,
+  VideoModuleRouters
+> {
+  readonly id = "video";
+
+  override services(_: unknown) {
+    return {
       video: new VideoService(undefined as never, undefined as never),
-    }),
-  });
+    };
+  }
 }

@@ -1,11 +1,7 @@
 import { createClient, type Client } from "@libsql/client";
 import { sqliteTable, text } from "drizzle-orm/sqlite-core";
-import {
-  collectBackendSchema,
-  createBackendApp,
-  defineBackendModule,
-  generateBackendSchemaSource,
-} from "./app";
+import { collectBackendSchema, createBackendApp, generateBackendSchemaSource } from "./app";
+import { BaseModule, type TableMap } from "./modules/base/base.module";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {
@@ -33,57 +29,72 @@ describe("createBackendApp", () => {
   it("resolves required dependencies in build order instead of registration order", () => {
     const calls: string[] = [];
 
-    const dep = defineBackendModule({
-      id: "dep",
-      db: () => {
+    class DepModule extends BaseModule<
+      never,
+      TableMap,
+      { depRepository: { ok: boolean } },
+      { depService: { ok: boolean } },
+      any
+    > {
+      readonly id = "dep";
+      override db() {
         calls.push("dep:db");
-        return { tables: {} };
-      },
-      repositories: () => {
+        return { tables: {} as TableMap };
+      }
+      override repositories() {
         calls.push("dep:repositories");
         return { depRepository: { ok: true } };
-      },
-      services: () => {
+      }
+      override services() {
         calls.push("dep:services");
         return { depService: { ok: true } };
-      },
-      trpc: ({ trpc }) => {
+      }
+      override trpc({ trpc }: any) {
         calls.push("dep:trpc");
         return {
           dep: trpc.router({
             ping: trpc.publicProcedure.query(() => "pong"),
           }),
         };
-      },
-    });
+      }
+    }
 
-    const main = defineBackendModule({
-      id: "main",
-      dependsOn: ["dep"],
-      db: ({ deps }) => {
+    class MainModule extends BaseModule<
+      { dep: DepModule },
+      TableMap,
+      { mainRepository: { ok: boolean } },
+      { mainService: { ok: boolean } },
+      any
+    > {
+      readonly id = "main";
+      override readonly dependsOn = ["dep"] as const;
+      override db({ deps }: any) {
         expect(deps.dep).toBeDefined();
         calls.push("main:db");
-        return { tables: {} };
-      },
-      repositories: ({ deps }) => {
+        return { tables: {} as TableMap };
+      }
+      override repositories({ deps }: any) {
         expect(deps.dep.repositories.depRepository).toEqual({ ok: true });
         calls.push("main:repositories");
         return { mainRepository: { ok: true } };
-      },
-      services: ({ deps }) => {
+      }
+      override services({ deps }: any) {
         expect(deps.dep.services.depService).toEqual({ ok: true });
         calls.push("main:services");
         return { mainService: { ok: true } };
-      },
-      trpc: ({ trpc }) => {
+      }
+      override trpc({ trpc }: any) {
         calls.push("main:trpc");
         return {
           main: trpc.router({
             ping: trpc.publicProcedure.query(() => "pong"),
           }),
         };
-      },
-    });
+      }
+    }
+
+    const dep = new DepModule();
+    const main = new MainModule();
 
     const built = createBackendApp({ db: { client } }).use(main).use(dep).build();
 
@@ -102,10 +113,10 @@ describe("createBackendApp", () => {
 
   it("fails on missing required dependencies", () => {
     const app = createBackendApp({ db: { client } }).use(
-      defineBackendModule({
-        id: "main",
-        dependsOn: ["dep"],
-      })
+      new (class MainMissingDep extends BaseModule<{ dep: any }, TableMap> {
+        readonly id = "main";
+        override readonly dependsOn = ["dep"] as const;
+      })()
     );
 
     expect(() => app.build()).toThrow('missing required dependency "dep"');
@@ -114,16 +125,16 @@ describe("createBackendApp", () => {
   it("fails on circular dependencies", () => {
     const app = createBackendApp({ db: { client } })
       .use(
-        defineBackendModule({
-          id: "a",
-          dependsOn: ["b"],
-        })
+        new (class A extends BaseModule<{ b: any }, TableMap> {
+          readonly id = "a";
+          override readonly dependsOn = ["b"] as const;
+        })()
       )
       .use(
-        defineBackendModule({
-          id: "b",
-          dependsOn: ["a"],
-        })
+        new (class B extends BaseModule<{ a: any }, TableMap> {
+          readonly id = "b";
+          override readonly dependsOn = ["a"] as const;
+        })()
       );
 
     expect(() => app.build()).toThrow("Circular backend module dependency detected");
@@ -139,63 +150,79 @@ describe("createBackendApp", () => {
 
     const duplicateKeyApp = createBackendApp({ db: { client } })
       .use(
-        defineBackendModule({
-          id: "one",
-          db: () => ({
-            tables: { shared: sharedNameA },
-          }),
-        })
+        new (class One extends BaseModule {
+          readonly id = "one";
+          override db() {
+            return { tables: { shared: sharedNameA } as TableMap };
+          }
+        })()
       )
       .use(
-        defineBackendModule({
-          id: "two",
-          db: () => ({
-            tables: { shared: sharedNameB },
-          }),
-        })
+        new (class Two extends BaseModule {
+          readonly id = "two";
+          override db() {
+            return { tables: { shared: sharedNameB } as TableMap };
+          }
+        })()
       );
 
     expect(() => duplicateKeyApp.build()).toThrow('Duplicate backend schema key "shared"');
 
     const duplicateTableNameApp = createBackendApp({ db: { client } })
       .use(
-        defineBackendModule({
-          id: "one",
-          db: () => ({
-            tables: { first: sharedNameA },
-          }),
-        })
+        new (class One extends BaseModule {
+          readonly id = "one";
+          override db() {
+            return { tables: { first: sharedNameA } as TableMap };
+          }
+        })()
       )
       .use(
-        defineBackendModule({
-          id: "two",
-          db: () => ({
-            tables: { second: sharedNameB },
-          }),
-        })
+        new (class Two extends BaseModule {
+          readonly id = "two";
+          override db() {
+            return { tables: { second: sharedNameB } as TableMap };
+          }
+        })()
       );
 
     expect(() => duplicateTableNameApp.build()).toThrow('Duplicate backend table name "shared_table"');
   });
 
   it("fails on duplicate tRPC namespaces", () => {
-    const first = defineBackendModule({
-      id: "first",
-      trpc: ({ trpc }) => ({
-        shared: trpc.router({
-          one: trpc.publicProcedure.query(() => "one"),
-        }),
-      }),
-    });
+    const first = new (class First extends BaseModule<
+      never,
+      TableMap,
+      Record<string, never>,
+      Record<string, never>,
+      { shared: any }
+    > {
+      readonly id = "first";
+      override trpc({ trpc }: any) {
+        return {
+          shared: trpc.router({
+            one: trpc.publicProcedure.query(() => "one"),
+          }),
+        };
+      }
+    })();
 
-    const second = defineBackendModule({
-      id: "second",
-      trpc: ({ trpc }) => ({
-        shared: trpc.router({
-          two: trpc.publicProcedure.query(() => "two"),
-        }),
-      }),
-    });
+    const second = new (class Second extends BaseModule<
+      never,
+      TableMap,
+      Record<string, never>,
+      Record<string, never>,
+      { shared: any }
+    > {
+      readonly id = "second";
+      override trpc({ trpc }: any) {
+        return {
+          shared: trpc.router({
+            two: trpc.publicProcedure.query(() => "two"),
+          }),
+        };
+      }
+    })();
 
     const app = createBackendApp({ db: { client } }).use(first).use(second);
 
@@ -207,12 +234,14 @@ describe("createBackendApp", () => {
       id: text("id").primaryKey(),
     });
 
-    const module = defineBackendModule({
-      id: "parity",
-      db: () => ({
-        tables: { parity: table },
-      }),
-    });
+    const module = new (class Parity extends BaseModule {
+      readonly id = "parity";
+      override db() {
+        return {
+          tables: { parity: table } as TableMap,
+        };
+      }
+    })();
 
     const collected = collectBackendSchema([module]);
     const built = createBackendApp({ db: { client } }).use(module).build();
@@ -230,15 +259,17 @@ describe("createBackendApp", () => {
     });
 
     const collected = collectBackendSchema([
-      defineBackendModule({
-        id: "schema",
-        db: () => ({
-          tables: {
-            users,
-            posts,
-          },
-        }),
-      }),
+      new (class Schema extends BaseModule {
+        readonly id = "schema";
+        override db() {
+          return {
+            tables: {
+              users,
+              posts,
+            } as TableMap,
+          };
+        }
+      })(),
     ]);
 
     const source = generateBackendSchemaSource({

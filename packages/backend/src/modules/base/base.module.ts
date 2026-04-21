@@ -15,7 +15,7 @@ import type {
 import type { BetterAuth } from "../auth/auth.lib";
 
 type AnyRecord = Record<string, any>;
-type TableMap = Record<string, SQLiteTableWithColumns<any>>;
+export type TableMap = Record<string, SQLiteTableWithColumns<any>>;
 
 /** Allow `never` / `{}` as “no deps” in first generic (e.g. legacy `BaseModule<never>`). */
 export type BaseModuleDeps = Record<string, BaseModule<any, any, any, any, any>> | Record<string, never>;

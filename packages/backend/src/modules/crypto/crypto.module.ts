@@ -1,32 +1,48 @@
-import { defineBackendModule } from "../../app";
 import * as cryptoTables from "./crypto.db";
+import { BaseModule, type ModuleRepositoriesContext, type ModuleServicesContext } from "../base/base.module";
 import { CryptoRepository } from "./crypto.repository";
 import { CryptoService } from "./crypto.service";
 
-export type CreateCryptoBackendModuleOptions = {
-  id?: string;
+type CryptoModuleDeps = never;
+type CryptoModuleTables = typeof cryptoTables;
+type CryptoModuleRepositories = {
+  crypto: CryptoRepository;
 };
+type CryptoModuleServices = {
+  crypto: CryptoService;
+};
+type CryptoModuleRouters = never;
 
-export function createCryptoBackendModule(options: CreateCryptoBackendModuleOptions = {}) {
-  const id = options.id ?? "crypto";
+export class CryptoModule extends BaseModule<
+  CryptoModuleDeps,
+  CryptoModuleTables,
+  CryptoModuleRepositories,
+  CryptoModuleServices,
+  CryptoModuleRouters
+> {
+  readonly id = "crypto";
 
-  return defineBackendModule({
-    id,
-    db: () => ({
+  override db() {
+    return {
       tables: { ...cryptoTables },
-    }),
-    repositories: ({ db }) => {
-      const schema = db.schema as any;
-      return {
-        crypto: new CryptoRepository({
-          orm: db.orm as never,
-          schema,
-          table: schema.cryptoPayments,
-        }),
-      };
-    },
-    services: ({ repositories }) => ({
+    };
+  }
+
+  override repositories({ db }: ModuleRepositoriesContext<CryptoModuleDeps, CryptoModuleTables>) {
+    return {
+      crypto: new CryptoRepository({
+        orm: db.orm,
+        schema: db.schema,
+        table: db.schema.cryptoPayments,
+      }),
+    };
+  }
+
+  override services({
+    repositories,
+  }: ModuleServicesContext<CryptoModuleDeps, CryptoModuleRepositories>) {
+    return {
       crypto: new CryptoService({ crypto: repositories.crypto }, {}),
-    }),
-  });
+    };
+  }
 }

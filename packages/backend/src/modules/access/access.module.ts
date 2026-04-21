@@ -1,32 +1,53 @@
 import type { Statements } from "better-auth/plugins/access";
-import { defineBackendModule } from "../../app";
+import type { AuthModule } from "../auth/auth.module";
+import {
+  BaseModule,
+  type ModuleRepositoriesContext,
+  type ModuleServicesContext,
+  type TableMap,
+} from "../base/base.module";
 import { AccessRepository } from "./access.repository";
 import { AccessService } from "./access.service";
 import type { AccessControlRoles } from "./access.utils";
 
-export type CreateAccessBackendModuleOptions<T extends Statements> = {
-  id?: string;
-  authModuleId?: string;
-  acr: AccessControlRoles<T>;
+type AccessModuleDeps = { auth: AuthModule };
+type AccessModuleTables = TableMap;
+type AccessModuleRepositories = {
+  access: AccessRepository;
 };
+type AccessModuleServices<T extends Statements = Statements> = {
+  access: AccessService<T>;
+};
+type AccessModuleRouters = never;
 
-export function createAccessBackendModule<T extends Statements>(
-  options: CreateAccessBackendModuleOptions<T>
-) {
-  const id = options.id ?? "access";
-  const authModuleId = options.authModuleId ?? "auth";
+export class AccessModule<T extends Statements = Statements> extends BaseModule<
+  AccessModuleDeps,
+  AccessModuleTables,
+  AccessModuleRepositories,
+  AccessModuleServices<T>,
+  AccessModuleRouters
+> {
+  readonly id = "access";
+  override readonly dependsOn = ["auth"] as const;
 
-  return defineBackendModule({
-    id,
-    dependsOn: [authModuleId],
-    repositories: ({ db }) => ({
+  constructor(private readonly acr: AccessControlRoles<T>) {
+    super();
+  }
+
+  override repositories({ db }: ModuleRepositoriesContext<AccessModuleDeps, AccessModuleTables>) {
+    return {
       access: new AccessRepository({
-        orm: db.orm as never,
-        schema: db.schema as never,
+        orm: db.orm,
+        schema: db.schema,
       }),
-    }),
-    services: ({ repositories }) => ({
-      access: new AccessService({ access: repositories.access }, options.acr),
-    }),
-  });
+    };
+  }
+
+  override services({
+    repositories,
+  }: ModuleServicesContext<AccessModuleDeps, AccessModuleRepositories>) {
+    return {
+      access: new AccessService({ access: repositories.access }, this.acr),
+    };
+  }
 }

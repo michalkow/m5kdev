@@ -1,48 +1,77 @@
-import { createBackendRouterMap, defineBackendModule } from "../../app";
+import { createBackendRouterMap } from "../../app";
+import type { AuthModule } from "../auth/auth.module";
+import type { WorkflowModule } from "../workflow/workflow.module";
+import {
+  BaseModule,
+  type ModuleRepositoriesContext,
+  type ModuleServicesContext,
+  type ModuleTRPCContext,
+} from "../base/base.module";
 import { createNotificationTables } from "./notification.db";
 import { NotificationRepository } from "./notification.repository";
 import { NotificationService } from "./notification.service";
 import { createNotificationTRPC } from "./notification.trpc";
 
-export type CreateNotificationBackendModuleOptions<Namespace extends string = string> = {
-  id?: string;
-  namespace?: Namespace;
-  authModuleId?: string;
-  workflowModuleId?: string;
+type NotificationModuleDeps = { auth: AuthModule; workflow: WorkflowModule };
+type NotificationModuleTables = ReturnType<typeof createNotificationTables>;
+type NotificationModuleRepositories = {
+  notification: NotificationRepository;
+};
+type NotificationModuleServices = {
+  notification: NotificationService;
+};
+type NotificationModuleRouters<Namespace extends string> = {
+  [K in Namespace]: ReturnType<typeof createNotificationTRPC>;
 };
 
-export function createNotificationBackendModule<const Namespace extends string = "notification">(
-  options: CreateNotificationBackendModuleOptions<Namespace> = {}
-) {
-  const id = options.id ?? "notification";
-  const namespace = (options.namespace ?? "notification") as Namespace;
-  const authModuleId = options.authModuleId ?? "auth";
-  const workflowModuleId = options.workflowModuleId ?? "workflow";
+export class NotificationModule<const Namespace extends string = "notification"> extends BaseModule<
+  NotificationModuleDeps,
+  NotificationModuleTables,
+  NotificationModuleRepositories,
+  NotificationModuleServices,
+  NotificationModuleRouters<Namespace>
+> {
+  readonly id = "notification";
+  override readonly dependsOn = ["auth", "workflow"] as const;
 
-  return defineBackendModule({
-    id,
-    dependsOn: [authModuleId, workflowModuleId],
-    db: ({ deps }) => {
-      const authTables = deps[authModuleId].tables as any;
-      return {
-      tables: createNotificationTables({
-        users: authTables.users,
-      }),
-      };
-    },
-    repositories: ({ db }) => ({
+  constructor(private readonly options: { namespace?: Namespace } = {}) {
+    super();
+  }
+
+  override db() {
+    return {
+      tables: createNotificationTables(),
+    };
+  }
+
+  override repositories({
+    db,
+  }: ModuleRepositoriesContext<NotificationModuleDeps, NotificationModuleTables>) {
+    return {
       notification: new NotificationRepository({
-        orm: db.orm as never,
-        schema: db.schema as never,
+        orm: db.orm,
+        schema: db.schema,
       }),
-    }),
-    services: ({ repositories, deps }) => ({
+    };
+  }
+
+  override services({
+    repositories,
+    deps,
+  }: ModuleServicesContext<NotificationModuleDeps, NotificationModuleRepositories>) {
+    return {
       notification: new NotificationService(
         { notification: repositories.notification },
-        { workflow: deps[workflowModuleId].services.workflow }
+        { workflow: deps.workflow.services.workflow }
       ),
-    }),
-    trpc: ({ trpc, services }) =>
-      createBackendRouterMap(namespace, createNotificationTRPC(trpc, services.notification)),
-  });
+    };
+  }
+
+  override trpc({
+    trpc,
+    services,
+  }: ModuleTRPCContext<NotificationModuleDeps, NotificationModuleServices>) {
+    const namespace = (this.options.namespace ?? "notification") as Namespace;
+    return createBackendRouterMap(namespace, createNotificationTRPC(trpc, services.notification));
+  }
 }

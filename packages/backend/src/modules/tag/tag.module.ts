@@ -1,49 +1,66 @@
-import { createBackendRouterMap, defineBackendModule } from "../../app";
+import { createBackendRouterMap } from "../../app";
+import type { AuthModule } from "../auth/auth.module";
+import {
+  BaseModule,
+  type ModuleRepositoriesContext,
+  type ModuleServicesContext,
+  type ModuleTRPCContext,
+} from "../base/base.module";
 import { createTagTables } from "./tag.db";
 import { TagRepository } from "./tag.repository";
 import { TagService } from "./tag.service";
 import { createTagTRPC } from "./tag.trpc";
 
-export type CreateTagBackendModuleOptions<Namespace extends string = string> = {
-  id?: string;
-  namespace?: Namespace;
-  authModuleId?: string;
+type TagModuleDeps = { auth: AuthModule };
+type TagModuleTables = ReturnType<typeof createTagTables>;
+type TagModuleRepositories = {
+  tag: TagRepository;
+};
+type TagModuleServices = {
+  tag: TagService;
+};
+type TagModuleRouters<Namespace extends string> = {
+  [K in Namespace]: ReturnType<typeof createTagTRPC>;
 };
 
-export function createTagBackendModule<const Namespace extends string = "tag">(
-  options: CreateTagBackendModuleOptions<Namespace> = {}
-) {
-  const id = options.id ?? "tag";
-  const namespace = (options.namespace ?? "tag") as Namespace;
-  const authModuleId = options.authModuleId ?? "auth";
+export class TagModule<const Namespace extends string = "tag"> extends BaseModule<
+  TagModuleDeps,
+  TagModuleTables,
+  TagModuleRepositories,
+  TagModuleServices,
+  TagModuleRouters<Namespace>
+> {
+  readonly id = "tag";
+  override readonly dependsOn = ["auth"] as const;
 
-  return defineBackendModule({
-    id,
-    dependsOn: [authModuleId],
-    db: ({ deps }) => {
-      const authTables = deps[authModuleId].tables as any;
-      return {
-      tables: createTagTables({
-        users: authTables.users,
-        organizations: authTables.organizations,
-        teams: authTables.teams,
+  constructor(private readonly options: { namespace?: Namespace } = {}) {
+    super();
+  }
+
+  override db() {
+    return {
+      tables: createTagTables(),
+    };
+  }
+
+  override repositories({ db }: ModuleRepositoriesContext<TagModuleDeps, TagModuleTables>) {
+    return {
+      tag: new TagRepository({
+        orm: db.orm,
+        schema: db.schema,
+        table: db.schema.tags,
       }),
-      };
-    },
-    repositories: ({ db }) => {
-      const schema = db.schema as any;
-      return {
-        tag: new TagRepository({
-          orm: db.orm as never,
-          schema,
-          table: schema.tags,
-        }),
-      };
-    },
-    services: ({ repositories }) => ({
+    };
+  }
+
+  override services({ repositories }: ModuleServicesContext<TagModuleDeps, TagModuleRepositories>) {
+    return {
       tag: new TagService({ tag: repositories.tag }, {}),
-    }),
-    trpc: ({ trpc, services }) =>
-      createBackendRouterMap(namespace, createTagTRPC(trpc, services.tag)),
-  });
+    };
+  }
+
+  override trpc({ trpc, services }: ModuleTRPCContext<TagModuleDeps, TagModuleServices>) {
+    const namespace = (this.options.namespace ?? "tag") as Namespace;
+    return createBackendRouterMap(namespace, createTagTRPC(trpc, services.tag));
+  }
 }

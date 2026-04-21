@@ -3,8 +3,9 @@ import os from "node:os";
 import path from "node:path";
 import { createClient, type Client } from "@libsql/client";
 import type { FunctionComponent } from "react";
+import type { Logger } from "pino";
 import { createBackendApp } from "../../app";
-import { createEmailBackendModule } from "./email.module";
+import { EmailModule } from "./email.module";
 import { EmailService, type EmailTemplates } from "./email.service";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
@@ -72,8 +73,15 @@ describe("EmailService", () => {
       },
     });
     service.logger = {
+      level: "info",
+      fatal: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
       info: jest.fn(),
-    } as any;
+      debug: jest.fn(),
+      trace: jest.fn(),
+      silent: jest.fn(),
+    } as unknown as Logger<string, boolean>;
 
     const result = await service.sendWaitlistInvite("person@example.com", "abc123");
 
@@ -116,9 +124,13 @@ describe("EmailService", () => {
 
       const files = await fs.readdir(outputDirectory);
       expect(files).toHaveLength(1);
+      const first = files[0];
+      if (!first) {
+        throw new Error("Expected rendered email to be stored");
+      }
 
       const payload = JSON.parse(
-        await fs.readFile(path.join(outputDirectory, files[0]!), "utf8")
+        await fs.readFile(path.join(outputDirectory, first), "utf8")
       ) as {
         subject: string;
         props: {
@@ -164,9 +176,7 @@ describe("createEmailBackendModule", () => {
       },
     })
       .use(
-        createEmailBackendModule({
-          templates,
-        })
+        new EmailModule(templates)
       )
       .build();
 

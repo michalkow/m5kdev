@@ -65,10 +65,10 @@ The app root becomes the single place where backend infrastructure is configured
 ```ts
 import { createBackendApp, type InferBackendAppRouter } from "@m5kdev/backend/app";
 import { createBetterAuth } from "@m5kdev/backend/modules/auth/auth.lib";
-import { createAuthBackendModule } from "@m5kdev/backend/modules/auth/auth.module";
-import { createEmailBackendModule } from "@m5kdev/backend/modules/email/email.module";
-import { createNotificationBackendModule } from "@m5kdev/backend/modules/notification/notification.module";
-import { createWorkflowBackendModule } from "@m5kdev/backend/modules/workflow/workflow.module";
+import { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
+import { EmailModule } from "@m5kdev/backend/modules/email/email.module";
+import { NotificationModule } from "@m5kdev/backend/modules/notification/notification.module";
+import { WorkflowModule } from "@m5kdev/backend/modules/workflow/workflow.module";
 import { templates } from "@my-app/email";
 import express from "express";
 import { postsModule } from "./modules/posts/posts.module";
@@ -112,15 +112,15 @@ export const backendApp = createBackendApp({
     },
   },
 })
-  .use(createEmailBackendModule({ templates: templates as never }))
-  .use(createAuthBackendModule({ emailModuleId: "email" }))
+  .use(new EmailModule(templates as never))
+  .use(new AuthModule())
   .use(
-    createWorkflowBackendModule({
+    new WorkflowModule({
       queues: { fast: { concurrency: 5 } },
       defaultQueue: "fast",
     })
   )
-  .use(createNotificationBackendModule())
+  .use(new NotificationModule())
   .use(postsModule);
 
 export const builtBackendApp = backendApp.build();

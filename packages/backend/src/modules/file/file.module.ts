@@ -1,41 +1,58 @@
-import { defineBackendModule } from "../../app";
+import type { AuthModule } from "../auth/auth.module";
+import {
+  BaseModule,
+  type ModuleExpressContext,
+  type ModuleRepositoriesContext,
+  type ModuleServicesContext,
+} from "../base/base.module";
 import { createFileTables } from "./file.db";
 import { FileRepository, FileS3Repository } from "./file.repository";
 import { createUploadRouter } from "./file.router";
 import { FileService } from "./file.service";
 
-export type CreateFileBackendModuleOptions = {
-  id?: string;
-  mountPath?: string;
-  authModuleId?: string;
+type FileModuleDeps = { auth: AuthModule };
+type FileModuleTables = ReturnType<typeof createFileTables>;
+type FileModuleRepositories = {
+  file: FileRepository;
+  fileS3: FileS3Repository;
 };
+type FileModuleServices = {
+  file: FileService;
+};
+type FileModuleRouters = never;
 
-export function createFileBackendModule(options: CreateFileBackendModuleOptions = {}) {
-  const id = options.id ?? "file";
-  const mountPath = options.mountPath ?? "/upload";
-  const authModuleId = options.authModuleId ?? "auth";
+export class FileModule extends BaseModule<
+  FileModuleDeps,
+  FileModuleTables,
+  FileModuleRepositories,
+  FileModuleServices,
+  FileModuleRouters
+> {
+  readonly id = "file";
+  override readonly dependsOn = ["auth"] as const;
 
-  return defineBackendModule({
-    id,
-    dependsOn: [authModuleId],
-    db: ({ deps }) => {
-      const authTables = deps[authModuleId].tables as any;
-      return {
-      tables: createFileTables({
-        users: authTables.users,
-        organizations: authTables.organizations,
-        teams: authTables.teams,
-      }),
-      };
-    },
-    repositories: ({ db }) => ({
+  constructor(private readonly mountPath: string = "/upload") {
+    super();
+  }
+
+  override db() {
+    return {
+      tables: createFileTables(),
+    };
+  }
+
+  override repositories({ db }: ModuleRepositoriesContext<FileModuleDeps, FileModuleTables>) {
+    return {
       file: new FileRepository({
-        orm: db.orm as never,
-        schema: db.schema as never,
+        orm: db.orm,
+        schema: db.schema,
       }),
       fileS3: new FileS3Repository(),
-    }),
-    services: ({ repositories }) => ({
+    };
+  }
+
+  override services({ repositories }: ModuleServicesContext<FileModuleDeps, FileModuleRepositories>) {
+    return {
       file: new FileService(
         {
           file: repositories.file,
@@ -43,16 +60,17 @@ export function createFileBackendModule(options: CreateFileBackendModuleOptions 
         },
         undefined as never
       ),
-    }),
-    express: ({ infra, services, authMiddleware }) => {
-      if (!authMiddleware) return;
-      infra.express.use(
-        mountPath,
-        createUploadRouter({
-          authMiddleware,
-          fileService: services.file,
-        })
-      );
-    },
-  });
+    };
+  }
+
+  override express({ infra, services, authMiddleware }: ModuleExpressContext<FileModuleDeps, FileModuleServices>) {
+    if (!authMiddleware) return;
+    infra.express.use(
+      this.mountPath,
+      createUploadRouter({
+        authMiddleware,
+        fileService: services.file,
+      })
+    );
+  }
 }

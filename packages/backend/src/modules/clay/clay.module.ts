@@ -1,11 +1,10 @@
 import type { z } from "zod";
-import { defineBackendModule } from "../../app";
+import type { WebhookModule } from "../webhook/webhook.module";
+import { BaseModule, type ModuleServicesContext, type TableMap } from "../base/base.module";
 import { ClayRepository } from "./clay.repository";
 import { ClayService } from "./clay.service";
 
-export type CreateClayBackendModuleOptions<K extends string> = {
-  id?: string;
-  webhookModuleId?: string;
+export type ClayTablesConfig<K extends string> = {
   tables: Record<
     K,
     {
@@ -19,24 +18,43 @@ export type CreateClayBackendModuleOptions<K extends string> = {
   >;
 };
 
-export function createClayBackendModule<K extends string>(
-  options: CreateClayBackendModuleOptions<K>
-) {
-  const id = options.id ?? "clay";
-  const webhookModuleId = options.webhookModuleId ?? "webhook";
+type ClayModuleDeps = { webhook: WebhookModule };
+type ClayModuleTables = TableMap;
+type ClayModuleRepositories = {
+  clay: ClayRepository;
+};
+type ClayModuleServices<K extends string> = {
+  clay: ClayService<K>;
+};
+type ClayModuleRouters = never;
 
-  return defineBackendModule({
-    id,
-    dependsOn: [webhookModuleId],
-    repositories: () => ({
+export class ClayModule<K extends string> extends BaseModule<
+  ClayModuleDeps,
+  ClayModuleTables,
+  ClayModuleRepositories,
+  ClayModuleServices<K>,
+  ClayModuleRouters
+> {
+  readonly id = "clay";
+  override readonly dependsOn = ["webhook"] as const;
+
+  constructor(private readonly config: ClayTablesConfig<K>) {
+    super();
+  }
+
+  override repositories() {
+    return {
       clay: new ClayRepository(),
-    }),
-    services: ({ repositories, deps }) => ({
+    };
+  }
+
+  override services({ repositories, deps }: ModuleServicesContext<ClayModuleDeps, ClayModuleRepositories>) {
+    return {
       clay: new ClayService(
         { clay: repositories.clay },
-        { webhook: deps[webhookModuleId].services.webhook },
-        options.tables
+        { webhook: deps.webhook.services.webhook },
+        this.config.tables
       ),
-    }),
-  });
+    };
+  }
 }

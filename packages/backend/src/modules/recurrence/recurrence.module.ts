@@ -1,51 +1,68 @@
-import { createBackendRouterMap, defineBackendModule } from "../../app";
+import { createBackendRouterMap } from "../../app";
+import type { AuthModule } from "../auth/auth.module";
+import {
+  BaseModule,
+  type ModuleRepositoriesContext,
+  type ModuleServicesContext,
+  type ModuleTRPCContext,
+} from "../base/base.module";
 import { createRecurrenceTables } from "./recurrence.db";
 import { RecurrenceRepository, RecurrenceRulesRepository } from "./recurrence.repository";
 import { RecurrenceService } from "./recurrence.service";
 import { createRecurrenceTRPC } from "./recurrence.trpc";
 
-export type CreateRecurrenceBackendModuleOptions<Namespace extends string = string> = {
-  id?: string;
-  namespace?: Namespace;
-  authModuleId?: string;
+type RecurrenceModuleDeps = { auth: AuthModule };
+type RecurrenceModuleTables = ReturnType<typeof createRecurrenceTables>;
+type RecurrenceModuleRepositories = {
+  recurrence: RecurrenceRepository;
+  recurrenceRules: RecurrenceRulesRepository;
+};
+type RecurrenceModuleServices = {
+  recurrence: RecurrenceService;
+};
+type RecurrenceModuleRouters<Namespace extends string> = {
+  [K in Namespace]: ReturnType<typeof createRecurrenceTRPC>;
 };
 
-export function createRecurrenceBackendModule<const Namespace extends string = "recurrence">(
-  options: CreateRecurrenceBackendModuleOptions<Namespace> = {}
-) {
-  const id = options.id ?? "recurrence";
-  const namespace = (options.namespace ?? "recurrence") as Namespace;
-  const authModuleId = options.authModuleId ?? "auth";
+export class RecurrenceModule<const Namespace extends string = "recurrence"> extends BaseModule<
+  RecurrenceModuleDeps,
+  RecurrenceModuleTables,
+  RecurrenceModuleRepositories,
+  RecurrenceModuleServices,
+  RecurrenceModuleRouters<Namespace>
+> {
+  readonly id = "recurrence";
+  override readonly dependsOn = ["auth"] as const;
 
-  return defineBackendModule({
-    id,
-    dependsOn: [authModuleId],
-    db: ({ deps }) => {
-      const authTables = deps[authModuleId].tables as any;
-      return {
-      tables: createRecurrenceTables({
-        users: authTables.users,
-        organizations: authTables.organizations,
-        teams: authTables.teams,
+  constructor(private readonly options: { namespace?: Namespace } = {}) {
+    super();
+  }
+
+  override db() {
+    return {
+      tables: createRecurrenceTables(),
+    };
+  }
+
+  override repositories({ db }: ModuleRepositoriesContext<RecurrenceModuleDeps, RecurrenceModuleTables>) {
+    return {
+      recurrence: new RecurrenceRepository({
+        orm: db.orm,
+        schema: db.schema,
+        table: db.schema.recurrence,
       }),
-      };
-    },
-    repositories: ({ db }) => {
-      const schema = db.schema as any;
-      return {
-        recurrence: new RecurrenceRepository({
-          orm: db.orm as never,
-          schema,
-          table: schema.recurrence,
-        }),
-        recurrenceRules: new RecurrenceRulesRepository({
-          orm: db.orm as never,
-          schema,
-          table: schema.recurrenceRules,
-        }),
-      };
-    },
-    services: ({ repositories }) => ({
+      recurrenceRules: new RecurrenceRulesRepository({
+        orm: db.orm,
+        schema: db.schema,
+        table: db.schema.recurrenceRules,
+      }),
+    };
+  }
+
+  override services({
+    repositories,
+  }: ModuleServicesContext<RecurrenceModuleDeps, RecurrenceModuleRepositories>) {
+    return {
       recurrence: new RecurrenceService(
         {
           recurrence: repositories.recurrence,
@@ -53,8 +70,11 @@ export function createRecurrenceBackendModule<const Namespace extends string = "
         },
         {}
       ),
-    }),
-    trpc: ({ trpc, services }) =>
-      createBackendRouterMap(namespace, createRecurrenceTRPC(trpc, services.recurrence)),
-  });
+    };
+  }
+
+  override trpc({ trpc, services }: ModuleTRPCContext<RecurrenceModuleDeps, RecurrenceModuleServices>) {
+    const namespace = (this.options.namespace ?? "recurrence") as Namespace;
+    return createBackendRouterMap(namespace, createRecurrenceTRPC(trpc, services.recurrence));
+  }
 }

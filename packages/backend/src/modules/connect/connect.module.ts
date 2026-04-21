@@ -1,48 +1,80 @@
 import type { ConnectProvider } from "./connect.types";
-import { createBackendRouterMap, defineBackendModule } from "../../app";
+import { createBackendRouterMap } from "../../app";
 import * as connectTables from "./connect.db";
+import {
+  BaseModule,
+  type ModuleExpressContext,
+  type ModuleRepositoriesContext,
+  type ModuleServicesContext,
+  type ModuleTRPCContext,
+} from "../base/base.module";
 import { ConnectRepository } from "./connect.repository";
 import { createConnectRouter } from "./connect.router";
 import { ConnectService } from "./connect.service";
 import { createConnectTRPC } from "./connect.trpc";
 
-export type CreateConnectBackendModuleOptions<Namespace extends string = string> = {
-  id?: string;
-  namespace?: Namespace;
-  mountPath?: string;
-  providers: ConnectProvider[];
+type ConnectModuleDeps = never;
+type ConnectModuleTables = typeof connectTables;
+type ConnectModuleRepositories = {
+  connect: ConnectRepository;
+};
+type ConnectModuleServices = {
+  connect: ConnectService;
+};
+type ConnectModuleRouters<Namespace extends string> = {
+  [K in Namespace]: ReturnType<typeof createConnectTRPC>;
 };
 
-export function createConnectBackendModule<const Namespace extends string = "connect">(
-  options: CreateConnectBackendModuleOptions<Namespace>
-) {
-  const id = options.id ?? "connect";
-  const namespace = (options.namespace ?? "connect") as Namespace;
-  const mountPath = options.mountPath ?? "/connect";
+export class ConnectModule<const Namespace extends string = "connect"> extends BaseModule<
+  ConnectModuleDeps,
+  ConnectModuleTables,
+  ConnectModuleRepositories,
+  ConnectModuleServices,
+  ConnectModuleRouters<Namespace>
+> {
+  readonly id = "connect";
 
-  return defineBackendModule({
-    id,
-    db: () => ({
+  constructor(
+    private readonly providers: ConnectProvider[],
+    private readonly options: { namespace?: Namespace; mountPath?: string } = {}
+  ) {
+    super();
+  }
+
+  override db() {
+    return {
       tables: { ...connectTables },
-    }),
-    repositories: ({ db }) => {
-      const schema = db.schema as any;
-      return {
-        connect: new ConnectRepository({
-          orm: db.orm as never,
-          schema,
-          table: schema.connect,
-        }),
-      };
-    },
-    services: ({ repositories }) => ({
-      connect: new ConnectService({ connect: repositories.connect }, options.providers),
-    }),
-    trpc: ({ trpc, services }) =>
-      createBackendRouterMap(namespace, createConnectTRPC(trpc, services.connect)),
-    express: ({ infra, services, authMiddleware }) => {
-      if (!authMiddleware) return;
-      infra.express.use(mountPath, createConnectRouter(authMiddleware, services.connect));
-    },
-  });
+    };
+  }
+
+  override repositories({ db }: ModuleRepositoriesContext<ConnectModuleDeps, ConnectModuleTables>) {
+    return {
+      connect: new ConnectRepository({
+        orm: db.orm,
+        schema: db.schema,
+        table: db.schema.connect,
+      }),
+    };
+  }
+
+  override services({ repositories }: ModuleServicesContext<ConnectModuleDeps, ConnectModuleRepositories>) {
+    return {
+      connect: new ConnectService({ connect: repositories.connect }, this.providers),
+    };
+  }
+
+  override trpc({ trpc, services }: ModuleTRPCContext<ConnectModuleDeps, ConnectModuleServices>) {
+    const namespace = (this.options.namespace ?? "connect") as Namespace;
+    return createBackendRouterMap(namespace, createConnectTRPC(trpc, services.connect));
+  }
+
+  override express({
+    infra,
+    services,
+    authMiddleware,
+  }: ModuleExpressContext<ConnectModuleDeps, ConnectModuleServices>) {
+    if (!authMiddleware) return;
+    const mountPath = this.options.mountPath ?? "/connect";
+    infra.express.use(mountPath, createConnectRouter(authMiddleware, services.connect));
+  }
 }

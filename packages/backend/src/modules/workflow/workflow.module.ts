@@ -1,56 +1,83 @@
-import { createBackendRouterMap, defineBackendModule } from "../../app";
+import { createBackendRouterMap } from "../../app";
+import type { AuthModule } from "../auth/auth.module";
+import {
+  BaseModule,
+  type ModuleRepositoriesContext,
+  type ModuleServicesContext,
+  type ModuleTRPCContext,
+} from "../base/base.module";
 import { createWorkflowTables } from "./workflow.db";
 import { WorkflowRepository } from "./workflow.repository";
 import { WorkflowService } from "./workflow.service";
 import { createWorkflowTRPC } from "./workflow.trpc";
 import type { WorkflowServiceConfig } from "./workflow.types";
 
-export type CreateWorkflowBackendModuleOptions<Namespace extends string = string> = Omit<
+export type WorkflowModuleConfig<Namespace extends string = string> = Omit<
   WorkflowServiceConfig,
   "connection"
 > & {
-  id?: string;
   namespace?: Namespace;
-  authModuleId?: string;
 };
 
-export function createWorkflowBackendModule<const Namespace extends string = "workflow">(
-  options: CreateWorkflowBackendModuleOptions<Namespace>
-) {
-  const id = options.id ?? "workflow";
-  const namespace = (options.namespace ?? "workflow") as Namespace;
-  const authModuleId = options.authModuleId ?? "auth";
+type WorkflowModuleDeps = { auth: AuthModule };
+type WorkflowModuleTables = ReturnType<typeof createWorkflowTables>;
+type WorkflowModuleRepositories = {
+  workflow: WorkflowRepository;
+};
+type WorkflowModuleServices = {
+  workflow: WorkflowService;
+};
+type WorkflowModuleRouters<Namespace extends string> = {
+  [K in Namespace]: ReturnType<typeof createWorkflowTRPC>;
+};
 
-  return defineBackendModule({
-    id,
-    dependsOn: [authModuleId],
-    db: ({ deps }) => {
-      const authTables = deps[authModuleId].tables as any;
-      return {
-      tables: createWorkflowTables({
-        users: authTables.users,
-      }),
-      };
-    },
-    repositories: ({ db }) => ({
+export class WorkflowModule<const Namespace extends string = "workflow"> extends BaseModule<
+  WorkflowModuleDeps,
+  WorkflowModuleTables,
+  WorkflowModuleRepositories,
+  WorkflowModuleServices,
+  WorkflowModuleRouters<Namespace>
+> {
+  readonly id = "workflow";
+  override readonly dependsOn = ["auth"] as const;
+
+  constructor(private readonly config: WorkflowModuleConfig<Namespace>) {
+    super();
+  }
+
+  override db() {
+    return {
+      tables: createWorkflowTables(),
+    };
+  }
+
+  override repositories({ db }: ModuleRepositoriesContext<WorkflowModuleDeps, WorkflowModuleTables>) {
+    return {
       workflow: new WorkflowRepository({
-        orm: db.orm as never,
-        schema: db.schema as never,
+        orm: db.orm,
+        schema: db.schema,
       }),
-    }),
-    services: ({ repositories, infra }) => {
-      if (!infra.redis) {
-        throw new Error(`Workflow module "${id}" requires Redis in createBackendApp(...)`);
-      }
+    };
+  }
 
-      return {
-        workflow: new WorkflowService(repositories.workflow, {
-          ...options,
-          connection: infra.redis.duplicate(),
-        }),
-      };
-    },
-    trpc: ({ trpc, services }) =>
-      createBackendRouterMap(namespace, createWorkflowTRPC(trpc, services.workflow)),
-  });
+  override services({
+    repositories,
+    infra,
+  }: ModuleServicesContext<WorkflowModuleDeps, WorkflowModuleRepositories>) {
+    if (!infra.redis) {
+      throw new Error(`Workflow module "${this.id}" requires Redis in createBackendApp(...)`);
+    }
+
+    return {
+      workflow: new WorkflowService(repositories.workflow, {
+        ...this.config,
+        connection: infra.redis.duplicate(),
+      }),
+    };
+  }
+
+  override trpc({ trpc, services }: ModuleTRPCContext<WorkflowModuleDeps, WorkflowModuleServices>) {
+    const namespace = (this.config.namespace ?? "workflow") as Namespace;
+    return createBackendRouterMap(namespace, createWorkflowTRPC(trpc, services.workflow));
+  }
 }

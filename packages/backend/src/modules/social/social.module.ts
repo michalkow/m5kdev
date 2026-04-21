@@ -1,33 +1,43 @@
-import { defineBackendModule } from "../../app";
 import { SocialService } from "./social.service";
 import type { SocialProvider } from "./social.types";
+import type { ConnectModule } from "../connect/connect.module";
+import type { FileModule } from "../file/file.module";
+import { BaseModule, type ModuleServicesContext, type TableMap } from "../base/base.module";
 
-export type CreateSocialBackendModuleOptions = {
-  id?: string;
-  connectModuleId?: string;
-  fileModuleId?: string;
-  providers: SocialProvider[];
+type SocialModuleDeps = { connect: ConnectModule; file: FileModule };
+type SocialModuleTables = TableMap;
+type SocialModuleRepositories = Record<string, never>;
+type SocialModuleServices = {
+  social: SocialService;
 };
+type SocialModuleRouters = never;
 
-export function createSocialBackendModule(options: CreateSocialBackendModuleOptions) {
-  const id = options.id ?? "social";
-  const connectModuleId = options.connectModuleId ?? "connect";
-  const fileModuleId = options.fileModuleId ?? "file";
+export class SocialModule extends BaseModule<
+  SocialModuleDeps,
+  SocialModuleTables,
+  SocialModuleRepositories,
+  SocialModuleServices,
+  SocialModuleRouters
+> {
+  readonly id = "social";
+  override readonly dependsOn = ["connect", "file"] as const;
 
-  return defineBackendModule({
-    id,
-    dependsOn: [connectModuleId, fileModuleId],
-    services: ({ deps }) => ({
+  constructor(private readonly providers: SocialProvider[]) {
+    super();
+  }
+
+  override services({ deps }: ModuleServicesContext<SocialModuleDeps, SocialModuleRepositories>) {
+    return {
       social: new SocialService(
         {
-          connect: deps[connectModuleId].repositories.connect,
+          connect: deps.connect.repositories.connect,
         },
         {
-          connect: deps[connectModuleId].services.connect,
-          file: deps[fileModuleId].services.file,
+          connect: deps.connect.services.connect,
+          file: deps.file.services.file,
         },
-        options.providers
+        this.providers
       ),
-    }),
-  });
+    };
+  }
 }

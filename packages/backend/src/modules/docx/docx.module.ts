@@ -1,11 +1,26 @@
-import { defineBackendModule } from "../../app";
+import { BaseModule, type TableMap } from "../base/base.module";
 import { DocxService } from "./docx.service";
 
-export function createDocxBackendModule(options: { id?: string } = {}) {
-  return defineBackendModule({
-    id: options.id ?? "docx",
-    services: () => ({
+type DocxModuleDeps = never;
+type DocxModuleTables = TableMap;
+type DocxModuleRepositories = {};
+type DocxModuleServices = {
+  docx: DocxService;
+};
+type DocxModuleRouters = never;
+
+export class DocxModule extends BaseModule<
+  DocxModuleDeps,
+  DocxModuleTables,
+  DocxModuleRepositories,
+  DocxModuleServices,
+  DocxModuleRouters
+> {
+  readonly id = "docx";
+
+  override services(_: unknown) {
+    return {
       docx: new DocxService(undefined as never, undefined as never),
-    }),
-  });
+    };
+  }
 }
