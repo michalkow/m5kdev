@@ -7,6 +7,7 @@ import {
   Spinner,
   Table,
   Tooltip,
+  type Key
 } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";

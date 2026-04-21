@@ -18,7 +18,7 @@ import {
 import { AuthService } from "./auth.service";
 import { createAuthTRPC } from "./auth.trpc";
 
-type AuthModuleDeps = { email: EmailModule; billing: BillingModule };
+type AuthModuleDeps = { email: EmailModule; billing?: BillingModule };
 type AuthModuleTables = typeof authTables;
 type AuthModuleRepositories = {
   auth: AuthRepository;

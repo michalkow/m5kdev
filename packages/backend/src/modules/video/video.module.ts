@@ -18,9 +18,9 @@ export class VideoModule extends BaseModule<
 > {
   readonly id = "video";
 
-  override services(_: unknown) {
+  override services() {
     return {
-      video: new VideoService(undefined as never, undefined as never),
+      video: new VideoService(),
     };
   }
 }

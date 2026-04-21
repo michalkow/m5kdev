@@ -18,9 +18,9 @@ export class PdfModule extends BaseModule<
 > {
   readonly id = "pdf";
 
-  override services(_: unknown) {
+  override services() {
     return {
-      pdf: new PdfService(undefined as never, undefined as never),
+      pdf: new PdfService(),
     };
   }
 }

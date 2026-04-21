@@ -18,9 +18,9 @@ export class DocxModule extends BaseModule<
 > {
   readonly id = "docx";
 
-  override services(_: unknown) {
+  override services() {
     return {
-      docx: new DocxService(undefined as never, undefined as never),
+      docx: new DocxService(),
     };
   }
 }
