@@ -9,13 +9,13 @@ import express, { type Express } from "express";
 import IORedis, { type RedisOptions } from "ioredis";
 import type { Logger } from "pino";
 import { Resend } from "resend";
+import { defaultMergedSchema, moduleTableMap } from "./db/module-schema";
 import type * as authTables from "./modules/auth/auth.db";
 import type { BetterAuth } from "./modules/auth/auth.lib";
 import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/auth.middleware";
 import type { BaseModule } from "./modules/base/base.module";
 import { WorkflowRegistry } from "./modules/workflow/workflow.registry";
 import { WorkflowService } from "./modules/workflow/workflow.service";
-import { defaultMergedSchema, moduleTableMap } from "./db/module-schema";
 import { logger as rootLogger } from "./utils/logger";
 import {
   createAuthContext,
@@ -522,10 +522,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   const redisState = createRedisClient(config.redis);
   const resendState = createResendClient(config.resend);
   const moduleStates = new Map<string, BuiltModuleRuntime>();
-  const schema: AppDbSchema = {
-    ...defaultMergedSchema,
-    ...(config.schema ?? ({} as unknown as AppDbSchema)),
-  };
+  const schema: AppDbSchema = config.schema ?? ({} as unknown as AppDbSchema);
 
   const orm = drizzle(dbClientState.client, { schema });
   const repositoryModules: Record<string, AnyRecord> = {};
@@ -735,7 +732,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     expressApp.all("/api/auth/*", toNodeHandler(auth));
   }
 
-  for (const module of registeredModules) {
+  for (const module of orderedModules) {
     const state = moduleStates.get(module.id)!;
     module.express?.({
       env,
@@ -885,5 +882,5 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   };
 }
 
-export type InferBackendAppRouter<TApp extends { build(): { trpc: { router: AnyRouter } } }> =
-  ReturnType<TApp["build"]>["trpc"]["router"];
+export type InferBackendAppRouter<TApp extends typeof createBackendApp> =
+  ReturnType<TApp>["trpc"]["router"];
