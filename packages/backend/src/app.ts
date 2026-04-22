@@ -9,7 +9,7 @@ import express, { type Express } from "express";
 import IORedis, { type RedisOptions } from "ioredis";
 import type { Logger } from "pino";
 import { Resend } from "resend";
-import { defaultMergedSchema, moduleTableMap } from "./db/module-schema";
+
 import type * as authTables from "./modules/auth/auth.db";
 import type { BetterAuth } from "./modules/auth/auth.lib";
 import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/auth.middleware";
@@ -531,7 +531,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   for (const module of orderedModules) {
     moduleStates.set(module.id, {
       id: module.id,
-      tables: (moduleTableMap as Record<string, TableMap>)[module.id] ?? {},
+      tables: {} as TableMap,
       repositories: {},
       services: {},
       routers: {},

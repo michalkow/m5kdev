@@ -6,7 +6,7 @@ import {
   type ModuleServicesContext,
   type ModuleTRPCContext,
 } from "../base/base.module";
-import type * as workflowTables from "./workflow.db";
+import type { workflows } from "./workflow.db";
 import { WorkflowRepository } from "./workflow.repository";
 import { WorkflowService } from "./workflow.service";
 import { createWorkflowTRPC } from "./workflow.trpc";
@@ -20,7 +20,7 @@ export type WorkflowModuleConfig<Namespace extends string = string> = Omit<
 };
 
 type WorkflowModuleDeps = { auth: AuthModule };
-type WorkflowModuleTables = typeof workflowTables;
+type WorkflowModuleTables = { workflows: typeof workflows };
 type WorkflowModuleRepositories = {
   workflow: WorkflowRepository;
 };

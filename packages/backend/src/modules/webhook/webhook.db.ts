@@ -1,7 +1,5 @@
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
-import { WEBHOOK_STATUS_ENUM, type WebhookStatus } from "./webhook.constants";
-
 export const webhook = sqliteTable("webhook", {
   id: text("id").primaryKey().$default(uuidv4),
   createdAt: integer("created_at", { mode: "timestamp" })
@@ -9,7 +7,10 @@ export const webhook = sqliteTable("webhook", {
     .$default(() => new Date()),
   updatedAt: integer("updated_at", { mode: "timestamp" }),
   timeoutSec: integer("timeout_sec").notNull().default(60),
-  status: text("status").notNull().default(WEBHOOK_STATUS_ENUM.WAITING).$type<WebhookStatus>(),
+  status: text("status")
+    .notNull()
+    .default("WAITING")
+    .$type<"WAITING" | "COMPLETED" | "TIMEOUT" | "ERROR_CALLBACK" | "ERROR_DATA">(),
   error: text("error"),
   payload: text("payload"),
 });

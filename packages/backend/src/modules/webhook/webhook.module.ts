@@ -1,11 +1,11 @@
 import { BaseModule, type ModuleExpressContext, type ModuleRepositoriesContext, type ModuleServicesContext } from "../base/base.module";
-import type * as webhookTables from "./webhook.db";
+import type { webhook } from "./webhook.db";
 import { WebhookRepository } from "./webhook.repository";
 import { createWebhookRouter } from "./webhook.router";
 import { WebhookService } from "./webhook.service";
 
 type WebhookModuleDeps = never;
-type WebhookModuleTables = typeof webhookTables;
+type WebhookModuleTables = { webhook: typeof webhook };
 type WebhookModuleRepositories = {
   webhook: WebhookRepository;
 };
