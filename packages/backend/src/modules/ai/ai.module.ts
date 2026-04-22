@@ -9,7 +9,7 @@ import {
   type ModuleServicesContext,
   type ModuleTRPCContext,
 } from "../base/base.module";
-import { createAITables } from "./ai.db";
+import type * as aiTables from "./ai.db";
 import { AiUsageRepository } from "./ai.repository";
 import { AIService } from "./ai.service";
 import { IdeogramRepository } from "./ideogram/ideogram.repository";
@@ -37,7 +37,7 @@ export type AIModuleConfig<
 };
 
 type AIModuleDeps = { auth: AuthModule };
-type AIModuleTables = ReturnType<typeof createAITables>;
+type AIModuleTables = typeof aiTables;
 type AIModuleRepositories = {
   aiUsage: AiUsageRepository;
   ideogram?: IdeogramRepository;
@@ -65,12 +65,6 @@ export class AIModule<
 
   constructor(private readonly config: AIModuleConfig<MastraInstance, Namespace>) {
     super();
-  }
-
-  override db() {
-    return {
-      tables: createAITables(),
-    };
   }
 
   override repositories({ db }: ModuleRepositoriesContext<AIModuleDeps, AIModuleTables>) {

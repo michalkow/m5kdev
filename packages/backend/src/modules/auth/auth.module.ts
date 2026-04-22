@@ -7,7 +7,7 @@ import {
 } from "../base/base.module";
 import type { BillingModule } from "../billing/billing.module";
 import type { EmailModule } from "../email/email.module";
-import * as authTables from "./auth.db";
+import type * as authTables from "./auth.db";
 import {
   AuthInvitationRepository,
   AuthOrganizationRepository,
@@ -43,12 +43,6 @@ export class AuthModule extends BaseModule<
   readonly id = "auth";
   override readonly dependsOn = ["email"] as const;
   override readonly optionalDependsOn = ["billing"] as const;
-
-  override db() {
-    return {
-      tables: { ...authTables },
-    };
-  }
 
   override repositories({ db }: ModuleRepositoriesContext<AuthModuleDeps, AuthModuleTables>) {
     return {

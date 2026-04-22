@@ -6,13 +6,13 @@ import {
   type ModuleServicesContext,
   type ModuleTRPCContext,
 } from "../base/base.module";
-import { createRecurrenceTables } from "./recurrence.db";
+import type * as recurrenceTables from "./recurrence.db";
 import { RecurrenceRepository, RecurrenceRulesRepository } from "./recurrence.repository";
 import { RecurrenceService } from "./recurrence.service";
 import { createRecurrenceTRPC } from "./recurrence.trpc";
 
 type RecurrenceModuleDeps = { auth: AuthModule };
-type RecurrenceModuleTables = ReturnType<typeof createRecurrenceTables>;
+type RecurrenceModuleTables = typeof recurrenceTables;
 type RecurrenceModuleRepositories = {
   recurrence: RecurrenceRepository;
   recurrenceRules: RecurrenceRulesRepository;
@@ -36,12 +36,6 @@ export class RecurrenceModule<const Namespace extends string = "recurrence"> ext
 
   constructor(private readonly options: { namespace?: Namespace } = {}) {
     super();
-  }
-
-  override db() {
-    return {
-      tables: createRecurrenceTables(),
-    };
   }
 
   override repositories({ db }: ModuleRepositoriesContext<RecurrenceModuleDeps, RecurrenceModuleTables>) {

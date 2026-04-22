@@ -3,7 +3,6 @@ import type { SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
 import type {
   BackendAppAuthFactoryContext,
   BackendModuleAuthContext,
-  BackendModuleDbContext,
   BackendModuleDependencyMap,
   BackendModuleExpressContext,
   BackendModuleLifecycleContext,
@@ -26,13 +25,6 @@ type IsDepsEmpty<Deps extends BaseModuleDeps> = [keyof Deps] extends [never] ? t
 export type ModuleTypedDeps<Deps extends BaseModuleDeps> = IsDepsEmpty<Deps> extends true
   ? BackendModuleDependencyMap
   : { [K in keyof Deps & string]: BackendModuleDependencyMap[string] } & BackendModuleDependencyMap;
-
-export type ModuleDbContext<Deps extends BaseModuleDeps = Record<string, never>> = Omit<
-  BackendModuleDbContext,
-  "deps"
-> & {
-  deps: ModuleTypedDeps<Deps>;
-};
 
 export type ModuleRepositoriesContext<
   Deps extends BaseModuleDeps = Record<string, never>,
@@ -120,8 +112,8 @@ export abstract class BaseModule<
 
   readonly dependsOn?: readonly (keyof Deps & string)[];
   readonly optionalDependsOn?: readonly string[];
-
-  db?(ctx: ModuleDbContext<Deps>): { tables: Tables } | undefined;
+  /** DB-only dependencies (tables only). Not used for service init ordering. */
+  readonly dbDependsOn?: readonly string[];
 
   repositories?(ctx: ModuleRepositoriesContext<Deps, Tables>): Repositories | undefined;
 

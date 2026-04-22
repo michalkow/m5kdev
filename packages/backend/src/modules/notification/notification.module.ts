@@ -7,13 +7,13 @@ import {
   type ModuleServicesContext,
   type ModuleTRPCContext,
 } from "../base/base.module";
-import { createNotificationTables } from "./notification.db";
+import type * as notificationTables from "./notification.db";
 import { NotificationRepository } from "./notification.repository";
 import { NotificationService } from "./notification.service";
 import { createNotificationTRPC } from "./notification.trpc";
 
 type NotificationModuleDeps = { auth: AuthModule; workflow: WorkflowModule };
-type NotificationModuleTables = ReturnType<typeof createNotificationTables>;
+type NotificationModuleTables = typeof notificationTables;
 type NotificationModuleRepositories = {
   notification: NotificationRepository;
 };
@@ -36,12 +36,6 @@ export class NotificationModule<const Namespace extends string = "notification">
 
   constructor(private readonly options: { namespace?: Namespace } = {}) {
     super();
-  }
-
-  override db() {
-    return {
-      tables: createNotificationTables(),
-    };
   }
 
   override repositories({

@@ -4,7 +4,7 @@ import { EmailModule } from "@m5kdev/backend/modules/email/email.module";
 import { NotificationModule } from "@m5kdev/backend/modules/notification/notification.module";
 import { WorkflowModule } from "@m5kdev/backend/modules/workflow/workflow.module";
 import { templates } from "{{PACKAGE_SCOPE}}/email";
-import { postsModule } from "./modules/posts/posts.module";
+import { PostsModule } from "./modules/posts/posts.module";
 
 export const emailBackendModule = new EmailModule(templates as never);
 
@@ -22,7 +22,7 @@ export const workflowBackendModule = new WorkflowModule({
 });
 
 export const notificationBackendModule = new NotificationModule();
-export const postsBackendModule = postsModule;
+export const postsBackendModule = new PostsModule();
 
 export const backendModules = defineBackendModules([
   emailBackendModule,

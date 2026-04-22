@@ -6,13 +6,13 @@ import {
   type ModuleServicesContext,
   type ModuleTRPCContext,
 } from "../base/base.module";
-import { createTagTables } from "./tag.db";
+import type * as tagTables from "./tag.db";
 import { TagRepository } from "./tag.repository";
 import { TagService } from "./tag.service";
 import { createTagTRPC } from "./tag.trpc";
 
 type TagModuleDeps = { auth: AuthModule };
-type TagModuleTables = ReturnType<typeof createTagTables>;
+type TagModuleTables = typeof tagTables;
 type TagModuleRepositories = {
   tag: TagRepository;
 };
@@ -35,12 +35,6 @@ export class TagModule<const Namespace extends string = "tag"> extends BaseModul
 
   constructor(private readonly options: { namespace?: Namespace } = {}) {
     super();
-  }
-
-  override db() {
-    return {
-      tables: createTagTables(),
-    };
   }
 
   override repositories({ db }: ModuleRepositoriesContext<TagModuleDeps, TagModuleTables>) {

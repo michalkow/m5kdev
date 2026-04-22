@@ -1,4 +1,4 @@
-import * as cryptoTables from "./crypto.db";
+import type * as cryptoTables from "./crypto.db";
 import { BaseModule, type ModuleRepositoriesContext, type ModuleServicesContext } from "../base/base.module";
 import { CryptoRepository } from "./crypto.repository";
 import { CryptoService } from "./crypto.service";
@@ -21,12 +21,6 @@ export class CryptoModule extends BaseModule<
   CryptoModuleRouters
 > {
   readonly id = "crypto";
-
-  override db() {
-    return {
-      tables: { ...cryptoTables },
-    };
-  }
 
   override repositories({ db }: ModuleRepositoriesContext<CryptoModuleDeps, CryptoModuleTables>) {
     return {

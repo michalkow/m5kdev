@@ -1,27 +1,29 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { collectBackendSchema, generateBackendSchemaSource } from "@m5kdev/backend/app";
-import { backendSchemaModules } from "../src/schema-modules";
+import * as authTables from "@m5kdev/backend/modules/auth/auth.db";
+import * as notificationTables from "@m5kdev/backend/modules/notification/notification.db";
+import * as workflowTables from "@m5kdev/backend/modules/workflow/workflow.db";
+import * as postsTables from "../src/modules/posts/posts.db";
 
 export async function generateSchema(): Promise<void> {
-  const collected = collectBackendSchema(backendSchemaModules, {
-    env: process.env,
-  });
   const outputDirectory = path.resolve(process.cwd(), "src/generated");
   const outputPath = path.join(outputDirectory, "schema.ts");
 
   const source = [
-    'import { collectBackendSchema } from "@m5kdev/backend/app";',
-    'import { backendSchemaModules } from "../schema-modules";',
+    'import * as authTables from "@m5kdev/backend/modules/auth/auth.db";',
+    'import * as notificationTables from "@m5kdev/backend/modules/notification/notification.db";',
+    'import * as workflowTables from "@m5kdev/backend/modules/workflow/workflow.db";',
+    'import * as postsTables from "../modules/posts/posts.db";',
     "",
-    "const collected = collectBackendSchema(backendSchemaModules, {",
-    "  env: process.env,",
-    "});",
+    "export const schema = {",
+    "  ...authTables,",
+    "  ...workflowTables,",
+    "  ...notificationTables,",
+    "  ...postsTables,",
+    "};",
     "",
-    generateBackendSchemaSource({
-      schema: collected.schema,
-      schemaExpression: "collected.schema",
-    }),
+    "export type AppDbSchema = typeof schema;",
+    "",
   ].join("\n");
 
   await fs.mkdir(outputDirectory, { recursive: true });

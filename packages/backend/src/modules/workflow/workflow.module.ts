@@ -6,7 +6,7 @@ import {
   type ModuleServicesContext,
   type ModuleTRPCContext,
 } from "../base/base.module";
-import { createWorkflowTables } from "./workflow.db";
+import type * as workflowTables from "./workflow.db";
 import { WorkflowRepository } from "./workflow.repository";
 import { WorkflowService } from "./workflow.service";
 import { createWorkflowTRPC } from "./workflow.trpc";
@@ -20,7 +20,7 @@ export type WorkflowModuleConfig<Namespace extends string = string> = Omit<
 };
 
 type WorkflowModuleDeps = { auth: AuthModule };
-type WorkflowModuleTables = ReturnType<typeof createWorkflowTables>;
+type WorkflowModuleTables = typeof workflowTables;
 type WorkflowModuleRepositories = {
   workflow: WorkflowRepository;
 };
@@ -43,12 +43,6 @@ export class WorkflowModule<const Namespace extends string = "workflow"> extends
 
   constructor(private readonly config: WorkflowModuleConfig<Namespace>) {
     super();
-  }
-
-  override db() {
-    return {
-      tables: createWorkflowTables(),
-    };
   }
 
   override repositories({ db }: ModuleRepositoriesContext<WorkflowModuleDeps, WorkflowModuleTables>) {

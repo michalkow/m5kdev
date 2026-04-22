@@ -1,5 +1,5 @@
 import { BaseModule, type ModuleExpressContext, type ModuleRepositoriesContext, type ModuleServicesContext } from "../base/base.module";
-import * as webhookTables from "./webhook.db";
+import type * as webhookTables from "./webhook.db";
 import { WebhookRepository } from "./webhook.repository";
 import { createWebhookRouter } from "./webhook.router";
 import { WebhookService } from "./webhook.service";
@@ -25,12 +25,6 @@ export class WebhookModule extends BaseModule<
 
   constructor(private readonly mountPath: string = "/webhook") {
     super();
-  }
-
-  override db() {
-    return {
-      tables: { ...webhookTables },
-    };
   }
 
   override repositories({

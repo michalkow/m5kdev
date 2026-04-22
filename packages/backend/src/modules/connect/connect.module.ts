@@ -1,6 +1,6 @@
 import type { ConnectProvider } from "./connect.types";
 import { createBackendRouterMap } from "../../app";
-import * as connectTables from "./connect.db";
+import type * as connectTables from "./connect.db";
 import {
   BaseModule,
   type ModuleExpressContext,
@@ -39,12 +39,6 @@ export class ConnectModule<const Namespace extends string = "connect"> extends B
     private readonly options: { namespace?: Namespace; mountPath?: string } = {}
   ) {
     super();
-  }
-
-  override db() {
-    return {
-      tables: { ...connectTables },
-    };
   }
 
   override repositories({ db }: ModuleRepositoriesContext<ConnectModuleDeps, ConnectModuleTables>) {

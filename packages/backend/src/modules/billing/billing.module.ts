@@ -7,7 +7,7 @@ import {
   type ModuleServicesContext,
   type ModuleTRPCContext,
 } from "../base/base.module";
-import * as billingTables from "./billing.db";
+import type * as billingTables from "./billing.db";
 import { BillingRepository } from "./billing.repository";
 import { BillingService } from "./billing.service";
 import { createBillingTRPC } from "./billing.trpc";
@@ -38,12 +38,6 @@ export class BillingModule extends BaseModule<
     private readonly config: { plans: StripePlan[]; trial?: StripePlan },
   ) {
     super();
-  }
-
-  override db() {
-    return {
-      tables: { ...billingTables },
-    };
   }
 
   override repositories({ db }: ModuleRepositoriesContext<BillingModuleDeps, BillingModuleTables>) {

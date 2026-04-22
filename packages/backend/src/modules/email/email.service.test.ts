@@ -160,25 +160,24 @@ describe("createEmailBackendModule", () => {
   });
 
   it("builds the email service from backend app config", () => {
-    const built = createBackendApp({
-      db: { client },
-      app: {
-        name: "Kernel App",
-        urls: {
-          web: "http://localhost:5173",
-          api: "http://localhost:8080",
+    const built = createBackendApp(
+      {
+        db: { client },
+        app: {
+          name: "Kernel App",
+          urls: {
+            web: "http://localhost:5173",
+            api: "http://localhost:8080",
+          },
+        },
+        email: {
+          mode: "log",
+          from: "no-reply@example.com",
+          systemNotificationEmail: "ops@example.com",
         },
       },
-      email: {
-        mode: "log",
-        from: "no-reply@example.com",
-        systemNotificationEmail: "ops@example.com",
-      },
-    })
-      .use(
-        new EmailModule(templates)
-      )
-      .build();
+      [new EmailModule(templates)] as const
+    );
 
     const service = built.modules.email.services.email as EmailService;
 

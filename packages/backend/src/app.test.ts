@@ -1,7 +1,6 @@
 import { createClient, type Client } from "@libsql/client";
-import { sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { collectBackendSchema, createBackendApp, generateBackendSchemaSource } from "./app";
 import { BaseModule, type TableMap } from "./modules/base/base.module";
+import { createBackendApp } from "./app";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {
@@ -37,10 +36,6 @@ describe("createBackendApp", () => {
       any
     > {
       readonly id = "dep";
-      override db() {
-        calls.push("dep:db");
-        return { tables: {} as TableMap };
-      }
       override repositories() {
         calls.push("dep:repositories");
         return { depRepository: { ok: true } };
@@ -68,11 +63,6 @@ describe("createBackendApp", () => {
     > {
       readonly id = "main";
       override readonly dependsOn = ["dep"] as const;
-      override db({ deps }: any) {
-        expect(deps.dep).toBeDefined();
-        calls.push("main:db");
-        return { tables: {} as TableMap };
-      }
       override repositories({ deps }: any) {
         expect(deps.dep.repositories.depRepository).toEqual({ ok: true });
         calls.push("main:repositories");
@@ -96,12 +86,10 @@ describe("createBackendApp", () => {
     const dep = new DepModule();
     const main = new MainModule();
 
-    const built = createBackendApp({ db: { client } }).use(main).use(dep).build();
+    const built = createBackendApp({ db: { client } }, [main, dep] as const);
 
     expect(Object.keys(built.modules)).toEqual(["dep", "main"]);
     expect(calls).toEqual([
-      "dep:db",
-      "main:db",
       "dep:repositories",
       "main:repositories",
       "dep:services",
@@ -112,81 +100,30 @@ describe("createBackendApp", () => {
   });
 
   it("fails on missing required dependencies", () => {
-    const app = createBackendApp({ db: { client } }).use(
-      new (class MainMissingDep extends BaseModule<{ dep: any }, TableMap> {
-        readonly id = "main";
-        override readonly dependsOn = ["dep"] as const;
-      })()
-    );
+    const main = new (class MainMissingDep extends BaseModule<{ dep: any }, TableMap> {
+      readonly id = "main";
+      override readonly dependsOn = ["dep"] as const;
+    })();
 
-    expect(() => app.build()).toThrow('missing required dependency "dep"');
+    expect(() => createBackendApp({ db: { client } }, [main] as const)).toThrow(
+      'missing required dependency "dep"'
+    );
   });
 
   it("fails on circular dependencies", () => {
-    const app = createBackendApp({ db: { client } })
-      .use(
-        new (class A extends BaseModule<{ b: any }, TableMap> {
-          readonly id = "a";
-          override readonly dependsOn = ["b"] as const;
-        })()
-      )
-      .use(
-        new (class B extends BaseModule<{ a: any }, TableMap> {
-          readonly id = "b";
-          override readonly dependsOn = ["a"] as const;
-        })()
-      );
+    const a = new (class A extends BaseModule<{ b: any }, TableMap> {
+      readonly id = "a";
+      override readonly dependsOn = ["b"] as const;
+    })();
 
-    expect(() => app.build()).toThrow("Circular backend module dependency detected");
-  });
+    const b = new (class B extends BaseModule<{ a: any }, TableMap> {
+      readonly id = "b";
+      override readonly dependsOn = ["a"] as const;
+    })();
 
-  it("fails on duplicate schema keys and table names", () => {
-    const sharedNameA = sqliteTable("shared_table", {
-      id: text("id").primaryKey(),
-    });
-    const sharedNameB = sqliteTable("shared_table", {
-      id: text("id").primaryKey(),
-    });
-
-    const duplicateKeyApp = createBackendApp({ db: { client } })
-      .use(
-        new (class One extends BaseModule {
-          readonly id = "one";
-          override db() {
-            return { tables: { shared: sharedNameA } as TableMap };
-          }
-        })()
-      )
-      .use(
-        new (class Two extends BaseModule {
-          readonly id = "two";
-          override db() {
-            return { tables: { shared: sharedNameB } as TableMap };
-          }
-        })()
-      );
-
-    expect(() => duplicateKeyApp.build()).toThrow('Duplicate backend schema key "shared"');
-
-    const duplicateTableNameApp = createBackendApp({ db: { client } })
-      .use(
-        new (class One extends BaseModule {
-          readonly id = "one";
-          override db() {
-            return { tables: { first: sharedNameA } as TableMap };
-          }
-        })()
-      )
-      .use(
-        new (class Two extends BaseModule {
-          readonly id = "two";
-          override db() {
-            return { tables: { second: sharedNameB } as TableMap };
-          }
-        })()
-      );
-
-    expect(() => duplicateTableNameApp.build()).toThrow('Duplicate backend table name "shared_table"');
+    expect(() => createBackendApp({ db: { client } }, [a, b] as const)).toThrow(
+      "Circular backend module dependency detected"
+    );
   });
 
   it("fails on duplicate tRPC namespaces", () => {
@@ -199,11 +136,7 @@ describe("createBackendApp", () => {
     > {
       readonly id = "first";
       override trpc({ trpc }: any) {
-        return {
-          shared: trpc.router({
-            one: trpc.publicProcedure.query(() => "one"),
-          }),
-        };
+        return { shared: trpc.router({ ping: trpc.publicProcedure.query(() => "pong") }) };
       }
     })();
 
@@ -216,71 +149,13 @@ describe("createBackendApp", () => {
     > {
       readonly id = "second";
       override trpc({ trpc }: any) {
-        return {
-          shared: trpc.router({
-            two: trpc.publicProcedure.query(() => "two"),
-          }),
-        };
+        return { shared: trpc.router({ ping: trpc.publicProcedure.query(() => "pong") }) };
       }
     })();
 
-    const app = createBackendApp({ db: { client } }).use(first).use(second);
-
-    expect(() => app.build()).toThrow('Duplicate backend tRPC router namespace "shared"');
-  });
-
-  it("collects runtime schema with the same module db phase used by build", () => {
-    const table = sqliteTable("schema_parity", {
-      id: text("id").primaryKey(),
-    });
-
-    const module = new (class Parity extends BaseModule {
-      readonly id = "parity";
-      override db() {
-        return {
-          tables: { parity: table } as TableMap,
-        };
-      }
-    })();
-
-    const collected = collectBackendSchema([module]);
-    const built = createBackendApp({ db: { client } }).use(module).build();
-
-    expect(Object.keys(collected.schema)).toEqual(["parity"]);
-    expect(Object.keys(built.db.schema)).toEqual(["parity"]);
-  });
-
-  it("generates DrizzleKit-consumable source with top-level table exports", () => {
-    const users = sqliteTable("users", {
-      id: text("id").primaryKey(),
-    });
-    const posts = sqliteTable("posts", {
-      id: text("id").primaryKey(),
-    });
-
-    const collected = collectBackendSchema([
-      new (class Schema extends BaseModule {
-        readonly id = "schema";
-        override db() {
-          return {
-            tables: {
-              users,
-              posts,
-            } as TableMap,
-          };
-        }
-      })(),
-    ]);
-
-    const source = generateBackendSchemaSource({
-      schema: collected.schema,
-      schemaExpression: "collected.schema",
-    });
-
-    expect(source).toContain("export const posts = collected.schema.posts;");
-    expect(source).toContain("export const users = collected.schema.users;");
-    expect(source).toContain("export const schema = {");
-    expect(source).toContain("  posts,");
-    expect(source).toContain("  users,");
+    expect(() => createBackendApp({ db: { client } }, [first, second] as const)).toThrow(
+      'Duplicate backend tRPC router namespace "shared"'
+    );
   });
 });
+

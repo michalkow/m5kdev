@@ -5,13 +5,13 @@ import {
   type ModuleRepositoriesContext,
   type ModuleServicesContext,
 } from "../base/base.module";
-import { createFileTables } from "./file.db";
+import type * as fileTables from "./file.db";
 import { FileRepository, FileS3Repository } from "./file.repository";
 import { createUploadRouter } from "./file.router";
 import { FileService } from "./file.service";
 
 type FileModuleDeps = { auth: AuthModule };
-type FileModuleTables = ReturnType<typeof createFileTables>;
+type FileModuleTables = typeof fileTables;
 type FileModuleRepositories = {
   file: FileRepository;
   fileS3: FileS3Repository;
@@ -33,12 +33,6 @@ export class FileModule extends BaseModule<
 
   constructor(private readonly mountPath: string = "/upload") {
     super();
-  }
-
-  override db() {
-    return {
-      tables: createFileTables(),
-    };
   }
 
   override repositories({ db }: ModuleRepositoriesContext<FileModuleDeps, FileModuleTables>) {
