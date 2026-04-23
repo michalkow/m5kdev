@@ -376,95 +376,97 @@ export function OrganizationChildOrganizationsRoute({
       </Card>
 
       <Modal isOpen={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <Modal.Backdrop />
-        <Modal.Container>
-          <Modal.Dialog>
-            <Modal.Header>
-              <Modal.Heading className="text-lg font-semibold">
-                {t("web-ui:organization.childOrgs.createTitle")}
-              </Modal.Heading>
-            </Modal.Header>
-            <Modal.Body className="grid gap-3">
-              <div className="grid gap-2">
-                <Label htmlFor={createNameInputId} className="text-sm font-medium">
-                  {t("web-ui:organization.childOrgs.createNameLabel")}
-                </Label>
-                <Input
-                  id={createNameInputId}
-                  value={newOrganizationName}
-                  placeholder={t("web-ui:organization.childOrgs.createNamePlaceholder")}
-                  onChange={(e) => setNewOrganizationName(e.target.value)}
-                  variant="secondary"
-                />
-              </div>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="secondary" onPress={() => setIsCreateOpen(false)}>
-                {t("web-ui:common.cancel")}
-              </Button>
-              <Button variant="primary" isPending={isCreating} onPress={onSubmitCreate}>
-                {t("web-ui:organization.childOrgs.createSubmit")}
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading className="text-lg font-semibold">
+                  {t("web-ui:organization.childOrgs.createTitle")}
+                </Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="grid gap-3">
+                <div className="grid gap-2">
+                  <Label htmlFor={createNameInputId} className="text-sm font-medium">
+                    {t("web-ui:organization.childOrgs.createNameLabel")}
+                  </Label>
+                  <Input
+                    id={createNameInputId}
+                    value={newOrganizationName}
+                    placeholder={t("web-ui:organization.childOrgs.createNamePlaceholder")}
+                    onChange={(e) => setNewOrganizationName(e.target.value)}
+                    variant="secondary"
+                  />
+                </div>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="secondary" onPress={() => setIsCreateOpen(false)}>
+                  {t("web-ui:common.cancel")}
+                </Button>
+                <Button variant="primary" isPending={isCreating} onPress={onSubmitCreate}>
+                  {t("web-ui:organization.childOrgs.createSubmit")}
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
       </Modal>
 
       <Modal isOpen={isEditOpen} onOpenChange={setIsEditOpen}>
-        <Modal.Backdrop />
-        <Modal.Container>
-          <Modal.Dialog>
-            <Modal.Header>
-              <Modal.Heading className="text-lg font-semibold">
-                {t("web-ui:organization.childOrgs.editTitle")}
-              </Modal.Heading>
-            </Modal.Header>
-            <Modal.Body className="grid gap-3">
-              <div className="grid gap-2">
-                <Label htmlFor={editNameInputId} className="text-sm font-medium">
-                  {t("web-ui:organization.childOrgs.form.name")}
-                </Label>
-                <Input
-                  id={editNameInputId}
-                  value={editingName}
-                  onChange={(e) => setEditingName(e.target.value)}
-                  variant="secondary"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor={editSlugInputId} className="text-sm font-medium">
-                  {t("web-ui:organization.childOrgs.form.slug")}
-                </Label>
-                <Input
-                  id={editSlugInputId}
-                  value={editingSlug}
-                  onChange={(e) => setEditingSlug(e.target.value)}
-                  variant="secondary"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor={editMetadataInputId} className="text-sm font-medium">
-                  {t("web-ui:organization.childOrgs.form.metadata")}
-                </Label>
-                <TextArea
-                  id={editMetadataInputId}
-                  value={editingMetadata}
-                  onChange={(e) => setEditingMetadata(e.target.value)}
-                  variant="secondary"
-                  rows={6}
-                />
-              </div>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="secondary" onPress={() => setIsEditOpen(false)}>
-                {t("web-ui:common.cancel")}
-              </Button>
-              <Button variant="primary" isPending={isUpdating} onPress={onSubmitEdit}>
-                {t("web-ui:organization.childOrgs.saveButton")}
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading className="text-lg font-semibold">
+                  {t("web-ui:organization.childOrgs.editTitle")}
+                </Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="grid gap-3">
+                <div className="grid gap-2">
+                  <Label htmlFor={editNameInputId} className="text-sm font-medium">
+                    {t("web-ui:organization.childOrgs.form.name")}
+                  </Label>
+                  <Input
+                    id={editNameInputId}
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    variant="secondary"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor={editSlugInputId} className="text-sm font-medium">
+                    {t("web-ui:organization.childOrgs.form.slug")}
+                  </Label>
+                  <Input
+                    id={editSlugInputId}
+                    value={editingSlug}
+                    onChange={(e) => setEditingSlug(e.target.value)}
+                    variant="secondary"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor={editMetadataInputId} className="text-sm font-medium">
+                    {t("web-ui:organization.childOrgs.form.metadata")}
+                  </Label>
+                  <TextArea
+                    id={editMetadataInputId}
+                    value={editingMetadata}
+                    onChange={(e) => setEditingMetadata(e.target.value)}
+                    variant="secondary"
+                    rows={6}
+                  />
+                </div>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="secondary" onPress={() => setIsEditOpen(false)}>
+                  {t("web-ui:common.cancel")}
+                </Button>
+                <Button variant="primary" isPending={isUpdating} onPress={onSubmitEdit}>
+                  {t("web-ui:organization.childOrgs.saveButton")}
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
       </Modal>
     </div>
   );
