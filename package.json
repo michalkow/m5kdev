@@ -20,7 +20,7 @@
     "cs:patch": "pnpm cs:add --all --patch && pnpm cs:version",
     "cs:publish": "pnpm build && pnpm dlx @changesets/cli publish && git push --follow-tags",
     "cs:version": "pnpm dlx @changesets/cli version",
-    "cs:deploy": "read -p 'Message: ' msg && pnpm cs:add --all --patch -m \"$msg\" && pnpm cs:version && pnpm build && pnpm dlx @changesets/cli publish && git push --follow-tags && git add . && git commit -m \"$msg\" && git push",
+    "cs:deploy": "read -p 'Message: ' msg && pnpm cs:add -m \"$msg\" && pnpm cs:version && pnpm build && pnpm dlx @changesets/cli publish && git push --follow-tags && git add . && git commit -m \"$msg\" && git push",
     "knip": "knip"
   },
   "devDependencies": {

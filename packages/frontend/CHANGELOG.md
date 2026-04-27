@@ -1,5 +1,16 @@
 # @m5kdev/frontend
 
+## 0.18.0
+
+### Minor Changes
+
+- modules rc
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.18.0
+
 ## 0.17.7
 
 ### Patch Changes

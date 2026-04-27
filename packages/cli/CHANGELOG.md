@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.18.0
+
+### Minor Changes
+
+- modules rc
+
 ## 0.17.7
 
 ### Patch Changes
