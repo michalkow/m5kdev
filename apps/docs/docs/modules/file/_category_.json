@@ -1,0 +1,8 @@
+{
+  "label": "File",
+  "position": 1,
+  "link": {
+    "type": "doc",
+    "id": "modules/file/index"
+  }
+}

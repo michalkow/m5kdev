@@ -1,0 +1,33 @@
+{
+  "name": "@m5kdev/docs",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "docusaurus build",
+    "check-types": "tsc --noEmit",
+    "clear": "docusaurus clear",
+    "dev": "docusaurus start --host 0.0.0.0",
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write",
+    "serve": "docusaurus serve --host 0.0.0.0",
+    "start": "docusaurus start"
+  },
+  "dependencies": {
+    "@docusaurus/core": "catalog:",
+    "@docusaurus/faster": "catalog:",
+    "@docusaurus/preset-classic": "catalog:",
+    "@mdx-js/react": "catalog:",
+    "prism-react-renderer": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "catalog:",
+    "@docusaurus/module-type-aliases": "catalog:",
+    "@docusaurus/tsconfig": "catalog:",
+    "@docusaurus/types": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}
