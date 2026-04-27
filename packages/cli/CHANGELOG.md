@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.19.0
+
+### Minor Changes
+
+- table heroui
+
 ## 0.18.0
 
 ### Minor Changes

@@ -1,5 +1,16 @@
 # @m5kdev/frontend
 
+## 0.19.0
+
+### Minor Changes
+
+- table heroui
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.19.0
+
 ## 0.18.0
 
 ### Minor Changes
