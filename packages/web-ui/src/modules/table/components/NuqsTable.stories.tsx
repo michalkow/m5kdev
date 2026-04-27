@@ -1,5 +1,6 @@
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { TableParams } from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
+import type { Meta, StoryObj } from "@storybook/react";
 import type {
   GroupingState,
   PaginationState,
@@ -7,8 +8,7 @@ import type {
   SortingState,
   Updater,
 } from "@tanstack/react-table";
-import type { Meta, StoryObj } from "@storybook/react";
-import { useCallback, useState, type ReactElement } from "react";
+import { type ReactElement, useCallback, useState } from "react";
 
 import { NuqsTable, type NuqsTableColumn } from "./NuqsTable";
 
@@ -194,4 +194,3 @@ export const GroupedByStatus: Story = {
     initialGrouping: ["status"],
   },
 };
-

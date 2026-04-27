@@ -238,5 +238,6 @@
   "organization.switcher.failedToSwitchOrganization": "Failed to switch organization",
   "organization.switcher.organizationSwitched": "Organization switched",
   "organization.switcher.retry": "Retry",
-  "impersonating.unknownUser": "Unknown user"
+  "impersonating.unknownUser": "Unknown user",
+  "search.placeholder": "Search..."
 }

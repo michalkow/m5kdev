@@ -1,4 +1,5 @@
-import { Button, Checkbox, Input, Popover } from "@heroui/react";
+import type { Selection, SortDescriptor } from "@heroui/react";
+import { Button, Checkbox, Input, Popover, SearchField, Table } from "@heroui/react";
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { FilterMethods } from "@m5kdev/commons/modules/table/filter.types";
 import type { TableParams } from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
@@ -12,19 +13,13 @@ import {
   getGroupedRowModel,
   getPaginationRowModel,
   type Table as ReactTable,
+  type RowSelectionState,
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
 import { ChevronDown, ChevronRight, ChevronUp, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../../components/ui/table";
+import { useTranslation } from "react-i18next";
 import { ColumnOrderAndVisibility } from "./ColumnOrderAndVisibility";
 import { TableFiltering } from "./TableFiltering";
 import { TableGroupBy } from "./TableGroupBy";
@@ -99,6 +94,26 @@ function applyVisibility(prev: ColumnItem[], visibility: VisibilityState): Colum
   }));
 }
 
+function sortingToSortDescriptor(
+  sorting: { id: string; desc: boolean }[]
+): SortDescriptor | undefined {
+  const first = sorting[0];
+  if (!first) return undefined;
+  return {
+    column: first.id,
+    direction: first.desc ? "descending" : "ascending",
+  };
+}
+
+function sortDescriptorToSorting(descriptor: SortDescriptor): { id: string; desc: boolean }[] {
+  return [
+    {
+      id: String(descriptor.column),
+      desc: descriptor.direction === "descending",
+    },
+  ];
+}
+
 export const NuqsTable = <T,>({
   data,
   total,
@@ -108,6 +123,7 @@ export const NuqsTable = <T,>({
   singleFilter = false,
   filterMethods,
 }: NuqsTableParams<T>) => {
+  const { t } = useTranslation();
   const columnIds = useMemo(() => columns.map((col) => String(col.id)), [columns]);
   // const columnsWithId = useMemo(() => {
   //   const idColumn: NuqsTableColumn<T> = {
@@ -135,15 +151,15 @@ export const NuqsTable = <T,>({
 
     // Merge saved layout with default layout
     const savedById = new Map<string, { order: number; visibility: boolean }>();
-    saved.order.forEach((id, index) => {
+    for (const [index, id] of saved.order.entries()) {
       savedById.set(id, { order: index, visibility: saved.visibility[id] ?? true });
-    });
+    }
 
     const merged: ColumnItem[] = [];
     const processedIds = new Set<string>();
 
     // Add columns in saved order
-    saved.order.forEach((id) => {
+    for (const id of saved.order) {
       const defaultCol = defaultLayout.find((col) => col.id === id);
       if (defaultCol) {
         merged.push({
@@ -152,14 +168,14 @@ export const NuqsTable = <T,>({
         });
         processedIds.add(id);
       }
-    });
+    }
 
     // Add any new columns that weren't in saved layout
-    defaultLayout.forEach((col) => {
+    for (const col of defaultLayout) {
       if (!processedIds.has(col.id)) {
         merged.push(col);
       }
-    });
+    }
 
     return merged;
   }, [columns, columnIds]);
@@ -322,33 +338,69 @@ export const NuqsTable = <T,>({
   const [isColumnsOpen, setIsColumnsOpen] = useState(false);
   const [isGroupByOpen, setIsGroupByOpen] = useState(false);
 
+  const sortDescriptor = useMemo(() => sortingToSortDescriptor(sorting ?? []), [sorting]);
+
+  const selectableRowIds = useMemo(() => {
+    return table
+      .getRowModel()
+      .rows.filter((row) => !row.getIsGrouped())
+      .map((row) => row.id);
+  }, [table]);
+
+  const selectedKeys = useMemo<Selection>(() => {
+    const state = rowSelection ?? {};
+    const allowed = new Set(selectableRowIds);
+    const keys = Object.entries(state)
+      .filter(([, isSelected]) => Boolean(isSelected))
+      .map(([rowId]) => rowId);
+    return new Set(keys.filter((id) => allowed.has(id)));
+  }, [rowSelection, selectableRowIds]);
+
+  const onSelectionChange = (keys: Selection) => {
+    if (!setRowSelection) return;
+
+    const next: RowSelectionState = {};
+    const allowed = new Set(selectableRowIds);
+
+    if (keys === "all") {
+      for (const id of selectableRowIds) next[id] = true;
+      setRowSelection(next);
+      return;
+    }
+
+    for (const id of keys) {
+      const rowId = String(id);
+      if (!allowed.has(rowId)) continue;
+      next[rowId] = true;
+    }
+    setRowSelection(next);
+  };
+
   return (
     <>
-      <div className="flex w-full flex-wrap items-center justify-between gap-2">
+      <div className="flex w-full flex-wrap items-center justify-between gap-2 mb-3">
         <div className="flex min-w-0 flex-1 items-center">
           {showGlobalSearch ? (
-            <div className="relative max-w-xs w-full">
-              <Search
-                className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
-              />
-              <Input
-                className="max-w-xs pl-8"
-                placeholder="Search…"
-                value={q ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setQ?.(v === "" ? null : v);
-                }}
-                aria-label="Search table"
-              />
-            </div>
+            <SearchField name="search">
+              <SearchField.Group>
+                <SearchField.SearchIcon />
+                <SearchField.Input
+                  className="w-[280px]"
+                  placeholder={t("web-ui:search.placeholder")}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setQ?.(v === "" ? null : v);
+                  }}
+                />
+                <SearchField.ClearButton />
+              </SearchField.Group>
+            </SearchField>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Popover isOpen={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
             <Popover.Trigger>
-              <Button variant="outline" size="sm">
+              <Button variant="tertiary" size="sm">
                 <div className="flex items-center gap-2">
                   Filters
                   <ChevronDown className="h-4 w-4" />
@@ -371,7 +423,7 @@ export const NuqsTable = <T,>({
           {groupableColumns.length > 0 && (
             <Popover isOpen={isGroupByOpen} onOpenChange={setIsGroupByOpen}>
               <Popover.Trigger>
-                <Button variant={hasGrouping ? "secondary" : "outline"} size="sm">
+                <Button variant={hasGrouping ? "secondary" : "tertiary"} size="sm">
                   <div className="flex items-center gap-2">
                     {hasGrouping
                       ? `Grouped by: ${grouping.map((id) => groupableColumns.find((c) => c.id === id)?.label ?? id).join(" → ")}`
@@ -398,7 +450,7 @@ export const NuqsTable = <T,>({
           )}
           <Popover isOpen={isColumnsOpen} onOpenChange={setIsColumnsOpen}>
             <Popover.Trigger>
-              <Button variant="outline" size="sm">
+              <Button variant="tertiary" size="sm">
                 <div className="flex items-center gap-2">
                   Columns
                   <ChevronDown className="h-4 w-4" />
@@ -418,113 +470,127 @@ export const NuqsTable = <T,>({
           </Popover>
         </div>
       </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>
-              <Checkbox
-                isSelected={table.getIsAllRowsSelected()}
-                onChange={(isSelected) => {
-                  table.toggleAllRowsSelected(Boolean(isSelected));
-                }}
-              />
-            </TableHead>
-            {table.getHeaderGroups()[0].headers.map((header) => (
-              <TableHead
-                onClick={
-                  header.column.getCanSort() ? header.column.getToggleSortingHandler() : undefined
-                }
-                key={header.id}
-              >
-                {flexRender(header.column.columnDef.header, header.getContext())}
-                {header.column.getCanSort() && (
-                  <>
-                    {header.column.getIsSorted() === "asc" && (
-                      <ChevronUp className="h-4 w-4 inline ml-1" />
-                    )}
-                    {header.column.getIsSorted() === "desc" && (
-                      <ChevronDown className="h-4 w-4 inline ml-1" />
-                    )}
-                  </>
-                )}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.map((row) => {
-            if (row.getIsGrouped()) {
-              return (
-                <TableRow
-                  key={row.id}
-                  className="bg-muted/40 font-medium cursor-pointer hover:bg-muted/60"
-                  onClick={() => row.toggleExpanded()}
+      <Table variant="primary">
+        <Table.ScrollContainer>
+          <Table.Content
+            aria-label="Table"
+            className="min-w-[600px]"
+            sortDescriptor={sortDescriptor}
+            onSortChange={(descriptor) => {
+              setSorting?.(sortDescriptorToSorting(descriptor));
+            }}
+            selectionMode="multiple"
+            selectedKeys={selectedKeys}
+            onSelectionChange={onSelectionChange}
+          >
+            <Table.Header>
+              <Table.Column className="pr-0">
+                <Checkbox aria-label="Select all" slot="selection">
+                  <Checkbox.Control>
+                    <Checkbox.Indicator />
+                  </Checkbox.Control>
+                </Checkbox>
+              </Table.Column>
+              {table.getHeaderGroups()[0]?.headers.map((header) => (
+                <Table.Column
+                  key={header.id}
+                  id={header.column.id}
+                  allowsSorting={header.column.getCanSort()}
+                  isRowHeader={false}
                 >
-                  <TableCell />
-                  {row.getVisibleCells().map((cell) => {
-                    if (cell.getIsGrouped()) {
-                      return (
-                        <TableCell key={cell.id}>
-                          <span className="flex items-center gap-1.5">
-                            {row.getIsExpanded() ? (
-                              <ChevronDown className="h-4 w-4 shrink-0" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 shrink-0" />
-                            )}
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            <span className="text-muted-foreground font-normal ml-1">
-                              ({row.subRows.length})
-                            </span>
-                          </span>
-                        </TableCell>
-                      );
-                    }
-                    if (cell.getIsAggregated()) {
-                      return (
-                        <TableCell key={cell.id}>
-                          {flexRender(
-                            cell.column.columnDef.aggregatedCell ?? cell.column.columnDef.cell,
-                            cell.getContext()
-                          )}
-                        </TableCell>
-                      );
-                    }
-                    return <TableCell key={cell.id} />;
-                  })}
-                </TableRow>
-              );
-            }
+                  {({ sortDirection }) => (
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate">
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                      </span>
+                      {sortDirection === "ascending" ? (
+                        <ChevronUp className="h-4 w-4 shrink-0" />
+                      ) : sortDirection === "descending" ? (
+                        <ChevronDown className="h-4 w-4 shrink-0" />
+                      ) : null}
+                    </span>
+                  )}
+                </Table.Column>
+              ))}
+            </Table.Header>
+            <Table.Body>
+              {table.getRowModel().rows.map((row) => {
+                if (row.getIsGrouped()) {
+                  return (
+                    <Table.Row
+                      key={row.id}
+                      id={row.id}
+                      className="bg-muted/40 font-medium cursor-pointer hover:bg-muted/60"
+                      onPress={() => row.toggleExpanded()}
+                    >
+                      <Table.Cell className="pr-0" />
+                      {row.getVisibleCells().map((cell) => {
+                        if (cell.getIsGrouped()) {
+                          return (
+                            <Table.Cell key={cell.id}>
+                              <span className="flex items-center gap-1.5">
+                                {row.getIsExpanded() ? (
+                                  <ChevronDown className="h-4 w-4 shrink-0" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 shrink-0" />
+                                )}
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                <span className="text-muted-foreground font-normal ml-1">
+                                  ({row.subRows.length})
+                                </span>
+                              </span>
+                            </Table.Cell>
+                          );
+                        }
+                        if (cell.getIsAggregated()) {
+                          return (
+                            <Table.Cell key={cell.id}>
+                              {flexRender(
+                                cell.column.columnDef.aggregatedCell ?? cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
+                            </Table.Cell>
+                          );
+                        }
+                        return <Table.Cell key={cell.id} />;
+                      })}
+                    </Table.Row>
+                  );
+                }
 
-            return (
-              <TableRow key={row.id}>
-                <TableCell>
-                  <Checkbox
-                    isSelected={row.getIsSelected()}
-                    onChange={(isSelected) => {
-                      row.toggleSelected(Boolean(isSelected));
-                    }}
-                  />
-                </TableCell>
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            );
-          })}
-        </TableBody>
+                return (
+                  <Table.Row key={row.id} id={row.id}>
+                    <Table.Cell className="pr-0">
+                      <Checkbox aria-label="Select row" slot="selection" variant="secondary">
+                        <Checkbox.Control>
+                          <Checkbox.Indicator />
+                        </Checkbox.Control>
+                      </Checkbox>
+                    </Table.Cell>
+                    {row.getVisibleCells().map((cell) => (
+                      <Table.Cell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </Table.Cell>
+                    ))}
+                  </Table.Row>
+                );
+              })}
+            </Table.Body>
+          </Table.Content>
+        </Table.ScrollContainer>
+        <Table.Footer>
+          <TablePagination
+            pageCount={
+              isGrouped
+                ? Math.ceil(table.getPrePaginationRowModel().rows.length / limit) || 1
+                : serverPageCount
+            }
+            page={isGrouped ? table.getState().pagination.pageIndex + 1 : page}
+            limit={limit}
+            setPagination={setPagination}
+          />
+        </Table.Footer>
       </Table>
-      <TablePagination
-        pageCount={
-          isGrouped
-            ? Math.ceil(table.getPrePaginationRowModel().rows.length / limit) || 1
-            : serverPageCount
-        }
-        page={isGrouped ? table.getState().pagination.pageIndex + 1 : page}
-        limit={limit}
-        setPagination={setPagination}
-      />
     </>
   );
 };
