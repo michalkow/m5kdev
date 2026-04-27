@@ -7,10 +7,10 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { Button } from "@heroui/react";
+import type { ColumnOrderState, VisibilityState } from "@tanstack/react-table";
 import { EyeIcon, EyeOffIcon, GripVertical } from "lucide-react";
 import { useCallback, useState } from "react";
-import type { ColumnOrderState, VisibilityState } from "@tanstack/react-table";
-import { Button } from "../../../components/ui/button";
 import type { ColumnItem } from "./table.types";
 
 interface ColumnOrderAndVisibilityItemProps {
@@ -42,7 +42,8 @@ const ColumnOrderAndVisibilityItem = ({
         </div>
         <Button
           variant="ghost"
-          size="icon"
+          isIconOnly
+          size="sm"
           onClick={() => onChangeVisibilityState(String(column.id))}
         >
           {column.visibility ? <EyeIcon className="h-4 w-4" /> : <EyeOffIcon className="h-4 w-4" />}
@@ -120,8 +121,9 @@ export const ColumnOrderAndVisibility = ({
           ))}
         </SortableContext>
       </DndContext>
-      <Button onClick={onSubmit}>Apply</Button>
+      <Button fullWidth size="sm" onPress={onSubmit}>
+        Apply
+      </Button>
     </div>
   );
 };
-

@@ -1,4 +1,4 @@
-import { Checkbox, Input, Popover } from "@heroui/react";
+import { Button, Checkbox, Input, Popover } from "@heroui/react";
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { FilterMethods } from "@m5kdev/commons/modules/table/filter.types";
 import type { TableParams } from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
@@ -17,7 +17,6 @@ import {
 } from "@tanstack/react-table";
 import { ChevronDown, ChevronRight, ChevronUp, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "../../../components/ui/button";
 import {
   Table,
   TableBody,
@@ -357,14 +356,16 @@ export const NuqsTable = <T,>({
               </Button>
             </Popover.Trigger>
             <Popover.Content placement="bottom">
-              <TableFiltering
-                columns={filterableColumns}
-                onFiltersChange={onFiltersChange}
-                filters={filters ?? []}
-                onClose={() => setIsFiltersOpen(false)}
-                singleFilter={singleFilter}
-                filterMethods={filterMethods}
-              />
+              <Popover.Dialog>
+                <TableFiltering
+                  columns={filterableColumns}
+                  onFiltersChange={onFiltersChange}
+                  filters={filters ?? []}
+                  onClose={() => setIsFiltersOpen(false)}
+                  singleFilter={singleFilter}
+                  filterMethods={filterMethods}
+                />
+              </Popover.Dialog>
             </Popover.Content>
           </Popover>
           {groupableColumns.length > 0 && (
@@ -380,16 +381,18 @@ export const NuqsTable = <T,>({
                 </Button>
               </Popover.Trigger>
               <Popover.Content placement="bottom">
-                <TableGroupBy
-                  columns={groupableColumns}
-                  activeGrouping={grouping}
-                  onGroupingChange={(columnIds) => {
-                    setGrouping(columnIds);
-                    setExpanded({});
-                    setPagination?.({ pageIndex: 0, pageSize: limit });
-                  }}
-                  onClose={() => setIsGroupByOpen(false)}
-                />
+                <Popover.Dialog>
+                  <TableGroupBy
+                    columns={groupableColumns}
+                    activeGrouping={grouping}
+                    onGroupingChange={(columnIds) => {
+                      setGrouping(columnIds);
+                      setExpanded({});
+                      setPagination?.({ pageIndex: 0, pageSize: limit });
+                    }}
+                    onClose={() => setIsGroupByOpen(false)}
+                  />
+                </Popover.Dialog>
               </Popover.Content>
             </Popover>
           )}
@@ -403,12 +406,14 @@ export const NuqsTable = <T,>({
               </Button>
             </Popover.Trigger>
             <Popover.Content placement="bottom">
-              <ColumnOrderAndVisibility
-                layout={layout}
-                onChangeOrder={onChangeOrder}
-                onChangeVisibility={onChangeVisibility}
-                onClose={() => setIsColumnsOpen(false)}
-              />
+              <Popover.Dialog>
+                <ColumnOrderAndVisibility
+                  layout={layout}
+                  onChangeOrder={onChangeOrder}
+                  onChangeVisibility={onChangeVisibility}
+                  onClose={() => setIsColumnsOpen(false)}
+                />
+              </Popover.Dialog>
             </Popover.Content>
           </Popover>
         </div>

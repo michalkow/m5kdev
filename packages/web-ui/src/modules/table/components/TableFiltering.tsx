@@ -1,6 +1,4 @@
-import type { DateValue } from "@react-types/calendar";
-import type { Key, RangeValue, Selection } from "@react-types/shared";
-import { Input, ListBox, Select } from "@heroui/react";
+import { Button, Input, ListBox, Select } from "@heroui/react";
 import { getLocalTimeZone, today } from "@internationalized/date";
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import type {
@@ -9,10 +7,12 @@ import type {
   FilterMethod,
   FilterMethods,
 } from "@m5kdev/commons/modules/table/filter.types";
+import type { DateValue } from "@react-types/calendar";
+import type { Key, RangeValue, Selection } from "@react-types/shared";
 import { PlusIcon, XIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button } from "../../../components/ui/button";
+
 import {
   type FilterValue,
   type HeroUIFilter,
@@ -91,11 +91,7 @@ const componentForFilterMethod: Record<ComponentForFilterMethod, ComponentRender
   select: (value, onChange, options = []) => {
     const selection = (value as Selection | undefined) ?? new Set<string>();
     const selectedKey =
-      selection === "all"
-        ? undefined
-        : selection.size > 0
-          ? String([...selection][0])
-          : undefined;
+      selection === "all" ? undefined : selection.size > 0 ? String([...selection][0]) : undefined;
     return (
       <Select
         aria-label="Select Value"
@@ -130,11 +126,7 @@ const componentForFilterMethod: Record<ComponentForFilterMethod, ComponentRender
   },
   multiSelect: (value, onChange, options = []) => {
     const selectedKeys: Selection =
-      value === "all"
-        ? "all"
-        : value instanceof Set
-          ? (value as Set<Key>)
-          : new Set<Key>();
+      value === "all" ? "all" : value instanceof Set ? (value as Set<Key>) : new Set<Key>();
     const selectValue: readonly Key[] =
       selectedKeys === "all" ? options.map((o) => o.value) : [...selectedKeys];
     return (
@@ -427,12 +419,14 @@ export const TableFiltering = ({
         );
       })}
       {!singleFilter && (
-        <Button variant="outline" size="sm" onClick={addFilter}>
+        <Button fullWidth variant="ghost" size="sm" onPress={addFilter}>
           <PlusIcon className="h-4 w-4" />
           Add Filter
         </Button>
       )}
-      <Button onClick={applyFilters}>{singleFilter ? "Apply Filter" : "Apply Filters"}</Button>
+      <Button fullWidth size="sm" onPress={applyFilters}>
+        {singleFilter ? "Apply Filter" : "Apply Filters"}
+      </Button>
     </div>
   );
 };

@@ -1,5 +1,5 @@
+import { Button, Checkbox, Label } from "@heroui/react";
 import { useState } from "react";
-import { Button } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
 
 interface TableGroupByColumn {
@@ -37,36 +37,33 @@ export const TableGroupBy = ({
 
   return (
     <div className="flex flex-col gap-2 p-1 min-w-[180px]">
-      <div className="flex flex-col gap-0.5">
+      <div className="flex flex-col gap-1">
         {columns.map((col) => (
-          <button
+          <Checkbox
+            variant="secondary"
             key={col.id}
-            type="button"
-            className={cn(
-              "text-left px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors flex items-center gap-2",
-              selected.includes(col.id) && "bg-muted font-medium"
-            )}
-            onClick={() => toggle(col.id)}
+            id={`table-group-by-${col.id}`}
+            isSelected={selected.includes(col.id)}
+            onChange={() => toggle(col.id)}
           >
-            <span
-              className={cn(
-                "h-4 w-4 rounded border border-muted-foreground/40 flex items-center justify-center shrink-0 text-xs",
-                selected.includes(col.id) && "bg-primary border-primary text-primary-foreground"
+            <Checkbox.Control>
+              <Checkbox.Indicator />
+            </Checkbox.Control>
+            <Checkbox.Content>
+              <Label htmlFor={`table-group-by-${col.id}`} className="truncate">
+                {col.label}
+              </Label>
+              {selected.includes(col.id) && selected.length > 1 && (
+                <span className="text-muted-foreground text-xs ml-auto">
+                  {selected.indexOf(col.id) + 1}
+                </span>
               )}
-            >
-              {selected.includes(col.id) ? "✓" : ""}
-            </span>
-            {col.label}
-            {selected.includes(col.id) && selected.length > 1 && (
-              <span className="text-muted-foreground text-xs ml-auto">
-                {selected.indexOf(col.id) + 1}
-              </span>
-            )}
-          </button>
+            </Checkbox.Content>
+          </Checkbox>
         ))}
       </div>
-      <div className="flex gap-1.5">
-        <Button size="sm" variant="outline" onClick={onClear} className="flex-1">
+      <div className="flex gap-2">
+        <Button size="sm" variant="tertiary" onClick={onClear} className="flex-1">
           Clear
         </Button>
         <Button size="sm" onClick={onApply} className="flex-1">
