@@ -243,5 +243,6 @@
   "table.pagination.summaryRange": "{{start}} to {{end}} of {{total}} results",
   "table.pagination.summaryPage": "Page {{page}} of {{pageCount}}",
   "table.pagination.previous": "Prev",
-  "table.pagination.next": "Next"
+  "table.pagination.next": "Next",
+  "table.noResults": "No results found"
 }

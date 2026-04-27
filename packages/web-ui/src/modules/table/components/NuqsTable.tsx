@@ -1,5 +1,5 @@
 import type { Selection, SortDescriptor } from "@heroui/react";
-import { Button, Checkbox, Popover, SearchField, Table } from "@heroui/react";
+import { Button, Checkbox, EmptyState, Popover, SearchField, Table } from "@heroui/react";
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { FilterMethods } from "@m5kdev/commons/modules/table/filter.types";
 import type { TableParams } from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
@@ -17,7 +17,7 @@ import {
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, DatabaseIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ColumnOrderAndVisibility } from "./ColumnOrderAndVisibility";
@@ -378,7 +378,7 @@ export const NuqsTable = <T,>({
 
   return (
     <>
-      <div className="flex w-full flex-wrap items-center justify-between gap-2 mb-3">
+      <div className="flex w-full flex-wrap items-center justify-between gap-2 mb-2">
         <div className="flex min-w-0 flex-1 items-center">
           {showGlobalSearch ? (
             <SearchField name="search" variant="secondary">
@@ -513,7 +513,14 @@ export const NuqsTable = <T,>({
                 </Table.Column>
               ))}
             </Table.Header>
-            <Table.Body>
+            <Table.Body
+              renderEmptyState={() => (
+                <EmptyState className="flex h-full w-full flex-col items-center justify-center gap-4 text-center py-10">
+                  <DatabaseIcon className="size-6 text-muted" />
+                  <span className="text-sm text-muted">{t("web-ui:table.noResults")}</span>
+                </EmptyState>
+              )}
+            >
               {table.getRowModel().rows.map((row) => {
                 if (row.getIsGrouped()) {
                   return (

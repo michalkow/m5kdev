@@ -116,14 +116,19 @@ interface NuqsTableStoryProps {
   readonly initialQ?: string | null;
   readonly initialGrouping?: GroupingState;
   readonly total?: number;
+  /** When true, renders the table with no rows (empty state). */
+  readonly empty?: boolean;
 }
 
 function NuqsTableStory({
   showGlobalSearch = false,
   initialQ = null,
   initialGrouping = [],
-  total = DATA.length,
+  total,
+  empty = false,
 }: NuqsTableStoryProps): ReactElement {
+  const rows = empty ? ([] as PersonRow[]) : DATA;
+  const resolvedTotal = empty ? 0 : (total ?? DATA.length);
   const [q, setQ] = useState<string | null>(initialQ);
   const [filters, setFilters] = useState<QueryFilters>([]);
   const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }]);
@@ -160,8 +165,8 @@ function NuqsTableStory({
     <div className="bg-background text-foreground">
       <div className="p-6">
         <NuqsTable<PersonRow>
-          data={DATA}
-          total={total}
+          data={rows}
+          total={resolvedTotal}
           columns={COLUMNS}
           tableProps={tableProps}
           showGlobalSearch={showGlobalSearch}
@@ -192,5 +197,11 @@ export const WithGlobalSearch: Story = {
 export const GroupedByStatus: Story = {
   args: {
     initialGrouping: ["status"],
+  },
+};
+
+export const Empty: Story = {
+  args: {
+    empty: true,
   },
 };
