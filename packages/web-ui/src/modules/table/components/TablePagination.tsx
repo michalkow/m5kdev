@@ -1,18 +1,15 @@
+import { Pagination } from "@heroui/react";
 import type { TableProps } from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
-import { useEffect, useState } from "react";
-import { Input } from "../../../components/ui/input";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationNext,
-  PaginationPrevious,
-} from "../../../components/ui/pagination";
+import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
 interface TablePaginationProps {
   pageCount: number;
   page: TableProps["page"];
   limit: TableProps["limit"];
   setPagination: TableProps["setPagination"];
+  /** When set, summary matches HeroUI Table footer pattern: “start–end of total”. */
+  total?: number;
 }
 
 export const TablePagination = ({
@@ -20,64 +17,74 @@ export const TablePagination = ({
   page = 1,
   limit = 10,
   setPagination,
+  total,
 }: TablePaginationProps) => {
-  const [inputValue, setInputValue] = useState(String(page));
+  const { t } = useTranslation("web-ui");
+  const safePageCount = Math.max(1, pageCount);
+  const pages = useMemo(
+    () => Array.from({ length: safePageCount }, (_, i) => i + 1),
+    [safePageCount]
+  );
 
-  useEffect(() => {
-    setInputValue(String(page));
-  }, [page]);
+  const isFirstPage = page <= 1;
+  const isLastPage = page >= safePageCount;
 
-  const commitPage = () => {
-    const newPage = Number(inputValue);
-    if (Number.isFinite(newPage) && newPage >= 1 && newPage <= pageCount) {
-      setPagination?.({ pageIndex: newPage - 1, pageSize: limit });
-    } else {
-      setInputValue(String(page));
+  const start = (page - 1) * limit + 1;
+  const end = total !== undefined ? Math.min(page * limit, total) : undefined;
+
+  const summary =
+    total !== undefined && end !== undefined
+      ? t("table.pagination.summaryRange", { start, end, total })
+      : t("table.pagination.summaryPage", { page, pageCount: safePageCount });
+
+  /** Avoid hundreds of page links when `pageCount` is large. */
+  const MAX_PAGE_LINKS = 12;
+  const pageLinks = useMemo(() => {
+    if (safePageCount <= MAX_PAGE_LINKS) {
+      return pages;
     }
+    const windowSize = 5;
+    const half = Math.floor(windowSize / 2);
+    let from = Math.max(1, page - half);
+    const to = Math.min(safePageCount, from + windowSize - 1);
+    from = Math.max(1, to - windowSize + 1);
+    return Array.from({ length: to - from + 1 }, (_, i) => from + i);
+  }, [pages, page, safePageCount]);
+
+  const goToPage = (newPage: number) => {
+    setPagination?.({ pageIndex: newPage - 1, pageSize: limit });
   };
 
-  const isFirstPage = page === 1;
-  const isLastPage = page >= pageCount;
   return (
-    <Pagination>
-      <PaginationContent>
-        <PaginationPrevious
-          isActive={!isFirstPage}
-          aria-disabled={isFirstPage}
-          className={isFirstPage ? "pointer-events-none opacity-50" : undefined}
-          onClick={() => {
-            if (!isFirstPage) {
-              setPagination?.({ pageIndex: page - 2, pageSize: limit });
-            }
-          }}
-        />
-        <div className="flex items-center gap-1.5">
-          <Input
-            type="number"
-            value={inputValue}
-            min={1}
-            max={pageCount}
-            onChange={(e) => setInputValue(e.target.value)}
-            onBlur={commitPage}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                commitPage();
-              }
-            }}
-          />
-          <span className="text-sm text-muted-foreground whitespace-nowrap">/ {pageCount}</span>
-        </div>
-        <PaginationNext
-          isActive={!isLastPage}
-          aria-disabled={isLastPage}
-          className={isLastPage ? "pointer-events-none opacity-50" : undefined}
-          onClick={() => {
-            if (!isLastPage) {
-              setPagination?.({ pageIndex: page, pageSize: limit });
-            }
-          }}
-        />
-      </PaginationContent>
+    <Pagination size="sm">
+      <Pagination.Summary>{summary}</Pagination.Summary>
+      <Pagination.Content>
+        <Pagination.Item>
+          <Pagination.Previous
+            isDisabled={isFirstPage}
+            onPress={() => goToPage(Math.max(1, page - 1))}
+          >
+            <Pagination.PreviousIcon />
+            {t("table.pagination.previous")}
+          </Pagination.Previous>
+        </Pagination.Item>
+        {pageLinks.map((p) => (
+          <Pagination.Item key={p}>
+            <Pagination.Link isActive={p === page} onPress={() => goToPage(p)}>
+              {p}
+            </Pagination.Link>
+          </Pagination.Item>
+        ))}
+        <Pagination.Item>
+          <Pagination.Next
+            isDisabled={isLastPage}
+            onPress={() => goToPage(Math.min(safePageCount, page + 1))}
+          >
+            {t("table.pagination.next")}
+            <Pagination.NextIcon />
+          </Pagination.Next>
+        </Pagination.Item>
+      </Pagination.Content>
     </Pagination>
   );
 };

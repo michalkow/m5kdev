@@ -239,5 +239,9 @@
   "organization.switcher.organizationSwitched": "Organization switched",
   "organization.switcher.retry": "Retry",
   "impersonating.unknownUser": "Unknown user",
-  "search.placeholder": "Search..."
+  "search.placeholder": "Search...",
+  "table.pagination.summaryRange": "{{start}} to {{end}} of {{total}} results",
+  "table.pagination.summaryPage": "Page {{page}} of {{pageCount}}",
+  "table.pagination.previous": "Prev",
+  "table.pagination.next": "Next"
 }

@@ -1,5 +1,5 @@
 import type { Selection, SortDescriptor } from "@heroui/react";
-import { Button, Checkbox, Input, Popover, SearchField, Table } from "@heroui/react";
+import { Button, Checkbox, Popover, SearchField, Table } from "@heroui/react";
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { FilterMethods } from "@m5kdev/commons/modules/table/filter.types";
 import type { TableParams } from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
@@ -17,7 +17,7 @@ import {
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { ChevronDown, ChevronRight, ChevronUp, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ColumnOrderAndVisibility } from "./ColumnOrderAndVisibility";
@@ -381,7 +381,7 @@ export const NuqsTable = <T,>({
       <div className="flex w-full flex-wrap items-center justify-between gap-2 mb-3">
         <div className="flex min-w-0 flex-1 items-center">
           {showGlobalSearch ? (
-            <SearchField name="search">
+            <SearchField name="search" variant="secondary">
               <SearchField.Group>
                 <SearchField.SearchIcon />
                 <SearchField.Input
@@ -588,6 +588,7 @@ export const NuqsTable = <T,>({
             page={isGrouped ? table.getState().pagination.pageIndex + 1 : page}
             limit={limit}
             setPagination={setPagination}
+            total={isGrouped ? undefined : total}
           />
         </Table.Footer>
       </Table>
