@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.19.2
+
+### Patch Changes
+
+- table props
+- Updated dependencies
+  - @m5kdev/commons@0.19.2
+  - @m5kdev/config@0.19.2
+
 ## 0.19.1
 
 ### Patch Changes

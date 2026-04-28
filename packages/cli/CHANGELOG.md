@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.19.2
+
+### Patch Changes
+
+- table props
+
 ## 0.19.1
 
 ### Patch Changes

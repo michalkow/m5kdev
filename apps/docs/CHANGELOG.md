@@ -1,5 +1,11 @@
 # @m5kdev/docs
 
+## 0.1.2
+
+### Patch Changes
+
+- table props
+
 ## 0.1.1
 
 ### Patch Changes
