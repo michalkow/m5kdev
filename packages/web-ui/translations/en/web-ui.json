@@ -41,6 +41,8 @@
   "image.crop.error": "Error cropping image:",
   "upload.errors.invalidType": "Please select a valid image file (JPG, PNG, or WebP)",
   "upload.errors.tooLarge": "File size must be less than 5MB",
+  "profile.name": "Name",
+  "profile.saveChanges": "Save Changes",
   "profile.updated": "Profile updated",
   "profile.updateDescription": "Your profile has been updated.",
   "profile.error": "Error",

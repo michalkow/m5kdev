@@ -69,7 +69,7 @@ export function ProfileEditor({ initialValues, onSubmit }: ProfileEditorProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>
-                    <Label>Name</Label>
+                    <Label>{t("web-ui:profile.name")}</Label>
                   </FormLabel>
                   <FormControl>
                     <TextField>
@@ -82,7 +82,7 @@ export function ProfileEditor({ initialValues, onSubmit }: ProfileEditorProps) {
             />
           </div>
 
-          <Button type="submit">Save Changes</Button>
+          <Button type="submit">{t("web-ui:profile.saveChanges")}</Button>
         </form>
       </Form>
     </div>
