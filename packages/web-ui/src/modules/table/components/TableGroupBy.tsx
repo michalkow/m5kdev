@@ -1,6 +1,5 @@
-import { Button, Checkbox, Label } from "@heroui/react";
+import { Button, Label, Radio, RadioGroup } from "@heroui/react";
 import { useState } from "react";
-import { cn } from "../../../lib/utils";
 
 interface TableGroupByColumn {
   id: string;
@@ -20,53 +19,36 @@ export const TableGroupBy = ({
   onGroupingChange,
   onClose,
 }: TableGroupByProps) => {
-  const [selected, setSelected] = useState<string[]>(activeGrouping);
-
-  const toggle = (id: string) => {
-    setSelected((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
-  };
+  const [selected, setSelected] = useState<string>(activeGrouping[0] ?? "");
 
   const onApply = () => {
-    onGroupingChange(selected);
+    onGroupingChange(selected ? [selected] : []);
     onClose();
   };
 
   const onClear = () => {
-    setSelected([]);
+    setSelected("");
   };
 
   return (
-    <div className="flex flex-col gap-2 p-1 min-w-[180px]">
-      <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-2  min-w-[180px]">
+      <RadioGroup value={selected} onChange={setSelected} variant="secondary">
         {columns.map((col) => (
-          <Checkbox
-            variant="secondary"
-            key={col.id}
-            id={`table-group-by-${col.id}`}
-            isSelected={selected.includes(col.id)}
-            onChange={() => toggle(col.id)}
-          >
-            <Checkbox.Control>
-              <Checkbox.Indicator />
-            </Checkbox.Control>
-            <Checkbox.Content>
-              <Label htmlFor={`table-group-by-${col.id}`} className="truncate">
-                {col.label}
-              </Label>
-              {selected.includes(col.id) && selected.length > 1 && (
-                <span className="text-muted-foreground text-xs ml-auto">
-                  {selected.indexOf(col.id) + 1}
-                </span>
-              )}
-            </Checkbox.Content>
-          </Checkbox>
+          <Radio key={col.id} value={col.id}>
+            <Radio.Control>
+              <Radio.Indicator />
+            </Radio.Control>
+            <Radio.Content>
+              <Label>{col.label}</Label>
+            </Radio.Content>
+          </Radio>
         ))}
-      </div>
+      </RadioGroup>
       <div className="flex gap-2">
-        <Button size="sm" variant="tertiary" onClick={onClear} className="flex-1">
+        <Button size="sm" variant="tertiary" onPress={onClear} className="flex-1">
           Clear
         </Button>
-        <Button size="sm" onClick={onApply} className="flex-1">
+        <Button size="sm" onPress={onApply} className="flex-1">
           Apply
         </Button>
       </div>

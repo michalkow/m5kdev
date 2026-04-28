@@ -96,7 +96,7 @@ export const ColumnOrderAndVisibility = ({
   }, [activeLayout, onChangeOrder, onChangeVisibility, onClose]);
 
   return (
-    <div className="flex flex-col gap-2 p-1 min-w-[200px]">
+    <div className="flex flex-col gap-2 min-w-[200px]">
       <DndContext
         onDragEnd={({ active, over }) => {
           if (over && active.id !== over?.id) {

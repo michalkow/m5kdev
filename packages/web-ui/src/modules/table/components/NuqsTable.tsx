@@ -6,14 +6,13 @@ import type { TableParams } from "@m5kdev/frontend/modules/table/hooks/useNuqsTa
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   type ColumnOrderState,
-  type ExpandedState,
   flexRender,
   getCoreRowModel,
-  getExpandedRowModel,
   getGroupedRowModel,
   getPaginationRowModel,
   type Table as ReactTable,
   type RowSelectionState,
+  type Row as TanStackRow,
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
@@ -21,6 +20,7 @@ import { ChevronDown, ChevronRight, ChevronUp, DatabaseIcon } from "lucide-react
 import type { ComponentType } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { cn } from "../../../lib/utils";
 import { ColumnOrderAndVisibility } from "./ColumnOrderAndVisibility";
 import { TableFiltering } from "./TableFiltering";
 import { TableGroupBy } from "./TableGroupBy";
@@ -249,7 +249,7 @@ export const NuqsTable = <T,>({
   }, [showGlobalSearch, q, limit, setPagination]);
 
   const isGrouped = grouping.length > 0;
-  const [expanded, setExpanded] = useState<ExpandedState>({});
+  const [expandedKeys, setExpandedKeys] = useState<Selection>(() => new Set());
 
   // Redirect back if we're on an empty page (past the last page)
   useEffect(() => {
@@ -272,20 +272,17 @@ export const NuqsTable = <T,>({
     getRowId: (row) => String((row as { id: string | number }).id),
     manualSorting: true,
     manualPagination: !isGrouped,
-    state: { pagination, sorting, rowSelection, columnOrder, columnVisibility, grouping, expanded },
+    state: { pagination, sorting, rowSelection, columnOrder, columnVisibility, grouping },
     ...(isGrouped ? {} : { pageCount: serverPageCount }),
     manualFiltering: true,
     enableGrouping: true,
     groupedColumnMode: false,
-    autoResetExpanded: false,
     onSortingChange: setSorting,
     onPaginationChange: setPagination,
     onRowSelectionChange: setRowSelection,
     onGroupingChange: setGrouping,
-    onExpandedChange: setExpanded,
     getCoreRowModel: getCoreRowModel(),
     getGroupedRowModel: getGroupedRowModel(),
-    getExpandedRowModel: getExpandedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onColumnOrderChange: (updater) => {
       setLayout((prev) =>
@@ -362,12 +359,39 @@ export const NuqsTable = <T,>({
 
   const isRowSelectionEnabled = Boolean(BulkActions);
 
-  const selectableRowIds = useMemo(() => {
-    return table
-      .getRowModel()
-      .rows.filter((row) => !row.getIsGrouped())
-      .map((row) => row.id);
+  const visibleLeafColumnsRaw = useMemo(() => table.getVisibleLeafColumns(), [table]);
+
+  const visibleLeafColumns = useMemo(() => {
+    if (!isGrouped || grouping.length === 0) return visibleLeafColumnsRaw;
+    const groupedId = grouping[0];
+    const grouped = visibleLeafColumnsRaw.filter((col) => col.id === groupedId);
+    const rest = visibleLeafColumnsRaw.filter((col) => col.id !== groupedId);
+    return [...grouped, ...rest];
+  }, [visibleLeafColumnsRaw, isGrouped, grouping]);
+
+  const leafHeadersById = useMemo(() => {
+    const groups = table.getHeaderGroups();
+    const leaf = groups[groups.length - 1];
+    const entries = (leaf?.headers ?? []).map((h) => [String(h.column.id), h] as const);
+    return new Map(entries);
   }, [table]);
+
+  const allRows = useMemo(() => {
+    const flatten = (rows: readonly TanStackRow<T>[]): TanStackRow<T>[] => {
+      const out: TanStackRow<T>[] = [];
+      for (const row of rows) {
+        out.push(row);
+        if (row.subRows.length > 0) out.push(...flatten(row.subRows));
+      }
+      return out;
+    };
+
+    return flatten(table.getPrePaginationRowModel().rows);
+  }, [table]);
+
+  const selectableRowIds = useMemo(() => {
+    return allRows.filter((row) => !row.getIsGrouped()).map((row) => row.id);
+  }, [allRows]);
 
   const selectedKeys = useMemo<Selection>(() => {
     if (!isRowSelectionEnabled) return new Set();
@@ -388,11 +412,126 @@ export const NuqsTable = <T,>({
   const selectedRows = useMemo(() => {
     if (!isRowSelectionEnabled) return [];
     const selectedIdSet = new Set(selectedRowIds);
-    return table
-      .getRowModel()
-      .rows.filter((row) => !row.getIsGrouped() && selectedIdSet.has(row.id))
+    return allRows
+      .filter((row) => !row.getIsGrouped() && selectedIdSet.has(row.id))
       .map((row) => row.original);
-  }, [table, selectedRowIds, isRowSelectionEnabled]);
+  }, [allRows, selectedRowIds, isRowSelectionEnabled]);
+
+  const treeColumnId = useMemo(() => {
+    if (isGrouped && grouping.length > 0) return grouping[0];
+    const first = table.getVisibleLeafColumns()[0] ?? table.getAllLeafColumns()[0];
+    return first?.id ? String(first.id) : undefined;
+  }, [table, isGrouped, grouping]);
+
+  const toggleExpanded = (rowId: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(
+        prev === "all"
+          ? table.getPaginationRowModel().rows.map((r) => r.id)
+          : (prev as Iterable<string>)
+      );
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      return next;
+    });
+  };
+
+  const renderGroupHeaderRow = (groupRow: TanStackRow<T>) => {
+    const isExpanded = expandedKeys === "all" || (expandedKeys as Set<string>).has(groupRow.id);
+    const expandedCellClass = isExpanded ? "bg-accent-soft" : undefined;
+
+    return (
+      <Table.Row
+        key={groupRow.id}
+        id={groupRow.id}
+        textValue={String(groupRow.groupingValue ?? groupRow.id)}
+        className="font-medium"
+      >
+        {isRowSelectionEnabled ? (
+          <Table.Cell className={cn("pr-0", expandedCellClass)} />
+        ) : null}
+        {visibleLeafColumns.map((column) => {
+          const cell = groupRow.getAllCells().find((c) => c.column.id === column.id);
+          const isTreeCell = String(column.id) === treeColumnId;
+
+          if (!cell)
+            return (
+              <Table.Cell
+                key={`${groupRow.id}__${column.id}`}
+                className={expandedCellClass}
+              />
+            );
+
+          const cellContent = cell.getIsGrouped()
+            ? flexRender(cell.column.columnDef.cell, cell.getContext())
+            : cell.getIsAggregated()
+              ? flexRender(
+                  cell.column.columnDef.aggregatedCell ?? cell.column.columnDef.cell,
+                  cell.getContext()
+                )
+              : cell.getIsPlaceholder()
+                ? null
+                : flexRender(cell.column.columnDef.cell, cell.getContext());
+
+          if (!isTreeCell)
+            return (
+              <Table.Cell key={cell.id} className={expandedCellClass}>
+                {cellContent}
+              </Table.Cell>
+            );
+
+          return (
+            <Table.Cell
+              key={cell.id}
+              textValue={String(cellContent ?? "")}
+              className={expandedCellClass}
+            >
+              <span className="flex items-center gap-1.5">
+                <Button
+                  isIconOnly
+                  aria-label="Toggle group"
+                  size="sm"
+                  variant="ghost"
+                  onPress={() => toggleExpanded(groupRow.id)}
+                >
+                  <ChevronRight
+                    aria-hidden="true"
+                    className={cn(
+                      "h-4 w-4 shrink-0 text-muted transition-transform duration-150",
+                      isExpanded && "rotate-90"
+                    )}
+                  />
+                </Button>
+                {cellContent}
+                <span className="text-muted-foreground font-normal ml-1">
+                  ({groupRow.subRows.length})
+                </span>
+              </span>
+            </Table.Cell>
+          );
+        })}
+      </Table.Row>
+    );
+  };
+
+  const renderLeafRow = (row: TanStackRow<T>) => (
+    <Table.Row key={row.id} id={row.id}>
+      {isRowSelectionEnabled ? (
+        <Table.Cell className="pr-0">
+          <Checkbox aria-label="Select row" slot="selection" variant="secondary">
+            <Checkbox.Control>
+              <Checkbox.Indicator />
+            </Checkbox.Control>
+          </Checkbox>
+        </Table.Cell>
+      ) : null}
+      {row.getVisibleCells().map((cell) => (
+        <Table.Cell key={cell.id}>
+          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+        </Table.Cell>
+      ))}
+    </Table.Row>
+  );
 
   const clearSelection = () => {
     setRowSelection?.({});
@@ -495,7 +634,7 @@ export const NuqsTable = <T,>({
                       activeGrouping={grouping}
                       onGroupingChange={(columnIds) => {
                         setGrouping(columnIds);
-                        setExpanded({});
+                        setExpandedKeys(new Set());
                         setPagination?.({ pageIndex: 0, pageSize: limit });
                       }}
                       onClose={() => setIsGroupByOpen(false)}
@@ -552,81 +691,65 @@ export const NuqsTable = <T,>({
                   </Checkbox>
                 </Table.Column>
               ) : null}
-              {table.getHeaderGroups()[0]?.headers.map((header, index) => (
-                <Table.Column
-                  key={header.id}
-                  id={header.column.id}
-                  allowsSorting={header.column.getCanSort()}
-                  isRowHeader={index === 0}
-                >
-                  {({ sortDirection }) => (
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="truncate">
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                      </span>
-                      {sortDirection === "ascending" ? (
-                        <ChevronUp className="h-4 w-4 shrink-0" />
-                      ) : sortDirection === "descending" ? (
-                        <ChevronDown className="h-4 w-4 shrink-0" />
-                      ) : null}
-                    </span>
-                  )}
-                </Table.Column>
-              ))}
-            </Table.Header>
-            <Table.Body
-              renderEmptyState={() => (
-                <EmptyState className="flex h-full w-full flex-col items-center justify-center gap-4 text-center py-10">
-                  <DatabaseIcon className="size-6 text-muted" />
-                  <span className="text-sm text-muted">{t("web-ui:table.noResults")}</span>
-                </EmptyState>
-              )}
-            >
-              {table.getRowModel().rows.map((row) => {
-                if (row.getIsGrouped()) {
-                  return (
-                    <Table.Row
-                      key={row.id}
-                      id={row.id}
-                      className="bg-muted/40 font-medium cursor-pointer hover:bg-muted/60"
-                      onPress={() => row.toggleExpanded()}
-                    >
-                      {isRowSelectionEnabled ? <Table.Cell className="pr-0" /> : null}
-                      {row.getVisibleCells().map((cell) => {
-                        if (cell.getIsGrouped()) {
-                          return (
-                            <Table.Cell key={cell.id}>
-                              <span className="flex items-center gap-1.5">
-                                {row.getIsExpanded() ? (
-                                  <ChevronDown className="h-4 w-4 shrink-0" />
-                                ) : (
-                                  <ChevronRight className="h-4 w-4 shrink-0" />
-                                )}
-                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                <span className="text-muted-foreground font-normal ml-1">
-                                  ({row.subRows.length})
-                                </span>
-                              </span>
-                            </Table.Cell>
-                          );
-                        }
-                        if (cell.getIsAggregated()) {
-                          return (
-                            <Table.Cell key={cell.id}>
-                              {flexRender(
-                                cell.column.columnDef.aggregatedCell ?? cell.column.columnDef.cell,
-                                cell.getContext()
-                              )}
-                            </Table.Cell>
-                          );
-                        }
-                        return <Table.Cell key={cell.id} />;
-                      })}
-                    </Table.Row>
-                  );
-                }
-
+              {visibleLeafColumns.map((column, index) => {
+                const header = leafHeadersById.get(String(column.id));
                 return (
+                  <Table.Column
+                    key={String(column.id)}
+                    id={String(column.id)}
+                    allowsSorting={column.getCanSort()}
+                    isRowHeader={index === 0}
+                  >
+                    {({ sortDirection }) => (
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="truncate">
+                          {header && !header.isPlaceholder
+                            ? flexRender(header.column.columnDef.header, header.getContext())
+                            : flexRender(column.columnDef.header, {
+                                column,
+                                table,
+                                header: header as never,
+                              })}
+                        </span>
+                        {sortDirection === "ascending" ? (
+                          <ChevronUp className="h-4 w-4 shrink-0" />
+                        ) : sortDirection === "descending" ? (
+                          <ChevronDown className="h-4 w-4 shrink-0" />
+                        ) : null}
+                      </span>
+                    )}
+                  </Table.Column>
+                );
+              })}
+            </Table.Header>
+            {isGrouped ? (
+              <Table.Body
+                renderEmptyState={() => (
+                  <EmptyState className="flex h-full w-full flex-col items-center justify-center gap-4 text-center py-10">
+                    <DatabaseIcon className="size-6 text-muted" />
+                    <span className="text-sm text-muted">{t("web-ui:table.noResults")}</span>
+                  </EmptyState>
+                )}
+              >
+                {table.getPaginationRowModel().rows.flatMap((groupRow) => {
+                  const isExpanded =
+                    expandedKeys === "all" || (expandedKeys as Set<string>).has(groupRow.id);
+
+                  if (!isExpanded) return [renderGroupHeaderRow(groupRow)];
+
+                  return [renderGroupHeaderRow(groupRow), ...groupRow.subRows.map(renderLeafRow)];
+                })}
+              </Table.Body>
+            ) : (
+              <Table.Body
+                renderEmptyState={() => (
+                  <EmptyState className="flex h-full w-full flex-col items-center justify-center gap-4 text-center py-10">
+                    <DatabaseIcon className="size-6 text-muted" />
+                    <span className="text-sm text-muted">{t("web-ui:table.noResults")}</span>
+                  </EmptyState>
+                )}
+              >
+                {table.getRowModel().rows.map((row) => (
                   <Table.Row key={row.id} id={row.id}>
                     {isRowSelectionEnabled ? (
                       <Table.Cell className="pr-0">
@@ -643,9 +766,9 @@ export const NuqsTable = <T,>({
                       </Table.Cell>
                     ))}
                   </Table.Row>
-                );
-              })}
-            </Table.Body>
+                ))}
+              </Table.Body>
+            )}
           </Table.Content>
         </Table.ScrollContainer>
         {!hideFooter ? (

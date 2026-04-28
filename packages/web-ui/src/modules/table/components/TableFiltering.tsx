@@ -401,7 +401,7 @@ export const TableFiltering = ({
   }, [filters, onFiltersChange, onClose]);
 
   return (
-    <div className="flex flex-col gap-2 p-1 min-w-[600px]">
+    <div className="flex flex-col gap-2 min-w-[600px]">
       {filterEntries.map(([filterId, filter]) => {
         const availableColumns = availableColumnsMap.get(filterId) ?? columns;
         return (
