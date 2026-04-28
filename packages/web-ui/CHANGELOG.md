@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.19.3
+
+### Patch Changes
+
+- table bulkActions
+- Updated dependencies
+  - @m5kdev/commons@0.19.3
+  - @m5kdev/frontend@0.19.3
+
 ## 0.19.2
 
 ### Patch Changes

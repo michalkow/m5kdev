@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.19.3
+
+### Patch Changes
+
+- table bulkActions
+
 ## 0.19.2
 
 ### Patch Changes
