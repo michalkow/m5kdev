@@ -500,19 +500,19 @@ export const NuqsTable = <T,>({
             onSelectionChange={onSelectionChange}
           >
             <Table.Header>
-              <Table.Column className="pr-0" isRowHeader>
+              <Table.Column className="pr-0">
                 <Checkbox aria-label="Select all" slot="selection">
                   <Checkbox.Control>
                     <Checkbox.Indicator />
                   </Checkbox.Control>
                 </Checkbox>
               </Table.Column>
-              {table.getHeaderGroups()[0]?.headers.map((header) => (
+              {table.getHeaderGroups()[0]?.headers.map((header, index) => (
                 <Table.Column
                   key={header.id}
                   id={header.column.id}
                   allowsSorting={header.column.getCanSort()}
-                  isRowHeader={header.column.id.startsWith("_")}
+                  isRowHeader={index === 0}
                 >
                   {({ sortDirection }) => (
                     <span className="flex items-center justify-between gap-2">
