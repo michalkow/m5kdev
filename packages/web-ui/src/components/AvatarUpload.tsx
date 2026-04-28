@@ -1,11 +1,10 @@
+import { Avatar, ProgressBar } from "@heroui/react";
 import { useFileUpload } from "@m5kdev/frontend/modules/file/hooks/useUpload";
 import { Edit2, User } from "lucide-react";
-import { type ChangeEvent, useRef, useState } from "react";
+import { type ChangeEvent, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CropDialog } from "./CropDialog";
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-import { Progress } from "./ui/progress";
 import { cn } from "../lib/utils";
+import { CropDialog } from "./CropDialog";
 
 interface AvatarUploadProps {
   currentAvatarUrl?: string | null;
@@ -20,6 +19,7 @@ export function AvatarUpload({ currentAvatarUrl, onUploadComplete, className }: 
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentAvatarUrl || null);
   const [showCropDialog, setShowCropDialog] = useState(false);
 
+  const inputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { upload, status, progress, errorMessage, reset } = useFileUpload();
 
@@ -59,7 +59,6 @@ export function AvatarUpload({ currentAvatarUrl, onUploadComplete, className }: 
         minetype: string;
         size: number;
       }>("image", croppedFile);
-      console.log({ res });
       onUploadComplete?.(res.url);
     } catch (error) {
       console.error("Error uploading image:", error);
@@ -81,28 +80,31 @@ export function AvatarUpload({ currentAvatarUrl, onUploadComplete, className }: 
 
   return (
     <>
-      <div
-        role="dialog"
-        className={cn("relative inline-block", className)}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        <Avatar className="h-24 w-24 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-          {previewUrl ? (
-            <AvatarImage src={previewUrl} alt={t("web-ui:avatar.preview.alt")} />
-          ) : (
-            <AvatarFallback>
-              <User className="h-12 w-12" />
-            </AvatarFallback>
-          )}
-          {isHovered && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
-              <Edit2 className="h-6 w-6 text-white" />
-            </div>
-          )}
-        </Avatar>
+      <div className={cn("relative inline-block", className)}>
+        <label
+          htmlFor={inputId}
+          className="inline-block"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <Avatar color="accent" variant="soft" className="relative size-24 cursor-pointer">
+            {previewUrl ? (
+              <Avatar.Image src={previewUrl} alt={t("web-ui:avatar.preview.alt")} />
+            ) : (
+              <Avatar.Fallback>
+                <User className="h-12 w-12" />
+              </Avatar.Fallback>
+            )}
+            {isHovered && (
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50">
+                <Edit2 className="h-6 w-6 text-white" />
+              </div>
+            )}
+          </Avatar>
+        </label>
 
         <input
+          id={inputId}
           ref={fileInputRef}
           type="file"
           className="hidden"
@@ -112,7 +114,15 @@ export function AvatarUpload({ currentAvatarUrl, onUploadComplete, className }: 
 
         {status === "uploading" && (
           <div className="mt-2 w-full">
-            <Progress value={progress} className="h-2" />
+            <ProgressBar
+              aria-label={t("web-ui:upload.progress.ariaLabel")}
+              className="w-full"
+              value={progress}
+            >
+              <ProgressBar.Track className="h-2">
+                <ProgressBar.Fill />
+              </ProgressBar.Track>
+            </ProgressBar>
           </div>
         )}
         {status === "error" && <p className="mt-2 text-sm text-red-500">{errorMessage}</p>}

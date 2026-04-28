@@ -1,4 +1,4 @@
-import {Button, Card, Input} from "@heroui/react";
+import { Button, Input, Label, TextField } from "@heroui/react";
 
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
@@ -23,18 +23,77 @@ const profileSchema = z.object({
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
+export interface ProfileEditorProps {
+  readonly initialValues: ProfileFormValues;
+  readonly onSubmit: (data: ProfileFormValues) => void | Promise<void>;
+}
+
+export function ProfileEditor({ initialValues, onSubmit }: ProfileEditorProps) {
+  const { t } = useTranslation();
+
+  const form = useForm<ProfileFormValues>({
+    defaultValues: initialValues,
+  });
+
+  return (
+    <div className="container py-10 px-4">
+      <div className="flex flex-col gap-1 mb-4">
+        <p className="text-xl font-semibold">{t("web-ui:profile.settings.title")}</p>
+        <p className="text-sm text-muted">{t("web-ui:profile.settings.description")}</p>
+      </div>
+
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <div className="flex flex-row gap-4 items-start">
+            <FormField
+              control={form.control}
+              name="image"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <AvatarUpload
+                      currentAvatarUrl={field.value}
+                      onUploadComplete={(url) => {
+                        field.onChange(url);
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    <Label>Name</Label>
+                  </FormLabel>
+                  <FormControl>
+                    <TextField>
+                      <Input placeholder={t("web-ui:profile.placeholders.name")} {...field} />
+                    </TextField>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <Button type="submit">Save Changes</Button>
+        </form>
+      </Form>
+    </div>
+  );
+}
+
 export function ProfileRoute() {
   const { t } = useTranslation();
   const { data: session } = useSession();
 
-  const form = useForm<ProfileFormValues>({
-    defaultValues: {
-      name: session?.user?.name || "",
-      image: session?.user?.image || null,
-    },
-  });
-
-  function onSubmit(data: ProfileFormValues) {
+  function handleSubmit(data: ProfileFormValues): void {
     authClient
       .updateUser(data)
       .then(() => {
@@ -50,55 +109,12 @@ export function ProfileRoute() {
   }
 
   return (
-    <div className="container py-10 px-4">
-      <Card>
-        <Card.Header className="flex flex-col gap-1">
-          <p className="text-xl font-semibold">{t("web-ui:profile.settings.title")}</p>
-          <p className="text-sm text-default-600">{t("web-ui:profile.settings.description")}</p>
-        </Card.Header>
-        <Card.Content>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="flex justify-center">
-                <FormField
-                  control={form.control}
-                  name="image"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <AvatarUpload
-                          currentAvatarUrl={field.value}
-                          onUploadComplete={(url) => {
-                            console.log(url);
-                            field.onChange(url);
-                          }}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder={t("web-ui:profile.placeholders.name")} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <Button type="submit">Save Changes</Button>
-            </form>
-          </Form>
-        </Card.Content>
-      </Card>
-    </div>
+    <ProfileEditor
+      initialValues={{
+        name: session?.user?.name || "",
+        image: session?.user?.image || null,
+      }}
+      onSubmit={handleSubmit}
+    />
   );
 }
