@@ -376,6 +376,7 @@ export const NuqsTable = <T,>({
     return new Map(entries);
   }, [table]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: TanStack `useReactTable` keeps one instance; row model updates require data/grouping/sorting, not `[table]` identity
   const allRows = useMemo(() => {
     const flatten = (rows: readonly TanStackRow<T>[]): TanStackRow<T>[] => {
       const out: TanStackRow<T>[] = [];
@@ -387,7 +388,7 @@ export const NuqsTable = <T,>({
     };
 
     return flatten(table.getPrePaginationRowModel().rows);
-  }, [table]);
+  }, [table, data, grouping, sorting]);
 
   const selectableRowIds = useMemo(() => {
     return allRows.filter((row) => !row.getIsGrouped()).map((row) => row.id);
@@ -447,19 +448,14 @@ export const NuqsTable = <T,>({
         textValue={String(groupRow.groupingValue ?? groupRow.id)}
         className="font-medium"
       >
-        {isRowSelectionEnabled ? (
-          <Table.Cell className={cn("pr-0", expandedCellClass)} />
-        ) : null}
+        {isRowSelectionEnabled ? <Table.Cell className={cn("pr-0", expandedCellClass)} /> : null}
         {visibleLeafColumns.map((column) => {
           const cell = groupRow.getAllCells().find((c) => c.column.id === column.id);
           const isTreeCell = String(column.id) === treeColumnId;
 
           if (!cell)
             return (
-              <Table.Cell
-                key={`${groupRow.id}__${column.id}`}
-                className={expandedCellClass}
-              />
+              <Table.Cell key={`${groupRow.id}__${column.id}`} className={expandedCellClass} />
             );
 
           const cellContent = cell.getIsGrouped()
@@ -483,7 +479,7 @@ export const NuqsTable = <T,>({
           return (
             <Table.Cell
               key={cell.id}
-              textValue={String(cellContent ?? "")}
+              textValue={String(cell.getValue() ?? "")}
               className={expandedCellClass}
             >
               <span className="flex items-center gap-1.5">
@@ -525,11 +521,15 @@ export const NuqsTable = <T,>({
           </Checkbox>
         </Table.Cell>
       ) : null}
-      {row.getVisibleCells().map((cell) => (
-        <Table.Cell key={cell.id}>
-          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-        </Table.Cell>
-      ))}
+      {visibleLeafColumns.map((column) => {
+        const cell = row.getVisibleCells().find((c) => c.column.id === column.id);
+        if (!cell) return <Table.Cell key={`${row.id}__${column.id}`} />;
+        return (
+          <Table.Cell key={cell.id}>
+            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+          </Table.Cell>
+        );
+      })}
     </Table.Row>
   );
 
@@ -749,24 +749,7 @@ export const NuqsTable = <T,>({
                   </EmptyState>
                 )}
               >
-                {table.getRowModel().rows.map((row) => (
-                  <Table.Row key={row.id} id={row.id}>
-                    {isRowSelectionEnabled ? (
-                      <Table.Cell className="pr-0">
-                        <Checkbox aria-label="Select row" slot="selection" variant="secondary">
-                          <Checkbox.Control>
-                            <Checkbox.Indicator />
-                          </Checkbox.Control>
-                        </Checkbox>
-                      </Table.Cell>
-                    ) : null}
-                    {row.getVisibleCells().map((cell) => (
-                      <Table.Cell key={cell.id}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </Table.Cell>
-                    ))}
-                  </Table.Row>
-                ))}
+                {table.getRowModel().rows.map(renderLeafRow)}
               </Table.Body>
             )}
           </Table.Content>
