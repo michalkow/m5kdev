@@ -122,6 +122,11 @@ export const NuqsTable = <T,>({
   showGlobalSearch = false,
   singleFilter = false,
   filterMethods,
+  hideHeader = false,
+  hideFooter = false,
+  hideColumns = false,
+  hideGroupBy = false,
+  hideFilters = false,
 }: NuqsTableParams<T>) => {
   const { t } = useTranslation();
   const columnIds = useMemo(() => columns.map((col) => String(col.id)), [columns]);
@@ -484,7 +489,7 @@ export const NuqsTable = <T,>({
             onSelectionChange={onSelectionChange}
           >
             <Table.Header>
-              <Table.Column className="pr-0">
+              <Table.Column className="pr-0" isRowHeader>
                 <Checkbox aria-label="Select all" slot="selection">
                   <Checkbox.Control>
                     <Checkbox.Indicator />
@@ -496,7 +501,7 @@ export const NuqsTable = <T,>({
                   key={header.id}
                   id={header.column.id}
                   allowsSorting={header.column.getCanSort()}
-                  isRowHeader={false}
+                  isRowHeader={header.column.id.startsWith("_")}
                 >
                   {({ sortDirection }) => (
                     <span className="flex items-center justify-between gap-2">
