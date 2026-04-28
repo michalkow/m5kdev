@@ -1,5 +1,6 @@
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { TableParams } from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
+import { Button } from "@heroui/react";
 import type { Meta, StoryObj } from "@storybook/react";
 import type {
   GroupingState,
@@ -10,7 +11,7 @@ import type {
 } from "@tanstack/react-table";
 import { type ReactElement, useCallback, useState } from "react";
 
-import { NuqsTable, type NuqsTableColumn } from "./NuqsTable";
+import { NuqsTable, type NuqsTableBulkActionsProps, type NuqsTableColumn } from "./NuqsTable";
 
 interface PersonRow {
   readonly id: string;
@@ -118,6 +119,7 @@ interface NuqsTableStoryProps {
   readonly total?: number;
   /** When true, renders the table with no rows (empty state). */
   readonly empty?: boolean;
+  readonly withBulkActions?: boolean;
 }
 
 function NuqsTableStory({
@@ -126,6 +128,7 @@ function NuqsTableStory({
   initialGrouping = [],
   total,
   empty = false,
+  withBulkActions = false,
 }: NuqsTableStoryProps): ReactElement {
   const rows = empty ? ([] as PersonRow[]) : DATA;
   const resolvedTotal = empty ? 0 : (total ?? DATA.length);
@@ -139,6 +142,21 @@ function NuqsTableStory({
   const setRowSelection = useCallback((updater: Updater<RowSelectionState>) => {
     setRowSelectionRaw((prev) => (typeof updater === "function" ? updater(prev) : updater));
   }, []);
+
+  const BulkActions = useCallback(
+    ({ selectedRows, clearSelection }: NuqsTableBulkActionsProps<PersonRow>) => {
+      if (selectedRows.length === 0) return null;
+      return (
+        <div className="flex items-center gap-2">
+          <div className="text-sm text-muted-foreground">{selectedRows.length} selected</div>
+          <Button size="sm" variant="secondary" onPress={clearSelection}>
+            Clear
+          </Button>
+        </div>
+      );
+    },
+    []
+  );
 
   const setGrouping = useCallback((updater: Updater<GroupingState>) => {
     setGroupingRaw((prev) => (typeof updater === "function" ? updater(prev) : updater));
@@ -169,6 +187,7 @@ function NuqsTableStory({
           total={resolvedTotal}
           columns={COLUMNS}
           tableProps={tableProps}
+          BulkActions={withBulkActions ? BulkActions : undefined}
           showGlobalSearch={showGlobalSearch}
         />
       </div>
@@ -191,6 +210,13 @@ export const WithGlobalSearch: Story = {
   args: {
     showGlobalSearch: true,
     initialQ: "alex",
+  },
+};
+
+export const WithBulkActions: Story = {
+  args: {
+    showGlobalSearch: true,
+    withBulkActions: true,
   },
 };
 

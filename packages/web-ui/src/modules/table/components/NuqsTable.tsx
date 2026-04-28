@@ -18,6 +18,7 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table";
 import { ChevronDown, ChevronRight, ChevronUp, DatabaseIcon } from "lucide-react";
+import type { ComponentType } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ColumnOrderAndVisibility } from "./ColumnOrderAndVisibility";
@@ -68,11 +69,19 @@ export type NuqsTableColumn<T> = ColumnDef<T> & {
   groupable?: boolean;
 };
 
+export interface NuqsTableBulkActionsProps<T> {
+  selectedRows: readonly T[];
+  selectedRowIds: readonly string[];
+  clearSelection: () => void;
+  table: ReactTable<T>;
+}
+
 interface NuqsTableParams<T> {
   data: T[];
   total?: number;
   columns: NuqsTableColumn<T>[];
   tableProps: TableParams;
+  BulkActions?: ComponentType<NuqsTableBulkActionsProps<T>>;
   /** When true, shows URL-synced global search; enable only if the list API applies `q` server-side. */
   showGlobalSearch?: boolean;
   singleFilter?: boolean;
@@ -124,6 +133,7 @@ export const NuqsTable = <T,>({
   total,
   columns,
   tableProps,
+  BulkActions,
   showGlobalSearch = false,
   singleFilter = false,
   filterMethods,
@@ -350,6 +360,8 @@ export const NuqsTable = <T,>({
 
   const sortDescriptor = useMemo(() => sortingToSortDescriptor(sorting ?? []), [sorting]);
 
+  const isRowSelectionEnabled = Boolean(BulkActions);
+
   const selectableRowIds = useMemo(() => {
     return table
       .getRowModel()
@@ -358,15 +370,36 @@ export const NuqsTable = <T,>({
   }, [table]);
 
   const selectedKeys = useMemo<Selection>(() => {
+    if (!isRowSelectionEnabled) return new Set();
     const state = rowSelection ?? {};
     const allowed = new Set(selectableRowIds);
     const keys = Object.entries(state)
       .filter(([, isSelected]) => Boolean(isSelected))
       .map(([rowId]) => rowId);
     return new Set(keys.filter((id) => allowed.has(id)));
-  }, [rowSelection, selectableRowIds]);
+  }, [rowSelection, selectableRowIds, isRowSelectionEnabled]);
+
+  const selectedRowIds = useMemo(() => {
+    if (!isRowSelectionEnabled) return [];
+    if (selectedKeys === "all") return selectableRowIds;
+    return Array.from(selectedKeys).map((id) => String(id));
+  }, [selectedKeys, selectableRowIds, isRowSelectionEnabled]);
+
+  const selectedRows = useMemo(() => {
+    if (!isRowSelectionEnabled) return [];
+    const selectedIdSet = new Set(selectedRowIds);
+    return table
+      .getRowModel()
+      .rows.filter((row) => !row.getIsGrouped() && selectedIdSet.has(row.id))
+      .map((row) => row.original);
+  }, [table, selectedRowIds, isRowSelectionEnabled]);
+
+  const clearSelection = () => {
+    setRowSelection?.({});
+  };
 
   const onSelectionChange = (keys: Selection) => {
+    if (!isRowSelectionEnabled) return;
     if (!setRowSelection) return;
 
     const next: RowSelectionState = {};
@@ -389,7 +422,7 @@ export const NuqsTable = <T,>({
   return (
     <>
       {!hideHeader ? (
-        <div className="flex w-full flex-wrap items-center justify-between gap-2 mb-2">
+        <div className="flex w-full flex-wrap items-center gap-2 mb-2">
           <div className="flex min-w-0 flex-1 items-center">
             {showGlobalSearch ? (
               <SearchField name="search" variant="secondary">
@@ -408,7 +441,17 @@ export const NuqsTable = <T,>({
               </SearchField>
             ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center justify-center">
+            {BulkActions ? (
+              <BulkActions
+                selectedRows={selectedRows}
+                selectedRowIds={selectedRowIds}
+                clearSelection={clearSelection}
+                table={table}
+              />
+            ) : null}
+          </div>
+          <div className="flex flex-1 items-center justify-end gap-2">
             {!hideFilters ? (
               <Popover isOpen={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
                 <Popover.Trigger>
@@ -495,18 +538,20 @@ export const NuqsTable = <T,>({
             onSortChange={(descriptor) => {
               setSorting?.(sortDescriptorToSorting(descriptor));
             }}
-            selectionMode="multiple"
-            selectedKeys={selectedKeys}
-            onSelectionChange={onSelectionChange}
+            selectionMode={isRowSelectionEnabled ? "multiple" : undefined}
+            selectedKeys={isRowSelectionEnabled ? selectedKeys : undefined}
+            onSelectionChange={isRowSelectionEnabled ? onSelectionChange : undefined}
           >
             <Table.Header>
-              <Table.Column className="pr-0">
-                <Checkbox aria-label="Select all" slot="selection">
-                  <Checkbox.Control>
-                    <Checkbox.Indicator />
-                  </Checkbox.Control>
-                </Checkbox>
-              </Table.Column>
+              {isRowSelectionEnabled ? (
+                <Table.Column className="pr-0">
+                  <Checkbox aria-label="Select all" slot="selection">
+                    <Checkbox.Control>
+                      <Checkbox.Indicator />
+                    </Checkbox.Control>
+                  </Checkbox>
+                </Table.Column>
+              ) : null}
               {table.getHeaderGroups()[0]?.headers.map((header, index) => (
                 <Table.Column
                   key={header.id}
@@ -546,7 +591,7 @@ export const NuqsTable = <T,>({
                       className="bg-muted/40 font-medium cursor-pointer hover:bg-muted/60"
                       onPress={() => row.toggleExpanded()}
                     >
-                      <Table.Cell className="pr-0" />
+                      {isRowSelectionEnabled ? <Table.Cell className="pr-0" /> : null}
                       {row.getVisibleCells().map((cell) => {
                         if (cell.getIsGrouped()) {
                           return (
@@ -583,13 +628,15 @@ export const NuqsTable = <T,>({
 
                 return (
                   <Table.Row key={row.id} id={row.id}>
-                    <Table.Cell className="pr-0">
-                      <Checkbox aria-label="Select row" slot="selection" variant="secondary">
-                        <Checkbox.Control>
-                          <Checkbox.Indicator />
-                        </Checkbox.Control>
-                      </Checkbox>
-                    </Table.Cell>
+                    {isRowSelectionEnabled ? (
+                      <Table.Cell className="pr-0">
+                        <Checkbox aria-label="Select row" slot="selection" variant="secondary">
+                          <Checkbox.Control>
+                            <Checkbox.Indicator />
+                          </Checkbox.Control>
+                        </Checkbox>
+                      </Table.Cell>
+                    ) : null}
                     {row.getVisibleCells().map((cell) => (
                       <Table.Cell key={cell.id}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
