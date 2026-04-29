@@ -221,29 +221,17 @@ export function OrganizationChildOrganizationsRoute({
 
   const onSubmitEdit = useCallback(() => {
     if (!editingOrganizationId) return;
-    let parsedMetadata: Record<string, unknown>;
-    try {
-      parsedMetadata = editingMetadata.trim()
-        ? (JSON.parse(editingMetadata) as Record<string, unknown>)
-        : {};
-    } catch (parseError) {
-      const message =
-        parseError instanceof SyntaxError
-          ? t("web-ui:organization.childOrgs.form.metadataInvalidJson")
-          : parseError instanceof Error
-            ? parseError.message
-            : t("web-ui:organization.childOrgs.form.metadataInvalid");
-      toast.error(message);
+    const name = editingName.trim();
+    if (!name) {
+      toast.error(t("web-ui:organization.childOrgs.form.nameRequired"));
       return;
     }
 
     updateOrganization({
-      organizationId: editingOrganizationId,
-      name: editingName.trim(),
-      slug: editingSlug.trim() ? editingSlug.trim() : null,
-      metadata: parsedMetadata,
+      id: editingOrganizationId,
+      name,
     });
-  }, [editingMetadata, editingName, editingOrganizationId, editingSlug, t, updateOrganization]);
+  }, [editingName, editingOrganizationId, t, updateOrganization]);
 
   useEffect(() => {
     if (!isEditOpen) {

@@ -49,7 +49,7 @@ catalog:
   tsx: 4.19.2
   turbo: 2.5.6
   tw-animate-css: 1.3.6
-  typescript: 5.9.2
+  typescript: 6.0.3
   uuid: 11.0.5
   vite: 7.0.4
   vite-plugin-i18next-loader: 3.1.2

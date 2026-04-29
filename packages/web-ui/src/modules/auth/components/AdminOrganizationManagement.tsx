@@ -100,10 +100,16 @@ export function AdminOrganizationManagement() {
             Change an organization’s type. This affects permissions like managing child organizations.
           </p>
         </div>
-        <Tooltip content="Changing type updates organizations.type. Active user sessions may need to refresh/reselect the organization to reflect the new type.">
-          <Button variant="ghost" size="sm" isIconOnly aria-label="Info">
-            <Info className="h-4 w-4" />
-          </Button>
+        <Tooltip>
+          <Tooltip.Trigger>
+            <Button variant="ghost" size="sm" isIconOnly aria-label="Info">
+              <Info className="h-4 w-4" />
+            </Button>
+          </Tooltip.Trigger>
+          <Tooltip.Content>
+            Changing type updates organizations.type. Active user sessions may need to refresh/reselect the organization
+            to reflect the new type.
+          </Tooltip.Content>
         </Tooltip>
       </div>
 
@@ -194,10 +200,9 @@ export function AdminOrganizationManagement() {
                           }}
                           isDisabled={isUpdatingType}
                           variant="secondary"
-                          size="sm"
                           className="min-w-[210px] inline-flex"
                         >
-                          <Select.Trigger>
+                          <Select.Trigger className="h-8 min-h-8 px-3 text-sm">
                             <Select.Value />
                             <Select.Indicator />
                           </Select.Trigger>

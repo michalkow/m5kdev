@@ -162,6 +162,7 @@
   "organization.childOrgs.editButton": "Edit",
   "organization.childOrgs.editTitle": "Edit child organization",
   "organization.childOrgs.form.name": "Name",
+  "organization.childOrgs.form.nameRequired": "Enter a name.",
   "organization.childOrgs.form.slug": "Slug",
   "organization.childOrgs.form.metadata": "Metadata (JSON)",
   "organization.childOrgs.form.metadataInvalidJson": "Metadata must be valid JSON.",

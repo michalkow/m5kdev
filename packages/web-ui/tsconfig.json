@@ -1,7 +1,6 @@
 {
   "extends": "@m5kdev/config/tsconfig.vite.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "rootDir": ".",
     "outDir": "dist",
     "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo",

@@ -14,7 +14,9 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
 
 export const WithLabel: Story = {
-  args: {
-    "aria-label": "Loading application",
-  },
+  render: () => (
+    <div className="flex h-screen w-full" role="status" aria-label="Loading application">
+      <AppLoader />
+    </div>
+  ),
 };

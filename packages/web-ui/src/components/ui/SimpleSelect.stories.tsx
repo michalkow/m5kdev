@@ -20,6 +20,7 @@ const meta = {
     layout: "centered",
   },
   args: {
+    label: "State",
     "aria-label": "State",
     data: sampleData,
     defaultSelectedKey: "ny",
@@ -29,10 +30,20 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
+export const Default: Story = {
+  args: {
+    label: "State",
+    "aria-label": "State",
+    data: sampleData,
+    defaultSelectedKey: "ny",
+  },
+};
 
 export const Disabled: Story = {
   args: {
+    label: "State",
+    "aria-label": "State",
+    data: sampleData,
     isDisabled: true,
     defaultSelectedKey: "tx",
   },
@@ -44,6 +55,7 @@ function ControlledSelectStory(): ReactElement {
   return (
     <div className="flex w-full max-w-sm flex-col gap-3">
       <SimpleSelect
+        label="State"
         aria-label="State"
         data={sampleData}
         value={selectedKey}
@@ -58,5 +70,10 @@ function ControlledSelectStory(): ReactElement {
 }
 
 export const Controlled: Story = {
+  args: {
+    label: "State",
+    "aria-label": "State",
+    data: sampleData,
+  },
   render: () => <ControlledSelectStory />,
 };

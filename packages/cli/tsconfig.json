@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "rootDir": ".",
   "compilerOptions": {
+    "rootDir": "./src",
     "esModuleInterop": true,
     "importHelpers": true,
     "outDir": "dist",
