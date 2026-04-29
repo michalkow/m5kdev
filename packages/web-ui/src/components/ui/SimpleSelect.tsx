@@ -2,11 +2,12 @@ import { Label, ListBox, Select, type SelectProps } from "@heroui/react";
 
 export function SimpleSelect<T extends object, M extends "single" | "multiple">({
   data,
+  label,
   ...props
-}: SelectProps<T, M> & { data: { label: string; value: string }[] }) {
+}: SelectProps<T, M> & { data: { label: string; value: string }[]; label: string }) {
   return (
     <Select {...props}>
-      <Label>State</Label>
+      {label && <Label>{label}</Label>}
       <Select.Trigger>
         <Select.Value />
         <Select.Indicator />
