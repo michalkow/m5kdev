@@ -11,10 +11,20 @@ export const organizationSchema = z.object({
   type: z.string().nullable(),
   parentId: z.string().nullable(),
   metadata: z.record(z.string(), z.unknown()).nullable(),
+  preferences: z.record(z.string(), z.unknown()).nullable(),
+  flags: z.array(z.string()).nullable(),
   createdAt: z.date(),
 });
 
 export type Organization = z.infer<typeof organizationSchema>;
+
+export const simpleOrganizationSchema = organizationSchema.omit({
+  metadata: true,
+  preferences: true,
+  flags: true,
+});
+
+export type SimpleOrganization = z.infer<typeof simpleOrganizationSchema>;
 
 export const waitlistSchema = z.object({
   id: z.string(),

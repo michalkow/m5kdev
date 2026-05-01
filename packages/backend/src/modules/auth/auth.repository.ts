@@ -14,6 +14,7 @@ import type {
   ChildOrganization,
   OrganizationType,
   ReadInvitationOutput,
+  SimpleOrganization,
   Waitlist,
   WaitlistOutput,
 } from "./auth.dto";
@@ -311,11 +312,19 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     );
   }
 
-  async listUserOrganizations(userId: string, tx?: Orm): ServerResultAsync<OrganizationRow[]> {
+  async listUserOrganizations(userId: string, tx?: Orm): ServerResultAsync<SimpleOrganization[]> {
     const db = tx ?? this.orm;
     const result = await this.throwableQuery(() =>
       db
-        .select()
+        .select({
+          id: this.schema.organizations.id,
+          name: this.schema.organizations.name,
+          slug: this.schema.organizations.slug,
+          logo: this.schema.organizations.logo,
+          type: this.schema.organizations.type,
+          parentId: this.schema.organizations.parentId,
+          createdAt: this.schema.organizations.createdAt,
+        })
         .from(this.schema.organizations)
         .innerJoin(
           this.schema.members,
@@ -324,11 +333,9 @@ export class AuthOrganizationRepository extends BaseTableRepository<
         .where(eq(this.schema.members.userId, userId))
         .then((result) => {
           const organizations = result.reduce((acc, curr) => {
-            acc.find((org) => org.id === curr.organizations.id)
-              ? acc
-              : acc.push(curr.organizations);
+            acc.find((org) => org.id === curr.id) ? acc : acc.push(curr);
             return acc;
-          }, [] as OrganizationRow[]);
+          }, [] as SimpleOrganization[]);
           return organizations;
         })
     );

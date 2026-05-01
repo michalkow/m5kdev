@@ -16,6 +16,7 @@ import type {
   ChildOrganization,
   OrganizationType,
   ReadInvitationOutput,
+  SimpleOrganization,
   UpdateChildOrganizationInput,
   Waitlist,
   WaitlistOutput,
@@ -430,7 +431,7 @@ export class AuthService extends BaseService<
     return this.repository.organization.listChildOrganizations(access.value.parentId);
   }
 
-  async listUserOrganizations(ctx: Context): ServerResultAsync<OrganizationRow[]> {
+  async listUserOrganizations(ctx: Context): ServerResultAsync<SimpleOrganization[]> {
     return this.repository.organization.listUserOrganizations(ctx.actor.userId);
   }
 

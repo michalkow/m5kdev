@@ -35,6 +35,7 @@
   "common.cancel": "Cancel",
   "common.save": "Save",
   "common.saving": "Saving...",
+  "common.loading": "Loading...",
   "image.crop.title": "Crop Image",
   "image.crop.failedContext": "Failed to get canvas context",
   "image.crop.failedCrop": "Failed to get cropped image",

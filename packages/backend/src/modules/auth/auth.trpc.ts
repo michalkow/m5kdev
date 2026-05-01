@@ -10,6 +10,7 @@ import {
   organizationTypeSchema,
   readInvitationInputSchema,
   readInvitationOutputSchema,
+  simpleOrganizationSchema,
   updateChildOrganizationInputSchema,
   waitlistOutputSchema,
   waitlistSchema,
@@ -279,9 +280,11 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.listChildOrganizations(ctx));
       }),
 
-    listUserOrganizations: procedure.output(z.array(organizationSchema)).query(async ({ ctx }) => {
-      return handleTRPCResult(await authService.listUserOrganizations(ctx));
-    }),
+    listUserOrganizations: procedure
+      .output(z.array(simpleOrganizationSchema))
+      .query(async ({ ctx }) => {
+        return handleTRPCResult(await authService.listUserOrganizations(ctx));
+      }),
 
     updateChildOrganization: procedure
       .input(updateChildOrganizationInputSchema)

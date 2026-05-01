@@ -1,4 +1,3 @@
-import type { ClientOptions } from "better-auth";
 import {
   adminClient,
   inferAdditionalFields,
@@ -7,7 +6,7 @@ import {
 } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
-const options = {
+export const authClient = createAuthClient({
   baseURL: import.meta.env.VITE_SERVER_URL,
   plugins: [
     lastLoginMethodClient(),
@@ -18,6 +17,28 @@ const options = {
     }),
     adminClient(),
     inferAdditionalFields({
+      session: {
+        activeOrganizationId: {
+          type: "string",
+          required: false,
+        },
+        activeTeamId: {
+          type: "string",
+          required: false,
+        },
+        activeTeamRole: {
+          type: "string",
+          required: false,
+        },
+        activeOrganizationRole: {
+          type: "string",
+          required: false,
+        },
+        activeOrganizationType: {
+          type: "string",
+          required: false,
+        },
+      },
       user: {
         onboarding: {
           type: "number",
@@ -44,6 +65,4 @@ const options = {
       },
     }),
   ],
-} satisfies ClientOptions;
-
-export const authClient = createAuthClient(options);
+});
