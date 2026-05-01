@@ -1,9 +1,15 @@
-import { and, count, desc, eq, gte, like, ne, or } from "drizzle-orm";
+import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
+import { and, count, desc, eq, gte, like, ne, or, type SelectedFields } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
 import type { ServerResultAsync } from "../base/base.dto";
-import { BaseRepository, BaseTableRepository } from "../base/base.repository";
+import {
+  BaseRepository,
+  BaseTableRepository,
+  type TableConditionBuilder,
+} from "../base/base.repository";
 import * as auth from "./auth.db";
 import type {
   AccountClaim,
@@ -369,49 +375,6 @@ export class AuthOrganizationRepository extends BaseTableRepository<
         metadata: normalizeRecord(org.metadata),
       }))
     );
-  }
-
-  async listAdminOrganizations(
-    {
-      search,
-      limit = 50,
-      offset = 0,
-    }: {
-      search?: string;
-      limit?: number;
-      offset?: number;
-    },
-    tx?: Orm
-  ): ServerResultAsync<AdminOrganization[]> {
-    const db = tx ?? this.orm;
-    const q = search?.trim();
-
-    const result = await this.throwableQuery(() => {
-      const query = db
-        .select({
-          id: this.schema.organizations.id,
-          name: this.schema.organizations.name,
-          slug: this.schema.organizations.slug,
-          type: this.schema.organizations.type,
-          parentId: this.schema.organizations.parentId,
-          createdAt: this.schema.organizations.createdAt,
-        })
-        .from(this.schema.organizations)
-        .orderBy(desc(this.schema.organizations.createdAt))
-        .limit(Math.min(Math.max(limit, 1), 200))
-        .offset(Math.max(offset, 0));
-
-      if (!q) return query;
-      const pattern = `%${q}%`;
-      return query.where(
-        or(
-          like(this.schema.organizations.name, pattern),
-          like(this.schema.organizations.slug, pattern)
-        )
-      );
-    });
-    if (result.isErr()) return err(result.error);
-    return ok(result.value);
   }
 
   async updateOrganizationTypeForAdmin(

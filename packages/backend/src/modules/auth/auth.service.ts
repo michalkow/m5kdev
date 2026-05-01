@@ -196,7 +196,9 @@ export class AuthService extends BaseService<
   async listAdminOrganizations(
     input: AdminOrganizationQueryInputSchema
   ): ServerResultAsync<OrganizationList> {
-    return this.repository.organization.queryList(input);
+    return this.repository.organization.queryList(input, {
+      globalSearchColumns: ["name", "slug"],
+    });
   }
 
   async updateAdminOrganizationType({
