@@ -311,6 +311,31 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     );
   }
 
+  async listUserOrganizations(userId: string, tx?: Orm): ServerResultAsync<OrganizationRow[]> {
+    const db = tx ?? this.orm;
+    const result = await this.throwableQuery(() =>
+      db
+        .select()
+        .from(this.schema.organizations)
+        .innerJoin(
+          this.schema.members,
+          eq(this.schema.organizations.id, this.schema.members.organizationId)
+        )
+        .where(eq(this.schema.members.userId, userId))
+        .then((result) => {
+          const organizations = result.reduce((acc, curr) => {
+            acc.find((org) => org.id === curr.organizations.id)
+              ? acc
+              : acc.push(curr.organizations);
+            return acc;
+          }, [] as OrganizationRow[]);
+          return organizations;
+        })
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value);
+  }
+
   async listChildOrganizations(parentId: string, tx?: Orm): ServerResultAsync<ChildOrganization[]> {
     const db = tx ?? this.orm;
     const result = await this.throwableQuery(() =>
@@ -631,11 +656,10 @@ export class AuthWaitlistRepository extends BaseTableRepository<
 }
 
 export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, never>> {
-
   getOrm(): Orm {
     return this.orm;
   }
-  
+
   getSchema(): Schema {
     return this.schema;
   }

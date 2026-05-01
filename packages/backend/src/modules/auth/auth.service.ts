@@ -430,6 +430,10 @@ export class AuthService extends BaseService<
     return this.repository.organization.listChildOrganizations(access.value.parentId);
   }
 
+  async listUserOrganizations(ctx: Context): ServerResultAsync<OrganizationRow[]> {
+    return this.repository.organization.listUserOrganizations(ctx.actor.userId);
+  }
+
   async updateChildOrganization(
     input: UpdateChildOrganizationInput,
     ctx: Context

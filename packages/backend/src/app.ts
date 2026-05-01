@@ -724,7 +724,10 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       trpcExpress.createExpressMiddleware({
         router: appRouter as AnyRouter,
         createContext,
-      } as any)
+        onError: ({ error, type, path, input }) => {
+          logger.error({ error, type, path, input });
+        },
+      })
     );
   }
 

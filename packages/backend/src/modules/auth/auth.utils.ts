@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { v4 as uuidv4 } from "uuid";
 import * as auth from "./auth.db";
@@ -7,6 +7,82 @@ const schema = { ...auth };
 type Schema = typeof schema;
 export type Orm = LibSQLDatabase<Schema>;
 
+export async function getNewOrganization<O extends Orm, S extends Schema>(
+  orm: O,
+  schema: S,
+  organizationId: string,
+  userId: string
+): Promise<{
+  id: string;
+  name: string;
+  slug: string | null;
+  type: string | null;
+  role: string;
+  teamId: string | null;
+  teamRole: string | null;
+}> {
+  const [organization] = await orm
+    .select({
+      id: schema.organizations.id,
+      name: schema.organizations.name,
+      slug: schema.organizations.slug,
+      type: schema.organizations.type,
+    })
+    .from(schema.organizations)
+    .where(eq(schema.organizations.id, organizationId))
+    .limit(1);
+
+  const [member] = await orm
+    .select({ organizationId: schema.members.organizationId, role: schema.members.role })
+    .from(schema.members)
+    .orderBy(desc(schema.members.createdAt))
+    .where(eq(schema.members.userId, userId))
+    .limit(1);
+
+  const [teamMember] = await orm
+    .select({ teamId: schema.teamMembers.teamId, role: schema.teamMembers.role })
+    .from(schema.teamMembers)
+    .innerJoin(schema.teams, eq(schema.teamMembers.teamId, schema.teams.id))
+    .where(
+      and(eq(schema.teamMembers.userId, userId), eq(schema.teams.organizationId, organizationId))
+    )
+    .orderBy(desc(schema.teamMembers.createdAt))
+    .limit(1);
+
+  return {
+    ...organization,
+    role: member.role,
+    teamId: teamMember?.teamId ?? null,
+    teamRole: teamMember?.role ?? null,
+  };
+}
+
+export async function getNewTeam<O extends Orm, S extends Schema>(
+  orm: O,
+  schema: S,
+  teamId: string,
+  userId: string
+): Promise<{
+  id: string;
+  name: string;
+  role: string;
+}> {
+  const [team] = await orm
+    .select({
+      id: schema.teams.id,
+      name: schema.teams.name,
+    })
+    .from(schema.teams)
+    .where(eq(schema.teams.id, teamId))
+    .limit(1);
+  const [teamMember] = await orm
+    .select({ teamId: schema.teamMembers.teamId, role: schema.teamMembers.role })
+    .from(schema.teamMembers)
+    .orderBy(desc(schema.teamMembers.createdAt))
+    .where(eq(schema.teamMembers.userId, userId))
+    .limit(1);
+  return { ...team, role: teamMember.role };
+}
 export async function getActiveOrganizationAndTeam<O extends Orm, S extends Schema>(
   orm: O,
   schema: S,

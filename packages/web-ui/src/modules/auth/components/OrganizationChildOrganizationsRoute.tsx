@@ -319,45 +319,49 @@ export function OrganizationChildOrganizationsRoute({
             <p className="text-sm text-default-500">{t("web-ui:organization.childOrgs.empty")}</p>
           ) : (
             <Table aria-label={t("web-ui:organization.childOrgs.title")}>
-              <Table.Header>
-                <Table.Column>{t("web-ui:organization.childOrgs.column.name")}</Table.Column>
-                <Table.Column>{t("web-ui:organization.childOrgs.column.slug")}</Table.Column>
-                <Table.Column>{t("web-ui:organization.childOrgs.column.createdAt")}</Table.Column>
-                <Table.Column>{t("web-ui:organization.childOrgs.column.actions")}</Table.Column>
-              </Table.Header>
-              <Table.Body>
-                {childOrganizations.map((org) => (
-                  <Table.Row key={org.id}>
-                    <Table.Cell className="font-medium">{org.name}</Table.Cell>
-                    <Table.Cell className="text-default-500">{org.slug ?? "-"}</Table.Cell>
-                    <Table.Cell className="text-default-500">
-                      {new Date(org.createdAt).toLocaleDateString()}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          isPending={switchingOrganizationId === org.id}
-                          isDisabled={switchingOrganizationId !== null}
-                          onPress={() => void onSwitchToChild(org.id)}
-                        >
-                          <span className="inline-flex items-center gap-2">
-                            <ArrowRightLeft className="h-4 w-4" />
-                            {t("web-ui:organization.childOrgs.switchButton")}
-                          </span>
-                        </Button>
-                        <Button size="sm" variant="secondary" onPress={() => onOpenEdit(org)}>
-                          <span className="inline-flex items-center gap-2">
-                            <Settings2 className="h-4 w-4" />
-                            {t("web-ui:organization.childOrgs.editButton")}
-                          </span>
-                        </Button>
-                      </div>
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
+              <Table.ScrollContainer>
+                <Table.Content>
+                  <Table.Header>
+                    <Table.Column>{t("web-ui:organization.childOrgs.column.name")}</Table.Column>
+                    <Table.Column>{t("web-ui:organization.childOrgs.column.slug")}</Table.Column>
+                    <Table.Column>{t("web-ui:organization.childOrgs.column.createdAt")}</Table.Column>
+                    <Table.Column>{t("web-ui:organization.childOrgs.column.actions")}</Table.Column>
+                  </Table.Header>
+                  <Table.Body items={childOrganizations}>
+                    {(org) => (
+                      <Table.Row id={org.id}>
+                        <Table.Cell className="font-medium">{org.name}</Table.Cell>
+                        <Table.Cell className="text-default-500">{org.slug ?? "-"}</Table.Cell>
+                        <Table.Cell className="text-default-500">
+                          {new Date(org.createdAt).toLocaleDateString()}
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              isPending={switchingOrganizationId === org.id}
+                              isDisabled={switchingOrganizationId !== null}
+                              onPress={() => void onSwitchToChild(org.id)}
+                            >
+                              <span className="inline-flex items-center gap-2">
+                                <ArrowRightLeft className="h-4 w-4" />
+                                {t("web-ui:organization.childOrgs.switchButton")}
+                              </span>
+                            </Button>
+                            <Button size="sm" variant="secondary" onPress={() => onOpenEdit(org)}>
+                              <span className="inline-flex items-center gap-2">
+                                <Settings2 className="h-4 w-4" />
+                                {t("web-ui:organization.childOrgs.editButton")}
+                              </span>
+                            </Button>
+                          </div>
+                        </Table.Cell>
+                      </Table.Row>
+                    )}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
             </Table>
           )}
         </Card.Content>

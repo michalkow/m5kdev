@@ -10,7 +10,12 @@ import { posthogCapture } from "../../utils/posthog";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
 import * as auth from "./auth.db";
-import { createOrganizationAndTeam, getActiveOrganizationAndTeam } from "./auth.utils";
+import {
+  createOrganizationAndTeam,
+  getActiveOrganizationAndTeam,
+  getNewOrganization,
+  getNewTeam,
+} from "./auth.utils";
 
 const schema = { ...auth };
 type Schema = typeof schema;
@@ -34,8 +39,8 @@ export type CreateBetterAuthConfigParams = {
   config?: {
     waitlist: boolean;
     provisionedAccountEmailDomain?: string;
-  }
-}
+  };
+};
 
 type CreateBetterAuthParams<
   O extends Orm,
@@ -49,7 +54,6 @@ type CreateBetterAuthParams<
     email?: E;
     billing?: B;
   };
-  
 } & CreateBetterAuthConfigParams;
 
 export function createBetterAuth<
@@ -57,7 +61,15 @@ export function createBetterAuth<
   S extends Schema,
   E extends EmailService,
   B extends BillingService,
->({ orm, schema, services, hooks, options, app, config }: CreateBetterAuthParams<O, S, E, B>) {
+>({
+  orm,
+  schema,
+  services,
+  hooks,
+  options,
+  app,
+  config,
+}: CreateBetterAuthParams<O, S, E, B>): BetterAuth {
   const { email: emailService, billing: billingService } = services;
   const { waitlist = false, provisionedAccountEmailDomain } = config ?? {};
   const webUrl = app?.urls?.web ?? process.env.VITE_APP_URL;
@@ -466,6 +478,59 @@ export function createBetterAuth<
                 activeOrganizationRole: organizationRole,
                 activeTeamRole: teamRole,
               },
+            };
+          },
+        },
+        update: {
+          before: async (session, ctx) => {
+            const prevSession = ctx?.context.session?.session;
+            if (!prevSession) return { data: session };
+            const { userId } = prevSession;
+            const { activeOrganizationId, activeTeamId } = session;
+
+            logger.debug({ step: "before update session", session, prevSession });
+
+            if (activeOrganizationId && activeOrganizationId !== prevSession.activeOrganizationId) {
+              const {
+                type: activeOrganizationType,
+                role: activeOrganizationRole,
+                teamId: activeTeamId,
+                teamRole: activeTeamRole,
+              } = await getNewOrganization(
+                orm,
+                schema,
+                activeOrganizationId as string,
+                userId as string
+              );
+
+              return {
+                data: {
+                  ...session,
+                  activeOrganizationType,
+                  activeOrganizationRole,
+                  activeTeamId,
+                  activeTeamRole,
+                },
+              };
+            }
+
+            if (activeTeamId && activeTeamId !== prevSession.activeTeamId) {
+              const { role: activeTeamRole } = await getNewTeam(
+                orm,
+                schema,
+                activeTeamId as string,
+                userId as string
+              );
+              return {
+                data: {
+                  ...session,
+                  activeTeamRole,
+                },
+              };
+            }
+
+            return {
+              data: session,
             };
           },
         },
