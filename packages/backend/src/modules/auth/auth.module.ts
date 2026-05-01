@@ -1,4 +1,5 @@
 import { createBackendRouterMap } from "../../app";
+import type { Grant } from "../base/base.grants";
 import {
   BaseModule,
   type ModuleRepositoriesContext,
@@ -8,6 +9,7 @@ import {
 import type { BillingModule } from "../billing/billing.module";
 import type { EmailModule } from "../email/email.module";
 import type * as authTables from "./auth.db";
+import { authGrants } from "./auth.grants";
 import {
   AuthInvitationRepository,
   AuthOrganizationRepository,
@@ -43,6 +45,12 @@ export class AuthModule extends BaseModule<
   readonly id = "auth";
   override readonly dependsOn = ["email"] as const;
   override readonly optionalDependsOn = ["billing"] as const;
+  private readonly grants: Grant[];
+
+  constructor(grants?: Grant[]) {
+    super();
+    this.grants = grants ?? authGrants;
+  }
 
   override repositories({ db }: ModuleRepositoriesContext<AuthModuleDeps, AuthModuleTables>) {
     return {
@@ -78,10 +86,14 @@ export class AuthModule extends BaseModule<
     deps,
   }: ModuleServicesContext<AuthModuleDeps, AuthModuleRepositories>) {
     return {
-      auth: new AuthService(repositories, {
-        email: deps.email.services.email,
-        billing: deps.billing?.services.billing,
-      }),
+      auth: new AuthService(
+        repositories,
+        {
+          email: deps.email.services.email,
+          billing: deps.billing?.services.billing,
+        },
+        this.grants
+      ),
     };
   }
 

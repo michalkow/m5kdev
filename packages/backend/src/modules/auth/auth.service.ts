@@ -4,7 +4,7 @@ import { posthogCapture } from "../../utils/posthog";
 import type { Context } from "../../utils/trpc";
 import { createActorFromContext, type OrganizationActor } from "../base/base.actor";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
-import { BaseService } from "../base/base.service";
+import { BasePermissionService, BaseService } from "../base/base.service";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
 import type * as auth from "./auth.db";
@@ -37,7 +37,7 @@ type AuthServiceDependencies =
   | { email: EmailService }
   | { email: EmailService; billing: BillingService };
 
-export class AuthService extends BaseService<
+export class AuthService extends BasePermissionService<
   {
     auth: AuthRepository;
     user: AuthUserRepository;
@@ -45,7 +45,8 @@ export class AuthService extends BaseService<
     waitlist: AuthWaitlistRepository;
     organization: AuthOrganizationRepository;
   },
-  AuthServiceDependencies
+  AuthServiceDependencies,
+  Context
 > {
   private getBillingService(): BillingService | null {
     if (!("billing" in this.service)) return null;
@@ -70,20 +71,44 @@ export class AuthService extends BaseService<
     return this.repository.waitlist.getUserWaitlistCount(ctx.actor.userId);
   }
 
-  async getOnboarding(ctx: Context): ServerResultAsync<number> {
-    return this.repository.user.getOnboarding(ctx.actor.userId);
-  }
+  // async getOnboarding(ctx: Context): ServerResultAsync<number> {
+  //   return this.repository.user.getOnboarding(ctx.actor.userId);
+  // }
 
-  async setOnboarding(onboarding: number, ctx: Context): ServerResultAsync<number> {
-    posthogCapture({
-      distinctId: ctx.actor.userId,
-      event: "onboarding_set",
-      properties: {
-        onboarding,
-      },
+  getOnboarding = this.procedure("getOnboarding")
+    .requireAuth()
+    .loadResource("user", ({ ctx }) => this.repository.user.findById(ctx.actor.userId))
+    .access({
+      action: "read",
+      entities: ({ state }) => ({
+        userId: state.user.id,
+      }),
+    })
+    .handle(({ state }): ServerResult<number> => {
+      return ok(state.user.onboarding ?? 0);
     });
-    return this.repository.user.setOnboarding(ctx.actor.userId, onboarding);
-  }
+
+  setOnboarding = this.procedure<number>("setOnboarding")
+    .requireAuth()
+    .loadResource("user", ({ ctx }) => this.repository.user.findById(ctx.actor.userId))
+    .access({
+      action: "write",
+      entities: ({ state }) => ({
+        userId: state.user.id,
+      }),
+    })
+    .handle(async ({ ctx, input: onboarding }): ServerResultAsync<number> => {
+      posthogCapture({
+        distinctId: ctx.actor.userId,
+        event: "onboarding_set",
+        properties: {
+          onboarding,
+        },
+      });
+      const result = await this.repository.user.update({ id: ctx.actor.userId, onboarding });
+      if (result.isErr()) return err(result.error);
+      return ok(result.value.onboarding as number);
+    });
 
   async getPreferences(ctx: Context): ServerResultAsync<Record<string, unknown>> {
     return this.repository.user.getPreferences(ctx.actor.userId);

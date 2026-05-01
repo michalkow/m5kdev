@@ -188,7 +188,7 @@ export function createAuthTRPC(
       }),
 
     getOnboarding: procedure.output(z.number()).query(async ({ ctx }) => {
-      return handleTRPCResult(await authService.getOnboarding(ctx));
+      return handleTRPCResult(await authService.getOnboarding(undefined, ctx));
     }),
 
     setOnboarding: procedure
