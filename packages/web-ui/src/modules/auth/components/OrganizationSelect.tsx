@@ -29,7 +29,7 @@ export function OrganizationSelect<T extends object>({
   const { data: organizations = [], isLoading: isLoadingOrganizations } = useUserOrganizations();
   const isLoading = isLoadingSession || isLoadingOrganizations;
   if (!showLoading && isLoading) return null;
-  if (!showSingle && organizations.length > 2) return null;
+  if (!showSingle && organizations.length <= 1) return null;
   return (
     <Select
       isDisabled={isLoading || isDisabled}
