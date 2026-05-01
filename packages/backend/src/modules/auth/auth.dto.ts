@@ -3,6 +3,8 @@ import { z } from "zod";
 export const organizationTypeSchema = z.enum(["solo", "organization", "agency", "enterprise"]);
 export type OrganizationType = z.infer<typeof organizationTypeSchema>;
 
+import { querySchema } from "@m5kdev/commons/modules/schemas/query.schema";
+
 export const organizationSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -18,6 +20,13 @@ export const organizationSchema = z.object({
 
 export type Organization = z.infer<typeof organizationSchema>;
 
+export const organizationListSchema = z.object({
+  rows: z.array(organizationSchema),
+  total: z.number(),
+});
+
+export type OrganizationList = z.infer<typeof organizationListSchema>;
+
 export const simpleOrganizationSchema = organizationSchema.omit({
   metadata: true,
   preferences: true,
@@ -25,6 +34,10 @@ export const simpleOrganizationSchema = organizationSchema.omit({
 });
 
 export type SimpleOrganization = z.infer<typeof simpleOrganizationSchema>;
+
+export const adminOrganizationQueryInputSchema = querySchema;
+
+export type AdminOrganizationQueryInputSchema = z.infer<typeof adminOrganizationQueryInputSchema>;
 
 export const waitlistSchema = z.object({
   id: z.string(),

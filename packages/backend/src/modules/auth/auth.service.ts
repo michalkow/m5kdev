@@ -13,7 +13,9 @@ import type {
   AccountClaimMagicLinkOutput,
   AccountClaimOutput,
   AdminOrganization,
+  AdminOrganizationQueryInputSchema,
   ChildOrganization,
+  OrganizationList,
   OrganizationType,
   ReadInvitationOutput,
   SimpleOrganization,
@@ -191,16 +193,10 @@ export class AuthService extends BaseService<
     return this.repository.waitlist.listAdminWaitlist();
   }
 
-  async listAdminOrganizations({
-    search,
-    limit,
-    offset,
-  }: {
-    search?: string;
-    limit?: number;
-    offset?: number;
-  }): ServerResultAsync<AdminOrganization[]> {
-    return this.repository.organization.listAdminOrganizations({ search, limit, offset });
+  async listAdminOrganizations(
+    input: AdminOrganizationQueryInputSchema
+  ): ServerResultAsync<OrganizationList> {
+    return this.repository.organization.queryList(input);
   }
 
   async updateAdminOrganizationType({

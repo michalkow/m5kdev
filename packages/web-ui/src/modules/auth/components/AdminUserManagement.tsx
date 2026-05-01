@@ -18,6 +18,7 @@ import type { Key } from "@react-types/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
+  Building2,
   CalendarClock,
   ChevronDown,
   ChevronUp,
@@ -500,6 +501,10 @@ export function AdminUserManagement({
     navigate("/admin/waitlist");
   };
 
+  const openOrganizationManagement = () => {
+    navigate("/admin/organizations");
+  };
+
   const hasActiveFilters =
     debouncedSearchQuery ||
     statusFilter !== "all" ||
@@ -513,6 +518,10 @@ export function AdminUserManagement({
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold">User Management</h2>
         <div className="flex items-center gap-2">
+          <Button onPress={openOrganizationManagement} size="sm">
+            <Building2 className="h-4 w-4 mr-2" />
+            Organizations
+          </Button>
           <Button onPress={openWaitlistModal} size="sm">
             <List className="h-4 w-4 mr-2" />
             Waitlist

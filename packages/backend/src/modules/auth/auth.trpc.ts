@@ -4,8 +4,10 @@ import {
   accountClaimMagicLinkOutputSchema,
   accountClaimOutputSchema,
   accountClaimSchema,
+  adminOrganizationQueryInputSchema,
   adminOrganizationSchema,
   childOrganizationSchema,
+  organizationListSchema,
   organizationSchema,
   organizationTypeSchema,
   readInvitationInputSchema,
@@ -111,14 +113,8 @@ export function createAuthTRPC(
     }),
 
     listAdminOrganizations: adminProcedure
-      .input(
-        z.object({
-          search: z.string().optional(),
-          limit: z.number().int().min(1).max(200).optional(),
-          offset: z.number().int().min(0).optional(),
-        })
-      )
-      .output(z.array(adminOrganizationSchema))
+      .input(adminOrganizationQueryInputSchema)
+      .output(organizationListSchema)
       .query(async ({ input }) => {
         return handleTRPCResult(await authService.listAdminOrganizations(input));
       }),
