@@ -5,13 +5,13 @@ import { fromNodeHeaders } from "better-auth/node";
 import type { Result } from "neverthrow";
 import type { BetterAuth, Session, User } from "../modules/auth/auth.lib";
 import {
-  createActorFromContext,
-  validateActor,
   type ActorScope,
   type AuthenticatedActor,
+  createActorFromContext,
   type OrganizationActor,
   type TeamActor,
   type UserActor,
+  validateActor,
 } from "../modules/base/base.actor";
 import { ServerError } from "./errors";
 import { logger } from "./logger";
@@ -46,6 +46,9 @@ const publicProcedure = baseProcedure;
 const privateProcedure = baseProcedure.use(({ ctx, next }) => {
   return next({ ctx: verifyProtectedProcedureContext(ctx) });
 });
+const organizationProcedure = privateProcedure.use(({ ctx, next }) => {
+  return next({ ctx: verifyOrganizationProcedureContext(ctx) });
+});
 const adminProcedure = baseProcedure.use(({ ctx, next }) => {
   return next({ ctx: verifyAdminProcedureContext(ctx) });
 });
@@ -55,6 +58,7 @@ export type TRPCMethods = {
   baseProcedure: typeof baseProcedure;
   publicProcedure: typeof publicProcedure;
   privateProcedure: typeof privateProcedure;
+  organizationProcedure: typeof organizationProcedure;
   adminProcedure: typeof adminProcedure;
 };
 
@@ -74,20 +78,22 @@ export function createTRPCMethods() {
     baseProcedure,
     publicProcedure,
     privateProcedure,
+    organizationProcedure,
     adminProcedure,
   };
 }
 
 export function createAuthContext(auth: BetterAuth) {
-  return async function createContext({ req }: CreateExpressContextOptions): Promise<RequestContext> {
+  return async function createContext({
+    req,
+  }: CreateExpressContextOptions): Promise<RequestContext> {
     const data = await auth.api.getSession({
       headers: fromNodeHeaders(req.headers),
     });
 
     const user = (data?.user as User) || null;
     const session = (data?.session as Session) || null;
-    const actor =
-      user && session ? createActorFromContext({ user, session }, "user") : null;
+    const actor = user && session ? createActorFromContext({ user, session }, "user") : null;
 
     return {
       session,

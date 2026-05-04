@@ -55,135 +55,7 @@ export class AuthUserRepository extends BaseTableRepository<
   Schema,
   Record<string, never>,
   Schema["users"]
-> {
-  async getOnboarding(userId: string, tx?: Orm): ServerResultAsync<number> {
-    const db = tx ?? this.orm;
-    const result = await this.throwableQuery(() =>
-      db
-        .select({ onboarding: this.schema.users.onboarding })
-        .from(this.schema.users)
-        .where(eq(this.schema.users.id, userId))
-        .limit(1)
-    );
-    if (result.isErr()) return err(result.error);
-    const [user] = result.value;
-    if (!user) return this.error("FORBIDDEN");
-    return ok(user.onboarding ?? 0);
-  }
-
-  async setOnboarding(userId: string, onboarding: number, tx?: Orm): ServerResultAsync<number> {
-    const db = tx ?? this.orm;
-    const updateResult = await this.throwableQuery(() =>
-      db.update(this.schema.users).set({ onboarding }).where(eq(this.schema.users.id, userId))
-    );
-    if (updateResult.isErr()) return err(updateResult.error);
-    return ok(onboarding);
-  }
-
-  async getPreferences(userId: string, tx?: Orm): ServerResultAsync<Record<string, unknown>> {
-    const db = tx ?? this.orm;
-    this.logger.info({ userId });
-    const userResult = await this.throwableQuery(() =>
-      db
-        .select({ preferences: this.schema.users.preferences })
-        .from(this.schema.users)
-        .where(eq(this.schema.users.id, userId))
-        .limit(1)
-    );
-    this.logger.info({ userResult });
-    if (userResult.isErr()) return err(userResult.error);
-    const [user] = userResult.value;
-    if (!user) return this.error("FORBIDDEN");
-
-    return ok(normalizeRecord(user.preferences));
-  }
-
-  async setPreferences(
-    userId: string,
-    preferences: Record<string, unknown>,
-    tx?: Orm
-  ): ServerResultAsync<Record<string, unknown>> {
-    const db = tx ?? this.orm;
-
-    const updateResult = await this.throwableQuery(() =>
-      db.update(this.schema.users).set({ preferences }).where(eq(this.schema.users.id, userId))
-    );
-    if (updateResult.isErr()) return err(updateResult.error);
-    return ok(preferences);
-  }
-
-  async getMetadata(userId: string, tx?: Orm): ServerResultAsync<Record<string, unknown>> {
-    const db = tx ?? this.orm;
-    const userResult = await this.throwableQuery(() =>
-      db
-        .select({ metadata: this.schema.users.metadata })
-        .from(this.schema.users)
-        .where(eq(this.schema.users.id, userId))
-        .limit(1)
-    );
-    if (userResult.isErr()) return err(userResult.error);
-    const [user] = userResult.value;
-    if (!user) return this.error("FORBIDDEN");
-    return ok(user.metadata ?? {});
-  }
-
-  async setMetadata(
-    userId: string,
-    metadata: Record<string, unknown>,
-    tx?: Orm
-  ): ServerResultAsync<Record<string, unknown>> {
-    const db = tx ?? this.orm;
-    const userResult = await this.throwableQuery(() =>
-      db
-        .select({ metadata: this.schema.users.metadata })
-        .from(this.schema.users)
-        .where(eq(this.schema.users.id, userId))
-        .limit(1)
-    );
-    if (userResult.isErr()) return err(userResult.error);
-    const [user] = userResult.value;
-    if (!user) return this.error("FORBIDDEN");
-
-    const updateResult = await this.throwableQuery(() =>
-      db
-        .update(this.schema.users)
-        .set({
-          metadata: {
-            ...(user.metadata ?? {}),
-            ...metadata,
-          },
-        })
-        .where(eq(this.schema.users.id, userId))
-    );
-    if (updateResult.isErr()) return err(updateResult.error);
-    return ok(metadata);
-  }
-
-  async getFlags(userId: string, tx?: Orm): ServerResultAsync<string[]> {
-    const db = tx ?? this.orm;
-    const userResult = await this.throwableQuery(() =>
-      db
-        .select({ flags: this.schema.users.flags })
-        .from(this.schema.users)
-        .where(eq(this.schema.users.id, userId))
-        .limit(1)
-    );
-    if (userResult.isErr()) return err(userResult.error);
-    const [user] = userResult.value;
-    if (!user) return this.error("FORBIDDEN");
-    return ok(normalizeOrganizationFlags(user.flags));
-  }
-
-  async setFlags(userId: string, flags: string[], tx?: Orm): ServerResultAsync<string[]> {
-    const db = tx ?? this.orm;
-
-    const updateResult = await this.throwableQuery(() =>
-      db.update(this.schema.users).set({ flags }).where(eq(this.schema.users.id, userId))
-    );
-    if (updateResult.isErr()) return err(updateResult.error);
-    return ok(flags);
-  }
-}
+> {}
 
 export class AuthOrganizationRepository extends BaseTableRepository<
   Orm,
@@ -236,56 +108,6 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     const fields = await this.getOrganizationJsonFieldsForMember(userId, organizationId, tx);
     if (!fields) return this.error("FORBIDDEN");
     return ok(fields.flags);
-  }
-
-  async setOrganizationFlags(
-    userId: string,
-    organizationId: string,
-    flags: string[],
-    tx?: Orm
-  ): ServerResultAsync<string[]> {
-    const db = tx ?? this.orm;
-    const fields = await this.getOrganizationJsonFieldsForMember(userId, organizationId, tx);
-    if (!fields) return this.error("FORBIDDEN");
-
-    const updateResult = await this.throwableQuery(() =>
-      db
-        .update(this.schema.organizations)
-        .set({ flags })
-        .where(eq(this.schema.organizations.id, organizationId))
-    );
-    if (updateResult.isErr()) return err(updateResult.error);
-    return ok(flags);
-  }
-
-  async getOrganizationPreferences(
-    userId: string,
-    organizationId: string,
-    tx?: Orm
-  ): ServerResultAsync<Record<string, unknown>> {
-    const fields = await this.getOrganizationJsonFieldsForMember(userId, organizationId, tx);
-    if (!fields) return this.error("FORBIDDEN");
-    return ok(fields.preferences);
-  }
-
-  async setOrganizationPreferences(
-    userId: string,
-    organizationId: string,
-    preferences: Record<string, unknown>,
-    tx?: Orm
-  ): ServerResultAsync<Record<string, unknown>> {
-    const db = tx ?? this.orm;
-    const fields = await this.getOrganizationJsonFieldsForMember(userId, organizationId, tx);
-    if (!fields) return this.error("FORBIDDEN");
-
-    const updateResult = await this.throwableQuery(() =>
-      db
-        .update(this.schema.organizations)
-        .set({ preferences })
-        .where(eq(this.schema.organizations.id, organizationId))
-    );
-    if (updateResult.isErr()) return err(updateResult.error);
-    return ok(preferences);
   }
 
   async createOrganization(
@@ -408,32 +230,7 @@ export class AuthInvitationRepository extends BaseTableRepository<
   Schema,
   Record<string, never>,
   Schema["invitations"]
-> {
-  async read(id: string, tx?: Orm): ServerResultAsync<ReadInvitationOutput> {
-    const db = tx ?? this.orm;
-    const invitationResult = await this.findById(id, tx);
-    if (invitationResult.isErr()) return err(invitationResult.error);
-    const invitation = invitationResult.value;
-    if (!invitation) return this.error("NOT_FOUND");
-    const organizationResult = await this.throwableQuery(() =>
-      db
-        .select()
-        .from(this.schema.organizations)
-        .where(eq(this.schema.organizations.id, invitation.organizationId))
-        .limit(1)
-    );
-    if (organizationResult.isErr()) return err(organizationResult.error);
-    const [organization] = organizationResult.value;
-    if (!organization) return this.error("NOT_FOUND");
-    return ok({
-      organizationId: invitation.organizationId,
-      email: invitation.email,
-      name: organization.name,
-      slug: organization.slug,
-      logo: organization.logo,
-    });
-  }
-}
+> {}
 
 export class AuthWaitlistRepository extends BaseTableRepository<
   Orm,

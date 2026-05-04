@@ -20,7 +20,13 @@ import {
 import type { AuthService } from "./auth.service";
 
 export function createAuthTRPC(
-  { router, publicProcedure, privateProcedure: procedure, adminProcedure }: TRPCMethods,
+  {
+    router,
+    publicProcedure,
+    privateProcedure: procedure,
+    adminProcedure,
+    organizationProcedure,
+  }: TRPCMethods,
   authService: AuthService
 ) {
   return router({
@@ -31,8 +37,8 @@ export function createAuthTRPC(
     readInvitation: publicProcedure
       .input(readInvitationInputSchema)
       .output(readInvitationOutputSchema)
-      .query(async ({ input }) => {
-        return handleTRPCResult(await authService.readInvitation(input));
+      .query(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.readInvitation(input, ctx));
       }),
 
     createInvitationCode: procedure
@@ -199,7 +205,7 @@ export function createAuthTRPC(
       }),
 
     getPreferences: procedure.output(z.record(z.string(), z.unknown())).query(async ({ ctx }) => {
-      return handleTRPCResult(await authService.getPreferences(ctx));
+      return handleTRPCResult(await authService.getPreferences(undefined, ctx));
     }),
 
     setPreferences: procedure
@@ -209,13 +215,13 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.setPreferences(input, ctx));
       }),
 
-    getOrganizationPreferences: procedure
+    getOrganizationPreferences: organizationProcedure
       .output(z.record(z.string(), z.unknown()))
       .query(async ({ ctx }) => {
-        return handleTRPCResult(await authService.getOrganizationPreferences(ctx));
+        return handleTRPCResult(await authService.getOrganizationPreferences(undefined, ctx));
       }),
 
-    setOrganizationPreferences: procedure
+    setOrganizationPreferences: organizationProcedure
       .input(z.record(z.string(), z.unknown()))
       .output(z.record(z.string(), z.unknown()))
       .mutation(async ({ ctx, input }) => {
@@ -223,7 +229,7 @@ export function createAuthTRPC(
       }),
 
     getMetadata: procedure.output(z.record(z.string(), z.unknown())).query(async ({ ctx }) => {
-      return handleTRPCResult(await authService.getMetadata(ctx));
+      return handleTRPCResult(await authService.getMetadata(undefined, ctx));
     }),
 
     setMetadata: procedure
@@ -234,12 +240,14 @@ export function createAuthTRPC(
       }),
 
     getFlags: procedure.output(z.array(z.string())).query(async ({ ctx }) => {
-      return handleTRPCResult(await authService.getFlags(ctx));
+      return handleTRPCResult(await authService.getFlags(undefined, ctx));
     }),
 
-    getOrganizationFlags: procedure.output(z.array(z.string())).query(async ({ ctx }) => {
-      return handleTRPCResult(await authService.getOrganizationFlags(ctx));
-    }),
+    getOrganizationFlags: organizationProcedure
+      .output(z.array(z.string()))
+      .query(async ({ ctx }) => {
+        return handleTRPCResult(await authService.getOrganizationFlags(undefined, ctx));
+      }),
 
     setFlags: procedure
       .input(z.array(z.string()))
@@ -248,7 +256,7 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.setFlags(input, ctx));
       }),
 
-    setOrganizationFlags: procedure
+    setOrganizationFlags: organizationProcedure
       .input(z.array(z.string()))
       .output(z.array(z.string()))
       .mutation(async ({ ctx, input }) => {

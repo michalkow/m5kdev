@@ -22,6 +22,7 @@ import type {
   UpdateChildOrganizationInput,
   Waitlist,
   WaitlistOutput,
+  waitlistSchema,
 } from "./auth.dto";
 import type {
   AuthInvitationRepository,
@@ -53,27 +54,69 @@ export class AuthService extends BasePermissionService<
     return this.service.billing;
   }
 
-  private organizationActorFromCtx(ctx: Context): ServerResult<OrganizationActor> {
-    try {
-      return ok(createActorFromContext({ user: ctx.user, session: ctx.session }, "organization"));
-    } catch (e) {
-      if (e instanceof ServerError) return err(e);
-      throw e;
-    }
-  }
+  // #region Invitations
+  // * =============================================================================
+  // * SECTION: Invitations
+  // * =============================================================================
 
-  async readInvitation({ id }: { id: string }): ServerResultAsync<ReadInvitationOutput> {
-    return this.repository.invitation.read(id);
-  }
+  readInvitation = this.procedure<{ id: string }>("readInvitation")
+    .loadResource("invitation", ({ input }) => this.repository.invitation.findById(input.id))
+    .loadResource("organization", ({ state }) =>
+      this.repository.organization.findById(state.invitation.organizationId)
+    )
+    .handle(({ state }): ServerResult<ReadInvitationOutput> => {
+      return ok({
+        organizationId: state.invitation.organizationId,
+        email: state.invitation.email,
+        name: state.organization.name,
+        slug: state.organization.slug,
+        logo: state.organization.logo,
+      });
+    });
+
+  // #endregion Invitations
+
+  // #region Waitlist
+  // * =============================================================================
+  // * SECTION: Waitlist
+  // * =============================================================================
+
+  listAdminWaitlist = this.procedure("listAdminWaitlist")
+    .requireAuth()
+    .loadResource("waitlist", () =>
+      this.repository.waitlist.queryList({
+        filters: [
+          {
+            columnId: "type",
+            type: "string",
+            method: "equals",
+            value: "WAITLIST",
+          },
+        ],
+      })
+    )
+    .access({
+      action: "read",
+      entities: ({ state }) =>
+        state.waitlist.rows.map((waitlist) => ({
+          userId: waitlist.userId,
+        })),
+    })
+    .handle(async ({ state }): ServerResultAsync<WaitlistOutput[]> => {
+      return ok(state.waitlist.rows);
+    });
 
   async getUserWaitlistCount(ctx: Context): ServerResultAsync<number> {
     if (ctx.actor.userRole === "admin") return ok(0);
     return this.repository.waitlist.getUserWaitlistCount(ctx.actor.userId);
   }
 
-  // async getOnboarding(ctx: Context): ServerResultAsync<number> {
-  //   return this.repository.user.getOnboarding(ctx.actor.userId);
-  // }
+  // #endregion Waitlist
+
+  // #region Users
+  // * =============================================================================
+  // * SECTION: Users
+  // * =============================================================================
 
   getOnboarding = this.procedure("getOnboarding")
     .requireAuth()
@@ -110,113 +153,170 @@ export class AuthService extends BasePermissionService<
       return ok(result.value.onboarding as number);
     });
 
-  async getPreferences(ctx: Context): ServerResultAsync<Record<string, unknown>> {
-    return this.repository.user.getPreferences(ctx.actor.userId);
-  }
-
-  async setPreferences(
-    preferences: Record<string, unknown>,
-    ctx: Context
-  ): ServerResultAsync<Record<string, unknown>> {
-    posthogCapture({
-      distinctId: ctx.actor.userId,
-      event: "preferences_set",
-    });
-    return this.repository.user.setPreferences(ctx.actor.userId, preferences);
-  }
-
-  async getOrganizationPreferences(ctx: Context): ServerResultAsync<Record<string, unknown>> {
-    const org = this.organizationActorFromCtx(ctx);
-    if (org.isErr()) return err(org.error);
-    const actor = org.value;
-
-    return this.repository.organization.getOrganizationPreferences(
-      actor.userId,
-      actor.organizationId
-    );
-  }
-
-  async setOrganizationPreferences(
-    preferences: Record<string, unknown>,
-    ctx: Context
-  ): ServerResultAsync<Record<string, unknown>> {
-    const org = this.organizationActorFromCtx(ctx);
-    if (org.isErr()) return err(org.error);
-    const actor = org.value;
-
-    posthogCapture({
-      distinctId: actor.userId,
-      event: "organization_preferences_set",
-      properties: {
-        organizationId: actor.organizationId,
-      },
+  getPreferences = this.procedure("getPreferences")
+    .requireAuth()
+    .loadResource("user", ({ ctx }) => this.repository.user.findById(ctx.actor.userId))
+    .access({
+      action: "read",
+      entities: ({ state }) => ({
+        userId: state.user.id,
+      }),
+    })
+    .handle(({ state }): ServerResult<Record<string, unknown>> => {
+      return ok(state.user.preferences ?? {});
     });
 
-    return this.repository.organization.setOrganizationPreferences(
-      actor.userId,
-      actor.organizationId,
-      preferences
-    );
-  }
-
-  async getMetadata(ctx: Context): ServerResultAsync<Record<string, unknown>> {
-    return this.repository.user.getMetadata(ctx.actor.userId);
-  }
-
-  async setMetadata(
-    metadata: Record<string, unknown>,
-    ctx: Context
-  ): ServerResultAsync<Record<string, unknown>> {
-    posthogCapture({
-      distinctId: ctx.actor.userId,
-      event: "metadata_set",
-    });
-    return this.repository.user.setMetadata(ctx.actor.userId, metadata);
-  }
-
-  async getFlags(ctx: Context): ServerResultAsync<string[]> {
-    return this.repository.user.getFlags(ctx.actor.userId);
-  }
-
-  async getOrganizationFlags(ctx: Context): ServerResultAsync<string[]> {
-    const org = this.organizationActorFromCtx(ctx);
-    if (org.isErr()) return err(org.error);
-    const actor = org.value;
-
-    return this.repository.organization.getOrganizationFlags(actor.userId, actor.organizationId);
-  }
-
-  async setFlags(flags: string[], ctx: Context): ServerResultAsync<string[]> {
-    posthogCapture({
-      distinctId: ctx.actor.userId,
-      event: "flags_set",
-    });
-    return this.repository.user.setFlags(ctx.actor.userId, flags);
-  }
-
-  async setOrganizationFlags(flags: string[], ctx: Context): ServerResultAsync<string[]> {
-    const org = this.organizationActorFromCtx(ctx);
-    if (org.isErr()) return err(org.error);
-    const actor = org.value;
-
-    posthogCapture({
-      distinctId: actor.userId,
-      event: "organization_flags_set",
-      properties: {
-        organizationId: actor.organizationId,
-      },
+  setPreferences = this.procedure<Record<string, unknown>>("setPreferences")
+    .requireAuth()
+    .loadResource("user", ({ ctx }) => this.repository.user.findById(ctx.actor.userId))
+    .access({
+      action: "write",
+      entities: ({ state }) => ({
+        userId: state.user.id,
+      }),
+    })
+    .handle(async ({ ctx, input, state }): ServerResultAsync<Record<string, unknown>> => {
+      const preferences = { ...(state.user.preferences ?? {}), ...input };
+      const result = await this.repository.user.update({ id: ctx.actor.userId, preferences });
+      if (result.isErr()) return err(result.error);
+      return ok(preferences);
     });
 
-    return this.repository.organization.setOrganizationFlags(
-      actor.userId,
-      actor.organizationId,
-      flags
-    );
-  }
+  getMetadata = this.procedure("getMetadata")
+    .requireAuth()
+    .loadResource("user", ({ ctx }) => this.repository.user.findById(ctx.actor.userId))
+    .access({
+      action: "read",
+      entities: ({ state }) => ({
+        userId: state.user.id,
+      }),
+    })
+    .handle(({ state }): ServerResult<Record<string, unknown>> => {
+      return ok(state.user.metadata ?? {});
+    });
 
-  async listAdminWaitlist(): ServerResultAsync<WaitlistOutput[]> {
-    return this.repository.waitlist.listAdminWaitlist();
-  }
+  setMetadata = this.procedure<Record<string, unknown>>("setMetadata")
+    .requireAuth()
+    .loadResource("user", ({ ctx }) => this.repository.user.findById(ctx.actor.userId))
+    .access({
+      action: "write",
+      entities: ({ state }) => ({
+        userId: state.user.id,
+      }),
+    })
+    .handle(async ({ ctx, input, state }): ServerResultAsync<Record<string, unknown>> => {
+      const metadata = { ...(state.user.metadata ?? {}), ...input };
+      const result = await this.repository.user.update({ id: ctx.actor.userId, metadata });
+      if (result.isErr()) return err(result.error);
+      return ok(metadata);
+    });
+
+  getFlags = this.procedure("getFlags")
+    .requireAuth()
+    .loadResource("user", ({ ctx }) => this.repository.user.findById(ctx.actor.userId))
+    .access({
+      action: "read",
+      entities: ({ state }) => ({
+        userId: state.user.id,
+      }),
+    })
+    .handle(({ state }): ServerResult<string[]> => {
+      return ok(state.user.flags ?? []);
+    });
+
+  setFlags = this.procedure<string[]>("setFlags")
+    .requireAuth()
+    .loadResource("user", ({ ctx }) => this.repository.user.findById(ctx.actor.userId))
+    .access({
+      action: "write",
+      entities: ({ state }) => ({
+        userId: state.user.id,
+      }),
+    })
+    .handle(async ({ ctx, input, state }): ServerResultAsync<string[]> => {
+      const flags = Array.from(new Set([...(state.user.flags ?? []), ...input]));
+      const result = await this.repository.user.update({ id: ctx.actor.userId, flags });
+      if (result.isErr()) return err(result.error);
+      return ok(flags);
+    });
+
+  // #endregion Users
+
+  // #region Organizations
+  // * =============================================================================
+  // * SECTION: Organizations
+  // * =============================================================================
+
+  getOrganizationPreferences = this.procedure("getOrganizationPreferences")
+    .requireAuth("organization")
+    .loadResource("organization", ({ ctx }) =>
+      this.repository.organization.findById(ctx.actor.organizationId)
+    )
+    .access({
+      action: "read",
+      entities: ({ state }) => ({
+        organizationId: state.organization.id,
+      }),
+    })
+    .handle(({ state }): ServerResult<Record<string, unknown>> => {
+      return ok(state.organization.preferences ?? {});
+    });
+
+  setOrganizationPreferences = this.procedure<Record<string, unknown>>("setOrganizationPreferences")
+    .requireAuth("organization")
+    .loadResource("organization", ({ ctx }) =>
+      this.repository.organization.findById(ctx.actor.organizationId)
+    )
+    .access({
+      action: "write",
+      entities: ({ state }) => ({
+        organizationId: state.organization.id,
+      }),
+    })
+    .handle(async ({ ctx, input, state }): ServerResultAsync<Record<string, unknown>> => {
+      const preferences = { ...(state.organization.preferences ?? {}), ...input };
+      const result = await this.repository.user.update({ id: ctx.actor.userId, preferences });
+      if (result.isErr()) return err(result.error);
+      return ok(preferences);
+    });
+
+  getOrganizationFlags = this.procedure("getOrganizationFlags")
+    .requireAuth("organization")
+    .loadResource("organization", ({ ctx }) =>
+      this.repository.organization.findById(ctx.actor.organizationId)
+    )
+    .access({
+      action: "read",
+      entities: ({ state }) => ({
+        organizationId: state.organization.id,
+      }),
+    })
+    .handle(({ state }): ServerResult<string[]> => {
+      return ok(state.organization.flags ?? []);
+    });
+
+  setOrganizationFlags = this.procedure<string[]>("setOrganizationFlags")
+    .requireAuth("organization")
+    .loadResource("organization", ({ ctx }) =>
+      this.repository.organization.findById(ctx.actor.organizationId)
+    )
+    .access({
+      action: "write",
+      entities: ({ state }) => ({
+        organizationId: state.organization.id,
+      }),
+    })
+    .handle(async ({ ctx, input, state }): ServerResultAsync<string[]> => {
+      const flags = Array.from(new Set([...(state.organization.flags ?? []), ...input]));
+      const result = await this.repository.organization.update({
+        id: ctx.actor.organizationId,
+        flags,
+      });
+      if (result.isErr()) return err(result.error);
+      return ok(flags);
+    });
+
+  // #endregion Organizations
 
   async listAdminOrganizations(
     input: AdminOrganizationQueryInputSchema
