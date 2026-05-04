@@ -56,13 +56,15 @@ export function createAuthTRPC(
         })
       )
       .output(accountClaimSchema)
-      .mutation(async ({ input }) => {
-        return handleTRPCResult(await authService.createAccountClaimCode(input));
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.createAccountClaimCode(input, ctx));
       }),
 
-    listAccountClaims: adminProcedure.output(z.array(accountClaimOutputSchema)).query(async () => {
-      return handleTRPCResult(await authService.listAccountClaims());
-    }),
+    listAccountClaims: adminProcedure
+      .output(z.array(accountClaimOutputSchema))
+      .query(async ({ ctx }) => {
+        return handleTRPCResult(await authService.listAccountClaims(undefined, ctx));
+      }),
 
     generateAccountClaimMagicLink: adminProcedure
       .input(
@@ -72,8 +74,8 @@ export function createAuthTRPC(
         })
       )
       .output(accountClaimMagicLinkOutputSchema)
-      .mutation(async ({ input }) => {
-        return handleTRPCResult(await authService.generateAccountClaimMagicLink(input));
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.generateAccountClaimMagicLink(input, ctx));
       }),
 
     listAccountClaimMagicLinks: adminProcedure
@@ -83,14 +85,14 @@ export function createAuthTRPC(
         })
       )
       .output(z.array(accountClaimMagicLinkOutputSchema))
-      .query(async ({ input }) => {
-        return handleTRPCResult(await authService.listAccountClaimMagicLinks(input));
+      .query(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.listAccountClaimMagicLinks(input, ctx));
       }),
 
     getMyAccountClaimStatus: procedure
       .output(accountClaimSchema.nullable())
       .query(async ({ ctx }) => {
-        return handleTRPCResult(await authService.getMyAccountClaimStatus(ctx));
+        return handleTRPCResult(await authService.getMyAccountClaimStatus(undefined, ctx));
       }),
 
     setMyAccountClaimEmail: procedure
@@ -107,11 +109,11 @@ export function createAuthTRPC(
     acceptMyAccountClaim: procedure
       .output(z.object({ status: z.boolean() }))
       .mutation(async ({ ctx }) => {
-        return handleTRPCResult(await authService.acceptMyAccountClaim(ctx));
+        return handleTRPCResult(await authService.acceptMyAccountClaim(undefined, ctx));
       }),
 
     listWaitlist: procedure.output(z.array(waitlistSchema)).query(async ({ ctx }) => {
-      return handleTRPCResult(await authService.listWaitlist(ctx));
+      return handleTRPCResult(await authService.listWaitlist({}, ctx));
     }),
 
     listAdminWaitlist: adminProcedure
@@ -146,8 +148,8 @@ export function createAuthTRPC(
         })
       )
       .output(waitlistOutputSchema)
-      .mutation(async ({ input }) => {
-        return handleTRPCResult(await authService.addToWaitlist(input));
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.addToWaitlist(input, ctx));
       }),
 
     inviteToWaitlist: procedure
@@ -169,8 +171,8 @@ export function createAuthTRPC(
         })
       )
       .output(waitlistOutputSchema)
-      .mutation(async ({ input }) => {
-        return handleTRPCResult(await authService.inviteFromWaitlist(input));
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.inviteFromWaitlist(input, ctx));
       }),
 
     removeFromWaitlist: adminProcedure
@@ -180,8 +182,8 @@ export function createAuthTRPC(
         })
       )
       .output(waitlistOutputSchema)
-      .mutation(async ({ input }) => {
-        return handleTRPCResult(await authService.removeFromWaitlist(input));
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.removeFromWaitlist(input, ctx));
       }),
 
     joinWaitlist: publicProcedure
@@ -191,8 +193,8 @@ export function createAuthTRPC(
         })
       )
       .output(waitlistOutputSchema)
-      .mutation(async ({ input }) => {
-        return handleTRPCResult(await authService.joinWaitlist(input));
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.joinWaitlist(input, ctx));
       }),
 
     getOnboarding: procedure.output(z.number()).query(async ({ ctx }) => {
@@ -276,8 +278,8 @@ export function createAuthTRPC(
           status: z.string(),
         })
       )
-      .query(async ({ input }) => {
-        return handleTRPCResult(await authService.validateWaitlistCode(input.code));
+      .query(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.validateWaitlistCode(input.code, ctx));
       }),
 
     listChildOrganizations: organizationProcedure

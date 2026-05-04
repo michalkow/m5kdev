@@ -11,9 +11,9 @@ import type { EmailModule } from "../email/email.module";
 import type * as authTables from "./auth.db";
 import { authGrants } from "./auth.grants";
 import {
+  AuthAccountClaimRepository,
   AuthInvitationRepository,
   AuthOrganizationRepository,
-  AuthRepository,
   AuthUserRepository,
   AuthWaitlistRepository,
 } from "./auth.repository";
@@ -23,7 +23,7 @@ import { createAuthTRPC } from "./auth.trpc";
 type AuthModuleDeps = { email: EmailModule; billing?: BillingModule };
 type AuthModuleTables = typeof authTables;
 type AuthModuleRepositories = {
-  auth: AuthRepository;
+  accountClaim: AuthAccountClaimRepository;
   user: AuthUserRepository;
   invitation: AuthInvitationRepository;
   waitlist: AuthWaitlistRepository;
@@ -54,9 +54,10 @@ export class AuthModule extends BaseModule<
 
   override repositories({ db }: ModuleRepositoriesContext<AuthModuleDeps, AuthModuleTables>) {
     return {
-      auth: new AuthRepository({
+      accountClaim: new AuthAccountClaimRepository({
         orm: db.orm,
         schema: db.schema,
+        table: db.schema.accountClaimMagicLinks,
       }),
       user: new AuthUserRepository({
         orm: db.orm,

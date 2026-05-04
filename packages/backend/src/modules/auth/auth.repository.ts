@@ -122,16 +122,6 @@ export class AuthWaitlistRepository extends BaseTableRepository<
     return ok(waitlist.count ?? 0);
   }
 
-  async addToWaitlist(email: string, tx?: Orm): ServerResultAsync<WaitlistOutput> {
-    const db = tx ?? this.orm;
-    const waitlistResult = await this.throwableQuery(() =>
-      db.insert(this.schema.waitlist).values({ email }).returning()
-    );
-    if (waitlistResult.isErr()) return err(waitlistResult.error);
-    const [waitlist] = waitlistResult.value;
-    return ok(waitlist);
-  }
-
   async inviteFromWaitlist(id: string, tx?: Orm): ServerResultAsync<Waitlist> {
     const db = tx ?? this.orm;
     const waitlistResult = await this.throwableQuery(() =>
@@ -195,16 +185,6 @@ export class AuthWaitlistRepository extends BaseTableRepository<
     return ok(waitlist);
   }
 
-  async joinWaitlist(email: string, tx?: Orm): ServerResultAsync<WaitlistOutput> {
-    const db = tx ?? this.orm;
-    const waitlistResult = await this.throwableQuery(() =>
-      db.insert(this.schema.waitlist).values({ email }).returning()
-    );
-    if (waitlistResult.isErr()) return err(waitlistResult.error);
-    const [waitlist] = waitlistResult.value;
-    return ok(waitlist);
-  }
-
   async removeFromWaitlist(id: string, tx?: Orm): ServerResultAsync<WaitlistOutput> {
     const db = tx ?? this.orm;
     const waitlistResult = await this.throwableQuery(() =>
@@ -257,15 +237,30 @@ export class AuthWaitlistRepository extends BaseTableRepository<
     const [claim] = claimResult.value;
     return ok(claim);
   }
-}
 
-export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, never>> {
-  getOrm(): Orm {
-    return this.orm;
-  }
-
-  getSchema(): Schema {
-    return this.schema;
+  async findPendingAccountClaimForUser(
+    userId: string,
+    tx?: Orm
+  ): ServerResultAsync<AccountClaim | null> {
+    const db = tx ?? this.orm;
+    const claimResult = await this.throwableQuery(() =>
+      db
+        .select()
+        .from(this.schema.waitlist)
+        .where(
+          and(
+            eq(this.schema.waitlist.type, "ACCOUNT_CLAIM"),
+            eq(this.schema.waitlist.claimUserId, userId),
+            eq(this.schema.waitlist.status, "INVITED"),
+            gte(this.schema.waitlist.expiresAt, new Date())
+          )
+        )
+        .orderBy(desc(this.schema.waitlist.createdAt))
+        .limit(1)
+    );
+    if (claimResult.isErr()) return err(claimResult.error);
+    const [claim] = claimResult.value;
+    return ok(claim ?? null);
   }
 
   async createClaimableProvisionedUser({
@@ -371,28 +366,6 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     return ok(createdResult.value);
   }
 
-  async listAccountClaims(tx?: Orm): ServerResultAsync<AccountClaimOutput[]> {
-    const db = tx ?? this.orm;
-    const claimsResult = await this.throwableQuery(() =>
-      db
-        .select({
-          id: this.schema.waitlist.id,
-          claimUserId: this.schema.waitlist.claimUserId,
-          status: this.schema.waitlist.status,
-          expiresAt: this.schema.waitlist.expiresAt,
-          claimedAt: this.schema.waitlist.claimedAt,
-          claimedEmail: this.schema.waitlist.claimedEmail,
-          createdAt: this.schema.waitlist.createdAt,
-          updatedAt: this.schema.waitlist.updatedAt,
-        })
-        .from(this.schema.waitlist)
-        .where(eq(this.schema.waitlist.type, "ACCOUNT_CLAIM"))
-        .orderBy(desc(this.schema.waitlist.createdAt))
-    );
-    if (claimsResult.isErr()) return err(claimsResult.error);
-    return ok(claimsResult.value);
-  }
-
   async validateAccountClaimCode(code: string, tx?: Orm): ServerResultAsync<{ status: string }> {
     const db = tx ?? this.orm;
     const claimResult = await this.throwableQuery(() =>
@@ -440,31 +413,6 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
         .select()
         .from(this.schema.waitlist)
         .where(and(eq(this.schema.waitlist.id, id), eq(this.schema.waitlist.type, "ACCOUNT_CLAIM")))
-        .limit(1)
-    );
-    if (claimResult.isErr()) return err(claimResult.error);
-    const [claim] = claimResult.value;
-    return ok(claim ?? null);
-  }
-
-  async findPendingAccountClaimForUser(
-    userId: string,
-    tx?: Orm
-  ): ServerResultAsync<AccountClaim | null> {
-    const db = tx ?? this.orm;
-    const claimResult = await this.throwableQuery(() =>
-      db
-        .select()
-        .from(this.schema.waitlist)
-        .where(
-          and(
-            eq(this.schema.waitlist.type, "ACCOUNT_CLAIM"),
-            eq(this.schema.waitlist.claimUserId, userId),
-            eq(this.schema.waitlist.status, "INVITED"),
-            gte(this.schema.waitlist.expiresAt, new Date())
-          )
-        )
-        .orderBy(desc(this.schema.waitlist.createdAt))
         .limit(1)
     );
     if (claimResult.isErr()) return err(claimResult.error);
@@ -584,44 +532,14 @@ export class AuthRepository extends BaseRepository<Orm, Schema, Record<string, n
     if (updateResult.isErr()) return err(updateResult.error);
     return ok({ status: true });
   }
+}
 
-  async createAccountClaimMagicLink(
-    {
-      claimId,
-      userId,
-      email,
-      token,
-      url,
-      expiresAt,
-    }: {
-      claimId: string;
-      userId: string;
-      email: string;
-      token: string;
-      url: string;
-      expiresAt?: Date;
-    },
-    tx?: Orm
-  ): ServerResultAsync<AccountClaimMagicLink> {
-    const db = tx ?? this.orm;
-    const linkResult = await this.throwableQuery(() =>
-      db
-        .insert(this.schema.accountClaimMagicLinks)
-        .values({
-          claimId,
-          userId,
-          email,
-          token,
-          url,
-          expiresAt: expiresAt ?? null,
-        })
-        .returning()
-    );
-    if (linkResult.isErr()) return err(linkResult.error);
-    const [link] = linkResult.value;
-    return ok(link);
-  }
-
+export class AuthAccountClaimRepository extends BaseTableRepository<
+  Orm,
+  Schema,
+  Record<string, never>,
+  Schema["accountClaimMagicLinks"]
+> {
   async listAccountClaimMagicLinks(
     claimId: string,
     tx?: Orm
