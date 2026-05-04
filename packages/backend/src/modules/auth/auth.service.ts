@@ -84,25 +84,26 @@ export class AuthService extends BasePermissionService<
   listAdminWaitlist = this.procedure("listAdminWaitlist")
     .requireAuth()
     .loadResource("waitlist", () =>
-      this.repository.waitlist.queryList({
-        filters: [
-          {
-            columnId: "type",
-            type: "string",
-            method: "equals",
-            value: "WAITLIST",
-          },
-        ],
-      })
+      this.repository.waitlist.queryList(
+        {
+          filters: [
+            {
+              columnId: "type",
+              type: "string",
+              method: "equals",
+              value: "WAITLIST",
+            },
+          ],
+        },
+        {
+          columns: ["id", "email", "name", "createdAt", "updatedAt", "status"],
+        }
+      )
     )
-    .access({
-      action: "read",
-      entities: ({ state }) =>
-        state.waitlist.rows.map((waitlist) => ({
-          userId: waitlist.userId,
-        })),
-    })
-    .handle(async ({ state }): ServerResultAsync<WaitlistOutput[]> => {
+    .handle(async ({ state, ctx }): ServerResultAsync<WaitlistOutput[]> => {
+      if (ctx.actor.userRole !== "admin")
+        return this.error("FORBIDDEN", "You are not allowed to list the waitlist");
+
       return ok(state.waitlist.rows);
     });
 

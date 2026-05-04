@@ -25,7 +25,12 @@ import { applySorting } from "../utils/applySorting";
 import { getConditionsFromFilters } from "../utils/getConditionsFromFilters";
 import { pushGlobalSearch } from "../utils/getGlobalSearchCondition";
 import { Base } from "./base.abstract";
-import { pickColumns, type ServerResult, type ServerResultAsync } from "./base.dto";
+import {
+  pickColumns,
+  pickTableColumns,
+  type ServerResult,
+  type ServerResultAsync,
+} from "./base.dto";
 
 /** Payload for update/updateMany: id key required (string), other table fields optional. */
 export type TableUpdatePayload<
@@ -211,6 +216,16 @@ export class BaseTableRepository<
     return super.withSortingAndPagination(query, { sort, order, page, limit }, table || this.table);
   }
 
+  async queryList<K extends keyof InferSelectModel<TTable> & string>(
+    query: QueryInput | undefined,
+    options: {
+      conditions?: TableConditionBuilder<TTable>;
+      columns: readonly K[];
+      globalSearchColumns?: string[];
+      showDeleted?: boolean;
+    },
+    tx?: O
+  ): ServerResultAsync<{ rows: Pick<InferSelectModel<TTable>, K>[]; total: number }>;
   async queryList(
     query?: QueryInput,
     options?: {
@@ -220,7 +235,21 @@ export class BaseTableRepository<
       showDeleted?: boolean;
     },
     tx?: O
-  ): ServerResultAsync<{ rows: InferSelectModel<TTable>[]; total: number }> {
+  ): ServerResultAsync<{ rows: InferSelectModel<TTable>[]; total: number }>;
+  async queryList<K extends keyof InferSelectModel<TTable> & string>(
+    query?: QueryInput,
+    options?: {
+      conditions?: TableConditionBuilder<TTable>;
+      select?: SelectedFields<SQLiteColumn, TTable>;
+      columns?: readonly K[];
+      globalSearchColumns?: string[];
+      showDeleted?: boolean;
+    },
+    tx?: O
+  ): ServerResultAsync<{
+    rows: InferSelectModel<TTable>[] | Pick<InferSelectModel<TTable>, K>[];
+    total: number;
+  }> {
     type Row = InferSelectModel<TTable>;
 
     const db = tx ?? this.orm;
@@ -246,9 +275,14 @@ export class BaseTableRepository<
       conditions.push(isNull(this.table.deletedAt));
     }
 
+    const selectForRows =
+      options?.columns !== undefined
+        ? pickTableColumns(this.table, options.columns)
+        : options?.select;
+
     const whereClause = conditions.join();
     const rowsQuery = this.withSortingAndPagination(
-      (options?.select ? db.select(options.select) : db.select())
+      (selectForRows ? db.select(selectForRows) : db.select())
         .from(this.table as any)
         .where(whereClause),
       query || {}
@@ -264,23 +298,47 @@ export class BaseTableRepository<
     });
     if (queryResult.isErr()) return err(queryResult.error);
 
+    if (options?.columns !== undefined) {
+      return ok({
+        rows: queryResult.value.rows as Pick<InferSelectModel<TTable>, K>[],
+        total: queryResult.value.totalResult?.count ?? 0,
+      });
+    }
+
     return ok({
       rows: queryResult.value.rows as Row[],
       total: queryResult.value.totalResult?.count ?? 0,
     });
   }
 
-  async findById(id: string, tx?: O): ServerResultAsync<InferSelectModel<TTable> | undefined> {
+  async findById(id: string, tx?: O): ServerResultAsync<InferSelectModel<TTable> | undefined>;
+  async findById<K extends keyof InferSelectModel<TTable> & string>(
+    id: string,
+    tx: O | undefined,
+    columns: readonly K[]
+  ): ServerResultAsync<Pick<InferSelectModel<TTable>, K> | undefined>;
+  async findById<K extends keyof InferSelectModel<TTable> & string>(
+    id: string,
+    tx?: O,
+    columns?: readonly K[]
+  ): ServerResultAsync<InferSelectModel<TTable> | Pick<InferSelectModel<TTable>, K> | undefined> {
     const db = tx ?? this.orm;
     type Row = InferSelectModel<TTable>;
 
-    const rowsResult = await this.throwableQuery(() =>
-      db
-        .select()
-        .from(this.table as any)
-        .where(eq(this.idColumn as SQLiteColumn, id))
-    );
+    const rowsResult = await this.throwableQuery(() => {
+      const query =
+        columns !== undefined
+          ? db
+              .select(pickTableColumns(this.table, columns))
+              .from(this.table as any)
+          : db.select().from(this.table as any);
+      return query.where(eq(this.idColumn as SQLiteColumn, id));
+    });
     if (rowsResult.isErr()) return err(rowsResult.error);
+
+    if (columns !== undefined) {
+      return ok((rowsResult.value as Pick<InferSelectModel<TTable>, K>[])[0]);
+    }
 
     return ok((rowsResult.value as Row[])[0]);
   }
