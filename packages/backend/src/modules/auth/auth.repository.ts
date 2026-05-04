@@ -1,25 +1,15 @@
-import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
-import { and, count, desc, eq, gte, like, ne, or, type SelectedFields } from "drizzle-orm";
+import { and, count, desc, eq, gte, ne } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
-import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
 import type { ServerResultAsync } from "../base/base.dto";
-import {
-  BaseRepository,
-  BaseTableRepository,
-  type TableConditionBuilder,
-} from "../base/base.repository";
+import { BaseRepository, BaseTableRepository } from "../base/base.repository";
 import * as auth from "./auth.db";
 import type {
   AccountClaim,
   AccountClaimMagicLink,
   AccountClaimMagicLinkOutput,
   AccountClaimOutput,
-  AdminOrganization,
-  ChildOrganization,
-  OrganizationType,
-  ReadInvitationOutput,
   SimpleOrganization,
   Waitlist,
   WaitlistOutput,
@@ -30,25 +20,6 @@ type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;
 type UserRow = typeof auth.users.$inferSelect;
 type OrganizationRow = typeof auth.organizations.$inferSelect;
-
-function normalizeOrganizationPreferences(value: unknown): Record<string, unknown> {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return {};
-}
-
-function normalizeOrganizationFlags(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string");
-}
-
-function normalizeRecord(value: unknown): Record<string, unknown> {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return {};
-}
 
 export class AuthUserRepository extends BaseTableRepository<
   Orm,
@@ -63,53 +34,6 @@ export class AuthOrganizationRepository extends BaseTableRepository<
   Record<string, never>,
   Schema["organizations"]
 > {
-  private async getOrganizationJsonFieldsForMember(
-    userId: string,
-    organizationId: string,
-    tx?: Orm
-  ): Promise<{
-    preferences: Record<string, unknown>;
-    metadata: Record<string, unknown>;
-    flags: string[];
-  } | null> {
-    const db = tx ?? this.orm;
-    const [row] = await db
-      .select({
-        preferences: this.schema.organizations.preferences,
-        metadata: this.schema.organizations.metadata,
-        flags: this.schema.organizations.flags,
-      })
-      .from(this.schema.organizations)
-      .innerJoin(
-        this.schema.members,
-        eq(this.schema.members.organizationId, this.schema.organizations.id)
-      )
-      .where(
-        and(
-          eq(this.schema.organizations.id, organizationId),
-          eq(this.schema.members.userId, userId)
-        )
-      )
-      .limit(1);
-
-    if (!row) return null;
-    return {
-      preferences: normalizeOrganizationPreferences(row.preferences),
-      metadata: normalizeRecord(row.metadata),
-      flags: normalizeOrganizationFlags(row.flags),
-    };
-  }
-
-  async getOrganizationFlags(
-    userId: string,
-    organizationId: string,
-    tx?: Orm
-  ): ServerResultAsync<string[]> {
-    const fields = await this.getOrganizationJsonFieldsForMember(userId, organizationId, tx);
-    if (!fields) return this.error("FORBIDDEN");
-    return ok(fields.flags);
-  }
-
   async createOrganization(
     {
       name,
@@ -170,59 +94,6 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     if (result.isErr()) return err(result.error);
     return ok(result.value);
   }
-
-  async listChildOrganizations(parentId: string, tx?: Orm): ServerResultAsync<ChildOrganization[]> {
-    const db = tx ?? this.orm;
-    const result = await this.throwableQuery(() =>
-      db
-        .select({
-          id: this.schema.organizations.id,
-          name: this.schema.organizations.name,
-          slug: this.schema.organizations.slug,
-          logo: this.schema.organizations.logo,
-          type: this.schema.organizations.type,
-          parentId: this.schema.organizations.parentId,
-          metadata: this.schema.organizations.metadata,
-          createdAt: this.schema.organizations.createdAt,
-        })
-        .from(this.schema.organizations)
-        .where(eq(this.schema.organizations.parentId, parentId))
-        .orderBy(this.schema.organizations.name)
-    );
-    if (result.isErr()) return err(result.error);
-
-    return ok(
-      result.value.map((org) => ({
-        ...org,
-        metadata: normalizeRecord(org.metadata),
-      }))
-    );
-  }
-
-  async updateOrganizationTypeForAdmin(
-    { organizationId, type }: { organizationId: string; type: OrganizationType },
-    tx?: Orm
-  ): ServerResultAsync<AdminOrganization> {
-    const db = tx ?? this.orm;
-    const updateResult = await this.throwableQuery(() =>
-      db
-        .update(this.schema.organizations)
-        .set({ type })
-        .where(eq(this.schema.organizations.id, organizationId))
-        .returning({
-          id: this.schema.organizations.id,
-          name: this.schema.organizations.name,
-          slug: this.schema.organizations.slug,
-          type: this.schema.organizations.type,
-          parentId: this.schema.organizations.parentId,
-          createdAt: this.schema.organizations.createdAt,
-        })
-    );
-    if (updateResult.isErr()) return err(updateResult.error);
-    const [updated] = updateResult.value;
-    if (!updated) return this.error("NOT_FOUND");
-    return ok(updated);
-  }
 }
 
 export class AuthInvitationRepository extends BaseTableRepository<
@@ -249,40 +120,6 @@ export class AuthWaitlistRepository extends BaseTableRepository<
     if (result.isErr()) return err(result.error);
     const [waitlist] = result.value;
     return ok(waitlist.count ?? 0);
-  }
-
-  async listAdminWaitlist(tx?: Orm): ServerResultAsync<WaitlistOutput[]> {
-    const db = tx ?? this.orm;
-    const waitlistResult = await this.throwableQuery(() =>
-      db
-        .select({
-          id: this.schema.waitlist.id,
-          name: this.schema.waitlist.name,
-          email: this.schema.waitlist.email,
-          createdAt: this.schema.waitlist.createdAt,
-          updatedAt: this.schema.waitlist.updatedAt,
-          status: this.schema.waitlist.status,
-        })
-        .from(this.schema.waitlist)
-        .where(eq(this.schema.waitlist.type, "WAITLIST"))
-        .orderBy(desc(this.schema.waitlist.createdAt))
-    );
-    if (waitlistResult.isErr()) return err(waitlistResult.error);
-    return ok(waitlistResult.value);
-  }
-
-  async listWaitlist(userId: string, tx?: Orm): ServerResultAsync<Waitlist[]> {
-    const db = tx ?? this.orm;
-    const waitlistResult = await this.throwableQuery(() =>
-      db
-        .select()
-        .from(this.schema.waitlist)
-        .where(
-          and(eq(this.schema.waitlist.userId, userId), eq(this.schema.waitlist.type, "WAITLIST"))
-        )
-    );
-    if (waitlistResult.isErr()) return err(waitlistResult.error);
-    return ok(waitlistResult.value);
   }
 
   async addToWaitlist(email: string, tx?: Orm): ServerResultAsync<WaitlistOutput> {

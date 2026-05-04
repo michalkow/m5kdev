@@ -1,7 +1,8 @@
+import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import { err, ok } from "neverthrow";
 import { ServerError } from "../../utils/errors";
 import { posthogCapture } from "../../utils/posthog";
-import type { Context } from "../../utils/trpc";
+import type { Context, OrganizationContext, RequestContext } from "../../utils/trpc";
 import { createActorFromContext, type OrganizationActor } from "../base/base.actor";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import { BasePermissionService, BaseService } from "../base/base.service";
@@ -47,72 +48,46 @@ export class AuthService extends BasePermissionService<
     organization: AuthOrganizationRepository;
   },
   AuthServiceDependencies,
-  Context
+  RequestContext
 > {
   private getBillingService(): BillingService | null {
     if (!("billing" in this.service)) return null;
     return this.service.billing;
   }
 
-  // #region Invitations
-  // * =============================================================================
-  // * SECTION: Invitations
-  // * =============================================================================
-
-  readInvitation = this.procedure<{ id: string }>("readInvitation")
-    .loadResource("invitation", ({ input }) => this.repository.invitation.findById(input.id))
-    .loadResource("organization", ({ state }) =>
-      this.repository.organization.findById(state.invitation.organizationId)
-    )
-    .handle(({ state }): ServerResult<ReadInvitationOutput> => {
-      return ok({
-        organizationId: state.invitation.organizationId,
-        email: state.invitation.email,
-        name: state.organization.name,
-        slug: state.organization.slug,
-        logo: state.organization.logo,
-      });
-    });
-
-  // #endregion Invitations
-
-  // #region Waitlist
-  // * =============================================================================
-  // * SECTION: Waitlist
-  // * =============================================================================
-
-  listAdminWaitlist = this.procedure("listAdminWaitlist")
-    .requireAuth()
-    .loadResource("waitlist", () =>
-      this.repository.waitlist.queryList(
-        {
-          filters: [
-            {
-              columnId: "type",
-              type: "string",
-              method: "equals",
-              value: "WAITLIST",
-            },
-          ],
-        },
-        {
-          columns: ["id", "email", "name", "createdAt", "updatedAt", "status"],
-        }
-      )
-    )
-    .handle(async ({ state, ctx }): ServerResultAsync<WaitlistOutput[]> => {
-      if (ctx.actor.userRole !== "admin")
-        return this.error("FORBIDDEN", "You are not allowed to list the waitlist");
-
-      return ok(state.waitlist.rows);
-    });
-
-  async getUserWaitlistCount(ctx: Context): ServerResultAsync<number> {
-    if (ctx.actor.userRole === "admin") return ok(0);
-    return this.repository.waitlist.getUserWaitlistCount(ctx.actor.userId);
+  private assertCanManageChildOrganizations(
+    ctx: OrganizationContext,
+    action: "create" | "manage" = "manage"
+  ): ServerResult<{ parentId: string; organizationType: string }> {
+    const organizationType = ctx.session.activeOrganizationType ?? "organization";
+    const parentId = ctx.session.activeOrganizationId ?? null;
+    if (!parentId) {
+      return this.error(
+        "FORBIDDEN",
+        action === "create"
+          ? "You are not allowed to create an organization without a parent organization"
+          : "You are not allowed to manage child organizations without a parent organization"
+      );
+    }
+    if (!["enterprise", "agency"].includes(organizationType)) {
+      return this.error(
+        "FORBIDDEN",
+        action === "create"
+          ? "You are not allowed to create an organization with this type"
+          : "You are not allowed to manage child organizations"
+      );
+    }
+    const role = ctx.session.activeOrganizationRole ?? "member";
+    if (!["admin", "owner"].includes(role)) {
+      return this.error(
+        "FORBIDDEN",
+        action === "create"
+          ? "You are not allowed to create an organization with this role"
+          : "You are not allowed to manage child organizations"
+      );
+    }
+    return ok({ parentId, organizationType });
   }
-
-  // #endregion Waitlist
 
   // #region Users
   // * =============================================================================
@@ -248,6 +223,80 @@ export class AuthService extends BasePermissionService<
   // * SECTION: Organizations
   // * =============================================================================
 
+  createOrganization = this.procedure<{ name: string }>("createOrganization")
+    .requireAuth("organization")
+    .handle(async ({ ctx, input }): ServerResultAsync<OrganizationRow> => {
+      const access = this.assertCanManageChildOrganizations(ctx, "create");
+      if (access.isErr()) return err(access.error);
+      return this.repository.organization.createOrganization({
+        name: input.name,
+        parentId: access.value.parentId,
+        userId: ctx.actor.userId,
+        role: access.value.organizationType === "agency" ? "agent" : "owner",
+      });
+    });
+
+  listChildOrganizations = this.procedure("listChildOrganizations")
+    .requireAuth("organization")
+    .handle(async ({ ctx }): ServerResultAsync<ChildOrganization[]> => {
+      const access = this.assertCanManageChildOrganizations(ctx);
+      if (access.isErr()) return err(access.error);
+      const result = await this.repository.organization.queryList(
+        {
+          filters: [
+            {
+              columnId: "parentId",
+              type: "string",
+              method: "equals",
+              value: access.value.parentId,
+            },
+          ],
+        },
+        {
+          columns: ["id", "name", "slug", "logo", "type", "parentId", "createdAt", "metadata"],
+        }
+      );
+      if (result.isErr()) return err(result.error);
+      return ok(result.value.rows);
+    });
+
+  listUserOrganizations = this.procedure("listUserOrganizations")
+    .requireAuth()
+    .handle(async ({ ctx }): ServerResultAsync<SimpleOrganization[]> => {
+      return this.repository.organization.listUserOrganizations(ctx.actor.userId);
+    });
+
+  updateChildOrganization = this.procedure<UpdateChildOrganizationInput>("updateChildOrganization")
+    .requireAuth("organization")
+    .handle(async ({ input, ctx }): ServerResultAsync<ChildOrganization> => {
+      const access = this.assertCanManageChildOrganizations(ctx);
+      if (access.isErr()) return err(access.error);
+
+      return this.repository.organization.update(input);
+    });
+
+  updateAdminOrganizationType = this.procedure<{
+    organizationId: string;
+    type: OrganizationType;
+  }>("updateAdminOrganizationType")
+    .requireAuth("admin")
+    .handle(async ({ input }): ServerResultAsync<OrganizationRow> => {
+      return this.repository.organization.update({
+        id: input.organizationId,
+        type: input.type,
+      });
+    });
+
+  listAdminOrganizations = this.procedure<AdminOrganizationQueryInputSchema>(
+    "listAdminOrganizations"
+  )
+    .requireAuth("admin")
+    .handle(async ({ input }): ServerResultAsync<OrganizationList> => {
+      return this.repository.organization.queryList(input, {
+        globalSearchColumns: ["name", "slug"],
+      });
+    });
+
   getOrganizationPreferences = this.procedure("getOrganizationPreferences")
     .requireAuth("organization")
     .loadResource("organization", ({ ctx }) =>
@@ -319,27 +368,55 @@ export class AuthService extends BasePermissionService<
 
   // #endregion Organizations
 
-  async listAdminOrganizations(
-    input: AdminOrganizationQueryInputSchema
-  ): ServerResultAsync<OrganizationList> {
-    return this.repository.organization.queryList(input, {
-      globalSearchColumns: ["name", "slug"],
+  // #region Waitlist
+  // * =============================================================================
+  // * SECTION: Waitlist
+  // * =============================================================================
+
+  listAdminWaitlist = this.procedure("listAdminWaitlist")
+    .requireAuth("admin")
+    .loadResource("waitlist", () =>
+      this.repository.waitlist.queryList(
+        {
+          filters: [
+            {
+              columnId: "type",
+              type: "string",
+              method: "equals",
+              value: "WAITLIST",
+            },
+          ],
+        },
+        {
+          columns: ["id", "email", "name", "createdAt", "updatedAt", "status"],
+        }
+      )
+    )
+    .handle(async ({ state }): ServerResultAsync<WaitlistOutput[]> => {
+      return ok(state.waitlist.rows);
     });
-  }
 
-  async updateAdminOrganizationType({
-    organizationId,
-    type,
-  }: {
-    organizationId: string;
-    type: OrganizationType;
-  }): ServerResultAsync<AdminOrganization> {
-    return this.repository.organization.updateOrganizationTypeForAdmin({ organizationId, type });
-  }
+  getUserWaitlistCount = this.procedure("getUserWaitlistCount")
+    .requireAuth()
+    .handle(async ({ ctx }): ServerResultAsync<number> => {
+      return this.repository.waitlist.getUserWaitlistCount(ctx.actor.userId);
+    });
 
-  async listWaitlist(ctx: Context): ServerResultAsync<Waitlist[]> {
-    return this.repository.waitlist.listWaitlist(ctx.actor.userId);
-  }
+  listWaitlist = this.procedure<QueryInput>("listWaitlist")
+    .requireAuth()
+    .addContextFilter(["user"])
+    .use("waitlist", ({ input }) =>
+      this.repository.waitlist.queryList({
+        ...input,
+        filters: [
+          ...(input.filters ?? []),
+          { columnId: "type", type: "string", method: "equals", value: "WAITLIST" },
+        ],
+      })
+    )
+    .handle(({ state }): ServerResult<Waitlist[]> => {
+      return ok(state.waitlist.rows);
+    });
 
   async addToWaitlist({ email }: { email: string }): ServerResultAsync<WaitlistOutput> {
     return this.repository.waitlist.addToWaitlist(email);
@@ -423,6 +500,8 @@ export class AuthService extends BasePermissionService<
   }): ServerResultAsync<AccountClaim> {
     return this.repository.waitlist.createAccountClaimCode({ userId, expiresInHours });
   }
+
+  // #endregion Waitlist
 
   async listAccountClaims(): ServerResultAsync<AccountClaimOutput[]> {
     return this.repository.auth.listAccountClaims();
@@ -515,71 +594,31 @@ export class AuthService extends BasePermissionService<
     return this.repository.auth.listAccountClaimMagicLinks(claimId);
   }
 
-  private assertCanManageChildOrganizations(
-    ctx: Context,
-    action: "create" | "manage" = "manage"
-  ): ServerResult<{ parentId: string; organizationType: string }> {
-    const organizationType = ctx.session.activeOrganizationType ?? "organization";
-    const parentId = ctx.session.activeOrganizationId ?? null;
-    if (!parentId) {
-      return this.error(
-        "FORBIDDEN",
-        action === "create"
-          ? "You are not allowed to create an organization without a parent organization"
-          : "You are not allowed to manage child organizations without a parent organization"
-      );
-    }
-    if (!["enterprise", "agency"].includes(organizationType)) {
-      return this.error(
-        "FORBIDDEN",
-        action === "create"
-          ? "You are not allowed to create an organization with this type"
-          : "You are not allowed to manage child organizations"
-      );
-    }
-    const role = ctx.session.activeOrganizationRole ?? "member";
-    if (!["admin", "owner"].includes(role)) {
-      return this.error(
-        "FORBIDDEN",
-        action === "create"
-          ? "You are not allowed to create an organization with this role"
-          : "You are not allowed to manage child organizations"
-      );
-    }
-    return ok({ parentId, organizationType });
-  }
+  // #region Invitations
+  // * =============================================================================
+  // * SECTION: Invitations
+  // * =============================================================================
 
-  async listChildOrganizations(ctx: Context): ServerResultAsync<ChildOrganization[]> {
-    const access = this.assertCanManageChildOrganizations(ctx);
-    if (access.isErr()) return err(access.error);
-    return this.repository.organization.listChildOrganizations(access.value.parentId);
-  }
-
-  async listUserOrganizations(ctx: Context): ServerResultAsync<SimpleOrganization[]> {
-    return this.repository.organization.listUserOrganizations(ctx.actor.userId);
-  }
-
-  async updateChildOrganization(
-    input: UpdateChildOrganizationInput,
-    ctx: Context
-  ): ServerResultAsync<ChildOrganization> {
-    const access = this.assertCanManageChildOrganizations(ctx);
-    if (access.isErr()) return err(access.error);
-
-    return this.repository.organization.update(input);
-  }
-
-  async createOrganization(
-    { name }: { name: string },
-    ctx: Context
-  ): ServerResultAsync<OrganizationRow> {
-    const access = this.assertCanManageChildOrganizations(ctx, "create");
-    if (access.isErr()) return err(access.error);
-    return this.repository.organization.createOrganization({
-      name,
-      parentId: access.value.parentId,
-      userId: ctx.actor.userId,
-      role: access.value.organizationType === "agency" ? "agent" : "owner",
+  readInvitation = this.procedure<{ id: string }>("readInvitation")
+    .loadResource("invitation", ({ input }) =>
+      this.repository.invitation.findById(input.id, undefined, ["organizationId", "email"])
+    )
+    .loadResource("organization", ({ state }) =>
+      this.repository.organization.findById(state.invitation.organizationId, undefined, [
+        "name",
+        "slug",
+        "logo",
+      ])
+    )
+    .handle(({ state }): ServerResult<ReadInvitationOutput> => {
+      return ok({
+        organizationId: state.invitation.organizationId,
+        email: state.invitation.email,
+        name: state.organization.name,
+        slug: state.organization.slug,
+        logo: state.organization.logo,
+      });
     });
-  }
+
+  // #endregion Invitations
 }

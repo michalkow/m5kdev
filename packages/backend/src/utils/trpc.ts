@@ -6,6 +6,7 @@ import type { Result } from "neverthrow";
 import type { BetterAuth, Session, User } from "../modules/auth/auth.lib";
 import {
   type ActorScope,
+  type AdminActor,
   type AuthenticatedActor,
   createActorFromContext,
   type OrganizationActor,
@@ -38,6 +39,12 @@ export type TeamContext = {
   session: Session;
   user: User;
   actor: TeamActor;
+};
+
+export type AdminContext = {
+  session: Session;
+  user: User;
+  actor: AdminActor;
 };
 
 const t = initTRPC.context<RequestContext>().create({ transformer });
@@ -165,7 +172,7 @@ export function verifyTeamProcedureContext(ctx: Context): TeamContext {
   }
 }
 
-export function verifyAdminProcedureContext(ctx: RequestContext): Context {
+export function verifyAdminProcedureContext(ctx: RequestContext): AdminContext {
   if (!ctx.user || !ctx.session) {
     throw new ServerError({
       code: "UNAUTHORIZED",
@@ -188,7 +195,7 @@ export function verifyAdminProcedureContext(ctx: RequestContext): Context {
       layerName: "TRPCController",
     }).toTRPC();
   }
-  return ctx as Context;
+  return ctx as AdminContext;
 }
 
 export function requireRequestUser(ctx: RequestContext): User {

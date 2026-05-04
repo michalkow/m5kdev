@@ -25,9 +25,12 @@ export type ServiceProcedureLoadedResource<TOutput> = NonNullable<
 export type ServiceProcedureResultLike<T> = T | ServerResult<T> | Promise<T | ServerResult<T>>;
 export type ServiceProcedureContextFilterScope = ActorScope;
 export type ServiceProcedureContextFilteredInput<TInput> = Extract<NonNullable<TInput>, QueryInput>;
-type ServiceProcedureAuthContext<Scope extends ActorScope> = {
-  actor: Actor[Scope];
-};
+type ServiceProcedureAuthContext<
+  Scope extends ActorScope,
+  TCtx extends ServiceProcedureContext = ServiceProcedureContext,
+> = {
+  [K in keyof TCtx]-?: NonNullable<TCtx[K]>;
+} & { actor: Actor[Scope] };
 type ServiceProcedureRequiredScopeFromFilter<
   TInclude extends readonly ServiceProcedureContextFilterScope[] | undefined,
 > = TInclude extends readonly ServiceProcedureContextFilterScope[]
@@ -196,7 +199,7 @@ export interface ServiceProcedureBuilder<
     include?: TInclude
   ): ServiceProcedureBuilder<
     ServiceProcedureContextFilteredInput<TInput>,
-    TCtx & ServiceProcedureAuthContext<ServiceProcedureRequiredScopeFromFilter<TInclude>>,
+    ServiceProcedureAuthContext<ServiceProcedureRequiredScopeFromFilter<TInclude>, TCtx>,
     Repositories,
     Services,
     State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> }
@@ -205,7 +208,7 @@ export interface ServiceProcedureBuilder<
     scope?: Scope
   ): ServiceProcedureBuilder<
     TInput,
-    TCtx & ServiceProcedureAuthContext<Scope>,
+    ServiceProcedureAuthContext<Scope, TCtx>,
     Repositories,
     Services,
     State
@@ -259,7 +262,7 @@ export interface PermissionServiceProcedureBuilder<
     include?: TInclude
   ): PermissionServiceProcedureBuilder<
     ServiceProcedureContextFilteredInput<TInput>,
-    TCtx & ServiceProcedureAuthContext<ServiceProcedureRequiredScopeFromFilter<TInclude>>,
+    ServiceProcedureAuthContext<ServiceProcedureRequiredScopeFromFilter<TInclude>, TCtx>,
     Repositories,
     Services,
     State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> }
@@ -268,7 +271,7 @@ export interface PermissionServiceProcedureBuilder<
     scope?: Scope
   ): PermissionServiceProcedureBuilder<
     TInput,
-    TCtx & ServiceProcedureAuthContext<Scope>,
+    ServiceProcedureAuthContext<Scope, TCtx>,
     Repositories,
     Services,
     State
@@ -277,7 +280,7 @@ export interface PermissionServiceProcedureBuilder<
     config: ServiceProcedureAccessEntitiesConfig<TInput, TCtx, Repositories, Services, State>
   ): PermissionServiceProcedureBuilder<
     TInput,
-    TCtx & ServiceProcedureAuthContext<"user">,
+    ServiceProcedureAuthContext<"user", TCtx>,
     Repositories,
     Services,
     State
@@ -293,7 +296,7 @@ export interface PermissionServiceProcedureBuilder<
     >
   ): PermissionServiceProcedureBuilder<
     TInput,
-    TCtx & ServiceProcedureAuthContext<"user">,
+    ServiceProcedureAuthContext<"user", TCtx>,
     Repositories,
     Services,
     State & { access: TEntities }
@@ -302,7 +305,7 @@ export interface PermissionServiceProcedureBuilder<
     config: ServiceProcedureAccessStateConfig<State, StepName>
   ): PermissionServiceProcedureBuilder<
     TInput,
-    TCtx & ServiceProcedureAuthContext<"user">,
+    ServiceProcedureAuthContext<"user", TCtx>,
     Repositories,
     Services,
     State & { access: State[StepName] }
@@ -777,7 +780,7 @@ export function createServiceProcedureBuilder<
 
     return createServiceProcedureBuilder<
       ServiceProcedureContextFilteredInput<TInput>,
-      TCtx & ServiceProcedureAuthContext<ServiceProcedureRequiredScopeFromFilter<TInclude>>,
+      ServiceProcedureAuthContext<ServiceProcedureRequiredScopeFromFilter<TInclude>, TCtx>,
       Repositories,
       Services,
       State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> }
@@ -843,7 +846,7 @@ export function createServiceProcedureBuilder<
       assertUniqueStepName(config.steps, "auth");
       return createServiceProcedureBuilder<
         TInput,
-        TCtx & ServiceProcedureAuthContext<Scope>,
+        ServiceProcedureAuthContext<Scope, TCtx>,
         Repositories,
         Services,
         State
@@ -883,7 +886,7 @@ export function createPermissionServiceProcedureBuilder<
 
     return createPermissionServiceProcedureBuilder<
       ServiceProcedureContextFilteredInput<TInput>,
-      TCtx & ServiceProcedureAuthContext<ServiceProcedureRequiredScopeFromFilter<TInclude>>,
+      ServiceProcedureAuthContext<ServiceProcedureRequiredScopeFromFilter<TInclude>, TCtx>,
       Repositories,
       Services,
       State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> }
@@ -897,7 +900,7 @@ export function createPermissionServiceProcedureBuilder<
     accessConfig: ServiceProcedureAccessEntitiesConfig<TInput, TCtx, Repositories, Services, State>
   ): PermissionServiceProcedureBuilder<
     TInput,
-    TCtx & ServiceProcedureAuthContext<"user">,
+    ServiceProcedureAuthContext<"user", TCtx>,
     Repositories,
     Services,
     State
@@ -913,7 +916,7 @@ export function createPermissionServiceProcedureBuilder<
     >
   ): PermissionServiceProcedureBuilder<
     TInput,
-    TCtx & ServiceProcedureAuthContext<"user">,
+    ServiceProcedureAuthContext<"user", TCtx>,
     Repositories,
     Services,
     State & { access: TEntities }
@@ -922,7 +925,7 @@ export function createPermissionServiceProcedureBuilder<
     accessConfig: ServiceProcedureAccessStateConfig<State, StepName>
   ): PermissionServiceProcedureBuilder<
     TInput,
-    TCtx & ServiceProcedureAuthContext<"user">,
+    ServiceProcedureAuthContext<"user", TCtx>,
     Repositories,
     Services,
     State & { access: State[StepName] }
@@ -942,7 +945,7 @@ export function createPermissionServiceProcedureBuilder<
     assertUniqueStepName(config.steps, "access");
     return createPermissionServiceProcedureBuilder<
       TInput,
-      TCtx & ServiceProcedureAuthContext<"user">,
+      ServiceProcedureAuthContext<"user", TCtx>,
       Repositories,
       Services,
       State
@@ -1008,7 +1011,7 @@ export function createPermissionServiceProcedureBuilder<
       assertUniqueStepName(config.steps, "auth");
       return createPermissionServiceProcedureBuilder<
         TInput,
-        TCtx & ServiceProcedureAuthContext<Scope>,
+        ServiceProcedureAuthContext<Scope, TCtx>,
         Repositories,
         Services,
         State

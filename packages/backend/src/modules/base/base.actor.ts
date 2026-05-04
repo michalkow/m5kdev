@@ -28,6 +28,15 @@ export type TeamActor = {
   teamRole: string;
 };
 
+export type AdminActor = {
+  userId: string;
+  userRole: "admin";
+  organizationId: string | null;
+  organizationRole: string | null;
+  teamId: string | null;
+  teamRole: string | null;
+};
+
 export type AuthenticatedActor = UserActor | OrganizationActor | TeamActor;
 
 /** @deprecated Prefer `AuthenticatedActor` — kept for grants and legacy call sites */
@@ -37,10 +46,11 @@ export type Actor = {
   user: UserActor;
   organization: OrganizationActor;
   team: TeamActor;
+  admin: AdminActor;
   authenticated: AuthenticatedActor;
 };
 
-export type ActorScope = "user" | "organization" | "team";
+export type ActorScope = "user" | "organization" | "team" | "admin";
 
 export type RequiredServiceActor<Scope extends ActorScope> = Actor[Scope];
 
@@ -126,6 +136,7 @@ export function createActorFromContext(
 
 export function validateActor(actor: AuthenticatedActor, scope: ActorScope): boolean {
   if (!actor.userId || !actor.userRole) return false;
+  if (scope === "admin") return actor.userRole === "admin";
   if (scope === "user") return true;
   if (scope === "organization") {
     return Boolean(actor.organizationId && actor.organizationRole);
