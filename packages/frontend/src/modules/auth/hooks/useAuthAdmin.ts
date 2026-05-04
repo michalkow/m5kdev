@@ -1,139 +1,105 @@
+import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import {
   type AnyUseMutationOptions,
+  type QueryClient,
+  type UseQueryOptions,
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { authClient } from "../auth.lib";
 
-// import type { QueryFilter, QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
-// import type {
-//   FilterMethod,
-//   FilterMethodName,
-//   FilterMethods,
-// } from "@m5kdev/commons/modules/table/filter.types";
-
 type ListUsersArgs = Parameters<typeof authClient.admin.listUsers>;
 
-/*
-type ListUsersParams = Parameters<typeof authClient.admin.listUsers>;
-type ListUsersArgs = Record<string, unknown>;
+type ListUsersResult = Awaited<ReturnType<typeof authClient.admin.listUsers>>;
 
-type FilterOperator = "eq" | "ne" | "lt" | "lte" | "gt" | "gte";
+/**
+ * Data shape returned from Better Auth `admin.listUsers` (tRPC-style query data).
+ */
+export type ListUsersQueryData = NonNullable<ListUsersResult["data"]>;
 
-type BetterAuthFilterParams = {
-  filterField: string;
-  filterValue: string | number | boolean;
-  filterOperator: FilterOperator;
-};
+export const AUTH_ADMIN_LIST_USERS_KEY = "auth-admin-list-users" as const;
 
-export const authFilterMethods: FilterMethods = {
-  string: [{ value: "equals", label: "Equals", component: "text" }],
-  number: [
-    { value: "equals", label: "Equals", component: "number" },
-    { value: "greater_than", label: "Greater Than", component: "number" },
-    { value: "less_than", label: "Less Than", component: "number" },
-  ],
-  date: [
-    { value: "on", label: "On", component: "date" },
-    { value: "before", label: "Before", component: "date" },
-    { value: "after", label: "After", component: "date" },
-  ],
-  boolean: [{ value: "equals", label: "Equals", component: "radio" }],
-  enum: [{ value: "equals", label: "Equals", component: "select" }],
-};
-
-const baseMethodOperatorMap: Partial<Record<FilterMethodName, FilterOperator>> = {
-  equals: "eq",
-  greater_than: "gt",
-  less_than: "lt",
-  before: "lte",
-  after: "gte",
-  on: "eq",
-};
-
-const getAllowedMethods = (): Record<FilterMethodName, FilterOperator> => {
-  const operatorMap: Partial<Record<FilterMethodName, FilterOperator>> = {};
-  Object.values(authFilterMethods).forEach((methodsForType) => {
-    methodsForType.forEach((method: FilterMethod) => {
-      const operator = baseMethodOperatorMap[method.value];
-      if (operator) {
-        operatorMap[method.value] = operator;
-      }
-    });
-  });
-  return operatorMap as Record<FilterMethodName, FilterOperator>;
-};
-
-const filterMethodToOperatorMap = getAllowedMethods();
-
-const mapFilterToBetterAuth = (filter?: QueryFilter): Partial<BetterAuthFilterParams> => {
-  if (!filter) return {};
-  if (!filter.type) return {};
-  const allowedMethodsForType = authFilterMethods[filter.type]?.map((method) => method.value) ?? [];
-  if (!allowedMethodsForType.includes(filter.method)) return {};
-  const operator = filterMethodToOperatorMap[filter.method];
-  if (!operator) return {};
-  const { columnId, value, type } = filter;
-  if (value === undefined || value === null) return {};
-  if (type === "boolean" && typeof value === "boolean" && operator === "eq") {
-    return { filterField: columnId, filterValue: value, filterOperator: operator };
-  }
-  if (type === "number" && typeof value === "number") {
-    return { filterField: columnId, filterValue: value, filterOperator: operator };
-  }
-  if ((type === "string" || type === "enum" || type === "date") && typeof value === "string") {
-    return { filterField: columnId, filterValue: value, filterOperator: operator };
-  }
-  return {};
-};
-*/
-
-export function useInvalidateListUsers(...args: ListUsersArgs) {
-  const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ["auth-admin-list-users", ...args] });
+/**
+ * Input aligned with `useQueryWithParams` / Nuqs table URL state (page, limit, sort, order, q, filters).
+ * Maps to Better Auth `listUsers` query payload.
+ */
+export interface ListUsersNuqsInput {
+  page: number;
+  limit: number;
+  sort?: string;
+  order?: "asc" | "desc" | null;
+  q?: string;
+  filters?: QueryFilters;
 }
 
-/*
-export function getListUsers(input: ListUsersArgs): any {
-  const {
-    filters,
-    page,
-    limit,
-    sort,
-    order,
-    ...listUsersParams
-  } = input as ListUsersArgs & QueryInput;
-  const filterParams = mapFilterToBetterAuth(filters?.[0]);
-  const sortDirection: "asc" | "desc" = order === "asc" ? "asc" : "desc";
-  const queryPayload = {
-    ...listUsersParams,
-    limit,
-    sortBy: sort,
-    sortDirection,
-    offset: (page - 1) * limit,
-    ...filterParams,
-  };
+type ListUsersFirstArg = ListUsersArgs[0];
 
+function mapNuqsInputToListUsersArg(input: ListUsersNuqsInput): ListUsersFirstArg {
+  const page = Math.max(1, input.page);
   return {
-    queryKey: ["auth-admin-list-users", input],
-    queryFn: async () => {
-      const { data, error } = await authClient.admin.listUsers({
-        query: queryPayload,
-      });
-      if (error) return Promise.reject(error);
-      return data;
+    query: {
+      searchField: "name",
+      searchOperator: "contains",
+      searchValue: input.q?.trim() ?? "",
+      limit: input.limit,
+      offset: (page - 1) * input.limit,
+      sortBy: (input.sort ?? "createdAt") as "name" | "email" | "role" | "createdAt",
+      sortDirection: (input.order ?? "desc") as "asc" | "desc",
     },
   };
 }
-*/
+
+/**
+ * Query key factory (tRPC-style). Omit input to match all list-users queries for invalidation.
+ */
+export function listUsersQueryKey(input?: ListUsersNuqsInput): readonly unknown[] {
+  if (input === undefined) {
+    return [AUTH_ADMIN_LIST_USERS_KEY] as const;
+  }
+  return [AUTH_ADMIN_LIST_USERS_KEY, mapNuqsInputToListUsersArg(input)] as const;
+}
+
+/**
+ * Query options factory for use with `useQuery`, `useNuqsTable` / `useQueryWithParams`, or `queryClient.fetchQuery`.
+ * Signature mirrors tRPC `procedure.queryOptions(input, opts?)`.
+ */
+export function listUsersQueryOptions(
+  input: ListUsersNuqsInput,
+  opts?: Omit<
+    UseQueryOptions<ListUsersQueryData, Error, ListUsersQueryData, readonly unknown[]>,
+    "queryKey" | "queryFn"
+  >
+): UseQueryOptions<ListUsersQueryData, Error, ListUsersQueryData, readonly unknown[]> {
+  const arg = mapNuqsInputToListUsersArg(input);
+  return {
+    queryKey: listUsersQueryKey(input),
+    queryFn: async (): Promise<ListUsersQueryData> => {
+      const { data, error } = await authClient.admin.listUsers(arg);
+      if (error) return Promise.reject(error);
+      if (data == null) {
+        return Promise.reject(new Error("listUsers returned no data"));
+      }
+      return data;
+    },
+    ...opts,
+  };
+}
+
+export function invalidateListUsersQuery(queryClient: QueryClient): Promise<void> {
+  return queryClient.invalidateQueries({ queryKey: [AUTH_ADMIN_LIST_USERS_KEY] });
+}
+
+export function useInvalidateListUsers(...args: ListUsersArgs) {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: [AUTH_ADMIN_LIST_USERS_KEY, ...args] });
+}
 
 export function useListUsers(...args: ListUsersArgs) {
   return useQuery({
-    queryKey: ["auth-admin-list-users", ...args],
-    queryFn: async ({ queryKey }) => {
-      const listUserArgs = queryKey.slice(1) as ListUsersArgs;
-      const { data, error } = await authClient.admin.listUsers(...listUserArgs);
+    queryKey: [AUTH_ADMIN_LIST_USERS_KEY, ...args],
+    queryFn: async () => {
+      const { data, error } = await authClient.admin.listUsers(...args);
       if (error) return Promise.reject(error);
       return data;
     },

@@ -7,38 +7,41 @@ import {
   Modal,
   Select,
   Spinner,
-  Table,
   Tooltip,
 } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
-import * as authAdmin from "@m5kdev/frontend/modules/auth/hooks/useAuthAdmin";
+import {
+  invalidateListUsersQuery,
+  type ListUsersNuqsInput,
+  type ListUsersQueryData,
+  listUsersQueryOptions,
+  useRemoveUser,
+  useUpdateUser,
+} from "@m5kdev/frontend/modules/auth/hooks/useAuthAdmin";
+import useNuqsTable from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
 import type { Key } from "@react-types/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
   Building2,
   CalendarClock,
-  ChevronDown,
-  ChevronUp,
   Copy,
-  Filter,
   Info,
   Link2,
   List,
   MoreHorizontal,
-  Search,
   UserPlus,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
-type SortField = "name" | "email" | "role" | "createdAt";
-type SortOrder = "asc" | "desc";
-type StatusFilter = "all" | "banned" | "active";
+import { NuqsTable, type NuqsTableColumn } from "../../table/components/NuqsTable";
+
+type AdminUserRow = NonNullable<ListUsersQueryData["users"]>[number];
 
 interface UserAiUsage {
   inputTokens: number | null;
@@ -62,8 +65,6 @@ export function AdminUserManagement({
   const emailInputId = useId();
   const passwordInputId = useId();
   const roleSelectId = useId();
-  const [page, setPage] = useState(0);
-  const [limit] = useState(10);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
   const [userToBan, setUserToBan] = useState<{ id: string; name: string } | null>(null);
   const [banReason, setBanReason] = useState("");
@@ -72,11 +73,6 @@ export function AdminUserManagement({
   const [isBanningUser, setIsBanningUser] = useState(false);
   const [isUnbanningUser, setIsUnbanningUser] = useState<Record<string, boolean>>({});
   const [isImpersonatingUser, setIsImpersonatingUser] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [sortField, setSortField] = useState<SortField>("createdAt");
-  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
   const [newUserData, setNewUserData] = useState({
     name: "",
@@ -101,6 +97,14 @@ export function AdminUserManagement({
   // AI Usage query
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();
+
+  const { params: tableParams, query: listQuery } = useNuqsTable<
+    ListUsersNuqsInput,
+    ListUsersQueryData
+  >({
+    getQueryOptions: listUsersQueryOptions,
+    prefix: "um",
+  });
   const usageQueryEnabled = enableAiUsage && !!userForUsage;
   const usageQueryOptions = enableAiUsage
     ? // @ts-expect-error optional ai router
@@ -123,72 +127,29 @@ export function AdminUserManagement({
     }
   };
 
-  // Reset page on filter change
-  const resetPage = useCallback(() => {
-    setPage(0);
-  }, []);
+  const listUsers = listQuery.data;
+  const users = listUsers?.users;
+  const totalUsers = listUsers?.total ?? 0;
 
-  // Debounce search query
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery);
-      resetPage();
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery, resetPage]);
-
-  // Handle status filter change
-  const handleStatusFilterChange = useCallback(
-    (value: StatusFilter) => {
-      setStatusFilter(value);
-      resetPage();
-    },
-    [resetPage]
-  );
-
-  const {
-    data: listUsers = {
-      users: [],
-      total: 0,
-    },
-    isLoading,
-    refetch,
-  } = authAdmin.useListUsers({
-    query: {
-      searchField: "name",
-      searchOperator: "contains",
-      searchValue: debouncedSearchQuery,
-      limit,
-      offset: page * limit,
-      sortBy: sortField,
-      sortDirection: sortOrder,
-    },
-  });
-
-  const { users, total: totalUsers } = listUsers;
-
-  const { mutate: deleteUser, isPending: isDeleting } = authAdmin.useRemoveUser({
+  const { mutate: deleteUser, isPending: isDeleting } = useRemoveUser({
     onSuccess: () => {
       toast.success("User deleted successfully");
-      refetch();
+      void invalidateListUsersQuery(queryClient);
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast.error(`Error deleting user: ${error.message}`);
     },
   });
 
-  const { mutate: updateUser } = authAdmin.useUpdateUser({
+  const { mutate: updateUser } = useUpdateUser({
     onSuccess: () => {
       toast.success("User updated successfully");
-      refetch();
+      void invalidateListUsersQuery(queryClient);
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast.error(`Error updating user: ${error.message}`);
     },
   });
-
-  const totalPages = totalUsers ? Math.ceil(totalUsers / limit) : 0;
 
   const confirmDelete = (userId: string) => {
     setUserToDelete(userId);
@@ -261,7 +222,7 @@ export function AdminUserManagement({
 
       toast.success(`User ${userToBan.name} has been banned`);
       setUserToBan(null);
-      await refetch();
+      await invalidateListUsersQuery(queryClient);
     } catch (error) {
       toast.error(`Failed to ban user: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
@@ -277,7 +238,7 @@ export function AdminUserManagement({
       });
 
       toast.success("User has been unbanned");
-      await refetch();
+      await invalidateListUsersQuery(queryClient);
     } catch (error) {
       toast.error(
         `Failed to unban user: ${error instanceof Error ? error.message : String(error)}`
@@ -315,38 +276,11 @@ export function AdminUserManagement({
     }
   };
 
-  const handlePageChange = (newPage: number) => {
-    if (newPage >= 0 && newPage < totalPages) {
-      setPage(newPage);
-    }
-  };
-
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      // Toggle order if same field
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    } else {
-      // Set new field and default to ascending
-      setSortField(field);
-      setSortOrder("asc");
-    }
-  };
-
-  const renderSortIcon = (field: SortField) => {
-    if (sortField !== field) return null;
-
-    return sortOrder === "asc" ? (
-      <ChevronUp className="h-4 w-4 inline ml-1" />
-    ) : (
-      <ChevronDown className="h-4 w-4 inline ml-1" />
-    );
-  };
-
-  const clearFilters = () => {
-    setSearchQuery("");
-    setStatusFilter("all");
-    setSortField("createdAt");
-    setSortOrder("desc");
+  const clearFilters = (): void => {
+    tableParams.setQ?.(null);
+    tableParams.setSorting?.([{ id: "createdAt", desc: true }]);
+    tableParams.setFilters?.([]);
+    tableParams.setPagination?.({ pageIndex: 0, pageSize: tableParams.limit ?? 10 });
   };
 
   const openCreateUserModal = () => {
@@ -376,7 +310,7 @@ export function AdminUserManagement({
 
       toast.success(`User ${newUserData.name} has been created`);
       setIsCreateUserModalOpen(false);
-      await refetch();
+      await invalidateListUsersQuery(queryClient);
     } catch (error) {
       toast.error(
         `Failed to create user: ${error instanceof Error ? error.message : String(error)}`
@@ -391,11 +325,6 @@ export function AdminUserManagement({
       ...prev,
       [field]: value,
     }));
-  };
-
-  const handleStatusSelectChange = (key: Key | null): void => {
-    if (key === null) return;
-    handleStatusFilterChange(String(key) as StatusFilter);
   };
 
   const handleRoleSelectChange = (key: Key | null): void => {
@@ -489,7 +418,190 @@ export function AdminUserManagement({
     setClaimEmail("");
   };
 
-  if (isLoading) {
+  const openWaitlistModal = (): void => {
+    navigate("/admin/waitlist");
+  };
+
+  const openOrganizationManagement = (): void => {
+    navigate("/admin/organizations");
+  };
+
+  const columns: NuqsTableColumn<AdminUserRow>[] = [
+    {
+      id: "id",
+      accessorKey: "id",
+      header: "ID",
+      cell: ({ row }) => <span className="font-mono text-xs">{String(row.original.id)}</span>,
+      enableSorting: false,
+    },
+    {
+      id: "name",
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => row.original.name,
+      enableSorting: true,
+    },
+    {
+      id: "email",
+      accessorKey: "email",
+      header: "Email",
+      cell: ({ row }) => row.original.email,
+      enableSorting: true,
+    },
+    {
+      id: "role",
+      accessorKey: "role",
+      header: "Role",
+      cell: ({ row }) => row.original.role || "user",
+      enableSorting: true,
+    },
+    {
+      id: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const user = row.original;
+        return user.banned ? (
+          <Tooltip>
+            <Tooltip.Trigger>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                Banned
+                {user.banReason ? <Info className="h-3 w-3" /> : null}
+              </span>
+            </Tooltip.Trigger>
+            <Tooltip.Content>
+              <div className="space-y-1 text-xs">
+                <p>
+                  <strong>Reason:</strong> {user.banReason || "No reason provided"}
+                </p>
+                {user.banExpires ? (
+                  <p className="flex items-center gap-1">
+                    <CalendarClock className="h-3 w-3" />
+                    <span>
+                      <strong>Expires:</strong>{" "}
+                      {formatBanExpiry(
+                        user.banExpires instanceof Date
+                          ? user.banExpires.getTime()
+                          : new Date(user.banExpires).getTime()
+                      )}
+                    </span>
+                  </p>
+                ) : null}
+              </div>
+            </Tooltip.Content>
+          </Tooltip>
+        ) : (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            Active
+          </span>
+        );
+      },
+      enableSorting: false,
+    },
+    {
+      id: "onboarding",
+      header: "Onboarding",
+      cell: ({ row }) => {
+        const onboarding = (row.original as { onboarding?: string | number }).onboarding;
+        return onboarding ?? "—";
+      },
+      enableSorting: false,
+    },
+    {
+      id: "createdAt",
+      accessorKey: "createdAt",
+      header: "Created At",
+      cell: ({ row }) => {
+        const d = row.original.createdAt;
+        return d ? new Date(d).toLocaleDateString() : "N/A";
+      },
+      enableSorting: true,
+    },
+    {
+      id: "actions",
+      header: () => <span className="text-right block">Actions</span>,
+      cell: ({ row }) => {
+        const user = row.original;
+        return (
+          <div className="flex justify-end">
+            <Dropdown>
+              <Dropdown.Trigger>
+                <Button variant="ghost" size="sm" isIconOnly aria-label="User actions">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </Dropdown.Trigger>
+              <Dropdown.Popover placement="bottom end">
+                <Dropdown.Menu aria-label="User actions">
+                  <Dropdown.Item key="onboarding" onPress={() => handleSetOnboardingUser(user.id)}>
+                    Set Onboarding
+                  </Dropdown.Item>
+                  <Dropdown.Item
+                    key="usage"
+                    onPress={() => openUsageModal(user.id, user.name)}
+                    className={enableAiUsage ? "" : "hidden"}
+                  >
+                    <span className="flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4" />
+                      View AI Usage
+                    </span>
+                  </Dropdown.Item>
+                  <Dropdown.Item
+                    key="impersonate"
+                    onPress={() => handleImpersonateUser(user.id)}
+                    isDisabled={Boolean(user.banned) || isImpersonatingUser}
+                  >
+                    {isImpersonatingUser ? (
+                      <>
+                        <Spinner className="mr-2 h-3 w-3" />
+                        Impersonating...
+                      </>
+                    ) : (
+                      "Impersonate"
+                    )}
+                  </Dropdown.Item>
+                  <Dropdown.Item
+                    key="magic-link"
+                    onPress={() => openMagicLinkModal(user.id, user.name, user.email ?? null)}
+                    className={enableAccountClaimActions ? "" : "hidden"}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Link2 className="h-4 w-4" />
+                      Generate Magic Login Link
+                    </span>
+                  </Dropdown.Item>
+                  {user.banned ? (
+                    <Dropdown.Item
+                      key="unban"
+                      onPress={() => handleUnbanUser(user.id)}
+                      isDisabled={isUnbanningUser[user.id]}
+                    >
+                      {isUnbanningUser[user.id] ? (
+                        <>
+                          <Spinner className="mr-2 h-3 w-3" />
+                          Unbanning...
+                        </>
+                      ) : (
+                        "Unban"
+                      )}
+                    </Dropdown.Item>
+                  ) : (
+                    <Dropdown.Item key="ban" onPress={() => openBanModal(user.id, user.name)}>
+                      Ban
+                    </Dropdown.Item>
+                  )}
+                  <Dropdown.Item key="remove" onPress={() => confirmDelete(user.id)}>
+                    Remove
+                  </Dropdown.Item>
+                </Dropdown.Menu>
+              </Dropdown.Popover>
+            </Dropdown>
+          </div>
+        );
+      },
+      enableSorting: false,
+    },
+  ];
+
+  if (listQuery.isPending && !listQuery.data) {
     return (
       <div className="flex justify-center p-8">
         <Spinner />
@@ -497,21 +609,13 @@ export function AdminUserManagement({
     );
   }
 
-  const openWaitlistModal = () => {
-    navigate("/admin/waitlist");
-  };
-
-  const openOrganizationManagement = () => {
-    navigate("/admin/organizations");
-  };
-
-  const hasActiveFilters =
-    debouncedSearchQuery ||
-    statusFilter !== "all" ||
-    sortField !== "createdAt" ||
-    sortOrder !== "desc";
-
   const usersList = users ?? [];
+
+  const hasNonDefaultTableState =
+    Boolean(tableParams.q?.trim()) ||
+    (tableParams.filters?.length ?? 0) > 0 ||
+    (tableParams.sort !== "" && tableParams.sort !== "createdAt") ||
+    (tableParams.sort === "createdAt" && tableParams.order != null && tableParams.order !== "desc");
 
   return (
     <div className="space-y-4 p-4">
@@ -534,272 +638,31 @@ export function AdminUserManagement({
         </div>
       </div>
 
-      {/* Search and filters */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        <form
-          className="relative flex-1"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setDebouncedSearchQuery(searchQuery);
-            resetPage();
-          }}
-        >
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            aria-label="Search users"
-            placeholder="Search users by name or email..."
-            className="pl-8 w-full"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            variant="secondary"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery("")}
-              className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
-              aria-label="Clear search"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </form>
-
-        <div className="flex gap-2">
-          <Select
-            aria-label="Status filter"
-            className="w-[160px]"
-            selectedKey={statusFilter}
-            onSelectionChange={handleStatusSelectChange}
-          >
-            <Select.Trigger>
-              <Filter className="mr-1 h-4 w-4 shrink-0" />
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                {/* biome-ignore lint/correctness/useUniqueElementIds: id is the Select option key */}
-                <ListBox.Item className="text-sm" id="all" textValue="All Users">
-                  All Users
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-                {/* biome-ignore lint/correctness/useUniqueElementIds: id is the Select option key */}
-                <ListBox.Item className="text-sm" id="active" textValue="Active Only">
-                  Active Only
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-                {/* biome-ignore lint/correctness/useUniqueElementIds: id is the Select option key */}
-                <ListBox.Item className="text-sm" id="banned" textValue="Banned Only">
-                  Banned Only
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
-
-          {hasActiveFilters && (
-            <Button variant="outline" size="sm" onPress={clearFilters}>
-              <X className="mr-1 h-4 w-4" />
-              Clear Filters
-            </Button>
-          )}
-        </div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+        {hasNonDefaultTableState ? (
+          <Button variant="outline" size="sm" onPress={clearFilters}>
+            <X className="mr-1 h-4 w-4" />
+            Reset table
+          </Button>
+        ) : null}
       </div>
+
+      {listQuery.isError ? (
+        <div className="rounded-lg border border-danger p-4 text-sm text-danger">
+          {listQuery.error instanceof Error ? listQuery.error.message : String(listQuery.error)}
+        </div>
+      ) : null}
 
       <div className="border rounded-lg overflow-hidden">
-        {usersList.length === 0 ? (
-          <div className="py-12 text-center text-sm text-muted-foreground">
-            {hasActiveFilters ? "No users found matching your filters" : "No users found"}
-          </div>
-        ) : (
-          <Table aria-label="Users table">
-            <Table.ScrollContainer>
-              <Table.Content>
-                <Table.Header>
-                  <Table.Column>ID</Table.Column>
-                  <Table.Column className="cursor-pointer" onClick={() => handleSort("name")}>
-                    Name {renderSortIcon("name")}
-                  </Table.Column>
-                  <Table.Column className="cursor-pointer" onClick={() => handleSort("email")}>
-                    Email {renderSortIcon("email")}
-                  </Table.Column>
-                  <Table.Column className="cursor-pointer" onClick={() => handleSort("role")}>
-                    Role {renderSortIcon("role")}
-                  </Table.Column>
-                  <Table.Column>Status</Table.Column>
-                  <Table.Column>Onboarding</Table.Column>
-                  <Table.Column className="cursor-pointer" onClick={() => handleSort("createdAt")}>
-                    Created At {renderSortIcon("createdAt")}
-                  </Table.Column>
-                  <Table.Column className="text-right">Actions</Table.Column>
-                </Table.Header>
-                <Table.Body items={usersList}>
-                  {(user) => {
-                    const onboarding = (user as { onboarding?: string | number }).onboarding;
-                    return (
-                      <Table.Row id={user.id}>
-                        <Table.Cell className="font-mono text-xs">{user.id}</Table.Cell>
-                        <Table.Cell>{user.name}</Table.Cell>
-                        <Table.Cell>{user.email}</Table.Cell>
-                        <Table.Cell>{user.role || "user"}</Table.Cell>
-                        <Table.Cell>
-                          {user.banned ? (
-                            <Tooltip>
-                              <Tooltip.Trigger>
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                  Banned
-                                  {user.banReason && <Info className="h-3 w-3" />}
-                                </span>
-                              </Tooltip.Trigger>
-                              <Tooltip.Content>
-                                <div className="space-y-1 text-xs">
-                                  <p>
-                                    <strong>Reason:</strong>{" "}
-                                    {user.banReason || "No reason provided"}
-                                  </p>
-                                  {user.banExpires && (
-                                    <p className="flex items-center gap-1">
-                                      <CalendarClock className="h-3 w-3" />
-                                      <span>
-                                        <strong>Expires:</strong>{" "}
-                                        {formatBanExpiry(user.banExpires.getTime())}
-                                      </span>
-                                    </p>
-                                  )}
-                                </div>
-                              </Tooltip.Content>
-                            </Tooltip>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              Active
-                            </span>
-                          )}
-                        </Table.Cell>
-                        <Table.Cell>{onboarding ?? "—"}</Table.Cell>
-                        <Table.Cell>
-                          {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "N/A"}
-                        </Table.Cell>
-                        <Table.Cell className="text-right">
-                          <Dropdown>
-                            <Dropdown.Trigger>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                isIconOnly
-                                aria-label="User actions"
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </Dropdown.Trigger>
-                            <Dropdown.Popover placement="bottom end">
-                              <Dropdown.Menu aria-label="User actions">
-                                <Dropdown.Item
-                                  key="onboarding"
-                                  onPress={() => handleSetOnboardingUser(user.id)}
-                                >
-                                  Set Onboarding
-                                </Dropdown.Item>
-                                <Dropdown.Item
-                                  key="usage"
-                                  onPress={() => openUsageModal(user.id, user.name)}
-                                  className={enableAiUsage ? "" : "hidden"}
-                                >
-                                  <span className="flex items-center gap-2">
-                                    <BarChart3 className="h-4 w-4" />
-                                    View AI Usage
-                                  </span>
-                                </Dropdown.Item>
-                                <Dropdown.Item
-                                  key="impersonate"
-                                  onPress={() => handleImpersonateUser(user.id)}
-                                  isDisabled={user.banned || isImpersonatingUser}
-                                >
-                                  {isImpersonatingUser ? (
-                                    <>
-                                      <Spinner className="mr-2 h-3 w-3" />
-                                      Impersonating...
-                                    </>
-                                  ) : (
-                                    "Impersonate"
-                                  )}
-                                </Dropdown.Item>
-                                <Dropdown.Item
-                                  key="magic-link"
-                                  onPress={() =>
-                                    openMagicLinkModal(user.id, user.name, user.email ?? null)
-                                  }
-                                  className={enableAccountClaimActions ? "" : "hidden"}
-                                >
-                                  <span className="flex items-center gap-2">
-                                    <Link2 className="h-4 w-4" />
-                                    Generate Magic Login Link
-                                  </span>
-                                </Dropdown.Item>
-                                {user.banned ? (
-                                  <Dropdown.Item
-                                    key="unban"
-                                    onPress={() => handleUnbanUser(user.id)}
-                                    isDisabled={isUnbanningUser[user.id]}
-                                  >
-                                    {isUnbanningUser[user.id] ? (
-                                      <>
-                                        <Spinner className="mr-2 h-3 w-3" />
-                                        Unbanning...
-                                      </>
-                                    ) : (
-                                      "Unban"
-                                    )}
-                                  </Dropdown.Item>
-                                ) : (
-                                  <Dropdown.Item
-                                    key="ban"
-                                    onPress={() => openBanModal(user.id, user.name)}
-                                  >
-                                    Ban
-                                  </Dropdown.Item>
-                                )}
-                                <Dropdown.Item key="remove" onPress={() => confirmDelete(user.id)}>
-                                  Remove
-                                </Dropdown.Item>
-                              </Dropdown.Menu>
-                            </Dropdown.Popover>
-                          </Dropdown>
-                        </Table.Cell>
-                      </Table.Row>
-                    );
-                  }}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
-        )}
+        <NuqsTable<AdminUserRow>
+          data={usersList}
+          total={totalUsers}
+          columns={columns}
+          tableProps={tableParams}
+          showGlobalSearch
+          hideFilters
+        />
       </div>
-
-      {/* Pagination */}
-      {totalPages > 0 && (
-        <div className="flex items-center justify-end space-x-2 py-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onPress={() => handlePageChange(page - 1)}
-            isDisabled={page === 0}
-          >
-            Previous
-          </Button>
-          <div className="text-sm text-muted-foreground">
-            Page {page + 1} of {totalPages}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onPress={() => handlePageChange(page + 1)}
-            isDisabled={page === totalPages - 1}
-          >
-            Next
-          </Button>
-        </div>
-      )}
 
       {/* Delete confirmation modal */}
       <Modal

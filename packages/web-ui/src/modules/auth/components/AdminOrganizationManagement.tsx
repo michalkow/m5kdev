@@ -1,27 +1,26 @@
-import {
-  Button,
-  Input,
-  type Key,
-  Label,
-  ListBox,
-  Select,
-  Spinner,
-  Table,
-  Tooltip,
-} from "@heroui/react";
+import { Button, Input, type Key, Label, ListBox, Select, Spinner, Tooltip } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
-import type { QueryFilter } from "@m5kdev/commons/modules/schemas/query.schema";
+import type { QueryFilter, QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
+import useNuqsTable from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { inferRouterOutputs } from "@trpc/server";
-import { Info, Search, X } from "lucide-react";
+import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
+import { Info, X } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { toast } from "sonner";
+
+import { NuqsTable, type NuqsTableColumn } from "../../table/components/NuqsTable";
 
 type OrganizationType = "solo" | "organization" | "agency" | "enterprise";
 
 type OrganizationAdminRow =
   inferRouterOutputs<BackendTRPCRouter>["auth"]["listAdminOrganizations"]["rows"][number];
+
+type ListAdminOrganizationsInput =
+  inferRouterInputs<BackendTRPCRouter>["auth"]["listAdminOrganizations"];
+
+type ListAdminOrganizationsOutput =
+  inferRouterOutputs<BackendTRPCRouter>["auth"]["listAdminOrganizations"];
 
 const organizationTypeOptions: { value: OrganizationType; label: string; description: string }[] = [
   { value: "solo", label: "Solo", description: "Individual account without org hierarchy." },
@@ -41,17 +40,20 @@ const lookupTypeFilter: QueryFilter = {
   value: "organization",
 };
 
+function formatOrgDate(date: Date | string | null | undefined): string {
+  if (!date) return "—";
+  const dateObj = typeof date === "string" ? new Date(date) : date;
+  return dateObj.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export function AdminOrganizationManagement() {
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();
-  const searchInputId = useId();
   const lookupSearchFieldId = useId();
-
-  const [page, setPage] = useState(1);
-  const limit = 50;
-
-  const [tableSearchQuery, setTableSearchQuery] = useState("");
-  const [debouncedTableSearch, setDebouncedTableSearch] = useState("");
 
   const [lookupSearchDraft, setLookupSearchDraft] = useState("");
   const [debouncedLookupSearch, setDebouncedLookupSearch] = useState("");
@@ -59,46 +61,30 @@ export function AdminOrganizationManagement() {
   const [pinnedOrganizationId, setPinnedOrganizationId] = useState<string | null>(null);
 
   useEffect(() => {
-    const t = window.setTimeout(() => {
-      setDebouncedTableSearch(tableSearchQuery);
-      setPage(1);
-    }, 300);
-    return () => window.clearTimeout(t);
-  }, [tableSearchQuery]);
-
-  useEffect(() => {
     const t = window.setTimeout(() => setDebouncedLookupSearch(lookupSearchDraft), 200);
     return () => window.clearTimeout(t);
   }, [lookupSearchDraft]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset pagination when focus changes
-  useEffect(() => {
-    setPage(1);
-  }, [pinnedOrganizationId]);
-
-  const tableQueryInput = useMemo(() => {
-    const filters: QueryFilter[] = [];
-    if (pinnedOrganizationId) {
-      filters.push({
+  const additionalFilters = useMemo((): QueryFilters | undefined => {
+    if (!pinnedOrganizationId) return undefined;
+    return [
+      {
         columnId: "id",
         type: "string",
         method: "equals",
         value: pinnedOrganizationId,
-      });
-    }
+      },
+    ];
+  }, [pinnedOrganizationId]);
 
-    const qTrim = debouncedTableSearch.trim();
-    return {
-      page,
-      limit,
-      ...(qTrim ? { q: qTrim } : {}),
-      ...(filters.length > 0 ? { filters } : {}),
-    };
-  }, [page, debouncedTableSearch, pinnedOrganizationId]);
-
-  const listQuery = useQuery(trpc.auth.listAdminOrganizations.queryOptions(tableQueryInput));
-  const rows = listQuery.data?.rows ?? [];
-  const total = listQuery.data?.total ?? 0;
+  const { params: tableParams, query: orgListQuery } = useNuqsTable<
+    ListAdminOrganizationsInput,
+    ListAdminOrganizationsOutput
+  >({
+    getQueryOptions: (input) => trpc.auth.listAdminOrganizations.queryOptions(input),
+    additionalFilters,
+    prefix: "om",
+  });
 
   const lookupQueryInput = useMemo(() => {
     const qTrim = debouncedLookupSearch.trim();
@@ -132,28 +118,96 @@ export function AdminOrganizationManagement() {
     })
   );
 
-  const formatDate = (date: Date | string | null | undefined) => {
-    if (!date) return "—";
-    const dateObj = typeof date === "string" ? new Date(date) : date;
-    return dateObj.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
+  const columns: NuqsTableColumn<OrganizationAdminRow>[] = [
+    {
+      id: "name",
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
+      enableSorting: true,
+    },
+    {
+      id: "slug",
+      accessorKey: "slug",
+      header: "Slug",
+      cell: ({ row }) => <span className="text-muted-foreground">{row.original.slug ?? "—"}</span>,
+      enableSorting: true,
+    },
+    {
+      id: "parentId",
+      accessorKey: "parentId",
+      header: "Parent",
+      cell: ({ row }) => (
+        <span className="text-muted-foreground">{row.original.parentId ?? "—"}</span>
+      ),
+      enableSorting: false,
+    },
+    {
+      id: "createdAt",
+      accessorKey: "createdAt",
+      header: "Created",
+      cell: ({ row }) => (
+        <span className="text-muted-foreground">{formatOrgDate(row.original.createdAt)}</span>
+      ),
+      enableSorting: true,
+      type: "date",
+    },
+    {
+      id: "type",
+      header: () => <span className="text-right block">Type</span>,
+      cell: ({ row }) => {
+        const org = row.original;
+        return (
+          <div className="flex justify-end">
+            <Select
+              aria-label={`Organization type for ${org.name}`}
+              selectedKey={(org.type ?? "organization") as Key}
+              onSelectionChange={(key) => {
+                const nextType = String(key) as OrganizationType;
+                if (nextType === (org.type ?? "organization")) return;
+                updateType({ organizationId: org.id, type: nextType });
+              }}
+              isDisabled={isUpdatingType}
+              variant="secondary"
+              className="min-w-[210px] inline-flex"
+            >
+              <Select.Trigger className="h-8 min-h-8 px-3 text-sm">
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover placement="bottom end">
+                <ListBox>
+                  {organizationTypeOptions.map((opt) => (
+                    <ListBox.Item key={opt.value} id={opt.value} textValue={opt.label}>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">{opt.label}</span>
+                        <span className="text-xs text-muted-foreground">{opt.description}</span>
+                      </div>
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+        );
+      },
+      enableSorting: true,
+      type: "enum",
+      options: organizationTypeOptions.map((o) => ({ label: o.label, value: o.value })),
+    },
+  ];
 
-  const canPrev = page > 1;
-  const canNext = page * limit < total;
-  const pageStart = total === 0 ? 0 : (page - 1) * limit + 1;
-  const pageEnd = Math.min(page * limit, total);
-
-  if (listQuery.isLoading && !listQuery.data) {
+  if (orgListQuery.isPending && !orgListQuery.data) {
     return (
       <div className="flex justify-center p-8">
         <Spinner />
       </div>
     );
   }
+
+  const rows = orgListQuery.data?.rows ?? [];
+  const total = orgListQuery.data?.total ?? 0;
 
   const pinnedHeading =
     pinnedOrganizationId !== null ? (
@@ -243,134 +297,23 @@ export function AdminOrganizationManagement() {
 
       {pinnedHeading}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="w-full sm:max-w-md">
-          <Label htmlFor={searchInputId}>Table search</Label>
-          <div className="relative mt-2">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              id={searchInputId}
-              aria-label="Search table rows"
-              placeholder="Match name or slug (global q) …"
-              className="pl-8 w-full"
-              value={tableSearchQuery}
-              onChange={(e) => setTableSearchQuery(e.target.value)}
-              variant="secondary"
-            />
-            {tableSearchQuery ? (
-              <button
-                type="button"
-                onClick={() => setTableSearchQuery("")}
-                className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
-                aria-label="Clear table search"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2 self-start sm:flex-row sm:items-center sm:self-auto">
-          <p className="text-xs text-muted-foreground whitespace-nowrap">
-            {total === 0 ? "No rows" : `${pageStart}–${pageEnd} of ${total}`}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              isDisabled={!canPrev || listQuery.isFetching}
-              onPress={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Prev
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              isDisabled={!canNext || listQuery.isFetching}
-              onPress={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {listQuery.isError ? (
+      {orgListQuery.isError ? (
         <div className="rounded-lg border p-4 text-sm text-danger">
-          {listQuery.error instanceof Error ? listQuery.error.message : String(listQuery.error)}
+          {orgListQuery.error instanceof Error
+            ? orgListQuery.error.message
+            : String(orgListQuery.error)}
         </div>
       ) : null}
 
       <div className="border rounded-lg overflow-hidden">
-        {rows.length === 0 ? (
-          <div className="py-12 text-center text-sm text-muted-foreground">
-            {debouncedTableSearch || pinnedOrganizationId
-              ? "No organizations match the current filters"
-              : "No organizations found"}
-          </div>
-        ) : (
-          <Table aria-label="Organizations table">
-            <Table.ScrollContainer>
-              <Table.Content>
-                <Table.Header>
-                  <Table.Column>Name</Table.Column>
-                  <Table.Column>Slug</Table.Column>
-                  <Table.Column>Parent</Table.Column>
-                  <Table.Column>Created</Table.Column>
-                  <Table.Column className="text-right">Type</Table.Column>
-                </Table.Header>
-                <Table.Body items={rows}>
-                  {(org: OrganizationAdminRow) => (
-                    <Table.Row id={org.id}>
-                      <Table.Cell className="font-medium">{org.name}</Table.Cell>
-                      <Table.Cell className="text-muted-foreground">{org.slug ?? "—"}</Table.Cell>
-                      <Table.Cell className="text-muted-foreground">
-                        {org.parentId ?? "—"}
-                      </Table.Cell>
-                      <Table.Cell className="text-muted-foreground">
-                        {formatDate(org.createdAt)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right">
-                        <Select
-                          aria-label={`Organization type for ${org.name}`}
-                          selectedKey={(org.type ?? "organization") as Key}
-                          onSelectionChange={(key) => {
-                            const nextType = String(key) as OrganizationType;
-                            if (nextType === (org.type ?? "organization")) return;
-                            updateType({ organizationId: org.id, type: nextType });
-                          }}
-                          isDisabled={isUpdatingType}
-                          variant="secondary"
-                          className="min-w-[210px] inline-flex"
-                        >
-                          <Select.Trigger className="h-8 min-h-8 px-3 text-sm">
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Select.Popover placement="bottom end">
-                            <ListBox>
-                              {organizationTypeOptions.map((opt) => (
-                                <ListBox.Item key={opt.value} id={opt.value} textValue={opt.label}>
-                                  <div className="flex flex-col">
-                                    <span className="text-sm font-medium">{opt.label}</span>
-                                    <span className="text-xs text-muted-foreground">
-                                      {opt.description}
-                                    </span>
-                                  </div>
-                                  <ListBox.ItemIndicator />
-                                </ListBox.Item>
-                              ))}
-                            </ListBox>
-                          </Select.Popover>
-                        </Select>
-                      </Table.Cell>
-                    </Table.Row>
-                  )}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
-        )}
+        <NuqsTable<OrganizationAdminRow>
+          data={rows}
+          total={total}
+          columns={columns}
+          tableProps={tableParams}
+          showGlobalSearch
+          hideFilters
+        />
       </div>
     </div>
   );
