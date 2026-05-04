@@ -620,7 +620,7 @@ export function PostsRoute() {
           }
         }}
       >
-        <Modal.Backdrop />
+        <Modal.Backdrop>
         <Modal.Container scroll="inside" size="lg" className="max-w-5xl">
           <Modal.Dialog>
             <form
@@ -718,6 +718,7 @@ export function PostsRoute() {
             </form>
           </Modal.Dialog>
         </Modal.Container>
+        </Modal.Backdrop>
       </Modal>
     </div>
   );

@@ -82,27 +82,28 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
       {children}
       {dialog && (
         <Modal isOpen={isOpen} onOpenChange={(open) => !open && handleUnsetDialog()}>
-          <Modal.Backdrop />
-          <Modal.Container className={`border ${intentBorderClass[intent]}`}>
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>{dialog.title}</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>{dialog.description}</Modal.Body>
-              <Modal.Footer>
-                <div className="flex flex-row gap-2">
-                  {(dialog.cancelable || dialog.onCancel) && (
-                    <Button variant="tertiary" onPress={handleCancel}>
-                      {dialog.cancelLabel ?? "Cancel"}
+          <Modal.Backdrop>
+            <Modal.Container className={`border ${intentBorderClass[intent]}`}>
+              <Modal.Dialog>
+                <Modal.Header>
+                  <Modal.Heading>{dialog.title}</Modal.Heading>
+                </Modal.Header>
+                <Modal.Body>{dialog.description}</Modal.Body>
+                <Modal.Footer>
+                  <div className="flex flex-row gap-2">
+                    {(dialog.cancelable || dialog.onCancel) && (
+                      <Button variant="tertiary" onPress={handleCancel}>
+                        {dialog.cancelLabel ?? "Cancel"}
+                      </Button>
+                    )}
+                    <Button variant={intentButtonVariant[intent]} onPress={handleConfirm}>
+                      {dialog.confirmLabel ?? "Confirm"}
                     </Button>
-                  )}
-                  <Button variant={intentButtonVariant[intent]} onPress={handleConfirm}>
-                    {dialog.confirmLabel ?? "Confirm"}
-                  </Button>
-                </div>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
+                  </div>
+                </Modal.Footer>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
         </Modal>
       )}
     </DialogContext.Provider>

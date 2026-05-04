@@ -671,29 +671,30 @@ export function AdminUserManagement({
           if (!open) setUserToDelete(null);
         }}
       >
-        <Modal.Backdrop />
-        <Modal.Container>
-          <Modal.Dialog>
-            <Modal.Header>
-              <Modal.Heading className="text-lg font-semibold">Are you sure?</Modal.Heading>
-            </Modal.Header>
-            <Modal.Body>
-              <p className="text-sm text-muted-foreground">
-                This action cannot be undone. This will permanently delete the user and all their
-                data.
-              </p>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="outline" onPress={() => setUserToDelete(null)}>
-                Cancel
-              </Button>
-              <Button variant="danger" onPress={handleDelete} isDisabled={isDeleting}>
-                {isDeleting ? <Spinner className="mr-2 h-4 w-4" /> : null}
-                Delete
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading className="text-lg font-semibold">Are you sure?</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <p className="text-sm text-muted-foreground">
+                  This action cannot be undone. This will permanently delete the user and all their
+                  data.
+                </p>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="outline" onPress={() => setUserToDelete(null)}>
+                  Cancel
+                </Button>
+                <Button variant="danger" onPress={handleDelete} isDisabled={isDeleting}>
+                  {isDeleting ? <Spinner className="mr-2 h-4 w-4" /> : null}
+                  Delete
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
       </Modal>
 
       {/* Ban user modal */}
@@ -703,116 +704,117 @@ export function AdminUserManagement({
           if (!open) setUserToBan(null);
         }}
       >
-        <Modal.Backdrop />
-        <Modal.Container>
-          <Modal.Dialog>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void handleBanUser();
-              }}
-              className="contents"
-            >
-              <Modal.Header>
-                <Modal.Heading className="text-lg font-semibold">Ban User</Modal.Heading>
-              </Modal.Header>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleBanUser();
+                }}
+                className="contents"
+              >
+                <Modal.Header>
+                  <Modal.Heading className="text-lg font-semibold">Ban User</Modal.Heading>
+                </Modal.Header>
 
-              <Modal.Body className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  {userToBan &&
-                    `You are about to ban ${userToBan.name}. This will prevent them from signing in.`}
-                </p>
-                <div className="space-y-2">
-                  <Label htmlFor={banReasonInputId}>Ban Reason</Label>
-                  <Input
-                    id={banReasonInputId}
-                    placeholder="Enter reason for ban"
-                    value={banReason}
-                    onChange={(e) => setBanReason(e.target.value)}
-                    variant="secondary"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Ban Duration</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      type="button"
-                      variant={banExpiry === "never" ? "primary" : "outline"}
-                      onPress={() => setBanExpiry("never")}
-                    >
-                      Permanent
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={banExpiry === "1d" ? "primary" : "outline"}
-                      onPress={() => setBanExpiry("1d")}
-                    >
-                      1 Day
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={banExpiry === "7d" ? "primary" : "outline"}
-                      onPress={() => setBanExpiry("7d")}
-                    >
-                      7 Days
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={banExpiry === "30d" ? "primary" : "outline"}
-                      onPress={() => setBanExpiry("30d")}
-                    >
-                      30 Days
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id={customDurationId}
-                      checked={banExpiry === "custom"}
-                      onChange={(e) =>
-                        e.target.checked ? setBanExpiry("custom") : setBanExpiry("never")
-                      }
+                <Modal.Body className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    {userToBan &&
+                      `You are about to ban ${userToBan.name}. This will prevent them from signing in.`}
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor={banReasonInputId}>Ban Reason</Label>
+                    <Input
+                      id={banReasonInputId}
+                      placeholder="Enter reason for ban"
+                      value={banReason}
+                      onChange={(e) => setBanReason(e.target.value)}
+                      variant="secondary"
                     />
-                    <label htmlFor={customDurationId} className="text-sm font-medium">
-                      Custom Duration
-                    </label>
                   </div>
 
-                  {banExpiry === "custom" && (
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <div className="flex flex-1 flex-col gap-2">
-                        <Label htmlFor={`${customDurationId}-days`}>Custom duration (days)</Label>
-                        <Input
-                          id={`${customDurationId}-days`}
-                          type="number"
-                          min={1}
-                          value={customBanDays.toString()}
-                          onChange={(e) => setCustomBanDays(Number(e.target.value))}
-                          variant="secondary"
-                        />
-                      </div>
-                      <span className="text-sm sm:pt-8">Days</span>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Ban Duration</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant={banExpiry === "never" ? "primary" : "outline"}
+                        onPress={() => setBanExpiry("never")}
+                      >
+                        Permanent
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={banExpiry === "1d" ? "primary" : "outline"}
+                        onPress={() => setBanExpiry("1d")}
+                      >
+                        1 Day
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={banExpiry === "7d" ? "primary" : "outline"}
+                        onPress={() => setBanExpiry("7d")}
+                      >
+                        7 Days
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={banExpiry === "30d" ? "primary" : "outline"}
+                        onPress={() => setBanExpiry("30d")}
+                      >
+                        30 Days
+                      </Button>
                     </div>
-                  )}
-                </div>
-              </Modal.Body>
+                  </div>
 
-              <Modal.Footer>
-                <Button variant="outline" type="button" onPress={() => setUserToBan(null)}>
-                  Cancel
-                </Button>
-                <Button variant="danger" type="submit" isDisabled={isBanningUser}>
-                  {isBanningUser ? <Spinner className="mr-2 h-4 w-4" /> : null}
-                  {isBanningUser ? "Banning..." : "Ban User"}
-                </Button>
-              </Modal.Footer>
-            </form>
-          </Modal.Dialog>
-        </Modal.Container>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id={customDurationId}
+                        checked={banExpiry === "custom"}
+                        onChange={(e) =>
+                          e.target.checked ? setBanExpiry("custom") : setBanExpiry("never")
+                        }
+                      />
+                      <label htmlFor={customDurationId} className="text-sm font-medium">
+                        Custom Duration
+                      </label>
+                    </div>
+
+                    {banExpiry === "custom" && (
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <div className="flex flex-1 flex-col gap-2">
+                          <Label htmlFor={`${customDurationId}-days`}>Custom duration (days)</Label>
+                          <Input
+                            id={`${customDurationId}-days`}
+                            type="number"
+                            min={1}
+                            value={customBanDays.toString()}
+                            onChange={(e) => setCustomBanDays(Number(e.target.value))}
+                            variant="secondary"
+                          />
+                        </div>
+                        <span className="text-sm sm:pt-8">Days</span>
+                      </div>
+                    )}
+                  </div>
+                </Modal.Body>
+
+                <Modal.Footer>
+                  <Button variant="outline" type="button" onPress={() => setUserToBan(null)}>
+                    Cancel
+                  </Button>
+                  <Button variant="danger" type="submit" isDisabled={isBanningUser}>
+                    {isBanningUser ? <Spinner className="mr-2 h-4 w-4" /> : null}
+                    {isBanningUser ? "Banning..." : "Ban User"}
+                  </Button>
+                </Modal.Footer>
+              </form>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
       </Modal>
 
       {/* Create user modal */}
@@ -822,107 +824,108 @@ export function AdminUserManagement({
           if (!open) setIsCreateUserModalOpen(false);
         }}
       >
-        <Modal.Backdrop />
-        <Modal.Container>
-          <Modal.Dialog>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void handleCreateUser();
-              }}
-              className="contents"
-            >
-              <Modal.Header>
-                <Modal.Heading className="text-lg font-semibold">Create New User</Modal.Heading>
-              </Modal.Header>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleCreateUser();
+                }}
+                className="contents"
+              >
+                <Modal.Header>
+                  <Modal.Heading className="text-lg font-semibold">Create New User</Modal.Heading>
+                </Modal.Header>
 
-              <Modal.Body className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Fill in the details below to create a new user account.
-                </p>
-                <div className="space-y-2">
-                  <Label htmlFor={nameInputId}>Name *</Label>
-                  <Input
-                    id={nameInputId}
-                    placeholder="Enter user's name"
-                    value={newUserData.name}
-                    onChange={(e) => handleNewUserDataChange("name", e.target.value)}
-                    variant="secondary"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={emailInputId}>Email *</Label>
-                  <Input
-                    id={emailInputId}
-                    type="email"
-                    placeholder="Enter user's email"
-                    value={newUserData.email}
-                    onChange={(e) => handleNewUserDataChange("email", e.target.value)}
-                    variant="secondary"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={passwordInputId}>Password *</Label>
-                  <Input
-                    id={passwordInputId}
-                    type="password"
-                    placeholder="Enter password"
-                    value={newUserData.password}
-                    onChange={(e) => handleNewUserDataChange("password", e.target.value)}
-                    variant="secondary"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-sm font-medium" id={roleSelectId}>
-                    Role
+                <Modal.Body className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Fill in the details below to create a new user account.
                   </p>
-                  <Select
-                    aria-label="Select role"
-                    aria-labelledby={roleSelectId}
-                    selectedKey={newUserData.role}
-                    onSelectionChange={handleRoleSelectChange}
-                  >
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {/* biome-ignore lint/correctness/useUniqueElementIds: id is the Select option key */}
-                        <ListBox.Item className="text-sm" id="user" textValue="User">
-                          User
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                        {/* biome-ignore lint/correctness/useUniqueElementIds: id is the Select option key */}
-                        <ListBox.Item className="text-sm" id="admin" textValue="Admin">
-                          Admin
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                </div>
-              </Modal.Body>
+                  <div className="space-y-2">
+                    <Label htmlFor={nameInputId}>Name *</Label>
+                    <Input
+                      id={nameInputId}
+                      placeholder="Enter user's name"
+                      value={newUserData.name}
+                      onChange={(e) => handleNewUserDataChange("name", e.target.value)}
+                      variant="secondary"
+                    />
+                  </div>
 
-              <Modal.Footer>
-                <Button
-                  variant="outline"
-                  type="button"
-                  onPress={() => setIsCreateUserModalOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" variant="primary" isDisabled={isCreatingUser}>
-                  {isCreatingUser ? <Spinner className="mr-2 h-4 w-4" /> : null}
-                  {isCreatingUser ? "Creating..." : "Create User"}
-                </Button>
-              </Modal.Footer>
-            </form>
-          </Modal.Dialog>
-        </Modal.Container>
+                  <div className="space-y-2">
+                    <Label htmlFor={emailInputId}>Email *</Label>
+                    <Input
+                      id={emailInputId}
+                      type="email"
+                      placeholder="Enter user's email"
+                      value={newUserData.email}
+                      onChange={(e) => handleNewUserDataChange("email", e.target.value)}
+                      variant="secondary"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor={passwordInputId}>Password *</Label>
+                    <Input
+                      id={passwordInputId}
+                      type="password"
+                      placeholder="Enter password"
+                      value={newUserData.password}
+                      onChange={(e) => handleNewUserDataChange("password", e.target.value)}
+                      variant="secondary"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium" id={roleSelectId}>
+                      Role
+                    </p>
+                    <Select
+                      aria-label="Select role"
+                      aria-labelledby={roleSelectId}
+                      selectedKey={newUserData.role}
+                      onSelectionChange={handleRoleSelectChange}
+                    >
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {/* biome-ignore lint/correctness/useUniqueElementIds: id is the Select option key */}
+                          <ListBox.Item className="text-sm" id="user" textValue="User">
+                            User
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                          {/* biome-ignore lint/correctness/useUniqueElementIds: id is the Select option key */}
+                          <ListBox.Item className="text-sm" id="admin" textValue="Admin">
+                            Admin
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </div>
+                </Modal.Body>
+
+                <Modal.Footer>
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onPress={() => setIsCreateUserModalOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" variant="primary" isDisabled={isCreatingUser}>
+                    {isCreatingUser ? <Spinner className="mr-2 h-4 w-4" /> : null}
+                    {isCreatingUser ? "Creating..." : "Create User"}
+                  </Button>
+                </Modal.Footer>
+              </form>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
       </Modal>
 
       {/* AI Usage modal */}
@@ -932,65 +935,66 @@ export function AdminUserManagement({
           if (!open) setUserForUsage(null);
         }}
       >
-        <Modal.Backdrop />
-        <Modal.Container>
-          <Modal.Dialog>
-            <Modal.Header className="flex flex-col gap-1">
-              <Modal.Heading className="text-lg font-semibold flex items-center gap-2">
-                <BarChart3 className="h-5 w-5" />
-                AI Usage
-              </Modal.Heading>
-              <p className="text-sm text-default-600">
-                {userForUsage && `Usage statistics for ${userForUsage.name}`}
-              </p>
-            </Modal.Header>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog>
+              <Modal.Header className="flex flex-col gap-1">
+                <Modal.Heading className="text-lg font-semibold flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  AI Usage
+                </Modal.Heading>
+                <p className="text-sm text-default-600">
+                  {userForUsage && `Usage statistics for ${userForUsage.name}`}
+                </p>
+              </Modal.Header>
 
-            <Modal.Body>
-              {isLoadingUsage ? (
-                <div className="flex justify-center py-8">
-                  <Spinner />
-                </div>
-              ) : usageData ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 rounded-lg bg-default-100">
-                      <p className="text-sm text-default-600">Input Tokens</p>
-                      <p className="text-2xl font-semibold">
-                        {formatTokenCount(usageData.inputTokens)}
-                      </p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-default-100">
-                      <p className="text-sm text-default-600">Output Tokens</p>
-                      <p className="text-2xl font-semibold">
-                        {formatTokenCount(usageData.outputTokens)}
-                      </p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-default-100">
-                      <p className="text-sm text-default-600">Total Tokens</p>
-                      <p className="text-2xl font-semibold">
-                        {formatTokenCount(usageData.totalTokens)}
-                      </p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-primary-100">
-                      <p className="text-sm text-primary-600">Estimated Cost</p>
-                      <p className="text-2xl font-semibold text-primary">
-                        {formatCost(usageData.cost)}
-                      </p>
+              <Modal.Body>
+                {isLoadingUsage ? (
+                  <div className="flex justify-center py-8">
+                    <Spinner />
+                  </div>
+                ) : usageData ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 rounded-lg bg-default-100">
+                        <p className="text-sm text-default-600">Input Tokens</p>
+                        <p className="text-2xl font-semibold">
+                          {formatTokenCount(usageData.inputTokens)}
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-lg bg-default-100">
+                        <p className="text-sm text-default-600">Output Tokens</p>
+                        <p className="text-2xl font-semibold">
+                          {formatTokenCount(usageData.outputTokens)}
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-lg bg-default-100">
+                        <p className="text-sm text-default-600">Total Tokens</p>
+                        <p className="text-2xl font-semibold">
+                          {formatTokenCount(usageData.totalTokens)}
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-lg bg-primary-100">
+                        <p className="text-sm text-primary-600">Estimated Cost</p>
+                        <p className="text-2xl font-semibold text-primary">
+                          {formatCost(usageData.cost)}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="text-center py-8 text-default-600">No usage data available</div>
-              )}
-            </Modal.Body>
+                ) : (
+                  <div className="text-center py-8 text-default-600">No usage data available</div>
+                )}
+              </Modal.Body>
 
-            <Modal.Footer>
-              <Button variant="outline" onPress={() => setUserForUsage(null)}>
-                Close
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
+              <Modal.Footer>
+                <Button variant="outline" onPress={() => setUserForUsage(null)}>
+                  Close
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
       </Modal>
 
       {/* Magic login link modal */}
@@ -1004,75 +1008,76 @@ export function AdminUserManagement({
           }
         }}
       >
-        <Modal.Backdrop />
-        <Modal.Container>
-          <Modal.Dialog>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void handleGenerateMagicLink();
-              }}
-              className="contents"
-            >
-              <Modal.Header>
-                <Modal.Heading className="text-lg font-semibold">
-                  Generate Magic Login Link
-                </Modal.Heading>
-              </Modal.Header>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleGenerateMagicLink();
+                }}
+                className="contents"
+              >
+                <Modal.Header>
+                  <Modal.Heading className="text-lg font-semibold">
+                    Generate Magic Login Link
+                  </Modal.Heading>
+                </Modal.Header>
 
-              <Modal.Body className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  {userForMagicLink &&
-                    `Generate a one-time claim sign-in link for ${userForMagicLink.name}.`}
-                </p>
-                <div className="space-y-2">
-                  <Label htmlFor={magicLinkEmailInputId}>Claim email</Label>
-                  <Input
-                    id={magicLinkEmailInputId}
-                    type="email"
-                    placeholder="person@example.com"
-                    value={claimEmail}
-                    onChange={(e) => setClaimEmail(e.target.value)}
-                    variant="secondary"
-                  />
+                <Modal.Body className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    This email is used for provider linking and future sign-ins.
+                    {userForMagicLink &&
+                      `Generate a one-time claim sign-in link for ${userForMagicLink.name}.`}
                   </p>
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={magicLinkEmailInputId}>Claim email</Label>
+                    <Input
+                      id={magicLinkEmailInputId}
+                      type="email"
+                      placeholder="person@example.com"
+                      value={claimEmail}
+                      onChange={(e) => setClaimEmail(e.target.value)}
+                      variant="secondary"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      This email is used for provider linking and future sign-ins.
+                    </p>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor={generatedMagicLinkInputId}>Generated link</Label>
-                  <Input
-                    id={generatedMagicLinkInputId}
-                    value={generatedMagicLink ?? ""}
-                    readOnly
-                    variant="secondary"
-                    placeholder="Generate link to see it here"
-                  />
-                </div>
-              </Modal.Body>
+                  <div className="space-y-2">
+                    <Label htmlFor={generatedMagicLinkInputId}>Generated link</Label>
+                    <Input
+                      id={generatedMagicLinkInputId}
+                      value={generatedMagicLink ?? ""}
+                      readOnly
+                      variant="secondary"
+                      placeholder="Generate link to see it here"
+                    />
+                  </div>
+                </Modal.Body>
 
-              <Modal.Footer>
-                <Button variant="outline" type="button" onPress={closeMagicLinkModal}>
-                  Close
-                </Button>
-                <Button
-                  variant="outline"
-                  type="button"
-                  onPress={() => void copyGeneratedMagicLink()}
-                  isDisabled={!generatedMagicLink}
-                >
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copy Link
-                </Button>
-                <Button variant="primary" type="submit" isDisabled={isGeneratingMagicLink}>
-                  {isGeneratingMagicLink ? <Spinner className="mr-2 h-4 w-4" /> : null}
-                  {isGeneratingMagicLink ? "Generating..." : "Generate Link"}
-                </Button>
-              </Modal.Footer>
-            </form>
-          </Modal.Dialog>
-        </Modal.Container>
+                <Modal.Footer>
+                  <Button variant="outline" type="button" onPress={closeMagicLinkModal}>
+                    Close
+                  </Button>
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onPress={() => void copyGeneratedMagicLink()}
+                    isDisabled={!generatedMagicLink}
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy Link
+                  </Button>
+                  <Button variant="primary" type="submit" isDisabled={isGeneratingMagicLink}>
+                    {isGeneratingMagicLink ? <Spinner className="mr-2 h-4 w-4" /> : null}
+                    {isGeneratingMagicLink ? "Generating..." : "Generate Link"}
+                  </Button>
+                </Modal.Footer>
+              </form>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
       </Modal>
     </div>
   );

@@ -270,28 +270,29 @@ export function AdminWaitlist() {
           if (!open) setItemToDelete(null);
         }}
       >
-        <Modal.Backdrop />
-        <Modal.Container>
-          <Modal.Dialog>
-            <Modal.Header>
-              <Modal.Heading className="text-lg font-semibold">Are you sure?</Modal.Heading>
-            </Modal.Header>
-            <Modal.Body>
-              <p className="text-sm text-muted-foreground">
-                This action cannot be undone. This will permanently remove this entry from the
-                waitlist.
-              </p>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="outline" onPress={() => setItemToDelete(null)}>
-                Cancel
-              </Button>
-              <Button variant="danger" onPress={handleRemove} isPending={isRemoving}>
-                Remove
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading className="text-lg font-semibold">Are you sure?</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <p className="text-sm text-muted-foreground">
+                  This action cannot be undone. This will permanently remove this entry from the
+                  waitlist.
+                </p>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="outline" onPress={() => setItemToDelete(null)}>
+                  Cancel
+                </Button>
+                <Button variant="danger" onPress={handleRemove} isPending={isRemoving}>
+                  Remove
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
       </Modal>
 
       {/* Add to waitlist modal */}
@@ -301,48 +302,54 @@ export function AdminWaitlist() {
           if (!open) setIsAddModalOpen(false);
         }}
       >
-        <Modal.Backdrop />
-        <Modal.Container>
-          <Modal.Dialog>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleAdd();
-              }}
-              className="contents"
-            >
-              <Modal.Header>
-                <Modal.Heading className="text-lg font-semibold">Add to Waitlist</Modal.Heading>
-              </Modal.Header>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAdd();
+                }}
+                className="contents"
+              >
+                <Modal.Header>
+                  <Modal.Heading className="text-lg font-semibold">Add to Waitlist</Modal.Heading>
+                </Modal.Header>
 
-              <Modal.Body className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Enter an email address to add someone to the waitlist.
-                </p>
-                <div className="space-y-2">
-                  <Label htmlFor={emailInputId}>Email *</Label>
-                  <Input
-                    id={emailInputId}
-                    type="email"
-                    placeholder="Enter email address"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    variant="secondary"
-                  />
-                </div>
-              </Modal.Body>
+                <Modal.Body className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Enter an email address to add someone to the waitlist.
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor={emailInputId}>Email *</Label>
+                    <Input
+                      id={emailInputId}
+                      type="email"
+                      placeholder="Enter email address"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      variant="secondary"
+                    />
+                  </div>
+                </Modal.Body>
 
-              <Modal.Footer>
-                <Button variant="outline" type="button" onPress={() => setIsAddModalOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" variant="primary" isDisabled={isAdding} isPending={isAdding}>
-                  {isAdding ? "Adding..." : "Add to Waitlist"}
-                </Button>
-              </Modal.Footer>
-            </form>
-          </Modal.Dialog>
-        </Modal.Container>
+                <Modal.Footer>
+                  <Button variant="outline" type="button" onPress={() => setIsAddModalOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    isDisabled={isAdding}
+                    isPending={isAdding}
+                  >
+                    {isAdding ? "Adding..." : "Add to Waitlist"}
+                  </Button>
+                </Modal.Footer>
+              </form>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
       </Modal>
     </div>
   );
