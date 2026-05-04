@@ -85,6 +85,7 @@ export class AuthModule extends BaseModule<
   override services({
     repositories,
     deps,
+    appConfig,
   }: ModuleServicesContext<AuthModuleDeps, AuthModuleRepositories>) {
     return {
       auth: new AuthService(
@@ -93,7 +94,8 @@ export class AuthModule extends BaseModule<
           email: deps.email.services.email,
           billing: deps.billing?.services.billing,
         },
-        this.grants
+        this.grants,
+        appConfig.urls
       ),
     };
   }

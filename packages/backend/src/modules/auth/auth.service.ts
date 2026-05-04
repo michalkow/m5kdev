@@ -1,8 +1,10 @@
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import { err, ok } from "neverthrow";
+import type { BackendAppMetadata } from "../../app";
 import { posthogCapture } from "../../utils/posthog";
 import type { OrganizationContext, RequestContext } from "../../utils/trpc";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
+import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
@@ -31,6 +33,8 @@ import type {
 
 type OrganizationRow = typeof auth.organizations.$inferSelect;
 
+const ACCOUNT_CLAIM_MAGIC_LINK_FETCH_MS = 10_000;
+
 type AuthServiceDependencies =
   | { email: EmailService }
   | { email: EmailService; billing: BillingService };
@@ -46,6 +50,24 @@ export class AuthService extends BasePermissionService<
   AuthServiceDependencies,
   RequestContext
 > {
+  private readonly appUrls?: BackendAppMetadata["urls"];
+
+  constructor(
+    repository: {
+      accountClaim: AuthAccountClaimRepository;
+      user: AuthUserRepository;
+      invitation: AuthInvitationRepository;
+      waitlist: AuthWaitlistRepository;
+      organization: AuthOrganizationRepository;
+    },
+    service: AuthServiceDependencies,
+    grants: ResourceGrant[],
+    appUrls?: BackendAppMetadata["urls"]
+  ) {
+    super(repository, service, grants);
+    this.appUrls = appUrls;
+  }
+
   private getBillingService(): BillingService | null {
     if (!("billing" in this.service)) return null;
     return this.service.billing;
@@ -267,6 +289,13 @@ export class AuthService extends BasePermissionService<
     .handle(async ({ input, ctx }): ServerResultAsync<ChildOrganization> => {
       const access = this.assertCanManageChildOrganizations(ctx);
       if (access.isErr()) return err(access.error);
+
+      const target = await this.repository.organization.findById(input.id, undefined, ["parentId"]);
+      if (target.isErr()) return err(target.error);
+      if (!target.value) return this.error("NOT_FOUND", "Organization not found");
+      if (target.value.parentId !== access.value.parentId) {
+        return this.error("FORBIDDEN", "You are not allowed to update this organization");
+      }
 
       return this.repository.organization.update(input);
     });
@@ -595,16 +624,47 @@ export class AuthService extends BasePermissionService<
         });
         if (setEmail.isErr()) return err(setEmail.error);
 
-        const response = await fetch(`${process.env.VITE_SERVER_URL}/api/auth/sign-in/magic-link`, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            email: targetEmail.toLowerCase(),
-            callbackURL: `${process.env.VITE_APP_URL}/claim-account?claim=${claimId}`,
-          }),
-        });
+        const apiBase = (this.appUrls?.api ?? process.env.VITE_SERVER_URL)?.trim();
+        const webBase = (this.appUrls?.web ?? process.env.VITE_APP_URL)?.trim();
+        if (!apiBase || !webBase) {
+          return this.error(
+            "INTERNAL_SERVER_ERROR",
+            "Missing public API or web URL (configure app.urls.api / app.urls.web or VITE_SERVER_URL / VITE_APP_URL)"
+          );
+        }
+
+        const magicLinkUrl = new URL("/api/auth/sign-in/magic-link", apiBase).toString();
+        const callback = new URL("/claim-account", webBase);
+        callback.searchParams.set("claim", claimId);
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), ACCOUNT_CLAIM_MAGIC_LINK_FETCH_MS);
+
+        let response: Response;
+        try {
+          response = await fetch(magicLinkUrl, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              email: targetEmail.toLowerCase(),
+              callbackURL: callback.toString(),
+            }),
+            signal: controller.signal,
+          });
+        } catch (cause: unknown) {
+          if (cause instanceof Error && cause.name === "AbortError") {
+            return this.error(
+              "INTERNAL_SERVER_ERROR",
+              "Magic link request timed out",
+              { cause }
+            );
+          }
+          return this.error("INTERNAL_SERVER_ERROR", "Failed to generate magic link", { cause });
+        } finally {
+          clearTimeout(timeoutId);
+        }
 
         if (!response.ok) {
           return this.error("INTERNAL_SERVER_ERROR", "Failed to generate magic link");
