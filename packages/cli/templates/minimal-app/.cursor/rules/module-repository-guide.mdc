@@ -1,0 +1,193 @@
+---
+globs: apps/*/server/src/modules/**/*.repository.ts
+alwaysApply: false
+---
+
+# Module Repository File Style Guide
+
+Conventions for repository classes in app modules.
+
+## File Location
+
+```
+apps/<app>/server/src/modules/<module>/<module>.repository.ts
+```
+
+## Conventions
+
+- Extend `BaseTableRepository<Orm, Schema, NestedRepos, Schema["table"]>` for table-bound modules.
+- Use `BaseRepository` for non-table or multi-table repositories.
+- Keep repositories data-focused: persistence, query composition, and lightweight mapping only.
+- Do not import service classes into repositories.
+- Use Drizzle operators (`and`, `eq`, `inArray`, `isNull`, `like`, etc.) and query helpers from base classes.
+- When running inside `this.orm.transaction`, use `tx` consistently; avoid mixing `this.orm` calls in the same transaction flow.
+- Leave orchestration, policy decisions, and side effects to services.
+
+## Orm/Schema Type Pattern
+
+App repositories define their schema and ORM types inline from local table imports:
+
+```typescript
+import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import { posts } from "./posts.db";
+
+const schema = { posts };
+type Schema = typeof schema;
+type Orm = LibSQLDatabase<Schema>;
+```
+
+This is passed to `BaseTableRepository` generics and provided by the module's `repositories()` hook via `db.orm` and `db.schema`.
+
+## Built-in Base Methods
+
+`BaseTableRepository` provides typed CRUD helpers. Prefer them over hand-written queries when they fit:
+
+- `queryList(query, options)` — filtered/sorted/paginated lists.
+- `findById(id)` / `findManyById(ids)` — primary-key lookups.
+- `create(data)` / `createMany(data)` — inserts.
+- `update(data)` / `updateMany(data)` — updates.
+- `softDeleteById(id)` / `deleteById(id)` — deletes.
+
+Override only when custom joins, CTEs, or non-standard behavior is required.
+
+## Error Handling
+
+- Use `throwableQuery` to wrap individual Drizzle queries. It converts thrown database errors into `ServerResultAsync`.
+- Do not wrap entire method bodies in `throwableAsync`. Keep `throwableQuery` scoped tightly around the database call so error-handling logic stays outside the wrapper.
+- Chain results with `isErr()` checks and return `err(result.error)` to propagate failures.
+
+## Schema Type Imports
+
+Import schema types from the shared package for method signatures:
+
+```typescript
+import type {
+  PostSchema,
+  PostsListInputSchema,
+  PostsListOutputSchema,
+} from "@appname/shared/modules/posts/posts.schema";
+```
+
+## Example
+
+```typescript
+import type {
+  PostSchema,
+  PostsListInputSchema,
+  PostsListOutputSchema,
+} from "@appname/shared/modules/posts/posts.schema";
+import { BaseTableRepository } from "@m5kdev/backend/modules/base/base.repository";
+import type { ServerResultAsync } from "@m5kdev/backend/utils/types";
+import { and, asc, count, desc, eq, isNull, like, ne, or } from "drizzle-orm";
+import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import { err, ok } from "neverthrow";
+import { posts } from "./posts.db";
+
+const schema = { posts };
+type Schema = typeof schema;
+type Orm = LibSQLDatabase<Schema>;
+
+export class PostsRepository extends BaseTableRepository<
+  Orm,
+  Schema,
+  Record<string, never>,
+  Schema["posts"]
+> {
+  async list(input: PostsListInputSchema = {}): ServerResultAsync<PostsListOutputSchema> {
+    const page = input.page ?? 1;
+    const limit = input.limit ?? 6;
+    const search = input.search?.trim();
+    const conditions = [isNull(this.table.deletedAt)];
+
+    if (input.status) {
+      conditions.push(eq(this.table.status, input.status));
+    }
+
+    if (search) {
+      const escapedSearch = search.replace(/[%_]/g, "\\$&");
+      const pattern = `%${escapedSearch}%`;
+      const searchCondition = or(
+        like(this.table.title, pattern),
+        like(this.table.slug, pattern),
+        like(this.table.excerpt, pattern),
+        like(this.table.content, pattern)
+      );
+      if (searchCondition) {
+        conditions.push(searchCondition);
+      }
+    }
+
+    const whereClause = and(...conditions);
+    const ordering =
+      input.sort === "title"
+        ? input.order === "asc"
+          ? asc(this.table.title)
+          : desc(this.table.title)
+        : desc(this.table.createdAt);
+
+    const rowsQuery = this.orm
+      .select()
+      .from(this.table)
+      .where(whereClause)
+      .orderBy(ordering, desc(this.table.createdAt))
+      .limit(limit)
+      .offset((page - 1) * limit);
+
+    const countQuery = this.orm.select({ count: count() }).from(this.table).where(whereClause);
+
+    const result = await this.throwableQuery(() => Promise.all([rowsQuery, countQuery]));
+    if (result.isErr()) return err(result.error);
+    const [rows, [totalRow]] = result.value;
+
+    return ok({
+      rows: rows as PostSchema[],
+      total: totalRow?.count ?? 0,
+    });
+  }
+
+  async findBySlug(slug: string, excludeId?: string) {
+    const whereClause = excludeId
+      ? and(eq(this.table.slug, slug), ne(this.table.id, excludeId), isNull(this.table.deletedAt))
+      : and(eq(this.table.slug, slug), isNull(this.table.deletedAt));
+
+    const result = await this.throwableQuery(() =>
+      this.orm.select().from(this.table).where(whereClause).limit(1)
+    );
+    if (result.isErr()) return err(result.error);
+    const [row] = result.value;
+    return ok(row);
+  }
+}
+```
+
+## When to Use `async` Methods vs Query Builder
+
+Use regular `async` methods (as shown above) when:
+
+- The method requires an optional `tx` parameter for transaction support.
+- The method orchestrates multiple sequential queries with branching logic between them.
+- The method wraps a `this.orm.transaction()` call.
+
+Use `this.query()` builder for simpler single-query methods with schema-typed input/output:
+
+```typescript
+findBySlug = this.query("findBySlug")
+  .input(z.object({ slug: z.string() }))
+  .output(postSchema.nullable())
+  .handle(async ({ slug }) => {
+    const result = await this.throwableQuery(() =>
+      this.orm.select().from(this.table).where(eq(this.table.slug, slug)).limit(1)
+    );
+    if (result.isErr()) return err(result.error);
+    const [row] = result.value;
+    return row ?? null;
+  });
+```
+
+## Best Practices
+
+1. Prefer built-in `BaseTableRepository` methods (`findById`, `create`, `update`, `softDeleteById`) over hand-written queries for standard CRUD.
+2. Use `throwableQuery` around each individual Drizzle query, not around the whole method body.
+3. Filter soft-deleted rows with `isNull(this.table.deletedAt)` in custom queries.
+4. Accept optional `tx?: Orm` parameter in methods that participate in transactions.
+5. Return `ServerResultAsync` consistently from all repository methods.

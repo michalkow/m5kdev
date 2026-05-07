@@ -26,7 +26,6 @@ apps/*/server/src/modules/<module>/
 ├── <module>.service.ts
 ├── <module>.trpc.ts           # or *.router.ts for express endpoints
 ├── <module>.grants.ts         # when using BasePermissionService
-└── <module>.jobs.ts           # optional workflow jobs
 ```
 
 ## Layer Boundaries
@@ -34,7 +33,6 @@ apps/*/server/src/modules/<module>/
 - `.repository.ts`: persistence only, no service imports.
 - `.service.ts`: business logic and orchestration.
 - `.trpc.ts` / `.router.ts`: transport only, delegate to service.
-- `.jobs.ts`: worker entrypoints calling service methods.
 
 ## Composition Pattern
 

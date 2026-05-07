@@ -1,0 +1,198 @@
+---
+globs: packages/backend/src/modules/**/*.module.ts
+alwaysApply: false
+---
+
+# Module File Style Guide
+
+A `*.module.ts` file is the composition unit for a backend module. It wires repositories, services, tRPC routers, Express routes, workflows, auth, and lifecycle hooks into a single class that the app kernel orchestrates.
+
+## Conventions
+
+- Extend `BaseModule<Deps, Tables, Repositories, Services, Routers>` from `../base/base.module`.
+- Declare local type aliases for each generic slot (`*ModuleDeps`, `*ModuleTables`, `*ModuleRepositories`, `*ModuleServices`, `*ModuleRouters`).
+- Set `readonly id` to match the module directory name (e.g. `readonly id = "auth"`).
+- Declare `dependsOn` / `optionalDependsOn` as `readonly` tuples with `as const`.
+- Override only the hooks the module actually needs; omit the rest.
+- Keep hook bodies as pure wiring — no business logic. Instantiate repos/services and return them.
+- Use `createBackendRouterMap(namespace, router)` in `trpc()` to produce typed router fragments.
+- Accept external config/libs through `constructor` parameters, not through hook contexts.
+
+## Generic Parameters
+
+| Position | Name | Purpose | When unused |
+|----------|------|---------|-------------|
+| 1 | `Deps` | Map of module dependencies (`{ email: EmailModule }`) | `never` |
+| 2 | `Tables` | `typeof import("./mod.db")` — DB table exports | `TableMap` |
+| 3 | `Repositories` | Object map of repository instances | `{}` |
+| 4 | `Services` | Object map of service instances | `{}` |
+| 5 | `Routers` | Object map of tRPC routers keyed by namespace | `never` |
+
+## Dependency Declaration
+
+- **`dependsOn`** — required modules. The kernel ensures they initialize first and populates `ctx.deps.<id>` with their tables, repositories, services, and routers.
+- **`optionalDependsOn`** — optional modules. Same ordering guarantee, but `ctx.deps.<id>` may be `undefined` at runtime if the module is not registered.
+- **`dbDependsOn`** — DB-only dependencies (tables merged into schema). Not used for service init ordering.
+
+Access dependent module services through `ctx.deps`:
+
+```typescript
+override services({ repositories, deps }: ModuleServicesContext<MyDeps, MyRepos>) {
+  return {
+    myService: new MyService(repositories, {
+      email: deps.email.services.email,
+      billing: deps.billing?.services.billing, // optional dep
+    }),
+  };
+}
+```
+
+## Lifecycle Hooks (Execution Order)
+
+The kernel calls hooks across all modules in topological order:
+
+1. **`repositories(ctx)`** — instantiate repositories. Context provides `db` (orm, schema, client), `deps`, `infra`.
+2. **`services(ctx)`** — instantiate services. Context adds `repositories` from step 1.
+3. **`auth(ctx)`** — return a `BetterAuth` instance (at most one module may provide this).
+4. **`trpc(ctx)`** — return router map fragment. Context adds `services` and `trpc` methods.
+5. **`express(ctx)`** — mount Express routes. Context adds `authMiddleware`, `roleAuthMiddleware`.
+6. **`workflows(ctx)`** — register workflow handlers. Context adds `workflow` runtime.
+7. **`startup(ctx)`** — async hook called after full app build and workflow start.
+8. **`shutdown(ctx)`** — async hook called on app teardown (reverse module order).
+
+Each hook receives a typed context (`ModuleRepositoriesContext`, `ModuleServicesContext`, etc.) parameterized by `Deps` and the relevant output type from prior hooks.
+
+## Patterns
+
+### Full Module (repos + services + tRPC + dependencies)
+
+```typescript
+import { createBackendRouterMap } from "../../app";
+import {
+  BaseModule,
+  type ModuleRepositoriesContext,
+  type ModuleServicesContext,
+  type ModuleTRPCContext,
+} from "../base/base.module";
+import type { EmailModule } from "../email/email.module";
+import type * as itemTables from "./item.db";
+import { ItemRepository } from "./item.repository";
+import { ItemService } from "./item.service";
+import { createItemTRPC } from "./item.trpc";
+
+type ItemModuleDeps = { email: EmailModule };
+type ItemModuleTables = typeof itemTables;
+type ItemModuleRepositories = { item: ItemRepository };
+type ItemModuleServices = { item: ItemService };
+type ItemModuleRouters = { item: ReturnType<typeof createItemTRPC> };
+
+export class ItemModule extends BaseModule<
+  ItemModuleDeps,
+  ItemModuleTables,
+  ItemModuleRepositories,
+  ItemModuleServices,
+  ItemModuleRouters
+> {
+  readonly id = "item";
+  override readonly dependsOn = ["email"] as const;
+
+  override repositories({ db }: ModuleRepositoriesContext<ItemModuleDeps, ItemModuleTables>) {
+    return {
+      item: new ItemRepository({ orm: db.orm, schema: db.schema, table: db.schema.items }),
+    };
+  }
+
+  override services({ repositories, deps }: ModuleServicesContext<ItemModuleDeps, ItemModuleRepositories>) {
+    return {
+      item: new ItemService(repositories, { email: deps.email.services.email }),
+    };
+  }
+
+  override trpc({ trpc, services }: ModuleTRPCContext<ItemModuleDeps, ItemModuleServices>) {
+    return createBackendRouterMap("item", createItemTRPC(trpc, services.item));
+  }
+}
+```
+
+### Services-Only Module (no DB, no deps)
+
+```typescript
+import { BaseModule, type TableMap } from "../base/base.module";
+import { DocxService } from "./docx.service";
+
+type DocxModuleDeps = never;
+type DocxModuleTables = TableMap;
+type DocxModuleRepositories = {};
+type DocxModuleServices = { docx: DocxService };
+type DocxModuleRouters = never;
+
+export class DocxModule extends BaseModule<
+  DocxModuleDeps, DocxModuleTables, DocxModuleRepositories, DocxModuleServices, DocxModuleRouters
+> {
+  readonly id = "docx";
+
+  override services() {
+    return { docx: new DocxService() };
+  }
+}
+```
+
+### No-Deps Module with Constructor Config
+
+```typescript
+export class BillingModule extends BaseModule<
+  never, BillingModuleTables, BillingRepositories, BillingServices, BillingRouters
+> {
+  readonly id = "billing";
+
+  constructor(
+    private readonly libs: { stripe: Stripe },
+    private readonly config: { plans: StripePlan[] },
+  ) {
+    super();
+  }
+
+  override repositories({ db }: ModuleRepositoriesContext<never, BillingModuleTables>) {
+    return {
+      billing: new BillingRepository({
+        orm: db.orm, schema: db.schema, table: db.schema.subscriptions,
+        libs: this.libs, config: this.config,
+      }),
+    };
+  }
+
+  // services, trpc ...
+}
+```
+
+### Module with Express Hook
+
+```typescript
+override express({ infra, services, authMiddleware }: ModuleExpressContext<Deps, Services>) {
+  if (!authMiddleware) return;
+  infra.express.use("/upload", createUploadRouter({ authMiddleware, fileService: services.file }));
+}
+```
+
+### Configurable Namespace
+
+Use a const generic to let consumers choose the tRPC namespace:
+
+```typescript
+export class WorkflowModule<const Namespace extends string = "workflow"> extends BaseModule<
+  WorkflowModuleDeps, WorkflowModuleTables, WorkflowModuleRepositories,
+  WorkflowModuleServices, WorkflowModuleRouters<Namespace>
+> {
+  readonly id = "workflow";
+
+  constructor(private readonly config: WorkflowModuleConfig<Namespace>) {
+    super();
+  }
+
+  override trpc({ trpc, services }: ModuleTRPCContext<WorkflowModuleDeps, WorkflowModuleServices>) {
+    const namespace = (this.config.namespace ?? "workflow") as Namespace;
+    return createBackendRouterMap(namespace, createWorkflowTRPC(trpc, services.workflow));
+  }
+}
+```
+

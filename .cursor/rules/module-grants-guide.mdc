@@ -1,5 +1,5 @@
 ---
-globs: apps/*/server/src/modules/**/*{.grants.ts,.service.ts}
+globs: packages/backend/src/modules/**/*.grants.ts
 alwaysApply: false
 ---
 
@@ -13,6 +13,93 @@ Use this when working with module grants and `BasePermissionService`.
 - Keep authorization checks in `<module>.service.ts`.
 - Action names in `accessGuard`/`accessGuardAsync` must exactly match action names defined in grants.
 - Prefer canonical action vocabulary: `read`, `write`, `delete`, `publish`.
+
+## Default Grants from `@m5kdev/backend`
+
+Backend modules ship default grants via `<module>.grants.ts`. These provide sensible role/access defaults so apps work out of the box.
+
+### Auth Module (`defaultAuthGrants`)
+
+```typescript
+import { flattenNestedGrants } from "@m5kdev/backend/modules/base/base.grants";
+
+export const defaultAuthGrants = flattenNestedGrants({
+  auth: {
+    user: {
+      admin: { read: "all", write: "all", delete: "all" },
+      user:  { read: "own", write: "own", delete: "own" },
+    },
+    organization: {
+      owner:  { read: "all", write: "all", delete: "all" },
+      admin:  { read: "all", write: "all" },
+      member: { read: "own" },
+    },
+  },
+});
+```
+
+### Grant Structure
+
+`flattenNestedGrants` accepts a `NestedGrants` object shaped as:
+
+```
+{ [resource]: { [level]: { [role]: { [action]: Access } } } }
+```
+
+- **resource** — domain area (e.g. `"auth"`).
+- **level** — scope: `"user"`, `"team"`, or `"organization"`.
+- **role** — role name at that level (e.g. `"admin"`, `"member"`, `"owner"`).
+- **action** — canonical action (`"read"`, `"write"`, `"delete"`, `"publish"`).
+- **Access** — `"all"` (any entity) or `"own"` (ownership check required).
+
+The function flattens this into a `Grant[]` consumed by `BasePermissionService`.
+
+### Overriding Default Grants
+
+Backend modules accept optional grants via their constructor, falling back to the shipped defaults:
+
+```typescript
+class AuthModule extends BaseModule<...> {
+  private readonly grants: Grant[];
+
+  constructor(grants?: Grant[]) {
+    super();
+    this.grants = grants ?? defaultAuthGrants;
+  }
+}
+```
+
+Apps can override grants at composition time:
+
+```typescript
+// apps/myapp/server/src/modules.ts
+const authModule = new AuthModule(
+  flattenNestedGrants({
+    auth: {
+      user: {
+        admin: { read: "all", write: "all", delete: "all" },
+        user:  { read: "own", write: "own" }, // no self-delete
+      },
+      organization: {
+        owner:  { read: "all", write: "all", delete: "all" },
+        admin:  { read: "all", write: "all" },
+        member: { read: "own" },
+      },
+    },
+  })
+);
+```
+
+Only override when the app needs to deviate from the defaults. Pass `undefined` (or omit) to keep default behavior.
+
+### Writing Default Grants for New Backend Modules
+
+When adding a new module to `@m5kdev/backend`:
+
+1. Create `<module>.grants.ts` in the module directory.
+2. Export a `default<Module>Grants` constant using `flattenNestedGrants`.
+3. Accept optional `Grant[]` in the module constructor, falling back to the default.
+4. Pass the grants to `BasePermissionService` via the service constructor.
 
 ## Recommended Pattern
 
@@ -40,3 +127,5 @@ Use these actions in grants and in service guard calls to avoid string drift.
 - Grant declares `write` while service checks `update`.
 - Decorating a module with grants but never enforcing them in service methods.
 - Doing permission checks in tRPC/router instead of service.
+- Duplicating default grants in app code instead of relying on the backend defaults.
+- Overriding grants without understanding the full default set (always check `<module>.grants.ts` first).

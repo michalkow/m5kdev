@@ -1,0 +1,113 @@
+---
+globs: apps/*/server/src/modules/**/*.trpc.ts
+alwaysApply: false
+---
+
+# Module tRPC File Style Guide
+
+Conventions for tRPC router files in app modules.
+
+## File Location
+
+```
+apps/<app>/server/src/modules/<module>/<module>.trpc.ts
+```
+
+## Conventions
+
+- Export a factory function named `create<Module>TRPC`.
+- Import input and output schemas from the shared schema file: `@appname/shared/modules/<module>/<module>.schema`.
+- Use `handleTRPCResult` from `@m5kdev/backend/utils/trpc` to unwrap `Result` types.
+- Separate queries and mutations; keep resolvers thin and delegate to the service.
+- Always pass `ctx` to service methods as the second argument. The first argument (`input`) can be `undefined`.
+- Use `z` inline only for simple ad-hoc inputs with primitives (`z.string()`, `z.number()`, `z.array()` with primitive value, `z.record()`); prefer shared schemas otherwise.
+- Do not perform business logic or DB access directly in tRPC resolvers.
+- To turn a schema into its array version, use `schema.array()` instead of `z.array(schema)`.
+
+## Factory Pattern
+
+The factory function receives `TRPCMethods` (destructured) and the service instance:
+
+```typescript
+import {
+  postCreateInputSchema,
+  postCreateOutputSchema,
+  postsListInputSchema,
+  postsListOutputSchema,
+  postUpdateInputSchema,
+  postUpdateOutputSchema,
+  postPublishInputSchema,
+  postPublishOutputSchema,
+  postSoftDeleteInputSchema,
+  postSoftDeleteOutputSchema,
+} from "@appname/shared/modules/posts/posts.schema";
+import { handleTRPCResult, type TRPCMethods } from "@m5kdev/backend/utils/trpc";
+import type { PostsService } from "./posts.service";
+
+export function createPostsTRPC(
+  { router, privateProcedure: procedure }: TRPCMethods,
+  postsService: PostsService
+) {
+  return router({
+    list: procedure
+      .input(postsListInputSchema)
+      .output(postsListOutputSchema)
+      .query(async ({ ctx, input }) => handleTRPCResult(await postsService.list(input ?? {}, ctx))),
+
+    create: procedure
+      .input(postCreateInputSchema)
+      .output(postCreateOutputSchema)
+      .mutation(async ({ ctx, input }) => handleTRPCResult(await postsService.create(input, ctx))),
+
+    update: procedure
+      .input(postUpdateInputSchema)
+      .output(postUpdateOutputSchema)
+      .mutation(async ({ ctx, input }) => handleTRPCResult(await postsService.update(input, ctx))),
+
+    publish: procedure
+      .input(postPublishInputSchema)
+      .output(postPublishOutputSchema)
+      .mutation(async ({ ctx, input }) => handleTRPCResult(await postsService.publish(input, ctx))),
+
+    softDelete: procedure
+      .input(postSoftDeleteInputSchema)
+      .output(postSoftDeleteOutputSchema)
+      .mutation(async ({ ctx, input }) =>
+        handleTRPCResult(await postsService.softDelete(input, ctx))
+      ),
+  });
+}
+```
+
+## Available Procedure Types
+
+Destructure from `TRPCMethods` based on auth requirements:
+
+| Procedure | Auth | Use for |
+|---|---|---|
+| `publicProcedure` | None | Public endpoints |
+| `privateProcedure` | User session required | Most CRUD operations |
+| `adminProcedure` | Admin role required | Admin-only operations |
+| `organizationProcedure` | Organization context required | Org-scoped operations |
+
+Alias `privateProcedure` as `procedure` for conciseness when most routes are authenticated.
+
+## Wiring to Module
+
+The factory is called in the module's `trpc()` hook:
+
+```typescript
+override trpc({ trpc, services }: ModuleTRPCContext<Deps, Services>) {
+  return createBackendRouterMap("posts", createPostsTRPC(trpc, services.posts));
+}
+```
+
+The namespace string (`"posts"`) becomes the tRPC path prefix (e.g., `trpc.posts.list`).
+
+## Best Practices
+
+1. Keep resolvers one-liners: `handleTRPCResult(await service.method(input, ctx))`.
+2. Never access repositories or database directly in tRPC files.
+3. Use shared schemas for `.input()` and `.output()` to maintain contract consistency.
+4. For optional input, pass a default value: `input ?? {}`.
+5. Use `.query()` for read operations and `.mutation()` for writes.

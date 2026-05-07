@@ -1,5 +1,5 @@
 ---
-globs: apps/*/server/src/modules/**/*.service.ts
+globs: packages/backend/src/modules/**/*.service.ts
 alwaysApply: false
 ---
 
@@ -11,16 +11,112 @@ alwaysApply: false
 - Declare repository and service dependencies as explicit named maps in generics.
 - Instantiate service classes in `apps/*/server/src/service.ts` (composition root), not inside module files.
 - Keep orchestration/business logic in service; repositories handle persistence only.
-- Accept contextual objects (usually `{ user }` or full app `Context`) where required by auth/business logic.
+- Implement service methods as **procedures** using `this.procedure("name")` builder chains.
 - Propagate `ServerResultAsync` consistently and use `err(...)`/`ok(...)` composition.
 - Prefer helper methods for repeated workflows (prompt prep, query assembly, enrichment).
 
-## Method Patterns
+## Procedure Builder
 
-- `list/read/status`: usually pass-through with enforced `user.id`.
-- `create/update/delete`: enforce ownership/permission before mutation when module is permissioned.
-- `*_async job trigger` methods: schedule jobs and return IDs; keep queue concerns small.
-- `ai*` methods: isolate AI interactions and keep prompt/model selection centralized.
+Service methods are defined using the procedure builder pattern. Each procedure is a chainable pipeline that handles input typing, authentication, resource loading, access control, and output typing before the final handler.
+
+### Builder Methods (in typical call order)
+
+1. `.input(schema)` -- Accepts a Zod schema; infers `TInput` so you don't need `this.procedure<Type>(...)`. No runtime validation by default; pass `true` as second arg to enable it.
+2. `.output(schema)` -- Accepts a Zod schema; constrains the handler return type so you don't need explicit return annotations. No runtime validation by default; pass `true` as second arg to enable it.
+3. `.requireAuth(scope?)` -- Enforces authentication. Scope can be `"user"` (default), `"organization"`, `"team"`, or `"admin"`.
+4. `.loadResource(name, loader)` -- Loads a value and stores it in `state`; returns `NOT_FOUND` if falsy.
+5. `.use(name, step)` -- Runs an arbitrary step and stores the result in `state`.
+6. `.addContextFilter(scopes?)` -- Applies context-based query filtering (requires auth).
+7. `.access(config)` -- Permission check (only on `BasePermissionService`).
+8. `.handle(handler)` -- Terminal method; runs the handler with `{ input, ctx, state, repository, service, logger }`.
+
+### Input / Output Typing
+
+Prefer `.input(schema)` with Zod schemas defined in the module's `.dto.ts` file over inline generic types:
+
+```typescript
+// Preferred: schema-driven
+create = this.procedure("create")
+  .input(itemSchemas.input.create)
+  .output(itemSchemas.output.single)
+  .requireAuth()
+  .handle(async ({ input, ctx }) => {
+    return this.repository.item.create({ ...input, userId: ctx.actor.userId });
+  });
+
+// Acceptable for simple primitives with no matching schema
+getCount = this.procedure("getCount")
+  .requireAuth()
+  .handle(async ({ ctx }): ServerResultAsync<number> => {
+    return this.repository.item.countByUser(ctx.actor.userId);
+  });
+```
+
+When no Zod schema exists (simple primitives, inline objects), you can still use the generic: `this.procedure<string>("name")`.
+
+## Procedure Patterns
+
+### Simple CRUD
+
+```typescript
+list = this.procedure("list")
+  .input(itemSchemas.input.list)
+  .output(itemSchemas.output.list)
+  .requireAuth()
+  .handle(async ({ input, ctx }) => {
+    return this.repository.item.list({ ...input, userId: ctx.actor.userId });
+  });
+
+create = this.procedure("create")
+  .input(itemSchemas.input.create)
+  .output(itemSchemas.output.single)
+  .requireAuth()
+  .handle(async ({ input, ctx }) => {
+    return this.repository.item.create({ ...input, userId: ctx.actor.userId });
+  });
+```
+
+### With Resource Loading and Access Control
+
+```typescript
+update = this.procedure("update")
+  .input(itemSchemas.input.update)
+  .output(itemSchemas.output.single)
+  .requireAuth()
+  .loadResource("item", ({ input }) => this.repository.item.findById(input.id))
+  .access({
+    action: "write",
+    entities: ({ state }) => ({ userId: state.item.userId }),
+  })
+  .handle(async ({ input }) => {
+    return this.repository.item.update(input);
+  });
+```
+
+### With Context Filter (Query-Based Lists)
+
+```typescript
+list = this.procedure("list")
+  .output(itemSchemas.output.list)
+  .requireAuth()
+  .addContextFilter(["user"])
+  .handle(({ input }) => {
+    return this.repository.item.queryList(input, {
+      globalSearchColumns: ["name", "description"],
+    });
+  });
+```
+
+### Public (No Auth)
+
+```typescript
+validateCode = this.procedure("validateCode")
+  .input(itemSchemas.input.validate)
+  .output(itemSchemas.output.status)
+  .handle(async ({ input }) => {
+    return this.repository.item.validateCode(input);
+  });
+```
 
 ## Permission and Grants
 
@@ -31,13 +127,54 @@ alwaysApply: false
 ## Example Skeleton
 
 ```typescript
+import { err, ok } from "neverthrow";
 import { BaseService } from "@m5kdev/backend/modules/base/base.service";
-import type { User } from "../../lib/auth";
+import { itemSchemas } from "./item.dto";
+import type { ItemRepository } from "./item.repository";
 
-export class ItemService extends BaseService<{ item: ItemRepository }, { ai: AIService }> {
-  async create(data: CreateInput, { user }: { user: User }) {
-    // Business rules + orchestration
-    return this.repository.item.create({ ...data, userId: user.id });
-  }
+export class ItemService extends BaseService<
+  { item: ItemRepository },
+  Record<string, never>
+> {
+  list = this.procedure("list")
+    .input(itemSchemas.input.list)
+    .output(itemSchemas.output.single.array())
+    .requireAuth()
+    .handle(async ({ input, ctx }) => {
+      return this.repository.item.list({ ...input, userId: ctx.actor.userId });
+    });
+
+  create = this.procedure("create")
+    .input(itemSchemas.input.create)
+    .output(itemSchemas.output.single)
+    .requireAuth()
+    .handle(async ({ input, ctx }) => {
+      return this.repository.item.create({ ...input, userId: ctx.actor.userId });
+    });
+
+  update = this.procedure("update")
+    .input(itemSchemas.input.update)
+    .output(itemSchemas.output.single)
+    .requireAuth()
+    .loadResource("item", ({ input }) => this.repository.item.findById(input.id))
+    .use("owner", ({ ctx, state }) => {
+      if (state.item.userId !== ctx.actor.userId) return this.error("FORBIDDEN");
+      return true;
+    })
+    .handle(async ({ input }) => {
+      return this.repository.item.update(input);
+    });
+
+  delete = this.procedure("delete")
+    .input(itemSchemas.input.delete)
+    .requireAuth()
+    .loadResource("item", ({ input }) => this.repository.item.findById(input.id))
+    .use("owner", ({ ctx, state }) => {
+      if (state.item.userId !== ctx.actor.userId) return this.error("FORBIDDEN");
+      return true;
+    })
+    .handle(async ({ input }) => {
+      return this.repository.item.deleteById(input.id);
+    });
 }
 ```

@@ -1,0 +1,134 @@
+---
+globs: apps/*/server/src/modules/**/*.grants.ts
+alwaysApply: false
+---
+
+# Module Grants and Permission Guide
+
+Conventions for defining permission grants in app modules.
+
+## File Location
+
+```
+apps/<app>/server/src/modules/<module>/<module>.grants.ts
+```
+
+## Core Rules
+
+- Keep grants in `<module>.grants.ts`.
+- Keep authorization checks in `<module>.service.ts` via the procedure builder's `.access()` step.
+- Action names in `.access()` and `accessGuard`/`accessGuardAsync` must exactly match action names defined in grants.
+- Prefer canonical action vocabulary: `read`, `write`, `delete`, `publish`.
+
+## Grant Structure
+
+App modules use flat `ResourceGrant[]` arrays imported from `@m5kdev/backend/modules/base/base.grants`:
+
+```typescript
+import type { ResourceGrant } from "@m5kdev/backend/modules/base/base.grants";
+```
+
+Each `ResourceGrant` has four fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `action` | `string` | The permission action (`"read"`, `"write"`, `"delete"`, `"publish"`) |
+| `level` | `"user" \| "team" \| "organization"` | The scope level at which the grant applies |
+| `role` | `string` | The role that receives this grant (`"owner"`, `"admin"`, `"member"`) |
+| `access` | `"all" \| "own"` | `"all"` grants access to any entity; `"own"` requires ownership match |
+
+## Example
+
+```typescript
+import type { ResourceGrant } from "@m5kdev/backend/modules/base/base.grants";
+
+export const postsGrants: ResourceGrant[] = [
+  {
+    action: "write",
+    level: "team",
+    role: "owner",
+    access: "own",
+  },
+  {
+    action: "publish",
+    level: "team",
+    role: "owner",
+    access: "own",
+  },
+  {
+    action: "delete",
+    level: "team",
+    role: "owner",
+    access: "own",
+  },
+  {
+    action: "write",
+    level: "organization",
+    role: "owner",
+    access: "own",
+  },
+  {
+    action: "publish",
+    level: "organization",
+    role: "owner",
+    access: "own",
+  },
+  {
+    action: "delete",
+    level: "organization",
+    role: "owner",
+    access: "own",
+  },
+];
+```
+
+## Wiring Grants to Services
+
+Pass the grants array as the third argument to `BasePermissionService` in the module file:
+
+```typescript
+override services({ repositories }: ModuleServicesContext<Deps, Repositories>) {
+  return {
+    posts: new PostsService({ posts: repositories.posts }, {}, postsGrants),
+  };
+}
+```
+
+## Service Integration
+
+Use `.access()` in procedure chains to enforce grants. The action string must match a grant's `action` field:
+
+```typescript
+readonly update = this.procedure<UpdateInput>("update")
+  .requireAuth()
+  .use("post", async ({ input }) => {
+    const current = await this.repository.posts.findById(input.id);
+    if (current.isErr()) return err(current.error);
+    if (!current.value || current.value.deletedAt) return this.error("NOT_FOUND");
+    return current.value;
+  })
+  .access({
+    action: "write",
+    entityStep: "post",
+  })
+  .handle(async ({ input }) => {
+    return this.repository.posts.update(input);
+  });
+```
+
+The `.access()` step supports two entity resolution modes:
+
+- `entityStep` — reads entity from a previous `.use()` or `.loadResource()` step.
+- `entities` — inline function returning `{ userId?, organizationId?, teamId? }`.
+
+## Service Choice
+
+- Use `BasePermissionService` only when the module actually performs `.access()` checks.
+- If a module has no permission enforcement, use `BaseService` instead.
+
+## Anti-Patterns
+
+- Grant declares `write` while service checks `update` — action names must match exactly.
+- Defining grants but never enforcing them with `.access()` in service procedures.
+- Doing permission checks in tRPC/router files instead of in the service layer.
+- Using `BasePermissionService` when no grants or `.access()` calls exist.

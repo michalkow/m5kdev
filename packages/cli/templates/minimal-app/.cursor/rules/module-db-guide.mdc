@@ -1,0 +1,61 @@
+---
+globs: apps/*/server/src/modules/**/*.db.ts
+alwaysApply: false
+---
+
+# Module DB File Style Guide
+
+Conventions for database table definitions in app modules.
+
+## Conventions
+
+- Import enum-like constants from shared constants: `@appname/shared/modules/<module>/<module>.constants`.
+- Import auth tables for foreign keys: `import { users, organizations, teams } from "@m5kdev/backend/modules/auth/auth.db"`.
+- Define tables with Drizzle's `sqliteTable` aliased as `table`.
+- Use `uuidv4` as the default for string IDs via `.$default(uuidv4)`.
+- Represent booleans with `integer(..., { mode: "boolean" })` and `.default(false)`.
+- Represent timestamps with `integer(..., { mode: "timestamp" })`.
+  - `createdAt`: `integer("created_at", { mode: "timestamp" }).notNull().$default(() => new Date())`
+  - `updatedAt`: `integer("updated_at", { mode: "timestamp" })`
+  - `deletedAt`: `integer("deleted_at", { mode: "timestamp" })`
+- JSON columns: `text("col", { mode: "json" }).default([]).$type<string[]>()` or `.default({}).$type<Record<string, unknown>>()`.
+- Use `references(() => otherTable.id, { onDelete: "cascade" })` for non-nullable FKs and `{ onDelete: "set null" }` for nullable FKs.
+- Composite join tables define primary keys with `primaryKey({ columns: [t.aId, t.bId] })`.
+- Table names are plural; column names are snake_case at DB level, camelCase in code.
+- Inline union types are acceptable for simple status columns: `.$type<"draft" | "published">()`.
+
+## File Location
+
+```
+apps/<app>/server/src/modules/<module>/<module>.db.ts
+```
+
+## Example
+
+```typescript
+import { organizations, teams, users } from "@m5kdev/backend/modules/auth/auth.db";
+import { integer, sqliteTable as table, text } from "drizzle-orm/sqlite-core";
+import { v4 as uuidv4 } from "uuid";
+
+export const posts = table("posts", {
+  id: text("id").primaryKey().$default(uuidv4),
+  authorUserId: text("author_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  organizationId: text("organization_id").references(() => organizations.id, {
+    onDelete: "set null",
+  }),
+  teamId: text("team_id").references(() => teams.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  slug: text("slug").notNull().unique(),
+  excerpt: text("excerpt"),
+  content: text("content").notNull(),
+  status: text("status").$type<"draft" | "published">().notNull().default("draft"),
+  publishedAt: integer("published_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .$default(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }),
+  deletedAt: integer("deleted_at", { mode: "timestamp" }),
+});
+```

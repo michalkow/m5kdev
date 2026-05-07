@@ -1,21 +1,10 @@
 import { z } from "zod";
 import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 import {
-  accountClaimMagicLinkOutputSchema,
-  accountClaimOutputSchema,
-  accountClaimSchema,
-  adminOrganizationQueryInputSchema,
-  adminOrganizationSchema,
-  childOrganizationSchema,
-  organizationListSchema,
-  organizationSchema,
-  organizationTypeSchema,
-  readInvitationInputSchema,
-  readInvitationOutputSchema,
-  simpleOrganizationSchema,
-  updateChildOrganizationInputSchema,
-  waitlistOutputSchema,
-  waitlistSchema,
+  accountClaimMagicLinkSchemas,
+  invitationSchemas,
+  organizationSchemas,
+  waitlistSchemas,
 } from "./auth.dto";
 import type { AuthService } from "./auth.service";
 
@@ -35,72 +24,54 @@ export function createAuthTRPC(
     }),
 
     readInvitation: publicProcedure
-      .input(readInvitationInputSchema)
-      .output(readInvitationOutputSchema)
+      .input(invitationSchemas.input.read)
+      .output(invitationSchemas.output.read)
       .query(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.readInvitation(input, ctx));
       }),
 
     createInvitationCode: procedure
-      .input(z.object({ name: z.string().optional() }))
-      .output(waitlistSchema)
+      .input(waitlistSchemas.input.create)
+      .output(waitlistSchemas.output.single)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.createInvitationCode(input, ctx));
       }),
 
     createAccountClaimCode: adminProcedure
-      .input(
-        z.object({
-          userId: z.string(),
-          expiresInHours: z.number().optional(),
-        })
-      )
-      .output(accountClaimSchema)
+      .input(accountClaimMagicLinkSchemas.input.create)
+      .output(waitlistSchemas.output.claim)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.createAccountClaimCode(input, ctx));
       }),
 
     listAccountClaims: adminProcedure
-      .output(z.array(accountClaimOutputSchema))
+      .output(waitlistSchemas.output.accountClaim.array())
       .query(async ({ ctx }) => {
         return handleTRPCResult(await authService.listAccountClaims(undefined, ctx));
       }),
 
     generateAccountClaimMagicLink: adminProcedure
-      .input(
-        z.object({
-          claimId: z.string(),
-          email: z.string().email().optional(),
-        })
-      )
-      .output(accountClaimMagicLinkOutputSchema)
+      .input(accountClaimMagicLinkSchemas.input.generateLink)
+      .output(accountClaimMagicLinkSchemas.output.single)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.generateAccountClaimMagicLink(input, ctx));
       }),
 
     listAccountClaimMagicLinks: adminProcedure
-      .input(
-        z.object({
-          claimId: z.string(),
-        })
-      )
-      .output(z.array(accountClaimMagicLinkOutputSchema))
+      .input(accountClaimMagicLinkSchemas.input.listLinks)
+      .output(accountClaimMagicLinkSchemas.output.single.array())
       .query(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.listAccountClaimMagicLinks(input, ctx));
       }),
 
     getMyAccountClaimStatus: procedure
-      .output(accountClaimSchema.nullable())
+      .output(waitlistSchemas.output.claim.nullable())
       .query(async ({ ctx }) => {
         return handleTRPCResult(await authService.getMyAccountClaimStatus(undefined, ctx));
       }),
 
     setMyAccountClaimEmail: procedure
-      .input(
-        z.object({
-          email: z.string().email(),
-        })
-      )
+      .input(accountClaimMagicLinkSchemas.input.setEmail)
       .output(z.object({ status: z.boolean() }))
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.setMyAccountClaimEmail(input, ctx));
@@ -112,87 +83,61 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.acceptMyAccountClaim(undefined, ctx));
       }),
 
-    listWaitlist: procedure.output(z.array(waitlistSchema)).query(async ({ ctx }) => {
+    listWaitlist: procedure.output(waitlistSchemas.output.single.array()).query(async ({ ctx }) => {
       return handleTRPCResult(await authService.listWaitlist({}, ctx));
     }),
 
     listAdminWaitlist: adminProcedure
-      .output(z.array(waitlistOutputSchema))
+      .output(waitlistSchemas.output.simple.array())
       .query(async ({ ctx }) => {
         return handleTRPCResult(await authService.listAdminWaitlist(undefined, ctx));
       }),
 
     listAdminOrganizations: adminProcedure
-      .input(adminOrganizationQueryInputSchema)
-      .output(organizationListSchema)
+      .input(organizationSchemas.input.list)
+      .output(organizationSchemas.output.list)
       .query(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.listAdminOrganizations(input, ctx));
       }),
 
     updateAdminOrganizationType: adminProcedure
-      .input(
-        z.object({
-          organizationId: z.string(),
-          type: organizationTypeSchema,
-        })
-      )
-      .output(adminOrganizationSchema)
+      .input(organizationSchemas.input.updateType)
+      .output(organizationSchemas.output.admin)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.updateAdminOrganizationType(input, ctx));
       }),
 
     addToWaitlist: adminProcedure
-      .input(
-        z.object({
-          email: z.string(),
-        })
-      )
-      .output(waitlistOutputSchema)
+      .input(waitlistSchemas.input.add)
+      .output(waitlistSchemas.output.single)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.addToWaitlist(input, ctx));
       }),
 
     inviteToWaitlist: procedure
-      .input(
-        z.object({
-          email: z.string(),
-          name: z.string().optional(),
-        })
-      )
-      .output(waitlistSchema)
+      .input(waitlistSchemas.input.invite)
+      .output(waitlistSchemas.output.single)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.inviteToWaitlist(input, ctx));
       }),
 
     inviteFromWaitlist: adminProcedure
-      .input(
-        z.object({
-          id: z.string(),
-        })
-      )
-      .output(waitlistOutputSchema)
+      .input(waitlistSchemas.input.inviteFrom)
+      .output(waitlistSchemas.output.single)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.inviteFromWaitlist(input, ctx));
       }),
 
     removeFromWaitlist: adminProcedure
-      .input(
-        z.object({
-          id: z.string(),
-        })
-      )
-      .output(waitlistOutputSchema)
+      .input(waitlistSchemas.input.remove)
+      .output(waitlistSchemas.output.single)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.removeFromWaitlist(input, ctx));
       }),
 
     joinWaitlist: publicProcedure
-      .input(
-        z.object({
-          email: z.string(),
-        })
-      )
-      .output(waitlistOutputSchema)
+      .input(waitlistSchemas.input.join)
+      .output(waitlistSchemas.output.single)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.joinWaitlist(input, ctx));
       }),
@@ -268,11 +213,7 @@ export function createAuthTRPC(
       }),
 
     validateWaitlistCode: publicProcedure
-      .input(
-        z.object({
-          code: z.string(),
-        })
-      )
+      .input(waitlistSchemas.input.validateCode)
       .output(
         z.object({
           status: z.string(),
@@ -283,27 +224,27 @@ export function createAuthTRPC(
       }),
 
     listChildOrganizations: organizationProcedure
-      .output(z.array(childOrganizationSchema))
+      .output(z.array(organizationSchemas.output.child))
       .query(async ({ ctx }) => {
         return handleTRPCResult(await authService.listChildOrganizations(undefined, ctx));
       }),
 
     listUserOrganizations: procedure
-      .output(z.array(simpleOrganizationSchema))
+      .output(z.array(organizationSchemas.output.simple))
       .query(async ({ ctx }) => {
         return handleTRPCResult(await authService.listUserOrganizations(undefined, ctx));
       }),
 
     updateChildOrganization: organizationProcedure
-      .input(updateChildOrganizationInputSchema)
-      .output(childOrganizationSchema)
+      .input(organizationSchemas.input.updateChild)
+      .output(organizationSchemas.output.child)
       .mutation(async ({ ctx, input }) => {
         return handleTRPCResult(await authService.updateChildOrganization(input, ctx));
       }),
 
     createOrganization: organizationProcedure
-      .input(z.object({ name: z.string() }))
-      .output(organizationSchema)
+      .input(organizationSchemas.input.create)
+      .output(organizationSchemas.output.single)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.createOrganization(input, ctx));
       }),

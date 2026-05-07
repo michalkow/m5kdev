@@ -8,20 +8,11 @@ import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
-import type * as auth from "./auth.db";
-import type {
-  AccountClaim,
-  AccountClaimMagicLinkOutput,
-  AccountClaimOutput,
-  AdminOrganizationQueryInputSchema,
-  ChildOrganization,
-  OrganizationList,
-  OrganizationType,
-  ReadInvitationOutput,
-  SimpleOrganization,
-  UpdateChildOrganizationInput,
-  Waitlist,
-  WaitlistOutput,
+import {
+  accountClaimMagicLinkSchemas,
+  invitationSchemas,
+  organizationSchemas,
+  waitlistSchemas,
 } from "./auth.dto";
 import type {
   AuthAccountClaimRepository,
@@ -30,8 +21,6 @@ import type {
   AuthUserRepository,
   AuthWaitlistRepository,
 } from "./auth.repository";
-
-type OrganizationRow = typeof auth.organizations.$inferSelect;
 
 const ACCOUNT_CLAIM_MAGIC_LINK_FETCH_MS = 10_000;
 
@@ -241,9 +230,11 @@ export class AuthService extends BasePermissionService<
   // * SECTION: Organizations
   // * =============================================================================
 
-  createOrganization = this.procedure<{ name: string }>("createOrganization")
+  createOrganization = this.procedure("createOrganization")
+    .input(organizationSchemas.input.create)
+    .output(organizationSchemas.output.single)
     .requireAuth("organization")
-    .handle(async ({ ctx, input }): ServerResultAsync<OrganizationRow> => {
+    .handle(async ({ ctx, input }) => {
       const access = this.assertCanManageChildOrganizations(ctx, "create");
       if (access.isErr()) return err(access.error);
       return this.repository.organization.createOrganization({
@@ -255,8 +246,9 @@ export class AuthService extends BasePermissionService<
     });
 
   listChildOrganizations = this.procedure("listChildOrganizations")
+    .output(organizationSchemas.output.child.array())
     .requireAuth("organization")
-    .handle(async ({ ctx }): ServerResultAsync<ChildOrganization[]> => {
+    .handle(async ({ ctx }) => {
       const access = this.assertCanManageChildOrganizations(ctx);
       if (access.isErr()) return err(access.error);
       const result = await this.repository.organization.queryList(
@@ -279,14 +271,17 @@ export class AuthService extends BasePermissionService<
     });
 
   listUserOrganizations = this.procedure("listUserOrganizations")
+    .output(organizationSchemas.output.simple.array())
     .requireAuth()
-    .handle(async ({ ctx }): ServerResultAsync<SimpleOrganization[]> => {
+    .handle(async ({ ctx }) => {
       return this.repository.organization.listUserOrganizations(ctx.actor.userId);
     });
 
-  updateChildOrganization = this.procedure<UpdateChildOrganizationInput>("updateChildOrganization")
+  updateChildOrganization = this.procedure("updateChildOrganization")
+    .input(organizationSchemas.input.updateChild)
+    .output(organizationSchemas.output.child)
     .requireAuth("organization")
-    .handle(async ({ input, ctx }): ServerResultAsync<ChildOrganization> => {
+    .handle(async ({ input, ctx }) => {
       const access = this.assertCanManageChildOrganizations(ctx);
       if (access.isErr()) return err(access.error);
 
@@ -300,23 +295,22 @@ export class AuthService extends BasePermissionService<
       return this.repository.organization.update(input);
     });
 
-  updateAdminOrganizationType = this.procedure<{
-    organizationId: string;
-    type: OrganizationType;
-  }>("updateAdminOrganizationType")
+  updateAdminOrganizationType = this.procedure("updateAdminOrganizationType")
+    .input(organizationSchemas.input.updateType)
+    .output(organizationSchemas.output.single)
     .requireAuth("admin")
-    .handle(async ({ input }): ServerResultAsync<OrganizationRow> => {
+    .handle(async ({ input }) => {
       return this.repository.organization.update({
         id: input.organizationId,
         type: input.type,
       });
     });
 
-  listAdminOrganizations = this.procedure<AdminOrganizationQueryInputSchema>(
-    "listAdminOrganizations"
-  )
+  listAdminOrganizations = this.procedure("listAdminOrganizations")
+    .input(organizationSchemas.input.list)
+    .output(organizationSchemas.output.list)
     .requireAuth("admin")
-    .handle(async ({ input }): ServerResultAsync<OrganizationList> => {
+    .handle(async ({ input }) => {
       return this.repository.organization.queryList(input, {
         globalSearchColumns: ["name", "slug"],
       });
@@ -402,6 +396,7 @@ export class AuthService extends BasePermissionService<
   // * =============================================================================
 
   listAdminWaitlist = this.procedure("listAdminWaitlist")
+    .output(waitlistSchemas.output.simple.array())
     .requireAuth("admin")
     .loadResource("waitlist", () =>
       this.repository.waitlist.queryList(
@@ -420,7 +415,7 @@ export class AuthService extends BasePermissionService<
         }
       )
     )
-    .handle(async ({ state }): ServerResultAsync<WaitlistOutput[]> => {
+    .handle(async ({ state }) => {
       return ok(state.waitlist.rows);
     });
 
@@ -431,6 +426,7 @@ export class AuthService extends BasePermissionService<
     });
 
   listWaitlist = this.procedure<QueryInput>("listWaitlist")
+    .output(waitlistSchemas.output.claim.array())
     .requireAuth()
     .addContextFilter(["user"])
     .use("waitlist", ({ input }) =>
@@ -442,20 +438,24 @@ export class AuthService extends BasePermissionService<
         ],
       })
     )
-    .handle(({ state }): ServerResult<Waitlist[]> => {
+    .handle(({ state }) => {
       return ok(state.waitlist.rows);
     });
 
-  addToWaitlist = this.procedure<{ email: string }>("addToWaitlist")
+  addToWaitlist = this.procedure("addToWaitlist")
+    .input(waitlistSchemas.input.add)
+    .output(waitlistSchemas.output.single)
     .requireAuth("admin")
-    .handle(async ({ input }): ServerResultAsync<WaitlistOutput> => {
+    .handle(async ({ input }) => {
       return this.repository.waitlist.create(input);
     });
 
-  inviteFromWaitlist = this.procedure<{ id: string }>("inviteFromWaitlist")
+  inviteFromWaitlist = this.procedure("inviteFromWaitlist")
+    .input(waitlistSchemas.input.inviteFrom)
+    .output(waitlistSchemas.output.claim)
     .requireAuth("admin")
-    .handle(async ({ input }): ServerResultAsync<Waitlist> => {
-      const waitlist = await this.repository.waitlist.inviteFromWaitlist(input.id);
+    .handle(async ({ input }) => {
+      const waitlist = await this.repository.waitlist.inviteFromWaitlist(input);
       if (waitlist.isErr()) return err(waitlist.error);
       if (!waitlist.value.code) return this.error("BAD_REQUEST");
       if (!waitlist.value.email) return this.error("BAD_REQUEST");
@@ -463,9 +463,11 @@ export class AuthService extends BasePermissionService<
       return ok(waitlist.value);
     });
 
-  inviteToWaitlist = this.procedure<{ email: string; name?: string }>("inviteToWaitlist")
+  inviteToWaitlist = this.procedure("inviteToWaitlist")
+    .input(waitlistSchemas.input.invite)
+    .output(waitlistSchemas.output.claim)
     .requireAuth()
-    .handle(async ({ input: { email, name }, ctx }): ServerResultAsync<Waitlist> => {
+    .handle(async ({ input: { email, name }, ctx }) => {
       const count = await this.repository.waitlist.getUserWaitlistCount(ctx.user.id);
       if (count.isErr()) return err(count.error);
       if (count.value >= 3) return this.error("BAD_REQUEST", "Run out of invites");
@@ -493,9 +495,11 @@ export class AuthService extends BasePermissionService<
       return ok(waitlist.value);
     });
 
-  createInvitationCode = this.procedure<{ name?: string }>("createInvitationCode")
+  createInvitationCode = this.procedure("createInvitationCode")
+    .input(waitlistSchemas.input.create)
+    .output(waitlistSchemas.output.claim)
     .requireAuth()
-    .handle(async ({ input: { name }, ctx }): ServerResultAsync<Waitlist> => {
+    .handle(async ({ input: { name }, ctx }) => {
       posthogCapture({
         distinctId: ctx.actor.userId,
         event: "waitlist_invitation_code_created",
@@ -506,18 +510,21 @@ export class AuthService extends BasePermissionService<
       return this.repository.waitlist.createInvitationCode({ userId: ctx.actor.userId, name });
     });
 
-  joinWaitlist = this.procedure<{ email: string }>("joinWaitlist").handle(
-    async ({ input }): ServerResultAsync<WaitlistOutput> => {
+  joinWaitlist = this.procedure("joinWaitlist")
+    .input(waitlistSchemas.input.join)
+    .output(waitlistSchemas.output.single)
+    .handle(async ({ input }) => {
       const waitlist = await this.repository.waitlist.create(input);
       if (waitlist.isErr()) return err(waitlist.error);
       await this.service.email.sendWaitlistConfirmation(input.email);
       return ok(waitlist.value);
-    }
-  );
+    });
 
-  removeFromWaitlist = this.procedure<{ id: string }>("removeFromWaitlist")
+  removeFromWaitlist = this.procedure("removeFromWaitlist")
+    .input(waitlistSchemas.input.remove)
+    .output(waitlistSchemas.output.single)
     .requireAuth("admin")
-    .handle(async ({ input: { id } }): ServerResultAsync<WaitlistOutput> => {
+    .handle(async ({ input: { id } }) => {
       return this.repository.waitlist.update({ id, status: "REMOVED" });
     });
 
@@ -527,18 +534,18 @@ export class AuthService extends BasePermissionService<
     }
   );
 
-  createAccountClaimCode = this.procedure<{
-    userId: string;
-    expiresInHours?: number;
-  }>("createAccountClaimCode")
+  createAccountClaimCode = this.procedure("createAccountClaimCode")
+    .input(accountClaimMagicLinkSchemas.input.create)
+    .output(waitlistSchemas.output.claim)
     .requireAuth("admin")
-    .handle(async ({ input }): ServerResultAsync<AccountClaim> => {
+    .handle(async ({ input }) => {
       return this.repository.waitlist.createAccountClaimCode(input);
     });
 
   listAccountClaims = this.procedure("listAccountClaims")
+    .output(waitlistSchemas.output.accountClaim.array())
     .requireAuth("admin")
-    .handle(async (): ServerResultAsync<AccountClaimOutput[]> => {
+    .handle(async () => {
       const result = await this.repository.waitlist.queryList(
         {
           filters: [{ columnId: "type", type: "string", method: "equals", value: "ACCOUNT_CLAIM" }],
@@ -563,12 +570,14 @@ export class AuthService extends BasePermissionService<
     });
 
   getMyAccountClaimStatus = this.procedure("getMyAccountClaimStatus")
+    .output(waitlistSchemas.output.claim.nullable())
     .requireAuth()
-    .handle(async ({ ctx }): ServerResultAsync<AccountClaim | null> => {
+    .handle(async ({ ctx }) => {
       return this.repository.waitlist.findPendingAccountClaimForUser(ctx.actor.userId);
     });
 
-  setMyAccountClaimEmail = this.procedure<{ email: string }>("setMyAccountClaimEmail")
+  setMyAccountClaimEmail = this.procedure("setMyAccountClaimEmail")
+    .input(accountClaimMagicLinkSchemas.input.setEmail)
     .requireAuth()
     .handle(async ({ ctx, input: { email } }): ServerResultAsync<{ status: boolean }> => {
       return this.repository.waitlist.setAccountClaimEmail({ userId: ctx.actor.userId, email });
@@ -595,87 +604,80 @@ export class AuthService extends BasePermissionService<
       return ok(accepted.value);
     });
 
-  generateAccountClaimMagicLink = this.procedure<{
-    claimId: string;
-    email?: string;
-  }>("generateAccountClaimMagicLink")
+  generateAccountClaimMagicLink = this.procedure("generateAccountClaimMagicLink")
+    .input(accountClaimMagicLinkSchemas.input.generateLink)
+    .output(accountClaimMagicLinkSchemas.output.single)
     .requireAuth("admin")
-    .handle(
-      async ({ input: { claimId, email } }): ServerResultAsync<AccountClaimMagicLinkOutput> => {
-        const claim = await this.repository.waitlist.findAccountClaimById(claimId);
-        if (claim.isErr()) return err(claim.error);
-        if (!claim.value) return this.error("NOT_FOUND", "Claim not found");
-        if (!claim.value.claimUserId) return this.error("BAD_REQUEST", "Claim has no user");
-        if (claim.value.status !== "INVITED") {
-          return this.error("BAD_REQUEST", "Claim is not pending");
-        }
-        if (claim.value.expiresAt && claim.value.expiresAt < new Date()) {
-          return this.error("BAD_REQUEST", "Claim is expired");
-        }
-
-        const targetEmail = email ?? claim.value.claimedEmail ?? undefined;
-        if (!targetEmail) {
-          return this.error("BAD_REQUEST", "Email required to generate magic link");
-        }
-
-        const setEmail = await this.repository.waitlist.setAccountClaimEmail({
-          userId: claim.value.claimUserId,
-          email: targetEmail,
-        });
-        if (setEmail.isErr()) return err(setEmail.error);
-
-        const apiBase = (this.appUrls?.api ?? process.env.VITE_SERVER_URL)?.trim();
-        const webBase = (this.appUrls?.web ?? process.env.VITE_APP_URL)?.trim();
-        if (!apiBase || !webBase) {
-          return this.error(
-            "INTERNAL_SERVER_ERROR",
-            "Missing public API or web URL (configure app.urls.api / app.urls.web or VITE_SERVER_URL / VITE_APP_URL)"
-          );
-        }
-
-        const magicLinkUrl = new URL("/api/auth/sign-in/magic-link", apiBase).toString();
-        const callback = new URL("/claim-account", webBase);
-        callback.searchParams.set("claim", claimId);
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), ACCOUNT_CLAIM_MAGIC_LINK_FETCH_MS);
-
-        let response: Response;
-        try {
-          response = await fetch(magicLinkUrl, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({
-              email: targetEmail.toLowerCase(),
-              callbackURL: callback.toString(),
-            }),
-            signal: controller.signal,
-          });
-        } catch (cause: unknown) {
-          if (cause instanceof Error && cause.name === "AbortError") {
-            return this.error(
-              "INTERNAL_SERVER_ERROR",
-              "Magic link request timed out",
-              { cause }
-            );
-          }
-          return this.error("INTERNAL_SERVER_ERROR", "Failed to generate magic link", { cause });
-        } finally {
-          clearTimeout(timeoutId);
-        }
-
-        if (!response.ok) {
-          return this.error("INTERNAL_SERVER_ERROR", "Failed to generate magic link");
-        }
-
-        const latest = await this.repository.accountClaim.latestAccountClaimMagicLink(claimId);
-        if (latest.isErr()) return err(latest.error);
-        if (!latest.value) return this.error("INTERNAL_SERVER_ERROR");
-        return ok(latest.value);
+    .handle(async ({ input: { claimId, email } }) => {
+      const claim = await this.repository.waitlist.findAccountClaimById(claimId);
+      if (claim.isErr()) return err(claim.error);
+      if (!claim.value) return this.error("NOT_FOUND", "Claim not found");
+      if (!claim.value.claimUserId) return this.error("BAD_REQUEST", "Claim has no user");
+      if (claim.value.status !== "INVITED") {
+        return this.error("BAD_REQUEST", "Claim is not pending");
       }
-    );
+      if (claim.value.expiresAt && claim.value.expiresAt < new Date()) {
+        return this.error("BAD_REQUEST", "Claim is expired");
+      }
+
+      const targetEmail = email ?? claim.value.claimedEmail ?? undefined;
+      if (!targetEmail) {
+        return this.error("BAD_REQUEST", "Email required to generate magic link");
+      }
+
+      const setEmail = await this.repository.waitlist.setAccountClaimEmail({
+        userId: claim.value.claimUserId,
+        email: targetEmail,
+      });
+      if (setEmail.isErr()) return err(setEmail.error);
+
+      const apiBase = (this.appUrls?.api ?? process.env.VITE_SERVER_URL)?.trim();
+      const webBase = (this.appUrls?.web ?? process.env.VITE_APP_URL)?.trim();
+      if (!apiBase || !webBase) {
+        return this.error(
+          "INTERNAL_SERVER_ERROR",
+          "Missing public API or web URL (configure app.urls.api / app.urls.web or VITE_SERVER_URL / VITE_APP_URL)"
+        );
+      }
+
+      const magicLinkUrl = new URL("/api/auth/sign-in/magic-link", apiBase).toString();
+      const callback = new URL("/claim-account", webBase);
+      callback.searchParams.set("claim", claimId);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), ACCOUNT_CLAIM_MAGIC_LINK_FETCH_MS);
+
+      let response: Response;
+      try {
+        response = await fetch(magicLinkUrl, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            email: targetEmail.toLowerCase(),
+            callbackURL: callback.toString(),
+          }),
+          signal: controller.signal,
+        });
+      } catch (cause: unknown) {
+        if (cause instanceof Error && cause.name === "AbortError") {
+          return this.error("INTERNAL_SERVER_ERROR", "Magic link request timed out", { cause });
+        }
+        return this.error("INTERNAL_SERVER_ERROR", "Failed to generate magic link", { cause });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      if (!response.ok) {
+        return this.error("INTERNAL_SERVER_ERROR", "Failed to generate magic link");
+      }
+
+      const latest = await this.repository.accountClaim.latestAccountClaimMagicLink({ claimId });
+      if (latest.isErr()) return err(latest.error);
+      if (!latest.value) return this.error("INTERNAL_SERVER_ERROR");
+      return ok(latest.value);
+    });
 
   // #endregion Waitlist
 
@@ -684,7 +686,9 @@ export class AuthService extends BasePermissionService<
   // * SECTION: Invitations
   // * =============================================================================
 
-  readInvitation = this.procedure<{ id: string }>("readInvitation")
+  readInvitation = this.procedure("readInvitation")
+    .input(invitationSchemas.input.read)
+    .output(invitationSchemas.output.read)
     .loadResource("invitation", ({ input }) =>
       this.repository.invitation.findById(input.id, undefined, ["organizationId", "email"])
     )
@@ -695,7 +699,7 @@ export class AuthService extends BasePermissionService<
         "logo",
       ])
     )
-    .handle(({ state }): ServerResult<ReadInvitationOutput> => {
+    .handle(({ state }) => {
       return ok({
         organizationId: state.invitation.organizationId,
         email: state.invitation.email,
@@ -712,10 +716,12 @@ export class AuthService extends BasePermissionService<
   // * SECTION: Account Claims
   // * =============================================================================
 
-  listAccountClaimMagicLinks = this.procedure<{ claimId: string }>("listAccountClaimMagicLinks")
+  listAccountClaimMagicLinks = this.procedure("listAccountClaimMagicLinks")
+    .input(accountClaimMagicLinkSchemas.input.listLinks)
+    .output(accountClaimMagicLinkSchemas.output.single.array())
     .requireAuth("admin")
-    .handle(async ({ input }): ServerResultAsync<AccountClaimMagicLinkOutput[]> => {
-      return this.repository.accountClaim.listAccountClaimMagicLinks(input.claimId);
+    .handle(async ({ input }) => {
+      return this.repository.accountClaim.listAccountClaimMagicLinks(input);
     });
 
   // #endregion Account Claims

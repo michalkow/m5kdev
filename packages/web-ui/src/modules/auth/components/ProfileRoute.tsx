@@ -80,9 +80,8 @@ export function ProfileEditor({ initialValues, onSubmit }: ProfileEditorProps) {
                 </FormItem>
               )}
             />
+            <Button type="submit">{t("web-ui:profile.saveChanges")}</Button>
           </div>
-
-          <Button type="submit">{t("web-ui:profile.saveChanges")}</Button>
         </form>
       </Form>
     </div>

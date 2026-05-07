@@ -1,6 +1,7 @@
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server";
 import { ok } from "neverthrow";
+import type { z } from "zod";
 import type { ServerError } from "../../utils/errors";
 import type { logger } from "../../utils/logger";
 import type { Base } from "./base.abstract";
@@ -156,7 +157,23 @@ export interface ServiceProcedureBuilder<
   Repositories extends RepositoryMap,
   Services extends ServiceMap,
   State extends ServiceProcedureState = Record<string, never>,
+  TExpectedOutput = void,
 > {
+  input<TSchema extends z.ZodType>(
+    schema: TSchema,
+    validate?: boolean
+  ): ServiceProcedureBuilder<
+    z.infer<TSchema>,
+    TCtx,
+    Repositories,
+    Services,
+    State,
+    TExpectedOutput
+  >;
+  output<TSchema extends z.ZodType>(
+    schema: TSchema,
+    validate?: boolean
+  ): ServiceProcedureBuilder<TInput, TCtx, Repositories, Services, State, z.infer<TSchema>>;
   use<StepName extends string, TOutput = void>(
     stepName: StepName,
     step: ServiceProcedureStep<TInput, TCtx, Repositories, Services, State, TOutput>
@@ -165,7 +182,8 @@ export interface ServiceProcedureBuilder<
     TCtx,
     Repositories,
     Services,
-    State & Record<StepName, ServiceProcedureStoredValue<TOutput>>
+    State & Record<StepName, ServiceProcedureStoredValue<TOutput>>,
+    TExpectedOutput
   >;
   /**
    * Loads a value from a `ServerResult` (or plain value) and stores it under `stepName`.
@@ -181,7 +199,8 @@ export interface ServiceProcedureBuilder<
     TCtx,
     Repositories,
     Services,
-    State & Record<StepName, ServiceProcedureLoadedResource<TOutput>>
+    State & Record<StepName, ServiceProcedureLoadedResource<TOutput>>,
+    TExpectedOutput
   >;
   mapInput<StepName extends string, TNextInput>(
     stepName: StepName,
@@ -191,7 +210,8 @@ export interface ServiceProcedureBuilder<
     TCtx,
     Repositories,
     Services,
-    State & Record<StepName, ServiceProcedureStoredValue<TNextInput>>
+    State & Record<StepName, ServiceProcedureStoredValue<TNextInput>>,
+    TExpectedOutput
   >;
   addContextFilter<
     TInclude extends readonly ServiceProcedureContextFilterScope[] | undefined = undefined,
@@ -202,7 +222,8 @@ export interface ServiceProcedureBuilder<
     ServiceProcedureAuthContext<ServiceProcedureRequiredScopeFromFilter<TInclude>, TCtx>,
     Repositories,
     Services,
-    State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> }
+    State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> },
+    TExpectedOutput
   >;
   requireAuth<Scope extends ActorScope = "user">(
     scope?: Scope
@@ -211,11 +232,24 @@ export interface ServiceProcedureBuilder<
     ServiceProcedureAuthContext<Scope, TCtx>,
     Repositories,
     Services,
-    State
+    State,
+    TExpectedOutput
   >;
-  handle<TOutput>(
-    handler: ServiceProcedureHandler<TInput, TCtx, Repositories, Services, State, TOutput>
-  ): ServiceProcedure<TInput, TCtx, TOutput>;
+  // biome-ignore lint/suspicious/noConfusingVoidType: void is used as a sentinel for "no output schema declared"
+  handle: [TExpectedOutput] extends [void]
+    ? <TOutput>(
+        handler: ServiceProcedureHandler<TInput, TCtx, Repositories, Services, State, TOutput>
+      ) => ServiceProcedure<TInput, TCtx, TOutput>
+    : (
+        handler: ServiceProcedureHandler<
+          TInput,
+          TCtx,
+          Repositories,
+          Services,
+          State,
+          TExpectedOutput
+        >
+      ) => ServiceProcedure<TInput, TCtx, TExpectedOutput>;
 }
 
 export interface PermissionServiceProcedureBuilder<
@@ -224,7 +258,37 @@ export interface PermissionServiceProcedureBuilder<
   Repositories extends RepositoryMap,
   Services extends ServiceMap,
   State extends ServiceProcedureState = Record<string, never>,
-> extends ServiceProcedureBuilder<TInput, TCtx, Repositories, Services, State> {
+  TExpectedOutput = void,
+> extends ServiceProcedureBuilder<
+    TInput,
+    TCtx,
+    Repositories,
+    Services,
+    State,
+    TExpectedOutput
+  > {
+  input<TSchema extends z.ZodType>(
+    schema: TSchema,
+    validate?: boolean
+  ): PermissionServiceProcedureBuilder<
+    z.infer<TSchema>,
+    TCtx,
+    Repositories,
+    Services,
+    State,
+    TExpectedOutput
+  >;
+  output<TSchema extends z.ZodType>(
+    schema: TSchema,
+    validate?: boolean
+  ): PermissionServiceProcedureBuilder<
+    TInput,
+    TCtx,
+    Repositories,
+    Services,
+    State,
+    z.infer<TSchema>
+  >;
   use<StepName extends string, TOutput = void>(
     stepName: StepName,
     step: ServiceProcedureStep<TInput, TCtx, Repositories, Services, State, TOutput>
@@ -233,7 +297,8 @@ export interface PermissionServiceProcedureBuilder<
     TCtx,
     Repositories,
     Services,
-    State & Record<StepName, ServiceProcedureStoredValue<TOutput>>
+    State & Record<StepName, ServiceProcedureStoredValue<TOutput>>,
+    TExpectedOutput
   >;
   loadResource<StepName extends string, TOutput>(
     stepName: StepName,
@@ -244,7 +309,8 @@ export interface PermissionServiceProcedureBuilder<
     TCtx,
     Repositories,
     Services,
-    State & Record<StepName, ServiceProcedureLoadedResource<TOutput>>
+    State & Record<StepName, ServiceProcedureLoadedResource<TOutput>>,
+    TExpectedOutput
   >;
   mapInput<StepName extends string, TNextInput>(
     stepName: StepName,
@@ -254,7 +320,8 @@ export interface PermissionServiceProcedureBuilder<
     TCtx,
     Repositories,
     Services,
-    State & Record<StepName, ServiceProcedureStoredValue<TNextInput>>
+    State & Record<StepName, ServiceProcedureStoredValue<TNextInput>>,
+    TExpectedOutput
   >;
   addContextFilter<
     TInclude extends readonly ServiceProcedureContextFilterScope[] | undefined = undefined,
@@ -265,7 +332,8 @@ export interface PermissionServiceProcedureBuilder<
     ServiceProcedureAuthContext<ServiceProcedureRequiredScopeFromFilter<TInclude>, TCtx>,
     Repositories,
     Services,
-    State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> }
+    State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> },
+    TExpectedOutput
   >;
   requireAuth<Scope extends ActorScope = "user">(
     scope?: Scope
@@ -274,7 +342,8 @@ export interface PermissionServiceProcedureBuilder<
     ServiceProcedureAuthContext<Scope, TCtx>,
     Repositories,
     Services,
-    State
+    State,
+    TExpectedOutput
   >;
   access(
     config: ServiceProcedureAccessEntitiesConfig<TInput, TCtx, Repositories, Services, State>
@@ -283,7 +352,8 @@ export interface PermissionServiceProcedureBuilder<
     ServiceProcedureAuthContext<"user", TCtx>,
     Repositories,
     Services,
-    State
+    State,
+    TExpectedOutput
   >;
   access<TEntities extends Entity | Entity[] | undefined>(
     config: ServiceProcedureAccessEntitiesConfig<
@@ -299,7 +369,8 @@ export interface PermissionServiceProcedureBuilder<
     ServiceProcedureAuthContext<"user", TCtx>,
     Repositories,
     Services,
-    State & { access: TEntities }
+    State & { access: TEntities },
+    TExpectedOutput
   >;
   access<StepName extends ServiceProcedureEntityStepName<State>>(
     config: ServiceProcedureAccessStateConfig<State, StepName>
@@ -308,7 +379,8 @@ export interface PermissionServiceProcedureBuilder<
     ServiceProcedureAuthContext<"user", TCtx>,
     Repositories,
     Services,
-    State & { access: State[StepName] }
+    State & { access: State[StepName] },
+    TExpectedOutput
   >;
 }
 
@@ -367,6 +439,7 @@ type ProcedureRuntimeStep<Repositories extends RepositoryMap, Services extends S
 type ProcedureBuilderConfig<Repositories extends RepositoryMap, Services extends ServiceMap> = {
   name: string;
   steps: ProcedureRuntimeStep<Repositories, Services>[];
+  outputSchema?: z.ZodType;
 };
 
 const DEFAULT_CONTEXT_FILTER_INCLUDE = [
@@ -577,6 +650,26 @@ function createContextFilterStep<Repositories extends RepositoryMap, Services ex
   };
 }
 
+function createInputValidationStep<
+  Repositories extends RepositoryMap,
+  Services extends ServiceMap,
+>(
+  host: BaseServiceProcedureHost<Repositories, Services>,
+  schema: z.ZodType
+): ProcedureRuntimeStep<Repositories, Services> {
+  return {
+    stage: "input",
+    stepName: "inputValidation",
+    run: async ({ input }) => {
+      const parsed = schema.safeParse(input);
+      if (!parsed.success) {
+        return host.error("BAD_REQUEST", parsed.error.message);
+      }
+      return ok(parsed.data);
+    },
+  };
+}
+
 function createAccessStep<
   TInput,
   TCtx extends ServiceProcedureContext,
@@ -744,6 +837,17 @@ function createProcedureHandler<
           return handlerResult;
         }
 
+        if (config.outputSchema) {
+          const parsed = config.outputSchema.safeParse(handlerResult.value);
+          if (!parsed.success) {
+            return host.error("INTERNAL_SERVER_ERROR", parsed.error.message);
+          }
+          logProcedureStage(host, config.name, typedCtx, "success", {
+            durationMs: Date.now() - startTime,
+          });
+          return ok(parsed.data as TOutput);
+        }
+
         logProcedureStage(host, config.name, typedCtx, "success", {
           durationMs: Date.now() - startTime,
         });
@@ -765,10 +869,11 @@ export function createServiceProcedureBuilder<
   Repositories extends RepositoryMap,
   Services extends ServiceMap,
   State extends ServiceProcedureState = Record<string, never>,
+  TExpectedOutput = void,
 >(
   host: BaseServiceProcedureHost<Repositories, Services>,
   config: ProcedureBuilderConfig<Repositories, Services>
-): ServiceProcedureBuilder<TInput, TCtx, Repositories, Services, State> {
+): ServiceProcedureBuilder<TInput, TCtx, Repositories, Services, State, TExpectedOutput> {
   function addContextFilter<
     TInclude extends readonly ServiceProcedureContextFilterScope[] | undefined = undefined,
   >(include?: TInclude) {
@@ -783,14 +888,32 @@ export function createServiceProcedureBuilder<
       ServiceProcedureAuthContext<ServiceProcedureRequiredScopeFromFilter<TInclude>, TCtx>,
       Repositories,
       Services,
-      State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> }
+      State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> },
+      TExpectedOutput
     >(host, {
       ...config,
       steps: [...steps, createContextFilterStep(host, include)],
     });
   }
 
-  const builder: ServiceProcedureBuilder<TInput, TCtx, Repositories, Services, State> = {
+  const builder: ServiceProcedureBuilder<
+    TInput,
+    TCtx,
+    Repositories,
+    Services,
+    State,
+    TExpectedOutput
+  > = {
+    input(schema, validate) {
+      const nextConfig = validate
+        ? { ...config, steps: [...config.steps, createInputValidationStep(host, schema)] }
+        : config;
+      return createServiceProcedureBuilder(host, nextConfig);
+    },
+    output(schema, validate) {
+      const nextConfig = validate ? { ...config, outputSchema: schema } : config;
+      return createServiceProcedureBuilder(host, nextConfig);
+    },
     use<StepName extends string, TOutput = void>(
       stepName: StepName,
       step: ServiceProcedureStep<TInput, TCtx, Repositories, Services, State, TOutput>
@@ -801,7 +924,8 @@ export function createServiceProcedureBuilder<
         TCtx,
         Repositories,
         Services,
-        State & Record<StepName, ServiceProcedureStoredValue<TOutput>>
+        State & Record<StepName, ServiceProcedureStoredValue<TOutput>>,
+        TExpectedOutput
       >(host, {
         ...config,
         steps: [...config.steps, createUseStep(stepName, step)],
@@ -819,7 +943,8 @@ export function createServiceProcedureBuilder<
         TCtx,
         Repositories,
         Services,
-        State & Record<StepName, ServiceProcedureLoadedResource<TOutput>>
+        State & Record<StepName, ServiceProcedureLoadedResource<TOutput>>,
+        TExpectedOutput
       >(host, {
         ...config,
         steps: [...config.steps, createLoadResourceStep(host, stepName, step, notFoundMessage)],
@@ -835,7 +960,8 @@ export function createServiceProcedureBuilder<
         TCtx,
         Repositories,
         Services,
-        State & Record<StepName, ServiceProcedureStoredValue<TNextInput>>
+        State & Record<StepName, ServiceProcedureStoredValue<TNextInput>>,
+        TExpectedOutput
       >(host, {
         ...config,
         steps: [...config.steps, createInputStep(stepName, step)],
@@ -849,18 +975,18 @@ export function createServiceProcedureBuilder<
         ServiceProcedureAuthContext<Scope, TCtx>,
         Repositories,
         Services,
-        State
+        State,
+        TExpectedOutput
       >(host, {
         ...config,
         steps: [...config.steps, createRequireAuthStep(host, scope ?? "user")],
       });
     },
-    handle<TOutput>(
-      handler: ServiceProcedureHandler<TInput, TCtx, Repositories, Services, State, TOutput>
-    ) {
+    // biome-ignore lint/suspicious/noExplicitAny: conditional handle type requires untyped implementation
+    handle(handler: any) {
       return createProcedureHandler(host, config, handler);
     },
-  };
+  } as ServiceProcedureBuilder<TInput, TCtx, Repositories, Services, State, TExpectedOutput>;
 
   return builder;
 }
@@ -871,10 +997,11 @@ export function createPermissionServiceProcedureBuilder<
   Repositories extends RepositoryMap,
   Services extends ServiceMap,
   State extends ServiceProcedureState = Record<string, never>,
+  TExpectedOutput = void,
 >(
   host: PermissionServiceProcedureHost<Repositories, Services>,
   config: ProcedureBuilderConfig<Repositories, Services>
-): PermissionServiceProcedureBuilder<TInput, TCtx, Repositories, Services, State> {
+): PermissionServiceProcedureBuilder<TInput, TCtx, Repositories, Services, State, TExpectedOutput> {
   function addContextFilter<
     TInclude extends readonly ServiceProcedureContextFilterScope[] | undefined = undefined,
   >(include?: TInclude) {
@@ -889,7 +1016,8 @@ export function createPermissionServiceProcedureBuilder<
       ServiceProcedureAuthContext<ServiceProcedureRequiredScopeFromFilter<TInclude>, TCtx>,
       Repositories,
       Services,
-      State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> }
+      State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> },
+      TExpectedOutput
     >(host, {
       ...config,
       steps: [...steps, createContextFilterStep(host, include)],
@@ -903,7 +1031,8 @@ export function createPermissionServiceProcedureBuilder<
     ServiceProcedureAuthContext<"user", TCtx>,
     Repositories,
     Services,
-    State
+    State,
+    TExpectedOutput
   >;
   function access<TEntities extends Entity | Entity[] | undefined>(
     accessConfig: ServiceProcedureAccessEntitiesConfig<
@@ -919,7 +1048,8 @@ export function createPermissionServiceProcedureBuilder<
     ServiceProcedureAuthContext<"user", TCtx>,
     Repositories,
     Services,
-    State & { access: TEntities }
+    State & { access: TEntities },
+    TExpectedOutput
   >;
   function access<StepName extends ServiceProcedureEntityStepName<State>>(
     accessConfig: ServiceProcedureAccessStateConfig<State, StepName>
@@ -928,7 +1058,8 @@ export function createPermissionServiceProcedureBuilder<
     ServiceProcedureAuthContext<"user", TCtx>,
     Repositories,
     Services,
-    State & { access: State[StepName] }
+    State & { access: State[StepName] },
+    TExpectedOutput
   >;
   function access(
     accessConfig:
@@ -948,14 +1079,32 @@ export function createPermissionServiceProcedureBuilder<
       ServiceProcedureAuthContext<"user", TCtx>,
       Repositories,
       Services,
-      State
+      State,
+      TExpectedOutput
     >(host, {
       ...config,
       steps: [...config.steps, createAccessStep(host, accessConfig)],
     });
   }
 
-  const builder: PermissionServiceProcedureBuilder<TInput, TCtx, Repositories, Services, State> = {
+  const builder: PermissionServiceProcedureBuilder<
+    TInput,
+    TCtx,
+    Repositories,
+    Services,
+    State,
+    TExpectedOutput
+  > = {
+    input(schema, validate) {
+      const nextConfig = validate
+        ? { ...config, steps: [...config.steps, createInputValidationStep(host, schema)] }
+        : config;
+      return createPermissionServiceProcedureBuilder(host, nextConfig);
+    },
+    output(schema, validate) {
+      const nextConfig = validate ? { ...config, outputSchema: schema } : config;
+      return createPermissionServiceProcedureBuilder(host, nextConfig);
+    },
     use<StepName extends string, TOutput = void>(
       stepName: StepName,
       step: ServiceProcedureStep<TInput, TCtx, Repositories, Services, State, TOutput>
@@ -966,7 +1115,8 @@ export function createPermissionServiceProcedureBuilder<
         TCtx,
         Repositories,
         Services,
-        State & Record<StepName, ServiceProcedureStoredValue<TOutput>>
+        State & Record<StepName, ServiceProcedureStoredValue<TOutput>>,
+        TExpectedOutput
       >(host, {
         ...config,
         steps: [...config.steps, createUseStep(stepName, step)],
@@ -984,7 +1134,8 @@ export function createPermissionServiceProcedureBuilder<
         TCtx,
         Repositories,
         Services,
-        State & Record<StepName, ServiceProcedureLoadedResource<TOutput>>
+        State & Record<StepName, ServiceProcedureLoadedResource<TOutput>>,
+        TExpectedOutput
       >(host, {
         ...config,
         steps: [...config.steps, createLoadResourceStep(host, stepName, step, notFoundMessage)],
@@ -1000,7 +1151,8 @@ export function createPermissionServiceProcedureBuilder<
         TCtx,
         Repositories,
         Services,
-        State & Record<StepName, ServiceProcedureStoredValue<TNextInput>>
+        State & Record<StepName, ServiceProcedureStoredValue<TNextInput>>,
+        TExpectedOutput
       >(host, {
         ...config,
         steps: [...config.steps, createInputStep(stepName, step)],
@@ -1014,19 +1166,26 @@ export function createPermissionServiceProcedureBuilder<
         ServiceProcedureAuthContext<Scope, TCtx>,
         Repositories,
         Services,
-        State
+        State,
+        TExpectedOutput
       >(host, {
         ...config,
         steps: [...config.steps, createRequireAuthStep(host, scope ?? "user")],
       });
     },
     access,
-    handle<TOutput>(
-      handler: ServiceProcedureHandler<TInput, TCtx, Repositories, Services, State, TOutput>
-    ) {
+    // biome-ignore lint/suspicious/noExplicitAny: conditional handle type requires untyped implementation
+    handle(handler: any) {
       return createProcedureHandler(host, config, handler);
     },
-  };
+  } as PermissionServiceProcedureBuilder<
+    TInput,
+    TCtx,
+    Repositories,
+    Services,
+    State,
+    TExpectedOutput
+  >;
 
   return builder;
 }

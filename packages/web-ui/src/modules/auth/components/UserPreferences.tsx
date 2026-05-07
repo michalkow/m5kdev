@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import type { z } from "zod";
+
 import {
   type ControlsFor,
   type PreferenceEditorLabels,
@@ -15,6 +15,18 @@ export type {
   UpdatePreferencesOptions,
 } from "./PreferencesEditor";
 
+import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
+import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
+import { toast } from "sonner";
+import { z } from "zod";
+import { ProfileEditor } from "./ProfileRoute";
+
+const profileSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  image: z.string().nullable(),
+});
+
+type ProfileFormValues = z.infer<typeof profileSchema>;
 export function UserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
   schema,
   controls,
@@ -35,6 +47,23 @@ export function UserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
 }): ReactElement {
   const { t } = useTranslation("web-ui");
 
+  const { data: session } = useSession();
+
+  function handleSubmit(data: ProfileFormValues): void {
+    authClient
+      .updateUser(data)
+      .then(() => {
+        toast.success(t("web-ui:profile.updated"), {
+          description: t("web-ui:profile.updateDescription"),
+        });
+      })
+      .catch(() => {
+        toast.error(t("web-ui:profile.error"), {
+          description: t("web-ui:profile.errorDescription"),
+        });
+      });
+  }
+
   const labels: PreferenceEditorLabels = {
     title: t("web-ui:preferences.title"),
     submit: t("web-ui:preferences.submit"),
@@ -44,14 +73,23 @@ export function UserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
   };
 
   return (
-    <PreferencesEditor
-      schema={schema}
-      controls={controls}
-      values={preferences}
-      isLoading={isLoading}
-      isPending={isPending}
-      labels={labels}
-      updateValues={updatePreferences}
-    />
+    <>
+      <ProfileEditor
+        initialValues={{
+          name: session?.user?.name || "",
+          image: session?.user?.image || null,
+        }}
+        onSubmit={handleSubmit}
+      />
+      <PreferencesEditor
+        schema={schema}
+        controls={controls}
+        values={preferences}
+        isLoading={isLoading}
+        isPending={isPending}
+        labels={labels}
+        updateValues={updatePreferences}
+      />
+    </>
   );
 }

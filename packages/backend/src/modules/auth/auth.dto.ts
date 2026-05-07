@@ -1,132 +1,134 @@
+import { queryListOutput, querySchema } from "@m5kdev/commons/modules/schemas/query.schema";
+import { createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
+import { accountClaimMagicLinks, organizations, waitlist } from "./auth.db";
 
-export const organizationTypeSchema = z.enum(["solo", "organization", "agency", "enterprise"]);
-export type OrganizationType = z.infer<typeof organizationTypeSchema>;
+export const organizationSchema = createSelectSchema(organizations);
 
-import { querySchema } from "@m5kdev/commons/modules/schemas/query.schema";
+export const organizationSchemas = {
+  output: {
+    single: organizationSchema,
+    list: queryListOutput(organizationSchema),
+    simple: organizationSchema.omit({
+      metadata: true,
+      preferences: true,
+      flags: true,
+    }),
+    child: organizationSchema.omit({
+      preferences: true,
+      flags: true,
+    }),
+    admin: organizationSchema.omit({
+      metadata: true,
+      preferences: true,
+      flags: true,
+    }),
+  },
+  input: {
+    list: querySchema,
+    create: z.object({
+      name: z.string(),
+    }),
+    updateChild: z.object({
+      id: z.string(),
+      name: z.string().min(1),
+    }),
+    updateType: z.object({
+      organizationId: z.string(),
+      type: organizationSchema.shape.type,
+    }),
+  },
+};
 
-export const organizationSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  slug: z.string().nullable(),
-  logo: z.string().nullable(),
-  type: z.string().nullable(),
-  parentId: z.string().nullable(),
-  metadata: z.record(z.string(), z.unknown()).nullable(),
-  preferences: z.record(z.string(), z.unknown()).nullable(),
-  flags: z.array(z.string()).nullable(),
-  createdAt: z.date(),
-});
+export const waitlistSchema = createSelectSchema(waitlist);
 
-export type Organization = z.infer<typeof organizationSchema>;
+export const waitlistSchemas = {
+  output: {
+    single: waitlistSchema.omit({ code: true, expiresAt: true }),
+    claim: waitlistSchema.omit({ code: true }),
+    simple: waitlistSchema.pick({
+      id: true,
+      email: true,
+      name: true,
+      createdAt: true,
+      updatedAt: true,
+      status: true,
+    }),
+    accountClaim: waitlistSchema.pick({
+      id: true,
+      claimUserId: true,
+      status: true,
+      expiresAt: true,
+      claimedAt: true,
+      claimedEmail: true,
+      createdAt: true,
+      updatedAt: true,
+    }),
+  },
+  input: {
+    create: z.object({
+      name: z.string().optional(),
+    }),
+    add: z.object({
+      email: z.string(),
+    }),
+    invite: z.object({
+      email: z.string(),
+      name: z.string().optional(),
+    }),
+    inviteFrom: z.object({
+      id: z.string(),
+    }),
+    remove: z.object({
+      id: z.string(),
+    }),
+    join: z.object({
+      email: z.string(),
+    }),
+    validateCode: z.object({
+      code: z.string(),
+    }),
+  },
+};
 
-export const organizationListSchema = z.object({
-  rows: z.array(organizationSchema),
-  total: z.number(),
-});
+export const invitationSchemas = {
+  output: {
+    read: z.object({
+      organizationId: z.string(),
+      email: z.string(),
+      name: z.string().nullable(),
+      slug: z.string().nullable(),
+      logo: z.string().nullable(),
+    }),
+  },
+  input: {
+    read: z.object({
+      id: z.string(),
+    }),
+  },
+};
 
-export type OrganizationList = z.infer<typeof organizationListSchema>;
+export const accountClaimMagicLinkSchema = createSelectSchema(accountClaimMagicLinks);
+const accountClaimMagicLinkOutputSchema = accountClaimMagicLinkSchema.omit({ token: true });
 
-export const simpleOrganizationSchema = organizationSchema.omit({
-  metadata: true,
-  preferences: true,
-  flags: true,
-});
-
-export type SimpleOrganization = z.infer<typeof simpleOrganizationSchema>;
-
-export const adminOrganizationQueryInputSchema = querySchema;
-
-export type AdminOrganizationQueryInputSchema = z.infer<typeof adminOrganizationQueryInputSchema>;
-
-export const waitlistSchema = z.object({
-  id: z.string(),
-  name: z.string().nullable(),
-  email: z.string().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date().nullable(),
-  status: z.string(),
-  code: z.string().nullable(),
-  expiresAt: z.date().nullable(),
-});
-
-export const readInvitationInputSchema = z.object({
-  id: z.string(),
-});
-
-export const readInvitationOutputSchema = z.object({
-  organizationId: z.string(),
-  email: z.string(),
-  name: z.string().nullable(),
-  slug: z.string().nullable(),
-  logo: z.string().nullable(),
-});
-
-export type ReadInvitationOutput = z.infer<typeof readInvitationOutputSchema>;
-export type ReadInvitationInput = z.infer<typeof readInvitationInputSchema>;
-
-export const waitlistOutputSchema = waitlistSchema.omit({ code: true, expiresAt: true });
-export type WaitlistOutput = z.infer<typeof waitlistOutputSchema>;
-export type Waitlist = z.infer<typeof waitlistSchema>;
-
-export const accountClaimSchema = z.object({
-  id: z.string(),
-  claimUserId: z.string().nullable(),
-  code: z.string().nullable(),
-  status: z.string(),
-  expiresAt: z.date().nullable(),
-  claimedAt: z.date().nullable(),
-  claimedEmail: z.string().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date().nullable(),
-});
-
-export const accountClaimOutputSchema = accountClaimSchema.omit({ code: true });
-export type AccountClaim = z.infer<typeof accountClaimSchema>;
-export type AccountClaimOutput = z.infer<typeof accountClaimOutputSchema>;
-
-export const accountClaimMagicLinkSchema = z.object({
-  id: z.string(),
-  claimId: z.string(),
-  userId: z.string(),
-  email: z.string(),
-  token: z.string(),
-  url: z.string(),
-  expiresAt: z.date().nullable(),
-  createdAt: z.date(),
-});
-
-export const accountClaimMagicLinkOutputSchema = accountClaimMagicLinkSchema.omit({ token: true });
-export type AccountClaimMagicLink = z.infer<typeof accountClaimMagicLinkSchema>;
-export type AccountClaimMagicLinkOutput = z.infer<typeof accountClaimMagicLinkOutputSchema>;
-
-export const childOrganizationSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  slug: z.string().nullable(),
-  logo: z.string().nullable(),
-  type: z.string().nullable(),
-  parentId: z.string().nullable(),
-  metadata: z.record(z.string(), z.unknown()).nullable(),
-  createdAt: z.date(),
-});
-
-export type ChildOrganization = z.infer<typeof childOrganizationSchema>;
-
-export const adminOrganizationSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  slug: z.string().nullable(),
-  type: z.string().nullable(),
-  parentId: z.string().nullable(),
-  createdAt: z.date(),
-});
-
-export type AdminOrganization = z.infer<typeof adminOrganizationSchema>;
-
-export const updateChildOrganizationInputSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1),
-});
-
-export type UpdateChildOrganizationInput = z.infer<typeof updateChildOrganizationInputSchema>;
+export const accountClaimMagicLinkSchemas = {
+  output: {
+    single: accountClaimMagicLinkOutputSchema,
+  },
+  input: {
+    create: z.object({
+      userId: z.string(),
+      expiresInHours: z.number().optional(),
+    }),
+    generateLink: z.object({
+      claimId: z.string(),
+      email: z.string().email().optional(),
+    }),
+    listLinks: z.object({
+      claimId: z.string(),
+    }),
+    setEmail: z.object({
+      email: z.string().email(),
+    }),
+  },
+};

@@ -9,7 +9,7 @@ import {
 import type { BillingModule } from "../billing/billing.module";
 import type { EmailModule } from "../email/email.module";
 import type * as authTables from "./auth.db";
-import { authGrants } from "./auth.grants";
+import { defaultAuthGrants } from "./auth.grants";
 import {
   AuthAccountClaimRepository,
   AuthInvitationRepository,
@@ -49,7 +49,7 @@ export class AuthModule extends BaseModule<
 
   constructor(grants?: Grant[]) {
     super();
-    this.grants = grants ?? authGrants;
+    this.grants = grants ?? defaultAuthGrants;
   }
 
   override repositories({ db }: ModuleRepositoriesContext<AuthModuleDeps, AuthModuleTables>) {

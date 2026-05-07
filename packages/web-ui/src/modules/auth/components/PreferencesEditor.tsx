@@ -1,4 +1,14 @@
-import { Button, Form, Input, Label, ListBox, Select, Switch } from "@heroui/react";
+import {
+  Button,
+  Description,
+  Form,
+  Input,
+  Label,
+  ListBox,
+  NumberField,
+  Select,
+  Switch,
+} from "@heroui/react";
 import type { FormEvent, ReactElement } from "react";
 import { toast } from "sonner";
 import type { z } from "zod";
@@ -111,7 +121,12 @@ export function PreferencesEditor<S extends z.ZodObject<z.ZodRawShape>>({
                 value="on"
                 defaultSelected={Boolean(value)}
               >
-                {control.label}
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+                <Switch.Content>
+                  <Label className="text-sm">{control.label}</Label>
+                </Switch.Content>
               </Switch>
             );
           case "select":
@@ -131,11 +146,7 @@ export function PreferencesEditor<S extends z.ZodObject<z.ZodRawShape>>({
                   <Select.Popover>
                     <ListBox>
                       {(control.options ?? []).map((option) => (
-                        <ListBox.Item
-                          key={option.value}
-                          id={option.value}
-                          textValue={option.label}
-                        >
+                        <ListBox.Item key={option.value} id={option.value} textValue={option.label}>
                           {option.label}
                           <ListBox.ItemIndicator />
                         </ListBox.Item>
@@ -148,19 +159,22 @@ export function PreferencesEditor<S extends z.ZodObject<z.ZodRawShape>>({
           case "number":
             return (
               <div key={String(key)} className="grid gap-2">
-                <Label className="text-sm font-medium" htmlFor={`pref-${String(key)}`}>
-                  {control.label}
-                </Label>
-                <Input
-                  id={`pref-${String(key)}`}
-                  name={String(key)}
-                  type="number"
-                  defaultValue={value == null ? "" : String(value)}
-                  min={control.min}
-                  max={control.max}
-                  step={control.step}
-                  variant="secondary"
-                />
+                <NumberField>
+                  <Label className="text-sm font-medium">{control.label}</Label>
+                  <NumberField.Group>
+                    <NumberField.DecrementButton />
+                    <NumberField.Input
+                      id={`pref-${String(key)}`}
+                      name={String(key)}
+                      type="number"
+                      defaultValue={(value as number) ?? undefined}
+                      min={control.min}
+                      max={control.max}
+                      step={control.step}
+                    />
+                    <NumberField.IncrementButton />
+                  </NumberField.Group>
+                </NumberField>
               </div>
             );
           default:

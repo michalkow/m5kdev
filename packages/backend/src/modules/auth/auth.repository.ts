@@ -2,17 +2,15 @@ import { and, count, desc, eq, gte, ne } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
+import { z } from "zod";
 import type { ServerResultAsync } from "../base/base.dto";
-import { BaseRepository, BaseTableRepository } from "../base/base.repository";
+import { BaseTableRepository } from "../base/base.repository";
 import * as auth from "./auth.db";
-import type {
-  AccountClaim,
-  AccountClaimMagicLink,
-  AccountClaimMagicLinkOutput,
-  AccountClaimOutput,
-  SimpleOrganization,
-  Waitlist,
-  WaitlistOutput,
+import {
+  accountClaimMagicLinkSchemas,
+  organizationSchemas,
+  waitlistSchema,
+  waitlistSchemas,
 } from "./auth.dto";
 
 const schema = { ...auth };
@@ -64,36 +62,36 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     );
   }
 
-  async listUserOrganizations(userId: string, tx?: Orm): ServerResultAsync<SimpleOrganization[]> {
-    const db = tx ?? this.orm;
-    const result = await this.throwableQuery(() =>
-      db
-        .select({
-          id: this.schema.organizations.id,
-          name: this.schema.organizations.name,
-          slug: this.schema.organizations.slug,
-          logo: this.schema.organizations.logo,
-          type: this.schema.organizations.type,
-          parentId: this.schema.organizations.parentId,
-          createdAt: this.schema.organizations.createdAt,
-        })
-        .from(this.schema.organizations)
-        .innerJoin(
-          this.schema.members,
-          eq(this.schema.organizations.id, this.schema.members.organizationId)
-        )
-        .where(eq(this.schema.members.userId, userId))
-        .then((result) => {
-          const organizations = result.reduce((acc, curr) => {
-            acc.find((org) => org.id === curr.id) ? acc : acc.push(curr);
-            return acc;
-          }, [] as SimpleOrganization[]);
-          return organizations;
-        })
-    );
-    if (result.isErr()) return err(result.error);
-    return ok(result.value);
-  }
+  listUserOrganizations = this.query<string>("listUserOrganizations")
+    .output(z.array(organizationSchemas.output.simple))
+    .handle(async (userId) => {
+      return this.throwableQuery(() =>
+        this.orm
+          .select({
+            id: this.schema.organizations.id,
+            name: this.schema.organizations.name,
+            slug: this.schema.organizations.slug,
+            logo: this.schema.organizations.logo,
+            type: this.schema.organizations.type,
+            parentId: this.schema.organizations.parentId,
+            createdAt: this.schema.organizations.createdAt,
+          })
+          .from(this.schema.organizations)
+          .innerJoin(
+            this.schema.members,
+            eq(this.schema.organizations.id, this.schema.members.organizationId)
+          )
+          .where(eq(this.schema.members.userId, userId))
+          .then((rows) => {
+            const seen = new Set<string>();
+            return rows.filter((row) => {
+              if (seen.has(row.id)) return false;
+              seen.add(row.id);
+              return true;
+            });
+          })
+      );
+    });
 }
 
 export class AuthInvitationRepository extends BaseTableRepository<
@@ -122,82 +120,84 @@ export class AuthWaitlistRepository extends BaseTableRepository<
     return ok(waitlist.count ?? 0);
   }
 
-  async inviteFromWaitlist(id: string, tx?: Orm): ServerResultAsync<Waitlist> {
-    const db = tx ?? this.orm;
-    const waitlistResult = await this.throwableQuery(() =>
-      db
-        .update(this.schema.waitlist)
-        .set({
-          status: "INVITED",
-          code: uuidv4(),
-          expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
-        })
-        .where(eq(this.schema.waitlist.id, id))
-        .returning()
-    );
-    if (waitlistResult.isErr()) return err(waitlistResult.error);
-    const [waitlist] = waitlistResult.value;
-    return ok(waitlist);
-  }
+  inviteFromWaitlist = this.query("inviteFromWaitlist")
+    .input(waitlistSchemas.input.inviteFrom)
+    .output(waitlistSchema)
+    .handle(async ({ id }) => {
+      const result = await this.throwableQuery(() =>
+        this.orm
+          .update(this.schema.waitlist)
+          .set({
+            status: "INVITED",
+            code: uuidv4(),
+            expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
+          })
+          .where(eq(this.schema.waitlist.id, id))
+          .returning()
+      );
+      if (result.isErr()) return err(result.error);
+      const [waitlist] = result.value;
+      return waitlist;
+    });
 
-  async inviteToWaitlist(
-    { email, userId, name }: { email: string; userId: string; name?: string },
-    tx?: Orm
-  ): ServerResultAsync<Waitlist> {
-    const db = tx ?? this.orm;
-    const waitlistResult = await this.throwableQuery(() =>
-      db
-        .insert(this.schema.waitlist)
-        .values({
-          email,
-          name,
-          status: "INVITED",
-          code: uuidv4(),
-          expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
-          userId: userId,
-        })
-        .returning()
-    );
-    if (waitlistResult.isErr()) return err(waitlistResult.error);
-    const [waitlist] = waitlistResult.value;
-    return ok(waitlist);
-  }
+  inviteToWaitlist = this.query<{ email: string; userId: string; name?: string }>(
+    "inviteToWaitlist"
+  )
+    .output(waitlistSchema)
+    .handle(async ({ email, userId, name }) => {
+      const result = await this.throwableQuery(() =>
+        this.orm
+          .insert(this.schema.waitlist)
+          .values({
+            email,
+            name,
+            status: "INVITED",
+            code: uuidv4(),
+            expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+            userId,
+          })
+          .returning()
+      );
+      if (result.isErr()) return err(result.error);
+      const [waitlist] = result.value;
+      return waitlist;
+    });
 
-  async createInvitationCode(
-    { userId, name }: { userId: string; name?: string },
-    tx?: Orm
-  ): ServerResultAsync<Waitlist> {
-    const db = tx ?? this.orm;
-    const waitlistResult = await this.throwableQuery(() =>
-      db
-        .insert(this.schema.waitlist)
-        .values({
-          name,
-          status: "INVITED",
-          code: uuidv4(),
-          expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
-          userId: userId,
-        })
-        .returning()
-    );
-    if (waitlistResult.isErr()) return err(waitlistResult.error);
-    const [waitlist] = waitlistResult.value;
-    return ok(waitlist);
-  }
+  createInvitationCode = this.query<{ userId: string; name?: string }>("createInvitationCode")
+    .output(waitlistSchema)
+    .handle(async ({ userId, name }) => {
+      const result = await this.throwableQuery(() =>
+        this.orm
+          .insert(this.schema.waitlist)
+          .values({
+            name,
+            status: "INVITED",
+            code: uuidv4(),
+            expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+            userId,
+          })
+          .returning()
+      );
+      if (result.isErr()) return err(result.error);
+      const [waitlist] = result.value;
+      return waitlist;
+    });
 
-  async removeFromWaitlist(id: string, tx?: Orm): ServerResultAsync<WaitlistOutput> {
-    const db = tx ?? this.orm;
-    const waitlistResult = await this.throwableQuery(() =>
-      db
-        .update(this.schema.waitlist)
-        .set({ status: "REMOVED" })
-        .where(eq(this.schema.waitlist.id, id))
-        .returning()
-    );
-    if (waitlistResult.isErr()) return err(waitlistResult.error);
-    const [waitlist] = waitlistResult.value;
-    return ok(waitlist);
-  }
+  removeFromWaitlist = this.query("removeFromWaitlist")
+    .input(waitlistSchemas.input.remove)
+    .output(waitlistSchemas.output.single)
+    .handle(async ({ id }) => {
+      const result = await this.throwableQuery(() =>
+        this.orm
+          .update(this.schema.waitlist)
+          .set({ status: "REMOVED" })
+          .where(eq(this.schema.waitlist.id, id))
+          .returning()
+      );
+      if (result.isErr()) return err(result.error);
+      const [waitlist] = result.value;
+      return waitlist;
+    });
 
   async validateWaitlistCode(code: string, tx?: Orm): ServerResultAsync<{ status: string }> {
     const db = tx ?? this.orm;
@@ -216,52 +216,49 @@ export class AuthWaitlistRepository extends BaseTableRepository<
     return ok({ status: "VALID" });
   }
 
-  async createAccountClaimCode(
-    { userId, expiresInHours = 24 * 14 }: { userId: string; expiresInHours?: number },
-    tx?: Orm
-  ): ServerResultAsync<AccountClaim> {
-    const db = tx ?? this.orm;
-    const claimResult = await this.throwableQuery(() =>
-      db
-        .insert(this.schema.waitlist)
-        .values({
-          type: "ACCOUNT_CLAIM",
-          claimUserId: userId,
-          code: uuidv4(),
-          status: "INVITED",
-          expiresAt: new Date(Date.now() + 1000 * 60 * 60 * expiresInHours),
-        })
-        .returning()
-    );
-    if (claimResult.isErr()) return err(claimResult.error);
-    const [claim] = claimResult.value;
-    return ok(claim);
-  }
+  createAccountClaimCode = this.query("createAccountClaimCode")
+    .input(accountClaimMagicLinkSchemas.input.create)
+    .output(waitlistSchemas.output.claim)
+    .handle(async ({ userId, expiresInHours = 24 * 14 }) => {
+      const result = await this.throwableQuery(() =>
+        this.orm
+          .insert(this.schema.waitlist)
+          .values({
+            type: "ACCOUNT_CLAIM",
+            claimUserId: userId,
+            code: uuidv4(),
+            status: "INVITED",
+            expiresAt: new Date(Date.now() + 1000 * 60 * 60 * expiresInHours),
+          })
+          .returning()
+      );
+      if (result.isErr()) return err(result.error);
+      const [claim] = result.value;
+      return claim;
+    });
 
-  async findPendingAccountClaimForUser(
-    userId: string,
-    tx?: Orm
-  ): ServerResultAsync<AccountClaim | null> {
-    const db = tx ?? this.orm;
-    const claimResult = await this.throwableQuery(() =>
-      db
-        .select()
-        .from(this.schema.waitlist)
-        .where(
-          and(
-            eq(this.schema.waitlist.type, "ACCOUNT_CLAIM"),
-            eq(this.schema.waitlist.claimUserId, userId),
-            eq(this.schema.waitlist.status, "INVITED"),
-            gte(this.schema.waitlist.expiresAt, new Date())
+  findPendingAccountClaimForUser = this.query<string>("findPendingAccountClaimForUser")
+    .output(waitlistSchemas.output.claim.nullable())
+    .handle(async (userId) => {
+      const result = await this.throwableQuery(() =>
+        this.orm
+          .select()
+          .from(this.schema.waitlist)
+          .where(
+            and(
+              eq(this.schema.waitlist.type, "ACCOUNT_CLAIM"),
+              eq(this.schema.waitlist.claimUserId, userId),
+              eq(this.schema.waitlist.status, "INVITED"),
+              gte(this.schema.waitlist.expiresAt, new Date())
+            )
           )
-        )
-        .orderBy(desc(this.schema.waitlist.createdAt))
-        .limit(1)
-    );
-    if (claimResult.isErr()) return err(claimResult.error);
-    const [claim] = claimResult.value;
-    return ok(claim ?? null);
-  }
+          .orderBy(desc(this.schema.waitlist.createdAt))
+          .limit(1)
+      );
+      if (result.isErr()) return err(result.error);
+      const [claim] = result.value;
+      return claim ?? null;
+    });
 
   async createClaimableProvisionedUser({
     name,
@@ -277,7 +274,10 @@ export class AuthWaitlistRepository extends BaseTableRepository<
     onboarding?: number;
     role?: "user" | "admin" | "agent";
     expiresInHours?: number;
-  }): ServerResultAsync<{ user: UserRow; claim: AccountClaim }> {
+  }): ServerResultAsync<{
+    user: UserRow;
+    claim: z.infer<typeof waitlistSchemas.output.claim>;
+  }> {
     const normalizedEmail = email.toLowerCase();
     const existingUserResult = await this.throwableQuery(() =>
       this.orm
@@ -385,40 +385,45 @@ export class AuthWaitlistRepository extends BaseTableRepository<
     return ok({ status: "VALID" });
   }
 
-  async findAccountClaimByCode(code: string, tx?: Orm): ServerResultAsync<AccountClaim | null> {
-    const db = tx ?? this.orm;
-    const claimResult = await this.throwableQuery(() =>
-      db
-        .select()
-        .from(this.schema.waitlist)
-        .where(
-          and(
-            eq(this.schema.waitlist.code, code),
-            eq(this.schema.waitlist.type, "ACCOUNT_CLAIM"),
-            eq(this.schema.waitlist.status, "INVITED"),
-            gte(this.schema.waitlist.expiresAt, new Date())
+  findAccountClaimByCode = this.query("findAccountClaimByCode")
+    .input(waitlistSchemas.input.validateCode)
+    .output(waitlistSchemas.output.claim.nullable())
+    .handle(async ({ code }) => {
+      const result = await this.throwableQuery(() =>
+        this.orm
+          .select()
+          .from(this.schema.waitlist)
+          .where(
+            and(
+              eq(this.schema.waitlist.code, code),
+              eq(this.schema.waitlist.type, "ACCOUNT_CLAIM"),
+              eq(this.schema.waitlist.status, "INVITED"),
+              gte(this.schema.waitlist.expiresAt, new Date())
+            )
           )
-        )
-        .limit(1)
-    );
-    if (claimResult.isErr()) return err(claimResult.error);
-    const [claim] = claimResult.value;
-    return ok(claim ?? null);
-  }
+          .limit(1)
+      );
+      if (result.isErr()) return err(result.error);
+      const [claim] = result.value;
+      return claim ?? null;
+    });
 
-  async findAccountClaimById(id: string, tx?: Orm): ServerResultAsync<AccountClaim | null> {
-    const db = tx ?? this.orm;
-    const claimResult = await this.throwableQuery(() =>
-      db
-        .select()
-        .from(this.schema.waitlist)
-        .where(and(eq(this.schema.waitlist.id, id), eq(this.schema.waitlist.type, "ACCOUNT_CLAIM")))
-        .limit(1)
-    );
-    if (claimResult.isErr()) return err(claimResult.error);
-    const [claim] = claimResult.value;
-    return ok(claim ?? null);
-  }
+  findAccountClaimById = this.query<string>("findAccountClaimById")
+    .output(waitlistSchemas.output.claim.nullable())
+    .handle(async (id) => {
+      const result = await this.throwableQuery(() =>
+        this.orm
+          .select()
+          .from(this.schema.waitlist)
+          .where(
+            and(eq(this.schema.waitlist.id, id), eq(this.schema.waitlist.type, "ACCOUNT_CLAIM"))
+          )
+          .limit(1)
+      );
+      if (result.isErr()) return err(result.error);
+      const [claim] = result.value;
+      return claim ?? null;
+    });
 
   async setAccountClaimEmail(
     { userId, email }: { userId: string; email: string },
@@ -540,53 +545,49 @@ export class AuthAccountClaimRepository extends BaseTableRepository<
   Record<string, never>,
   Schema["accountClaimMagicLinks"]
 > {
-  async listAccountClaimMagicLinks(
-    claimId: string,
-    tx?: Orm
-  ): ServerResultAsync<AccountClaimMagicLinkOutput[]> {
-    const db = tx ?? this.orm;
-    const linksResult = await this.throwableQuery(() =>
-      db
-        .select({
-          id: this.schema.accountClaimMagicLinks.id,
-          claimId: this.schema.accountClaimMagicLinks.claimId,
-          userId: this.schema.accountClaimMagicLinks.userId,
-          email: this.schema.accountClaimMagicLinks.email,
-          url: this.schema.accountClaimMagicLinks.url,
-          expiresAt: this.schema.accountClaimMagicLinks.expiresAt,
-          createdAt: this.schema.accountClaimMagicLinks.createdAt,
-        })
-        .from(this.schema.accountClaimMagicLinks)
-        .where(eq(this.schema.accountClaimMagicLinks.claimId, claimId))
-        .orderBy(desc(this.schema.accountClaimMagicLinks.createdAt))
-    );
-    if (linksResult.isErr()) return err(linksResult.error);
-    return ok(linksResult.value);
-  }
+  listAccountClaimMagicLinks = this.query("listAccountClaimMagicLinks")
+    .input(accountClaimMagicLinkSchemas.input.listLinks)
+    .output(z.array(accountClaimMagicLinkSchemas.output.single))
+    .handle(async ({ claimId }) => {
+      return this.throwableQuery(() =>
+        this.orm
+          .select({
+            id: this.schema.accountClaimMagicLinks.id,
+            claimId: this.schema.accountClaimMagicLinks.claimId,
+            userId: this.schema.accountClaimMagicLinks.userId,
+            email: this.schema.accountClaimMagicLinks.email,
+            url: this.schema.accountClaimMagicLinks.url,
+            expiresAt: this.schema.accountClaimMagicLinks.expiresAt,
+            createdAt: this.schema.accountClaimMagicLinks.createdAt,
+          })
+          .from(this.schema.accountClaimMagicLinks)
+          .where(eq(this.schema.accountClaimMagicLinks.claimId, claimId))
+          .orderBy(desc(this.schema.accountClaimMagicLinks.createdAt))
+      );
+    });
 
-  async latestAccountClaimMagicLink(
-    claimId: string,
-    tx?: Orm
-  ): ServerResultAsync<AccountClaimMagicLinkOutput | null> {
-    const db = tx ?? this.orm;
-    const linkResult = await this.throwableQuery(() =>
-      db
-        .select({
-          id: this.schema.accountClaimMagicLinks.id,
-          claimId: this.schema.accountClaimMagicLinks.claimId,
-          userId: this.schema.accountClaimMagicLinks.userId,
-          email: this.schema.accountClaimMagicLinks.email,
-          url: this.schema.accountClaimMagicLinks.url,
-          expiresAt: this.schema.accountClaimMagicLinks.expiresAt,
-          createdAt: this.schema.accountClaimMagicLinks.createdAt,
-        })
-        .from(this.schema.accountClaimMagicLinks)
-        .where(eq(this.schema.accountClaimMagicLinks.claimId, claimId))
-        .orderBy(desc(this.schema.accountClaimMagicLinks.createdAt))
-        .limit(1)
-    );
-    if (linkResult.isErr()) return err(linkResult.error);
-    const [link] = linkResult.value;
-    return ok(link ?? null);
-  }
+  latestAccountClaimMagicLink = this.query("latestAccountClaimMagicLink")
+    .input(accountClaimMagicLinkSchemas.input.listLinks)
+    .output(accountClaimMagicLinkSchemas.output.single.nullable())
+    .handle(async ({ claimId }) => {
+      const result = await this.throwableQuery(() =>
+        this.orm
+          .select({
+            id: this.schema.accountClaimMagicLinks.id,
+            claimId: this.schema.accountClaimMagicLinks.claimId,
+            userId: this.schema.accountClaimMagicLinks.userId,
+            email: this.schema.accountClaimMagicLinks.email,
+            url: this.schema.accountClaimMagicLinks.url,
+            expiresAt: this.schema.accountClaimMagicLinks.expiresAt,
+            createdAt: this.schema.accountClaimMagicLinks.createdAt,
+          })
+          .from(this.schema.accountClaimMagicLinks)
+          .where(eq(this.schema.accountClaimMagicLinks.claimId, claimId))
+          .orderBy(desc(this.schema.accountClaimMagicLinks.createdAt))
+          .limit(1)
+      );
+      if (result.isErr()) return err(result.error);
+      const [link] = result.value;
+      return link ?? null;
+    });
 }

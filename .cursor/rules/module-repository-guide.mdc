@@ -1,5 +1,5 @@
 ---
-globs: apps/*/server/src/modules/**/*.repository.ts
+globs: packages/backend/src/modules/**/*.repository.ts
 alwaysApply: false
 ---
 
@@ -13,26 +13,53 @@ Derived from current backend stack patterns.
 - Use `BaseRepository` for non-table or multi-table repositories.
 - Keep repositories data-focused: persistence, query composition, and lightweight mapping only.
 - Do not import service classes into repositories.
-- Use `throwableAsync` + `ServerResultAsync` consistently.
 - Use Drizzle operators (`and`, `eq`, `inArray`, `isNull`, etc.) and query helpers from base classes.
-- Keep optional `tx` args on methods that may run inside transactions.
 - When running inside `this.orm.transaction`, use `tx` consistently; avoid mixing `this.orm` calls in the same transaction flow.
 - Leave orchestration (cross-domain workflows, policy decisions, side effects) to services.
 
-## Method Patterns
+## Query Builder (`this.query`)
 
-- `queryList(query)`: use base pagination/sorting/filter helpers where possible.
-- `findById` / `findManyById`: use base table methods unless custom joins are required.
-- `create` / `update` / `softDelete` / `delete`: prefer base table methods, override only for custom behavior.
-- Multi-table list/read methods: use DTO select schemas/transformers to keep output shaping explicit.
+Prefer `this.query()` for new repository methods. The builder provides compile-time type narrowing via Zod schemas from the module's `.dto.ts` file.
 
-## Example Skeleton
+- Use `.input(schema)` to narrow the input type from a DTO input schema.
+- Use `.output(schema)` to narrow the output type from a DTO output schema.
+- Use the generic type parameter `this.query<InputType>(name)` when no matching DTO input schema exists.
+- Use `.nullable()` on output schemas for methods that may return `null`.
+- Use `z.array(schema)` for methods that return lists.
+
+## Error Handling: `throwableQuery` vs `throwableAsync`
+
+- Use `throwableQuery` to wrap **individual Drizzle queries** (selects, inserts, updates, deletes, transactions). It converts thrown database errors into `ServerResultAsync`.
+- Do **not** wrap entire method bodies in `throwableAsync`. Keep `throwableQuery` scoped tightly around the database call so error-handling logic (branching on `isErr`, returning `this.error(...)`) stays outside the wrapper.
+- The `this.query()` builder already wraps the handler in `throwableAsync` internally, so query-builder methods only need `throwableQuery` around their Drizzle calls.
+
+## Prefer Built-in Base Methods
+
+`BaseTableRepository` provides typed CRUD helpers. Prefer them over hand-written queries when they fit the use case, including inside custom methods:
+
+- `queryList(query, options)` for filtered/sorted/paginated lists.
+- `findById(id)` / `findManyById(ids)` for primary-key lookups.
+- `create(data)` / `createMany(data)` for inserts.
+- `update(data)` / `updateMany(data)` for updates.
+- `softDeleteById(id)` / `deleteById(id)` for deletes.
+
+Override these only when custom joins, CTEs, or non-standard behavior is required.
+
+## When to Use `async` Methods Instead of Query Builder
+
+Use regular `async` methods when:
+
+- The method requires an optional `tx` parameter for transaction support.
+- The method orchestrates multiple sequential queries with branching logic between them.
+- The method wraps a `this.orm.transaction()` call.
+
+## Example: Query Builder Method
 
 ```typescript
 import { BaseTableRepository } from "@m5kdev/backend/modules/base/base.repository";
-import { and, eq, inArray, isNull } from "drizzle-orm";
-import { ok } from "neverthrow";
+import { z } from "zod";
 import type { Orm, Schema } from "#db";
+import { itemSchemas } from "./items.dto";
 
 export class ItemRepository extends BaseTableRepository<
   Orm,
@@ -40,14 +67,45 @@ export class ItemRepository extends BaseTableRepository<
   Record<string, never>,
   Schema["items"]
 > {
-  async listForUser(userId: string) {
-    return this.throwableAsync(async () => {
-      const rows = await this.orm
-        .select()
-        .from(this.schema.items)
-        .where(and(eq(this.schema.items.userId, userId), isNull(this.schema.items.deletedAt)));
-      return ok(rows);
+  findBySlug = this.query("findBySlug")
+    .input(z.object({ slug: z.string() }))
+    .output(itemSchemas.output.single.nullable())
+    .handle(async ({ slug }) => {
+      const result = await this.throwableQuery(() =>
+        this.orm
+          .select()
+          .from(this.schema.items)
+          .where(eq(this.schema.items.slug, slug))
+          .limit(1)
+      );
+      if (result.isErr()) return err(result.error);
+      const [item] = result.value;
+      return item ?? null;
     });
-  }
+}
+```
+
+## Example: Async Method (Transaction / Multi-Query)
+
+```typescript
+async transferOwnership(
+  { fromUserId, toUserId, itemId }: { fromUserId: string; toUserId: string; itemId: string },
+  tx?: Orm
+): ServerResultAsync<{ status: boolean }> {
+  const db = tx ?? this.orm;
+
+  const itemResult = await this.throwableQuery(() =>
+    db.select().from(this.schema.items).where(eq(this.schema.items.id, itemId)).limit(1)
+  );
+  if (itemResult.isErr()) return err(itemResult.error);
+  const [item] = itemResult.value;
+  if (!item) return this.error("NOT_FOUND");
+  if (item.userId !== fromUserId) return this.error("FORBIDDEN");
+
+  const updateResult = await this.throwableQuery(() =>
+    db.update(this.schema.items).set({ userId: toUserId }).where(eq(this.schema.items.id, itemId)).returning()
+  );
+  if (updateResult.isErr()) return err(updateResult.error);
+  return ok({ status: true });
 }
 ```

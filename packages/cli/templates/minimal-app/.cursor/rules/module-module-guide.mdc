@@ -1,0 +1,183 @@
+---
+globs: apps/*/server/src/modules/**/*.module.ts
+alwaysApply: false
+---
+
+# Module File Style Guide
+
+A `*.module.ts` file is the composition unit for an app module. It wires repositories, services, and tRPC routers into a single class that the backend kernel orchestrates.
+
+## File Location
+
+```
+apps/<app>/server/src/modules/<module>/<module>.module.ts
+```
+
+## Conventions
+
+- Extend `BaseModule<Deps, Tables, Repositories, Services, Routers>` from `@m5kdev/backend/modules/base/base.module`.
+- Declare local type aliases for each generic slot (`*ModuleDeps`, `*ModuleTables`, `*ModuleRepositories`, `*ModuleServices`, `*ModuleRouters`).
+- Set `readonly id` to match the module directory name (e.g. `readonly id = "posts"`).
+- Declare `dependsOn` as a `readonly` tuple with `as const`. App modules typically depend on framework modules like `AuthModule`.
+- Override only the hooks the module actually needs; omit the rest.
+- Keep hook bodies as pure wiring — no business logic.
+- Use `createBackendRouterMap(namespace, router)` from `@m5kdev/backend/app` in the `trpc()` hook.
+- Export a singleton instance at the bottom of the file.
+
+## Generic Parameters
+
+| Position | Name | Purpose | When unused |
+|----------|------|---------|-------------|
+| 1 | `Deps` | Map of module dependencies (`{ auth: AuthModule }`) | `never` |
+| 2 | `Tables` | `typeof import("./<module>.db")` — DB table exports | `TableMap` |
+| 3 | `Repositories` | Object map of repository instances | `{}` |
+| 4 | `Services` | Object map of service instances | `{}` |
+| 5 | `Routers` | Object map of tRPC routers keyed by namespace | `never` |
+
+## Dependency Declaration
+
+- `dependsOn` lists required modules by their `id`. The kernel initializes them first and provides their output via `ctx.deps`.
+- App modules commonly depend on `"auth"` for the framework's `AuthModule`.
+- Use `optionalDependsOn` when a dependency is not always registered.
+
+## Lifecycle Hooks (Execution Order)
+
+1. `repositories(ctx)` — Instantiate repositories. Context provides `db` (orm, schema, client), `deps`, `infra`.
+2. `services(ctx)` — Instantiate services. Context adds `repositories` from step 1.
+3. `trpc(ctx)` — Return router map fragment. Context adds `services` and `trpc` methods.
+4. `express(ctx)` — Mount Express routes (optional).
+5. `workflows(ctx)` — Register workflow handlers (optional).
+6. `startup(ctx)` — Async hook after full app build (optional).
+7. `shutdown(ctx)` — Async hook on teardown (optional).
+
+## Example
+
+```typescript
+import { createBackendRouterMap } from "@m5kdev/backend/app";
+import type { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
+import {
+  BaseModule,
+  type ModuleRepositoriesContext,
+  type ModuleServicesContext,
+  type ModuleTRPCContext,
+} from "@m5kdev/backend/modules/base/base.module";
+import type * as postsTables from "./posts.db";
+import { postsGrants } from "./posts.grants";
+import { PostsRepository } from "./posts.repository";
+import { PostsService } from "./posts.service";
+import { createPostsTRPC } from "./posts.trpc";
+
+type PostsModuleDeps = { auth: AuthModule };
+type PostsModuleTables = typeof postsTables;
+type PostsModuleRepositories = {
+  posts: PostsRepository;
+};
+type PostsModuleServices = {
+  posts: PostsService;
+};
+type PostsModuleRouters = {
+  posts: ReturnType<typeof createPostsTRPC>;
+};
+
+export class PostsModule extends BaseModule<
+  PostsModuleDeps,
+  PostsModuleTables,
+  PostsModuleRepositories,
+  PostsModuleServices,
+  PostsModuleRouters
+> {
+  readonly id = "posts";
+  override readonly dependsOn = ["auth"] as const;
+
+  override repositories({ db }: ModuleRepositoriesContext<PostsModuleDeps, PostsModuleTables>) {
+    return {
+      posts: new PostsRepository({
+        orm: db.orm,
+        schema: db.schema,
+        table: db.schema.posts,
+      }),
+    };
+  }
+
+  override services({
+    repositories,
+  }: ModuleServicesContext<PostsModuleDeps, PostsModuleRepositories>) {
+    return {
+      posts: new PostsService({ posts: repositories.posts }, {}, postsGrants),
+    };
+  }
+
+  override trpc({ trpc, services }: ModuleTRPCContext<PostsModuleDeps, PostsModuleServices>) {
+    return createBackendRouterMap("posts", createPostsTRPC(trpc, services.posts));
+  }
+}
+
+export const postsModule = new PostsModule();
+```
+
+## Registration
+
+Register the module in `apps/<app>/server/src/modules.ts`:
+
+```typescript
+import { defineBackendModules } from "@m5kdev/backend/app";
+import { PostsModule } from "./modules/posts/posts.module";
+
+export const postsBackendModule = new PostsModule();
+
+export const backendModules = defineBackendModules([
+  emailBackendModule,
+  authBackendModule,
+  workflowBackendModule,
+  notificationBackendModule,
+  postsBackendModule,
+] as const);
+```
+
+Then chain `.use(postsBackendModule)` in `apps/<app>/server/src/app.ts`.
+
+## Accessing Module Output
+
+After building, module repositories and services are re-exported from composition root files:
+
+```typescript
+// apps/<app>/server/src/repository.ts
+export const postsRepository = builtBackendApp.modules.posts.repositories.posts;
+
+// apps/<app>/server/src/service.ts
+export const postsService = builtBackendApp.modules.posts.services.posts;
+```
+
+## Patterns
+
+### Services-Only Module (No DB)
+
+```typescript
+export class UtilsModule extends BaseModule<
+  never, TableMap, {}, UtilsModuleServices, never
+> {
+  readonly id = "utils";
+
+  override services() {
+    return { utils: new UtilsService() };
+  }
+}
+```
+
+### Module with Constructor Config
+
+```typescript
+export class PaymentsModule extends BaseModule<...> {
+  readonly id = "payments";
+
+  constructor(private readonly config: { apiKey: string }) {
+    super();
+  }
+
+  override services({ repositories }: ModuleServicesContext<...>) {
+    return {
+      payments: new PaymentsService(repositories, {}, this.config),
+    };
+  }
+}
+```

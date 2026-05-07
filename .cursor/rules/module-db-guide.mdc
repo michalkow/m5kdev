@@ -13,12 +13,12 @@ This guide captures conventions observed in module database files (e.g., `contex
 - Define tables with Drizzle's `sqliteTable` as `table` alias.
 - Use `uuidv4` as the default for string IDs via `.$default(uuidv4)`.
 - Represent booleans with `integer(..., { mode: "boolean" })` and `.default(false)`.
-- Represent timestamps with `integer(..., { mode: "timestamp" })` and `.$default(() => new Date())`.
-  - `createdAt`: `.$default(() => new Date())`
-  - `updatedAt`: `.notNull().$default(() => new Date())`
-  - Support soft-deletes/archive via optional `deletedAt`/`archivedAt`.
-- JSON columns: `text("col", { mode: "json" }).default([]).$type<string[]>()`.
-- Use `references(() => otherTable.id, { onDelete: "cascade" })` for FKs.
+- Represent timestamps with `integer(..., { mode: "timestamp" })`.
+  - `createdAt`: `integer("created_at", { mode: "timestamp" }).notNull().$default(() => new Date())`
+  - `updatedAt`: `integer("updated_at", { mode: "timestamp" })`
+  - `deletedAt`: `integer("updated_at", { mode: "timestamp" })`
+- JSON columns: `text("array", { mode: "json" }).default([]).$type<string[]>()` or `text("object", { mode: "json" }).default({}).$type<Record<string, unknown>>()`.
+- Use `references(() => otherTable.id, { onDelete: "cascade" })` for FKs if not nullable and `{ onDelete: "set null" }` when nullable.
 - Composite join tables define primary keys with `primaryKey({ columns: [t.aId, t.bId] })`.
 - Table names are plural; column names are snake_case at DB level, camelCase in code.
 

@@ -39,6 +39,13 @@ export const querySchema = z.object({
   q: z.string().optional(),
 });
 
+export function queryListOutput<T extends z.ZodTypeAny>(rows: T) {
+  return z.object({
+    rows: z.array(rows),
+    total: z.number(),
+  });
+}
+
 export type QueryListOutput<T> = { rows: T[]; total: number };
 
 export type QueryInput = z.infer<typeof querySchema>;

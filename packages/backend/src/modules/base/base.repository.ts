@@ -31,6 +31,10 @@ import {
   type ServerResult,
   type ServerResultAsync,
 } from "./base.dto";
+import {
+  createRepositoryQueryBuilder,
+  type RepositoryQueryBuilder,
+} from "./base.query";
 
 /** Payload for update/updateMany: id key required (string), other table fields optional. */
 export type TableUpdatePayload<
@@ -162,6 +166,10 @@ export class BaseRepository<
     return query
       ? { ...query, filters: [...(query?.filters ?? []), userIdFilter] }
       : { filters: [userIdFilter] };
+  }
+
+  protected query<TInput>(name: string): RepositoryQueryBuilder<TInput> {
+    return createRepositoryQueryBuilder(this, { name });
   }
 
   helpers = {

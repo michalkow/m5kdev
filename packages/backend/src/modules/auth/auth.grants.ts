@@ -1,6 +1,6 @@
 import { flattenNestedGrants } from "@m5kdev/backend/modules/base/base.grants";
 
-export const authGrants = flattenNestedGrants({
+export const defaultAuthGrants = flattenNestedGrants({
   auth: {
     user: {
       admin: {
