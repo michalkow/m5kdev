@@ -11,22 +11,22 @@ import { toast } from "sonner";
 
 type Phase = "idle" | "accepting" | "success" | "error";
 
-export type OrganizationAcceptInvitationRouteProps = {
+export interface AuthOrganizationAcceptInvitationRouteProps {
   loginPath?: string;
   signupPath?: string;
   defaultRedirectPath?: string;
   managerRedirectPath?: string;
   managerRoles?: string[];
   onInvalidateScopedQueries?: () => void | Promise<void>;
-};
+}
 
-export function OrganizationAcceptInvitationRoute({
+export function AuthOrganizationAcceptInvitationRoute({
   signupPath = "/signup",
   defaultRedirectPath = "/",
   managerRedirectPath = "/organization/members",
   managerRoles = ["admin", "owner"],
   onInvalidateScopedQueries,
-}: OrganizationAcceptInvitationRouteProps) {
+}: AuthOrganizationAcceptInvitationRouteProps) {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const { data: session, registerSession } = useSession();
@@ -54,7 +54,7 @@ export function OrganizationAcceptInvitationRoute({
       }).toString();
       navigate(`${signupPath}?${search}`, { replace: true });
     }
-  }, [invitationId, signupPath, navigate, session, invitationData]);
+  }, [invitationId, signupPath, navigate, session, invitationData, t]);
 
   useEffect(() => {
     if (!session || !invitationId || phase !== "idle") {

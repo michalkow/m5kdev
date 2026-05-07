@@ -9,7 +9,7 @@ import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-type ChildOrganization = {
+interface ChildOrganization {
   id: string;
   name: string;
   slug: string | null;
@@ -18,12 +18,12 @@ type ChildOrganization = {
   logo: string | null;
   metadata: Record<string, unknown> | null;
   createdAt: Date | string;
-};
+}
 
-export type OrganizationChildOrganizationsRouteProps = {
+export interface AuthOrganizationChildOrganizationsRouteProps {
   managerRoles?: string[];
   onInvalidateScopedQueries?: () => void | Promise<void>;
-};
+}
 
 function OrganizationStateCard({ title, message }: { title: string; message: string }) {
   return (
@@ -47,7 +47,7 @@ function safeStringify(value: unknown) {
 function useChildOrganizationAccess({
   managerRoles,
   onInvalidateScopedQueries,
-}: OrganizationChildOrganizationsRouteProps) {
+}: AuthOrganizationChildOrganizationsRouteProps) {
   const { data: session, registerSession } = useSession();
   const queryClient = useQueryClient();
 
@@ -83,10 +83,10 @@ function useChildOrganizationAccess({
   };
 }
 
-export function OrganizationChildOrganizationsRoute({
+export function AuthOrganizationChildOrganizationsRoute({
   managerRoles,
   onInvalidateScopedQueries,
-}: OrganizationChildOrganizationsRouteProps) {
+}: AuthOrganizationChildOrganizationsRouteProps) {
   const { t } = useTranslation();
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();
@@ -324,7 +324,9 @@ export function OrganizationChildOrganizationsRoute({
                   <Table.Header>
                     <Table.Column>{t("web-ui:organization.childOrgs.column.name")}</Table.Column>
                     <Table.Column>{t("web-ui:organization.childOrgs.column.slug")}</Table.Column>
-                    <Table.Column>{t("web-ui:organization.childOrgs.column.createdAt")}</Table.Column>
+                    <Table.Column>
+                      {t("web-ui:organization.childOrgs.column.createdAt")}
+                    </Table.Column>
                     <Table.Column>{t("web-ui:organization.childOrgs.column.actions")}</Table.Column>
                   </Table.Header>
                   <Table.Body items={childOrganizations}>

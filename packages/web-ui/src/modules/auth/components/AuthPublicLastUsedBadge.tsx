@@ -1,7 +1,7 @@
 import { Badge, type BadgeProps } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 
-export function LastUsedBadge({
+export function AuthPublicLastUsedBadge({
   lastMethod,
   method,
   children,

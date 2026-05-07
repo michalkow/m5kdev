@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { CopyButton } from "../../../components/CopyButton";
 
-export function InviteFriends() {
+export function AuthUserInviteFriends() {
   const { appUrl } = useAppConfig();
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();

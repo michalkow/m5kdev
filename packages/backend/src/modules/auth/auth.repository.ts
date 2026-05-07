@@ -143,7 +143,7 @@ export class AuthWaitlistRepository extends BaseTableRepository<
   inviteToWaitlist = this.query<{ email: string; userId: string; name?: string }>(
     "inviteToWaitlist"
   )
-    .output(waitlistSchema)
+    .output(waitlistSchemas.output.full)
     .handle(async ({ email, userId, name }) => {
       const result = await this.throwableQuery(() =>
         this.orm
@@ -164,7 +164,7 @@ export class AuthWaitlistRepository extends BaseTableRepository<
     });
 
   createInvitationCode = this.query<{ userId: string; name?: string }>("createInvitationCode")
-    .output(waitlistSchema)
+    .output(waitlistSchemas.output.full)
     .handle(async ({ userId, name }) => {
       const result = await this.throwableQuery(() =>
         this.orm

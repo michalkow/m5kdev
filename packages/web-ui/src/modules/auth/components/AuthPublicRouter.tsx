@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 import { Route } from "react-router";
-import { ClaimAccountRoute } from "./ClaimAccountRoute";
-import { ErrorAuthRoute } from "./ErrorAuthRoute";
-import { ForgotPasswordRoute } from "./ForgotPasswordRoute";
-import { LoginRoute } from "./LoginRoute";
-import { PublicAuthLayout } from "./PublicAuthLayout";
-import { ResetPasswordRoute } from "./ResetPasswordRoute";
-import { SignupRoute } from "./SignupRoute";
+import { AuthPublicClaimAccountRoute } from "./AuthPublicClaimAccountRoute";
+import { AuthPublicErrorRoute } from "./AuthPublicErrorRoute";
+import { AuthPublicForgotPasswordRoute } from "./AuthPublicForgotPasswordRoute";
+import { AuthPublicLayout } from "./AuthPublicLayout";
+import { AuthPublicLoginRoute } from "./AuthPublicLoginRoute";
+import { AuthPublicResetPasswordRoute } from "./AuthPublicResetPasswordRoute";
+import { AuthPublicSignupRoute } from "./AuthPublicSignupRoute";
 
 interface AuthRouterProps {
   header: ReactNode;
@@ -16,13 +16,16 @@ interface AuthRouterProps {
 
 export function AuthPublicRouter({ header, providers, waitlist }: AuthRouterProps) {
   return (
-    <Route element={<PublicAuthLayout header={header} />}>
-      <Route path="/login" element={<LoginRoute providers={providers} />} />
-      <Route path="/signup" element={<SignupRoute providers={providers} waitlist={waitlist} />} />
-      <Route path="/forgot-password" element={<ForgotPasswordRoute />} />
-      <Route path="/reset-password" element={<ResetPasswordRoute />} />
-      <Route path="/claim-account" element={<ClaimAccountRoute />} />
-      <Route path="/error-auth" element={<ErrorAuthRoute />} />
+    <Route element={<AuthPublicLayout header={header} />}>
+      <Route path="/login" element={<AuthPublicLoginRoute providers={providers} />} />
+      <Route
+        path="/signup"
+        element={<AuthPublicSignupRoute providers={providers} waitlist={waitlist} />}
+      />
+      <Route path="/forgot-password" element={<AuthPublicForgotPasswordRoute />} />
+      <Route path="/reset-password" element={<AuthPublicResetPasswordRoute />} />
+      <Route path="/claim-account" element={<AuthPublicClaimAccountRoute />} />
+      <Route path="/error-auth" element={<AuthPublicErrorRoute />} />
     </Route>
   );
 }

@@ -32,7 +32,7 @@ export function createAuthTRPC(
 
     createInvitationCode: procedure
       .input(waitlistSchemas.input.create)
-      .output(waitlistSchemas.output.single)
+      .output(waitlistSchemas.output.full)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.createInvitationCode(input, ctx));
       }),
@@ -83,7 +83,7 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.acceptMyAccountClaim(undefined, ctx));
       }),
 
-    listWaitlist: procedure.output(waitlistSchemas.output.single.array()).query(async ({ ctx }) => {
+    listWaitlist: procedure.output(waitlistSchemas.output.full.array()).query(async ({ ctx }) => {
       return handleTRPCResult(await authService.listWaitlist({}, ctx));
     }),
 
@@ -116,7 +116,7 @@ export function createAuthTRPC(
 
     inviteToWaitlist: procedure
       .input(waitlistSchemas.input.invite)
-      .output(waitlistSchemas.output.single)
+      .output(waitlistSchemas.output.full)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.inviteToWaitlist(input, ctx));
       }),

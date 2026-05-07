@@ -1,38 +1,34 @@
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-
+import type { z } from "zod";
+import { AuthUserProfileEditor } from "./AuthUserProfileEditor";
 import {
+  AuthUtilityPreferencesEditor,
   type ControlsFor,
   type PreferenceEditorLabels,
-  PreferencesEditor,
-} from "./PreferencesEditor";
+} from "./AuthUtilityPreferencesEditor";
 
 export type {
   ControlDefinition,
   ControlsFor,
   PreferenceEditorLabels,
   UpdatePreferencesOptions,
-} from "./PreferencesEditor";
+} from "./AuthUtilityPreferencesEditor";
 
-import type { BackendTRPCRouter } from "@m5kdev/backend/types";
-import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
-
-import { useMutation, useQuery } from "@tanstack/react-query";
-
-import type { z } from "zod";
-import { UserProfileEditor } from "./UserProfileEditor";
-
-export type UserPreferencesProps<S extends z.ZodObject<z.ZodRawShape>> = {
+export interface AuthUserPreferencesProps<S extends z.ZodObject<z.ZodRawShape>> {
   schema: S;
   controls: ControlsFor<z.infer<S>>;
   hideProfileEditor?: boolean;
-};
+}
 
-export function UserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
+export function AuthUserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
   schema,
   controls,
   hideProfileEditor = false,
-}: UserPreferencesProps<S>): ReactElement {
+}: AuthUserPreferencesProps<S>): ReactElement {
   const { t } = useTranslation("web-ui");
   const trpc = useAppTRPC<BackendTRPCRouter>();
 
@@ -53,8 +49,8 @@ export function UserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
 
   return (
     <>
-      {!hideProfileEditor && <UserProfileEditor />}
-      <PreferencesEditor
+      {!hideProfileEditor && <AuthUserProfileEditor />}
+      <AuthUtilityPreferencesEditor
         schema={schema}
         controls={controls}
         values={preferences}

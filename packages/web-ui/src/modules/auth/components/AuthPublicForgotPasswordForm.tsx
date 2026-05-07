@@ -9,7 +9,7 @@ type Inputs = {
   email: string;
 };
 
-export function ForgotPasswordForm() {
+export function AuthPublicForgotPasswordForm() {
   const { t } = useTranslation();
   const {
     register,

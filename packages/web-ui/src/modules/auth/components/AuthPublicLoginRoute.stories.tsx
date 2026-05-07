@@ -2,10 +2,10 @@ import { AppConfigProvider } from "@m5kdev/frontend/modules/app/components/AppCo
 import type { Meta, StoryObj } from "@storybook/react";
 import type { ReactElement, ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router";
-import { LoginRoute } from "./LoginRoute";
-import { PublicAuthLayout } from "./PublicAuthLayout";
+import { AuthPublicLayout } from "./AuthPublicLayout";
+import { AuthPublicLoginRoute } from "./AuthPublicLoginRoute";
 
-interface LoginRouteStoryProps {
+interface AuthPublicLoginRouteStoryProps {
   readonly providers?: string[];
   readonly header?: ReactNode;
 }
@@ -21,10 +21,10 @@ function StoryHeader(): ReactElement {
   );
 }
 
-function LoginRouteStory({
+function AuthPublicLoginRouteStory({
   providers,
   header = <StoryHeader />,
-}: LoginRouteStoryProps): ReactElement {
+}: AuthPublicLoginRouteStoryProps): ReactElement {
   return (
     <div className="bg-background text-foreground">
       <AppConfigProvider
@@ -36,8 +36,8 @@ function LoginRouteStory({
       >
         <MemoryRouter initialEntries={["/login"]}>
           <Routes>
-            <Route element={<PublicAuthLayout header={header} />}>
-              <Route path="/login" element={<LoginRoute providers={providers} />} />
+            <Route element={<AuthPublicLayout header={header} />}>
+              <Route path="/login" element={<AuthPublicLoginRoute providers={providers} />} />
             </Route>
           </Routes>
         </MemoryRouter>
@@ -47,10 +47,10 @@ function LoginRouteStory({
 }
 
 const meta = {
-  title: "modules/auth/LoginRoute",
-  component: LoginRouteStory,
+  title: "modules/auth/AuthPublicLoginRoute",
+  component: AuthPublicLoginRouteStory,
   tags: ["autodocs"],
-} satisfies Meta<typeof LoginRouteStory>;
+} satisfies Meta<typeof AuthPublicLoginRouteStory>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

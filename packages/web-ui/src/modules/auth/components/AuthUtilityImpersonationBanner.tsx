@@ -3,7 +3,7 @@ import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useTranslation } from "react-i18next";
 
-export function ImpersonationBanner() {
+export function AuthUtilityImpersonationBanner() {
   const { data: session } = useSession();
   const { t } = useTranslation("web-ui");
   const isImpersonating = !!session?.session?.impersonatedBy;

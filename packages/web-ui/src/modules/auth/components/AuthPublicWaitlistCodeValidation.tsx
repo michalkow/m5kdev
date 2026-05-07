@@ -4,11 +4,13 @@ import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-interface WaitlistCodeValidationProps {
+interface AuthPublicWaitlistCodeValidationProps {
   code: string;
 }
 
-export function WaitlistCodeValidation({ code }: WaitlistCodeValidationProps) {
+export function AuthPublicWaitlistCodeValidation({
+  code,
+}: AuthPublicWaitlistCodeValidationProps) {
   const { t } = useTranslation();
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const { data, isLoading, error } = useQuery(

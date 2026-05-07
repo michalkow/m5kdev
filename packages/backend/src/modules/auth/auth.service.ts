@@ -426,7 +426,7 @@ export class AuthService extends BasePermissionService<
     });
 
   listWaitlist = this.procedure<QueryInput>("listWaitlist")
-    .output(waitlistSchemas.output.claim.array())
+    .output(waitlistSchemas.output.full.array())
     .requireAuth()
     .addContextFilter(["user"])
     .use("waitlist", ({ input }) =>
@@ -465,7 +465,7 @@ export class AuthService extends BasePermissionService<
 
   inviteToWaitlist = this.procedure("inviteToWaitlist")
     .input(waitlistSchemas.input.invite)
-    .output(waitlistSchemas.output.claim)
+    .output(waitlistSchemas.output.full)
     .requireAuth()
     .handle(async ({ input: { email, name }, ctx }) => {
       const count = await this.repository.waitlist.getUserWaitlistCount(ctx.user.id);
@@ -497,7 +497,7 @@ export class AuthService extends BasePermissionService<
 
   createInvitationCode = this.procedure("createInvitationCode")
     .input(waitlistSchemas.input.create)
-    .output(waitlistSchemas.output.claim)
+    .output(waitlistSchemas.output.full)
     .requireAuth()
     .handle(async ({ input: { name }, ctx }) => {
       posthogCapture({

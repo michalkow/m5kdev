@@ -6,9 +6,9 @@ import { toast } from "sonner";
 import { GoogleIcon } from "../../../icons/GoogleIcon";
 import { LinkedInIcon } from "../../../icons/LinkedInIcon";
 import { MicrosoftIcon } from "../../../icons/MicrosoftIcon";
-import { LastUsedBadge } from "./LastUsedBadge";
+import { AuthPublicLastUsedBadge } from "./AuthPublicLastUsedBadge";
 
-export function AuthProviders({
+export function AuthPublicProviders({
   providers,
   lastMethod,
   code,
@@ -43,7 +43,7 @@ export function AuthProviders({
     <>
       <div className="flex flex-col gap-4">
         {providers.includes("google") && (
-          <LastUsedBadge lastMethod={lastMethod} method="google">
+          <AuthPublicLastUsedBadge lastMethod={lastMethod} method="google">
             <Button
               type="button"
               variant="outline"
@@ -62,10 +62,10 @@ export function AuthProviders({
               <GoogleIcon className="h-5 w-5" />
               {t("web-ui:auth.login.google")}
             </Button>
-          </LastUsedBadge>
+          </AuthPublicLastUsedBadge>
         )}
         {providers.includes("linkedin") && (
-          <LastUsedBadge lastMethod={lastMethod} method="linkedin">
+          <AuthPublicLastUsedBadge lastMethod={lastMethod} method="linkedin">
             <Button
               type="button"
               variant="outline"
@@ -84,10 +84,10 @@ export function AuthProviders({
               <LinkedInIcon className="h-5 w-5" />
               {t("web-ui:auth.login.linkedin")}
             </Button>
-          </LastUsedBadge>
+          </AuthPublicLastUsedBadge>
         )}
         {providers.includes("microsoft") && (
-          <LastUsedBadge lastMethod={lastMethod} method="microsoft">
+          <AuthPublicLastUsedBadge lastMethod={lastMethod} method="microsoft">
             <Button
               type="button"
               variant="outline"
@@ -106,7 +106,7 @@ export function AuthProviders({
               <MicrosoftIcon className="h-5 w-5" />
               {t("web-ui:auth.login.microsoft")}
             </Button>
-          </LastUsedBadge>
+          </AuthPublicLastUsedBadge>
         )}
       </div>
       <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t after:border-border">

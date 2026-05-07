@@ -5,7 +5,7 @@ import { useQueryState } from "nuqs";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
-export function ErrorAuthRoute() {
+export function AuthPublicErrorRoute() {
   const { t } = useTranslation();
   const [error] = useQueryState("error");
 

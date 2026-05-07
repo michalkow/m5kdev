@@ -14,7 +14,7 @@ type OrganizationDetails = {
   metadata?: Record<string, unknown> | null;
 };
 
-export type OrganizationSettingsRouteLabels = {
+export interface AuthOrganizationSettingsRouteLabels {
   settingsTitle: string;
   settingsDescription: string;
   settingsNoActive: string;
@@ -28,12 +28,12 @@ export type OrganizationSettingsRouteLabels = {
   updateSuccess: string;
   updateError: string;
   loadError: string;
-};
+}
 
-export type OrganizationSettingsRouteProps = {
+export interface AuthOrganizationSettingsRouteProps {
   managerRoles?: string[];
   onInvalidateScopedQueries?: () => void | Promise<void>;
-};
+}
 
 function OrganizationStateCard({ title, message }: { title: string; message: string }) {
   return (
@@ -49,7 +49,7 @@ function OrganizationStateCard({ title, message }: { title: string; message: str
 function useOrganizationAccess({
   managerRoles,
   onInvalidateScopedQueries,
-}: Pick<OrganizationSettingsRouteProps, "managerRoles" | "onInvalidateScopedQueries">) {
+}: Pick<AuthOrganizationSettingsRouteProps, "managerRoles" | "onInvalidateScopedQueries">) {
   const { data: session, registerSession } = useSession();
   const queryClient = useQueryClient();
 
@@ -90,7 +90,7 @@ function useOrganizationAccess({
 function useOrganizationConfig() {
   const { t } = useTranslation();
 
-  const translatedLabels = useMemo<OrganizationSettingsRouteLabels>(
+  const translatedLabels = useMemo<AuthOrganizationSettingsRouteLabels>(
     () => ({
       settingsTitle: t("web-ui:organization.settings.title"),
       settingsDescription: t("web-ui:organization.settings.description"),
@@ -121,10 +121,10 @@ function useOrganizationConfig() {
   return { resolvedLabels: translatedLabels, resolvedRoleLabels: translatedRoleLabels };
 }
 
-export function OrganizationSettingsRoute({
+export function AuthOrganizationSettingsRoute({
   managerRoles,
   onInvalidateScopedQueries,
-}: OrganizationSettingsRouteProps) {
+}: AuthOrganizationSettingsRouteProps) {
   const { resolvedLabels, resolvedRoleLabels } = useOrganizationConfig();
 
   const {
@@ -278,7 +278,11 @@ export function OrganizationSettingsRoute({
             />
           </div>
           <div className="flex justify-end">
-            <Button variant="primary" isPending={isSavingOrganization} onPress={onUpdateOrganization}>
+            <Button
+              variant="primary"
+              isPending={isSavingOrganization}
+              onPress={onUpdateOrganization}
+            >
               {resolvedLabels.saveButton}
             </Button>
           </div>

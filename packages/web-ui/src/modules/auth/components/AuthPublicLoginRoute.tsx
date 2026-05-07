@@ -1,9 +1,9 @@
-import {Card} from "@heroui/react";
+import { Card } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
-import { LoginForm } from "./LoginForm";
+import { AuthPublicLoginForm } from "./AuthPublicLoginForm";
 
-export function LoginRoute({ providers }: { providers?: string[] }) {
+export function AuthPublicLoginRoute({ providers }: { providers?: string[] }) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-6">
@@ -17,7 +17,7 @@ export function LoginRoute({ providers }: { providers?: string[] }) {
           </p>
         </Card.Header>
         <Card.Content>
-          <LoginForm providers={providers} />
+          <AuthPublicLoginForm providers={providers} />
         </Card.Content>
       </Card>
       <div className="text-balance text-center text-xs text-muted-foreground [&_a]:underline [&_a]:underline-offset-4 [&_a]:hover:text-primary  ">

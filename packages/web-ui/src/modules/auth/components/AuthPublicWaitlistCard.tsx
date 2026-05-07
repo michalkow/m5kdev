@@ -6,7 +6,7 @@ import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-export function WaitlistCard() {
+export function AuthPublicWaitlistCard() {
   const { t } = useTranslation();
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const emailInputId = useId();

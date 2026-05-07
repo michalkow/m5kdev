@@ -11,7 +11,7 @@ import { GoogleIcon } from "../../../icons/GoogleIcon";
 import { LinkedInIcon } from "../../../icons/LinkedInIcon";
 import { MicrosoftIcon } from "../../../icons/MicrosoftIcon";
 
-export function ClaimAccountRoute() {
+export function AuthPublicClaimAccountRoute() {
   const { serverUrl } = useAppConfig();
   const { data: session, registerSession } = useSession();
   const navigate = useNavigate();

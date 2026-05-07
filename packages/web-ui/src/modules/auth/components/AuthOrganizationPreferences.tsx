@@ -7,26 +7,26 @@ import { type ReactElement, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { z } from "zod";
 import {
+  AuthUtilityPreferencesEditor,
   type ControlsFor,
   type PreferenceEditorLabels,
-  PreferencesEditor,
   type UpdatePreferencesOptions,
-} from "./PreferencesEditor";
+} from "./AuthUtilityPreferencesEditor";
 
-type OrganizationPreferenceLabels = PreferenceEditorLabels & {
+type AuthOrganizationPreferenceLabels = PreferenceEditorLabels & {
   noActiveOrganization: string;
   loadError: string;
 };
 
-export type OrganizationPreferencesTarget = "preferences" | "flags";
+export type AuthOrganizationPreferencesTarget = "preferences" | "flags";
 
-export type OrganizationPreferencesProps<S extends z.ZodObject<z.ZodRawShape>> = {
+export interface AuthOrganizationPreferencesProps<S extends z.ZodObject<z.ZodRawShape>> {
   schema: S;
   controls: ControlsFor<z.infer<S>>;
-  target?: OrganizationPreferencesTarget;
-  labels?: Partial<OrganizationPreferenceLabels>;
+  target?: AuthOrganizationPreferencesTarget;
+  labels?: Partial<AuthOrganizationPreferenceLabels>;
   onInvalidateScopedQueries?: () => void | Promise<void>;
-};
+}
 
 function OrganizationStateCard({ title, message }: { title: string; message: string }) {
   return (
@@ -56,13 +56,13 @@ function getFlagsFromValues(values: Record<string, unknown>): string[] {
     .map(([key]) => key);
 }
 
-export function OrganizationPreferences<S extends z.ZodObject<z.ZodRawShape>>({
+export function AuthOrganizationPreferences<S extends z.ZodObject<z.ZodRawShape>>({
   schema,
   controls,
   target = "preferences",
   labels,
   onInvalidateScopedQueries,
-}: OrganizationPreferencesProps<S>): ReactElement {
+}: AuthOrganizationPreferencesProps<S>): ReactElement {
   const { data: session, isLoading: isSessionLoading } = useSession();
   const { t } = useTranslation("web-ui");
   const trpc = useAppTRPC<BackendTRPCRouter>();
@@ -72,7 +72,7 @@ export function OrganizationPreferences<S extends z.ZodObject<z.ZodRawShape>>({
   const labelKeyPrefix =
     target === "flags" ? "web-ui:organization.flags" : "web-ui:organization.preferences";
 
-  const resolvedLabels = useMemo<OrganizationPreferenceLabels>(
+  const resolvedLabels = useMemo<AuthOrganizationPreferenceLabels>(
     () => ({
       title: labels?.title ?? t(`${labelKeyPrefix}.title`),
       submit: labels?.submit ?? t(`${labelKeyPrefix}.submit`),
@@ -213,7 +213,7 @@ export function OrganizationPreferences<S extends z.ZodObject<z.ZodRawShape>>({
   }
 
   return (
-    <PreferencesEditor
+    <AuthUtilityPreferencesEditor
       schema={schema}
       controls={controls}
       values={currentValues}

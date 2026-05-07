@@ -1,19 +1,19 @@
-import {Card} from "@heroui/react";
+import { Card } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
-import { ResetPasswordForm } from "./ResetPasswordForm";
+import { AuthPublicForgotPasswordForm } from "./AuthPublicForgotPasswordForm";
 
-export function ResetPasswordRoute() {
+export function AuthPublicForgotPasswordRoute() {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-6">
       <Card>
         <Card.Header className="text-center flex flex-col gap-1">
-          <h2 className="text-xl font-semibold">{t("web-ui:auth.resetPassword.title")}</h2>
-          <p className="text-sm text-default-600">{t("web-ui:auth.resetPassword.description")}</p>
+          <p className="text-xl font-semibold">{t("web-ui:auth.forgotPassword.title")}</p>
+          <p className="text-sm text-default-600">{t("web-ui:auth.forgotPassword.description")}</p>
         </Card.Header>
         <Card.Content>
-          <ResetPasswordForm />
+          <AuthPublicForgotPasswordForm />
         </Card.Content>
       </Card>
       <div className="text-center text-xs text-muted-foreground">

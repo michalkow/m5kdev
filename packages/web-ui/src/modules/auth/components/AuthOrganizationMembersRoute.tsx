@@ -1,17 +1,7 @@
-import type { Key } from "@react-types/shared";
-import {
-  Button,
-  Card,
-  Chip,
-  Input,
-  Label,
-  ListBox,
-  Select,
-  Spinner,
-  Table,
-} from "@heroui/react";
+import { Button, Card, Chip, Input, Label, ListBox, Select, Spinner, Table } from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
+import type { Key } from "@react-types/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Trash2, UserPlus, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -71,13 +61,13 @@ type CombinedMemberRow =
 
 const ORGANIZATION_ROLES = ["member", "admin", "owner"] as const;
 
-export type OrganizationRole = (typeof ORGANIZATION_ROLES)[number];
+export type AuthOrganizationRole = (typeof ORGANIZATION_ROLES)[number];
 
-function isOrganizationRole(role: string): role is OrganizationRole {
+function isAuthOrganizationRole(role: string): role is AuthOrganizationRole {
   return (ORGANIZATION_ROLES as readonly string[]).includes(role);
 }
 
-export type OrganizationMembersRouteLabels = {
+export interface AuthOrganizationMembersRouteLabels {
   loadError: string;
   membersTitle: string;
   membersNoActive: string;
@@ -117,14 +107,14 @@ export type OrganizationMembersRouteLabels = {
   copyInviteLink: string;
   cancelInvitation: string;
   roleUnknown: string;
-};
+}
 
-export type OrganizationMembersRouteProps = {
+export interface AuthOrganizationMembersRouteProps {
   managerRoles?: string[];
-  assignableRoles?: OrganizationRole[];
+  assignableRoles?: AuthOrganizationRole[];
   invitationAcceptPath?: string;
   onInvalidateScopedQueries?: () => void | Promise<void>;
-};
+}
 
 function OrganizationStateCard({ title, message }: { title: string; message: string }) {
   return (
@@ -140,7 +130,7 @@ function OrganizationStateCard({ title, message }: { title: string; message: str
 function useOrganizationAccess({
   managerRoles,
   onInvalidateScopedQueries,
-}: Pick<OrganizationMembersRouteProps, "managerRoles" | "onInvalidateScopedQueries">) {
+}: Pick<AuthOrganizationMembersRouteProps, "managerRoles" | "onInvalidateScopedQueries">) {
   const { data: session, registerSession } = useSession();
   const queryClient = useQueryClient();
 
@@ -180,10 +170,10 @@ function useOrganizationAccess({
 
 function useOrganizationConfig({
   assignableRoles,
-}: Pick<OrganizationMembersRouteProps, "assignableRoles">) {
+}: Pick<AuthOrganizationMembersRouteProps, "assignableRoles">) {
   const { t } = useTranslation();
 
-  const translatedLabels = useMemo<OrganizationMembersRouteLabels>(
+  const translatedLabels = useMemo<AuthOrganizationMembersRouteLabels>(
     () => ({
       loadError: t("web-ui:organization.members.loadError"),
       membersTitle: t("web-ui:organization.members.title"),
@@ -251,12 +241,12 @@ function useOrganizationConfig({
   };
 }
 
-export function OrganizationMembersRoute({
+export function AuthOrganizationMembersRoute({
   managerRoles,
   assignableRoles,
   invitationAcceptPath,
   onInvalidateScopedQueries,
-}: OrganizationMembersRouteProps) {
+}: AuthOrganizationMembersRouteProps) {
   const { resolvedLabels, resolvedRoleLabels, resolvedAssignableRoles } = useOrganizationConfig({
     assignableRoles,
   });
@@ -269,7 +259,7 @@ export function OrganizationMembersRoute({
   } = useOrganizationAccess({ managerRoles, onInvalidateScopedQueries });
 
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<OrganizationRole>(
+  const [inviteRole, setInviteRole] = useState<AuthOrganizationRole>(
     resolvedAssignableRoles[0] ?? "member"
   );
   const isMountedRef = useRef(true);
@@ -291,7 +281,7 @@ export function OrganizationMembersRoute({
       organizationId,
     }: {
       memberId: string;
-      role: OrganizationRole;
+      role: AuthOrganizationRole;
       organizationId: string;
     }) => {
       const { error } = await authClient.organization.updateMemberRole({
@@ -340,7 +330,7 @@ export function OrganizationMembersRoute({
       organizationId,
     }: {
       email: string;
-      role: OrganizationRole;
+      role: AuthOrganizationRole;
       organizationId: string;
     }) => {
       const { error } = await authClient.organization.inviteMember({
@@ -481,7 +471,7 @@ export function OrganizationMembersRoute({
   }, [invitations, members, resolvedLabels.invitedUser, resolvedLabels.unknownName]);
 
   const onUpdateMemberRole = useCallback(
-    (memberId: string, role: OrganizationRole) => {
+    (memberId: string, role: AuthOrganizationRole) => {
       if (!canManageOrganization || !activeOrganizationId) return;
       updateRoleMutation.mutate({ memberId, role, organizationId: activeOrganizationId });
     },
@@ -609,7 +599,11 @@ export function OrganizationMembersRoute({
                 selectedKey={inviteRole}
                 onSelectionChange={(key) => {
                   const role = key == null ? undefined : String(key);
-                  if (role && isOrganizationRole(role) && resolvedAssignableRoles.includes(role)) {
+                  if (
+                    role &&
+                    isAuthOrganizationRole(role) &&
+                    resolvedAssignableRoles.includes(role)
+                  ) {
                     setInviteRole(role);
                   }
                 }}
@@ -646,7 +640,9 @@ export function OrganizationMembersRoute({
           </div>
 
           {rows.length === 0 ? (
-            <div className="py-10 text-center text-sm text-default-500">{resolvedLabels.tableEmpty}</div>
+            <div className="py-10 text-center text-sm text-default-500">
+              {resolvedLabels.tableEmpty}
+            </div>
           ) : (
             <Table aria-label={resolvedLabels.tableTitle}>
               <Table.ScrollContainer>
@@ -656,7 +652,9 @@ export function OrganizationMembersRoute({
                     <Table.Column>{resolvedLabels.columnEmail}</Table.Column>
                     <Table.Column>{resolvedLabels.columnRole}</Table.Column>
                     <Table.Column>{resolvedLabels.columnStatus}</Table.Column>
-                    <Table.Column className="text-right">{resolvedLabels.columnActions}</Table.Column>
+                    <Table.Column className="text-right">
+                      {resolvedLabels.columnActions}
+                    </Table.Column>
                   </Table.Header>
                   <Table.Body items={rows}>
                     {(row) => (
@@ -674,7 +672,7 @@ export function OrganizationMembersRoute({
                                 if (
                                   role &&
                                   role !== row.role &&
-                                  isOrganizationRole(role) &&
+                                  isAuthOrganizationRole(role) &&
                                   resolvedAssignableRoles.includes(role)
                                 ) {
                                   void onUpdateMemberRole(row.memberId, role);
@@ -688,7 +686,11 @@ export function OrganizationMembersRoute({
                               <Select.Popover>
                                 <ListBox>
                                   {resolvedAssignableRoles.map((role) => (
-                                    <ListBox.Item key={role} id={role} textValue={getRoleLabel(role)}>
+                                    <ListBox.Item
+                                      key={role}
+                                      id={role}
+                                      textValue={getRoleLabel(role)}
+                                    >
                                       {getRoleLabel(role)}
                                       <ListBox.ItemIndicator />
                                     </ListBox.Item>

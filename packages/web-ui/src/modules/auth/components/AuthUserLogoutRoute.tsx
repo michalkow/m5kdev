@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router";
 import { AppLoader } from "../../app/components/AppLoader";
 
-export default function Logout({ loader = <AppLoader /> }: { loader?: React.ReactNode }) {
+export function AuthUserLogoutRoute({ loader = <AppLoader /> }: { loader?: React.ReactNode }) {
   const navigate = useNavigate();
 
   // biome-ignore lint/correctness/useExhaustiveDependencies(authClient): authClient is a singleton

@@ -2,6 +2,7 @@ import { Button, FieldError, Form, Input, Label, TextField, toast } from "@herou
 
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
+import type { FormEvent } from "react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
@@ -13,12 +14,12 @@ const profileSchema = z.object({
   image: z.string().nullable(),
 });
 
-export function UserProfileEditor() {
+export function AuthUserProfileEditor() {
   const { t } = useTranslation();
   const { data: session, isLoading } = useSession();
   const [image, setImage] = useState<string | null>(session?.user?.image || null);
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>): void {
+  function handleSubmit(e: FormEvent<HTMLFormElement>): void {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const name = formData.get("name") as string;

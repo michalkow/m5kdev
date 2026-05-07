@@ -4,7 +4,7 @@ interface ProtectedRoutesProps {
   children: React.ReactNode;
 }
 
-export function ProtectedRoutes({ children }: ProtectedRoutesProps) {
+export function AuthUtilityProtectedRoutes({ children }: ProtectedRoutesProps) {
   const hasSession = useProtectedRoute();
 
   if (!hasSession) {

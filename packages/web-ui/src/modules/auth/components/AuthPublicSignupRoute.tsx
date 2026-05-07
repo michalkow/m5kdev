@@ -5,17 +5,20 @@ import { useQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
-import { AuthProviders } from "./AuthProviders";
-import { SignupForm } from "./SignupFormRoute";
-import { WaitlistCard } from "./WaitlistCard";
-import { WaitlistCodeValidation } from "./WaitlistCodeValidation";
+import { AuthPublicProviders } from "./AuthPublicProviders";
+import { AuthPublicSignupForm } from "./AuthPublicSignupFormRoute";
+import { AuthPublicWaitlistCard } from "./AuthPublicWaitlistCard";
+import { AuthPublicWaitlistCodeValidation } from "./AuthPublicWaitlistCodeValidation";
 
-interface SignupRouteProps {
+interface AuthPublicSignupRouteProps {
   providers?: string[];
   waitlist?: boolean;
 }
 
-export function SignupRoute({ providers, waitlist = false }: SignupRouteProps) {
+export function AuthPublicSignupRoute({
+  providers,
+  waitlist = false,
+}: AuthPublicSignupRouteProps) {
   const { t } = useTranslation("web-ui");
 
   const [code] = useQueryState("code");
@@ -51,7 +54,7 @@ export function SignupRoute({ providers, waitlist = false }: SignupRouteProps) {
         </Alert>
       )}
       {hasWaitlist && !code ? (
-        <WaitlistCard />
+        <AuthPublicWaitlistCard />
       ) : (
         <Card>
           <Card.Header className="text-center flex flex-col gap-1">
@@ -60,14 +63,14 @@ export function SignupRoute({ providers, waitlist = false }: SignupRouteProps) {
           </Card.Header>
           <Card.Content>
             <div className="grid gap-6">
-              {hasWaitlist && code && <WaitlistCodeValidation code={code} />}
-              <AuthProviders
+              {hasWaitlist && code && <AuthPublicWaitlistCodeValidation code={code} />}
+              <AuthPublicProviders
                 providers={providers}
                 code={code}
                 invitation={invitation}
                 requestSignUp
               />
-              <SignupForm
+              <AuthPublicSignupForm
                 code={code}
                 invitation={invitation}
                 email={email}

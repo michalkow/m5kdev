@@ -45,7 +45,7 @@ function getEmailProviderUrl(email: string): string | null {
   return domainMap[domain] || null;
 }
 
-export function SignupForm({
+export function AuthPublicSignupForm({
   code,
   invitation,
   email,

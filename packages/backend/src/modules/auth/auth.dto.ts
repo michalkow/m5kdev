@@ -45,6 +45,7 @@ export const waitlistSchema = createSelectSchema(waitlist);
 export const waitlistSchemas = {
   output: {
     single: waitlistSchema.omit({ code: true, expiresAt: true }),
+    full: waitlistSchema,
     claim: waitlistSchema.omit({ code: true }),
     simple: waitlistSchema.pick({
       id: true,

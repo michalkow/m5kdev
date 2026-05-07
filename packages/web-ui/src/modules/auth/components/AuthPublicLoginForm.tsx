@@ -4,10 +4,10 @@ import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { AuthProviders } from "./AuthProviders";
-import { LastUsedBadge } from "./LastUsedBadge";
+import { AuthPublicLastUsedBadge } from "./AuthPublicLastUsedBadge";
+import { AuthPublicProviders } from "./AuthPublicProviders";
 
-export function LoginForm({ providers }: { providers?: string[] }) {
+export function AuthPublicLoginForm({ providers }: { providers?: string[] }) {
   const lastMethod = authClient.getLastUsedLoginMethod();
   const { registerSession } = useSession();
   const navigate = useNavigate();
@@ -49,7 +49,7 @@ export function LoginForm({ providers }: { providers?: string[] }) {
   return (
     <Form onSubmit={onSubmit} className="grid gap-6">
       <div className="grid gap-6">
-        <AuthProviders providers={providers} lastMethod={lastMethod} returnTo={returnTo} />
+        <AuthPublicProviders providers={providers} lastMethod={lastMethod} returnTo={returnTo} />
 
         <div className="grid gap-6">
           <div className="grid gap-2">
@@ -60,9 +60,9 @@ export function LoginForm({ providers }: { providers?: string[] }) {
               variant="secondary"
               autoComplete="email"
             >
-              <LastUsedBadge lastMethod={lastMethod} method="email">
+              <AuthPublicLastUsedBadge lastMethod={lastMethod} method="email">
                 <Label>{t("web-ui:auth.login.email")}</Label>
-              </LastUsedBadge>
+              </AuthPublicLastUsedBadge>
               <Input placeholder={t("web-ui:auth.login.placeholder.email")} />
               <FieldError />
             </TextField>

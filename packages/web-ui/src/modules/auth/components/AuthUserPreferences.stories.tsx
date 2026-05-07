@@ -1,11 +1,11 @@
 import { AppConfigProvider } from "@m5kdev/frontend/modules/app/components/AppConfigProvider";
 import { AppTrpcQueryProvider } from "@m5kdev/frontend/modules/app/components/AppTrpcQueryProvider";
 import type { Meta, StoryObj } from "@storybook/react";
-import { type ReactElement, useCallback, useState } from "react";
+import type { ReactElement } from "react";
 import { Toaster } from "sonner";
 import { z } from "zod";
-import type { ControlsFor } from "./PreferencesEditor";
-import { type UpdatePreferencesOptions, UserPreferences } from "./UserPreferences";
+import { AuthUserPreferences } from "./AuthUserPreferences";
+import type { ControlsFor } from "./AuthUtilityPreferencesEditor";
 
 const preferencesSchema = z.object({
   emailNotifications: z.boolean(),
@@ -38,7 +38,7 @@ const preferencesControls: ControlsFor<PreferencesValues> = {
   },
 };
 
-function UserPreferencesStory(): ReactElement {
+function AuthUserPreferencesStory(): ReactElement {
   return (
     <div className="bg-background text-foreground">
       <Toaster richColors />
@@ -50,7 +50,7 @@ function UserPreferencesStory(): ReactElement {
         }}
       >
         <AppTrpcQueryProvider>
-          <UserPreferences schema={preferencesSchema} controls={preferencesControls} />
+          <AuthUserPreferences schema={preferencesSchema} controls={preferencesControls} />
         </AppTrpcQueryProvider>
       </AppConfigProvider>
     </div>
@@ -58,8 +58,8 @@ function UserPreferencesStory(): ReactElement {
 }
 
 const meta = {
-  title: "modules/auth/UserPreferences",
-  component: UserPreferencesStory,
+  title: "modules/auth/AuthUserPreferences",
+  component: AuthUserPreferencesStory,
   tags: ["autodocs"],
   args: {
     isLoading: false,
@@ -70,7 +70,7 @@ const meta = {
       itemsPerPage: 25,
     } satisfies PreferencesValues,
   },
-} satisfies Meta<typeof UserPreferencesStory>;
+} satisfies Meta<typeof AuthUserPreferencesStory>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

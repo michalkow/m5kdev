@@ -13,17 +13,17 @@ import { useUserOrganizations } from "@m5kdev/frontend/modules/auth/hooks/useUse
 import { Building2Icon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-type OrganizationSelectProps<T extends object> = SelectProps<T, "single"> & {
+interface AuthOrganizationSelectProps<T extends object> extends SelectProps<T, "single"> {
   showLoading?: boolean;
   showSingle?: boolean;
-};
+}
 
-export function OrganizationSelect<T extends object>({
+export function AuthOrganizationSelect<T extends object>({
   isDisabled,
   showLoading = false,
   showSingle = false,
   ...props
-}: OrganizationSelectProps<T>) {
+}: AuthOrganizationSelectProps<T>) {
   const { t } = useTranslation("web-ui");
   const { data: session, isLoading: isLoadingSession } = useSession();
   const { data: organizations = [], isLoading: isLoadingOrganizations } = useUserOrganizations();

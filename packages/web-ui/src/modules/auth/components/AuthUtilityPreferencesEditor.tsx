@@ -1,14 +1,4 @@
-import {
-  Button,
-  Description,
-  Form,
-  Input,
-  Label,
-  ListBox,
-  NumberField,
-  Select,
-  Switch,
-} from "@heroui/react";
+import { Button, Form, Label, ListBox, NumberField, Select, Switch } from "@heroui/react";
 import type { FormEvent, ReactElement } from "react";
 import { toast } from "sonner";
 import type { z } from "zod";
@@ -50,7 +40,7 @@ export type PreferenceEditorProps<S extends z.ZodObject<z.ZodRawShape>> = {
   updateValues: (partialValues: Partial<z.infer<S>>, options: UpdatePreferencesOptions) => void;
 };
 
-export function PreferencesEditor<S extends z.ZodObject<z.ZodRawShape>>({
+export function AuthUtilityPreferencesEditor<S extends z.ZodObject<z.ZodRawShape>>({
   schema,
   controls,
   values,

@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
-export function ResetPasswordForm() {
+export function AuthPublicResetPasswordForm() {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
