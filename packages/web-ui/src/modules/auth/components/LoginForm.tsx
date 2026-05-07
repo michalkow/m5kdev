@@ -1,21 +1,14 @@
-import { Button, Input } from "@heroui/react";
+import { Button, FieldError, Form, Input, Label, TextField } from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
-import { type SubmitHandler, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { AuthProviders } from "./AuthProviders";
 import { LastUsedBadge } from "./LastUsedBadge";
 
-type Inputs = {
-  email: string;
-  password: string;
-};
-
 export function LoginForm({ providers }: { providers?: string[] }) {
   const lastMethod = authClient.getLastUsedLoginMethod();
-  const { register, handleSubmit } = useForm<Inputs>();
   const { registerSession } = useSession();
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -24,15 +17,18 @@ export function LoginForm({ providers }: { providers?: string[] }) {
   const returnTo =
     !returnToPath?.startsWith("//") && returnToPath?.startsWith("/") ? returnToPath : undefined;
 
-  const onSubmit: SubmitHandler<Inputs> = (data) => {
-    console.log(data);
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("login-email") as string;
+    const password = formData.get("login-password") as string;
+
     authClient.signIn
       .email({
-        email: data.email,
-        password: data.password,
+        email,
+        password,
       })
       .then((res) => {
-        console.log(res);
         if (res.data?.user) {
           registerSession(() => {
             navigate(returnTo ?? "/");
@@ -43,7 +39,7 @@ export function LoginForm({ providers }: { providers?: string[] }) {
           });
         }
       })
-      .catch((error) => {
+      .catch((error: Error) => {
         toast.error(t("web-ui:auth.errors.server"), {
           description: error.message,
         });
@@ -51,45 +47,47 @@ export function LoginForm({ providers }: { providers?: string[] }) {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <Form onSubmit={onSubmit} className="grid gap-6">
       <div className="grid gap-6">
         <AuthProviders providers={providers} lastMethod={lastMethod} returnTo={returnTo} />
 
         <div className="grid gap-6">
           <div className="grid gap-2">
-            <LastUsedBadge lastMethod={lastMethod} method="email">
-              <label htmlFor="email" className="text-sm font-medium">
-                {t("web-ui:auth.login.email")}
-              </label>
-            </LastUsedBadge>
-            <Input
+            <TextField
+              isRequired
+              name="login-email"
               type="email"
-              placeholder={t("web-ui:auth.login.placeholder.email")}
               variant="secondary"
-              required
-              {...register("email", { required: true })}
-            />
+              autoComplete="email"
+            >
+              <LastUsedBadge lastMethod={lastMethod} method="email">
+                <Label>{t("web-ui:auth.login.email")}</Label>
+              </LastUsedBadge>
+              <Input placeholder={t("web-ui:auth.login.placeholder.email")} />
+              <FieldError />
+            </TextField>
           </div>
 
           <div className="grid gap-2">
-            <div className="flex items-center">
-              <label htmlFor="password" className="text-sm font-medium">
-                {t("web-ui:auth.login.password")}
-              </label>
-              <Link
-                to="/forgot-password"
-                className="ml-auto text-sm underline-offset-4 hover:underline"
-              >
-                {t("web-ui:auth.login.forgotPassword")}
-              </Link>
-            </div>
-            <Input
-              placeholder={t("web-ui:auth.login.password")}
+            <TextField
+              isRequired
+              name="login-password"
               type="password"
               variant="secondary"
-              required
-              {...register("password", { required: true })}
-            />
+              autoComplete="password"
+            >
+              <div className="flex w-full items-center">
+                <Label>{t("web-ui:auth.login.password")}</Label>
+                <Link
+                  to="/forgot-password"
+                  className="ml-auto text-sm underline-offset-4 hover:underline"
+                >
+                  {t("web-ui:auth.login.forgotPassword")}
+                </Link>
+              </div>
+              <Input placeholder={t("web-ui:auth.login.password")} />
+              <FieldError />
+            </TextField>
           </div>
           <Button type="submit" className="w-full" variant="primary">
             {t("web-ui:auth.login.button")}
@@ -103,6 +101,6 @@ export function LoginForm({ providers }: { providers?: string[] }) {
           </Link>
         </div>
       </div>
-    </form>
+    </Form>
   );
 }

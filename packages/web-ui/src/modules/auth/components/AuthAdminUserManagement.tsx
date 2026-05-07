@@ -50,15 +50,15 @@ interface UserAiUsage {
   cost: number | null;
 }
 
-interface AdminUserManagementProps {
+export interface AuthAdminUserManagementProps {
   enableAccountClaimActions?: boolean;
   enableAiUsage?: boolean;
 }
 
-export function AdminUserManagement({
+export function AuthAdminUserManagement({
   enableAccountClaimActions = true,
   enableAiUsage = false,
-}: AdminUserManagementProps) {
+}: AuthAdminUserManagementProps) {
   const banReasonInputId = useId();
   const customDurationId = useId();
   const nameInputId = useId();

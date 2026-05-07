@@ -50,7 +50,7 @@ function formatOrgDate(date: Date | string | null | undefined): string {
   });
 }
 
-export function AdminOrganizationManagement() {
+export function AuthAdminOrganizationManagement() {
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();
   const lookupSearchFieldId = useId();

@@ -1,9 +1,9 @@
+import { AppConfigProvider } from "@m5kdev/frontend/modules/app/components/AppConfigProvider";
 import type { Meta, StoryObj } from "@storybook/react";
 import type { ReactElement, ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router";
-
-import { AuthLayout } from "./AuthLayout";
 import { LoginRoute } from "./LoginRoute";
+import { PublicAuthLayout } from "./PublicAuthLayout";
 
 interface LoginRouteStoryProps {
   readonly providers?: string[];
@@ -27,13 +27,21 @@ function LoginRouteStory({
 }: LoginRouteStoryProps): ReactElement {
   return (
     <div className="bg-background text-foreground">
-      <MemoryRouter initialEntries={["/login"]}>
-        <Routes>
-          <Route element={<AuthLayout header={header} />}>
-            <Route path="/login" element={<LoginRoute providers={providers} />} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
+      <AppConfigProvider
+        config={{
+          appUrl: "http://localhost:6006",
+          serverUrl: "http://localhost:3000",
+          appName: "Storybook",
+        }}
+      >
+        <MemoryRouter initialEntries={["/login"]}>
+          <Routes>
+            <Route element={<PublicAuthLayout header={header} />}>
+              <Route path="/login" element={<LoginRoute providers={providers} />} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </AppConfigProvider>
     </div>
   );
 }

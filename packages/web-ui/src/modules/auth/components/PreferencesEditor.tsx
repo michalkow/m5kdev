@@ -43,7 +43,7 @@ export type PreferenceEditorLabels = {
 export type PreferenceEditorProps<S extends z.ZodObject<z.ZodRawShape>> = {
   schema: S;
   controls: ControlsFor<z.infer<S>>;
-  values: Partial<z.infer<S>>;
+  values: Record<string, unknown>;
   isLoading: boolean;
   isPending: boolean;
   labels: PreferenceEditorLabels;

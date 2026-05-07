@@ -1,39 +1,46 @@
-import { Button, Card, Input, Label } from "@heroui/react";
+import {
+  Button,
+  Card,
+  ErrorMessage,
+  FieldError,
+  Form,
+  Input,
+  Label,
+  TextField,
+} from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
-import { type SubmitHandler, useForm } from "react-hook-form";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
-type Inputs = {
-  password: string;
-  confirmPassword: string;
-};
-
 export function ResetPasswordForm() {
   const { t } = useTranslation();
-  const {
-    register,
-    handleSubmit,
-    setError,
-    formState: { errors },
-  } = useForm<Inputs>();
   const [searchParams] = useSearchParams();
+  const [error, setError] = useState<string | null>(null);
   const token = searchParams.get("token");
 
-  const onSubmit: SubmitHandler<Inputs> = (data) => {
-    if (data.password !== data.confirmPassword) {
-      setError("confirmPassword", { message: t("web-ui:auth.resetPassword.passwordMismatch") });
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const newPassword = formData.get("reset-password-new") as string;
+    const confirmPassword = formData.get("reset-password-confirm") as string;
+
+    setError(null);
+
+    if (!token) {
+      setError(t("web-ui:auth.resetPassword.tokenRequired"));
       return;
     }
 
-    if (!token) {
-      throw new Error(t("web-ui:auth.resetPassword.tokenRequired"));
+    if (newPassword !== confirmPassword) {
+      setError(t("web-ui:auth.resetPassword.passwordMismatch"));
+      return;
     }
 
     authClient
       .resetPassword({
-        newPassword: data.password,
+        newPassword,
         token,
       })
       .then(() => {
@@ -53,47 +60,38 @@ export function ResetPasswordForm() {
           <p className="text-sm text-default-600">{t("web-ui:auth.resetPassword.description")}</p>
         </Card.Header>
         <Card.Content className="gap-6">
-          <form onSubmit={handleSubmit(onSubmit)} className="grid gap-6">
+          <Form onSubmit={onSubmit} className="grid gap-6">
             <div className="grid gap-2">
-              <Label className="text-sm font-medium" htmlFor="reset-password-new">
-                {t("web-ui:auth.resetPassword.newPassword")}
-              </Label>
-              <Input
-                id="reset-password-new"
-                placeholder={t("web-ui:auth.resetPassword.newPassword")}
+              <TextField
+                isRequired
+                name="reset-password-new"
                 type="password"
                 variant="secondary"
-                required
-                {...register("password", {
-                  required: t("web-ui:auth.resetPassword.passwordRequired"),
-                })}
-              />
-              {errors.password && (
-                <span className="text-red-500 text-xs">{errors.password.message}</span>
-              )}
+                minLength={8}
+              >
+                <Label>{t("web-ui:auth.resetPassword.newPassword")}</Label>
+                <Input placeholder={t("web-ui:auth.resetPassword.newPassword")} />
+                <FieldError />
+              </TextField>
             </div>
             <div className="grid gap-2">
-              <Label className="text-sm font-medium" htmlFor="reset-password-confirm">
-                {t("web-ui:auth.resetPassword.confirmPassword")}
-              </Label>
-              <Input
-                id="reset-password-confirm"
-                placeholder={t("web-ui:auth.resetPassword.confirmPassword")}
+              <TextField
+                isRequired
+                name="reset-password-confirm"
                 type="password"
                 variant="secondary"
-                required
-                {...register("confirmPassword", {
-                  required: t("web-ui:auth.resetPassword.confirmPasswordRequired"),
-                })}
-              />
-              {errors.confirmPassword && (
-                <span className="text-red-500 text-xs">{errors.confirmPassword.message}</span>
-              )}
+                minLength={8}
+              >
+                <Label> {t("web-ui:auth.resetPassword.confirmPassword")}</Label>
+                <Input placeholder={t("web-ui:auth.resetPassword.confirmPassword")} />
+                <FieldError />
+              </TextField>
             </div>
+            {error && <ErrorMessage>{error}</ErrorMessage>}
             <Button type="submit" className="w-full" variant="primary">
               {t("web-ui:auth.resetPassword.button")}
             </Button>
-          </form>
+          </Form>
         </Card.Content>
       </Card>
       <div className="text-center text-xs text-muted-foreground">

@@ -1,4 +1,5 @@
 import { AppConfigProvider } from "@m5kdev/frontend/modules/app/components/AppConfigProvider";
+import { AppTrpcQueryProvider } from "@m5kdev/frontend/modules/app/components/AppTrpcQueryProvider";
 import type { Meta, StoryObj } from "@storybook/react";
 import { type ReactElement, useCallback, useState } from "react";
 import { Toaster } from "sonner";
@@ -37,26 +38,7 @@ const preferencesControls: ControlsFor<PreferencesValues> = {
   },
 };
 
-interface UserPreferencesStoryProps {
-  readonly isLoading: boolean;
-  readonly isPending: boolean;
-  readonly initialPreferences: PreferencesValues;
-}
-
-function UserPreferencesStory({
-  isLoading,
-  isPending,
-  initialPreferences,
-}: UserPreferencesStoryProps): ReactElement {
-  const [preferences, setPreferences] = useState<PreferencesValues>(initialPreferences);
-
-  const updatePreferences = useCallback(
-    (partial: Partial<PreferencesValues>, _options: UpdatePreferencesOptions) => {
-      setPreferences((prev) => ({ ...prev, ...partial }));
-    },
-    []
-  );
-
+function UserPreferencesStory(): ReactElement {
   return (
     <div className="bg-background text-foreground">
       <Toaster richColors />
@@ -67,14 +49,9 @@ function UserPreferencesStory({
           appName: "Storybook",
         }}
       >
-        <UserPreferences
-          schema={preferencesSchema}
-          controls={preferencesControls}
-          preferences={preferences}
-          isLoading={isLoading}
-          isPending={isPending}
-          updatePreferences={updatePreferences}
-        />
+        <AppTrpcQueryProvider>
+          <UserPreferences schema={preferencesSchema} controls={preferencesControls} />
+        </AppTrpcQueryProvider>
       </AppConfigProvider>
     </div>
   );

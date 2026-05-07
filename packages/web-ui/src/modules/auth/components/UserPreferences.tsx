@@ -5,7 +5,6 @@ import {
   type ControlsFor,
   type PreferenceEditorLabels,
   PreferencesEditor,
-  type UpdatePreferencesOptions,
 } from "./PreferencesEditor";
 
 export type {
@@ -15,54 +14,34 @@ export type {
   UpdatePreferencesOptions,
 } from "./PreferencesEditor";
 
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
-import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
-import { toast } from "sonner";
-import { z } from "zod";
-import { ProfileEditor } from "./ProfileRoute";
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 
-const profileSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  image: z.string().nullable(),
-});
+import { useMutation, useQuery } from "@tanstack/react-query";
 
-type ProfileFormValues = z.infer<typeof profileSchema>;
+import type { z } from "zod";
+import { UserProfileEditor } from "./UserProfileEditor";
+
+export type UserPreferencesProps<S extends z.ZodObject<z.ZodRawShape>> = {
+  schema: S;
+  controls: ControlsFor<z.infer<S>>;
+  hideProfileEditor?: boolean;
+};
+
 export function UserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
   schema,
   controls,
-  preferences,
-  isLoading,
-  isPending,
-  updatePreferences,
-}: {
-  schema: S;
-  controls: ControlsFor<z.infer<S>>;
-  preferences: z.infer<S>;
-  isLoading: boolean;
-  isPending: boolean;
-  updatePreferences: (
-    partialPreferences: Partial<z.infer<S>>,
-    options: UpdatePreferencesOptions
-  ) => void;
-}): ReactElement {
+  hideProfileEditor = false,
+}: UserPreferencesProps<S>): ReactElement {
   const { t } = useTranslation("web-ui");
+  const trpc = useAppTRPC<BackendTRPCRouter>();
 
-  const { data: session } = useSession();
-
-  function handleSubmit(data: ProfileFormValues): void {
-    authClient
-      .updateUser(data)
-      .then(() => {
-        toast.success(t("web-ui:profile.updated"), {
-          description: t("web-ui:profile.updateDescription"),
-        });
-      })
-      .catch(() => {
-        toast.error(t("web-ui:profile.error"), {
-          description: t("web-ui:profile.errorDescription"),
-        });
-      });
-  }
+  const { data: preferences = {}, isLoading: isPreferencesLoading } = useQuery(
+    trpc.auth.getPreferences.queryOptions()
+  );
+  const { mutate: setPreferences, isPending: isSetPreferencesPending } = useMutation(
+    trpc.auth.setPreferences.mutationOptions()
+  );
 
   const labels: PreferenceEditorLabels = {
     title: t("web-ui:preferences.title"),
@@ -74,21 +53,15 @@ export function UserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
 
   return (
     <>
-      <ProfileEditor
-        initialValues={{
-          name: session?.user?.name || "",
-          image: session?.user?.image || null,
-        }}
-        onSubmit={handleSubmit}
-      />
+      {!hideProfileEditor && <UserProfileEditor />}
       <PreferencesEditor
         schema={schema}
         controls={controls}
         values={preferences}
-        isLoading={isLoading}
-        isPending={isPending}
+        isLoading={isPreferencesLoading}
+        isPending={isSetPreferencesPending}
         labels={labels}
-        updateValues={updatePreferences}
+        updateValues={setPreferences}
       />
     </>
   );
