@@ -9,7 +9,7 @@ export function AuthPublicForgotPasswordRoute() {
     <div className="flex flex-col gap-6">
       <Card>
         <Card.Header className="text-center flex flex-col gap-1">
-          <p className="text-xl font-semibold">{t("web-ui:auth.forgotPassword.title")}</p>
+          <h1 className="text-xl font-semibold">{t("web-ui:auth.forgotPassword.title")}</h1>
           <p className="text-sm text-default-600">{t("web-ui:auth.forgotPassword.description")}</p>
         </Card.Header>
         <Card.Content>

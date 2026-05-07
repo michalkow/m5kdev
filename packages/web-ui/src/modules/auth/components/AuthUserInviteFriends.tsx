@@ -75,9 +75,19 @@ export function AuthUserInviteFriends() {
   };
 
   const handleCreateCode = async () => {
-    createInvitationCodeMutation.mutate({ name: name.length > 0 ? name : undefined });
-    setEmail("");
-    setName("");
+    createInvitationCodeMutation.mutate(
+      { name: name.length > 0 ? name : undefined },
+      {
+        onSuccess: () => {
+          toast.success("Code created successfully!");
+          setEmail("");
+          setName("");
+        },
+        onError: (error) => {
+          toast.error(error.message);
+        },
+      }
+    );
   };
 
   const getStatusColor = (status: string) => {

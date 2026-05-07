@@ -74,7 +74,7 @@ export function AuthPublicLoginForm({ providers }: { providers?: string[] }) {
               name="login-password"
               type="password"
               variant="secondary"
-              autoComplete="password"
+              autoComplete="current-password"
             >
               <div className="flex w-full items-center">
                 <Label>{t("web-ui:auth.login.password")}</Label>

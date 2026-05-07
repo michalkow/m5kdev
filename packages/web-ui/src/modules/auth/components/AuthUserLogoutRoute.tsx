@@ -9,8 +9,9 @@ export function AuthUserLogoutRoute({ loader = <AppLoader /> }: { loader?: React
   // biome-ignore lint/correctness/useExhaustiveDependencies(authClient): authClient is a singleton
   // biome-ignore lint/correctness/useExhaustiveDependencies(navigate): navigate is a global hook
   useEffect(() => {
-    authClient.signOut();
-    navigate("/login");
+    authClient.signOut().then(() => {
+      navigate("/login");
+    });
   }, []);
 
   return loader;
