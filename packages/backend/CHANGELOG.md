@@ -1,5 +1,17 @@
 # @m5kdev/backend
 
+## 0.20.0
+
+### Minor Changes
+
+- auth compoinents
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.20.0
+  - @m5kdev/config@0.20.0
+
 ## 0.19.3
 
 ### Patch Changes

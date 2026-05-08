@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.20.0
+
+### Minor Changes
+
+- auth compoinents
+
 ## 0.19.3
 
 ### Patch Changes
