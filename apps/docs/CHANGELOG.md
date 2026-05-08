@@ -1,5 +1,11 @@
 # @m5kdev/docs
 
+## 0.2.1
+
+### Patch Changes
+
+- organization
+
 ## 0.2.0
 
 ### Minor Changes
