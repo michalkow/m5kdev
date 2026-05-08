@@ -1,7 +1,7 @@
 import { Button, Card, FieldError, Form, Input, Label, TextField, toast } from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AvatarUpload } from "../../../components/AvatarUpload";
@@ -54,18 +54,18 @@ function OrganizationProfileForm({
           />
 
           <TextField name="name" isRequired minLength={2}>
-            <Label>{t("web-ui:organization.profile.name")}</Label>
+            <Label>{t("web-ui:organization.settings.form.name")}</Label>
             <Input
-              placeholder={t("web-ui:organization.profile.placeholders.name")}
+              placeholder={t("web-ui:organization.settings.form.namePlaceholder")}
               defaultValue={organization.name || ""}
             />
             <FieldError />
           </TextField>
           {allowSlugChange && (
             <TextField name="slug" isRequired minLength={2}>
-              <Label>{t("web-ui:organization.profile.slug")}</Label>
+              <Label>{t("web-ui:organization.settings.form.slug")}</Label>
               <Input
-                placeholder={t("web-ui:organization.profile.placeholders.slug")}
+                placeholder={t("web-ui:organization.settings.form.slugPlaceholder")}
                 defaultValue={organization.slug || ""}
               />
               <FieldError />
@@ -91,18 +91,30 @@ export function AuthOrganizationProfile({
 }: AuthOrganizationProfileProps) {
   const { t } = useTranslation();
   const { data: session } = useSession();
-  const { data: activeOrganization, isPending: isLoadingActiveOrganization } =
-    authClient.useActiveOrganization();
-
-  const activeOrganizationId = activeOrganization?.id;
+  const activeOrganizationId = session?.session.activeOrganizationId;
   const activeOrganizationRole = session?.session.activeOrganizationRole;
   const canManageOrganization = managerRoles.includes(activeOrganizationRole ?? "");
+
+  const { data: activeOrganization, isPending: isLoadingActiveOrganization } = useQuery({
+    queryKey: ["auth-organization-full", activeOrganizationId],
+    queryFn: async () => {
+      const { data, error } = await authClient.organization.getFullOrganization({
+        query: {
+          organizationId: activeOrganizationId!,
+          membersLimit: 0,
+        },
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    enabled: Boolean(activeOrganizationId && canManageOrganization),
+  });
 
   const { isPending: isSavingOrganization, mutate: updateOrganization } = useMutation({
     mutationFn: (data: { name: string; slug: string; logo?: string }) =>
       authClient.organization
         .update({
-          organizationId: activeOrganizationId,
+          organizationId: activeOrganizationId!,
           data,
         })
         .then((result) => {
@@ -110,14 +122,16 @@ export function AuthOrganizationProfile({
           return result.data;
         }),
     onSuccess: () => {
-      toast.success(t("web-ui:organization.settings.updated"));
+      toast.success(t("web-ui:organization.settings.updateSuccess"));
     },
     onError: (error) => {
       toast.danger(
-        error instanceof Error ? error.message : t("web-ui:organization.settings.error")
+        error instanceof Error ? error.message : t("web-ui:organization.settings.updateError")
       );
     },
   });
+
+  if (isLoadingActiveOrganization) return <AppLoader />;
 
   if (!activeOrganization || !activeOrganizationId)
     return (
@@ -135,24 +149,18 @@ export function AuthOrganizationProfile({
       />
     );
 
-  if (isLoadingActiveOrganization) return <AppLoader />;
-
   return (
-    <div className="p-6">
-      <Card>
-        <Card.Header className="flex items-center justify-between">
-          <Card.Title>{t("web-ui:organization.settings.title")}</Card.Title>
-          <Card.Description>{t("web-ui:organization.settings.description")}</Card.Description>
-        </Card.Header>
-        <Card.Content className="grid gap-3">
-          <OrganizationProfileForm
-            organization={activeOrganization}
-            updateOrganization={updateOrganization}
-            isPending={isSavingOrganization}
-            allowSlugChange={allowSlugChange}
-          />
-        </Card.Content>
-      </Card>
+    <div className="container py-10 px-4">
+      <div className="flex flex-col gap-1 mb-4">
+        <p className="text-xl font-semibold">{t("web-ui:organization.settings.title")}</p>
+        <p className="text-sm text-muted">{t("web-ui:organization.settings.description")}</p>
+      </div>
+      <OrganizationProfileForm
+        organization={activeOrganization}
+        updateOrganization={updateOrganization}
+        isPending={isSavingOrganization}
+        allowSlugChange={allowSlugChange}
+      />
     </div>
   );
 }

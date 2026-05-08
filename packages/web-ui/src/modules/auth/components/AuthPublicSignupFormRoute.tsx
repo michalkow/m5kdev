@@ -81,7 +81,7 @@ export function AuthPublicSignupForm({
       )
       .then((result) => {
         if (result.error) {
-          toast.danger(t("web-ui:auth.errors.invitationCodeInvalid"));
+          toast.danger(result.error.message);
           setStatus("start");
           return;
         }
