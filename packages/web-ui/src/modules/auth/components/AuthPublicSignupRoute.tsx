@@ -15,10 +15,7 @@ interface AuthPublicSignupRouteProps {
   waitlist?: boolean;
 }
 
-export function AuthPublicSignupRoute({
-  providers,
-  waitlist = false,
-}: AuthPublicSignupRouteProps) {
+export function AuthPublicSignupRoute({ providers, waitlist = false }: AuthPublicSignupRouteProps) {
   const { t } = useTranslation("web-ui");
 
   const [code] = useQueryState("code");

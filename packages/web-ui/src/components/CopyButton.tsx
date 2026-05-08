@@ -1,8 +1,7 @@
-import { Button, type ButtonProps } from "@heroui/react";
+import { Button, type ButtonProps, toast } from "@heroui/react";
 import { CheckCircle, Copy } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 
 export function CopyButton({
   text,
@@ -22,7 +21,7 @@ export function CopyButton({
       toast.success(t("web-ui:common.copySuccess"));
       setTimeout(() => setIsCopied(false), notificationTimeout);
     } catch (error) {
-      toast.error(t("web-ui:common.copyError"));
+      toast.danger(t("web-ui:common.copyError"));
       console.error(error);
     }
   };

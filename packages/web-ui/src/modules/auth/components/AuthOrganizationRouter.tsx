@@ -1,15 +1,46 @@
 import { Route } from "react-router";
-import { AuthOrganizationAcceptInvitationRoute } from "./AuthOrganizationAcceptInvitationRoute";
-import { AuthOrganizationChildOrganizationsRoute } from "./AuthOrganizationChildOrganizationsRoute";
+import type { z } from "zod";
+import {
+  AuthOrganizationAcceptInvitationRoute,
+  type AuthOrganizationAcceptInvitationRouteProps,
+} from "./AuthOrganizationAcceptInvitationRoute";
+import {
+  AuthOrganizationChildOrganizationsRoute,
+  type AuthOrganizationChildOrganizationsRouteProps,
+} from "./AuthOrganizationChildOrganizationsRoute";
+import {
+  AuthOrganizationMembersRoute,
+  type AuthOrganizationMembersRouteProps,
+} from "./AuthOrganizationMembersRoute";
+import {
+  AuthOrganizationPreferences,
+  type AuthOrganizationPreferencesProps,
+} from "./AuthOrganizationPreferences";
 
-export function AuthOrganizationRouter() {
+export interface AuthOrganizationRouterProps<S extends z.ZodObject<z.ZodRawShape>>
+  extends AuthOrganizationPreferencesProps<S>,
+    AuthOrganizationAcceptInvitationRouteProps,
+    AuthOrganizationChildOrganizationsRouteProps,
+    AuthOrganizationMembersRouteProps {}
+
+export function AuthOrganizationRouter<S extends z.ZodObject<z.ZodRawShape>>(
+  props: AuthOrganizationRouterProps<S>
+) {
   return (
     <>
       <Route
         path="/organization/accept-invitation"
-        element={<AuthOrganizationAcceptInvitationRoute />}
+        element={<AuthOrganizationAcceptInvitationRoute {...props} />}
       />
-      <Route path="/organization/manage" element={<AuthOrganizationChildOrganizationsRoute />} />
+      <Route
+        path="/organization/manage"
+        element={<AuthOrganizationChildOrganizationsRoute {...props} />}
+      />
+      <Route path="/organization/members" element={<AuthOrganizationMembersRoute {...props} />} />
+      <Route
+        path="/organization/preferences"
+        element={<AuthOrganizationPreferences {...props} />}
+      />
     </>
   );
 }

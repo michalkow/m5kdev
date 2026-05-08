@@ -1,9 +1,9 @@
-import { Button, FieldError, Form, Input, Label, TextField } from "@heroui/react";
+import { Button, FieldError, Form, Input, Label, TextField, toast } from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { toast } from "sonner";
+
 import { AuthPublicLastUsedBadge } from "./AuthPublicLastUsedBadge";
 import { AuthPublicProviders } from "./AuthPublicProviders";
 
@@ -34,13 +34,13 @@ export function AuthPublicLoginForm({ providers }: { providers?: string[] }) {
             navigate(returnTo ?? "/");
           });
         } else if (res.error) {
-          toast.error(t("web-ui:auth.errors.authentication"), {
+          toast.danger(t("web-ui:auth.errors.authentication"), {
             description: res.error.message,
           });
         }
       })
       .catch((error: Error) => {
-        toast.error(t("web-ui:auth.errors.server"), {
+        toast.danger(t("web-ui:auth.errors.server"), {
           description: error.message,
         });
       });

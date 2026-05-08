@@ -1,11 +1,10 @@
-import { Button, Card, Chip, Input, Label } from "@heroui/react";
+import { Button, Card, Chip, Input, Label, toast } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Link2Icon, Mail, Send, Ticket, Users, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
 import { z } from "zod";
 import { CopyButton } from "../../../components/CopyButton";
 
@@ -33,7 +32,7 @@ export function AuthUserInviteFriends() {
         toast.success("Invitation sent successfully!");
       },
       onError: (error) => {
-        toast.error(error.message);
+        toast.danger(error.message);
       },
     })
   );
@@ -52,7 +51,7 @@ export function AuthUserInviteFriends() {
         toast.success("Code created successfully!");
       },
       onError: (error) => {
-        toast.error(error.message);
+        toast.danger(error.message);
       },
     })
   );
@@ -84,7 +83,7 @@ export function AuthUserInviteFriends() {
           setName("");
         },
         onError: (error) => {
-          toast.error(error.message);
+          toast.danger(error.message);
         },
       }
     );

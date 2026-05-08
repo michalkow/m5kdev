@@ -1,22 +1,32 @@
-import { Alert, Button, Card, Input, Label } from "@heroui/react";
+import {
+  Alert,
+  Button,
+  Card,
+  FieldError,
+  Form,
+  Input,
+  Label,
+  TextField,
+  toast,
+} from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useMutation } from "@tanstack/react-query";
-import { useId, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 
 export function AuthPublicWaitlistCard() {
   const { t } = useTranslation();
   const trpc = useAppTRPC<BackendTRPCRouter>();
-  const emailInputId = useId();
-  const [email, setEmail] = useState("");
+
   const [joined, setJoined] = useState(false);
 
   const { mutate } = useMutation(trpc.auth.joinWaitlist.mutationOptions());
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("email") as string;
     mutate(
       { email },
       {
@@ -24,7 +34,7 @@ export function AuthPublicWaitlistCard() {
           setJoined(true);
         },
         onError: (error) => {
-          toast.error(
+          toast.danger(
             error instanceof Error
               ? error.message
               : t("web-ui:auth.waitlist.error", {
@@ -55,25 +65,16 @@ export function AuthPublicWaitlistCard() {
         <p className="text-sm text-default-600">{t("web-ui:auth.waitlist.description")}</p>
       </Card.Header>
       <Card.Content>
-        <form onSubmit={handleSubmit} className="grid gap-6">
-          <div className="grid gap-2">
-            <Label className="text-sm font-medium" htmlFor={emailInputId}>
-              {t("web-ui:auth.waitlist.email")}
-            </Label>
-            <Input
-              id={emailInputId}
-              type="email"
-              placeholder={t("web-ui:auth.waitlist.placeholder.email")}
-              required
-              variant="secondary"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
+        <Form onSubmit={handleSubmit} className="grid gap-6">
+          <TextField name="email" type="email" variant="secondary" isRequired>
+            <Label>{t("web-ui:auth.waitlist.email")}</Label>
+            <Input placeholder={t("web-ui:auth.waitlist.placeholder.email")} />
+            <FieldError />
+          </TextField>
           <Button type="submit" variant="primary">
             {t("web-ui:auth.waitlist.button")}
           </Button>
-        </form>
+        </Form>
       </Card.Content>
     </Card>
   );

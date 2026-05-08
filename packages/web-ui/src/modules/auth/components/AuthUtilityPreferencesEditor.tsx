@@ -1,6 +1,5 @@
-import { Button, Form, Label, ListBox, NumberField, Select, Switch } from "@heroui/react";
+import { Button, Form, Label, ListBox, NumberField, Select, Switch, toast } from "@heroui/react";
 import type { FormEvent, ReactElement } from "react";
-import { toast } from "sonner";
 import type { z } from "zod";
 
 export type UpdatePreferencesOptions = {
@@ -77,7 +76,7 @@ export function AuthUtilityPreferencesEditor<S extends z.ZodObject<z.ZodRawShape
           toast.success(labels.updated);
         },
         onError: () => {
-          toast.error(labels.updateError);
+          toast.danger(labels.updateError);
         },
       });
     } else {

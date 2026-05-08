@@ -1,8 +1,7 @@
-import { Button } from "@heroui/react";
+import { Button, toast } from "@heroui/react";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 import { GoogleIcon } from "../../../icons/GoogleIcon";
 import { LinkedInIcon } from "../../../icons/LinkedInIcon";
 import { MicrosoftIcon } from "../../../icons/MicrosoftIcon";
@@ -35,7 +34,7 @@ export function AuthPublicProviders({
   const callbackURL = `${appUrl}${returnTo}`;
   const handleSignIn = (result: { error?: unknown }) => {
     if (result.error) {
-      toast.error(t("web-ui:auth.errors.invitationCodeInvalid"));
+      toast.danger(t("web-ui:auth.errors.invitationCodeInvalid"));
     }
   };
 

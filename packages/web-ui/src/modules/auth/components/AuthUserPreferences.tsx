@@ -11,13 +11,6 @@ import {
   type PreferenceEditorLabels,
 } from "./AuthUtilityPreferencesEditor";
 
-export type {
-  ControlDefinition,
-  ControlsFor,
-  PreferenceEditorLabels,
-  UpdatePreferencesOptions,
-} from "./AuthUtilityPreferencesEditor";
-
 export interface AuthUserPreferencesProps<S extends z.ZodObject<z.ZodRawShape>> {
   schema: S;
   controls: ControlsFor<z.infer<S>>;

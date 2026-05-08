@@ -105,7 +105,7 @@ export function AppSidebarUser({ user, onSignOut, organizationSettingsPath }: Ap
                   key="admin"
                   id={itemId("admin")}
                   textValue={t("web-ui:sidebar.user.adminDashboard")}
-                  onPress={() => navigate("/admin")}
+                  onPress={() => navigate("/admin/users")}
                 >
                   <span className="flex items-center gap-2">
                     <Settings className="size-4 shrink-0" />
@@ -134,7 +134,7 @@ export function AppSidebarUser({ user, onSignOut, organizationSettingsPath }: Ap
                 key="profile"
                 id={itemId("profile")}
                 textValue={t("web-ui:sidebar.user.account")}
-                onPress={() => navigate("/profile")}
+                onPress={() => navigate("/user/preferences")}
               >
                 <span className="flex items-center gap-2">
                   <User className="size-4 shrink-0" />

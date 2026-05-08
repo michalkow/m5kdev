@@ -1,16 +1,19 @@
-import { Card } from "@heroui/react";
+import { toast } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactElement, useCallback, useMemo } from "react";
+import { type ReactElement, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { z } from "zod";
+import {
+  AuthOrganizationProfile,
+  type AuthOrganizationProfileProps,
+} from "./AuthOrganizationProfile";
 import {
   AuthUtilityPreferencesEditor,
   type ControlsFor,
   type PreferenceEditorLabels,
-  type UpdatePreferencesOptions,
 } from "./AuthUtilityPreferencesEditor";
 
 type AuthOrganizationPreferenceLabels = PreferenceEditorLabels & {
@@ -18,209 +21,69 @@ type AuthOrganizationPreferenceLabels = PreferenceEditorLabels & {
   loadError: string;
 };
 
-export type AuthOrganizationPreferencesTarget = "preferences" | "flags";
-
-export interface AuthOrganizationPreferencesProps<S extends z.ZodObject<z.ZodRawShape>> {
+export interface AuthOrganizationPreferencesProps<S extends z.ZodObject<z.ZodRawShape>>
+  extends AuthOrganizationProfileProps {
   schema: S;
   controls: ControlsFor<z.infer<S>>;
-  target?: AuthOrganizationPreferencesTarget;
-  labels?: Partial<AuthOrganizationPreferenceLabels>;
   onInvalidateScopedQueries?: () => void | Promise<void>;
-}
-
-function OrganizationStateCard({ title, message }: { title: string; message: string }) {
-  return (
-    <div className="p-6">
-      <Card>
-        <Card.Header className="text-lg font-semibold">{title}</Card.Header>
-        <Card.Content>{message}</Card.Content>
-      </Card>
-    </div>
-  );
-}
-
-function getFlagValues<S extends z.ZodObject<z.ZodRawShape>>(
-  controls: ControlsFor<z.infer<S>>,
-  flags: string[]
-): Partial<z.infer<S>> {
-  const activeFlags = new Set(flags);
-
-  return Object.fromEntries(
-    Object.keys(controls).map((key) => [key, activeFlags.has(key)])
-  ) as Partial<z.infer<S>>;
-}
-
-function getFlagsFromValues(values: Record<string, unknown>): string[] {
-  return Object.entries(values)
-    .filter(([, value]) => value === true)
-    .map(([key]) => key);
 }
 
 export function AuthOrganizationPreferences<S extends z.ZodObject<z.ZodRawShape>>({
   schema,
   controls,
-  target = "preferences",
-  labels,
   onInvalidateScopedQueries,
+  ...profileProps
 }: AuthOrganizationPreferencesProps<S>): ReactElement {
-  const { data: session, isLoading: isSessionLoading } = useSession();
+  const { data: session } = useSession();
   const { t } = useTranslation("web-ui");
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();
 
-  const activeOrganizationId = session?.session.activeOrganizationId ?? "";
-  const labelKeyPrefix =
-    target === "flags" ? "web-ui:organization.flags" : "web-ui:organization.preferences";
+  const activeOrganizationId = session?.session.activeOrganizationId;
 
   const resolvedLabels = useMemo<AuthOrganizationPreferenceLabels>(
     () => ({
-      title: labels?.title ?? t(`${labelKeyPrefix}.title`),
-      submit: labels?.submit ?? t(`${labelKeyPrefix}.submit`),
-      updated: labels?.updated ?? t(`${labelKeyPrefix}.updated`),
-      updateError: labels?.updateError ?? t(`${labelKeyPrefix}.updateError`),
-      loading: labels?.loading ?? t(`${labelKeyPrefix}.loading`),
-      noActiveOrganization: labels?.noActiveOrganization ?? t(`${labelKeyPrefix}.noActive`),
-      loadError: labels?.loadError ?? t(`${labelKeyPrefix}.loadError`),
+      title: t("web-ui:organization.preferences.title"),
+      submit: t("web-ui:organization.preferences.submit"),
+      updated: t("web-ui:organization.preferences.updated"),
+      updateError: t("web-ui:organization.preferences.updateError"),
+      loading: t("web-ui:organization.preferences.loading"),
+      noActiveOrganization: t("web-ui:organization.preferences.noActive"),
+      loadError: t("web-ui:organization.preferences.loadError"),
     }),
-    [labelKeyPrefix, labels, t]
+    [t]
   );
 
-  const preferencesQuery = useQuery({
-    ...trpc.auth.getOrganizationPreferences.queryOptions(),
-    enabled: target === "preferences" && Boolean(activeOrganizationId),
-  });
-
-  const flagsQuery = useQuery({
-    ...trpc.auth.getOrganizationFlags.queryOptions(),
-    enabled: target === "flags" && Boolean(activeOrganizationId),
-  });
-
-  const setPreferencesMutation = useMutation(
-    trpc.auth.setOrganizationPreferences.mutationOptions()
-  );
-  const setFlagsMutation = useMutation(trpc.auth.setOrganizationFlags.mutationOptions());
-
-  const currentValues = useMemo<Partial<z.infer<S>>>(() => {
-    if (target === "flags") {
-      return getFlagValues<S>(controls, flagsQuery.data ?? []);
-    }
-
-    return (preferencesQuery.data ?? {}) as Partial<z.infer<S>>;
-  }, [controls, flagsQuery.data, preferencesQuery.data, target]);
-
-  const updateValues = useCallback(
-    (partialValues: Partial<z.infer<S>>, options: UpdatePreferencesOptions) => {
-      if (target === "flags") {
-        const nextValues = {
-          ...currentValues,
-          ...partialValues,
-        } as Record<string, unknown>;
-        const nextFlags = getFlagsFromValues(nextValues);
-
-        if (!options.noOptimisticUpdate) {
-          queryClient.setQueryData(trpc.auth.getOrganizationFlags.queryKey(), nextFlags);
-        }
-
-        setFlagsMutation.mutate(nextFlags, {
-          onSuccess: async (result) => {
-            queryClient.setQueryData(trpc.auth.getOrganizationFlags.queryKey(), result);
-            if (activeOrganizationId) {
-              await queryClient.invalidateQueries({
-                queryKey: ["auth-organization-details", activeOrganizationId],
-              });
-            }
-            await onInvalidateScopedQueries?.();
-            options.onSuccess?.();
-          },
-          onError: async (error) => {
-            if (!options.noOptimisticUpdate) {
-              await queryClient.invalidateQueries({
-                queryKey: trpc.auth.getOrganizationFlags.queryKey(),
-              });
-            }
-            options.onError?.(error);
-          },
-        });
-        return;
-      }
-
-      const nextPreferences = {
-        ...(preferencesQuery.data ?? {}),
-        ...partialValues,
-      };
-
-      if (!options.noOptimisticUpdate) {
-        queryClient.setQueryData(trpc.auth.getOrganizationPreferences.queryKey(), nextPreferences);
-      }
-
-      setPreferencesMutation.mutate(nextPreferences, {
-        onSuccess: async (result) => {
-          queryClient.setQueryData(trpc.auth.getOrganizationPreferences.queryKey(), result);
-          if (activeOrganizationId) {
-            await queryClient.invalidateQueries({
-              queryKey: ["auth-organization-details", activeOrganizationId],
-            });
-          }
-          await onInvalidateScopedQueries?.();
-          options.onSuccess?.();
-        },
-        onError: async (error) => {
-          if (!options.noOptimisticUpdate) {
-            await queryClient.invalidateQueries({
-              queryKey: trpc.auth.getOrganizationPreferences.queryKey(),
-            });
-          }
-          options.onError?.(error);
-        },
-      });
-    },
-    [
-      activeOrganizationId,
-      currentValues,
-      onInvalidateScopedQueries,
-      preferencesQuery.data,
-      queryClient,
-      setFlagsMutation,
-      setPreferencesMutation,
-      target,
-      trpc.auth.getOrganizationFlags,
-      trpc.auth.getOrganizationPreferences,
-    ]
+  const { data: preferences = {}, isLoading: isPreferencesLoading } = useQuery(
+    trpc.auth.getOrganizationPreferences.queryOptions(undefined, {
+      enabled: Boolean(activeOrganizationId),
+    })
   );
 
-  const isLoading =
-    isSessionLoading || (target === "flags" ? flagsQuery.isLoading : preferencesQuery.isLoading);
-  const isPending =
-    target === "flags" ? setFlagsMutation.isPending : setPreferencesMutation.isPending;
-  const queryError = target === "flags" ? flagsQuery.error : preferencesQuery.error;
-
-  if (!isSessionLoading && !activeOrganizationId) {
-    return (
-      <OrganizationStateCard
-        title={resolvedLabels.title}
-        message={resolvedLabels.noActiveOrganization}
-      />
-    );
-  }
-
-  if (queryError) {
-    return (
-      <OrganizationStateCard
-        title={resolvedLabels.title}
-        message={queryError instanceof Error ? queryError.message : resolvedLabels.loadError}
-      />
-    );
-  }
+  const { mutate: setPreferences, isPending: isSetPreferencesPending } = useMutation(
+    trpc.auth.setOrganizationPreferences.mutationOptions({
+      onSuccess: async (result) => {
+        queryClient.setQueryData(trpc.auth.getOrganizationPreferences.queryKey(), result);
+        await onInvalidateScopedQueries?.();
+      },
+      onError: async (error) => {
+        toast.danger(error instanceof Error ? error.message : resolvedLabels.updateError);
+      },
+    })
+  );
 
   return (
-    <AuthUtilityPreferencesEditor
-      schema={schema}
-      controls={controls}
-      values={currentValues}
-      isLoading={isLoading}
-      isPending={isPending}
-      labels={resolvedLabels}
-      updateValues={updateValues}
-    />
+    <>
+      <AuthOrganizationProfile {...profileProps} />
+      <AuthUtilityPreferencesEditor
+        schema={schema}
+        controls={controls}
+        values={preferences}
+        isLoading={isPreferencesLoading}
+        isPending={isSetPreferencesPending}
+        labels={resolvedLabels}
+        updateValues={setPreferences}
+      />
+    </>
   );
 }

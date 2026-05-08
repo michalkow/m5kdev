@@ -1,9 +1,7 @@
 import { Button, FieldError, Form, Input, Label, TextField, toast } from "@heroui/react";
-
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
-import type { FormEvent } from "react";
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
 import { AvatarUpload } from "../../../components/AvatarUpload";

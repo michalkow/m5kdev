@@ -8,9 +8,7 @@ interface AuthPublicWaitlistCodeValidationProps {
   code: string;
 }
 
-export function AuthPublicWaitlistCodeValidation({
-  code,
-}: AuthPublicWaitlistCodeValidationProps) {
+export function AuthPublicWaitlistCodeValidation({ code }: AuthPublicWaitlistCodeValidationProps) {
   const { t } = useTranslation();
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const { data, isLoading, error } = useQuery(
@@ -23,11 +21,14 @@ export function AuthPublicWaitlistCodeValidation({
   if (isLoading) {
     return (
       <Alert className={className} status="default">
-        <Alert.Title>
-          {t("web-ui:auth.waitlist.validatingCode", {
-            defaultValue: "Validating the invitation code...",
-          })}
-        </Alert.Title>
+        <Alert.Indicator />
+        <Alert.Content>
+          <Alert.Title>
+            {t("web-ui:auth.waitlist.validatingCode", {
+              defaultValue: "Validating the invitation code...",
+            })}
+          </Alert.Title>
+        </Alert.Content>
       </Alert>
     );
   }
@@ -35,11 +36,14 @@ export function AuthPublicWaitlistCodeValidation({
   if (error) {
     return (
       <Alert className={className} status="danger">
-        <Alert.Title>
-          {t("web-ui:auth.waitlist.codeError", {
-            defaultValue: "An error occurred while validating the invitation code.",
-          })}
-        </Alert.Title>
+        <Alert.Indicator />
+        <Alert.Content>
+          <Alert.Title>
+            {t("web-ui:auth.waitlist.codeError", {
+              defaultValue: "An error occurred while validating the invitation code.",
+            })}
+          </Alert.Title>
+        </Alert.Content>
       </Alert>
     );
   }
@@ -47,11 +51,14 @@ export function AuthPublicWaitlistCodeValidation({
   if (status === "VALID") {
     return (
       <Alert className={className} status="success">
-        <Alert.Title>
-          {t("web-ui:auth.waitlist.codeValid", {
-            defaultValue: "Invitation code is valid. You can proceed.",
-          })}
-        </Alert.Title>
+        <Alert.Indicator />
+        <Alert.Content>
+          <Alert.Title>
+            {t("web-ui:auth.waitlist.codeValid", {
+              defaultValue: "Invitation code is valid. You can proceed.",
+            })}
+          </Alert.Title>
+        </Alert.Content>
       </Alert>
     );
   }
@@ -73,7 +80,10 @@ export function AuthPublicWaitlistCodeValidation({
 
     return (
       <Alert className={className} status="danger">
-        <Alert.Title>{message}</Alert.Title>
+        <Alert.Indicator />
+        <Alert.Content>
+          <Alert.Title>{message}</Alert.Title>
+        </Alert.Content>
       </Alert>
     );
   }

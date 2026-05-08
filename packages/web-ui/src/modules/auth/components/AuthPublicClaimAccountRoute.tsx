@@ -1,4 +1,15 @@
-import { Alert, Button, Card, Description, Input, Label } from "@heroui/react";
+import {
+  Alert,
+  Button,
+  Card,
+  Description,
+  FieldError,
+  Form,
+  Input,
+  Label,
+  TextField,
+  toast,
+} from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
@@ -6,10 +17,11 @@ import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { toast } from "sonner";
 import { GoogleIcon } from "../../../icons/GoogleIcon";
 import { LinkedInIcon } from "../../../icons/LinkedInIcon";
 import { MicrosoftIcon } from "../../../icons/MicrosoftIcon";
+
+// TODO: review Form / Input usage
 
 export function AuthPublicClaimAccountRoute() {
   const { serverUrl } = useAppConfig();
@@ -55,7 +67,7 @@ export function AuthPublicClaimAccountRoute() {
         queryClient.invalidateQueries({ queryKey: trpc.auth.getMyAccountClaimStatus.queryKey() });
       })
       .catch((error) => {
-        toast.error(error.message);
+        toast.danger(error instanceof Error ? error.message : "Unable to link provider");
       })
       .finally(() => {
         navigate("/claim-account", { replace: true });
@@ -75,7 +87,14 @@ export function AuthPublicClaimAccountRoute() {
   const claim = claimStatusQuery.data;
   const hasClaimEmail = Boolean(claim?.claimedEmail);
 
-  const onSetEmail = async () => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("email") as string;
+    onSetEmail(email);
+  };
+
+  const onSetEmail = async (email: string) => {
     setBusy("email");
     try {
       await setEmailMutation.mutateAsync({ email });
@@ -85,7 +104,7 @@ export function AuthPublicClaimAccountRoute() {
       });
       toast.success("Email updated");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to set email");
+      toast.danger(error instanceof Error ? error.message : "Unable to set email");
     } finally {
       setBusy("none");
     }
@@ -114,7 +133,7 @@ export function AuthPublicClaimAccountRoute() {
       });
       toast.success("Password set. Account claimed.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to set password");
+      toast.danger(error instanceof Error ? error.message : "Unable to set password");
     } finally {
       setBusy("none");
     }
@@ -138,7 +157,7 @@ export function AuthPublicClaimAccountRoute() {
       }
       window.location.href = payload.url;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to link provider");
+      toast.danger(error instanceof Error ? error.message : "Unable to link provider");
       setBusy("none");
     }
   };
@@ -162,21 +181,24 @@ export function AuthPublicClaimAccountRoute() {
           </Alert>
         ) : null}
 
-        <div className="grid gap-2">
-          <Label className="text-sm font-medium">Email</Label>
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            variant="secondary"
-          />
-          <Description className="text-sm text-default-500">
-            Set your real email before linking providers and password.
-          </Description>
-          <Button onPress={onSetEmail} isDisabled={!email || busy !== "none" || !claim}>
+        <Form onSubmit={handleSubmit} className="grid gap-2">
+          <TextField name="email" type="email" variant="secondary">
+            <Label className="text-sm font-medium">Email</Label>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              variant="secondary"
+            />
+            <Description className="text-sm text-default-500">
+              Set your real email before linking providers and password.
+            </Description>
+            <FieldError />
+          </TextField>
+          <Button type="submit" isDisabled={!email || busy !== "none" || !claim}>
             {busy === "email" ? "Saving..." : "Save Email"}
           </Button>
-        </div>
+        </Form>
 
         <div className="grid gap-2">
           <p className="text-sm font-medium">Link a provider</p>
@@ -206,13 +228,16 @@ export function AuthPublicClaimAccountRoute() {
         </div>
 
         <div className="grid gap-2">
-          <Label className="text-sm font-medium">Set password</Label>
-          <Input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            variant="secondary"
-          />
+          <TextField name="password" type="password" variant="secondary" minLength={8}>
+            <Label className="text-sm font-medium">Set password</Label>
+            <Input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              variant="secondary"
+            />
+            <FieldError />
+          </TextField>
           <Button
             onPress={onSetPassword}
             isDisabled={!newPassword || busy !== "none" || !hasClaimEmail || !claim}

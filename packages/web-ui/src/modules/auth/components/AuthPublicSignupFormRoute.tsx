@@ -1,16 +1,9 @@
-import { Alert, Button, Input, Label } from "@heroui/react";
+import { Alert, Button, FieldError, Form, Input, Label, TextField, toast } from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useState } from "react";
-import { type SubmitHandler, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
-import { toast } from "sonner";
-
-type Inputs = {
-  email: string;
-  password: string;
-};
 
 function getEmailProviderUrl(email: string): string | null {
   const domain = email.split("@")[1]?.toLowerCase();
@@ -61,23 +54,23 @@ export function AuthPublicSignupForm({
   const [userEmail, setUserEmail] = useState<string>(email || "");
   const { registerSession } = useSession();
   const navigate = useNavigate();
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<Inputs>();
+  const emailLocked = !!email;
 
-  const onSubmit: SubmitHandler<Inputs> = (data) => {
-    console.log(data);
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const submittedEmail = formData.get("signup-email") as string;
+    const password = formData.get("signup-password") as string;
+
     setStatus("busy");
-    setUserEmail(data.email);
+    setUserEmail(submittedEmail);
 
     authClient.signUp
       .email(
         {
-          name: data.email,
-          email: data.email,
-          password: data.password,
+          name: submittedEmail,
+          email: submittedEmail,
+          password,
         },
         {
           headers: {
@@ -87,39 +80,37 @@ export function AuthPublicSignupForm({
         }
       )
       .then((result) => {
-        console.log(result);
         if (result.error) {
-          toast.error(t("web-ui:auth.errors.invitationCodeInvalid"));
+          toast.danger(t("web-ui:auth.errors.invitationCodeInvalid"));
           setStatus("start");
           return;
         }
         if (waitlist || invitation) {
           authClient.signIn
             .email({
-              email: data.email,
-              password: data.password,
+              email: submittedEmail,
+              password,
             })
             .then((res) => {
-              console.log(res);
               if (res.data?.user) {
                 registerSession(() => {
                   navigate("/");
                 });
               } else if (res.error) {
-                toast.error(t("web-ui:auth.errors.authentication"), {
+                toast.danger(t("web-ui:auth.errors.authentication"), {
                   description: res.error.message,
                 });
               }
             })
-            .catch((error) => {
-              toast.error(t("web-ui:auth.errors.server"), {
+            .catch((error: Error) => {
+              toast.danger(t("web-ui:auth.errors.server"), {
                 description: error.message,
               });
             });
         } else setStatus("done");
       })
-      .catch((error) => {
-        toast.error(error.message);
+      .catch((error: Error) => {
+        toast.danger(error.message);
         setStatus("start");
       });
   };
@@ -129,67 +120,65 @@ export function AuthPublicSignupForm({
 
     return (
       <Alert status="success" className="surface surface--secondary">
-        <Alert.Title>{t("web-ui:auth.signup.verificationEmailSent.title")}</Alert.Title>
-        <Alert.Description>
-          <div className="mt-2">
-            {t("web-ui:auth.signup.verificationEmailSent.description")}
-            {emailProviderUrl && (
-              <div className="mt-3">
-                <a
-                  href={emailProviderUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium underline underline-offset-4 hover:opacity-80 transition-opacity"
-                >
-                  {t("web-ui:auth.signup.verificationEmailSent.openEmail")}
-                </a>
-              </div>
-            )}
-          </div>
-        </Alert.Description>
+        <Alert.Indicator />
+        <Alert.Content>
+          <Alert.Title>{t("web-ui:auth.signup.verificationEmailSent.title")}</Alert.Title>
+          <Alert.Description>
+            <div className="mt-2">
+              {t("web-ui:auth.signup.verificationEmailSent.description")}
+              {emailProviderUrl && (
+                <div className="mt-3">
+                  <a
+                    href={emailProviderUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium underline underline-offset-4 hover:opacity-80 transition-opacity"
+                  >
+                    {t("web-ui:auth.signup.verificationEmailSent.openEmail")}
+                  </a>
+                </div>
+              )}
+            </div>
+          </Alert.Description>
+        </Alert.Content>
       </Alert>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="grid gap-6">
+    <Form onSubmit={onSubmit} className="grid gap-6">
       <div className="grid gap-2">
-        <Label className="text-sm font-medium" htmlFor="signup-email">
-          {t("web-ui:auth.login.email")}
-        </Label>
-        <Input
-          id="signup-email"
+        <TextField
+          isRequired
+          name="signup-email"
           type="email"
-          placeholder={t("web-ui:auth.login.placeholder.email")}
           variant="secondary"
-          required
           defaultValue={email ?? ""}
-          disabled={!!email}
-          {...register("email", { required: true })}
-        />
-        {errors.email && (
-          <span className="text-red-500 text-xs">{t("web-ui:auth.signup.emailRequired")}</span>
-        )}
+          isReadOnly={emailLocked}
+          autoComplete="email"
+        >
+          <Label className="text-sm font-medium">{t("web-ui:auth.login.email")}</Label>
+          <Input placeholder={t("web-ui:auth.login.placeholder.email")} />
+          <FieldError />
+        </TextField>
       </div>
       <div className="grid gap-2">
-        <Label className="text-sm font-medium" htmlFor="signup-password">
-          {t("web-ui:auth.login.password")}
-        </Label>
-        <Input
-          id="signup-password"
-          placeholder={t("web-ui:auth.login.password")}
+        <TextField
+          isRequired
+          name="signup-password"
           type="password"
           variant="secondary"
-          required
-          {...register("password", { required: true })}
-        />
-        {errors.password && (
-          <span className="text-red-500 text-xs">{t("web-ui:auth.signup.passwordRequired")}</span>
-        )}
+          autoComplete="new-password"
+          minLength={8}
+        >
+          <Label className="text-sm font-medium">{t("web-ui:auth.login.password")}</Label>
+          <Input placeholder={t("web-ui:auth.login.password")} />
+          <FieldError />
+        </TextField>
       </div>
       <Button type="submit" className="w-full" variant="primary" isDisabled={status === "busy"}>
         {status === "busy" ? t("web-ui:auth.signup.signingUp") : t("web-ui:auth.signup.button")}
       </Button>
-    </form>
+    </Form>
   );
 }
