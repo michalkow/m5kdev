@@ -45,7 +45,7 @@ export function AuthUserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
 
   return (
     <div className="container py-10 px-4">
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-8">
         {!hideProfileEditor && <AuthUserProfileEditor />}
         {!hideThemePicker && <AuthUtilityThemePicker />}
         <AuthUtilityPreferencesEditor

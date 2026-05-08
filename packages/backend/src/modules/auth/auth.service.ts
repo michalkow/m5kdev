@@ -295,15 +295,12 @@ export class AuthService extends BasePermissionService<
       return this.repository.organization.update(input);
     });
 
-  updateAdminOrganizationType = this.procedure("updateAdminOrganizationType")
-    .input(organizationSchemas.input.updateType)
-    .output(organizationSchemas.output.single)
+  updateAdminOrganization = this.procedure("updateAdminOrganization")
+    .input(organizationSchemas.input.updateAdmin)
+    .output(organizationSchemas.output.admin)
     .requireAuth("admin")
     .handle(async ({ input }) => {
-      return this.repository.organization.update({
-        id: input.organizationId,
-        type: input.type,
-      });
+      return this.repository.organization.update(input);
     });
 
   listAdminOrganizations = this.procedure("listAdminOrganizations")

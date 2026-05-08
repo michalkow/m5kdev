@@ -100,11 +100,11 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.listAdminOrganizations(input, ctx));
       }),
 
-    updateAdminOrganizationType: adminProcedure
-      .input(organizationSchemas.input.updateType)
+    updateAdminOrganization: adminProcedure
+      .input(organizationSchemas.input.updateAdmin)
       .output(organizationSchemas.output.admin)
       .mutation(async ({ input, ctx }) => {
-        return handleTRPCResult(await authService.updateAdminOrganizationType(input, ctx));
+        return handleTRPCResult(await authService.updateAdminOrganization(input, ctx));
       }),
 
     addToWaitlist: adminProcedure

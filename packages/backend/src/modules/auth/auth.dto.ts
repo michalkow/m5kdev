@@ -33,9 +33,12 @@ export const organizationSchemas = {
       id: z.string(),
       name: z.string().min(1),
     }),
-    updateType: z.object({
-      organizationId: z.string(),
-      type: organizationSchema.shape.type,
+    updateAdmin: z.object({
+      id: z.string(),
+      name: z.string().min(1).optional(),
+      slug: z.string().min(1).optional(),
+      type: organizationSchema.shape.type.optional(),
+      parentId: z.string().nullable().optional(),
     }),
   },
 };
