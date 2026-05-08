@@ -25,18 +25,15 @@ import type { Key } from "@react-types/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
-  Building2,
   CalendarClock,
   Copy,
   Info,
   Link2,
-  List,
   MoreHorizontal,
   UserPlus,
-  X,
 } from "lucide-react";
 import { useId, useState } from "react";
-import { useNavigate } from "react-router";
+
 import { toast } from "sonner";
 
 import { NuqsTable, type NuqsTableColumn } from "../../table/components/NuqsTable";
@@ -90,7 +87,7 @@ export function AuthAdminUserManagement({
   const [claimEmail, setClaimEmail] = useState("");
   const [generatedMagicLink, setGeneratedMagicLink] = useState<string | null>(null);
   const [isGeneratingMagicLink, setIsGeneratingMagicLink] = useState(false);
-  const navigate = useNavigate();
+
   const magicLinkEmailInputId = useId();
   const generatedMagicLinkInputId = useId();
 
@@ -276,13 +273,6 @@ export function AuthAdminUserManagement({
     }
   };
 
-  const clearFilters = (): void => {
-    tableParams.setQ?.(null);
-    tableParams.setSorting?.([{ id: "createdAt", desc: true }]);
-    tableParams.setFilters?.([]);
-    tableParams.setPagination?.({ pageIndex: 0, pageSize: tableParams.limit ?? 10 });
-  };
-
   const openCreateUserModal = () => {
     setNewUserData({
       name: "",
@@ -416,14 +406,6 @@ export function AuthAdminUserManagement({
     setUserForMagicLink(null);
     setGeneratedMagicLink(null);
     setClaimEmail("");
-  };
-
-  const openWaitlistModal = (): void => {
-    navigate("/admin/waitlist");
-  };
-
-  const openOrganizationManagement = (): void => {
-    navigate("/admin/organizations");
   };
 
   const columns: NuqsTableColumn<AdminUserRow>[] = [
@@ -611,39 +593,16 @@ export function AuthAdminUserManagement({
 
   const usersList = users ?? [];
 
-  const hasNonDefaultTableState =
-    Boolean(tableParams.q?.trim()) ||
-    (tableParams.filters?.length ?? 0) > 0 ||
-    (tableParams.sort !== "" && tableParams.sort !== "createdAt") ||
-    (tableParams.sort === "createdAt" && tableParams.order != null && tableParams.order !== "desc");
-
   return (
     <div className="space-y-4 p-4">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold">User Management</h2>
-        <div className="flex items-center gap-2">
-          <div className="text-sm text-muted-foreground">Total users: {totalUsers || 0}</div>
-          <Button onPress={openCreateUserModal} size="sm">
-            <UserPlus className="h-4 w-4 mr-2" />
-            Create User
-          </Button>
-        </div>
-      </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-        {hasNonDefaultTableState ? (
-          <Button variant="outline" size="sm" onPress={clearFilters}>
-            <X className="mr-1 h-4 w-4" />
-            Reset table
-          </Button>
-        ) : null}
+        <Button onPress={openCreateUserModal} size="sm">
+          <UserPlus className="h-4 w-4 mr-2" />
+          Create User
+        </Button>
       </div>
-
-      {listQuery.isError ? (
-        <div className="rounded-lg border border-danger p-4 text-sm text-danger">
-          {listQuery.error instanceof Error ? listQuery.error.message : String(listQuery.error)}
-        </div>
-      ) : null}
 
       <NuqsTable<AdminUserRow>
         data={usersList}

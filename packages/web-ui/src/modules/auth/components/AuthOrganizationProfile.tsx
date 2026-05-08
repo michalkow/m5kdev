@@ -144,7 +144,7 @@ export function AuthOrganizationProfile({
     );
 
   return (
-    <div className="container py-10 px-4">
+    <div>
       <div className="flex flex-col gap-1 mb-4">
         <p className="text-xl font-semibold">{t("web-ui:organization.settings.title")}</p>
         <p className="text-sm text-muted">{t("web-ui:organization.settings.description")}</p>

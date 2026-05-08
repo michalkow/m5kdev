@@ -2,6 +2,7 @@ import { Button } from "@heroui/react";
 import { ChevronsLeftIcon, ChevronsRightIcon } from "lucide-react";
 import { Link } from "react-router";
 import { useSidebar } from "../../../components/Sidebar";
+import { useTheme } from "../../../hooks/useTheme";
 import { cn } from "../../../lib/utils";
 
 export function AppSidebarHeader({
@@ -9,11 +10,12 @@ export function AppSidebarHeader({
   title,
   size = 30,
 }: {
-  logo: { src: string; alt: string };
+  logo: { src: string; darkSrc?: string; alt: string };
   title: string;
   size?: number;
 }) {
   const { open, toggleSidebar } = useSidebar();
+  const { resolvedTheme } = useTheme();
   return (
     <div
       className={cn(
@@ -31,7 +33,7 @@ export function AppSidebarHeader({
       >
         <img
           className="shrink-0"
-          src={logo.src}
+          src={resolvedTheme === "dark" ? (logo.darkSrc ?? logo.src) : logo.src}
           alt={logo.alt}
           style={{ width: size, height: size }}
         />

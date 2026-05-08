@@ -73,17 +73,19 @@ export function AuthOrganizationPreferences<S extends z.ZodObject<z.ZodRawShape>
   );
 
   return (
-    <>
-      <AuthOrganizationProfile {...profileProps} />
-      <AuthUtilityPreferencesEditor
-        schema={schema}
-        controls={controls}
-        values={preferences}
-        isLoading={isPreferencesLoading}
-        isPending={isSetPreferencesPending}
-        labels={resolvedLabels}
-        updateValues={setPreferences}
-      />
-    </>
+    <div className="container py-10 px-4">
+      <div className="flex flex-col gap-8">
+        <AuthOrganizationProfile {...profileProps} />
+        <AuthUtilityPreferencesEditor
+          schema={schema}
+          controls={controls}
+          values={preferences}
+          isLoading={isPreferencesLoading}
+          isPending={isSetPreferencesPending}
+          labels={resolvedLabels}
+          updateValues={setPreferences}
+        />
+      </div>
+    </div>
   );
 }

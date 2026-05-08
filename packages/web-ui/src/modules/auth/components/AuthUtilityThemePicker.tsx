@@ -1,31 +1,11 @@
 import { Label, ListBox, Select } from "@heroui/react";
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "../../../hooks/useTheme";
 
 export function AuthUtilityThemePicker() {
   const { t } = useTranslation("web-ui");
-  const saved = localStorage.getItem("theme") as "light" | "dark" | null;
-  const [theme, setTheme] = useState<"light" | "dark" | "system">(saved ?? "system");
+  const { theme, setTheme } = useTheme();
 
-  const handleChange = (value: "light" | "dark" | "system") => {
-    setTheme(value);
-    const d = document.documentElement;
-
-    const theme =
-      value === "system"
-        ? window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light"
-        : value;
-
-    d.classList.remove("light", "dark");
-    d.classList.add(theme);
-    d.setAttribute("data-theme", theme);
-    d.style.colorScheme = theme;
-
-    if (value === "system") localStorage.removeItem("theme");
-    else localStorage.setItem("theme", value);
-  };
   return (
     <div>
       <div className="flex flex-col gap-1 mb-4">
@@ -34,7 +14,7 @@ export function AuthUtilityThemePicker() {
       </div>
       <Select
         value={theme}
-        onChange={(value) => handleChange(value as unknown as "light" | "dark" | "system")}
+        onChange={(value) => setTheme(value as unknown as "light" | "dark" | "system")}
       >
         <Select.Trigger>
           <Select.Value />
