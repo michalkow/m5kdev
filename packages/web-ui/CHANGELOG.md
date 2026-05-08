@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.20.8
+
+### Patch Changes
+
+- admin look
+- Updated dependencies
+  - @m5kdev/commons@0.20.8
+  - @m5kdev/frontend@0.20.8
+
 ## 0.20.5
 
 ### Patch Changes

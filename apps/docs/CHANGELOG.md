@@ -1,5 +1,11 @@
 # @m5kdev/docs
 
+## 0.2.2
+
+### Patch Changes
+
+- admin look
+
 ## 0.2.1
 
 ### Patch Changes
