@@ -148,7 +148,7 @@ export function AuthUtilityPreferencesEditor<S extends z.ZodObject<z.ZodRawShape
           case "number":
             return (
               <div key={String(key)} className="grid gap-2">
-                <NumberField>
+                <NumberField defaultValue={(value as number) ?? undefined}>
                   <Label className="text-sm font-medium">{control.label}</Label>
                   <NumberField.Group>
                     <NumberField.DecrementButton />
@@ -156,7 +156,6 @@ export function AuthUtilityPreferencesEditor<S extends z.ZodObject<z.ZodRawShape
                       id={`pref-${String(key)}`}
                       name={String(key)}
                       type="number"
-                      defaultValue={(value as number) ?? undefined}
                       min={control.min}
                       max={control.max}
                       step={control.step}

@@ -53,21 +53,15 @@ function OrganizationProfileForm({
             }}
           />
 
-          <TextField name="name" isRequired minLength={2}>
+          <TextField name="name" isRequired minLength={2} defaultValue={organization.name || ""}>
             <Label>{t("web-ui:organization.settings.form.name")}</Label>
-            <Input
-              placeholder={t("web-ui:organization.settings.form.namePlaceholder")}
-              defaultValue={organization.name || ""}
-            />
+            <Input placeholder={t("web-ui:organization.settings.form.namePlaceholder")} />
             <FieldError />
           </TextField>
           {allowSlugChange && (
-            <TextField name="slug" isRequired minLength={2}>
+            <TextField name="slug" isRequired minLength={2} defaultValue={organization.slug || ""}>
               <Label>{t("web-ui:organization.settings.form.slug")}</Label>
-              <Input
-                placeholder={t("web-ui:organization.settings.form.slugPlaceholder")}
-                defaultValue={organization.slug || ""}
-              />
+              <Input placeholder={t("web-ui:organization.settings.form.slugPlaceholder")} />
               <FieldError />
             </TextField>
           )}

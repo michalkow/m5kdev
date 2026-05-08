@@ -61,12 +61,14 @@ export function AuthUserProfileEditor() {
               }}
             />
 
-            <TextField name="name" isRequired minLength={2}>
+            <TextField
+              name="name"
+              isRequired
+              minLength={2}
+              defaultValue={session?.user?.name || ""}
+            >
               <Label>{t("web-ui:profile.name")}</Label>
-              <Input
-                placeholder={t("web-ui:profile.placeholders.name")}
-                defaultValue={session?.user?.name || ""}
-              />
+              <Input placeholder={t("web-ui:profile.placeholders.name")} />
               <FieldError />
             </TextField>
           </div>
