@@ -250,5 +250,14 @@
   "table.pagination.summaryPage": "Page {{page}} of {{pageCount}}",
   "table.pagination.previous": "Prev",
   "table.pagination.next": "Next",
-  "table.noResults": "No results found"
+  "table.noResults": "No results found",
+  "auth.admin.tabs": "Admin navigation",
+  "auth.admin.users": "Users",
+  "auth.admin.organizations": "Organizations",
+  "auth.admin.waitlist": "Waitlist",
+  "theme.title": "Theme",
+  "theme.description": "Select your preferred color theme.",
+  "theme.system": "System",
+  "theme.light": "Light",
+  "theme.dark": "Dark"
 }

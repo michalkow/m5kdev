@@ -622,19 +622,11 @@ export function AuthAdminUserManagement({
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold">User Management</h2>
         <div className="flex items-center gap-2">
-          <Button onPress={openOrganizationManagement} size="sm">
-            <Building2 className="h-4 w-4 mr-2" />
-            Organizations
-          </Button>
-          <Button onPress={openWaitlistModal} size="sm">
-            <List className="h-4 w-4 mr-2" />
-            Waitlist
-          </Button>
+          <div className="text-sm text-muted-foreground">Total users: {totalUsers || 0}</div>
           <Button onPress={openCreateUserModal} size="sm">
             <UserPlus className="h-4 w-4 mr-2" />
             Create User
           </Button>
-          <div className="text-sm text-muted-foreground">Total users: {totalUsers || 0}</div>
         </div>
       </div>
 
@@ -653,16 +645,14 @@ export function AuthAdminUserManagement({
         </div>
       ) : null}
 
-      <div className="border rounded-lg overflow-hidden">
-        <NuqsTable<AdminUserRow>
-          data={usersList}
-          total={totalUsers}
-          columns={columns}
-          tableProps={tableParams}
-          showGlobalSearch
-          hideFilters
-        />
-      </div>
+      <NuqsTable<AdminUserRow>
+        data={usersList}
+        total={totalUsers}
+        columns={columns}
+        tableProps={tableParams}
+        showGlobalSearch
+        hideFilters
+      />
 
       {/* Delete confirmation modal */}
       <Modal

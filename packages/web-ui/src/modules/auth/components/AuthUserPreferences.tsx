@@ -10,17 +10,20 @@ import {
   type ControlsFor,
   type PreferenceEditorLabels,
 } from "./AuthUtilityPreferencesEditor";
+import { AuthUtilityThemePicker } from "./AuthUtilityThemePicker";
 
 export interface AuthUserPreferencesProps<S extends z.ZodObject<z.ZodRawShape>> {
   schema: S;
   controls: ControlsFor<z.infer<S>>;
   hideProfileEditor?: boolean;
+  hideThemePicker?: boolean;
 }
 
 export function AuthUserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
   schema,
   controls,
   hideProfileEditor = false,
+  hideThemePicker = false,
 }: AuthUserPreferencesProps<S>): ReactElement {
   const { t } = useTranslation("web-ui");
   const trpc = useAppTRPC<BackendTRPCRouter>();
@@ -41,17 +44,20 @@ export function AuthUserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
   };
 
   return (
-    <>
-      {!hideProfileEditor && <AuthUserProfileEditor />}
-      <AuthUtilityPreferencesEditor
-        schema={schema}
-        controls={controls}
-        values={preferences}
-        isLoading={isPreferencesLoading}
-        isPending={isSetPreferencesPending}
-        labels={labels}
-        updateValues={setPreferences}
-      />
-    </>
+    <div className="container py-10 px-4">
+      <div className="flex flex-col gap-4">
+        {!hideProfileEditor && <AuthUserProfileEditor />}
+        {!hideThemePicker && <AuthUtilityThemePicker />}
+        <AuthUtilityPreferencesEditor
+          schema={schema}
+          controls={controls}
+          values={preferences}
+          isLoading={isPreferencesLoading}
+          isPending={isSetPreferencesPending}
+          labels={labels}
+          updateValues={setPreferences}
+        />
+      </div>
+    </div>
   );
 }

@@ -95,7 +95,7 @@ export function AuthUtilityPreferencesEditor<S extends z.ZodObject<z.ZodRawShape
   }
 
   return (
-    <Form key={formKey} onSubmit={handleSubmit} className="flex flex-col gap-4 p-6">
+    <Form key={formKey} onSubmit={handleSubmit} className="flex flex-col gap-4">
       <h1 className="text-2xl font-bold">{labels.title}</h1>
       {keys.map((key) => {
         const control = controls[key];
