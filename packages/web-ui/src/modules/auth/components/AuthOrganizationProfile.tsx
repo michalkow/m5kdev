@@ -1,11 +1,20 @@
-import { Button, Card, FieldError, Form, Input, Label, TextField, toast } from "@heroui/react";
+import {
+  Button,
+  Card,
+  FieldError,
+  Form,
+  Input,
+  Label,
+  Spinner,
+  TextField,
+  toast,
+} from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AvatarUpload } from "../../../components/AvatarUpload";
-import { AppLoader } from "../../app/components/AppLoader";
 
 function OrganizationStateCard({ title, message }: { title: string; message: string }) {
   return (
@@ -89,7 +98,7 @@ export function AuthOrganizationProfile({
   const activeOrganizationRole = session?.session.activeOrganizationRole;
   const canManageOrganization = managerRoles.includes(activeOrganizationRole ?? "");
 
-  const { data: activeOrganization, isPending: isLoadingActiveOrganization } = useQuery({
+  const { data: activeOrganization, isLoading: isLoadingActiveOrganization } = useQuery({
     queryKey: ["auth-organization-full", activeOrganizationId],
     queryFn: async () => {
       const { data, error } = await authClient.organization.getFullOrganization({
@@ -125,7 +134,12 @@ export function AuthOrganizationProfile({
     },
   });
 
-  if (isLoadingActiveOrganization) return <AppLoader />;
+  if (isLoadingActiveOrganization)
+    return (
+      <div className="flex w-full justify-center items-center">
+        <Spinner size="xl" color="current" />
+      </div>
+    );
 
   if (!activeOrganization || !activeOrganizationId)
     return (
