@@ -100,6 +100,41 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.listAdminOrganizations(input, ctx));
       }),
 
+    searchAdminUsers: adminProcedure
+      .input(organizationSchemas.input.list)
+      .output(organizationSchemas.output.adminUsers)
+      .query(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.searchAdminUsers(input, ctx));
+      }),
+
+    listAdminOrganizationMembers: adminProcedure
+      .input(organizationSchemas.input.adminMembers)
+      .output(organizationSchemas.output.members)
+      .query(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.listAdminOrganizationMembers(input, ctx));
+      }),
+
+    addAdminOrganizationMember: adminProcedure
+      .input(organizationSchemas.input.addAdminMember)
+      .output(organizationSchemas.output.member)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.addAdminOrganizationMember(input, ctx));
+      }),
+
+    updateAdminOrganizationMemberRole: adminProcedure
+      .input(organizationSchemas.input.updateAdminMemberRole)
+      .output(organizationSchemas.output.member)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.updateAdminOrganizationMemberRole(input, ctx));
+      }),
+
+    removeAdminOrganizationMember: adminProcedure
+      .input(organizationSchemas.input.removeAdminMember)
+      .output(z.object({ id: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.removeAdminOrganizationMember(input, ctx));
+      }),
+
     updateAdminOrganization: adminProcedure
       .input(organizationSchemas.input.updateAdmin)
       .output(organizationSchemas.output.admin)

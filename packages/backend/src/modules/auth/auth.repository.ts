@@ -18,6 +18,9 @@ type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;
 type UserRow = typeof auth.users.$inferSelect;
 type OrganizationRow = typeof auth.organizations.$inferSelect;
+type OrganizationMemberRow = typeof auth.members.$inferSelect & {
+  user: Pick<UserRow, "id" | "name" | "email" | "role" | "banned" | "emailVerified">;
+};
 
 export class AuthUserRepository extends BaseTableRepository<
   Orm,
@@ -32,6 +35,32 @@ export class AuthOrganizationRepository extends BaseTableRepository<
   Record<string, never>,
   Schema["organizations"]
 > {
+  private selectMemberRows(organizationId: string, memberId?: string) {
+    const conditions = [eq(this.schema.members.organizationId, organizationId)];
+    if (memberId) conditions.push(eq(this.schema.members.id, memberId));
+
+    return this.orm
+      .select({
+        id: this.schema.members.id,
+        organizationId: this.schema.members.organizationId,
+        userId: this.schema.members.userId,
+        role: this.schema.members.role,
+        createdAt: this.schema.members.createdAt,
+        user: {
+          id: this.schema.users.id,
+          name: this.schema.users.name,
+          email: this.schema.users.email,
+          role: this.schema.users.role,
+          banned: this.schema.users.banned,
+          emailVerified: this.schema.users.emailVerified,
+        },
+      })
+      .from(this.schema.members)
+      .innerJoin(this.schema.users, eq(this.schema.members.userId, this.schema.users.id))
+      .where(and(...conditions))
+      .orderBy(this.schema.users.email);
+  }
+
   async createOrganization(
     {
       name,
@@ -92,6 +121,175 @@ export class AuthOrganizationRepository extends BaseTableRepository<
           })
       );
     });
+
+  async listOrganizationMembers(
+    organizationId: string
+  ): ServerResultAsync<OrganizationMemberRow[]> {
+    return this.throwableQuery(() => this.selectMemberRows(organizationId));
+  }
+
+  async addOrganizationMember({
+    organizationId,
+    userId,
+    role,
+  }: {
+    organizationId: string;
+    userId: string;
+    role: string;
+  }): ServerResultAsync<OrganizationMemberRow> {
+    const organization = await this.findById(organizationId, undefined, ["id"]);
+    if (organization.isErr()) return err(organization.error);
+    if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
+
+    const userResult = await this.throwableQuery(() =>
+      this.orm
+        .select({ id: this.schema.users.id })
+        .from(this.schema.users)
+        .where(eq(this.schema.users.id, userId))
+        .limit(1)
+    );
+    if (userResult.isErr()) return err(userResult.error);
+    const [user] = userResult.value;
+    if (!user) return this.error("NOT_FOUND", "User not found");
+
+    const existingResult = await this.throwableQuery(() =>
+      this.orm
+        .select({ id: this.schema.members.id })
+        .from(this.schema.members)
+        .where(
+          and(
+            eq(this.schema.members.organizationId, organizationId),
+            eq(this.schema.members.userId, userId)
+          )
+        )
+        .limit(1)
+    );
+    if (existingResult.isErr()) return err(existingResult.error);
+    const [existing] = existingResult.value;
+    if (existing) return this.error("CONFLICT", "User is already a member");
+
+    const insertResult = await this.throwableQuery(() =>
+      this.orm
+        .insert(this.schema.members)
+        .values({
+          organizationId,
+          userId,
+          role,
+        })
+        .returning({ id: this.schema.members.id })
+    );
+    if (insertResult.isErr()) return err(insertResult.error);
+    const [inserted] = insertResult.value;
+    if (!inserted) return this.error("UNPROCESSABLE_CONTENT");
+
+    const memberResult = await this.throwableQuery(() =>
+      this.selectMemberRows(organizationId, inserted.id).limit(1)
+    );
+    if (memberResult.isErr()) return err(memberResult.error);
+    const [member] = memberResult.value;
+    if (!member) return this.error("NOT_FOUND", "Member not found");
+    return ok(member);
+  }
+
+  async updateOrganizationMemberRole({
+    organizationId,
+    memberId,
+    role,
+  }: {
+    organizationId: string;
+    memberId: string;
+    role: string;
+  }): ServerResultAsync<OrganizationMemberRow> {
+    const existingResult = await this.throwableQuery(() =>
+      this.selectMemberRows(organizationId, memberId).limit(1)
+    );
+    if (existingResult.isErr()) return err(existingResult.error);
+    const [existing] = existingResult.value;
+    if (!existing) return this.error("NOT_FOUND", "Member not found");
+
+    const updateResult = await this.throwableQuery(() =>
+      this.orm.transaction(async (tx) => {
+        await tx
+          .update(this.schema.members)
+          .set({ role })
+          .where(
+            and(
+              eq(this.schema.members.id, memberId),
+              eq(this.schema.members.organizationId, organizationId)
+            )
+          );
+
+        await tx
+          .update(this.schema.sessions)
+          .set({ activeOrganizationRole: role })
+          .where(
+            and(
+              eq(this.schema.sessions.userId, existing.userId),
+              eq(this.schema.sessions.activeOrganizationId, organizationId)
+            )
+          );
+      })
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+
+    const memberResult = await this.throwableQuery(() =>
+      this.selectMemberRows(organizationId, memberId).limit(1)
+    );
+    if (memberResult.isErr()) return err(memberResult.error);
+    const [member] = memberResult.value;
+    if (!member) return this.error("NOT_FOUND", "Member not found");
+    return ok(member);
+  }
+
+  async removeOrganizationMember({
+    organizationId,
+    memberId,
+  }: {
+    organizationId: string;
+    memberId: string;
+  }): ServerResultAsync<{ id: string }> {
+    const existingResult = await this.throwableQuery(() =>
+      this.selectMemberRows(organizationId, memberId).limit(1)
+    );
+    if (existingResult.isErr()) return err(existingResult.error);
+    const [existing] = existingResult.value;
+    if (!existing) return this.error("NOT_FOUND", "Member not found");
+
+    const removeResult = await this.throwableQuery(() =>
+      this.orm.transaction(async (tx) => {
+        const [removed] = await tx
+          .delete(this.schema.members)
+          .where(
+            and(
+              eq(this.schema.members.id, memberId),
+              eq(this.schema.members.organizationId, organizationId)
+            )
+          )
+          .returning({ id: this.schema.members.id });
+
+        await tx
+          .update(this.schema.sessions)
+          .set({
+            activeOrganizationId: null,
+            activeOrganizationRole: null,
+            activeOrganizationType: null,
+            activeTeamId: null,
+            activeTeamRole: null,
+          })
+          .where(
+            and(
+              eq(this.schema.sessions.userId, existing.userId),
+              eq(this.schema.sessions.activeOrganizationId, organizationId)
+            )
+          );
+
+        return removed;
+      })
+    );
+    if (removeResult.isErr()) return err(removeResult.error);
+    if (!removeResult.value) return this.error("NOT_FOUND", "Member not found");
+    return ok(removeResult.value);
+  }
 }
 
 export class AuthInvitationRepository extends BaseTableRepository<

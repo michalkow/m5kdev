@@ -1,9 +1,23 @@
 import { queryListOutput, querySchema } from "@m5kdev/commons/modules/schemas/query.schema";
 import { createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
-import { accountClaimMagicLinks, organizations, waitlist } from "./auth.db";
+import { accountClaimMagicLinks, members, organizations, users, waitlist } from "./auth.db";
+
+const organizationRoleSchema = z.enum(["member", "admin", "owner"]);
+
+export const adminUserSummarySchema = createSelectSchema(users).pick({
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  banned: true,
+  emailVerified: true,
+});
 
 export const organizationSchema = createSelectSchema(organizations);
+const organizationMemberSchema = createSelectSchema(members).extend({
+  user: adminUserSummarySchema,
+});
 
 export const organizationSchemas = {
   output: {
@@ -23,9 +37,23 @@ export const organizationSchemas = {
       preferences: true,
       flags: true,
     }),
+    member: organizationMemberSchema,
+    members: z.object({
+      organization: organizationSchema.omit({
+        metadata: true,
+        preferences: true,
+        flags: true,
+      }),
+      members: organizationMemberSchema.array(),
+    }),
+    adminUsers: queryListOutput(adminUserSummarySchema),
   },
   input: {
     list: querySchema,
+
+    adminMembers: z.object({
+      organizationId: z.string(),
+    }),
     create: z.object({
       name: z.string(),
     }),
@@ -39,6 +67,20 @@ export const organizationSchemas = {
       slug: z.string().min(1).optional(),
       type: organizationSchema.shape.type.optional(),
       parentId: z.string().nullable().optional(),
+    }),
+    addAdminMember: z.object({
+      organizationId: z.string(),
+      userId: z.string(),
+      role: organizationRoleSchema,
+    }),
+    updateAdminMemberRole: z.object({
+      organizationId: z.string(),
+      memberId: z.string(),
+      role: organizationRoleSchema,
+    }),
+    removeAdminMember: z.object({
+      organizationId: z.string(),
+      memberId: z.string(),
     }),
   },
 };

@@ -1,5 +1,6 @@
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import { err, ok } from "neverthrow";
+import { z } from "zod";
 import type { BackendAppMetadata } from "../../app";
 import { posthogCapture } from "../../utils/posthog";
 import type { OrganizationContext, RequestContext } from "../../utils/trpc";
@@ -311,6 +312,62 @@ export class AuthService extends BasePermissionService<
       return this.repository.organization.queryList(input, {
         globalSearchColumns: ["name", "slug"],
       });
+    });
+
+  searchAdminUsers = this.procedure("searchAdminUsers")
+    .input(organizationSchemas.input.list)
+    .output(organizationSchemas.output.adminUsers)
+    .requireAuth("admin")
+    .handle(async ({ input }) => {
+      return this.repository.user.queryList(input, {
+        columns: ["id", "name", "email", "role", "banned", "emailVerified"],
+        globalSearchColumns: ["name", "email"],
+      });
+    });
+
+  listAdminOrganizationMembers = this.procedure("listAdminOrganizationMembers")
+    .input(organizationSchemas.input.adminMembers)
+    .output(organizationSchemas.output.members)
+    .requireAuth("admin")
+    .handle(async ({ input }) => {
+      const organization = await this.repository.organization.findById(
+        input.organizationId,
+        undefined,
+        ["id", "name", "slug", "logo", "type", "parentId", "createdAt"]
+      );
+      if (organization.isErr()) return err(organization.error);
+      if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
+
+      const members = await this.repository.organization.listOrganizationMembers(
+        input.organizationId
+      );
+      if (members.isErr()) return err(members.error);
+
+      return ok({ organization: organization.value, members: members.value });
+    });
+
+  addAdminOrganizationMember = this.procedure("addAdminOrganizationMember")
+    .input(organizationSchemas.input.addAdminMember)
+    .output(organizationSchemas.output.member)
+    .requireAuth("admin")
+    .handle(async ({ input }) => {
+      return this.repository.organization.addOrganizationMember(input);
+    });
+
+  updateAdminOrganizationMemberRole = this.procedure("updateAdminOrganizationMemberRole")
+    .input(organizationSchemas.input.updateAdminMemberRole)
+    .output(organizationSchemas.output.member)
+    .requireAuth("admin")
+    .handle(async ({ input }) => {
+      return this.repository.organization.updateOrganizationMemberRole(input);
+    });
+
+  removeAdminOrganizationMember = this.procedure("removeAdminOrganizationMember")
+    .input(organizationSchemas.input.removeAdminMember)
+    .output(z.object({ id: z.string() }))
+    .requireAuth("admin")
+    .handle(async ({ input }) => {
+      return this.repository.organization.removeOrganizationMember(input);
     });
 
   getOrganizationPreferences = this.procedure("getOrganizationPreferences")

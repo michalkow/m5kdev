@@ -277,6 +277,67 @@ test("admin creates, bans, unbans, and authenticates a user", async ({ page, req
   ).toBe(true);
 });
 
+test("admin manages organization members from organization admin", async ({ page, request }) => {
+  const email = `admin-org-member.${Date.now()}@auth-e2e.local`;
+  const password = "password1234";
+
+  await createVerifiedAccount(page, request, email, password);
+  const beforeMembership = await getUserState(request, profile, email);
+  expect(beforeMembership.organizations.map((organization) => organization.id)).not.toContain(
+    enterpriseOrgId
+  );
+
+  await login(page, profiles.standard.adminEmail, profiles.standard.adminPassword);
+  await page.goto("/admin/organizations");
+  await page.locator('input[name="search"]').fill("Auth E2E Enterprise standard");
+
+  const organizationRow = page.getByRole("row").filter({
+    hasText: "Auth E2E Enterprise standard",
+  });
+  await expect(organizationRow).toBeVisible();
+  await organizationRow.getByLabel(/manage members/i).click();
+
+  const dialog = page.getByRole("dialog").filter({ hasText: "Manage Members" });
+  await expect(dialog.getByText("Auth E2E Enterprise standard")).toBeVisible();
+  await dialog.getByText("Select user", { exact: true }).click();
+  await page.getByPlaceholder("Search users...").fill(email);
+  await page.getByRole("option", { name: new RegExp(email) }).click();
+  await dialog.getByRole("button", { name: /add member/i }).click();
+
+  const memberRow = dialog.getByRole("row").filter({ hasText: email });
+  await expect(memberRow).toBeVisible();
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, email);
+      return (
+        state.organizations.find((organization) => organization.id === enterpriseOrgId)?.role ??
+        null
+      );
+    })
+    .toBe("member");
+
+  await memberRow.getByRole("button", { name: `Member Role for ${email}` }).click();
+  await page.getByRole("option", { name: /^Admin$/ }).click();
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, email);
+      return (
+        state.organizations.find((organization) => organization.id === enterpriseOrgId)?.role ??
+        null
+      );
+    })
+    .toBe("admin");
+
+  await memberRow.getByRole("button", { name: `Remove ${email}` }).click();
+  await expect(memberRow).toBeHidden();
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, email);
+      return state.organizations.some((organization) => organization.id === enterpriseOrgId);
+    })
+    .toBe(false);
+});
+
 test("non-admin users cannot call admin auth APIs", async ({ page, request }) => {
   const email = `non-admin.${Date.now()}@auth-e2e.local`;
   const password = "password1234";

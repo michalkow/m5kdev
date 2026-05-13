@@ -25,6 +25,20 @@ export default defineConfig({
     }),
   ],
   resolve: {
+    alias: [
+      {
+        find: "@m5kdev/web-ui/utils",
+        replacement: path.resolve(__dirname, "../../../packages/web-ui/src/lib/utils.ts"),
+      },
+      {
+        find: /^@m5kdev\/web-ui\/components\/shared\/(.+)$/,
+        replacement: `${path.resolve(__dirname, "../../../packages/web-ui/src/components/ui/shared")}/$1`,
+      },
+      {
+        find: /^@m5kdev\/web-ui\/(.+)$/,
+        replacement: `${path.resolve(__dirname, "../../../packages/web-ui/src")}/$1`,
+      },
+    ],
     dedupe: ["react", "react-dom", "react-i18next", "react-router", "nuqs"],
   },
 });
