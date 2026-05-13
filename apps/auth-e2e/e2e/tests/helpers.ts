@@ -149,6 +149,22 @@ export async function createProvisionedClaimUser(
   };
 }
 
+export async function seedOrganizations(
+  request: APIRequestContext,
+  profile: Profile,
+  input: { prefix: string; count: number }
+) {
+  const response = await request.post(`${profiles[profile].serverUrl}/__auth-e2e/organizations`, {
+    data: input,
+  });
+  if (!response.ok()) {
+    throw new Error(`${response.status()} ${response.statusText()}: ${await response.text()}`);
+  }
+  return (await response.json()) as {
+    organizations: Array<{ id: string; name: string; slug: string }>;
+  };
+}
+
 export async function verifyLatestEmail(
   request: APIRequestContext,
   profile: Profile,

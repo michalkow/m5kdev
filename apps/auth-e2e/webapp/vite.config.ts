@@ -38,6 +38,10 @@ export default defineConfig({
         find: /^@m5kdev\/web-ui\/(.+)$/,
         replacement: `${path.resolve(__dirname, "../../../packages/web-ui/src")}/$1`,
       },
+      {
+        find: /^m5kdev-auth-e2e-shared\/(.+)$/,
+        replacement: `${path.resolve(__dirname, "../shared/src")}/$1`,
+      },
     ],
     dedupe: ["react", "react-dom", "react-i18next", "react-router", "nuqs"],
   },

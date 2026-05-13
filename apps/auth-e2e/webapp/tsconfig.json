@@ -7,15 +7,16 @@
     "declarationMap": false,
     "emitDeclarationOnly": false,
     "ignoreDeprecations": "6.0",
-    "rootDir": ".",
+    "rootDir": "..",
     "outDir": "dist",
     "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo",
     "paths": {
       "@/components/*": ["./src/components/*"],
       "@/modules/*": ["./src/modules/*"],
-      "@/utils/*": ["./src/utils/*"]
+      "@/utils/*": ["./src/utils/*"],
+      "m5kdev-auth-e2e-shared/*": ["../shared/src/*"]
     }
   },
-  "include": ["src", "vite.config.ts"],
+  "include": ["src", "vite.config.ts", "../shared/src"],
   "exclude": ["dist", "node_modules"]
 }

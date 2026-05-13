@@ -13,6 +13,19 @@ function normalizedEmail(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
+function normalizedText(value: unknown, fallback: string) {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function slugPart(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+}
+
 function sendJson(res: Response, status: number, body: unknown) {
   res
     .status(status)
@@ -225,5 +238,41 @@ export class TestHarnessModule extends BaseModule<
         });
       }
     );
+
+    infra.express.post("/__auth-e2e/organizations", async (req: Request, res: Response) => {
+      const body = req.body as { count?: unknown; prefix?: unknown };
+      const count = typeof body.count === "number" ? Math.trunc(body.count) : 12;
+      const prefix = normalizedText(body.prefix, "Harness Organization");
+
+      if (count < 1 || count > 50) {
+        sendJson(res, 400, { error: "count must be between 1 and 50" });
+        return;
+      }
+
+      const now = Date.now();
+      const slugPrefix = slugPart(prefix) || "organization";
+      const organizations = Array.from({ length: count }, (_, index) => {
+        const id = uuidv4();
+        const displayIndex = String(index + 1).padStart(2, "0");
+
+        return {
+          id,
+          name: `${prefix} ${displayIndex}`,
+          slug: `${slugPrefix}-${displayIndex}-${id.slice(0, 8)}`,
+          type: "organization",
+          createdAt: new Date(now + index),
+        };
+      });
+
+      await db.orm.insert(db.schema.organizations).values(organizations);
+
+      sendJson(res, 201, {
+        organizations: organizations.map((organization) => ({
+          id: organization.id,
+          name: organization.name,
+          slug: organization.slug,
+        })),
+      });
+    });
   }
 }

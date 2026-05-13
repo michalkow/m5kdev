@@ -1,7 +1,6 @@
 import {
   Autocomplete,
   Button,
-  Chip,
   EmptyState,
   Input,
   type Key,

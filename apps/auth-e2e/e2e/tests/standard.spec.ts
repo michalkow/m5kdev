@@ -11,6 +11,7 @@ import {
   logout,
   profiles,
   resetTokenFrom,
+  seedOrganizations,
   signUp,
   verifyLatestEmail,
 } from "./helpers";
@@ -336,6 +337,21 @@ test("admin manages organization members from organization admin", async ({ page
       return state.organizations.some((organization) => organization.id === enterpriseOrgId);
     })
     .toBe(false);
+});
+
+test("admin organization pagination stays on the selected page", async ({ page, request }) => {
+  const prefix = `Pagination Org ${Date.now()}`;
+  await seedOrganizations(request, profile, { prefix, count: 12 });
+
+  await login(page, profiles.standard.adminEmail, profiles.standard.adminPassword);
+  await page.goto("/admin/organizations");
+  await page.locator('input[name="search"]').fill(prefix);
+
+  await expect(page.getByText("1 to 10 of 12 results")).toBeVisible();
+  await page.getByRole("button", { name: /next/i }).click();
+
+  await expect(page).toHaveURL(/om_p=2/);
+  await expect(page.getByText("11 to 12 of 12 results")).toBeVisible();
 });
 
 test("non-admin users cannot call admin auth APIs", async ({ page, request }) => {

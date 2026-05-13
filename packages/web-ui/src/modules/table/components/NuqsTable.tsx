@@ -237,14 +237,13 @@ export const NuqsTable = <T,>({
     setQ,
   } = tableProps;
 
-  const skipFirstGlobalSearchPageReset = useRef(true);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset page when `q` changes (incl. back/forward)
+  const previousGlobalSearch = useRef(q);
   useEffect(() => {
     if (!showGlobalSearch) return;
-    if (skipFirstGlobalSearchPageReset.current) {
-      skipFirstGlobalSearchPageReset.current = false;
+    if (previousGlobalSearch.current === q) {
       return;
     }
+    previousGlobalSearch.current = q;
     setPagination?.({ pageIndex: 0, pageSize: limit });
   }, [showGlobalSearch, q, limit, setPagination]);
 
