@@ -669,9 +669,6 @@ export function AuthAdminOrganizationManagement() {
                               </Table.Cell>
                               <Table.Cell className="text-right">
                                 <div className="flex justify-end gap-2">
-                                  <Chip variant="soft" color="accent">
-                                    {member.role}
-                                  </Chip>
                                   <Button
                                     size="sm"
                                     variant="ghost"
