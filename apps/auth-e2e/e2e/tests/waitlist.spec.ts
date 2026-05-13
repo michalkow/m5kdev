@@ -98,7 +98,7 @@ test("signed-in user invite skips the waitlist", async ({ page, request }) => {
 
 test("expired waitlist codes are rejected before signup", async ({ page }) => {
   await page.goto("/signup?code=expired-waitlist-code");
-  await expect(page.getByText(/invalid|expired|invitation code not found/i)).toBeVisible();
+  await expect(page.getByText(/expired/i)).toBeVisible();
 });
 
 test("unknown waitlist codes are rejected before signup", async ({ page }) => {
