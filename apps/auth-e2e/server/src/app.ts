@@ -30,8 +30,6 @@ app.use(
       "Authorization",
       "Waitlist-Invitation-Code",
       "Organization-Invitation-Code",
-      "waitlist-invitation-code",
-      "organization-invitation-code",
     ],
   })
 );

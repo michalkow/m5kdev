@@ -522,6 +522,7 @@ export class AuthWaitlistRepository extends BaseTableRepository<
     );
     if (userResult.isErr()) return err(userResult.error);
     const [user] = userResult.value;
+    if (!user) return this.error("BAD_REQUEST", "User not found");
 
     const verifyUserResult = await this.throwableQuery(() =>
       db
