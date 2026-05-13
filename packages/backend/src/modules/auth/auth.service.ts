@@ -63,37 +63,47 @@ export class AuthService extends BasePermissionService<
     return this.service.billing;
   }
 
-  private assertCanManageChildOrganizations(
-    ctx: OrganizationContext,
-    action: "create" | "manage" = "manage"
+  private assertCanCreateChildOrganizations(
+    ctx: OrganizationContext
   ): ServerResult<{ parentId: string; organizationType: string }> {
     const organizationType = ctx.session.activeOrganizationType ?? "organization";
     const parentId = ctx.session.activeOrganizationId ?? null;
-    if (!parentId) {
-      return this.error(
-        "FORBIDDEN",
-        action === "create"
-          ? "You are not allowed to create an organization without a parent organization"
-          : "You are not allowed to manage child organizations without a parent organization"
-      );
-    }
-    if (!["enterprise", "agency"].includes(organizationType)) {
-      return this.error(
-        "FORBIDDEN",
-        action === "create"
-          ? "You are not allowed to create an organization with this type"
-          : "You are not allowed to manage child organizations"
-      );
-    }
     const role = ctx.session.activeOrganizationRole ?? "member";
-    if (!["admin", "owner"].includes(role)) {
+    if (!parentId || !["enterprise", "agency"].includes(organizationType) || !["admin", "owner"].includes(role)) 
       return this.error(
         "FORBIDDEN",
-        action === "create"
-          ? "You are not allowed to create an organization with this role"
-          : "You are not allowed to manage child organizations"
+        "You are not allowed to create an organization"
       );
-    }
+    return ok({ parentId, organizationType });
+  }
+
+  private assertCanManageChildOrganizations(
+    ctx: OrganizationContext
+  ): ServerResult<{ parentId: string; organizationType: string }> {
+    const organizationType = ctx.session.activeOrganizationType ?? "organization";
+    const parentId = ctx.session.activeOrganizationId ?? null;
+    const role = ctx.session.activeOrganizationRole ?? "member";
+
+    this.logger.info({ parentId, organizationType, role, ctx });
+    if (!parentId) 
+      return this.error(
+        "FORBIDDEN",
+        "You are not allowed to manage child organizations without a parent organization"
+      );
+    
+    if (!["enterprise", "agency"].includes(organizationType)) 
+      return this.error(
+        "FORBIDDEN",
+        "You are not allowed to manage child organizations in this organization type"
+      );
+    
+
+    if (!["admin", "owner"].includes(role)) 
+      return this.error(
+        "FORBIDDEN",
+        "You are not allowed to manage child organizations in this role"
+      );
+    
     return ok({ parentId, organizationType });
   }
 
@@ -236,7 +246,7 @@ export class AuthService extends BasePermissionService<
     .output(organizationSchemas.output.single)
     .requireAuth("organization")
     .handle(async ({ ctx, input }) => {
-      const access = this.assertCanManageChildOrganizations(ctx, "create");
+      const access = this.assertCanCreateChildOrganizations(ctx);
       if (access.isErr()) return err(access.error);
       return this.repository.organization.createOrganization({
         name: input.name,

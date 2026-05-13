@@ -1,4 +1,4 @@
-import { Button, Card, Chip, Input, Label, Modal, Spinner, Table, TextArea } from "@heroui/react";
+import { Button, Card, Input, Label, Modal, Spinner, Table } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
@@ -303,9 +303,6 @@ export function AuthOrganizationChildOrganizationsRoute({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Chip variant="soft" color="accent">
-              {activeOrganizationRole}
-            </Chip>
             <Button variant="primary" onPress={() => setIsCreateOpen(true)}>
               <span className="inline-flex items-center gap-2">
                 <Plus className="h-4 w-4" />
@@ -435,18 +432,6 @@ export function AuthOrganizationChildOrganizationsRoute({
                     value={editingSlug}
                     onChange={(e) => setEditingSlug(e.target.value)}
                     variant="secondary"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor={editMetadataInputId} className="text-sm font-medium">
-                    {t("web-ui:organization.childOrgs.form.metadata")}
-                  </Label>
-                  <TextArea
-                    id={editMetadataInputId}
-                    value={editingMetadata}
-                    onChange={(e) => setEditingMetadata(e.target.value)}
-                    variant="secondary"
-                    rows={6}
                   />
                 </div>
               </Modal.Body>
