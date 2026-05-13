@@ -523,6 +523,17 @@ export class AuthWaitlistRepository extends BaseTableRepository<
     if (userResult.isErr()) return err(userResult.error);
     const [user] = userResult.value;
 
+    const verifyUserResult = await this.throwableQuery(() =>
+      db
+        .update(this.schema.users)
+        .set({
+          emailVerified: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(this.schema.users.id, userId))
+    );
+    if (verifyUserResult.isErr()) return err(verifyUserResult.error);
+
     const updateResult = await this.throwableQuery(() =>
       db
         .update(this.schema.waitlist)

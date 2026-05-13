@@ -1,9 +1,15 @@
-import { type BetterAuthOptions, betterAuth } from "better-auth";
+import { type BetterAuthOptions, type BetterAuthPlugin, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { APIError, getOAuthState } from "better-auth/api";
+import {
+  APIError,
+  createAuthEndpoint,
+  getOAuthState,
+  sensitiveSessionMiddleware,
+} from "better-auth/api";
 import { admin, apiKey, lastLoginMethod, magicLink, organization } from "better-auth/plugins";
 import { and, desc, eq, gte, type InferSelectModel } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import { z } from "zod";
 import type { BackendAppMetadata } from "../../app";
 import { logger as rootLogger } from "../../utils/logger";
 import { posthogCapture } from "../../utils/posthog";
@@ -55,6 +61,52 @@ type CreateBetterAuthParams<
     billing?: B;
   };
 } & CreateBetterAuthConfigParams;
+
+function setPasswordEndpointPlugin(): BetterAuthPlugin {
+  return {
+    id: "m5kdev-set-password",
+    endpoints: {
+      setPassword: createAuthEndpoint(
+        "/set-password",
+        {
+          method: "POST",
+          body: z.object({
+            newPassword: z.string(),
+          }),
+          use: [sensitiveSessionMiddleware],
+        },
+        async (ctx) => {
+          const { newPassword } = ctx.body;
+          const session = ctx.context.session;
+          const minPasswordLength = ctx.context.password.config.minPasswordLength;
+          if (newPassword.length < minPasswordLength) {
+            throw new APIError("BAD_REQUEST", { message: "Password is too short" });
+          }
+          const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
+          if (newPassword.length > maxPasswordLength) {
+            throw new APIError("BAD_REQUEST", { message: "Password is too long" });
+          }
+
+          const existingCredentialAccount = (
+            await ctx.context.internalAdapter.findAccounts(session.user.id)
+          ).find((account) => account.providerId === "credential" && account.password);
+          if (existingCredentialAccount) {
+            throw new APIError("BAD_REQUEST", { message: "User already has a password" });
+          }
+
+          await ctx.context.internalAdapter.linkAccount({
+            userId: session.user.id,
+            providerId: "credential",
+            accountId: session.user.id,
+            password: await ctx.context.password.hash(newPassword),
+          });
+
+          return ctx.json({ status: true });
+        }
+      ),
+    },
+  };
+}
 
 export function createBetterAuth<
   O extends Orm,
@@ -216,6 +268,7 @@ export function createBetterAuth<
     },
     plugins: [
       ...(options?.plugins ?? []),
+      setPasswordEndpointPlugin(),
       magicLink({
         disableSignUp: true,
         sendMagicLink: async ({ email, url, token }) => {

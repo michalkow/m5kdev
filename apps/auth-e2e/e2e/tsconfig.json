@@ -1,0 +1,10 @@
+{
+  "extends": "@m5kdev/config/tsconfig.node.json",
+  "rootDir": ".",
+  "compilerOptions": {
+    "noEmit": true,
+    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
+  },
+  "exclude": ["dist", "node_modules", "test-results", "playwright-report"],
+  "include": ["playwright.config.ts", "tests/**/*.ts"]
+}

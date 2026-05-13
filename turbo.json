@@ -18,6 +18,11 @@
       "inputs": ["$TURBO_DEFAULT$", "tsconfig.json", "tsconfig.*.json"],
       "outputs": ["tsconfig.tsbuildinfo", "**/*.tsbuildinfo", "dist/tsconfig.lib.tsbuildinfo"]
     },
+    "test:e2e": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "outputs": ["test-results/**", "playwright-report/**"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

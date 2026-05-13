@@ -1,4 +1,4 @@
-import { flattenNestedGrants } from "@m5kdev/backend/modules/base/base.grants";
+import { flattenNestedGrants } from "../base/base.grants";
 
 export const defaultAuthGrants = flattenNestedGrants({
   auth: {

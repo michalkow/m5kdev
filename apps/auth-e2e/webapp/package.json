@@ -1,0 +1,50 @@
+{
+  "name": "@m5kdev/auth-e2e-webapp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev:standard": "VITE_AUTH_E2E_PROFILE=standard VITE_SERVER_URL=http://127.0.0.1:18180 VITE_APP_URL=http://127.0.0.1:15173 vite --host 127.0.0.1 --port 15173",
+    "dev:waitlist": "VITE_AUTH_E2E_PROFILE=waitlist VITE_SERVER_URL=http://127.0.0.1:18181 VITE_APP_URL=http://127.0.0.1:15174 vite --host 127.0.0.1 --port 15174",
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write",
+    "check-types": "tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@heroui/react": "catalog:",
+    "@heroui/styles": "catalog:",
+    "@m5kdev/auth-e2e-shared": "workspace:*",
+    "@m5kdev/commons": "workspace:*",
+    "@m5kdev/frontend": "workspace:*",
+    "@m5kdev/web-ui": "workspace:*",
+    "@tanstack/react-query": "catalog:",
+    "@trpc/client": "catalog:",
+    "@trpc/tanstack-react-query": "catalog:",
+    "better-auth": "catalog:",
+    "i18next": "catalog:",
+    "lucide-react": "catalog:",
+    "nuqs": "catalog:",
+    "posthog-js": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-i18next": "catalog:",
+    "react-router": "catalog:",
+    "sonner": "catalog:",
+    "tailwindcss": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@m5kdev/config": "workspace:*",
+    "@tailwindcss/vite": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "babel-plugin-react-compiler": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-i18next-loader": "catalog:",
+    "vite-tsconfig-paths": "catalog:"
+  }
+}

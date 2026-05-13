@@ -514,6 +514,7 @@ export class AuthService extends BasePermissionService<
       const waitlist = await this.repository.waitlist.create(input);
       if (waitlist.isErr()) return err(waitlist.error);
       await this.service.email.sendWaitlistConfirmation(input.email);
+      await this.service.email.sendSystemWaitlistNotification(input.email);
       return ok(waitlist.value);
     });
 

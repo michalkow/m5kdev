@@ -1,0 +1,39 @@
+/* biome-ignore-all lint/suspicious/noUnknownAtRules: Tailwind v4 */
+
+@import "tailwindcss";
+@import "@heroui/styles";
+
+@source "../../../../packages/frontend/src/**/*.{ts,tsx}";
+@source "../../../../packages/web-ui/src/**/*.{ts,tsx}";
+@source "./**/*.{ts,tsx}";
+
+@theme {
+  --color-canvas: oklch(0.982 0.01 95);
+  --color-ink: oklch(0.19 0.03 250);
+  --color-rule: oklch(0.86 0.025 250);
+  --font-editorial: Georgia, "Times New Roman", serif;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in oklch, var(--color-rule) 45%, transparent) 1px,
+      transparent 1px
+    ), linear-gradient(var(--color-canvas), var(--color-canvas));
+  background-size:
+    56px 56px,
+    auto;
+  color: var(--color-ink);
+}
+
+a {
+  color: inherit;
+}

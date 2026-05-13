@@ -19,6 +19,7 @@
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "check-types": "turbo run check-types",
+    "test:e2e:auth": "pnpm --filter @m5kdev/auth-e2e-tests test:e2e",
     "cs:add": "pnpm dlx @changesets/cli add",
     "cs:patch": "pnpm cs:add --all --patch && pnpm cs:version",
     "cs:publish": "pnpm build && pnpm dlx @changesets/cli publish && git push --follow-tags",

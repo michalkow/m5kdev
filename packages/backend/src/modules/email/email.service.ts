@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { ok } from "neverthrow";
@@ -53,7 +54,7 @@ type EmailServiceProps = {
   noReplyFrom?: string;
 };
 
-type EmailDeliveryPayload = {
+export type EmailDeliveryPayload = {
   to: string | string[];
   templateId: string;
   subject: string;
@@ -62,6 +63,16 @@ type EmailDeliveryPayload = {
   props: Record<string, unknown>;
   createdAt: string;
   html?: string;
+};
+
+export type StoredEmail = EmailDeliveryPayload & {
+  id: string;
+  filename: string;
+  filePath: string;
+};
+
+export type StoredEmailSummary = Omit<StoredEmail, "html"> & {
+  hasHtml: boolean;
 };
 
 function normalizeBaseUrl(url?: string) {
@@ -114,6 +125,43 @@ export class EmailService extends BaseService<never, never> {
 
   private resolveTemplate(templateKey: keyof EmailTemplates) {
     return this.templates[templateKey];
+  }
+
+  private resolveOutputDirectory() {
+    return path.resolve(process.cwd(), this.outputDirectory);
+  }
+
+  private getStoredEmailId(filename: string) {
+    return filename.replace(/\.json$/i, "");
+  }
+
+  private getStoredEmailFilename(id: string) {
+    const filename = path.basename(id);
+    return filename.endsWith(".json") ? filename : `${filename}.json`;
+  }
+
+  private async readStoredEmailFile(filename: string): Promise<StoredEmail | null> {
+    if (!filename.endsWith(".json")) return null;
+
+    const outputDirectory = this.resolveOutputDirectory();
+    const filePath = path.join(outputDirectory, filename);
+    const raw = await fs.readFile(filePath, "utf8");
+    const payload = JSON.parse(raw) as EmailDeliveryPayload;
+
+    return {
+      ...payload,
+      id: this.getStoredEmailId(filename),
+      filename,
+      filePath,
+    };
+  }
+
+  private toStoredEmailSummary(email: StoredEmail): StoredEmailSummary {
+    const { html: _html, ...summary } = email;
+    return {
+      ...summary,
+      hasHtml: Boolean(email.html),
+    };
   }
 
   private renderTemplatePayload(
@@ -181,10 +229,10 @@ export class EmailService extends BaseService<never, never> {
     }
 
     if (this.mode === "store") {
-      const outputDirectory = path.resolve(process.cwd(), this.outputDirectory);
+      const outputDirectory = this.resolveOutputDirectory();
       await fs.mkdir(outputDirectory, { recursive: true });
 
-      const filename = `${Date.now()}-${payload.templateId}.json`;
+      const filename = `${Date.now()}-${crypto.randomUUID()}-${payload.templateId}.json`;
       const outputPath = path.join(outputDirectory, filename);
       await fs.writeFile(outputPath, JSON.stringify(payload, null, 2), "utf8");
 
@@ -203,6 +251,74 @@ export class EmailService extends BaseService<never, never> {
       "Email delivery skipped in log mode"
     );
     return ok();
+  }
+
+  async listStoredEmails(): Promise<StoredEmailSummary[]> {
+    const outputDirectory = this.resolveOutputDirectory();
+
+    try {
+      await fs.mkdir(outputDirectory, { recursive: true });
+      const files = await fs.readdir(outputDirectory);
+      const emails = await Promise.all(
+        files
+          .filter((filename) => filename.endsWith(".json"))
+          .map((filename) =>
+            this.readStoredEmailFile(filename).catch((error) => {
+              this.logger.warn({ error, filename }, "Failed to read stored email payload");
+              return null;
+            })
+          )
+      );
+
+      return emails
+        .filter((email): email is StoredEmail => Boolean(email))
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+        .map((email) => this.toStoredEmailSummary(email));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    }
+  }
+
+  async readStoredEmail(id: string): Promise<StoredEmail | null> {
+    const filename = this.getStoredEmailFilename(id);
+    try {
+      return await this.readStoredEmailFile(filename);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw error;
+    }
+  }
+
+  async findLatestStoredEmail(filter: {
+    to?: string;
+    templateId?: string;
+  }): Promise<StoredEmail | null> {
+    const emails = await this.listStoredEmails();
+    const normalizedRecipient = filter.to?.toLowerCase();
+    const match = emails.find((email) => {
+      if (filter.templateId && email.templateId !== filter.templateId) return false;
+      if (!normalizedRecipient) return true;
+      const recipients = Array.isArray(email.to) ? email.to : [email.to];
+      return recipients.some((recipient) => recipient.toLowerCase() === normalizedRecipient);
+    });
+
+    return match ? this.readStoredEmail(match.id) : null;
+  }
+
+  async clearStoredEmails(): Promise<void> {
+    const outputDirectory = this.resolveOutputDirectory();
+    try {
+      const files = await fs.readdir(outputDirectory);
+      await Promise.all(
+        files
+          .filter((filename) => filename.endsWith(".json"))
+          .map((filename) => fs.unlink(path.join(outputDirectory, filename)))
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
   }
 
   async sendTemplate(
@@ -255,6 +371,22 @@ export class EmailService extends BaseService<never, never> {
       "waitlistConfirmation",
       {
         email,
+        brand: this.brand,
+      },
+      overrideOptions
+    );
+  }
+
+  async sendSystemWaitlistNotification(email: string, overrideOptions?: OverrideOptions) {
+    if (!this.systemNotificationEmail) return ok();
+
+    const url = buildAppUrl(this.appConfig.urls?.web, "/admin/waitlist") ?? undefined;
+    return this.sendTemplate(
+      this.systemNotificationEmail,
+      "systemWaitlistNotification",
+      {
+        email,
+        url,
         brand: this.brand,
       },
       overrideOptions

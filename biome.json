@@ -9,11 +9,14 @@
     "ignoreUnknown": false,
     "includes": [
       "**",
-      "!**/node_modules/**",
-      "!**/dist/**",
-      "!**/build/**",
-      "!**/.docusaurus/**",
-      "!**/.react-router/**"
+      "!**/node_modules",
+      "!**/dist",
+      "!**/build",
+      "!**/.auth-e2e",
+      "!**/test-results",
+      "!**/playwright-report",
+      "!**/.docusaurus",
+      "!**/.react-router"
     ]
   },
   "formatter": {
