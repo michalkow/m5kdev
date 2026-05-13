@@ -1,5 +1,3 @@
-import { templates } from "@m5kdev/auth-e2e-email";
-import { APP_NAME, type AuthE2EProfile } from "@m5kdev/auth-e2e-shared/modules/app/app.constants";
 import { createBackendApp } from "@m5kdev/backend/app";
 import { createBetterAuth } from "@m5kdev/backend/modules/auth/auth.lib";
 import { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
@@ -7,6 +5,8 @@ import { EmailModule } from "@m5kdev/backend/modules/email/email.module";
 import { EmailPreviewModule } from "@m5kdev/backend/modules/email/email.preview.module";
 import cors from "cors";
 import express from "express";
+import { templates } from "m5kdev-auth-e2e-email";
+import { APP_NAME, type AuthE2EProfile } from "m5kdev-auth-e2e-shared/modules/app/app.constants";
 import { schema } from "./generated/schema";
 import { PostsModule } from "./modules/posts/posts.module";
 import { TestHarnessModule } from "./modules/test-harness/test-harness.module";

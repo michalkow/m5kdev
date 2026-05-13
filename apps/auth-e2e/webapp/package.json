@@ -1,5 +1,5 @@
 {
-  "name": "@m5kdev/auth-e2e-webapp",
+  "name": "m5kdev-auth-e2e-webapp",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -15,7 +15,7 @@
   "dependencies": {
     "@heroui/react": "catalog:",
     "@heroui/styles": "catalog:",
-    "@m5kdev/auth-e2e-shared": "workspace:*",
+    "m5kdev-auth-e2e-shared": "workspace:*",
     "@m5kdev/commons": "workspace:*",
     "@m5kdev/frontend": "workspace:*",
     "@m5kdev/web-ui": "workspace:*",

@@ -1,5 +1,5 @@
 {
-  "name": "@m5kdev/auth-e2e-server",
+  "name": "m5kdev-auth-e2e-server",
   "version": "0.0.0",
   "private": true,
   "main": "src/index.ts",
@@ -16,8 +16,8 @@
   },
   "dependencies": {
     "@libsql/client": "catalog:",
-    "@m5kdev/auth-e2e-email": "workspace:*",
-    "@m5kdev/auth-e2e-shared": "workspace:*",
+    "m5kdev-auth-e2e-email": "workspace:*",
+    "m5kdev-auth-e2e-shared": "workspace:*",
     "@m5kdev/backend": "workspace:*",
     "@m5kdev/commons": "workspace:*",
     "@trpc/server": "catalog:",

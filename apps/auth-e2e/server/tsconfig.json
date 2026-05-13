@@ -12,14 +12,28 @@
     "jsx": "react-jsx",
     "noEmit": true,
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "paths": {
-      "@m5kdev/auth-e2e-email": ["../email/src/index.tsx"],
-      "@m5kdev/auth-e2e-shared/*": ["../shared/src/*"],
-      "@m5kdev/backend/app": ["../../../packages/backend/src/app.ts"],
-      "@m5kdev/backend/types": ["../../../packages/backend/src/types.ts"],
-      "@m5kdev/backend/modules/*": ["../../../packages/backend/src/modules/*"],
-      "@m5kdev/backend/utils/*": ["../../../packages/backend/src/utils/*"]
+      "m5kdev-auth-e2e-email": [
+        "../email/src/index.tsx"
+      ],
+      "m5kdev-auth-e2e-shared/*": [
+        "../shared/src/*"
+      ],
+      "@m5kdev/backend/app": [
+        "../../../packages/backend/src/app.ts"
+      ],
+      "@m5kdev/backend/types": [
+        "../../../packages/backend/src/types.ts"
+      ],
+      "@m5kdev/backend/modules/*": [
+        "../../../packages/backend/src/modules/*"
+      ],
+      "@m5kdev/backend/utils/*": [
+        "../../../packages/backend/src/utils/*"
+      ]
     }
   },
   "exclude": [

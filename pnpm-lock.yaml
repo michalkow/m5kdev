@@ -508,7 +508,7 @@ importers:
 
   apps/auth-e2e/e2e:
     devDependencies:
-      '@m5kdev/auth-e2e-shared':
+      'm5kdev-auth-e2e-shared':
         specifier: workspace:*
         version: link:../shared
       '@m5kdev/config':
@@ -551,10 +551,10 @@ importers:
       '@libsql/client':
         specifier: 'catalog:'
         version: 0.17.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
-      '@m5kdev/auth-e2e-email':
+      'm5kdev-auth-e2e-email':
         specifier: workspace:*
         version: link:../email
-      '@m5kdev/auth-e2e-shared':
+      'm5kdev-auth-e2e-shared':
         specifier: workspace:*
         version: link:../shared
       '@m5kdev/backend':
@@ -637,7 +637,7 @@ importers:
       '@heroui/styles':
         specifier: 'catalog:'
         version: 3.0.3(tailwind-merge@3.4.0)(tailwindcss@4.1.11)
-      '@m5kdev/auth-e2e-shared':
+      'm5kdev-auth-e2e-shared':
         specifier: workspace:*
         version: link:../shared
       '@m5kdev/commons':

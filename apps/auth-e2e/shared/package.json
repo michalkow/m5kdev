@@ -1,5 +1,5 @@
 {
-  "name": "@m5kdev/auth-e2e-shared",
+  "name": "m5kdev-auth-e2e-shared",
   "version": "0.0.0",
   "private": true,
   "scripts": {

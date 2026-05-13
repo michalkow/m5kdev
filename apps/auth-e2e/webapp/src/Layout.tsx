@@ -1,7 +1,7 @@
 import { buttonVariants } from "@heroui/styles";
-import { APP_NAME } from "@m5kdev/auth-e2e-shared/modules/app/app.constants";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { Building2, LogOut, MailPlus, ShieldCheck, UserCog } from "lucide-react";
+import { APP_NAME } from "m5kdev-auth-e2e-shared/modules/app/app.constants";
 import { Link, Outlet } from "react-router";
 
 const links = [

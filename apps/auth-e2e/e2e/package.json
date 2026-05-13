@@ -1,5 +1,5 @@
 {
-  "name": "@m5kdev/auth-e2e-tests",
+  "name": "m5kdev-auth-e2e-tests",
   "version": "0.0.0",
   "private": true,
   "scripts": {
@@ -10,7 +10,7 @@
     "test:e2e": "playwright test"
   },
   "devDependencies": {
-    "@m5kdev/auth-e2e-shared": "workspace:*",
+    "m5kdev-auth-e2e-shared": "workspace:*",
     "@m5kdev/config": "workspace:*",
     "@playwright/test": "catalog:",
     "@types/node": "catalog:",

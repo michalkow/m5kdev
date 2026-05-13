@@ -1,5 +1,5 @@
 {
-  "name": "@m5kdev/auth-e2e-email",
+  "name": "m5kdev-auth-e2e-email",
   "version": "0.0.0",
   "private": true,
   "scripts": {

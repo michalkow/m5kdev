@@ -13,26 +13,26 @@ export default defineConfig({
   webServer: [
     {
       command:
-        "pnpm --filter @m5kdev/auth-e2e-server prepare:standard && pnpm --filter @m5kdev/auth-e2e-server dev:standard",
+        "pnpm --filter m5kdev-auth-e2e-server prepare:standard && pnpm --filter m5kdev-auth-e2e-server dev:standard",
       url: "http://127.0.0.1:18180/__emails",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
     {
-      command: "pnpm --filter @m5kdev/auth-e2e-webapp dev:standard",
+      command: "pnpm --filter m5kdev-auth-e2e-webapp dev:standard",
       url: "http://127.0.0.1:15173",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
     {
       command:
-        "pnpm --filter @m5kdev/auth-e2e-server prepare:waitlist && pnpm --filter @m5kdev/auth-e2e-server dev:waitlist",
+        "pnpm --filter m5kdev-auth-e2e-server prepare:waitlist && pnpm --filter m5kdev-auth-e2e-server dev:waitlist",
       url: "http://127.0.0.1:18181/__emails",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
     {
-      command: "pnpm --filter @m5kdev/auth-e2e-webapp dev:waitlist",
+      command: "pnpm --filter m5kdev-auth-e2e-webapp dev:waitlist",
       url: "http://127.0.0.1:15174",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

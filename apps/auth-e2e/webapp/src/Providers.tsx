@@ -1,10 +1,10 @@
-import { APP_NAME } from "@m5kdev/auth-e2e-shared/modules/app/app.constants";
 import { AppConfigProvider } from "@m5kdev/frontend/modules/app/components/AppConfigProvider";
 import { AppTrpcQueryProvider } from "@m5kdev/frontend/modules/app/components/AppTrpcQueryProvider";
 import { AuthProvider } from "@m5kdev/frontend/modules/auth/components/AuthProvider";
 import { DialogProvider } from "@m5kdev/web-ui/components/DialogProvider";
 import { ThemeProvider } from "@m5kdev/web-ui/components/theme-provider";
 import { AppLoader } from "@m5kdev/web-ui/modules/app/components/AppLoader";
+import { APP_NAME } from "m5kdev-auth-e2e-shared/modules/app/app.constants";
 import { Toaster } from "sonner";
 import { Router } from "./Router";
 

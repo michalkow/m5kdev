@@ -1,4 +1,4 @@
-# @m5kdev/docs
+# m5kdev-docs
 
 ## 0.2.2
 

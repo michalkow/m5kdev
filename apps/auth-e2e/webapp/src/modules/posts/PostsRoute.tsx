@@ -1,5 +1,4 @@
 import { Button, Card, FieldError, Form, Input, Label, TextArea, TextField } from "@heroui/react";
-import type { Post, PostCreateInput } from "@m5kdev/auth-e2e-shared/modules/posts/posts.schema";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import {
   type QueryKey,
@@ -10,6 +9,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { Newspaper, Plus } from "lucide-react";
+import type { Post, PostCreateInput } from "m5kdev-auth-e2e-shared/modules/posts/posts.schema";
 import type { FormEvent } from "react";
 import { toast } from "sonner";
 

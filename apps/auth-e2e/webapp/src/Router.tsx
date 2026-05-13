@@ -1,4 +1,3 @@
-import { APP_NAME } from "@m5kdev/auth-e2e-shared/modules/app/app.constants";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { AuthAdminRouter } from "@m5kdev/web-ui/modules/auth/components/AuthAdminRouter";
 import { AuthOrganizationAcceptInvitationRoute } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationAcceptInvitationRoute";
@@ -7,6 +6,7 @@ import { AuthOrganizationMembersRoute } from "@m5kdev/web-ui/modules/auth/compon
 import { AuthOrganizationPreferences } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationPreferences";
 import { AuthPublicRouter } from "@m5kdev/web-ui/modules/auth/components/AuthPublicRouter";
 import { AuthUserRouter } from "@m5kdev/web-ui/modules/auth/components/AuthUserRouter";
+import { APP_NAME } from "m5kdev-auth-e2e-shared/modules/app/app.constants";
 import type { ReactNode } from "react";
 import { Navigate, Outlet, Route, Routes } from "react-router";
 import { z } from "zod";

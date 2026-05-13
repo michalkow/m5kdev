@@ -1,11 +1,11 @@
+import type { ServerResultAsync } from "@m5kdev/backend/modules/base/base.dto";
+import { BaseService } from "@m5kdev/backend/modules/base/base.service";
+import type { RequestContext } from "@m5kdev/backend/utils/trpc";
 import {
   type Post,
   postCreateSchema,
   postSchema,
-} from "@m5kdev/auth-e2e-shared/modules/posts/posts.schema";
-import type { ServerResultAsync } from "@m5kdev/backend/modules/base/base.dto";
-import { BaseService } from "@m5kdev/backend/modules/base/base.service";
-import type { RequestContext } from "@m5kdev/backend/utils/trpc";
+} from "m5kdev-auth-e2e-shared/modules/posts/posts.schema";
 import { err, ok } from "neverthrow";
 import type { PostsRepository } from "./posts.repository";
 import { slugify } from "./posts.utils";

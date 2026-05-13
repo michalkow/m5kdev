@@ -1,5 +1,5 @@
-import { postCreateSchema, postSchema } from "@m5kdev/auth-e2e-shared/modules/posts/posts.schema";
 import { handleTRPCResult, type TRPCMethods } from "@m5kdev/backend/utils/trpc";
+import { postCreateSchema, postSchema } from "m5kdev-auth-e2e-shared/modules/posts/posts.schema";
 import type { PostsService } from "./posts.service";
 
 export function createPostsTRPC(
