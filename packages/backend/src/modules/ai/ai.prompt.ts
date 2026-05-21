@@ -1,34 +1,28 @@
 import mustache from "mustache";
 import { logger } from "../../utils/logger";
 
-export class Prompt<C extends Record<string, string>> {
-  public prompt: string;
-  public name?: string;
-  public type: "text" | "chat";
-  public config?: {
+export type PromptSettings = {
+  name?: string;
+  type?: "text" | "chat";
+  config?: {
     model?: string;
     temperature?: number;
     supported_languages?: string[];
   };
-  public version?: number;
-  public labels?: string[];
-  public tags?: string[];
+  version?: number;
+  labels?: string[];
+  tags?: string[];
+};
+export class Prompt<C extends Record<string, string>> {
+  public prompt: string;
+  public name?: PromptSettings["name"];
+  public type: PromptSettings["type"];
+  public config?: PromptSettings["config"];
+  public version?: PromptSettings["version"];
+  public labels?: PromptSettings["labels"];
+  public tags?: PromptSettings["tags"];
 
-  constructor(
-    prompt: string,
-    settings?: {
-      name?: string;
-      type?: "text" | "chat";
-      config?: {
-        model?: string;
-        temperature?: number;
-        supported_languages?: string[];
-      };
-      version?: number;
-      labels?: string[];
-      tags?: string[];
-    }
-  ) {
+  constructor(prompt: string, settings?: PromptSettings) {
     this.prompt = prompt;
     this.name = settings?.name;
     this.type = settings?.type ?? "text";
