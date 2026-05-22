@@ -1,4 +1,5 @@
 import type { Mastra } from "@mastra/core";
+import type { LibSQLVector } from "@mastra/libsql";
 import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import type Replicate from "replicate";
 import { createBackendRouterMap } from "../../app";
@@ -10,16 +11,13 @@ import {
   type ModuleTRPCContext,
 } from "../base/base.module";
 import type * as aiTables from "./ai.db";
-import { AiUsageRepository } from "./ai.repository";
+import { AiUsageRepository, AiVectorRepository } from "./ai.repository";
 import { AIService } from "./ai.service";
+import { createAITRPC } from "./ai.trpc";
 import { IdeogramRepository } from "./ideogram/ideogram.repository";
 import { IdeogramService } from "./ideogram/ideogram.service";
-import { createAITRPC } from "./ai.trpc";
 
-export type AIModuleConfig<
-  MastraInstance extends Mastra,
-  Namespace extends string = string,
-> = {
+export type AIModuleConfig<MastraInstance extends Mastra, Namespace extends string = string> = {
   namespace?: Namespace;
   enableIdeogram?: boolean;
   libs: {
@@ -34,6 +32,7 @@ export type AIModuleConfig<
     repairModel?: string;
     removeMDash?: boolean;
   };
+  vectorStore?: LibSQLVector;
 };
 
 type AIModuleDeps = { auth: AuthModule };
@@ -41,6 +40,7 @@ type AIModuleTables = typeof aiTables;
 type AIModuleRepositories = {
   aiUsage: AiUsageRepository;
   ideogram?: IdeogramRepository;
+  aiVector?: AiVectorRepository;
 };
 type AIModuleServices<MastraInstance extends Mastra> = {
   ai: AIService<MastraInstance>;
@@ -75,6 +75,9 @@ export class AIModule<
         table: db.schema.aiUsage,
       }),
       ...(this.config.enableIdeogram ? { ideogram: new IdeogramRepository() } : {}),
+      ...(this.config.vectorStore
+        ? { aiVector: new AiVectorRepository(this.config.vectorStore) }
+        : {}),
     };
   }
 
@@ -86,7 +89,7 @@ export class AIModule<
     return {
       ...(ideogram ? { ideogram } : {}),
       ai: new AIService<MastraInstance>(
-        { aiUsage: repositories.aiUsage },
+        { aiUsage: repositories.aiUsage, aiVector: repositories.aiVector },
         ideogram ? { ideogram } : {},
         this.config.libs,
         this.config.options
@@ -94,7 +97,10 @@ export class AIModule<
     };
   }
 
-  override trpc({ trpc, services }: ModuleTRPCContext<AIModuleDeps, AIModuleServices<MastraInstance>>) {
+  override trpc({
+    trpc,
+    services,
+  }: ModuleTRPCContext<AIModuleDeps, AIModuleServices<MastraInstance>>) {
     const namespace = (this.config.namespace ?? "ai") as Namespace;
     return createBackendRouterMap(namespace, createAITRPC(trpc, services.ai));
   }

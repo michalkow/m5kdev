@@ -1,10 +1,11 @@
+import type { LibSQLVector } from "@mastra/libsql";
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import { eq, sql } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
-import { aiUsage } from "./ai.db";
 import type { ServerResultAsync } from "../base/base.dto";
-import { BaseTableRepository } from "../base/base.repository";
+import { BaseExternaRepository, BaseTableRepository } from "../base/base.repository";
+import { aiUsage } from "./ai.db";
 
 const schema = { aiUsage };
 type Schema = typeof schema;
@@ -51,5 +52,33 @@ export class AiUsageRepository extends BaseTableRepository<
     if (usageResult.isErr()) return err(usageResult.error);
     const [usage] = usageResult.value;
     return ok(usage);
+  }
+}
+
+export class AiVectorRepository extends BaseExternaRepository {
+  readonly vectorStore: LibSQLVector;
+
+  constructor(vectorStore: LibSQLVector) {
+    super();
+    this.vectorStore = vectorStore;
+  }
+
+  async upsertEmbeddings(params: {
+    indexName: string;
+    embed: {
+      embeddings: number[][];
+      chunks: { text: string }[];
+    };
+    metadata?: Record<string, unknown>;
+  }) {
+    const result = await this.throwablePromise(() =>
+      this.vectorStore.upsert({
+        indexName: params.indexName,
+        vectors: params.embed.embeddings,
+        metadata: params.embed.chunks.map((chunk) => ({ text: chunk.text, ...params.metadata })),
+      })
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value);
   }
 }

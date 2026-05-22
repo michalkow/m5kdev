@@ -29,6 +29,7 @@
     "@m5kdev/commons": "workspace:*",
     "@m5kdev/config": "workspace:*",
     "@mastra/core": "catalog:",
+    "@mastra/libsql": "catalog:",
     "@mastra/rag": "catalog:",
     "@openrouter/ai-sdk-provider": "catalog:",
     "@posthog/ai": "catalog:",

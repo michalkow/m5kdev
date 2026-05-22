@@ -21,7 +21,7 @@ import type { RequiredServiceActor } from "../base/base.actor";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
 import { repairJsonPrompt } from "./ai.prompts";
-import type { AiUsageRepository, AiUsageRow } from "./ai.repository";
+import type { AiUsageRepository, AiUsageRow, AiVectorRepository } from "./ai.repository";
 import type { IdeogramV3GenerateInput, IdeogramV3GenerateOutput } from "./ideogram/ideogram.dto";
 import type { IdeogramService } from "./ideogram/ideogram.service";
 
@@ -66,7 +66,7 @@ type AIServiceOptions = {
 };
 
 export class AIService<MastraInstance extends Mastra> extends BaseService<
-  { aiUsage?: AiUsageRepository },
+  { aiUsage?: AiUsageRepository; aiVector?: AiVectorRepository },
   { ideogram?: IdeogramService }
 > {
   helpers = {
@@ -79,7 +79,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   options?: AIServiceOptions;
 
   constructor(
-    repositories: { aiUsage?: AiUsageRepository },
+    repositories: { aiUsage?: AiUsageRepository; aiVector?: AiVectorRepository },
     services: { ideogram?: IdeogramService },
     libs: { mastra?: MastraInstance; openrouter?: OpenRouterProvider; replicate?: Replicate },
     options?: AIServiceOptions
@@ -223,6 +223,36 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     return ok({ ...result.value, object: result.value.object as z.infer<T> });
   }
 
+  async upsertEmbedDocument(params: {
+    indexName: string;
+    value: string;
+    options?: Parameters<ReturnType<typeof MDocument.fromText>["chunk"]>[0];
+    type?: "text" | "markdown" | "html" | "json";
+    model?: string;
+    metadata?: Record<string, unknown>;
+  }): ServerResultAsync<string[]> {
+    if (!this.repository.aiVector)
+      return this.error("INTERNAL_SERVER_ERROR", "AI vector repository is not available");
+
+    const embeddings = await this.embedDocument(
+      params.value,
+      params.options,
+      params.type,
+      params.model
+    );
+    if (embeddings.isErr()) return err(embeddings.error);
+    const embeddingsResult = await this.repository.aiVector.upsertEmbeddings({
+      indexName: params.indexName,
+      embed: {
+        embeddings: embeddings.value.embeddings,
+        chunks: embeddings.value.chunks,
+      },
+      metadata: params.metadata,
+    });
+    if (embeddingsResult.isErr()) return err(embeddingsResult.error);
+    return ok(embeddingsResult.value);
+  }
+
   async embedDocument(
     value: string,
     options?: Parameters<ReturnType<typeof MDocument.fromText>["chunk"]>[0],
@@ -323,10 +353,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       });
       // Exponential backoff: wait before retrying
       const attempt = Math.max(0, initialRetryAttempts - retryAttempts);
-      const delay = Math.min(
-        1000 * 2 ** attempt,
-        10000
-      );
+      const delay = Math.min(1000 * 2 ** attempt, 10000);
       await new Promise<void>((resolve) => setTimeout(resolve, delay));
       const nextModel = retryModels?.[0] ?? model;
       const nextRetryModels = retryModels ? [...retryModels.slice(1), model] : undefined;
@@ -441,10 +468,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       });
       // Exponential backoff: wait before retrying
       const attempt = Math.max(0, initialRetryAttempts - retryAttempts);
-      const delay = Math.min(
-        1000 * 2 ** attempt,
-        10000
-      );
+      const delay = Math.min(1000 * 2 ** attempt, 10000);
       await new Promise<void>((resolve) => setTimeout(resolve, delay));
       const nextModel = retryModels?.[0] ?? model;
       const nextRetryModels = retryModels ? [...retryModels.slice(1), model] : undefined;
