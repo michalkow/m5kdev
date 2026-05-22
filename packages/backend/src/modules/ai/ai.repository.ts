@@ -70,12 +70,12 @@ export class AiVectorRepository extends BaseExternaRepository {
       chunks: { text: string }[];
     };
     metadata?: Record<string, unknown>;
-  }) {
+  }): ServerResultAsync<string[]> {
     const result = await this.throwablePromise(() =>
       this.vectorStore.upsert({
         indexName: params.indexName,
         vectors: params.embed.embeddings,
-        metadata: params.embed.chunks.map((chunk) => ({ text: chunk.text, ...params.metadata })),
+        metadata: params.embed.chunks.map((chunk) => ({ ...params.metadata, text: chunk.text })),
       })
     );
     if (result.isErr()) return err(result.error);
