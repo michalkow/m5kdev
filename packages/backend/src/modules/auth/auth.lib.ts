@@ -208,6 +208,11 @@ export function createBetterAuth<
           required: false,
           defaultValue: null,
         },
+        metadata: {
+          type: "string",
+          required: false,
+          defaultValue: null,
+        },
         flags: {
           type: "string",
           required: false,
@@ -355,6 +360,28 @@ export function createBetterAuth<
           },
           member: {
             modelName: "member",
+            additionalFields: {
+              onboarding: {
+                type: "number",
+                required: false,
+                defaultValue: null,
+              },
+              preferences: {
+                type: "string",
+                required: false,
+                defaultValue: null,
+              },
+              metadata: {
+                type: "string",
+                required: false,
+                defaultValue: null,
+              },
+              flags: {
+                type: "string",
+                required: false,
+                defaultValue: null,
+              },
+            },
           },
           invitation: {
             modelName: "invitation",
@@ -371,6 +398,26 @@ export function createBetterAuth<
                 type: "string",
                 required: false,
                 defaultValue: "organization",
+              },
+              onboarding: {
+                type: "number",
+                required: false,
+                defaultValue: null,
+              },
+              preferences: {
+                type: "string",
+                required: false,
+                defaultValue: null,
+              },
+              metadata: {
+                type: "string",
+                required: false,
+                defaultValue: null,
+              },
+              flags: {
+                type: "string",
+                required: false,
+                defaultValue: null,
               },
             },
           },

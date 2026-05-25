@@ -35,9 +35,13 @@ export class AuthOrganizationRepository extends BaseTableRepository<
   Record<string, never>,
   Schema["organizations"]
 > {
-  private selectMemberRows(organizationId: string, memberId?: string) {
+  private selectMemberRows(
+    organizationId: string,
+    filters?: { memberId?: string; userId?: string }
+  ) {
     const conditions = [eq(this.schema.members.organizationId, organizationId)];
-    if (memberId) conditions.push(eq(this.schema.members.id, memberId));
+    if (filters?.memberId) conditions.push(eq(this.schema.members.id, filters.memberId));
+    if (filters?.userId) conditions.push(eq(this.schema.members.userId, filters.userId));
 
     return this.orm
       .select({
@@ -46,6 +50,10 @@ export class AuthOrganizationRepository extends BaseTableRepository<
         userId: this.schema.members.userId,
         role: this.schema.members.role,
         createdAt: this.schema.members.createdAt,
+        preferences: this.schema.members.preferences,
+        metadata: this.schema.members.metadata,
+        onboarding: this.schema.members.onboarding,
+        flags: this.schema.members.flags,
         user: {
           id: this.schema.users.id,
           name: this.schema.users.name,
@@ -59,6 +67,50 @@ export class AuthOrganizationRepository extends BaseTableRepository<
       .innerJoin(this.schema.users, eq(this.schema.members.userId, this.schema.users.id))
       .where(and(...conditions))
       .orderBy(this.schema.users.email);
+  }
+
+  async findMemberByUserAndOrganization({
+    userId,
+    organizationId,
+  }: {
+    userId: string;
+    organizationId: string;
+  }): ServerResultAsync<OrganizationMemberRow> {
+    const result = await this.throwableQuery(() =>
+      this.selectMemberRows(organizationId, { userId }).limit(1)
+    );
+    if (result.isErr()) return err(result.error);
+    const [member] = result.value;
+    if (!member) return this.error("NOT_FOUND", "Member not found");
+    return ok(member);
+  }
+
+  async updateMember({
+    id,
+    preferences,
+    metadata,
+    onboarding,
+    flags,
+  }: {
+    id: string;
+    preferences?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+    onboarding?: number;
+    flags?: string[];
+  }): ServerResultAsync<typeof auth.members.$inferSelect> {
+    const update: Partial<typeof auth.members.$inferInsert> = {};
+    if (preferences !== undefined) update.preferences = preferences;
+    if (metadata !== undefined) update.metadata = metadata;
+    if (onboarding !== undefined) update.onboarding = onboarding;
+    if (flags !== undefined) update.flags = flags;
+
+    const result = await this.throwableQuery(() =>
+      this.orm.update(this.schema.members).set(update).where(eq(this.schema.members.id, id)).returning()
+    );
+    if (result.isErr()) return err(result.error);
+    const [member] = result.value;
+    if (!member) return this.error("NOT_FOUND", "Member not found");
+    return ok(member);
   }
 
   async createOrganization(
@@ -103,6 +155,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
             logo: this.schema.organizations.logo,
             type: this.schema.organizations.type,
             parentId: this.schema.organizations.parentId,
+            onboarding: this.schema.organizations.onboarding,
             createdAt: this.schema.organizations.createdAt,
           })
           .from(this.schema.organizations)
@@ -183,7 +236,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     if (!inserted) return this.error("UNPROCESSABLE_CONTENT");
 
     const memberResult = await this.throwableQuery(() =>
-      this.selectMemberRows(organizationId, inserted.id).limit(1)
+      this.selectMemberRows(organizationId, { memberId: inserted.id }).limit(1)
     );
     if (memberResult.isErr()) return err(memberResult.error);
     const [member] = memberResult.value;
@@ -201,7 +254,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     role: string;
   }): ServerResultAsync<OrganizationMemberRow> {
     const existingResult = await this.throwableQuery(() =>
-      this.selectMemberRows(organizationId, memberId).limit(1)
+      this.selectMemberRows(organizationId, { memberId }).limit(1)
     );
     if (existingResult.isErr()) return err(existingResult.error);
     const [existing] = existingResult.value;
@@ -233,7 +286,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     if (updateResult.isErr()) return err(updateResult.error);
 
     const memberResult = await this.throwableQuery(() =>
-      this.selectMemberRows(organizationId, memberId).limit(1)
+      this.selectMemberRows(organizationId, { memberId }).limit(1)
     );
     if (memberResult.isErr()) return err(memberResult.error);
     const [member] = memberResult.value;
@@ -249,7 +302,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     memberId: string;
   }): ServerResultAsync<{ id: string }> {
     const existingResult = await this.throwableQuery(() =>
-      this.selectMemberRows(organizationId, memberId).limit(1)
+      this.selectMemberRows(organizationId, { memberId }).limit(1)
     );
     if (existingResult.isErr()) return err(existingResult.error);
     const [existing] = existingResult.value;

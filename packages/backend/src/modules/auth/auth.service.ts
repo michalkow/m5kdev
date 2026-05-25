@@ -274,7 +274,17 @@ export class AuthService extends BasePermissionService<
           ],
         },
         {
-          columns: ["id", "name", "slug", "logo", "type", "parentId", "createdAt", "metadata"],
+          columns: [
+            "id",
+            "name",
+            "slug",
+            "logo",
+            "type",
+            "parentId",
+            "createdAt",
+            "metadata",
+            "onboarding",
+          ],
         }
       );
       if (result.isErr()) return err(result.error);
@@ -303,7 +313,17 @@ export class AuthService extends BasePermissionService<
         return this.error("FORBIDDEN", "You are not allowed to update this organization");
       }
 
-      return this.repository.organization.update(input);
+      const { id, name, metadata } = input;
+      if (metadata !== undefined) {
+        const current = await this.repository.organization.findById(id, undefined, ["metadata"]);
+        if (current.isErr()) return err(current.error);
+        return this.repository.organization.update({
+          id,
+          name,
+          metadata: { ...(current.value?.metadata ?? {}), ...metadata },
+        });
+      }
+      return this.repository.organization.update({ id, name });
     });
 
   updateAdminOrganization = this.procedure("updateAdminOrganization")
@@ -343,7 +363,7 @@ export class AuthService extends BasePermissionService<
       const organization = await this.repository.organization.findById(
         input.organizationId,
         undefined,
-        ["id", "name", "slug", "logo", "type", "parentId", "createdAt"]
+        ["id", "name", "slug", "logo", "type", "parentId", "createdAt", "onboarding"]
       );
       if (organization.isErr()) return err(organization.error);
       if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
@@ -446,6 +466,244 @@ export class AuthService extends BasePermissionService<
       const flags = Array.from(new Set([...(state.organization.flags ?? []), ...input]));
       const result = await this.repository.organization.update({
         id: ctx.actor.organizationId,
+        flags,
+      });
+      if (result.isErr()) return err(result.error);
+      return ok(flags);
+    });
+
+  getOrganizationOnboarding = this.procedure("getOrganizationOnboarding")
+    .requireAuth("organization")
+    .loadResource("organization", ({ ctx }) =>
+      this.repository.organization.findById(ctx.actor.organizationId)
+    )
+    .access({
+      action: "read",
+      entities: ({ state }) => ({
+        organizationId: state.organization.id,
+      }),
+    })
+    .handle(({ state }): ServerResult<number> => {
+      return ok(state.organization.onboarding ?? 0);
+    });
+
+  setOrganizationOnboarding = this.procedure<number>("setOrganizationOnboarding")
+    .requireAuth("organization")
+    .loadResource("organization", ({ ctx }) =>
+      this.repository.organization.findById(ctx.actor.organizationId)
+    )
+    .access({
+      action: "write",
+      entities: ({ state }) => ({
+        organizationId: state.organization.id,
+      }),
+    })
+    .handle(async ({ ctx, input: onboarding }): ServerResultAsync<number> => {
+      const result = await this.repository.organization.update({
+        id: ctx.actor.organizationId,
+        onboarding,
+      });
+      if (result.isErr()) return err(result.error);
+      return ok(result.value.onboarding ?? onboarding);
+    });
+
+  getOrganizationMetadata = this.procedure("getOrganizationMetadata")
+    .requireAuth("organization")
+    .loadResource("organization", ({ ctx }) =>
+      this.repository.organization.findById(ctx.actor.organizationId)
+    )
+    .access({
+      action: "read",
+      entities: ({ state }) => ({
+        organizationId: state.organization.id,
+      }),
+    })
+    .handle(({ state }): ServerResult<Record<string, unknown>> => {
+      return ok(state.organization.metadata ?? {});
+    });
+
+  setOrganizationMetadata = this.procedure<Record<string, unknown>>("setOrganizationMetadata")
+    .requireAuth("organization")
+    .loadResource("organization", ({ ctx }) =>
+      this.repository.organization.findById(ctx.actor.organizationId)
+    )
+    .access({
+      action: "write",
+      entities: ({ state }) => ({
+        organizationId: state.organization.id,
+      }),
+    })
+    .handle(async ({ ctx, input, state }): ServerResultAsync<Record<string, unknown>> => {
+      const metadata = { ...(state.organization.metadata ?? {}), ...input };
+      const result = await this.repository.organization.update({
+        id: ctx.actor.organizationId,
+        metadata,
+      });
+      if (result.isErr()) return err(result.error);
+      return ok(metadata);
+    });
+
+  getMemberOnboarding = this.procedure("getMemberOnboarding")
+    .requireAuth("organization")
+    .loadResource("member", ({ ctx }) =>
+      this.repository.organization.findMemberByUserAndOrganization({
+        userId: ctx.actor.userId,
+        organizationId: ctx.actor.organizationId,
+      })
+    )
+    .access({
+      action: "read",
+      entities: ({ state }) => ({
+        userId: state.member.userId,
+      }),
+    })
+    .handle(({ state }): ServerResult<number> => {
+      return ok(state.member.onboarding ?? 0);
+    });
+
+  setMemberOnboarding = this.procedure<number>("setMemberOnboarding")
+    .requireAuth("organization")
+    .loadResource("member", ({ ctx }) =>
+      this.repository.organization.findMemberByUserAndOrganization({
+        userId: ctx.actor.userId,
+        organizationId: ctx.actor.organizationId,
+      })
+    )
+    .access({
+      action: "write",
+      entities: ({ state }) => ({
+        userId: state.member.userId,
+      }),
+    })
+    .handle(async ({ input: onboarding, state }): ServerResultAsync<number> => {
+      const result = await this.repository.organization.updateMember({
+        id: state.member.id,
+        onboarding,
+      });
+      if (result.isErr()) return err(result.error);
+      return ok(result.value.onboarding ?? onboarding);
+    });
+
+  getMemberPreferences = this.procedure("getMemberPreferences")
+    .requireAuth("organization")
+    .loadResource("member", ({ ctx }) =>
+      this.repository.organization.findMemberByUserAndOrganization({
+        userId: ctx.actor.userId,
+        organizationId: ctx.actor.organizationId,
+      })
+    )
+    .access({
+      action: "read",
+      entities: ({ state }) => ({
+        userId: state.member.userId,
+      }),
+    })
+    .handle(({ state }): ServerResult<Record<string, unknown>> => {
+      return ok(state.member.preferences ?? {});
+    });
+
+  setMemberPreferences = this.procedure<Record<string, unknown>>("setMemberPreferences")
+    .requireAuth("organization")
+    .loadResource("member", ({ ctx }) =>
+      this.repository.organization.findMemberByUserAndOrganization({
+        userId: ctx.actor.userId,
+        organizationId: ctx.actor.organizationId,
+      })
+    )
+    .access({
+      action: "write",
+      entities: ({ state }) => ({
+        userId: state.member.userId,
+      }),
+    })
+    .handle(async ({ input, state }): ServerResultAsync<Record<string, unknown>> => {
+      const preferences = { ...(state.member.preferences ?? {}), ...input };
+      const result = await this.repository.organization.updateMember({
+        id: state.member.id,
+        preferences,
+      });
+      if (result.isErr()) return err(result.error);
+      return ok(preferences);
+    });
+
+  getMemberMetadata = this.procedure("getMemberMetadata")
+    .requireAuth("organization")
+    .loadResource("member", ({ ctx }) =>
+      this.repository.organization.findMemberByUserAndOrganization({
+        userId: ctx.actor.userId,
+        organizationId: ctx.actor.organizationId,
+      })
+    )
+    .access({
+      action: "read",
+      entities: ({ state }) => ({
+        userId: state.member.userId,
+      }),
+    })
+    .handle(({ state }): ServerResult<Record<string, unknown>> => {
+      return ok(state.member.metadata ?? {});
+    });
+
+  setMemberMetadata = this.procedure<Record<string, unknown>>("setMemberMetadata")
+    .requireAuth("organization")
+    .loadResource("member", ({ ctx }) =>
+      this.repository.organization.findMemberByUserAndOrganization({
+        userId: ctx.actor.userId,
+        organizationId: ctx.actor.organizationId,
+      })
+    )
+    .access({
+      action: "write",
+      entities: ({ state }) => ({
+        userId: state.member.userId,
+      }),
+    })
+    .handle(async ({ input, state }): ServerResultAsync<Record<string, unknown>> => {
+      const metadata = { ...(state.member.metadata ?? {}), ...input };
+      const result = await this.repository.organization.updateMember({
+        id: state.member.id,
+        metadata,
+      });
+      if (result.isErr()) return err(result.error);
+      return ok(metadata);
+    });
+
+  getMemberFlags = this.procedure("getMemberFlags")
+    .requireAuth("organization")
+    .loadResource("member", ({ ctx }) =>
+      this.repository.organization.findMemberByUserAndOrganization({
+        userId: ctx.actor.userId,
+        organizationId: ctx.actor.organizationId,
+      })
+    )
+    .access({
+      action: "read",
+      entities: ({ state }) => ({
+        userId: state.member.userId,
+      }),
+    })
+    .handle(({ state }): ServerResult<string[]> => {
+      return ok(state.member.flags ?? []);
+    });
+
+  setMemberFlags = this.procedure<string[]>("setMemberFlags")
+    .requireAuth("organization")
+    .loadResource("member", ({ ctx }) =>
+      this.repository.organization.findMemberByUserAndOrganization({
+        userId: ctx.actor.userId,
+        organizationId: ctx.actor.organizationId,
+      })
+    )
+    .access({
+      action: "write",
+      entities: ({ state }) => ({
+        userId: state.member.userId,
+      }),
+    })
+    .handle(async ({ input, state }): ServerResultAsync<string[]> => {
+      const flags = Array.from(new Set([...(state.member.flags ?? []), ...input]));
+      const result = await this.repository.organization.updateMember({
+        id: state.member.id,
         flags,
       });
       if (result.isErr()) return err(result.error);

@@ -1,9 +1,11 @@
 import {
   adminClient,
   inferAdditionalFields,
+  inferOrgAdditionalFields,
   lastLoginMethodClient,
   organizationClient,
 } from "better-auth/client/plugins";
+import type { BetterAuth } from "@m5kdev/backend/modules/auth/auth.lib";
 import { createAuthClient } from "better-auth/react";
 
 export const authClient = createAuthClient({
@@ -14,6 +16,7 @@ export const authClient = createAuthClient({
       teams: {
         enabled: true,
       },
+      schema: inferOrgAdditionalFields<BetterAuth>(),
     }),
     adminClient(),
     inferAdditionalFields({
@@ -45,6 +48,10 @@ export const authClient = createAuthClient({
           required: false,
         },
         preferences: {
+          type: "string",
+          required: false,
+        },
+        metadata: {
           type: "string",
           required: false,
         },

@@ -5,6 +5,19 @@ import { accountClaimMagicLinks, members, organizations, users, waitlist } from 
 
 const organizationRoleSchema = z.enum(["member", "admin", "owner"]);
 
+export const settingsSchemas = {
+  output: {
+    record: z.record(z.string(), z.unknown()),
+    flags: z.array(z.string()),
+    onboarding: z.number(),
+  },
+  input: {
+    patchRecord: z.record(z.string(), z.unknown()),
+    flags: z.array(z.string()),
+    onboarding: z.number(),
+  },
+};
+
 export const adminUserSummarySchema = createSelectSchema(users).pick({
   id: true,
   name: true,
@@ -60,6 +73,7 @@ export const organizationSchemas = {
     updateChild: z.object({
       id: z.string(),
       name: z.string().min(1),
+      metadata: z.record(z.string(), z.unknown()).optional(),
     }),
     updateAdmin: z.object({
       id: z.string(),

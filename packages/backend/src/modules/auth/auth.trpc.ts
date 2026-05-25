@@ -4,6 +4,7 @@ import {
   accountClaimMagicLinkSchemas,
   invitationSchemas,
   organizationSchemas,
+  settingsSchemas,
   waitlistSchemas,
 } from "./auth.dto";
 import type { AuthService } from "./auth.service";
@@ -241,10 +242,88 @@ export function createAuthTRPC(
       }),
 
     setOrganizationFlags: organizationProcedure
-      .input(z.array(z.string()))
-      .output(z.array(z.string()))
+      .input(settingsSchemas.input.flags)
+      .output(settingsSchemas.output.flags)
       .mutation(async ({ ctx, input }) => {
         return handleTRPCResult(await authService.setOrganizationFlags(input, ctx));
+      }),
+
+    getOrganizationOnboarding: organizationProcedure
+      .output(settingsSchemas.output.onboarding)
+      .query(async ({ ctx }) => {
+        return handleTRPCResult(await authService.getOrganizationOnboarding(undefined, ctx));
+      }),
+
+    setOrganizationOnboarding: organizationProcedure
+      .input(settingsSchemas.input.onboarding)
+      .output(settingsSchemas.output.onboarding)
+      .mutation(async ({ ctx, input }) => {
+        return handleTRPCResult(await authService.setOrganizationOnboarding(input, ctx));
+      }),
+
+    getOrganizationMetadata: organizationProcedure
+      .output(settingsSchemas.output.record)
+      .query(async ({ ctx }) => {
+        return handleTRPCResult(await authService.getOrganizationMetadata(undefined, ctx));
+      }),
+
+    setOrganizationMetadata: organizationProcedure
+      .input(settingsSchemas.input.patchRecord)
+      .output(settingsSchemas.output.record)
+      .mutation(async ({ ctx, input }) => {
+        return handleTRPCResult(await authService.setOrganizationMetadata(input, ctx));
+      }),
+
+    getMemberOnboarding: organizationProcedure
+      .output(settingsSchemas.output.onboarding)
+      .query(async ({ ctx }) => {
+        return handleTRPCResult(await authService.getMemberOnboarding(undefined, ctx));
+      }),
+
+    setMemberOnboarding: organizationProcedure
+      .input(settingsSchemas.input.onboarding)
+      .output(settingsSchemas.output.onboarding)
+      .mutation(async ({ ctx, input }) => {
+        return handleTRPCResult(await authService.setMemberOnboarding(input, ctx));
+      }),
+
+    getMemberPreferences: organizationProcedure
+      .output(settingsSchemas.output.record)
+      .query(async ({ ctx }) => {
+        return handleTRPCResult(await authService.getMemberPreferences(undefined, ctx));
+      }),
+
+    setMemberPreferences: organizationProcedure
+      .input(settingsSchemas.input.patchRecord)
+      .output(settingsSchemas.output.record)
+      .mutation(async ({ ctx, input }) => {
+        return handleTRPCResult(await authService.setMemberPreferences(input, ctx));
+      }),
+
+    getMemberMetadata: organizationProcedure
+      .output(settingsSchemas.output.record)
+      .query(async ({ ctx }) => {
+        return handleTRPCResult(await authService.getMemberMetadata(undefined, ctx));
+      }),
+
+    setMemberMetadata: organizationProcedure
+      .input(settingsSchemas.input.patchRecord)
+      .output(settingsSchemas.output.record)
+      .mutation(async ({ ctx, input }) => {
+        return handleTRPCResult(await authService.setMemberMetadata(input, ctx));
+      }),
+
+    getMemberFlags: organizationProcedure
+      .output(settingsSchemas.output.flags)
+      .query(async ({ ctx }) => {
+        return handleTRPCResult(await authService.getMemberFlags(undefined, ctx));
+      }),
+
+    setMemberFlags: organizationProcedure
+      .input(settingsSchemas.input.flags)
+      .output(settingsSchemas.output.flags)
+      .mutation(async ({ ctx, input }) => {
+        return handleTRPCResult(await authService.setMemberFlags(input, ctx));
       }),
 
     validateWaitlistCode: publicProcedure
