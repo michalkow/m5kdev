@@ -93,7 +93,6 @@ export function AuthOrganizationChildOrganizationsRoute({
 
   const {
     activeOrganizationId,
-    activeOrganizationRole,
     canManageOrganization,
     canUseChildOrganizations,
     refreshOrganizationQueries,
@@ -108,7 +107,6 @@ export function AuthOrganizationChildOrganizationsRoute({
   const createNameInputId = useId();
   const editNameInputId = useId();
   const editSlugInputId = useId();
-  const editMetadataInputId = useId();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newOrganizationName, setNewOrganizationName] = useState("");
@@ -118,7 +116,7 @@ export function AuthOrganizationChildOrganizationsRoute({
   const [editingOrganizationId, setEditingOrganizationId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingSlug, setEditingSlug] = useState("");
-  const [editingMetadata, setEditingMetadata] = useState("{}");
+  const [, setEditingMetadata] = useState("{}");
 
   const { mutate: createOrganization, isPending: isCreating } = useMutation(
     trpc.auth.createOrganization.mutationOptions({

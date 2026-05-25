@@ -24,6 +24,7 @@ describe("base.actor", () => {
         userRole: "member",
         organizationId: "org-1",
         organizationRole: "owner",
+        organizationMemberId: "member-1",
         teamId: null,
         teamRole: null,
       })
@@ -35,6 +36,7 @@ describe("base.actor", () => {
         userRole: "member",
         organizationId: "org-1",
         organizationRole: "owner",
+        organizationMemberId: "member-1",
         teamId: "team-1",
         teamRole: "manager",
       })
