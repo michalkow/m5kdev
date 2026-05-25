@@ -105,7 +105,11 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     if (flags !== undefined) update.flags = flags;
 
     const result = await this.throwableQuery(() =>
-      this.orm.update(this.schema.members).set(update).where(eq(this.schema.members.id, id)).returning()
+      this.orm
+        .update(this.schema.members)
+        .set(update)
+        .where(eq(this.schema.members.id, id))
+        .returning()
     );
     if (result.isErr()) return err(result.error);
     const [member] = result.value;
@@ -325,6 +329,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
           .set({
             activeOrganizationId: null,
             activeOrganizationRole: null,
+            activeOrganizationMemberId: null,
             activeOrganizationType: null,
             activeTeamId: null,
             activeTeamRole: null,

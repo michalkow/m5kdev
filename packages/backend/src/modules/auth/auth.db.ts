@@ -46,6 +46,7 @@ export const sessions = sqliteTable("sessions", {
     .references(() => users.id, { onDelete: "cascade" }),
   impersonatedBy: text("impersonated_by"),
   activeOrganizationId: text("active_organization_id"),
+  activeOrganizationMemberId: text("active_organization_member_id"),
   activeOrganizationRole: text("active_organization_role"),
   activeOrganizationType: text("active_organization_type"),
   activeTeamId: text("active_team_id"),

@@ -121,6 +121,7 @@ export class TestHarnessModule extends BaseModule<
           userId: db.schema.sessions.userId,
           activeOrganizationId: db.schema.sessions.activeOrganizationId,
           activeOrganizationRole: db.schema.sessions.activeOrganizationRole,
+          activeOrganizationMemberId: db.schema.sessions.activeOrganizationMemberId,
           activeOrganizationType: db.schema.sessions.activeOrganizationType,
           activeTeamId: db.schema.sessions.activeTeamId,
           impersonatedBy: db.schema.sessions.impersonatedBy,

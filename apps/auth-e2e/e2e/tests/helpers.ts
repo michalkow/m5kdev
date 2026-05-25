@@ -45,6 +45,7 @@ export type UserHarnessState = {
     id: string;
     userId: string;
     activeOrganizationId: string | null;
+    activeOrganizationMemberId: string | null;
     activeOrganizationRole: string | null;
     activeOrganizationType: string | null;
     activeTeamId: string | null;

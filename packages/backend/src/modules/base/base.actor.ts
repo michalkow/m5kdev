@@ -6,6 +6,7 @@ export type UserActor = {
   userRole: string;
   organizationId: string | null;
   organizationRole: string | null;
+  organizationMemberId: string | null;
   teamId: string | null;
   teamRole: string | null;
 };
@@ -15,6 +16,7 @@ export type OrganizationActor = {
   userRole: string;
   organizationId: string;
   organizationRole: string;
+  organizationMemberId: string;
   teamId: string | null;
   teamRole: string | null;
 };
@@ -24,6 +26,7 @@ export type TeamActor = {
   userRole: string;
   organizationId: string;
   organizationRole: string;
+  organizationMemberId: string;
   teamId: string;
   teamRole: string;
 };
@@ -33,6 +36,7 @@ export type AdminActor = {
   userRole: "admin";
   organizationId: string | null;
   organizationRole: string | null;
+  organizationMemberId: string | null;
   teamId: string | null;
   teamRole: string | null;
 };
@@ -60,6 +64,7 @@ export type ServiceActorClaims = {
   userRole: string;
   organizationId?: string | null;
   organizationRole?: string | null;
+  organizationMemberId?: string | null;
   teamId?: string | null;
   teamRole?: string | null;
 };
@@ -129,6 +134,7 @@ export function createActorFromContext(
     userRole: context.user.role,
     organizationId: context.session.activeOrganizationId,
     organizationRole: context.session.activeOrganizationRole,
+    organizationMemberId: context.session.activeOrganizationMemberId,
     teamId: context.session.activeTeamId,
     teamRole: context.session.activeTeamRole,
   };
@@ -141,9 +147,7 @@ export function validateActor(actor: AuthenticatedActor, scope: ActorScope): boo
   if (scope === "organization") {
     return Boolean(actor.organizationId && actor.organizationRole);
   }
-  return Boolean(
-    actor.organizationId && actor.organizationRole && actor.teamId && actor.teamRole
-  );
+  return Boolean(actor.organizationId && actor.organizationRole && actor.teamId && actor.teamRole);
 }
 
 /**
@@ -152,6 +156,7 @@ export function validateActor(actor: AuthenticatedActor, scope: ActorScope): boo
 export function createServiceActor(claims: ServiceActorClaims): AuthenticatedActor {
   const organizationId = claims.organizationId ?? null;
   const organizationRole = claims.organizationRole ?? null;
+  const organizationMemberId = claims.organizationMemberId ?? null;
   const teamId = claims.teamId ?? null;
   const teamRole = claims.teamRole ?? null;
 
@@ -164,6 +169,7 @@ export function createServiceActor(claims: ServiceActorClaims): AuthenticatedAct
     userRole: claims.userRole,
     organizationId,
     organizationRole,
+    organizationMemberId,
     teamId,
     teamRole,
   };
