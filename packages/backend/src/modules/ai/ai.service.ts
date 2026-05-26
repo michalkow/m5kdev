@@ -16,11 +16,11 @@ import {
 import { jsonrepair } from "jsonrepair";
 import { err, ok } from "neverthrow";
 import type Replicate from "replicate";
-import type { ZodType, z } from "zod";
+import type { ZodAny, ZodType, z } from "zod";
 import type { RequiredServiceActor } from "../base/base.actor";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
-import { repairJsonPrompt } from "./ai.prompts";
+import { rapairZodPrompt, repairJsonPrompt } from "./ai.prompts";
 import type { AiUsageRepository, AiUsageRow, AiVectorRepository } from "./ai.repository";
 import type { IdeogramV3GenerateInput, IdeogramV3GenerateOutput } from "./ideogram/ideogram.dto";
 import type { IdeogramService } from "./ideogram/ideogram.service";
@@ -49,6 +49,7 @@ type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
   GenerateTextInput & {
     model: string;
     schema: T;
+    safeSchema?: ZodAny;
     repairAttempts?: number;
     repairModel?: string;
     ctx?: AIServiceActorContext;
@@ -376,6 +377,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     const {
       model,
       schema,
+      safeSchema,
       prompt,
       messages,
       repairAttempts = this.options?.repairAttempts ?? 0,
@@ -388,18 +390,19 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     } = params;
     const retryAttempts = retryAttemptsRaw;
     const initialRetryAttempts = initialRetryAttemptsRaw ?? retryAttemptsRaw;
+    const output = safeSchema ? Output.object({ schema: safeSchema }) : Output.object({ schema });
     const request = messages
       ? {
           ...rest,
           model: this.prepareModel(model),
           messages,
-          output: Output.object({ schema }),
+          output,
         }
       : {
           ...rest,
           model: this.prepareModel(model),
           prompt,
-          output: Output.object({ schema }),
+          output,
         };
     try {
       const result = await generateText(request);
@@ -417,6 +420,34 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         });
         if (createUsageResult.isErr()) return err(createUsageResult.error);
       }
+
+      if (safeSchema) {
+        const parsed = schema.safeParse(result.output);
+
+        if (parsed.success) return ok(parsed.data);
+
+        const assistantMessage: ModelMessage = {
+          role: "assistant",
+          content: JSON.stringify(result.output),
+        };
+        const userMessage: ModelMessage = {
+          role: "user",
+          content: rapairZodPrompt.compile({
+            issues: JSON.stringify(parsed.error.issues),
+          }),
+        };
+        return this.generateObject({
+          ...rest,
+          messages: messages
+            ? [...messages, assistantMessage, userMessage]
+            : [{ role: "user", content: prompt } as ModelMessage, assistantMessage, userMessage],
+          repairAttempts: repairAttempts - 1,
+          model: repairModel ?? model,
+          schema,
+          ctx,
+        });
+      }
+
       return ok(result.output as z.infer<T>);
     } catch (error) {
       if (NoObjectGeneratedError.isInstance(error)) {
