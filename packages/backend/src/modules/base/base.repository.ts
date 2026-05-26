@@ -36,6 +36,8 @@ import {
   type RepositoryQueryBuilder,
 } from "./base.query";
 
+export type QueryFindInput = Omit<QueryInput, "page" | "limit">;
+
 /** Payload for update/updateMany: id key required (string), other table fields optional. */
 export type TableUpdatePayload<
   TTable extends SQLiteTableWithColumns<any>,
@@ -317,6 +319,88 @@ export class BaseTableRepository<
       rows: queryResult.value.rows as Row[],
       total: queryResult.value.totalResult?.count ?? 0,
     });
+  }
+
+  async queryFind<K extends keyof InferSelectModel<TTable> & string>(
+    query: QueryFindInput | undefined,
+    options: {
+      conditions?: TableConditionBuilder<TTable>;
+      columns: readonly K[];
+      globalSearchColumns?: string[];
+      showDeleted?: boolean;
+    },
+    tx?: O
+  ): ServerResultAsync<Pick<InferSelectModel<TTable>, K> | undefined>;
+  async queryFind(
+    query?: QueryFindInput,
+    options?: {
+      conditions?: TableConditionBuilder<TTable>;
+      select?: SelectedFields<SQLiteColumn, TTable>;
+      globalSearchColumns?: string[];
+      showDeleted?: boolean;
+    },
+    tx?: O
+  ): ServerResultAsync<InferSelectModel<TTable> | undefined>;
+  async queryFind<K extends keyof InferSelectModel<TTable> & string>(
+    query?: QueryFindInput,
+    options?: {
+      conditions?: TableConditionBuilder<TTable>;
+      select?: SelectedFields<SQLiteColumn, TTable>;
+      columns?: readonly K[];
+      globalSearchColumns?: string[];
+      showDeleted?: boolean;
+    },
+    tx?: O
+  ): ServerResultAsync<InferSelectModel<TTable> | Pick<InferSelectModel<TTable>, K> | undefined> {
+    type Row = InferSelectModel<TTable>;
+
+    const db = tx ?? this.orm;
+    const conditions = options?.conditions ?? this.getConditionBuilder(this.table);
+    conditions.applyFilters(query);
+
+    if (options?.globalSearchColumns?.length) {
+      const columns: SQLiteColumn[] = [];
+      for (const columnId of options.globalSearchColumns) {
+        const column = this.table[columnId as keyof TTable] as SQLiteColumn | undefined;
+        if (!column) {
+          return this.error(
+            "BAD_REQUEST",
+            `Column ${columnId} not found in table ${this.table.name}`
+          );
+        }
+        columns.push(column);
+      }
+      conditions.applyGlobalSearch(query?.q, columns);
+    }
+
+    if (this.table.deletedAt && !options?.showDeleted) {
+      conditions.push(isNull(this.table.deletedAt));
+    }
+
+    const selectForRow =
+      options?.columns !== undefined
+        ? pickTableColumns(this.table, options.columns)
+        : options?.select;
+
+    const whereClause = conditions.join();
+    const rowQuery = applyPagination(
+      this.withSorting(
+        (selectForRow ? db.select(selectForRow) : db.select())
+          .from(this.table as any)
+          .where(whereClause),
+        query ?? {}
+      ),
+      1
+    );
+
+    const queryResult = await this.throwableQuery(() => rowQuery);
+    if (queryResult.isErr()) return err(queryResult.error);
+
+    if (options?.columns !== undefined) {
+      return ok((queryResult.value as Pick<InferSelectModel<TTable>, K>[])[0]);
+    }
+
+    return ok((queryResult.value as Row[])[0]);
   }
 
   async findById(id: string, tx?: O): ServerResultAsync<InferSelectModel<TTable> | undefined>;

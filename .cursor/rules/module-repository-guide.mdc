@@ -38,6 +38,7 @@ Prefer `this.query()` for new repository methods. The builder provides compile-t
 `BaseTableRepository` provides typed CRUD helpers. Prefer them over hand-written queries when they fit the use case, including inside custom methods:
 
 - `queryList(query, options)` for filtered/sorted/paginated lists.
+- `queryFind(query, options)` for filtered/sorted single-row lookup (no pagination/count).
 - `findById(id)` / `findManyById(ids)` for primary-key lookups.
 - `create(data)` / `createMany(data)` for inserts.
 - `update(data)` / `updateMany(data)` for updates.
