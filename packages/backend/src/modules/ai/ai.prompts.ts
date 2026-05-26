@@ -16,7 +16,7 @@ You are a JSON repair expert. You are given a JSON string that is invalid, error
 
 `);
 
-export const rapairZodPrompt = new Prompt<{
+export const repairZodPrompt = new Prompt<{
   issues: string;
 }>(`
 The returned JSON didn't follow all the constraints for the Zod schema. Below are the issues that were found. Please fix the issues and return the repaired JSON.

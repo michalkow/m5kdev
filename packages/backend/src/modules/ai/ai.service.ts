@@ -20,7 +20,7 @@ import type { ZodAny, ZodType, z } from "zod";
 import type { RequiredServiceActor } from "../base/base.actor";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
-import { rapairZodPrompt, repairJsonPrompt } from "./ai.prompts";
+import { repairJsonPrompt, repairZodPrompt } from "./ai.prompts";
 import type { AiUsageRepository, AiUsageRow, AiVectorRepository } from "./ai.repository";
 import type { IdeogramV3GenerateInput, IdeogramV3GenerateOutput } from "./ideogram/ideogram.dto";
 import type { IdeogramService } from "./ideogram/ideogram.service";
@@ -33,7 +33,11 @@ type GenerateTextInput =
   | { prompt: string | ModelMessage[]; messages?: never }
   | { messages: ModelMessage[]; prompt?: never };
 type AIServiceActorContext = { actor: RequiredServiceActor<"user"> };
-type AIServiceGenerateTextParams = Omit<GenerateTextParams, "model" | "prompt" | "messages"> &
+
+export type AIServiceGenerateTextParams = Omit<
+  GenerateTextParams,
+  "model" | "prompt" | "messages"
+> &
   GenerateTextInput & {
     model: string;
     removeMDash?: boolean;
@@ -42,7 +46,8 @@ type AIServiceGenerateTextParams = Omit<GenerateTextParams, "model" | "prompt" |
     initialRetryAttempts?: number;
     retryModels?: string[];
   };
-type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
+
+export type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
   GenerateTextParams,
   "model" | "prompt" | "messages" | "output"
 > &
@@ -426,13 +431,18 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
 
         if (parsed.success) return ok(parsed.data);
 
+        if (repairAttempts <= 0)
+          return this.error("PARSE_ERROR", "AI: Agent strict object failed", {
+            cause: parsed.error,
+          });
+
         const assistantMessage: ModelMessage = {
           role: "assistant",
           content: JSON.stringify(result.output),
         };
         const userMessage: ModelMessage = {
           role: "user",
-          content: rapairZodPrompt.compile({
+          content: repairZodPrompt.compile({
             issues: JSON.stringify(parsed.error.issues),
           }),
         };
