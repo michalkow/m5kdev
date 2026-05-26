@@ -16,7 +16,7 @@ import {
 import { jsonrepair } from "jsonrepair";
 import { err, ok } from "neverthrow";
 import type Replicate from "replicate";
-import type { ZodAny, ZodType, z } from "zod";
+import type { ZodType, z } from "zod";
 import type { RequiredServiceActor } from "../base/base.actor";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
@@ -54,13 +54,14 @@ export type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
   GenerateTextInput & {
     model: string;
     schema: T;
-    safeSchema?: ZodAny;
+    safeSchema?: ZodType<any, any, any>;
     repairAttempts?: number;
     repairModel?: string;
     ctx?: AIServiceActorContext;
     retryAttempts?: number;
     initialRetryAttempts?: number;
     retryModels?: string[];
+    objectType?: "object" | "array";
   };
 
 type AIServiceOptions = {
@@ -383,6 +384,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       model,
       schema,
       safeSchema,
+      objectType = "object",
       prompt,
       messages,
       repairAttempts = this.options?.repairAttempts ?? 0,
@@ -395,7 +397,14 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     } = params;
     const retryAttempts = retryAttemptsRaw;
     const initialRetryAttempts = initialRetryAttemptsRaw ?? retryAttemptsRaw;
-    const output = safeSchema ? Output.object({ schema: safeSchema }) : Output.object({ schema });
+    const output =
+      objectType === "object"
+        ? safeSchema
+          ? Output.object({ schema: safeSchema })
+          : Output.object({ schema })
+        : safeSchema
+          ? Output.array({ element: (safeSchema as unknown as z.ZodArray<any>).unwrap() })
+          : Output.array({ element: (schema as unknown as z.ZodArray<any>).unwrap() });
     const request = messages
       ? {
           ...rest,
