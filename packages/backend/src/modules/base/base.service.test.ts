@@ -659,4 +659,92 @@ describe("BasePermissionService procedure builder", () => {
     }
     expect(resolveEntity).not.toHaveBeenCalled();
   });
+
+  it("passes ownership-aware access options for entity resolvers", async () => {
+    const grants: ResourceGrant[] = [
+      {
+        action: "read",
+        level: "user",
+        role: "member",
+        access: "own",
+      },
+      {
+        action: "read",
+        level: "organization",
+        role: "owner",
+        access: "all",
+      },
+    ];
+
+    class PermissionService extends BasePermissionService<
+      Record<string, never>,
+      Record<string, never>
+    > {
+      constructor() {
+        super({} as Record<string, never>, {} as Record<string, never>, grants);
+      }
+
+      readonly run = this.procedure<{ ownerId: string }>("run")
+        .access({
+          action: "read",
+          ownership: true,
+          entities: ({ input }) => ({
+            ownership: "member" as const,
+            userId: input.ownerId,
+          }),
+        })
+        .handle(({ state }) => ok(state.access?.ownership ?? null));
+    }
+
+    const service = new PermissionService();
+    const result = await service.run({ ownerId: "user-1" }, { actor: createOrganizationActor() });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toBe("member");
+    }
+  });
+
+  it("passes ownership-aware access options for entityStep", async () => {
+    const grants: ResourceGrant[] = [
+      {
+        action: "read",
+        level: "organization",
+        role: "owner",
+        access: "own",
+      },
+    ];
+
+    class PermissionService extends BasePermissionService<
+      Record<string, never>,
+      Record<string, never>
+    > {
+      constructor() {
+        super({} as Record<string, never>, {} as Record<string, never>, grants);
+      }
+
+      readonly run = this.procedure("run")
+        .use("record", () =>
+          ok({
+            id: "resource-1",
+            ownership: "organization" as const,
+            organizationId: "org-1",
+          })
+        )
+        .access({
+          action: "read",
+          entityStep: "record",
+          ownership: true,
+        })
+        .handle(({ state }) => ok(state.access === state.record));
+    }
+
+    const service = new PermissionService();
+    const result = await service.run(undefined, { actor: createOrganizationActor() } as never);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toBe(true);
+    }
+  });
 });

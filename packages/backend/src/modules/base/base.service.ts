@@ -7,6 +7,7 @@ import {
   checkPermissionAsync,
   checkPermissionSync,
   type Entity,
+  type PermissionCheckOptions,
   type ResourceActionGrant,
   type ResourceGrant,
 } from "./base.grants";
@@ -169,9 +170,10 @@ export class BasePermissionService<
     actor: AuthenticatedActor,
     action: string,
     entities?: T | T[],
-    grants?: ResourceActionGrant[]
+    grants?: ResourceActionGrant[],
+    options?: PermissionCheckOptions
   ): ServerResult<true> {
-    const hasPermission = this.checkPermission(actor, action, entities, grants);
+    const hasPermission = this.checkPermission(actor, action, entities, grants, options);
     if (!hasPermission) return this.error("FORBIDDEN");
     return ok(true);
   }
@@ -180,9 +182,16 @@ export class BasePermissionService<
     actor: AuthenticatedActor,
     action: string,
     getEntities: () => ServerResultAsync<T | T[] | undefined>,
-    grants?: ResourceActionGrant[]
+    grants?: ResourceActionGrant[],
+    options?: PermissionCheckOptions
   ): ServerResultAsync<true> {
-    const hasPermission = await this.checkPermissionAsync(actor, action, getEntities, grants);
+    const hasPermission = await this.checkPermissionAsync(
+      actor,
+      action,
+      getEntities,
+      grants,
+      options
+    );
     if (hasPermission.isErr()) return err(hasPermission.error);
     if (!hasPermission.value) return this.error("FORBIDDEN");
     return ok(true);
@@ -198,20 +207,22 @@ export class BasePermissionService<
     actor: AuthenticatedActor,
     action: string,
     entities?: T | T[],
-    grants?: ResourceActionGrant[]
+    grants?: ResourceActionGrant[],
+    options?: PermissionCheckOptions
   ): boolean {
     const actionGrants = grants ?? this.grants.filter((grant) => grant.action === action);
-    return checkPermissionSync(actor, actionGrants, entities);
+    return checkPermissionSync(actor, actionGrants, entities, options);
   }
 
   async checkPermissionAsync<T extends Entity>(
     actor: AuthenticatedActor,
     action: string,
     getEntities: () => ServerResultAsync<T | T[] | undefined>,
-    grants?: ResourceActionGrant[]
+    grants?: ResourceActionGrant[],
+    options?: PermissionCheckOptions
   ): ServerResultAsync<boolean> {
     const actionGrants = grants ?? this.grants.filter((grant) => grant.action === action);
-    const permission = await checkPermissionAsync(actor, actionGrants, getEntities);
+    const permission = await checkPermissionAsync(actor, actionGrants, getEntities, options);
     if (permission.isErr())
       return this.error("INTERNAL_SERVER_ERROR", "Failed to check permission", {
         cause: permission.error,

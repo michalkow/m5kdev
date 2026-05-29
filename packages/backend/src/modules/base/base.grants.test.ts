@@ -336,6 +336,140 @@ describe("checkPermissionSync", () => {
     });
   });
 
+  describe("ownership-aware permissions", () => {
+    it("allows member-owned resources with matching user-level 'own' access", () => {
+      const ctx = createMockContext({ id: "user-123", role: "member" });
+      const grants: ResourceActionGrant[] = [{ level: "user", role: "member", access: "own" }];
+      const entity = createMockEntity({ ownership: "member", userId: "user-123" });
+
+      expect(checkPermissionSync(ctx, grants, entity, { ownership: true })).toBe(true);
+    });
+
+    it("allows member-owned resources with matching user-level 'all' access", () => {
+      const ctx = createMockContext({ id: "user-123", role: "admin" });
+      const grants: ResourceActionGrant[] = [{ level: "user", role: "admin", access: "all" }];
+      const entity = createMockEntity({ ownership: "member", userId: "other-user" });
+
+      expect(checkPermissionSync(ctx, grants, entity, { ownership: true })).toBe(true);
+    });
+
+    it("rejects member-owned resources with organization-level access only", () => {
+      const ctx = createMockContext(
+        {},
+        { activeOrganizationId: "org-1", activeOrganizationRole: "owner" }
+      );
+      const grants: ResourceActionGrant[] = [
+        { level: "organization", role: "owner", access: "all" },
+      ];
+      const entity = createMockEntity({
+        ownership: "member",
+        userId: "other-user",
+        organizationId: "org-1",
+      });
+
+      expect(checkPermissionSync(ctx, grants, entity, { ownership: true })).toBe(false);
+    });
+
+    it("allows organization-owned resources with matching organization-level 'own' access", () => {
+      const ctx = createMockContext(
+        {},
+        { activeOrganizationId: "org-1", activeOrganizationRole: "member" }
+      );
+      const grants: ResourceActionGrant[] = [
+        { level: "organization", role: "member", access: "own" },
+      ];
+      const entity = createMockEntity({ ownership: "organization", organizationId: "org-1" });
+
+      expect(checkPermissionSync(ctx, grants, entity, { ownership: true })).toBe(true);
+    });
+
+    it("allows organization-owned resources with matching organization-level 'all' access", () => {
+      const ctx = createMockContext(
+        {},
+        { activeOrganizationId: "org-1", activeOrganizationRole: "owner" }
+      );
+      const grants: ResourceActionGrant[] = [
+        { level: "organization", role: "owner", access: "all" },
+      ];
+      const entity = createMockEntity({ ownership: "organization", organizationId: "org-2" });
+
+      expect(checkPermissionSync(ctx, grants, entity, { ownership: true })).toBe(true);
+    });
+
+    it("rejects organization-owned resources with user-level access only", () => {
+      const ctx = createMockContext({ id: "user-123", role: "admin" });
+      const grants: ResourceActionGrant[] = [{ level: "user", role: "admin", access: "all" }];
+      const entity = createMockEntity({
+        ownership: "organization",
+        userId: "user-123",
+        organizationId: "org-1",
+      });
+
+      expect(checkPermissionSync(ctx, grants, entity, { ownership: true })).toBe(false);
+    });
+
+    it("rejects missing, null, or invalid ownership values", () => {
+      const ctx = createMockContext(
+        { role: "admin" },
+        { activeOrganizationId: "org-1", activeOrganizationRole: "owner" }
+      );
+      const grants: ResourceActionGrant[] = [
+        { level: "user", role: "admin", access: "all" },
+        { level: "organization", role: "owner", access: "all" },
+      ];
+
+      expect(checkPermissionSync(ctx, grants, createMockEntity(), { ownership: true })).toBe(false);
+      expect(
+        checkPermissionSync(ctx, grants, createMockEntity({ ownership: null }), {
+          ownership: true,
+        })
+      ).toBe(false);
+      expect(
+        checkPermissionSync(
+          ctx,
+          grants,
+          createMockEntity({ ownership: "team" as unknown as Entity["ownership"] }),
+          { ownership: true }
+        )
+      ).toBe(false);
+    });
+
+    it("requires every entity to pass with its own ownership value", () => {
+      const ctx = createMockContext(
+        { id: "user-123", role: "member" },
+        { activeOrganizationId: "org-1", activeOrganizationRole: "owner" }
+      );
+      const grants: ResourceActionGrant[] = [
+        { level: "user", role: "member", access: "own" },
+        { level: "organization", role: "owner", access: "all" },
+      ];
+
+      expect(
+        checkPermissionSync(
+          ctx,
+          grants,
+          [
+            createMockEntity({ ownership: "member", userId: "user-123" }),
+            createMockEntity({ ownership: "organization", organizationId: "org-1" }),
+          ],
+          { ownership: true }
+        )
+      ).toBe(true);
+
+      expect(
+        checkPermissionSync(
+          ctx,
+          grants,
+          [
+            createMockEntity({ ownership: "member", userId: "other-user" }),
+            createMockEntity({ ownership: "organization", organizationId: "org-1" }),
+          ],
+          { ownership: true }
+        )
+      ).toBe(false);
+    });
+  });
+
   describe("multiple grants", () => {
     it("checks 'all' access before 'own' access (optimization)", () => {
       const ctx = createMockContext({ id: "user-123", role: "admin" });
@@ -751,6 +885,20 @@ describe("checkPermissionAsync", () => {
       expect(result.isOk()).toBe(true);
       if (result.isOk()) expect(result.value).toBe(true);
       expect(getEntities).not.toHaveBeenCalled();
+    });
+
+    it("loads entities before allowing 'all' access in ownership-aware mode", async () => {
+      const ctx = createMockContext({ role: "admin" });
+      const grants: ResourceActionGrant[] = [{ level: "user", role: "admin", access: "all" }];
+      const getEntities = jest
+        .fn()
+        .mockResolvedValue(ok(createMockEntity({ ownership: "member" })));
+
+      const result = await checkPermissionAsync(ctx, grants, getEntities, { ownership: true });
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) expect(result.value).toBe(true);
+      expect(getEntities).toHaveBeenCalledTimes(1);
     });
   });
 

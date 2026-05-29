@@ -7,7 +7,7 @@ import type { logger } from "../../utils/logger";
 import type { Base } from "./base.abstract";
 import { type Actor, type ActorScope, type AuthenticatedActor, validateActor } from "./base.actor";
 import type { ServerResult, ServerResultAsync } from "./base.dto";
-import type { Entity, ResourceActionGrant } from "./base.grants";
+import type { Entity, PermissionCheckOptions, ResourceActionGrant } from "./base.grants";
 
 type ServiceLogger = ReturnType<typeof logger.child>;
 type RepositoryMap = Record<string, Base>;
@@ -111,6 +111,7 @@ export type ServiceProcedureEntityResolver<
 type ServiceProcedureAccessBaseConfig = {
   action: string;
   grants?: ResourceActionGrant[];
+  ownership?: boolean;
 };
 
 export type ServiceProcedureEntityStepName<State extends ServiceProcedureState> = Extract<
@@ -259,14 +260,7 @@ export interface PermissionServiceProcedureBuilder<
   Services extends ServiceMap,
   State extends ServiceProcedureState = Record<string, never>,
   TExpectedOutput = void,
-> extends ServiceProcedureBuilder<
-    TInput,
-    TCtx,
-    Repositories,
-    Services,
-    State,
-    TExpectedOutput
-  > {
+> extends ServiceProcedureBuilder<TInput, TCtx, Repositories, Services, State, TExpectedOutput> {
   input<TSchema extends z.ZodType>(
     schema: TSchema,
     validate?: boolean
@@ -410,13 +404,15 @@ type PermissionServiceProcedureHost<
     actor: AuthenticatedActor,
     action: string,
     entities?: T | T[],
-    grants?: ResourceActionGrant[]
+    grants?: ResourceActionGrant[],
+    options?: PermissionCheckOptions
   ): boolean;
   checkPermissionAsync<T extends Entity>(
     actor: AuthenticatedActor,
     action: string,
     getEntities: () => ServerResultAsync<T | T[] | undefined>,
-    grants?: ResourceActionGrant[]
+    grants?: ResourceActionGrant[],
+    options?: PermissionCheckOptions
   ): ServerResultAsync<boolean>;
 };
 
@@ -650,10 +646,7 @@ function createContextFilterStep<Repositories extends RepositoryMap, Services ex
   };
 }
 
-function createInputValidationStep<
-  Repositories extends RepositoryMap,
-  Services extends ServiceMap,
->(
+function createInputValidationStep<Repositories extends RepositoryMap, Services extends ServiceMap>(
   host: BaseServiceProcedureHost<Repositories, Services>,
   schema: z.ZodType
 ): ProcedureRuntimeStep<Repositories, Services> {
@@ -688,6 +681,7 @@ function createAccessStep<
       const typedArgs = args as ServiceProcedureArgs<TInput, TCtx, Repositories, Services, State>;
       const actor = requireProcedureActor(host, typedArgs.ctx, "user");
       if (actor.isErr()) return actor;
+      const permissionOptions: PermissionCheckOptions = config.ownership ? { ownership: true } : {};
 
       if ("entityStep" in config && typeof config.entityStep === "string") {
         const entities = typedArgs.state[config.entityStep] as TEntities;
@@ -695,7 +689,8 @@ function createAccessStep<
           actor.value,
           config.action,
           entities as Entity | Entity[] | undefined,
-          config.grants
+          config.grants,
+          permissionOptions
         );
 
         if (!hasPermission) {
@@ -721,7 +716,8 @@ function createAccessStep<
             }
             return entityResult;
           },
-          config.grants
+          config.grants,
+          permissionOptions
         );
 
         if (permission.isErr()) {
@@ -740,7 +736,8 @@ function createAccessStep<
         actor.value,
         config.action,
         entities,
-        config.grants
+        config.grants,
+        permissionOptions
       );
 
       if (!hasPermission) {
