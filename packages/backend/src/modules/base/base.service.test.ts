@@ -385,6 +385,50 @@ describe("BaseService procedure builder", () => {
     }
   });
 
+  it("rebases ServerError stacks and exposes origin from the caller", () => {
+    class OriginService extends BaseService<Record<string, never>, Record<string, never>> {
+      failDirectly() {
+        return this.error("BAD_REQUEST", "bad", { log: false });
+      }
+    }
+
+    const service = new OriginService();
+    const result = service.failDirectly();
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      const firstStackFrame = result.error.stack?.split("\n")[1]?.trim();
+
+      expect(firstStackFrame).toContain("OriginService.failDirectly");
+      expect(firstStackFrame).not.toContain("base.abstract");
+      expect(result.error.origin).toContain("OriginService.failDirectly");
+      expect(result.error.origin).toContain("base.service.test.ts");
+      expect(result.error.toJSON().origin).toBe(result.error.origin);
+    }
+  });
+
+  it("adds the procedure name to returned ServerError context", async () => {
+    class ProcedureErrorService extends BaseService<Record<string, never>, Record<string, never>> {
+      readonly run = this.procedure("generateQuarterDraft").handle(() =>
+        this.error("BAD_REQUEST", "bad", {
+          context: { requestId: "req-1" },
+          log: false,
+        })
+      );
+    }
+
+    const service = new ProcedureErrorService();
+    const result = await service.run(undefined, {});
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.context).toMatchObject({
+        procedure: "generateQuarterDraft",
+        requestId: "req-1",
+      });
+    }
+  });
+
   it("logs metadata stages without input or context payloads", async () => {
     class LoggedService extends BaseService<Record<string, never>, Record<string, never>> {
       readonly run = this.procedure<{ secret: string }>("run")

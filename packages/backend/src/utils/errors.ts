@@ -11,8 +11,9 @@ export class ServerError extends Error {
   readonly layer: ServerErrorLayer;
   readonly layerName: string;
   readonly clientMessage?: string;
-  readonly context?: Record<string, unknown>;
+  context?: Record<string, unknown>;
   readonly boundaryStack?: string; // where we wrapped it
+  origin?: string;
 
   constructor({
     code,
@@ -46,7 +47,16 @@ export class ServerError extends Error {
     if (captureBoundary) this.boundaryStack = new Error().stack;
 
     Error.captureStackTrace?.(this, ServerError);
+    this.refreshOrigin();
     Object.setPrototypeOf(this, new.target.prototype);
+  }
+
+  refreshOrigin(): void {
+    this.origin = extractOrigin(this.stack);
+  }
+
+  addContext(context: Record<string, unknown>): void {
+    this.context = { ...(this.context ?? {}), ...context };
   }
 
   is5xxError(): boolean {
@@ -72,6 +82,7 @@ export class ServerError extends Error {
       layer: this.layer,
       layerName: this.layerName,
       message: this.message,
+      origin: this.origin,
       context: this.context,
       stack: process.env.NODE_ENV !== "production" ? this.stack : undefined,
       boundaryStack: process.env.NODE_ENV !== "production" ? this.boundaryStack : undefined,
@@ -131,18 +142,33 @@ export function reportError(
     return;
   }
   if (err instanceof ServerError) {
+    const hintExtra = (hint as { extra?: Record<string, unknown> } | undefined)?.extra;
     // Merge - don't clobber caller-provided hint
     eventHint = {
       ...hint,
       extra: {
-        ...((hint as any)?.extra ?? {}),
+        ...(hintExtra ?? {}),
         layer: err.layer,
         layerName: err.layerName,
         code: err.code,
         message: err.message,
         clientMessage: err.clientMessage,
+        origin: err.origin,
       },
-    };
+    } as Parameters<typeof captureException>[1];
   }
   return reporter.captureException(err, eventHint);
+}
+
+function extractOrigin(stack?: string): string | undefined {
+  if (!stack) return undefined;
+  const frame = stack
+    .split("\n")
+    .slice(1)
+    .find(
+      (line) =>
+        !line.includes("node_modules") &&
+        !/base\.(abstract|procedure)\.|utils[\\/]errors\./.test(line)
+    );
+  return frame?.trim().replace(/^at\s+/, "");
 }

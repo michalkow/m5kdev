@@ -390,7 +390,12 @@ type BaseServiceProcedureHost<Repositories extends RepositoryMap, Services exten
   error(
     code: TRPC_ERROR_CODE_KEY,
     message?: string,
-    options?: { cause?: unknown; clientMessage?: string; log?: boolean }
+    options?: {
+      cause?: unknown;
+      clientMessage?: string;
+      context?: Record<string, unknown>;
+      log?: boolean;
+    }
   ): ServerResult<never>;
   throwableAsync<T>(fn: () => ServerResultAsync<T>): ServerResultAsync<T>;
   handleUnknownError(error: unknown): ServerError;
@@ -458,6 +463,13 @@ async function normalizeProcedureResult<T>(
 ): Promise<ServerResult<T>> {
   const resolved = await result;
   return isServerResult<T>(resolved) ? resolved : ok(resolved);
+}
+
+function addProcedureContext<T>(result: ServerResult<T>, procedure: string): ServerResult<T> {
+  if (result.isErr()) {
+    result.error.addContext({ procedure });
+  }
+  return result;
 }
 
 function assertUniqueStepName<Repositories extends RepositoryMap, Services extends ServiceMap>(
@@ -782,6 +794,7 @@ function createProcedureHandler<
           });
 
           if (stepResult.isErr()) {
+            addProcedureContext(stepResult, config.name);
             logProcedureStage(host, config.name, typedCtx, getFailureStage(stepResult.error.code), {
               stepName: step.stepName,
               durationMs: Date.now() - startTime,
@@ -821,6 +834,7 @@ function createProcedureHandler<
         );
 
         if (handlerResult.isErr()) {
+          addProcedureContext(handlerResult, config.name);
           logProcedureStage(
             host,
             config.name,
@@ -837,7 +851,10 @@ function createProcedureHandler<
         if (config.outputSchema) {
           const parsed = config.outputSchema.safeParse(handlerResult.value);
           if (!parsed.success) {
-            return host.error("INTERNAL_SERVER_ERROR", parsed.error.message);
+            return addProcedureContext(
+              host.error("INTERNAL_SERVER_ERROR", parsed.error.message),
+              config.name
+            );
           }
           logProcedureStage(host, config.name, typedCtx, "success", {
             durationMs: Date.now() - startTime,

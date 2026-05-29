@@ -33,7 +33,12 @@ type QueryBuilderHost = {
   error(
     code: TRPC_ERROR_CODE_KEY,
     message?: string,
-    options?: { cause?: unknown; clientMessage?: string; log?: boolean }
+    options?: {
+      cause?: unknown;
+      clientMessage?: string;
+      context?: Record<string, unknown>;
+      log?: boolean;
+    }
   ): ServerResult<never>;
   throwableAsync<T>(fn: () => ServerResultAsync<T>): ServerResultAsync<T>;
   handleUnknownError(error: unknown): ServerError;

@@ -20,8 +20,14 @@ export abstract class Base {
     {
       cause,
       clientMessage,
+      context,
       log = process.env.NODE_ENV === "development",
-    }: { cause?: unknown; clientMessage?: string; log?: boolean } = {}
+    }: {
+      cause?: unknown;
+      clientMessage?: string;
+      context?: Record<string, unknown>;
+      log?: boolean;
+    } = {}
   ) {
     const serverError = new ServerError({
       code,
@@ -30,8 +36,11 @@ export abstract class Base {
       message,
       clientMessage,
       cause,
+      context,
       captureBoundary: true,
     });
+    Error.captureStackTrace?.(serverError, this.error);
+    serverError.refreshOrigin();
     if (serverError.is5xxError()) reportError(serverError);
     if (log) logger.error(serverError);
     return err(serverError);
