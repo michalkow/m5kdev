@@ -1,5 +1,50 @@
 # @m5kdev/backend
 
+## 0.20.33
+
+### Patch Changes
+
+- rc-4
+- Updated dependencies
+  - @m5kdev/commons@0.20.33
+  - @m5kdev/config@0.20.33
+
+## 0.20.32
+
+### Patch Changes
+
+- rc-4
+- Updated dependencies
+  - @m5kdev/commons@0.20.32
+  - @m5kdev/config@0.20.32
+
+## 0.20.31
+
+### Patch Changes
+
+- rc-3
+- Updated dependencies
+  - @m5kdev/commons@0.20.31
+  - @m5kdev/config@0.20.31
+
+## 0.20.30
+
+### Patch Changes
+
+- rc-2
+- Updated dependencies
+  - @m5kdev/commons@0.20.30
+  - @m5kdev/config@0.20.30
+
+## 0.20.29
+
+### Patch Changes
+
+- rc-1
+- Updated dependencies
+  - @m5kdev/commons@0.20.29
+  - @m5kdev/config@0.20.29
+
 ## 0.20.8
 
 ### Patch Changes

@@ -7,5 +7,12 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": []
+  "ignore": [
+    "m5kdev-auth-e2e-email",
+    "m5kdev-auth-e2e-server",
+    "m5kdev-auth-e2e-shared",
+    "m5kdev-auth-e2e-tests",
+    "m5kdev-auth-e2e-webapp",
+    "m5kdev-docs"
+  ]
 }

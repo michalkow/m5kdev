@@ -1,5 +1,35 @@
 # create-m5kdev
 
+## 0.20.7
+
+### Patch Changes
+
+- rc-4
+
+## 0.20.6
+
+### Patch Changes
+
+- rc-4
+
+## 0.20.5
+
+### Patch Changes
+
+- rc-3
+
+## 0.20.4
+
+### Patch Changes
+
+- rc-2
+
+## 0.20.3
+
+### Patch Changes
+
+- rc-1
+
 ## 0.20.2
 
 ### Patch Changes
