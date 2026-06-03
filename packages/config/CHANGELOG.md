@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.20.34
+
+### Patch Changes
+
+- rc-5
+
 ## 0.20.33
 
 ### Patch Changes
