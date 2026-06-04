@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/backend",
-  "version": "0.20.34",
+  "version": "0.20.38",
   "description": "Composable Express server stack with Drizzle ORM and tRPC.",
   "license": "GPL-3.0-only",
   "repository": {

@@ -44,6 +44,8 @@ export const tagCreateSchema = z.object({
   assignableTo: z.string().array().optional().default([]),
   resourceType: z.string().optional(),
   resourceId: z.string().optional(),
+  parentId: z.string().nullish(),
+  type: z.string().nullish(),
 });
 
 export const tagUpdateSchema = z.object({
@@ -51,6 +53,8 @@ export const tagUpdateSchema = z.object({
   name: z.string().optional(),
   color: z.string().optional(),
   assignableTo: z.string().array().optional(),
+  parentId: z.string().nullish(),
+  type: z.string().nullish(),
 });
 
 export const tagLinkSchema = z.object({

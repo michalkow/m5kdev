@@ -1,8 +1,12 @@
 import { Button, Card, Chip, Input, Label, ListBox, Select, Spinner, Table } from "@heroui/react";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
-import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
+import { useAuthMemberInvite } from "@m5kdev/frontend/modules/auth/hooks/useMemberInvite";
+import {
+  type AuthOrganizationRole,
+  useOrganizationAccess,
+} from "@m5kdev/frontend/modules/auth/hooks/useOrganizationAccess";
 import type { Key } from "@react-types/shared";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Copy, Trash2, UserPlus, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -60,8 +64,6 @@ type CombinedMemberRow =
     };
 
 const ORGANIZATION_ROLES = ["member", "admin", "owner"] as const;
-
-export type AuthOrganizationRole = (typeof ORGANIZATION_ROLES)[number];
 
 function isAuthOrganizationRole(role: string): role is AuthOrganizationRole {
   return (ORGANIZATION_ROLES as readonly string[]).includes(role);
@@ -125,47 +127,6 @@ function OrganizationStateCard({ title, message }: { title: string; message: str
       </Card>
     </div>
   );
-}
-
-function useOrganizationAccess({
-  managerRoles,
-  onInvalidateScopedQueries,
-}: Pick<AuthOrganizationMembersRouteProps, "managerRoles" | "onInvalidateScopedQueries">) {
-  const { data: session, registerSession } = useSession();
-  const queryClient = useQueryClient();
-
-  const activeOrganizationId = session?.session.activeOrganizationId ?? "";
-  const activeOrganizationRole =
-    (session?.session as { activeOrganizationRole?: string } | undefined)?.activeOrganizationRole ??
-    "";
-  const managerRoleSet = useMemo(() => new Set(managerRoles ?? ["admin", "owner"]), [managerRoles]);
-  const canManageOrganization = managerRoleSet.has(activeOrganizationRole);
-
-  const refreshOrganizationQueries = useCallback(async () => {
-    await Promise.allSettled([
-      queryClient.invalidateQueries({ queryKey: ["auth-organization-list"] }),
-      queryClient.invalidateQueries({
-        queryKey: ["auth-organization-details", activeOrganizationId],
-      }),
-      queryClient.invalidateQueries({
-        queryKey: ["auth-organization-members", activeOrganizationId],
-      }),
-      queryClient.invalidateQueries({
-        queryKey: ["auth-organization-invitations", activeOrganizationId],
-      }),
-    ]);
-
-    registerSession(() => {
-      void onInvalidateScopedQueries?.();
-    });
-  }, [activeOrganizationId, onInvalidateScopedQueries, queryClient, registerSession]);
-
-  return {
-    activeOrganizationId,
-    activeOrganizationRole,
-    canManageOrganization,
-    refreshOrganizationQueries,
-  };
 }
 
 function useOrganizationConfig({
@@ -323,25 +284,8 @@ export function AuthOrganizationMembersRoute({
     },
   });
 
-  const createInvitationMutation = useMutation({
-    mutationFn: async ({
-      email,
-      role,
-      organizationId,
-    }: {
-      email: string;
-      role: AuthOrganizationRole;
-      organizationId: string;
-    }) => {
-      const { error } = await authClient.organization.inviteMember({
-        organizationId,
-        email: email.trim(),
-        role,
-      });
-      if (error) throw new Error(error.message ?? resolvedLabels.inviteError);
-    },
+  const createInvitationMutation = useAuthMemberInvite({
     onSuccess: async () => {
-      await refreshOrganizationQueriesStable();
       toast.success(resolvedLabels.inviteSuccess);
       if (isMountedRef.current) {
         setInviteEmail("");
@@ -495,7 +439,6 @@ export function AuthOrganizationMembersRoute({
     createInvitationMutation.mutate({
       email: inviteEmail,
       role: inviteRole,
-      organizationId: activeOrganizationId,
     });
   }, [
     canManageOrganization,

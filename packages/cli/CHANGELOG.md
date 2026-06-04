@@ -1,5 +1,17 @@
 # create-m5kdev
 
+## 0.20.10
+
+### Patch Changes
+
+- hooks
+
+## 0.20.9
+
+### Patch Changes
+
+- hooks
+
 ## 0.20.8
 
 ### Patch Changes

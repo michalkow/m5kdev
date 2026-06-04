@@ -1,5 +1,21 @@
 # @m5kdev/frontend
 
+## 0.20.38
+
+### Patch Changes
+
+- hooks
+- Updated dependencies
+  - @m5kdev/commons@0.20.38
+
+## 0.20.37
+
+### Patch Changes
+
+- hooks
+- Updated dependencies
+  - @m5kdev/commons@0.20.37
+
 ## 0.20.34
 
 ### Patch Changes
