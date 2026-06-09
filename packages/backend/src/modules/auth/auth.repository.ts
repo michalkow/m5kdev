@@ -528,7 +528,7 @@ export class AuthWaitlistRepository extends BaseTableRepository<
     email: string;
     metadata?: Record<string, unknown>;
     onboarding?: number;
-    role?: "user" | "admin" | "agent";
+    role?: "user" | "admin" | "owner";
     expiresInHours?: number;
   }): ServerResultAsync<{
     user: UserRow;

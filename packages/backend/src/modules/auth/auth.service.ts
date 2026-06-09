@@ -69,11 +69,12 @@ export class AuthService extends BasePermissionService<
     const organizationType = ctx.session.activeOrganizationType ?? "organization";
     const parentId = ctx.session.activeOrganizationId ?? null;
     const role = ctx.session.activeOrganizationRole ?? "member";
-    if (!parentId || !["enterprise", "agency"].includes(organizationType) || !["admin", "owner"].includes(role)) 
-      return this.error(
-        "FORBIDDEN",
-        "You are not allowed to create an organization"
-      );
+    if (
+      !parentId ||
+      !["enterprise", "agency"].includes(organizationType) ||
+      !["admin", "owner"].includes(role)
+    )
+      return this.error("FORBIDDEN", "You are not allowed to create an organization");
     return ok({ parentId, organizationType });
   }
 
@@ -85,25 +86,24 @@ export class AuthService extends BasePermissionService<
     const role = ctx.session.activeOrganizationRole ?? "member";
 
     this.logger.info({ parentId, organizationType, role, ctx });
-    if (!parentId) 
+    if (!parentId)
       return this.error(
         "FORBIDDEN",
         "You are not allowed to manage child organizations without a parent organization"
       );
-    
-    if (!["enterprise", "agency"].includes(organizationType)) 
+
+    if (!["enterprise", "agency"].includes(organizationType))
       return this.error(
         "FORBIDDEN",
         "You are not allowed to manage child organizations in this organization type"
       );
-    
 
-    if (!["admin", "owner"].includes(role)) 
+    if (!["admin", "owner"].includes(role))
       return this.error(
         "FORBIDDEN",
         "You are not allowed to manage child organizations in this role"
       );
-    
+
     return ok({ parentId, organizationType });
   }
 
@@ -252,7 +252,7 @@ export class AuthService extends BasePermissionService<
         name: input.name,
         parentId: access.value.parentId,
         userId: ctx.actor.userId,
-        role: access.value.organizationType === "agency" ? "agent" : "owner",
+        role: access.value.organizationType === "agency" ? "admin" : "owner",
       });
     });
 
