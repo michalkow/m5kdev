@@ -52,7 +52,7 @@ export class RecurrenceService extends BasePermissionService<
   Record<string, never>
 > {
   readonly list = this.procedure<QueryInput>("list")
-    .addContextFilter(["user"])
+    .addContextFilter(["user", "organization"])
     .handle(({ input }) =>
       this.repository.recurrence.queryList(input, {
         globalSearchColumns: ["name", "kind"],
