@@ -607,57 +607,46 @@ export function createBetterAuth<
         },
         update: {
           before: async (session, ctx) => {
+            const data = { ...session };
             const prevSession = ctx?.context.session?.session;
-            if (!prevSession) return { data: session };
-            const { userId } = prevSession;
             const { activeOrganizationId, activeTeamId } = session;
 
-            logger.debug({ step: "before update session", session, prevSession });
+            if (prevSession) {
+              if (
+                activeOrganizationId &&
+                activeOrganizationId !== prevSession.activeOrganizationId
+              ) {
+                const newOrganization = await getNewOrganization(
+                  orm,
+                  schema,
+                  activeOrganizationId as string,
+                  prevSession.userId
+                );
 
-            if (activeOrganizationId && activeOrganizationId !== prevSession.activeOrganizationId) {
-              const {
-                type: activeOrganizationType,
-                role: activeOrganizationRole,
-                memberId: activeOrganizationMemberId,
-                teamId: activeTeamId,
-                teamRole: activeTeamRole,
-              } = await getNewOrganization(
-                orm,
-                schema,
-                activeOrganizationId as string,
-                userId as string
-              );
+                data.activeOrganizationType = newOrganization.type;
+                data.activeOrganizationRole = newOrganization.role;
+                data.activeOrganizationMemberId = newOrganization.memberId;
+                data.activeTeamId = newOrganization.teamId;
+                data.activeTeamRole = newOrganization.teamRole;
+              }
 
-              return {
-                data: {
-                  ...session,
-                  activeOrganizationType,
-                  activeOrganizationRole,
-                  activeOrganizationMemberId,
-                  activeTeamId,
-                  activeTeamRole,
-                },
-              };
+              if (activeTeamId && activeTeamId !== prevSession.activeTeamId) {
+                const newTeam = await getNewTeam(
+                  orm,
+                  schema,
+                  activeTeamId as string,
+                  prevSession.userId
+                );
+                data.activeTeamRole = newTeam.role;
+              }
             }
-
-            if (activeTeamId && activeTeamId !== prevSession.activeTeamId) {
-              const { role: activeTeamRole } = await getNewTeam(
-                orm,
-                schema,
-                activeTeamId as string,
-                userId as string
-              );
-              return {
-                data: {
-                  ...session,
-                  activeTeamRole,
-                },
-              };
-            }
-
-            return {
-              data: session,
-            };
+            logger.debug({
+              step: "before update session",
+              currentSession: session,
+              prevSession,
+              nextSession: data,
+            });
+            return { data };
           },
         },
       },
