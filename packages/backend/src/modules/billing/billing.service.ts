@@ -2,10 +2,10 @@ import type { BillingSchema } from "@m5kdev/commons/modules/billing/billing.sche
 import { err, ok } from "neverthrow";
 import type Stripe from "stripe";
 import { posthogCapture } from "../../utils/posthog";
+import type { Context } from "../../utils/trpc";
 import type { User } from "../auth/auth.lib";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
-import type { Context } from "../../utils/trpc";
-import { BaseService } from "../base/base.service";
+import { BasePermissionService } from "../base/base.service";
 import type { BillingRepository } from "./billing.repository";
 
 const allowedEvents: Stripe.Event.Type[] = [
@@ -29,7 +29,7 @@ const allowedEvents: Stripe.Event.Type[] = [
   "payment_intent.canceled",
 ];
 
-export class BillingService extends BaseService<{ billing: BillingRepository }, never> {
+export class BillingService extends BasePermissionService<{ billing: BillingRepository }, never> {
   async createUserCustomer({
     user,
   }: {
@@ -86,10 +86,16 @@ export class BillingService extends BaseService<{ billing: BillingRepository }, 
   }
 
   async getActiveSubscription(ctx: Context): ServerResultAsync<BillingSchema | null> {
+    const readGuard = this.accessGuard(ctx.actor, "read", { userId: ctx.actor.userId });
+    if (readGuard.isErr()) return err(readGuard.error);
+
     return this.repository.billing.getActiveSubscription(ctx.actor.userId);
   }
 
   async listInvoices(ctx: Context): ServerResultAsync<Stripe.Invoice[]> {
+    const readGuard = this.accessGuard(ctx.actor, "read", { userId: ctx.actor.userId });
+    if (readGuard.isErr()) return err(readGuard.error);
+
     if (!ctx.user.stripeCustomerId)
       return this.error("NOT_FOUND", "User has no stripe customer id");
     return this.repository.billing.listInvoices(ctx.user.stripeCustomerId);

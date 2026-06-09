@@ -1,5 +1,6 @@
 import { createBackendRouterMap } from "../../app";
 import type { AuthModule } from "../auth/auth.module";
+import type { Grant } from "../base/base.grants";
 import {
   BaseModule,
   type ModuleRepositoriesContext,
@@ -7,6 +8,7 @@ import {
   type ModuleTRPCContext,
 } from "../base/base.module";
 import type * as recurrenceTables from "./recurrence.db";
+import { defaultRecurrenceGrants } from "./recurrence.grants";
 import { RecurrenceRepository, RecurrenceRulesRepository } from "./recurrence.repository";
 import { RecurrenceService } from "./recurrence.service";
 import { createRecurrenceTRPC } from "./recurrence.trpc";
@@ -33,9 +35,11 @@ export class RecurrenceModule<const Namespace extends string = "recurrence"> ext
 > {
   readonly id = "recurrence";
   override readonly dependsOn = ["auth"] as const;
+  private readonly grants: Grant[];
 
-  constructor(private readonly options: { namespace?: Namespace } = {}) {
+  constructor(private readonly options: { namespace?: Namespace; grants?: Grant[] } = {}) {
     super();
+    this.grants = options.grants ?? defaultRecurrenceGrants;
   }
 
   override repositories({ db }: ModuleRepositoriesContext<RecurrenceModuleDeps, RecurrenceModuleTables>) {
@@ -62,7 +66,8 @@ export class RecurrenceModule<const Namespace extends string = "recurrence"> ext
           recurrence: repositories.recurrence,
           recurrenceRules: repositories.recurrenceRules,
         },
-        {}
+        {},
+        this.grants
       ),
     };
   }

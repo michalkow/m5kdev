@@ -1,5 +1,6 @@
 import { createBackendRouterMap } from "../../app";
 import type { AuthModule } from "../auth/auth.module";
+import type { Grant } from "../base/base.grants";
 import type { WorkflowModule } from "../workflow/workflow.module";
 import {
   BaseModule,
@@ -8,6 +9,7 @@ import {
   type ModuleTRPCContext,
 } from "../base/base.module";
 import type * as notificationTables from "./notification.db";
+import { defaultNotificationGrants } from "./notification.grants";
 import { NotificationRepository } from "./notification.repository";
 import { NotificationService } from "./notification.service";
 import { createNotificationTRPC } from "./notification.trpc";
@@ -33,9 +35,11 @@ export class NotificationModule<const Namespace extends string = "notification">
 > {
   readonly id = "notification";
   override readonly dependsOn = ["auth", "workflow"] as const;
+  private readonly grants: Grant[];
 
-  constructor(private readonly options: { namespace?: Namespace } = {}) {
+  constructor(private readonly options: { namespace?: Namespace; grants?: Grant[] } = {}) {
     super();
+    this.grants = options.grants ?? defaultNotificationGrants;
   }
 
   override repositories({
@@ -56,7 +60,8 @@ export class NotificationModule<const Namespace extends string = "notification">
     return {
       notification: new NotificationService(
         { notification: repositories.notification },
-        { workflow: deps.workflow.services.workflow }
+        { workflow: deps.workflow.services.workflow },
+        this.grants
       ),
     };
   }

@@ -1,6 +1,6 @@
 import type {
-  TagDeleteSchema,
   TagCreateSchema,
+  TagDeleteSchema,
   TagLinkSchema,
   TagListInputSchema,
   TagListOutputSchema,
@@ -9,11 +9,14 @@ import type {
   TagUpdateSchema,
 } from "@m5kdev/commons/modules/tag/tag.schema";
 import type { ServerResultAsync } from "../base/base.dto";
-import { BaseService } from "../base/base.service";
+import { BasePermissionService } from "../base/base.service";
 import type { TaggingSelectOutputResult, TagSelectOutputResult } from "./tag.dto";
 import type { TagRepository } from "./tag.repository";
 
-export class TagService extends BaseService<{ tag: TagRepository }, Record<string, never>> {
+export class TagService extends BasePermissionService<
+  { tag: TagRepository },
+  Record<string, never>
+> {
   readonly list = this.procedure<TagListInputSchema & TagListSchema>("list")
     .requireAuth()
     .handle(({ input, ctx }): ServerResultAsync<TagListOutputSchema> => {
@@ -48,9 +51,9 @@ export class TagService extends BaseService<{ tag: TagRepository }, Record<strin
   readonly update = this.procedure<TagUpdateSchema>("update")
     .requireAuth()
     .loadResource("tag", ({ input }) => this.repository.tag.findById(input.id))
-    .use("owner", ({ ctx, state }) => {
-      if (state.tag.userId !== ctx.actor.userId) return this.error("FORBIDDEN");
-      return true;
+    .access({
+      action: "write",
+      entityStep: "tag",
     })
     .handle(({ input }): Promise<TagSelectOutputResult> => {
       return this.repository.tag.update(input);
@@ -79,9 +82,9 @@ export class TagService extends BaseService<{ tag: TagRepository }, Record<strin
   readonly delete = this.procedure<TagDeleteSchema>("delete")
     .requireAuth()
     .loadResource("tag", ({ input }) => this.repository.tag.findById(input.id))
-    .use("owner", ({ ctx, state }) => {
-      if (state.tag.userId !== ctx.actor.userId) return this.error("FORBIDDEN");
-      return true;
+    .access({
+      action: "delete",
+      entityStep: "tag",
     })
     .handle(({ input }) => this.repository.tag.softDeleteById(input.id));
 }

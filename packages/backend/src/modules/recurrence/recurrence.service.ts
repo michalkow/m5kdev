@@ -8,7 +8,7 @@ import type {
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import { err, ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
-import { BaseService } from "../base/base.service";
+import { BasePermissionService } from "../base/base.service";
 import type {
   CreateRecurrenceRuleInput,
   CreateWithRulesResult,
@@ -47,7 +47,7 @@ function mapRuleToInsert(
   return out as CreateRecurrenceRuleInput;
 }
 
-export class RecurrenceService extends BaseService<
+export class RecurrenceService extends BasePermissionService<
   { recurrence: RecurrenceRepository; recurrenceRules: RecurrenceRulesRepository },
   Record<string, never>
 > {
@@ -78,20 +78,23 @@ export class RecurrenceService extends BaseService<
 
   readonly findById = this.procedure<{ id: string }>("findById")
     .requireAuth()
-    .handle(async ({ input, ctx }): ServerResultAsync<CreateWithRulesResult["recurrence"] | null> => {
-      const result = await this.repository.recurrence.findById(input.id);
-      if (result.isErr()) return err(result.error);
-      if (!result.value) return ok(null);
-      if (result.value.userId !== ctx.actor.userId) return this.error("FORBIDDEN");
-      return ok(result.value);
-    });
+    .handle(
+      async ({ input, ctx }): ServerResultAsync<CreateWithRulesResult["recurrence"] | null> => {
+        const result = await this.repository.recurrence.findById(input.id);
+        if (result.isErr()) return err(result.error);
+        if (!result.value) return ok(null);
+        const guard = this.accessGuard(ctx.actor, "read", { userId: result.value.userId });
+        if (guard.isErr()) return err(guard.error);
+        return ok(result.value);
+      }
+    );
 
   readonly update = this.procedure<UpdateRecurrenceSchema & { id: string }>("update")
     .requireAuth()
     .loadResource("recurrence", ({ input }) => this.repository.recurrence.findById(input.id))
-    .use("owner", ({ ctx, state }) => {
-      if (state.recurrence.userId !== ctx.actor.userId) return this.error("FORBIDDEN");
-      return true;
+    .access({
+      action: "write",
+      entityStep: "recurrence",
     })
     .handle(({ input }): ServerResultAsync<CreateWithRulesResult["recurrence"]> => {
       return this.repository.recurrence.update(input);
@@ -103,9 +106,9 @@ export class RecurrenceService extends BaseService<
     .loadResource("recurrence", ({ state }) =>
       this.repository.recurrence.findById(state.rule.recurrenceId!)
     )
-    .use("owner", ({ ctx, state }) => {
-      if (state.recurrence.userId !== ctx.actor.userId) return this.error("FORBIDDEN");
-      return true;
+    .access({
+      action: "write",
+      entityStep: "recurrence",
     })
     .handle(({ input }): ServerResultAsync<CreateWithRulesResult["rules"][number]> => {
       return this.repository.recurrenceRules.update(input);
@@ -114,9 +117,9 @@ export class RecurrenceService extends BaseService<
   readonly delete = this.procedure<DeleteRecurrenceSchema>("delete")
     .requireAuth()
     .loadResource("recurrence", ({ input }) => this.repository.recurrence.findById(input.id))
-    .use("owner", ({ ctx, state }) => {
-      if (state.recurrence.userId !== ctx.actor.userId) return this.error("FORBIDDEN");
-      return true;
+    .access({
+      action: "delete",
+      entityStep: "recurrence",
     })
     .handle(({ input }): ServerResultAsync<{ id: string }> => {
       return this.repository.recurrence.deleteById(input.id);
@@ -128,9 +131,9 @@ export class RecurrenceService extends BaseService<
     .loadResource("recurrence", ({ state }) =>
       this.repository.recurrence.findById(state.rule.recurrenceId!)
     )
-    .use("owner", ({ ctx, state }) => {
-      if (state.recurrence.userId !== ctx.actor.userId) return this.error("FORBIDDEN");
-      return true;
+    .access({
+      action: "delete",
+      entityStep: "recurrence",
     })
     .handle(({ input }): ServerResultAsync<{ id: string }> => {
       return this.repository.recurrenceRules.deleteById(input.id);

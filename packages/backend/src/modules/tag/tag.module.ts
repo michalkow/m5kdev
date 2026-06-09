@@ -1,5 +1,6 @@
 import { createBackendRouterMap } from "../../app";
 import type { AuthModule } from "../auth/auth.module";
+import type { Grant } from "../base/base.grants";
 import {
   BaseModule,
   type ModuleRepositoriesContext,
@@ -7,6 +8,7 @@ import {
   type ModuleTRPCContext,
 } from "../base/base.module";
 import type * as tagTables from "./tag.db";
+import { defaultTagGrants } from "./tag.grants";
 import { TagRepository } from "./tag.repository";
 import { TagService } from "./tag.service";
 import { createTagTRPC } from "./tag.trpc";
@@ -32,9 +34,11 @@ export class TagModule<const Namespace extends string = "tag"> extends BaseModul
 > {
   readonly id = "tag";
   override readonly dependsOn = ["auth"] as const;
+  private readonly grants: Grant[];
 
-  constructor(private readonly options: { namespace?: Namespace } = {}) {
+  constructor(private readonly options: { namespace?: Namespace; grants?: Grant[] } = {}) {
     super();
+    this.grants = options.grants ?? defaultTagGrants;
   }
 
   override repositories({ db }: ModuleRepositoriesContext<TagModuleDeps, TagModuleTables>) {
@@ -49,7 +53,7 @@ export class TagModule<const Namespace extends string = "tag"> extends BaseModul
 
   override services({ repositories }: ModuleServicesContext<TagModuleDeps, TagModuleRepositories>) {
     return {
-      tag: new TagService({ tag: repositories.tag }, {}),
+      tag: new TagService({ tag: repositories.tag }, {}, this.grants),
     };
   }
 

@@ -9,7 +9,7 @@ import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
 import type { Context } from "../../utils/trpc";
 import type { ServerResultAsync } from "../base/base.dto";
-import { BaseService } from "../base/base.service";
+import { BasePermissionService } from "../base/base.service";
 import type { WorkflowService } from "../workflow/workflow.service";
 import {
   providerForPermanentTokenFailure,
@@ -49,7 +49,7 @@ function maskEndpoint(endpoint: string): string {
   }
 }
 
-export class NotificationService extends BaseService<
+export class NotificationService extends BasePermissionService<
   { notification: NotificationRepository },
   { workflow: WorkflowService }
 > {
@@ -79,6 +79,9 @@ export class NotificationService extends BaseService<
     ctx: Context,
     input: NotificationRegisterDeviceInput
   ): ServerResultAsync<{ deviceId: string }> {
+    const writeGuard = this.accessGuard(ctx.actor, "write", { userId: ctx.actor.userId });
+    if (writeGuard.isErr()) return err(writeGuard.error);
+
     const userId = ctx.actor.userId;
     if (input.platform === "web") {
       const row = await this.repository.notification.upsertWebDevice({
@@ -101,6 +104,9 @@ export class NotificationService extends BaseService<
   }
 
   async unregisterDevice(ctx: Context, deviceId: string): ServerResultAsync<{ ok: true }> {
+    const deleteGuard = this.accessGuard(ctx.actor, "delete", { userId: ctx.actor.userId });
+    if (deleteGuard.isErr()) return err(deleteGuard.error);
+
     const removed = await this.repository.notification.deleteDeviceOwnedByUser(
       deviceId,
       ctx.actor.userId
@@ -122,6 +128,9 @@ export class NotificationService extends BaseService<
       updatedAt: Date;
     }[]
   > {
+    const readGuard = this.accessGuard(ctx.actor, "read", { userId: ctx.actor.userId });
+    if (readGuard.isErr()) return err(readGuard.error);
+
     const rows = await this.repository.notification.listDevicesByUserId(ctx.actor.userId);
     if (rows.isErr()) return err(rows.error);
     return ok(
@@ -158,6 +167,9 @@ export class NotificationService extends BaseService<
       updatedAt: Date;
     }[]
   > {
+    const readGuard = this.accessGuard(ctx.actor, "read", { userId: ctx.actor.userId });
+    if (readGuard.isErr()) return err(readGuard.error);
+
     return this.repository.notification.listSendLogsForUser({
       userId: ctx.actor.userId,
       batchId: input?.batchId,

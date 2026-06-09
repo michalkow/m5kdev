@@ -1,5 +1,6 @@
 import type { ConnectProvider } from "./connect.types";
 import { createBackendRouterMap } from "../../app";
+import type { Grant } from "../base/base.grants";
 import type * as connectTables from "./connect.db";
 import {
   BaseModule,
@@ -8,6 +9,7 @@ import {
   type ModuleServicesContext,
   type ModuleTRPCContext,
 } from "../base/base.module";
+import { defaultConnectGrants } from "./connect.grants";
 import { ConnectRepository } from "./connect.repository";
 import { createConnectRouter } from "./connect.router";
 import { ConnectService } from "./connect.service";
@@ -33,12 +35,18 @@ export class ConnectModule<const Namespace extends string = "connect"> extends B
   ConnectModuleRouters<Namespace>
 > {
   readonly id = "connect";
+  private readonly grants: Grant[];
 
   constructor(
     private readonly providers: ConnectProvider[],
-    private readonly options: { namespace?: Namespace; mountPath?: string } = {}
+    private readonly options: {
+      namespace?: Namespace;
+      mountPath?: string;
+      grants?: Grant[];
+    } = {}
   ) {
     super();
+    this.grants = options.grants ?? defaultConnectGrants;
   }
 
   override repositories({ db }: ModuleRepositoriesContext<ConnectModuleDeps, ConnectModuleTables>) {
@@ -53,7 +61,7 @@ export class ConnectModule<const Namespace extends string = "connect"> extends B
 
   override services({ repositories }: ModuleServicesContext<ConnectModuleDeps, ConnectModuleRepositories>) {
     return {
-      connect: new ConnectService({ connect: repositories.connect }, this.providers),
+      connect: new ConnectService({ connect: repositories.connect }, this.providers, this.grants),
     };
   }
 

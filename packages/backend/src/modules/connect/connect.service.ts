@@ -1,7 +1,8 @@
 import { err, ok } from "neverthrow";
 import type { User } from "../auth/auth.lib";
 import type { ServerResultAsync } from "../base/base.dto";
-import { BaseService } from "../base/base.service";
+import type { ResourceGrant } from "../base/base.grants";
+import { BasePermissionService } from "../base/base.service";
 import type { ConnectDeleteInputSchema, ConnectListInputSchema } from "./connect.dto";
 import {
   buildAuthorizationUrl,
@@ -13,11 +14,15 @@ import {
 import type { ConnectRepository } from "./connect.repository";
 import type { ConnectProvider } from "./connect.types";
 
-export class ConnectService extends BaseService<{ connect: ConnectRepository }, never> {
+export class ConnectService extends BasePermissionService<{ connect: ConnectRepository }, never> {
   private providers = new Map<string, ConnectProvider>();
 
-  constructor(repositories: { connect: ConnectRepository }, providers: ConnectProvider[]) {
-    super(repositories);
+  constructor(
+    repositories: { connect: ConnectRepository },
+    providers: ConnectProvider[],
+    grants: ResourceGrant[]
+  ) {
+    super(repositories, {} as never, grants);
     this.providers = new Map(providers.map((provider) => [provider.id, provider]));
   }
 
@@ -168,14 +173,10 @@ export class ConnectService extends BaseService<{ connect: ConnectRepository }, 
 
   readonly delete = this.procedure<ConnectDeleteInputSchema>("connectDelete")
     .requireAuth()
-    .handle(async ({ input, ctx }) => {
-      const connection = await this.repository.connect.findById(input.id);
-      if (connection.isOk()) {
-        if (connection.value?.userId !== ctx.actor.userId) {
-          return this.error("FORBIDDEN", "Not your connection");
-        }
-        return this.repository.connect.deleteById(input.id);
-      }
-      return err(connection.error);
-    });
+    .loadResource("connection", ({ input }) => this.repository.connect.findById(input.id))
+    .access({
+      action: "delete",
+      entityStep: "connection",
+    })
+    .handle(({ input }) => this.repository.connect.deleteById(input.id));
 }

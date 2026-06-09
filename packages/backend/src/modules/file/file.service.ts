@@ -7,8 +7,10 @@ import { pipeline } from "node:stream/promises";
 import { fileTypes } from "@m5kdev/commons/modules/file/file.constants";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
+import type { AuthenticatedActor } from "../base/base.actor";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
-import { BaseService } from "../base/base.service";
+import type { ResourceGrant } from "../base/base.grants";
+import { BasePermissionService } from "../base/base.service";
 import type { FileRepository, FileS3Repository } from "./file.repository";
 import type {
   FinalizeS3UploadInput,
@@ -23,7 +25,7 @@ export type FileServiceRepositories = {
   file?: FileRepository;
 };
 
-export class FileService extends BaseService<
+export class FileService extends BasePermissionService<
   { fileS3: FileS3Repository } & Partial<{ file: FileRepository }>,
   never
 > {
@@ -84,7 +86,13 @@ export class FileService extends BaseService<
     return ok(undefined);
   }
 
-  async initiateS3Upload(input: InitiateS3UploadInput): ServerResultAsync<InitiateS3UploadResult> {
+  async initiateS3Upload(
+    actor: AuthenticatedActor,
+    input: InitiateS3UploadInput
+  ): ServerResultAsync<InitiateS3UploadResult> {
+    const writeGuard = this.accessGuard(actor, "write", { userId: input.userId });
+    if (writeGuard.isErr()) return err(writeGuard.error);
+
     const bucket = this.repository.fileS3.getBucket();
     if (!bucket) {
       return this.error("INTERNAL_SERVER_ERROR", "S3 bucket is not configured");
@@ -136,18 +144,24 @@ export class FileService extends BaseService<
     });
   }
 
-  async finalizeS3Upload(input: FinalizeS3UploadInput): ServerResultAsync<void> {
+  async finalizeS3Upload(
+    actor: AuthenticatedActor,
+    input: FinalizeS3UploadInput
+  ): ServerResultAsync<void> {
     const fileRepo = this.repository.file;
     if (!fileRepo) {
       return this.error("BAD_REQUEST", "File inventory is not configured");
     }
 
-    const rowResult = await fileRepo.findActiveByIdForUser(input.fileId, input.userId);
+    const rowResult = await fileRepo.findActiveById(input.fileId);
     if (rowResult.isErr()) return err(rowResult.error);
     const row = rowResult.value;
     if (!row) {
       return this.error("NOT_FOUND", "File not found");
     }
+
+    const writeGuard = this.accessGuard(actor, "write", { userId: row.userId });
+    if (writeGuard.isErr()) return err(writeGuard.error);
 
     if (row.status === "UPLOADED") {
       return ok(undefined);
@@ -166,18 +180,21 @@ export class FileService extends BaseService<
     return ok(undefined);
   }
 
-  async deleteUploadedFileById(fileId: string, userId: string): ServerResultAsync<void> {
+  async deleteUploadedFileById(actor: AuthenticatedActor, fileId: string): ServerResultAsync<void> {
     const fileRepo = this.repository.file;
     if (!fileRepo) {
       return this.error("BAD_REQUEST", "File inventory is not configured");
     }
 
-    const rowResult = await fileRepo.findActiveByIdForUser(fileId, userId);
+    const rowResult = await fileRepo.findActiveById(fileId);
     if (rowResult.isErr()) return err(rowResult.error);
     const row = rowResult.value;
     if (!row) {
       return this.error("NOT_FOUND", "File not found");
     }
+
+    const deleteGuard = this.accessGuard(actor, "delete", { userId: row.userId });
+    if (deleteGuard.isErr()) return err(deleteGuard.error);
 
     const s3Result = await this.repository.fileS3.deleteS3Object(row.key);
     if (s3Result.isErr()) return err(s3Result.error);

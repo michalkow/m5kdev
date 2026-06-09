@@ -5,6 +5,7 @@ import express, { type Request, type Response, type Router } from "express";
 import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
 import type { AuthMiddleware, AuthRequest } from "../auth/auth.middleware";
+import { createActorFromContext } from "../base/base.actor";
 import type { FileService } from "./file.service";
 
 function validateMimeType(type: string, file: Express.Multer.File): boolean {
@@ -121,7 +122,8 @@ export function createUploadRouter({
         return res.status(400).json({ error: "Missing contentType or originalName" });
       }
 
-      const result = await fileService.initiateS3Upload({
+      const actor = createActorFromContext({ user, session }, "user");
+      const result = await fileService.initiateS3Upload(actor, {
         userId,
         organizationId,
         teamId,
@@ -154,7 +156,8 @@ export function createUploadRouter({
         return res.status(400).json({ error: "Missing fileId" });
       }
 
-      const result = await fileService.finalizeS3Upload({ userId, fileId, etag });
+      const actor = createActorFromContext({ user, session }, "user");
+      const result = await fileService.finalizeS3Upload(actor, { userId, fileId, etag });
       if (result.isErr()) {
         const status =
           result.error.code === "NOT_FOUND" ? 404 : result.error.code === "BAD_REQUEST" ? 400 : 500;
@@ -171,13 +174,13 @@ export function createUploadRouter({
     if (!user || !session) {
       return res.status(401).json({ message: "Unauthorized" });
     }
-    const userId = user.id;
     const { fileId } = req.params;
     if (!fileId) {
       return res.status(400).json({ error: "Missing fileId" });
     }
 
-    const result = await fileService.deleteUploadedFileById(fileId, userId);
+    const actor = createActorFromContext({ user, session }, "user");
+    const result = await fileService.deleteUploadedFileById(actor, fileId);
     if (result.isErr()) {
       const status =
         result.error.code === "NOT_FOUND" ? 404 : result.error.code === "BAD_REQUEST" ? 400 : 500;

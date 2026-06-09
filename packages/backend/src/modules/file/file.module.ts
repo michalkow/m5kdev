@@ -1,4 +1,5 @@
 import type { AuthModule } from "../auth/auth.module";
+import type { Grant } from "../base/base.grants";
 import {
   BaseModule,
   type ModuleExpressContext,
@@ -6,6 +7,7 @@ import {
   type ModuleServicesContext,
 } from "../base/base.module";
 import type * as fileTables from "./file.db";
+import { defaultFileGrants } from "./file.grants";
 import { FileRepository, FileS3Repository } from "./file.repository";
 import { createUploadRouter } from "./file.router";
 import { FileService } from "./file.service";
@@ -30,9 +32,14 @@ export class FileModule extends BaseModule<
 > {
   readonly id = "file";
   override readonly dependsOn = ["auth"] as const;
+  private readonly grants: Grant[];
 
-  constructor(private readonly mountPath: string = "/upload") {
+  constructor(
+    private readonly mountPath: string = "/upload",
+    grants?: Grant[]
+  ) {
     super();
+    this.grants = grants ?? defaultFileGrants;
   }
 
   override repositories({ db }: ModuleRepositoriesContext<FileModuleDeps, FileModuleTables>) {
@@ -45,19 +52,26 @@ export class FileModule extends BaseModule<
     };
   }
 
-  override services({ repositories }: ModuleServicesContext<FileModuleDeps, FileModuleRepositories>) {
+  override services({
+    repositories,
+  }: ModuleServicesContext<FileModuleDeps, FileModuleRepositories>) {
     return {
       file: new FileService(
         {
           file: repositories.file,
           fileS3: repositories.fileS3,
         },
-        undefined as never
+        {} as never,
+        this.grants
       ),
     };
   }
 
-  override express({ infra, services, authMiddleware }: ModuleExpressContext<FileModuleDeps, FileModuleServices>) {
+  override express({
+    infra,
+    services,
+    authMiddleware,
+  }: ModuleExpressContext<FileModuleDeps, FileModuleServices>) {
     if (!authMiddleware) return;
     infra.express.use(
       this.mountPath,

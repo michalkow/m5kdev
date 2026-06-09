@@ -1,6 +1,7 @@
 import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
 import type Stripe from "stripe";
 import { createBackendRouterMap } from "../../app";
+import type { Grant } from "../base/base.grants";
 import {
   BaseModule,
   type ModuleRepositoriesContext,
@@ -8,6 +9,7 @@ import {
   type ModuleTRPCContext,
 } from "../base/base.module";
 import type * as billingTables from "./billing.db";
+import { defaultBillingGrants } from "./billing.grants";
 import { BillingRepository } from "./billing.repository";
 import { BillingService } from "./billing.service";
 import { createBillingTRPC } from "./billing.trpc";
@@ -32,12 +34,15 @@ export class BillingModule extends BaseModule<
   BillingRouters
 > {
   readonly id = "billing";
+  private readonly grants: Grant[];
 
   constructor(
     private readonly libs: { stripe: Stripe },
     private readonly config: { plans: StripePlan[]; trial?: StripePlan },
+    grants?: Grant[]
   ) {
     super();
+    this.grants = grants ?? defaultBillingGrants;
   }
 
   override repositories({ db }: ModuleRepositoriesContext<BillingModuleDeps, BillingModuleTables>) {
@@ -56,7 +61,7 @@ export class BillingModule extends BaseModule<
     repositories,
   }: ModuleServicesContext<BillingModuleDeps, BillingRepositories>) {
     return {
-      billing: new BillingService({ billing: repositories.billing }),
+      billing: new BillingService({ billing: repositories.billing }, {} as never, this.grants),
     };
   }
 
