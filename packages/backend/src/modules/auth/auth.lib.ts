@@ -640,7 +640,7 @@ export function createBetterAuth<
                 data.activeTeamRole = newTeam.role;
               }
             }
-            logger.debug({
+            logger.info({
               step: "before update session",
               currentSession: session,
               prevSession,

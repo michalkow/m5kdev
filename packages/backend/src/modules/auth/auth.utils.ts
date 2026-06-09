@@ -41,7 +41,9 @@ export async function getNewOrganization<O extends Orm, S extends Schema>(
     })
     .from(schema.members)
     .orderBy(desc(schema.members.createdAt))
-    .where(eq(schema.members.userId, userId))
+    .where(
+      and(eq(schema.members.userId, userId), eq(schema.members.organizationId, organizationId))
+    )
     .limit(1);
 
   const [teamMember] = await orm
@@ -85,7 +87,7 @@ export async function getNewTeam<O extends Orm, S extends Schema>(
     .select({ teamId: schema.teamMembers.teamId, role: schema.teamMembers.role })
     .from(schema.teamMembers)
     .orderBy(desc(schema.teamMembers.createdAt))
-    .where(eq(schema.teamMembers.userId, userId))
+    .where(and(eq(schema.teamMembers.userId, userId), eq(schema.teamMembers.teamId, teamId)))
     .limit(1);
   return { ...team, role: teamMember.role };
 }
@@ -145,12 +147,15 @@ export async function getActiveOrganizationAndTeam<O extends Orm, S extends Sche
     organizationMemberId = member?.id;
   }
 
-  if (!teamId || !teamRole) {
+  if ((!teamId || !teamRole) && organizationId) {
     const [teamMember] = await orm
       .select({ teamId: schema.teamMembers.teamId, role: schema.teamMembers.role })
       .from(schema.teamMembers)
+      .innerJoin(schema.teams, eq(schema.teamMembers.teamId, schema.teams.id))
+      .where(
+        and(eq(schema.teamMembers.userId, userId), eq(schema.teams.organizationId, organizationId))
+      )
       .orderBy(desc(schema.teamMembers.createdAt))
-      .where(eq(schema.teamMembers.userId, userId))
       .limit(1);
     teamId = teamMember?.teamId;
     teamRole = teamMember?.role;
