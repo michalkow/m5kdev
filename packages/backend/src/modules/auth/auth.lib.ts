@@ -29,6 +29,8 @@ export type Orm = LibSQLDatabase<Schema>;
 
 export type User = InferSelectModel<typeof auth.users>;
 export type Session = InferSelectModel<typeof auth.sessions>;
+export type Organization = InferSelectModel<typeof auth.organizations>;
+export type Member = InferSelectModel<typeof auth.members>;
 
 export type BetterAuth = ReturnType<typeof betterAuth>;
 
@@ -39,6 +41,11 @@ export type CreateBetterAuthConfigParams = {
       user: Pick<User, "id" | "email" | "emailVerified" | "name" | "createdAt" | "updatedAt">,
       membership: { organizationId: string; teamId?: string }
     ) => Promise<void>;
+    afterCreateOrganization?: (props: {
+      organization: Partial<Organization> & Record<string, any>;
+      member: Partial<Member> & Record<string, any>;
+      user: Partial<User> & Record<string, any>;
+    }) => Promise<void>;
   };
   options?: BetterAuthOptions;
   app?: BackendAppMetadata;
@@ -327,6 +334,11 @@ export function createBetterAuth<
                 expiresAt: customExpiration,
               },
             };
+          },
+          afterCreateOrganization: async (props) => {
+            if (hooks?.afterCreateOrganization) {
+              await hooks.afterCreateOrganization(props);
+            }
           },
         },
         allowUserToCreateOrganization: false,
