@@ -61,7 +61,7 @@ export class FileModule extends BaseModule<
           file: repositories.file,
           fileS3: repositories.fileS3,
         },
-        {} as never,
+        {},
         this.grants
       ),
     };

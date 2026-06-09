@@ -27,7 +27,7 @@ export type FileServiceRepositories = {
 
 export class FileService extends BasePermissionService<
   { fileS3: FileS3Repository } & Partial<{ file: FileRepository }>,
-  never
+  Record<string, never>
 > {
   isS3Path(pathValue: string): boolean {
     return pathValue.startsWith("s3::");

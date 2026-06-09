@@ -61,7 +61,7 @@ export class BillingModule extends BaseModule<
     repositories,
   }: ModuleServicesContext<BillingModuleDeps, BillingRepositories>) {
     return {
-      billing: new BillingService({ billing: repositories.billing }, {} as never, this.grants),
+      billing: new BillingService({ billing: repositories.billing }, {}, this.grants),
     };
   }
 

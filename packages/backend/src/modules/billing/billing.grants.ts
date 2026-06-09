@@ -6,7 +6,6 @@ export const defaultBillingGrants = flattenNestedGrants({
       user: {
         read: "own",
         write: "own",
-        delete: "own",
       },
       admin: {
         read: "all",
@@ -18,17 +17,14 @@ export const defaultBillingGrants = flattenNestedGrants({
       owner: {
         read: "all",
         write: "all",
-        delete: "all",
       },
       admin: {
         read: "all",
         write: "all",
-        delete: "all",
       },
       member: {
         read: "own",
         write: "own",
-        delete: "own",
       },
     },
   },

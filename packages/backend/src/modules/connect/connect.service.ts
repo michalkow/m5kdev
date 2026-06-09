@@ -14,7 +14,10 @@ import {
 import type { ConnectRepository } from "./connect.repository";
 import type { ConnectProvider } from "./connect.types";
 
-export class ConnectService extends BasePermissionService<{ connect: ConnectRepository }, never> {
+export class ConnectService extends BasePermissionService<
+  { connect: ConnectRepository },
+  Record<string, never>
+> {
   private providers = new Map<string, ConnectProvider>();
 
   constructor(
@@ -22,7 +25,7 @@ export class ConnectService extends BasePermissionService<{ connect: ConnectRepo
     providers: ConnectProvider[],
     grants: ResourceGrant[]
   ) {
-    super(repositories, {} as never, grants);
+    super(repositories, {}, grants);
     this.providers = new Map(providers.map((provider) => [provider.id, provider]));
   }
 

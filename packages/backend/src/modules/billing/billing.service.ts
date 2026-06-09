@@ -29,7 +29,10 @@ const allowedEvents: Stripe.Event.Type[] = [
   "payment_intent.canceled",
 ];
 
-export class BillingService extends BasePermissionService<{ billing: BillingRepository }, never> {
+export class BillingService extends BasePermissionService<
+  { billing: BillingRepository },
+  Record<string, never>
+> {
   async createUserCustomer({
     user,
   }: {
