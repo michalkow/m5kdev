@@ -29,11 +29,11 @@ const updateRecurrenceInputSchema = updateRecurrenceSchema.extend({
 const deleteRecurrenceOutputSchema = z.object({ id: z.string() });
 
 export function createRecurrenceTRPC(
-  { router, privateProcedure: procedure }: TRPCMethods,
+  { router, privateProcedure: procedure, organizationProcedure }: TRPCMethods,
   recurrenceService: RecurrenceService
 ) {
   return router({
-    list: procedure
+    list: organizationProcedure
       .input(querySchema.default({}))
       .output(listRecurrenceOutputSchema)
       .query(async ({ ctx, input }) => {

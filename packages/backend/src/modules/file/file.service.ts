@@ -9,7 +9,6 @@ import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
 import type { AuthenticatedActor } from "../base/base.actor";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
-import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
 import type { FileRepository, FileS3Repository } from "./file.repository";
 import type {

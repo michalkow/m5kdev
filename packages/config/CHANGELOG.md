@@ -1,5 +1,17 @@
 # @m5kdev/config
 
+## 0.20.48
+
+### Patch Changes
+
+- auth hooks
+
+## 0.20.47
+
+### Patch Changes
+
+- auth hooks
+
 ## 0.20.38
 
 ### Patch Changes

@@ -1,5 +1,21 @@
 # @m5kdev/frontend
 
+## 0.20.48
+
+### Patch Changes
+
+- auth hooks
+- Updated dependencies
+  - @m5kdev/commons@0.20.48
+
+## 0.20.47
+
+### Patch Changes
+
+- auth hooks
+- Updated dependencies
+  - @m5kdev/commons@0.20.47
+
 ## 0.20.38
 
 ### Patch Changes
