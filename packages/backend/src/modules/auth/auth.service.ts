@@ -279,12 +279,22 @@ export class AuthService extends BasePermissionService<
       });
       if (result.isErr()) return err(result.error);
       if (this.hooks?.afterCreateOrganization) {
-        await this.hooks.afterCreateOrganization({
-          orm: this.repository.organization.getOrm(),
-          organization: result.value.organization,
-          member: result.value.member,
-          user: ctx.user,
-        });
+        try {
+          await this.hooks.afterCreateOrganization({
+            orm: this.repository.organization.getOrm(),
+            organization: result.value.organization,
+            member: result.value.member,
+            user: ctx.user,
+          });
+        } catch (error) {
+          return this.error(
+            "INTERNAL_SERVER_ERROR",
+            "Failed to call afterCreateOrganization hook",
+            {
+              cause: error,
+            }
+          );
+        }
       }
       return ok(result.value.organization);
     });
