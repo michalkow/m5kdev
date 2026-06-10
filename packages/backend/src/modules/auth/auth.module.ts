@@ -17,7 +17,7 @@ import {
   AuthUserRepository,
   AuthWaitlistRepository,
 } from "./auth.repository";
-import { AuthService } from "./auth.service";
+import { AuthService, type AuthServiceHooks } from "./auth.service";
 import { createAuthTRPC } from "./auth.trpc";
 
 type AuthModuleDeps = { email: EmailModule; billing?: BillingModule };
@@ -46,10 +46,12 @@ export class AuthModule extends BaseModule<
   override readonly dependsOn = ["email"] as const;
   override readonly optionalDependsOn = ["billing"] as const;
   private readonly grants: Grant[];
+  private readonly hooks?: AuthServiceHooks;
 
-  constructor(grants?: Grant[]) {
+  constructor(grants?: Grant[], hooks?: AuthServiceHooks) {
     super();
     this.grants = grants ?? defaultAuthGrants;
+    this.hooks = hooks;
   }
 
   override repositories({ db }: ModuleRepositoriesContext<AuthModuleDeps, AuthModuleTables>) {
@@ -95,7 +97,8 @@ export class AuthModule extends BaseModule<
           billing: deps.billing?.services.billing,
         },
         this.grants,
-        appConfig.urls
+        appConfig.urls,
+        this.hooks
       ),
     };
   }

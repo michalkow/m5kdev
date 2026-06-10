@@ -1,4 +1,6 @@
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
+import type { InferSelectModel } from "drizzle-orm";
+import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import { z } from "zod";
 import type { BackendAppMetadata } from "../../app";
@@ -9,6 +11,7 @@ import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
+import * as auth from "./auth.db";
 import {
   accountClaimMagicLinkSchemas,
   invitationSchemas,
@@ -23,11 +26,28 @@ import type {
   AuthWaitlistRepository,
 } from "./auth.repository";
 
+const schema = { ...auth };
+type Schema = typeof schema;
+type Orm = LibSQLDatabase<Schema>;
+
+export type User = InferSelectModel<typeof auth.users>;
+export type Organization = InferSelectModel<typeof auth.organizations>;
+export type Member = InferSelectModel<typeof auth.members>;
+
 const ACCOUNT_CLAIM_MAGIC_LINK_FETCH_MS = 10_000;
 
 type AuthServiceDependencies =
   | { email: EmailService }
   | { email: EmailService; billing: BillingService };
+
+export type AuthServiceHooks = {
+  afterCreateOrganization?: (props: {
+    orm: Orm;
+    organization: Organization;
+    member: Member;
+    user: User;
+  }) => Promise<void>;
+};
 
 export class AuthService extends BasePermissionService<
   {
@@ -41,6 +61,7 @@ export class AuthService extends BasePermissionService<
   RequestContext
 > {
   private readonly appUrls?: BackendAppMetadata["urls"];
+  private readonly hooks?: AuthServiceHooks;
 
   constructor(
     repository: {
@@ -52,10 +73,12 @@ export class AuthService extends BasePermissionService<
     },
     service: AuthServiceDependencies,
     grants: ResourceGrant[],
-    appUrls?: BackendAppMetadata["urls"]
+    appUrls?: BackendAppMetadata["urls"],
+    hooks?: AuthServiceHooks
   ) {
     super(repository, service, grants);
     this.appUrls = appUrls;
+    this.hooks = hooks;
   }
 
   private getBillingService(): BillingService | null {
@@ -248,12 +271,22 @@ export class AuthService extends BasePermissionService<
     .handle(async ({ ctx, input }) => {
       const access = this.assertCanCreateChildOrganizations(ctx);
       if (access.isErr()) return err(access.error);
-      return this.repository.organization.createOrganization({
+      const result = await this.repository.organization.createOrganization({
         name: input.name,
         parentId: access.value.parentId,
         userId: ctx.actor.userId,
         role: access.value.organizationType === "agency" ? "admin" : "owner",
       });
+      if (result.isErr()) return err(result.error);
+      if (this.hooks?.afterCreateOrganization) {
+        await this.hooks.afterCreateOrganization({
+          orm: this.repository.organization.getOrm(),
+          organization: result.value.organization,
+          member: result.value.member,
+          user: ctx.user,
+        });
+      }
+      return ok(result.value.organization);
     });
 
   listChildOrganizations = this.procedure("listChildOrganizations")

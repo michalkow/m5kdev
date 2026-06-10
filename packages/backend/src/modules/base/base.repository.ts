@@ -31,10 +31,7 @@ import {
   type ServerResult,
   type ServerResultAsync,
 } from "./base.dto";
-import {
-  createRepositoryQueryBuilder,
-  type RepositoryQueryBuilder,
-} from "./base.query";
+import { createRepositoryQueryBuilder, type RepositoryQueryBuilder } from "./base.query";
 
 export type QueryFindInput = Omit<QueryInput, "page" | "limit">;
 
@@ -105,6 +102,12 @@ export class BaseRepository<
     this.orm = options.orm;
     this.schema = options.schema;
     this.repository = repository;
+  }
+  getOrm(): O {
+    return this.orm;
+  }
+  getSchema(): S {
+    return this.schema;
   }
   getConditionBuilder(): ConditionBuilder;
   getConditionBuilder(table: undefined): ConditionBuilder;
@@ -420,9 +423,7 @@ export class BaseTableRepository<
     const rowsResult = await this.throwableQuery(() => {
       const query =
         columns !== undefined
-          ? db
-              .select(pickTableColumns(this.table, columns))
-              .from(this.table as any)
+          ? db.select(pickTableColumns(this.table, columns)).from(this.table as any)
           : db.select().from(this.table as any);
       return query.where(eq(this.idColumn as SQLiteColumn, id));
     });
@@ -609,9 +610,12 @@ export class BaseTableRepository<
     const db = tx ?? this.orm;
 
     const rowsResult = await this.throwableQuery(() =>
-      db.delete(this.table as any).where(eq(this.idColumn as SQLiteColumn, id)).returning({
-        id: this.idColumn as SQLiteColumn,
-      })
+      db
+        .delete(this.table as any)
+        .where(eq(this.idColumn as SQLiteColumn, id))
+        .returning({
+          id: this.idColumn as SQLiteColumn,
+        })
     );
     if (rowsResult.isErr()) return err(rowsResult.error);
 

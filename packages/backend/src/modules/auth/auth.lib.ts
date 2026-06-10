@@ -41,11 +41,6 @@ export type CreateBetterAuthConfigParams = {
       user: Pick<User, "id" | "email" | "emailVerified" | "name" | "createdAt" | "updatedAt">,
       membership: { organizationId: string; teamId?: string }
     ) => Promise<void>;
-    afterCreateOrganization?: (props: {
-      organization: Partial<Organization> & Record<string, any>;
-      member: Partial<Member> & Record<string, any>;
-      user: Partial<User> & Record<string, any>;
-    }) => Promise<void>;
   };
   options?: BetterAuthOptions;
   app?: BackendAppMetadata;
@@ -334,11 +329,6 @@ export function createBetterAuth<
                 expiresAt: customExpiration,
               },
             };
-          },
-          afterCreateOrganization: async (props) => {
-            if (hooks?.afterCreateOrganization) {
-              await hooks.afterCreateOrganization(props);
-            }
           },
         },
         allowUserToCreateOrganization: false,
@@ -640,7 +630,7 @@ export function createBetterAuth<
                 data.activeTeamRole = newTeam.role;
               }
             }
-            logger.info({
+            logger.debug({
               step: "before update session",
               currentSession: session,
               prevSession,

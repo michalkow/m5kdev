@@ -18,6 +18,7 @@ type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;
 type UserRow = typeof auth.users.$inferSelect;
 type OrganizationRow = typeof auth.organizations.$inferSelect;
+type MemberRow = typeof auth.members.$inferSelect;
 type OrganizationMemberRow = typeof auth.members.$inferSelect & {
   user: Pick<UserRow, "id" | "name" | "email" | "role" | "banned" | "emailVerified">;
 };
@@ -125,7 +126,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
       role,
     }: { name: string; parentId: string | null; userId: string; role: string },
     tx?: Orm
-  ): ServerResultAsync<OrganizationRow> {
+  ): ServerResultAsync<{ organization: OrganizationRow; member: MemberRow }> {
     const db = tx ?? this.orm;
     return await this.throwableQuery(() =>
       db.transaction(async (t) => {
@@ -142,7 +143,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
           .returning();
         if (!member) throw new Error("Failed to create member");
 
-        return organization;
+        return { organization, member };
       })
     );
   }
