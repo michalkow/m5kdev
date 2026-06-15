@@ -122,6 +122,10 @@ export async function buildAuthorizationUrl(
     parameters.code_challenge_method = "S256";
   }
 
+  if (provider.authorizationExtraParams) {
+    Object.assign(parameters, provider.authorizationExtraParams);
+  }
+
   const url = client.buildAuthorizationUrl(config, parameters);
   return url.toString();
 }

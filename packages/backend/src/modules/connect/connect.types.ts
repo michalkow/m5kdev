@@ -12,6 +12,7 @@ export interface ConnectProvider {
   };
   issuerUrl?: string; // For auto-discovery
   supportsPKCE?: boolean; // Whether provider supports PKCE (default: true)
+  authorizationExtraParams?: Record<string, string>;
   mapProfile: (accessToken: string) => Promise<ConnectProfile>;
 }
 
