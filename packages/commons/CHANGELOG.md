@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.20.49
+
+### Patch Changes
+
+- google oauth
+
 ## 0.20.48
 
 ### Patch Changes

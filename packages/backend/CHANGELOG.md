@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.20.49
+
+### Patch Changes
+
+- google oauth
+- Updated dependencies
+  - @m5kdev/commons@0.20.49
+  - @m5kdev/config@0.20.49
+
 ## 0.20.48
 
 ### Patch Changes
