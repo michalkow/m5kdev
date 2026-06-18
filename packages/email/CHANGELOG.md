@@ -1,5 +1,17 @@
 # @m5kdev/email
 
+## 0.20.51
+
+### Patch Changes
+
+- admin create
+
+## 0.20.50
+
+### Patch Changes
+
+- admin create org
+
 ## 0.20.49
 
 ### Patch Changes
