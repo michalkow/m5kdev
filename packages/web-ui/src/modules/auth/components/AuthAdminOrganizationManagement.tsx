@@ -19,8 +19,8 @@ import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import useNuqsTable from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
-import { Pencil, Trash2, UserPlus, Users } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Pencil, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { NuqsTable, type NuqsTableColumn } from "../../table/components/NuqsTable";
@@ -65,11 +65,25 @@ function formatOrgDate(date: Date | string | null | undefined): string {
   });
 }
 
+function slugifyOrganizationName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
 export function AuthAdminOrganizationManagement() {
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();
 
   const [pinnedOrganizationId] = useState<string | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [createSlug, setCreateSlug] = useState("");
+  const [createType, setCreateType] = useState<Key>("organization");
+  const isSlugManuallyEdited = useRef(false);
   const [editingOrg, setEditingOrg] = useState<OrganizationAdminRow | null>(null);
   const [editName, setEditName] = useState("");
   const [editSlug, setEditSlug] = useState("");
@@ -164,6 +178,55 @@ export function AuthAdminOrganizationManagement() {
       },
     })
   );
+
+  const resetCreateForm = useCallback((): void => {
+    setCreateName("");
+    setCreateSlug("");
+    setCreateType("organization");
+    isSlugManuallyEdited.current = false;
+  }, []);
+
+  const { mutate: createOrg, isPending: isCreating } = useMutation(
+    trpc.auth.createAdminOrganization.mutationOptions({
+      onSuccess: async () => {
+        toast.success("Organization created successfully");
+        setIsCreateOpen(false);
+        resetCreateForm();
+        await invalidateOrgLists();
+      },
+      onError: (error: unknown) => {
+        toast.error(
+          `Failed to create organization: ${error instanceof Error ? error.message : String(error)}`
+        );
+      },
+    })
+  );
+
+  const openCreateModal = useCallback((): void => {
+    resetCreateForm();
+    setIsCreateOpen(true);
+  }, [resetCreateForm]);
+
+  const handleCreateNameBlur = useCallback((): void => {
+    if (isSlugManuallyEdited.current) return;
+    setCreateSlug(slugifyOrganizationName(createName));
+  }, [createName]);
+
+  const handleCreateSlugChange = useCallback((value: string): void => {
+    isSlugManuallyEdited.current = true;
+    setCreateSlug(value);
+  }, []);
+
+  const handleCreate = (): void => {
+    const name = createName.trim();
+    const slug = createSlug.trim();
+    if (!name || !slug) return;
+    createOrg({
+      name,
+      slug,
+      type: String(createType) as OrganizationType,
+    });
+  };
 
   const openEditModal = useCallback((org: OrganizationAdminRow) => {
     setEditingOrg(org);
@@ -353,6 +416,10 @@ export function AuthAdminOrganizationManagement() {
     <div className="space-y-4 p-4">
       <div className="flex items-start justify-between gap-4">
         <h2 className="text-xl font-semibold">Organization Management</h2>
+        <Button onPress={openCreateModal} size="sm">
+          <Plus className="mr-2 h-4 w-4" />
+          Create Organization
+        </Button>
       </div>
 
       <NuqsTable<OrganizationAdminRow>
@@ -363,6 +430,79 @@ export function AuthAdminOrganizationManagement() {
         showGlobalSearch
         hideFilters
       />
+
+      <Modal
+        isOpen={isCreateOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsCreateOpen(false);
+            resetCreateForm();
+          }
+        }}
+      >
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-md">
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>Create Organization</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="space-y-4">
+                <TextField value={createName} onChange={setCreateName} variant="secondary">
+                  <Label>Name</Label>
+                  <Input placeholder="Organization name" onBlur={handleCreateNameBlur} />
+                </TextField>
+
+                <TextField value={createSlug} onChange={handleCreateSlugChange} variant="secondary">
+                  <Label>Slug</Label>
+                  <Input placeholder="organization-slug" />
+                </TextField>
+
+                <Select
+                  aria-label="Organization type"
+                  selectedKey={createType}
+                  onSelectionChange={(key) => {
+                    if (key !== null) setCreateType(key);
+                  }}
+                  variant="secondary"
+                  className="w-full"
+                >
+                  <Label>Type</Label>
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {organizationTypeOptions.map((opt) => (
+                        <ListBox.Item key={opt.value} id={opt.value} textValue={opt.label}>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">{opt.label}</span>
+                            <span className="text-xs text-muted-foreground">{opt.description}</span>
+                          </div>
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="secondary" slot="close">
+                  Cancel
+                </Button>
+                <Button
+                  onPress={handleCreate}
+                  isDisabled={isCreating || !createName.trim() || !createSlug.trim()}
+                >
+                  {isCreating ? <Spinner className="mr-2 h-4 w-4" /> : null}
+                  Create
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
 
       <Modal
         isOpen={!!editingOrg}

@@ -369,6 +369,14 @@ export class AuthService extends BasePermissionService<
       return this.repository.organization.update({ id, name });
     });
 
+  createAdminOrganization = this.procedure("createAdminOrganization")
+    .input(organizationSchemas.input.createAdmin)
+    .output(organizationSchemas.output.admin)
+    .requireAuth("admin")
+    .handle(async ({ input }) => {
+      return this.repository.organization.create({ ...input, parentId: null });
+    });
+
   updateAdminOrganization = this.procedure("updateAdminOrganization")
     .input(organizationSchemas.input.updateAdmin)
     .output(organizationSchemas.output.admin)

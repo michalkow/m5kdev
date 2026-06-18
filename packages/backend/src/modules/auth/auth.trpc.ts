@@ -136,6 +136,13 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.removeAdminOrganizationMember(input, ctx));
       }),
 
+    createAdminOrganization: adminProcedure
+      .input(organizationSchemas.input.createAdmin)
+      .output(organizationSchemas.output.admin)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.createAdminOrganization(input, ctx));
+      }),
+
     updateAdminOrganization: adminProcedure
       .input(organizationSchemas.input.updateAdmin)
       .output(organizationSchemas.output.admin)
