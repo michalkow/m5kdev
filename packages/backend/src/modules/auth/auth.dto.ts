@@ -76,8 +76,8 @@ export const organizationSchemas = {
       metadata: z.record(z.string(), z.unknown()).optional(),
     }),
     createAdmin: z.object({
-      name: z.string().min(1),
-      slug: z.string().min(1),
+      name: z.string(),
+      slug: z.string(),
       type: organizationSchema.shape.type.optional(),
     }),
     updateAdmin: z.object({
