@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.21.1
+
+### Patch Changes
+
+- frontend rework
+- Updated dependencies
+  - @m5kdev/commons@0.21.1
+  - @m5kdev/config@0.21.1
+
 ## 0.21.0
 
 ### Minor Changes
