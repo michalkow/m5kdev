@@ -3,6 +3,22 @@ import { useAppConfig } from "../../app/hooks/useAppConfig";
 
 export type S3UploadStatus = "idle" | "uploading" | "success" | "error";
 
+export type UploadBlobInput =
+  | Blob
+  | {
+      uri: string;
+      name?: string;
+      type?: string;
+      size?: number;
+    };
+
+export type ResolvedUploadBlob = {
+  blob: Blob;
+  name: string;
+  type: string;
+  size: number;
+};
+
 async function getPresignedUrl(
   filename: string,
   filetype: string,
@@ -18,6 +34,40 @@ async function getPresignedUrl(
   return data.url;
 }
 
+function isBlobInput(file: UploadBlobInput): file is Blob {
+  return typeof Blob !== "undefined" && file instanceof Blob;
+}
+
+function getInputName(file: UploadBlobInput) {
+  if (!isBlobInput(file)) {
+    return file.name ?? `upload-${Date.now()}`;
+  }
+
+  return "name" in file && typeof file.name === "string" ? file.name : `upload-${Date.now()}`;
+}
+
+function getInputType(file: UploadBlobInput, blob: Blob) {
+  if (!isBlobInput(file)) {
+    return file.type ?? blob.type ?? "application/octet-stream";
+  }
+
+  return file.type || "application/octet-stream";
+}
+
+export async function resolveUploadBlob(file: UploadBlobInput): Promise<ResolvedUploadBlob> {
+  const blob = isBlobInput(file) ? file : await fetch(file.uri).then((response) => response.blob());
+  return {
+    blob,
+    name: getInputName(file),
+    type: getInputType(file, blob),
+    size: "size" in file && typeof file.size === "number" ? file.size : blob.size,
+  };
+}
+
+function createUploadId() {
+  return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2, 11);
+}
+
 export function useS3Upload(serverUrlOverride?: string) {
   const { serverUrl } = useAppConfig();
   const resolvedServerUrl = serverUrlOverride ?? serverUrl;
@@ -27,19 +77,20 @@ export function useS3Upload(serverUrlOverride?: string) {
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
 
   const upload = useCallback(
-    async (file: File | Blob, prefix?: string) => {
+    async (file: UploadBlobInput, prefix?: string) => {
       setProgress(0);
       setStatus("uploading");
       setError(null);
       setUploadedUrl(null);
       try {
-        const originalFilename = file instanceof File ? file.name : `upload-${Date.now()}`;
+        const resolvedFile = await resolveUploadBlob(file);
+        const originalFilename = resolvedFile.name;
         const extension = originalFilename.split(".").pop() || "";
-        const uuid = crypto.randomUUID();
+        const uuid = createUploadId();
         const filename = prefix
           ? `${prefix}/${uuid}${extension ? `.${extension}` : ""}`
           : `${uuid}${extension ? `.${extension}` : ""}`;
-        const filetype = file instanceof File ? file.type : "application/octet-stream";
+        const filetype = resolvedFile.type;
         const presignedUrl = await getPresignedUrl(filename, filetype, resolvedServerUrl);
 
         return await new Promise<string>((resolve, reject) => {
@@ -73,7 +124,7 @@ export function useS3Upload(serverUrlOverride?: string) {
             reject(new Error("Network error during upload"));
           };
 
-          xhr.send(file);
+          xhr.send(resolvedFile.blob);
         });
       } catch (err: unknown) {
         setStatus("error");

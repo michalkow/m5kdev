@@ -1,6 +1,5 @@
-import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
-import type { TableParams } from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
 import { Button } from "@heroui/react";
+import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { Meta, StoryObj } from "@storybook/react";
 import type {
   GroupingState,
@@ -10,6 +9,7 @@ import type {
   Updater,
 } from "@tanstack/react-table";
 import { type ReactElement, useCallback, useState } from "react";
+import type { TableParams } from "../hooks/useNuqsTable";
 
 import { NuqsTable, type NuqsTableBulkActionsProps, type NuqsTableColumn } from "./NuqsTable";
 

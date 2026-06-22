@@ -2,7 +2,6 @@ import type { Selection, SortDescriptor } from "@heroui/react";
 import { Button, Checkbox, EmptyState, Popover, SearchField, Table } from "@heroui/react";
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { FilterMethods } from "@m5kdev/commons/modules/table/filter.types";
-import type { TableParams } from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   type ColumnOrderState,
@@ -21,6 +20,7 @@ import type { ComponentType } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../../../lib/utils";
+import type { TableParams } from "../hooks/useNuqsTable";
 import { ColumnOrderAndVisibility } from "./ColumnOrderAndVisibility";
 import { TableFiltering } from "./TableFiltering";
 import { TableGroupBy } from "./TableGroupBy";

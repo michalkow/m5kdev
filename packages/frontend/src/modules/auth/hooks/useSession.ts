@@ -1,6 +1,7 @@
 import { useContext } from "react";
-import { authProviderContext } from "../components/AuthProvider";
+import { authProviderContext } from "../auth.context";
 
 export function useSession() {
-  return useContext(authProviderContext);
+  const { authClient: _authClient, ...session } = useContext(authProviderContext);
+  return session;
 }

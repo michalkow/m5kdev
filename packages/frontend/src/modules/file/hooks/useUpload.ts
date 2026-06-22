@@ -1,11 +1,12 @@
 import { useCallback, useState } from "react";
 import { useAppConfig } from "../../app/hooks/useAppConfig";
+import { resolveUploadBlob, type UploadBlobInput } from "./useS3Upload";
 
 export type UploadStatus = "pending" | "uploading" | "completed" | "error";
 
 export interface UploadFileTask {
   id: string;
-  file: File;
+  file: UploadBlobInput;
   progress: number;
   status: UploadStatus;
   errorMessage?: string;
@@ -22,7 +23,7 @@ interface UploadCallbacks {
 // Shared utility function to create upload promise
 const createUploadPromise = <T>(
   type: string,
-  file: File,
+  file: UploadBlobInput,
   callbacks: UploadCallbacks,
   serverUrl: string
 ): Promise<T> => {
@@ -60,13 +61,17 @@ const createUploadPromise = <T>(
 
     xhr.open("POST", `${serverUrl}/upload/file/${type}`);
     const formData = new FormData();
-    formData.append("file", file);
-    xhr.send(formData);
+    resolveUploadBlob(file)
+      .then(({ blob, name }) => {
+        formData.append("file", blob, name);
+        xhr.send(formData);
+      })
+      .catch(reject);
   });
 };
 
 // Shared utility to create a task
-const createUploadTask = (file: File): UploadFileTask => ({
+const createUploadTask = (file: UploadBlobInput): UploadFileTask => ({
   id:
     typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
@@ -75,7 +80,7 @@ const createUploadTask = (file: File): UploadFileTask => ({
   progress: 0,
   status: "pending",
   bytesUploaded: 0,
-  totalBytes: file.size,
+  totalBytes: "size" in file && typeof file.size === "number" ? file.size : 0,
 });
 
 // Hook for single file upload
@@ -84,7 +89,7 @@ export function useFileUpload() {
   const [uploadTask, setUploadTask] = useState<UploadFileTask | null>(null);
 
   const upload = useCallback(
-    async <T>(type: string, file: File): Promise<T> => {
+    async <T>(type: string, file: UploadBlobInput): Promise<T> => {
       const task = createUploadTask(file);
       setUploadTask(task);
 
@@ -149,17 +154,17 @@ export function useMultipartUpload() {
       setOverallProgress(100);
       return;
     }
-    const totalBytes = queue.reduce((sum, task) => sum + task.file.size, 0);
+    const totalBytes = queue.reduce((sum, task) => sum + task.totalBytes, 0);
     const uploadedBytes = queue.reduce((sum, task) => {
       if (task.status === "completed") {
-        return sum + task.file.size;
+        return sum + task.totalBytes;
       }
       if (task.status === "uploading") {
-        return sum + (task.progress / 100) * task.file.size;
+        return sum + (task.progress / 100) * task.totalBytes;
       }
       return sum;
     }, 0);
-    setOverallProgress(Math.floor((uploadedBytes / totalBytes) * 100));
+    setOverallProgress(totalBytes > 0 ? Math.floor((uploadedBytes / totalBytes) * 100) : 0);
   }, []);
 
   const uploadSingleFile = useCallback(
@@ -197,7 +202,7 @@ export function useMultipartUpload() {
   );
 
   const uploadFiles = useCallback(
-    async (type: string, files: File[]) => {
+    async (type: string, files: UploadBlobInput[]) => {
       const initialQueue = files.map(createUploadTask);
       setUploadQueue(initialQueue);
       updateOverallProgress(initialQueue);

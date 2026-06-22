@@ -1,7 +1,8 @@
 import { type AnyUseMutationOptions, useMutation } from "@tanstack/react-query";
-import { authClient } from "../auth.lib";
+import { useAuthClient } from "./useAuthClient";
 
 export function useUpdateUser(options: AnyUseMutationOptions) {
+  const authClient = useAuthClient();
   return useMutation({
     mutationFn: (...args: Parameters<typeof authClient.updateUser>) =>
       authClient.updateUser(...args),
@@ -12,6 +13,7 @@ export function useUpdateUser(options: AnyUseMutationOptions) {
 export function useUpdateUserPreferences<T extends Record<string, any>>(
   options: AnyUseMutationOptions
 ) {
+  const authClient = useAuthClient();
   return useMutation({
     mutationFn: (preferences: T) =>
       authClient.updateUser({ preferences: JSON.stringify(preferences) as string }),

@@ -1,7 +1,6 @@
 import { ListBox, Select } from "@heroui/react";
 import { CalendarDate, getLocalTimeZone, today } from "@internationalized/date";
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
-import { useNuqsQueryParams } from "@m5kdev/frontend/modules/table/hooks/useNuqsQueryParams";
 import {
   calendarDateToEndOfDayUTC,
   calendarDateToUTC,
@@ -13,6 +12,7 @@ import { DateTime } from "luxon";
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FilterHeroDateRangePicker } from "../../table/components/FilterHeroDateControls";
+import { useNuqsQueryParams } from "../hooks/useNuqsQueryParams";
 
 type QuickRangeKey =
   | "today"

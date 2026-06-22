@@ -1,5 +1,5 @@
 import { type UseMutationOptions, useMutation } from "@tanstack/react-query";
-import { authClient } from "../auth.lib";
+import { useAuthClient } from "./useAuthClient";
 import {
   type AuthOrganizationRole,
   type UseOrganizationAccessProps,
@@ -14,6 +14,7 @@ export function useAuthMemberInvite(
 ): ReturnType<typeof useMutation<void, Error, Variables, unknown>> {
   const { managerRoles = ["admin", "owner"], onInvalidateScopedQueries } = props ?? {};
   const { onSuccess, ...rest } = options;
+  const authClient = useAuthClient();
   const { refreshOrganizationQueries, activeOrganizationId } = useOrganizationAccess({
     managerRoles,
     onInvalidateScopedQueries,

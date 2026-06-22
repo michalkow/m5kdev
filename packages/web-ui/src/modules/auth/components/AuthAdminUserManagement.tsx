@@ -14,13 +14,12 @@ import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import {
   invalidateListUsersQuery,
-  type ListUsersNuqsInput,
   type ListUsersQueryData,
+  type ListUsersQueryInput,
   listUsersQueryOptions,
   useRemoveUser,
   useUpdateUser,
 } from "@m5kdev/frontend/modules/auth/hooks/useAuthAdmin";
-import useNuqsTable from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
 import type { Key } from "@react-types/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -37,6 +36,7 @@ import { useId, useState } from "react";
 import { toast } from "sonner";
 
 import { NuqsTable, type NuqsTableColumn } from "../../table/components/NuqsTable";
+import useNuqsTable from "../../table/hooks/useNuqsTable";
 
 type AdminUserRow = NonNullable<ListUsersQueryData["users"]>[number];
 
@@ -96,7 +96,7 @@ export function AuthAdminUserManagement({
   const queryClient = useQueryClient();
 
   const { params: tableParams, query: listQuery } = useNuqsTable<
-    ListUsersNuqsInput,
+    ListUsersQueryInput,
     ListUsersQueryData
   >({
     getQueryOptions: listUsersQueryOptions,

@@ -11,7 +11,7 @@ and the repo's shared frontend hooks.
 
 - Shared app shell components.
 - Auth and billing route components.
-- Table controls and reusable UI primitives.
+- Table controls, `nuqs` URL-state hooks, and reusable UI primitives.
 
 ## Module docs
 
@@ -25,4 +25,7 @@ Start with these module pages:
 ## Package rule
 
 Prefer HeroUI components and shared UI primitives before adding local duplicates
-inside an app.
+inside an app. Keep browser-only adapters here instead of `@m5kdev/frontend`.
+
+See [Frontend and Web UI split migration](/guides/frontend-web-ui-split) for
+the table hook import map.

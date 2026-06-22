@@ -29,8 +29,6 @@
     "@trpc/tanstack-react-query": "catalog:",
     "better-auth": "catalog:",
     "luxon": "catalog:",
-    "nuqs": "catalog:",
-    "posthog-js": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "zod": "catalog:"
@@ -52,6 +50,16 @@
     "vite": "catalog:"
   },
   "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/src/index.d.mts",
+        "default": "./dist/src/index.mjs"
+      },
+      "require": {
+        "types": "./dist/src/index.d.ts",
+        "default": "./dist/src/index.js"
+      }
+    },
     "./modules/app/components/*": {
       "import": {
         "types": "./dist/src/modules/app/components/*.d.mts",
@@ -160,6 +168,16 @@
       "require": {
         "types": "./dist/src/utils/*.d.ts",
         "default": "./dist/src/utils/*.js"
+      }
+    },
+    "./modules/table/queryParams": {
+      "import": {
+        "types": "./dist/src/modules/table/queryParams.d.mts",
+        "default": "./dist/src/modules/table/queryParams.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/table/queryParams.d.ts",
+        "default": "./dist/src/modules/table/queryParams.js"
       }
     }
   }

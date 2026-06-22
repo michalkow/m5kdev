@@ -12,10 +12,27 @@ table UI behavior.
 | Package | What it owns |
 | --- | --- |
 | `@m5kdev/commons` | Filter types and shared query contracts. |
-| `@m5kdev/frontend` | `nuqs` table hooks and query-param helpers. |
-| `@m5kdev/web-ui` | Table controls, filtering, pagination, grouping, and column visibility components. |
+| `@m5kdev/frontend` | Platform-neutral table query state, `useQueryWithParams`, and query/filter serializers. |
+| `@m5kdev/web-ui` | Table controls, `nuqs` URL-state hooks, filtering, pagination, grouping, and column visibility components. |
 
-## Documentation status
+## Migration
 
-This page is scaffolded. Fill it by documenting query state, filter transforms,
-backend query expectations, and UI composition.
+See [Frontend and Web UI split migration](/guides/frontend-web-ui-split) for the
+current import map and migration checklist.
+
+## Query state
+
+Use `@m5kdev/frontend` for query state that must work in both web and native
+apps:
+
+```ts
+import { useQueryWithParams } from "@m5kdev/frontend/modules/table/hooks/useQueryWithParams";
+import { useTableQueryParams } from "@m5kdev/frontend/modules/table/hooks/useTableQueryParams";
+```
+
+Use `@m5kdev/web-ui` when a web table should synchronize state through `nuqs`
+and URL search params:
+
+```ts
+import useNuqsTable from "@m5kdev/web-ui/modules/table/hooks/useNuqsTable";
+```

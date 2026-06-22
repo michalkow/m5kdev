@@ -16,7 +16,6 @@ import {
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
-import useNuqsTable from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import { Pencil, Plus, Trash2, UserPlus, Users } from "lucide-react";
@@ -24,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { NuqsTable, type NuqsTableColumn } from "../../table/components/NuqsTable";
+import useNuqsTable from "../../table/hooks/useNuqsTable";
 
 type OrganizationType = "solo" | "organization" | "agency" | "enterprise";
 

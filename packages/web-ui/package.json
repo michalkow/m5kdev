@@ -263,6 +263,16 @@
         "types": "./dist/src/lib/*.d.ts",
         "default": "./dist/src/lib/*.js"
       }
+    },
+    "./modules/table/hooks/*": {
+      "import": {
+        "types": "./dist/src/modules/table/hooks/*.d.mts",
+        "default": "./dist/src/modules/table/hooks/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/table/hooks/*.d.ts",
+        "default": "./dist/src/modules/table/hooks/*.js"
+      }
     }
   }
 }

@@ -1,18 +1,9 @@
 import type { QueryFilter, QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import { filterSchema, filtersSchema } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { GroupingState, PaginationState, SortingState, Updater } from "@tanstack/react-table";
-import {
-  createParser,
-  parseAsArrayOf,
-  parseAsInteger,
-  parseAsString,
-  parseAsStringLiteral,
-  useQueryState,
-} from "nuqs";
-import { useCallback, useEffect, useMemo } from "react";
 import { z } from "zod";
 
-/** Each row: [columnId, type, method, value, valueTo?, endColumnId?] — validated after parse */
+/** Each row: [columnId, type, method, value, valueTo?, endColumnId?] - validated after parse */
 const filtersRawSchema = z.array(z.array(z.string()).min(4).max(6));
 
 /** Escape `\`, `|`, `;` so we can split filters without JSON quotes/brackets. */
@@ -64,14 +55,14 @@ function splitByEscapedDelimiter(s: string, delimiter: string): string[] {
   return parts;
 }
 
-function serializeFiltersParam(rows: string[][]): string {
+export function serializeFiltersParam(rows: string[][]): string {
   if (rows.length === 0) {
     return "";
   }
   return rows.map((row) => row.map(escapeFilterField).join("|")).join(";");
 }
 
-function parseFiltersParam(value: string): string[][] | null {
+export function parseFiltersParam(value: string): string[][] | null {
   const trimmed = value.trim();
   if (trimmed === "") {
     return [];
@@ -90,14 +81,6 @@ function parseFiltersParam(value: string): string[][] | null {
   const parsed = filtersRawSchema.safeParse(rows);
   return parsed.success ? parsed.data : null;
 }
-
-const parseAsFilterTuples = createParser<string[][]>({
-  parse: (value) => parseFiltersParam(value),
-  serialize: (rows) => serializeFiltersParam(rows),
-  eq: (a, b) => JSON.stringify(a) === JSON.stringify(b),
-}).withDefault([]);
-
-const parseAsGrouping = parseAsArrayOf(parseAsString).withDefault([]);
 
 const NULLISH_METHODS: ReadonlySet<QueryFilter["method"]> = new Set([
   "isEmpty",
@@ -171,8 +154,8 @@ function decodeFilterValue(
   }
 }
 
-/** Builds URL tuple; omits optional tails when unused (endColumnId requires valueTo slot — may be ""). */
-function encodeFilterToTuple(filter: QueryFilter): string[] {
+/** Builds URL tuple; omits optional tails when unused (endColumnId requires valueTo slot - may be ""). */
+export function encodeFilterToTuple(filter: QueryFilter): string[] {
   const tuple: string[] = [filter.columnId, filter.type, filter.method, encodeFilterValue(filter)];
   const hasValueTo = filter.valueTo != null && filter.valueTo !== "";
   const hasEndColumnId = filter.endColumnId != null && filter.endColumnId !== "";
@@ -191,7 +174,7 @@ function encodeFilterToTuple(filter: QueryFilter): string[] {
   return tuple;
 }
 
-function decodeTupleToFilter(parts: readonly string[]): QueryFilter | null {
+export function decodeTupleToFilter(parts: readonly string[]): QueryFilter | null {
   if (parts.length < 4 || parts.length > 6) {
     return null;
   }
@@ -226,12 +209,20 @@ function decodeTupleToFilter(parts: readonly string[]): QueryFilter | null {
   return parsed.success ? parsed.data : null;
 }
 
+export function decodeFilterTuples(rows: readonly string[][]): QueryFilters {
+  const decoded = rows
+    .map((row) => decodeTupleToFilter(row))
+    .filter((filter): filter is QueryFilter => filter != null);
+  const parsed = filtersSchema.safeParse(decoded);
+  return parsed.success ? parsed.data : [];
+}
+
 export type Order = "asc" | "desc";
 
 export type Granularity = "daily" | "weekly" | "monthly" | "yearly";
 
-export interface NuqsQueryParams {
-  /** Global search string from URL (`q`); absent when not in URL. */
+export interface QueryParamsState {
+  /** Global search string; absent when not set. */
   q: string | null;
   setQ: (value: string | null) => void;
   filters?: QueryFilters;
@@ -249,142 +240,3 @@ export interface NuqsQueryParams {
   grouping: GroupingState;
   setGrouping: (updater: Updater<GroupingState>) => void;
 }
-
-/**
- * Hook to manage all query parameters via nuqs (URL query parameters)
- * Manages: `f` (filters as tuple arrays), `q`, `s`/`o`, `p`/`l`, `g`, `r`
- * Accepts an optional prefix to namespace params when multiple tables share a view.
- */
-export const useNuqsQueryParams = (prefix?: string): NuqsQueryParams => {
-  const k = (name: string) => (prefix ? `${prefix}_${name}` : name);
-
-  const [sort, setSort] = useQueryState<string>(k("s"), parseAsString.withDefault(""));
-  const [order, setOrder] = useQueryState<Order>(k("o"), parseAsStringLiteral(["asc", "desc"]));
-  const [page, setPage] = useQueryState<number>(k("p"), parseAsInteger.withDefault(1));
-  const [limit, setLimit] = useQueryState<number>(k("l"), parseAsInteger.withDefault(10));
-  const [qRaw, setQRaw] = useQueryState(k("q"), parseAsString);
-  const [filtersRaw, setFiltersRaw] = useQueryState<string[][]>(k("f"), parseAsFilterTuples);
-
-  const filters = useMemo((): QueryFilters => {
-    const decoded = filtersRaw
-      .map((row) => decodeTupleToFilter(row))
-      .filter((f): f is QueryFilter => f != null);
-    const parsed = filtersSchema.safeParse(decoded);
-    return parsed.success ? parsed.data : [];
-  }, [filtersRaw]);
-
-  const setFilters = useCallback(
-    (next: QueryFilters) => {
-      void setFiltersRaw(next.length === 0 ? null : next.map(encodeFilterToTuple));
-    },
-    [setFiltersRaw]
-  );
-
-  const setQ = useCallback(
-    (value: string | null) => {
-      void setQRaw(value === "" || value == null ? null : value);
-    },
-    [setQRaw]
-  );
-  const [granularity, setGranularity] = useQueryState<Granularity>(
-    k("r"),
-    parseAsStringLiteral(["daily", "weekly", "monthly", "yearly"]).withDefault("daily")
-  );
-  const [groupingRaw, setGroupingRaw] = useQueryState<string[]>(k("g"), parseAsGrouping);
-  const grouping: GroupingState = groupingRaw;
-
-  const setGrouping = useCallback(
-    (updater: Updater<GroupingState>) => {
-      const next = typeof updater === "function" ? updater(groupingRaw) : updater;
-      setGroupingRaw(next.length > 0 ? next : null);
-    },
-    [groupingRaw, setGroupingRaw]
-  );
-
-  const sorting = useMemo(() => {
-    if (!sort) {
-      return [];
-    }
-    const effectiveOrder = order ?? "asc";
-    return [{ id: sort, desc: effectiveOrder === "desc" }];
-  }, [sort, order]);
-
-  const pagination = useMemo(() => ({ pageIndex: page - 1, pageSize: limit }), [page, limit]);
-
-  const setSorting = useCallback(
-    (updater: Updater<SortingState>) => {
-      const currentSorting: SortingState = sort
-        ? [{ id: sort, desc: (order ?? "asc") === "desc" }]
-        : [];
-
-      const next = typeof updater === "function" ? updater(currentSorting) : updater;
-      const first = next[0];
-
-      if (!first || !first.id) {
-        setSort("");
-        setOrder(null);
-        return;
-      }
-
-      setSort(first.id);
-      setOrder(first.desc ? "desc" : "asc");
-    },
-    [sort, order, setSort, setOrder]
-  );
-
-  useEffect(() => {
-    if (sort && !order) {
-      setOrder("asc");
-    }
-  }, [sort, order, setOrder]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: dependent on page and limit only
-  const setPagination = useCallback(
-    (updater: Updater<PaginationState>) => {
-      const currentState = { pageIndex: page - 1, pageSize: limit };
-      const next = typeof updater === "function" ? updater(currentState) : updater;
-      setPage((next.pageIndex ?? 0) + 1);
-      setLimit(next.pageSize ?? 10);
-    },
-    [page, limit]
-  );
-
-  return useMemo(
-    () => ({
-      q: qRaw,
-      setQ,
-      filters,
-      setFilters,
-      granularity,
-      setGranularity,
-      sort,
-      order,
-      setSorting,
-      sorting,
-      page,
-      limit,
-      setPagination,
-      pagination,
-      grouping,
-      setGrouping,
-    }),
-    [
-      qRaw,
-      setQ,
-      filters,
-      setFilters,
-      granularity,
-      setGranularity,
-      sort,
-      order,
-      setSorting,
-      sorting,
-      page,
-      limit,
-      setPagination,
-      pagination,
-      grouping,
-      setGrouping,
-    ]
-  );
-};

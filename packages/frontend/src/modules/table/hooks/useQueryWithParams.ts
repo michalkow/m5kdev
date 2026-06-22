@@ -2,7 +2,7 @@ import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema"
 import { type UseQueryOptions, type UseQueryResult, useQuery } from "@tanstack/react-query";
 import type { GroupingState } from "@tanstack/react-table";
 import { useEffect, useMemo, useRef } from "react";
-import type { NuqsQueryParams } from "./useNuqsQueryParams";
+import type { QueryParamsState } from "../queryParams";
 
 /**
  * Flexible query options type that accepts both standard TanStack Query options
@@ -24,7 +24,7 @@ const FETCH_ALL_LIMIT = 99999;
 export interface QueryWithParamsOptions<TInput, TData> {
   getQueryOptions: GetQueryOptionsFn<TInput, TData>;
   queryParams?: TInput;
-  queryState: Pick<NuqsQueryParams, "filters" | "sort" | "order" | "page" | "limit" | "q">;
+  queryState: Pick<QueryParamsState, "filters" | "sort" | "order" | "page" | "limit" | "q">;
   grouping?: GroupingState;
   additionalFilters?: QueryFilters;
   enabled?: boolean;

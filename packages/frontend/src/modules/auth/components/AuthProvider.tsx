@@ -1,73 +1,39 @@
-import { usePostHog } from "posthog-js/react";
-import { createContext, useCallback, useEffect, useState } from "react";
-import { authClient } from "../auth.lib";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { AppConfigContext } from "../../app/components/AppConfigProvider";
+import { type AuthSession, authProviderContext } from "../auth.context";
+import { type AuthClient, configureAuthClient } from "../auth.lib";
 
-type Session = ReturnType<typeof authClient.useSession>["data"];
-
-function isImpersonatedSession(session: Session | null): boolean {
-  const sessionData = session?.session as { impersonatedBy?: string | null } | undefined;
-  return Boolean(sessionData?.impersonatedBy);
-}
-
-export const authProviderContext = createContext<{
-  isLoading: boolean;
-  data: Session | null;
-  signOut: () => void;
-  registerSession: (onSuccess: () => void) => void;
-}>({
-  isLoading: true,
-  data: null,
-  signOut: () => {},
-  registerSession: () => {},
-});
+type Session = AuthSession;
 
 export function AuthProvider({
+  authClient,
+  baseURL,
   children,
   loader,
   onSession,
 }: {
+  authClient?: AuthClient;
+  baseURL?: string;
   children: React.ReactNode;
   loader?: React.ReactNode;
   onSession?: (session: Session | null) => void;
 }) {
-  const posthog = usePostHog();
+  const appConfig = useContext(AppConfigContext);
+  const resolvedAuthClient = useMemo(
+    () => configureAuthClient({ baseURL: baseURL ?? appConfig?.serverUrl, client: authClient }),
+    [authClient, appConfig?.serverUrl, baseURL]
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
 
   const registerSession = useCallback(
     (onSuccess?: () => void) => {
-      authClient
+      resolvedAuthClient
         .getSession()
         .then(({ data: nextSession }) => {
           setIsLoading(false);
           setSession(nextSession);
           onSession?.(nextSession);
-
-          if (isImpersonatedSession(nextSession)) {
-            posthog.opt_out_capturing();
-            posthog.reset();
-            onSuccess?.();
-            return;
-          }
-
-          posthog.opt_in_capturing();
-
-          if (nextSession?.user) {
-            posthog.identify(nextSession.user.id, {
-              email: nextSession.user.email,
-              name: nextSession.user.name,
-              createdAt: nextSession.user.createdAt,
-              updatedAt: nextSession.user.updatedAt,
-              role: nextSession.user.role,
-              image: nextSession.user.image,
-              preferences: nextSession.user.preferences,
-              onboarding: nextSession.user.onboarding,
-              flags: nextSession.user.flags,
-            });
-          } else {
-            posthog.reset();
-          }
-
           onSuccess?.();
         })
         .catch((error) => {
@@ -76,29 +42,28 @@ export function AuthProvider({
           setSession(null);
         });
     },
-    [onSession, posthog]
+    [onSession, resolvedAuthClient]
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies(registerSession): registerSession is a callback
   useEffect(() => {
     registerSession();
-  }, []);
+  }, [registerSession]);
 
   const signOut = useCallback(() => {
-    authClient.signOut().then(() => {
-      posthog.reset();
-      posthog.opt_in_capturing();
+    resolvedAuthClient.signOut().then(() => {
       setSession(null);
     });
-  }, [posthog]);
+  }, [resolvedAuthClient]);
 
   // Show loading screen while checking authentication status
   if (isLoading) {
-    return loader ? loader : "Loading...";
+    return loader ? loader : null;
   }
 
   return (
-    <authProviderContext.Provider value={{ isLoading, data: session, signOut, registerSession }}>
+    <authProviderContext.Provider
+      value={{ authClient: resolvedAuthClient, isLoading, data: session, signOut, registerSession }}
+    >
       {children}
     </authProviderContext.Provider>
   );

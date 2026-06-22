@@ -1,11 +1,12 @@
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
+import { useQueryWithParams } from "@m5kdev/frontend/modules/table/hooks/useQueryWithParams";
+import type { QueryParamsState } from "@m5kdev/frontend/modules/table/queryParams";
 import type { UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
 import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
-import { type NuqsQueryParams, useNuqsQueryParams } from "./useNuqsQueryParams";
-import { useQueryWithParams } from "./useQueryWithParams";
+import { useNuqsQueryParams } from "./useNuqsQueryParams";
 
-export interface TableParams extends NuqsQueryParams {
+export interface TableParams extends QueryParamsState {
   rowSelection: RowSelectionState;
   setRowSelection: (updater: Updater<RowSelectionState>) => void;
 }
@@ -20,20 +21,16 @@ export interface NuqsTableReturn<TData> {
   query: UseQueryResult<TData>;
 }
 
-/**
- * Flexible query options type that accepts both standard TanStack Query options
- * and tRPC's queryOptions function return type.
- * Uses permissive generics to handle type differences between TanStack Query and tRPC.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// tRPC queryOptions carries branded query keys and error types that are still valid
+// React Query options, so keep this adapter boundary intentionally permissive.
+// biome-ignore lint/suspicious/noExplicitAny: preserves compatibility with tRPC queryOptions.
 type QueryOptionsLike<TData> = UseQueryOptions<TData, any, TData, any>;
 
-/**
- * Function type that accepts both standard query options functions and tRPC's queryOptions.
- * tRPC's queryOptions accepts (input, opts?) while standard functions may only accept (input).
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type GetQueryOptionsFn<TInput, TData> = (input: TInput, ...args: any[]) => QueryOptionsLike<TData>;
+type GetQueryOptionsFn<TInput, TData> = (
+  input: TInput,
+  // biome-ignore lint/suspicious/noExplicitAny: preserves compatibility with tRPC queryOptions.
+  ...args: any[]
+) => QueryOptionsLike<TData>;
 
 export interface NuqsTableOptions<TInput, TData> {
   getQueryOptions: GetQueryOptionsFn<TInput, TData>;
@@ -50,10 +47,8 @@ const useNuqsTable = <TInput, TData>({
   additionalFilters,
   onAdditionalFiltersChange,
 }: NuqsTableOptions<TInput, TData>): NuqsTableReturn<TData> => {
-  // Get all URL query state (includes grouping)
   const queryState = useNuqsQueryParams(prefix);
 
-  // Get query result — passes grouping so limit can be overridden when grouped
   const queryResult = useQueryWithParams({
     getQueryOptions,
     queryParams,
@@ -62,7 +57,6 @@ const useNuqsTable = <TInput, TData>({
     additionalFilters,
   });
 
-  // Table-specific row selection state
   const [rowSelection, setRowSelectionRaw] = useState<RowSelectionState>({});
 
   const setRowSelection = useCallback((updater: Updater<RowSelectionState>) => {
@@ -72,8 +66,6 @@ const useNuqsTable = <TInput, TData>({
     });
   }, []);
 
-  // Merge additionalFilters into displayed filters so the table UI shows all active filters.
-  // On write, strip the additional filters so only the table's own go to the prefixed URL param.
   const displayFilters = useMemo<QueryFilters>(() => {
     if (!additionalFilters?.length) return queryState.filters ?? [];
     return [...additionalFilters, ...(queryState.filters ?? [])];

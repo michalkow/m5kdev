@@ -1,7 +1,7 @@
 import { Pagination } from "@heroui/react";
-import type { TableProps } from "@m5kdev/frontend/modules/table/hooks/useNuqsTable";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import type { TableProps } from "../hooks/useNuqsTable";
 
 interface TablePaginationProps {
   pageCount: number;
