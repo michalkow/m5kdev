@@ -1,7 +1,7 @@
 import type { APIRequestContext, Page, TestInfo } from "@playwright/test";
 import { expect } from "@playwright/test";
 
-type Profile = "standard" | "waitlist";
+export type Profile = "standard" | "waitlist" | "expoStandard" | "expoWaitlist";
 
 export type StoredEmail = {
   id: string;
@@ -81,12 +81,26 @@ export const profiles = {
     adminEmail: "admin.waitlist@auth-e2e.local",
     adminPassword: "password1234",
   },
+  expoStandard: {
+    webUrl: "http://127.0.0.1:15183",
+    serverUrl: "http://127.0.0.1:18182",
+    adminEmail: "admin.standard@auth-e2e.local",
+    adminPassword: "password1234",
+  },
+  expoWaitlist: {
+    webUrl: "http://127.0.0.1:15184",
+    serverUrl: "http://127.0.0.1:18183",
+    adminEmail: "admin.waitlist@auth-e2e.local",
+    adminPassword: "password1234",
+  },
 } as const satisfies Record<
   Profile,
   { webUrl: string; serverUrl: string; adminEmail: string; adminPassword: string }
 >;
 
 export function profileFrom(testInfo: TestInfo): Profile {
+  if (testInfo.project.name === "expo-waitlist") return "expoWaitlist";
+  if (testInfo.project.name === "expo-standard") return "expoStandard";
   return testInfo.project.name === "waitlist" ? "waitlist" : "standard";
 }
 
