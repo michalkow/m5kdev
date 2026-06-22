@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.21.0
+
+### Minor Changes
+
+- frontend rework
+
 ## 0.20.51
 
 ### Patch Changes
