@@ -1,5 +1,6 @@
 import { Button } from "@heroui/react";
 import { ChevronsLeftIcon, ChevronsRightIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { useSidebar } from "../../../components/Sidebar";
 import { useTheme } from "../../../hooks/useTheme";
@@ -11,7 +12,7 @@ export function AppSidebarHeader({
   size = 30,
 }: {
   logo: { src: string; darkSrc?: string; alt: string };
-  title: string;
+  title: string | ReactNode;
   size?: number;
 }) {
   const { open, toggleSidebar } = useSidebar();

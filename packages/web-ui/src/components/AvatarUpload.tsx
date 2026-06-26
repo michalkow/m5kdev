@@ -1,5 +1,6 @@
 import { Avatar, ProgressBar } from "@heroui/react";
-import { useFileUpload } from "@m5kdev/frontend/modules/file/hooks/useUpload";
+import { useS3DownloadUrl } from "@m5kdev/frontend/modules/file/hooks/useS3DownloadUrl";
+import { useS3Upload } from "@m5kdev/frontend/modules/file/hooks/useS3Upload";
 import { Edit2, User } from "lucide-react";
 import { type ChangeEvent, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,12 +17,19 @@ export function AvatarUpload({ currentAvatarUrl, onUploadComplete, className }: 
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(currentAvatarUrl || null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showCropDialog, setShowCropDialog] = useState(false);
+
+  const isHttpUrl = Boolean(currentAvatarUrl?.startsWith("http"));
+  const { data: s3DownloadUrl } = useS3DownloadUrl(
+    !isHttpUrl && currentAvatarUrl ? currentAvatarUrl : ""
+  );
+  const storedAvatarUrl = isHttpUrl ? currentAvatarUrl : (s3DownloadUrl ?? null);
+  const displayUrl = previewUrl ?? storedAvatarUrl;
 
   const inputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { upload, status, progress, errorMessage, reset } = useFileUpload();
+  const { upload, status, progress, error, reset } = useS3Upload();
 
   const handleFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -54,23 +62,19 @@ export function AvatarUpload({ currentAvatarUrl, onUploadComplete, className }: 
     setShowCropDialog(false);
 
     try {
-      const res = await upload<{
-        url: string;
-        minetype: string;
-        size: number;
-      }>("image", croppedFile);
-      onUploadComplete?.(res.url);
-    } catch (error) {
-      console.error("Error uploading image:", error);
+      const key = await upload(croppedFile);
+      onUploadComplete?.(key);
+    } catch (uploadError) {
+      console.error("Error uploading image:", uploadError);
     }
   };
 
   const removeFile = () => {
-    if (previewUrl && previewUrl !== currentAvatarUrl) {
+    if (previewUrl?.startsWith("blob:")) {
       URL.revokeObjectURL(previewUrl);
     }
     setSelectedFile(null);
-    setPreviewUrl(currentAvatarUrl || null);
+    setPreviewUrl(null);
     setShowCropDialog(false);
     reset();
     if (fileInputRef.current) {
@@ -88,8 +92,8 @@ export function AvatarUpload({ currentAvatarUrl, onUploadComplete, className }: 
           onMouseLeave={() => setIsHovered(false)}
         >
           <Avatar color="accent" variant="soft" className="relative size-24 cursor-pointer">
-            {previewUrl ? (
-              <Avatar.Image src={previewUrl} alt={t("web-ui:avatar.preview.alt")} />
+            {displayUrl ? (
+              <Avatar.Image src={displayUrl} alt={t("web-ui:avatar.preview.alt")} />
             ) : (
               <Avatar.Fallback>
                 <User className="h-12 w-12" />
@@ -125,19 +129,21 @@ export function AvatarUpload({ currentAvatarUrl, onUploadComplete, className }: 
             </ProgressBar>
           </div>
         )}
-        {status === "error" && <p className="mt-2 text-sm text-red-500">{errorMessage}</p>}
+        {status === "error" && error ? (
+          <p className="mt-2 text-sm text-red-500">{error}</p>
+        ) : null}
       </div>
 
-      {previewUrl && (
+      {displayUrl && showCropDialog ? (
         <CropDialog
           open={showCropDialog}
           onOpenChange={setShowCropDialog}
-          imageUrl={previewUrl}
+          imageUrl={previewUrl ?? displayUrl}
           onCropComplete={handleCropComplete}
           onCancel={removeFile}
           isLoading={status === "uploading"}
         />
-      )}
+      ) : null}
     </>
   );
 }
