@@ -120,6 +120,7 @@ interface NuqsTableStoryProps {
   /** When true, renders the table with no rows (empty state). */
   readonly empty?: boolean;
   readonly withBulkActions?: boolean;
+  readonly withRowClick?: boolean;
 }
 
 function NuqsTableStory({
@@ -129,6 +130,7 @@ function NuqsTableStory({
   total,
   empty = false,
   withBulkActions = false,
+  withRowClick = false,
 }: NuqsTableStoryProps): ReactElement {
   const rows = empty ? ([] as PersonRow[]) : DATA;
   const resolvedTotal = empty ? 0 : (total ?? DATA.length);
@@ -188,6 +190,13 @@ function NuqsTableStory({
           columns={COLUMNS}
           tableProps={tableProps}
           BulkActions={withBulkActions ? BulkActions : undefined}
+          onRowClick={
+            withRowClick
+              ? (row) => {
+                  console.log("Row clicked:", row);
+                }
+              : undefined
+          }
           showGlobalSearch={showGlobalSearch}
         />
       </div>
@@ -217,6 +226,12 @@ export const WithBulkActions: Story = {
   args: {
     showGlobalSearch: true,
     withBulkActions: true,
+  },
+};
+
+export const WithRowClick: Story = {
+  args: {
+    withRowClick: true,
   },
 };
 

@@ -76,12 +76,16 @@ export interface NuqsTableBulkActionsProps<T> {
   table: ReactTable<T>;
 }
 
+export type NuqsTableRowClickHandler<T> = (row: T) => void;
+
 interface NuqsTableParams<T> {
   data: T[];
   total?: number;
   columns: NuqsTableColumn<T>[];
   tableProps: TableParams;
   BulkActions?: ComponentType<NuqsTableBulkActionsProps<T>>;
+  /** Invoked when a data row is activated (click, Enter, etc.). Group header rows are excluded. */
+  onRowClick?: NuqsTableRowClickHandler<T>;
   /** When true, shows URL-synced global search; enable only if the list API applies `q` server-side. */
   showGlobalSearch?: boolean;
   singleFilter?: boolean;
@@ -134,6 +138,7 @@ export const NuqsTable = <T,>({
   columns,
   tableProps,
   BulkActions,
+  onRowClick,
   showGlobalSearch = false,
   singleFilter = false,
   filterMethods,
@@ -510,7 +515,12 @@ export const NuqsTable = <T,>({
   };
 
   const renderLeafRow = (row: TanStackRow<T>) => (
-    <Table.Row key={row.id} id={row.id}>
+    <Table.Row
+      key={row.id}
+      id={row.id}
+      className={onRowClick ? "cursor-pointer" : undefined}
+      onAction={onRowClick ? () => onRowClick(row.original) : undefined}
+    >
       {isRowSelectionEnabled ? (
         <Table.Cell className="pr-0">
           <Checkbox aria-label="Select row" slot="selection" variant="secondary">
