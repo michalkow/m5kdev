@@ -3,18 +3,17 @@ packages:
 
 catalog:
   '@biomejs/biome': 2.2.0
-  '@heroui/react': 3.0.2
-  '@heroui/styles': 3.0.2
+  '@heroui/react': 3.0.3
+  '@heroui/styles': 3.0.3
   '@libsql/client': 0.17.0
-  '@m5kdev/backend': 0.3.3
-  '@m5kdev/commons': 0.3.3
-  '@m5kdev/config': 0.3.3
-  '@m5kdev/frontend': 0.3.3
-  '@m5kdev/web-ui': 0.3.3
+  '@m5kdev/backend': 0.21.3
+  '@m5kdev/commons': 0.21.3
+  '@m5kdev/config': 0.21.3
+  '@m5kdev/frontend': 0.21.3
+  '@m5kdev/web-ui': 0.21.3
   '@react-email/components': 1.0.1
   '@tailwindcss/vite': 4.1.11
   '@tanstack/react-query': 5.83.0
-  '@tanstack/react-query-devtools': 5.83.0
   '@trpc/client': 11.4.3
   '@trpc/server': 11.4.3
   '@trpc/tanstack-react-query': 11.4.3
@@ -32,6 +31,7 @@ catalog:
   drizzle-orm: 0.44.3
   express: 4.21.2
   i18next: 25.3.2
+  ioredis: 5.7.0
   lucide-react: 0.488.0
   neverthrow: 8.2.0
   nuqs: 2.4.3

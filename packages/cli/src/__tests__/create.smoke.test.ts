@@ -7,6 +7,7 @@ import { scaffoldProject } from "../create";
 
 const execFileAsync = promisify(execFile);
 const maybeDescribe = process.env.CLI_SMOKE === "1" ? describe : describe.skip;
+const SMOKE_TEST_TIMEOUT_MS = 10 * 60 * 1000;
 
 maybeDescribe("create command smoke test", () => {
   let tempRoot = "";
@@ -21,40 +22,46 @@ maybeDescribe("create command smoke test", () => {
   afterAll(async () => {
     process.chdir(initialCwd);
     await fs.rm(tempRoot, { recursive: true, force: true });
-  });
+  }, SMOKE_TEST_TIMEOUT_MS);
 
-  it("scaffolds a project and runs the generated commands", async () => {
-    jest.setTimeout(10 * 60 * 1000);
+  it(
+    "scaffolds a project and runs the generated commands",
+    async () => {
+      const result = await scaffoldProject({
+        targetDirectory: "smoke-app",
+        appName: "Smoke App",
+        appDescription: "Smoke test app",
+        yes: true,
+        force: false,
+        skipInstall: false,
+        skipGit: true,
+      });
 
-    const result = await scaffoldProject({
-      targetDirectory: "smoke-app",
-      appName: "Smoke App",
-      appDescription: "Smoke test app",
-      yes: true,
-      force: false,
-      skipInstall: false,
-      skipGit: true,
-    });
-
-    await execFileAsync("pnpm", ["check-types"], {
-      cwd: result.targetDirectory,
-      env: process.env,
-    });
-    await execFileAsync("pnpm", ["lint"], {
-      cwd: result.targetDirectory,
-      env: process.env,
-    });
-    await execFileAsync("pnpm", ["--filter", "./apps/server", "sync"], {
-      cwd: result.targetDirectory,
-      env: process.env,
-    });
-    await execFileAsync("pnpm", ["--filter", "./apps/server", "build"], {
-      cwd: result.targetDirectory,
-      env: process.env,
-    });
-    await execFileAsync("pnpm", ["--filter", "./apps/webapp", "build"], {
-      cwd: result.targetDirectory,
-      env: process.env,
-    });
-  });
+      await execFileAsync("pnpm", ["--filter", "./apps/server", "generate:schema"], {
+        cwd: result.targetDirectory,
+        env: process.env,
+      });
+      await execFileAsync("pnpm", ["check-types"], {
+        cwd: result.targetDirectory,
+        env: process.env,
+      });
+      await execFileAsync("pnpm", ["lint"], {
+        cwd: result.targetDirectory,
+        env: process.env,
+      });
+      await execFileAsync("pnpm", ["--filter", "./apps/server", "sync"], {
+        cwd: result.targetDirectory,
+        env: process.env,
+      });
+      await execFileAsync("pnpm", ["--filter", "./apps/server", "build"], {
+        cwd: result.targetDirectory,
+        env: process.env,
+      });
+      await execFileAsync("pnpm", ["--filter", "./apps/webapp", "build"], {
+        cwd: result.targetDirectory,
+        env: process.env,
+      });
+    },
+    SMOKE_TEST_TIMEOUT_MS
+  );
 });

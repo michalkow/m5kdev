@@ -1,3 +1,6 @@
+import { BasePermissionService } from "@m5kdev/backend/modules/base/base.service";
+import type { Context } from "@m5kdev/backend/utils/trpc";
+import type { ServerResultAsync } from "@m5kdev/backend/utils/types";
 import type {
   PostCreateInputSchema,
   PostCreateOutputSchema,
@@ -10,9 +13,6 @@ import type {
   PostUpdateInputSchema,
   PostUpdateOutputSchema,
 } from "{{PACKAGE_SCOPE}}/shared/modules/posts/posts.schema";
-import { BasePermissionService } from "@m5kdev/backend/modules/base/base.service";
-import type { ServerResultAsync } from "@m5kdev/backend/utils/types";
-import type { Context } from "@m5kdev/backend/utils/trpc";
 import { err, ok } from "neverthrow";
 import type { PostsRepository } from "./posts.repository";
 
@@ -114,7 +114,7 @@ export class PostsService extends BasePermissionService<
       return this.repository.posts.update({
         id: input.id,
         status: "published",
-        publishedAt: state.post.publishedAt ?? new Date(),
+        publishedAt: state.post?.publishedAt ?? new Date(),
       }) as ServerResultAsync<PostPublishOutputSchema>;
     });
 

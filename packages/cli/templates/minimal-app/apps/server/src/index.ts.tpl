@@ -1,5 +1,6 @@
 import type { Server } from "node:http";
 import { builtBackendApp } from "./app";
+
 const port = process.env.PORT ? Number.parseInt(process.env.PORT, 10) : 8080;
 
 let httpServer: Server | undefined;
@@ -38,7 +39,9 @@ async function start(): Promise<void> {
   await builtBackendApp.start();
   await new Promise<void>((resolve, reject) => {
     httpServer = builtBackendApp.express.app.listen(port, () => {
-      console.info(`Server running at ${process.env.VITE_SERVER_URL ?? `http://localhost:${port}`}`);
+      console.info(
+        `Server running at ${process.env.VITE_SERVER_URL ?? `http://localhost:${port}`}`
+      );
       resolve();
     });
     httpServer.on("error", reject);

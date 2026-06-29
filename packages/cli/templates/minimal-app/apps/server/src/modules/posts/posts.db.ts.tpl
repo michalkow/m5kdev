@@ -1,5 +1,5 @@
-import { type AnySQLiteColumn, integer, sqliteTable as table, text } from "drizzle-orm/sqlite-core";
 import { organizations, teams, users } from "@m5kdev/backend/modules/auth/auth.db";
+import { integer, sqliteTable as table, text } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
 
 export const posts = table("posts", {

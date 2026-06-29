@@ -13,7 +13,7 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(payload.title, {
       body: payload.body,
       data: payload.data ?? {},
-    }),
+    })
   );
 });
 
@@ -29,6 +29,6 @@ self.addEventListener("notificationclick", (event) => {
         return self.clients.openWindow("/");
       }
       return undefined;
-    }),
+    })
   );
 });

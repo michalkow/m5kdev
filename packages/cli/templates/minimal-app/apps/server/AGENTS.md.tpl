@@ -19,7 +19,8 @@ apps/server/src/modules/<module>/
 ├── <module>.db.ts
 ├── <module>.repository.ts
 ├── <module>.service.ts
-└── <module>.trpc.ts
+├── <module>.trpc.ts
+└── <module>.module.ts
 ```
 
 ## Layer Boundaries
@@ -27,12 +28,12 @@ apps/server/src/modules/<module>/
 - Repositories own persistence and query construction.
 - Services own business rules, orchestration, and context-aware defaults.
 - tRPC files own transport only and must delegate to services.
-- Keep composition explicit in `db.ts`, `repository.ts`, `service.ts`, and `trpc.ts`.
+- Register modules in `apps/server/src/app.ts`; use `db.ts` and `lib/auth.ts` only for scripts that need direct DB or auth access.
 
 ## Workflow, Redis, and push notifications
 
-- `workflow.ts` wires BullMQ via **Redis** (`REDIS_URL`). Start Redis locally before `pnpm dev` on the server, or jobs will not run.
-- `index.ts` calls `workflowRegistry.registerService(notificationService)` and `await workflowRegistry.start()` before listening.
-- After changing Drizzle tables (including `notification_*` tables merged in `db.ts`), run your project’s **Drizzle generate / migrate** command — do not hand-edit SQL migrations in this repo.
+- `WorkflowModule` and `NotificationModule` are registered in `app.ts`. Start **Redis** locally (`REDIS_URL`) before `pnpm dev` on the server, or background jobs will not run.
+- `index.ts` calls `builtBackendApp.start()` before listening and `builtBackendApp.shutdown()` on exit.
+- After changing Drizzle tables, run `pnpm --filter ./apps/server sync` — do not hand-edit SQL migrations in this repo.
 
 Push-related server env vars are documented in `apps/shared/.env.example`.

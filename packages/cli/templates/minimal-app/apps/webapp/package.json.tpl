@@ -19,7 +19,6 @@
     "@m5kdev/frontend": "catalog:",
     "@m5kdev/web-ui": "catalog:",
     "@tanstack/react-query": "catalog:",
-    "@tanstack/react-query-devtools": "catalog:",
     "@trpc/client": "catalog:",
     "@trpc/tanstack-react-query": "catalog:",
     "better-auth": "catalog:",

@@ -16,10 +16,14 @@ export default function AccountDeletionEmail({
       ctaLabel="Review deletion"
       ctaUrl={url}
       body={
-        <Text style={{ margin: "0" }}>
-          We received a request to delete your {{APP_NAME}} account. If that was you, use the link
-          below to confirm the action.
-        </Text>
+        <>
+          <Text style={{ margin: "0" }}>
+            We received a request to delete your {{APP_NAME}} account.
+          </Text>
+          <Text style={{ margin: "0" }}>
+            If that was you, use the link below to confirm the action.
+          </Text>
+        </>
       }
     />
   );

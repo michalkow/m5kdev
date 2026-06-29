@@ -12,7 +12,13 @@
       "auth": "Better Auth"
     },
     "navigation": {
-      "posts": "Posts"
+      "posts": "Posts",
+      "members": "Members",
+      "childOrgs": "Child orgs",
+      "orgPreferences": "Org preferences",
+      "profile": "Profile",
+      "invites": "Invites",
+      "admin": "Admin"
     },
     "push": {
       "eyebrow": "Browser push",
@@ -116,6 +122,12 @@
       "published": "Post published.",
       "deleted": "Post archived.",
       "validation": "Title and content are required."
+    }
+  },
+  "auth": {
+    "header": {
+      "eyebrow": "Framework Starter",
+      "tagline": "A minimal m5kdev starter with auth, tRPC, and one polished posts module."
     }
   }
 }

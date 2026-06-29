@@ -18,7 +18,7 @@ apps/<app>/server/src/modules/<module>/<module>.module.ts
 - Extend `BaseModule<Deps, Tables, Repositories, Services, Routers>` from `@m5kdev/backend/modules/base/base.module`.
 - Declare local type aliases for each generic slot (`*ModuleDeps`, `*ModuleTables`, `*ModuleRepositories`, `*ModuleServices`, `*ModuleRouters`).
 - Set `readonly id` to match the module directory name (e.g. `readonly id = "posts"`).
-- Declare `dependsOn` as a `readonly` tuple with `as const`. App modules typically depend on framework modules like `AuthModule`.
+- Declare `dbDependsOn` or `dependsOn` as a `readonly` tuple with `as const`. App modules that reference auth tables typically use `dbDependsOn: ["auth"]`.
 - Override only the hooks the module actually needs; omit the rest.
 - Keep hook bodies as pure wiring — no business logic.
 - Use `createBackendRouterMap(namespace, router)` from `@m5kdev/backend/app` in the `trpc()` hook.
@@ -117,35 +117,33 @@ export const postsModule = new PostsModule();
 
 ## Registration
 
-Register the module in `apps/<app>/server/src/modules.ts`:
+Register the module in `apps/<app>/server/src/app.ts`:
 
 ```typescript
-import { defineBackendModules } from "@m5kdev/backend/app";
+import { createBackendApp } from "@m5kdev/backend/app";
 import { PostsModule } from "./modules/posts/posts.module";
 
-export const postsBackendModule = new PostsModule();
-
-export const backendModules = defineBackendModules([
-  emailBackendModule,
-  authBackendModule,
-  workflowBackendModule,
-  notificationBackendModule,
-  postsBackendModule,
-] as const);
+export const builtBackendApp = createBackendApp(
+  {
+    // db, express, schema, app, email, auth, ...
+  },
+  [
+    new EmailModule(templates),
+    new AuthModule(),
+    new WorkflowModule({ /* ... */ }),
+    new NotificationModule(),
+    new PostsModule(),
+  ] as const
+);
 ```
-
-Then chain `.use(postsBackendModule)` in `apps/<app>/server/src/app.ts`.
 
 ## Accessing Module Output
 
-After building, module repositories and services are re-exported from composition root files:
+After building, module repositories and services are available on `builtBackendApp.modules`:
 
 ```typescript
-// apps/<app>/server/src/repository.ts
-export const postsRepository = builtBackendApp.modules.posts.repositories.posts;
-
-// apps/<app>/server/src/service.ts
-export const postsService = builtBackendApp.modules.posts.services.posts;
+const postsService = builtBackendApp.modules.posts.services.posts;
+const postsRepository = builtBackendApp.modules.posts.repositories.posts;
 ```
 
 ## Patterns

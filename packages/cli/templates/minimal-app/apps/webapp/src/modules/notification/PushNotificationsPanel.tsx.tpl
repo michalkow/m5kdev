@@ -1,15 +1,15 @@
 import { Button, Chip } from "@heroui/react";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
-import { useWebPush } from "@m5kdev/web-ui/hooks/useWebPush";
+import { type UseWebPushOptions, useWebPush } from "@m5kdev/web-ui/hooks/useWebPush";
 import { BellIcon } from "lucide-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useTRPC } from "../../utils/trpc";
+import { useTRPC } from "@/utils/trpc";
 
 export function PushNotificationsPanel() {
   const { data: session } = useSession();
   const trpc = useTRPC();
-  const { t } = useTranslation("blog-app");
+  const { t } = useTranslation("blog{{PACKAGE_SCOPE}}");
 
   const messages = useMemo(
     () => ({
@@ -20,7 +20,7 @@ export function PushNotificationsPanel() {
       failed: t("layout.push.failed"),
       enabled: t("layout.push.enabled"),
     }),
-    [t],
+    [t]
   );
 
   const {
@@ -36,8 +36,10 @@ export function PushNotificationsPanel() {
   } = useWebPush({
     enabled: Boolean(session),
     messages,
-    vapidPublicKeyQuery: trpc.notification.vapidPublicKey.queryOptions(),
-    registerDeviceMutation: trpc.notification.registerDevice.mutationOptions(),
+    vapidPublicKeyQuery:
+      trpc.notification.vapidPublicKey.queryOptions() as unknown as UseWebPushOptions["vapidPublicKeyQuery"],
+    registerDeviceMutation:
+      trpc.notification.registerDevice.mutationOptions() as unknown as UseWebPushOptions["registerDeviceMutation"],
   });
 
   if (!session) {
@@ -71,19 +73,13 @@ export function PushNotificationsPanel() {
             <p className="mt-2 text-xs text-emerald-800/90">{t("layout.push.permissionGranted")}</p>
           ) : null}
           {feedback ? (
-            <Chip className="mt-3" color={flowStatus === "error" ? "danger" : "success"} variant="flat">
+            <Chip
+              className={`mt-3 ${flowStatus === "error" ? "bg-danger-100 text-danger-900" : "bg-success-100 text-success-900"}`}
+            >
               {feedback}
             </Chip>
           ) : null}
-          <Button
-            className="mt-3"
-            color="primary"
-            isDisabled={disabled}
-            radius="full"
-            size="sm"
-            variant="flat"
-            onPress={() => void subscribe()}
-          >
+          <Button className="mt-3" isDisabled={disabled} size="sm" onPress={() => void subscribe()}>
             {t("layout.push.cta")}
           </Button>
         </div>

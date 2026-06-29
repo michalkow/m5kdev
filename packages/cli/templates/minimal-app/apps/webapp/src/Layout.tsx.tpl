@@ -1,23 +1,43 @@
-import { APP_NAME } from "{{PACKAGE_SCOPE}}/shared/modules/app/app.constants";
-import { Button, Chip } from "@heroui/react";
+import { Chip } from "@heroui/react";
+import { buttonVariants } from "@heroui/styles";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useTheme } from "@m5kdev/web-ui/components/theme-provider";
+import { APP_NAME } from "{{PACKAGE_SCOPE}}/shared/modules/app/app.constants";
 import {
   BookTextIcon,
+  Building2Icon,
   LogOutIcon,
   MoonStarIcon,
   NotebookTextIcon,
+  SettingsIcon,
+  ShieldCheckIcon,
   SunMediumIcon,
+  UserCogIcon,
+  UsersIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { NavLink, Outlet } from "react-router";
 import { PushNotificationsPanel } from "./modules/notification/PushNotificationsPanel";
 
+const NAV_LINKS = [
+  { to: "/posts", labelKey: "layout.navigation.posts", icon: BookTextIcon },
+  { to: "/organization/members", labelKey: "layout.navigation.members", icon: UsersIcon },
+  { to: "/organization/manage", labelKey: "layout.navigation.childOrgs", icon: Building2Icon },
+  {
+    to: "/organization/preferences",
+    labelKey: "layout.navigation.orgPreferences",
+    icon: SettingsIcon,
+  },
+  { to: "/user/preferences", labelKey: "layout.navigation.profile", icon: UserCogIcon },
+  { to: "/user/invite", labelKey: "layout.navigation.invites", icon: UsersIcon },
+  { to: "/admin/users", labelKey: "layout.navigation.admin", icon: ShieldCheckIcon },
+] as const;
+
 export function Layout() {
   const { data: session } = useSession();
   const { theme, setTheme } = useTheme();
-  const { t } = useTranslation("blog-app");
+  const { t } = useTranslation("blog{{PACKAGE_SCOPE}}");
 
   const userName = session?.user?.name || session?.user?.email || "Editor";
   const userEmail = session?.user?.email || "";
@@ -50,29 +70,28 @@ export function Layout() {
             </p>
             <p className="mt-3 text-sm leading-6 text-ink/75">{t("layout.workspace.body")}</p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Chip color="warning" variant="flat">
-                {t("layout.workspace.local")}
-              </Chip>
-              <Chip color="success" variant="flat">
-                {t("layout.workspace.auth")}
-              </Chip>
+              <Chip className="bg-amber-100 text-amber-900">{t("layout.workspace.local")}</Chip>
+              <Chip className="bg-emerald-100 text-emerald-900">{t("layout.workspace.auth")}</Chip>
             </div>
           </div>
 
           <PushNotificationsPanel />
 
           <nav className="mt-8 grid gap-2">
-            <NavLink
-              to="/posts"
-              className={({ isActive }) =>
-                isActive
-                  ? "group flex items-center gap-3 rounded-[22px] border border-emerald-300 bg-emerald-950 px-4 py-3 text-emerald-50"
-                  : "group flex items-center gap-3 rounded-[22px] border border-transparent bg-transparent px-4 py-3 text-ink/80 transition hover:border-amber-200 hover:bg-white/70"
-              }
-            >
-              <BookTextIcon className="h-4 w-4" />
-              <span className="font-medium">{t("layout.navigation.posts")}</span>
-            </NavLink>
+            {NAV_LINKS.map(({ to, labelKey, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) =>
+                  isActive
+                    ? "group flex items-center gap-3 rounded-[22px] border border-emerald-300 bg-emerald-950 px-4 py-3 text-emerald-50"
+                    : "group flex items-center gap-3 rounded-[22px] border border-transparent bg-transparent px-4 py-3 text-ink/80 transition hover:border-amber-200 hover:bg-white/70"
+                }
+              >
+                <Icon className="h-4 w-4" />
+                <span className="font-medium">{t(labelKey)}</span>
+              </NavLink>
+            ))}
           </nav>
 
           <div className="mt-8 rounded-[28px] border border-white/60 bg-stone-950 px-4 py-4 text-stone-100 shadow-[0_16px_32px_rgba(23,19,20,0.2)]">
@@ -81,13 +100,11 @@ export function Layout() {
             </p>
             <p className="mt-3 text-lg font-semibold">{userName}</p>
             <p className="mt-1 text-sm text-stone-300">{userEmail}</p>
-            <div className="mt-4 flex items-center gap-2">
-              <Button
-                radius="full"
-                size="sm"
-                variant="flat"
-                className="bg-stone-800 text-stone-100"
-                onPress={() => setTheme(theme === "dark" ? "light" : "dark")}
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className={buttonVariants({ variant: "secondary", size: "sm" })}
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               >
                 {theme === "dark" ? (
                   <SunMediumIcon className="h-4 w-4" />
@@ -95,20 +112,18 @@ export function Layout() {
                   <MoonStarIcon className="h-4 w-4" />
                 )}
                 {theme === "dark" ? t("layout.account.light") : t("layout.account.dark")}
-              </Button>
-              <Button
-                radius="full"
-                size="sm"
-                color="danger"
-                variant="flat"
-                onPress={() => {
+              </button>
+              <button
+                type="button"
+                className={buttonVariants({ variant: "danger", size: "sm" })}
+                onClick={() => {
                   authClient.signOut();
                   window.location.assign("/login");
                 }}
               >
                 <LogOutIcon className="h-4 w-4" />
                 {t("layout.account.signOut")}
-              </Button>
+              </button>
             </div>
           </div>
         </aside>
@@ -123,11 +138,7 @@ export function Layout() {
                 {t("layout.header.title")}
               </h2>
             </div>
-            <Chip
-              radius="full"
-              className="border border-emerald-300 bg-emerald-50 px-4 py-5 text-emerald-900"
-              variant="bordered"
-            >
+            <Chip className="border border-emerald-300 bg-emerald-50 px-4 py-5 text-emerald-900">
               {t("layout.header.runtime")}
             </Chip>
           </header>

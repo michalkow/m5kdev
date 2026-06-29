@@ -5,6 +5,7 @@ BETTER_AUTH_SECRET=replace-me
 VITE_APP_NAME={{APP_NAME}}
 VITE_APP_URL=http://localhost:5173
 VITE_SERVER_URL=http://localhost:8080
+VITE_ENABLE_WAITLIST=false
 
 # Database
 DATABASE_URL=file:./local.db

@@ -15,9 +15,9 @@
 
 ## Backend Conventions
 
-- Keep repository, service, and transport layers separate.
-- Instantiate repositories in `apps/server/src/repository.ts`.
-- Instantiate services in `apps/server/src/service.ts`.
+- Keep repository, service, and transport layers separate inside each module.
+- Register modules in `apps/server/src/app.ts` via `createBackendApp(config, [modules])`.
+- Use `BaseModule` subclasses for app modules; the kernel wires repositories, services, and tRPC.
 - Keep tRPC files focused on input/output wiring and delegate logic to services.
 - Do not create Drizzle migrations by hand. Use the scaffolded config and your project migration workflow later if you need generated migrations.
 
@@ -25,5 +25,6 @@
 
 - Keep the app shell shape: `NuqsAdapter` + `BrowserRouter` + `Providers`.
 - Compose global providers only in `apps/webapp/src/Providers.tsx`.
+- Use `AppConfigProvider` and `AppTrpcQueryProvider` from `@m5kdev/frontend`; use `@m5kdev/web-ui` for web-only UI.
 - Use `nuqs` for URL state, React Router for routing, HeroUI for UI primitives, and Tailwind v4 for styling.
 - Prefer shared framework utilities from `@m5kdev/frontend` and `@m5kdev/web-ui` before adding local duplicates.

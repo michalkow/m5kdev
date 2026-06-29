@@ -43,12 +43,30 @@ describe("scaffoldProject", () => {
       path.join(result.targetDirectory, "apps/shared/.env"),
       "utf8"
     );
+    const appConstants = await fs.readFile(
+      path.join(result.targetDirectory, "apps/shared/src/modules/app/app.constants.ts"),
+      "utf8"
+    );
+    const providers = await fs.readFile(
+      path.join(result.targetDirectory, "apps/webapp/src/Providers.tsx"),
+      "utf8"
+    );
+    const appTs = await fs.readFile(
+      path.join(result.targetDirectory, "apps/server/src/app.ts"),
+      "utf8"
+    );
 
     expect(rootPackage).toContain("\"name\": \"editorial-desk\"");
     expect(rootAgents).toContain("Editorial Desk");
     expect(rootAgents).toContain("A clean newsroom starter.");
     expect(sharedEnv).toContain("VITE_APP_NAME=Editorial Desk");
     expect(sharedEnv).not.toContain("{{APP_NAME}}");
+    expect(appConstants).toContain('APP_NAME = "Editorial Desk"');
+    expect(appConstants).toContain('APP_SLUG = "editorial-desk"');
+    expect(providers).toContain("AppConfigProvider");
+    expect(providers).toContain("AppTrpcQueryProvider");
+    expect(appTs).toContain("createBackendApp(");
+    expect(appTs).not.toContain(".build()");
   });
 
   it("refuses to overwrite a non-empty directory without force", async () => {

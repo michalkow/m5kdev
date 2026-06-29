@@ -3,6 +3,7 @@
   "rootDir": ".",
   "compilerOptions": {
     "esModuleInterop": true,
+    "ignoreDeprecations": "6.0",
     "importHelpers": true,
     "jsx": "react-jsx",
     "noEmit": true,

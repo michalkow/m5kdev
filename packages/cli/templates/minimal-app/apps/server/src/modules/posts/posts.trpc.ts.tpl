@@ -1,3 +1,4 @@
+import { handleTRPCResult, type TRPCMethods } from "@m5kdev/backend/utils/trpc";
 import {
   postCreateInputSchema,
   postCreateOutputSchema,
@@ -10,7 +11,6 @@ import {
   postUpdateInputSchema,
   postUpdateOutputSchema,
 } from "{{PACKAGE_SCOPE}}/shared/modules/posts/posts.schema";
-import { handleTRPCResult, type TRPCMethods } from "@m5kdev/backend/utils/trpc";
 import type { PostsService } from "./posts.service";
 
 export function createPostsTRPC(

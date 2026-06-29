@@ -1,16 +1,4 @@
 import {
-  POST_FILTER_VALUES,
-  POSTS_PAGE_SIZE,
-} from "{{PACKAGE_SCOPE}}/shared/modules/posts/posts.constants";
-import type {
-  PostCreateInputSchema,
-  PostPublishInputSchema,
-  PostSoftDeleteInputSchema,
-  PostsListInputSchema,
-  PostsListOutputSchema,
-  PostUpdateInputSchema,
-} from "{{PACKAGE_SCOPE}}/shared/modules/posts/posts.schema";
-import {
   Button,
   Card,
   Chip,
@@ -23,6 +11,18 @@ import {
   TextArea,
 } from "@heroui/react";
 import { useDialog } from "@m5kdev/web-ui/components/DialogProvider";
+import {
+  POST_FILTER_VALUES,
+  POSTS_PAGE_SIZE,
+} from "{{PACKAGE_SCOPE}}/shared/modules/posts/posts.constants";
+import type {
+  PostCreateInputSchema,
+  PostPublishInputSchema,
+  PostSoftDeleteInputSchema,
+  PostsListInputSchema,
+  PostsListOutputSchema,
+  PostUpdateInputSchema,
+} from "{{PACKAGE_SCOPE}}/shared/modules/posts/posts.schema";
 import { type UseQueryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
@@ -78,7 +78,7 @@ function getReadingTime(content: string): string {
 }
 
 export function PostsRoute() {
-  const { t } = useTranslation("blog-app");
+  const { t } = useTranslation("blog{{PACKAGE_SCOPE}}");
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const showDialog = useDialog();
@@ -235,7 +235,7 @@ export function PostsRoute() {
     showDialog({
       title: t("posts.deleteDialog.title"),
       description: t("posts.deleteDialog.body"),
-      color: "danger",
+      intent: "danger",
       cancelable: true,
       confirmLabel: t("posts.deleteDialog.confirm"),
       cancelLabel: t("posts.deleteDialog.cancel"),
@@ -268,11 +268,7 @@ export function PostsRoute() {
           </h2>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-muted-ink">{t("posts.hero.body")}</p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Button
-              className="rounded-full"
-              variant="primary"
-              onPress={openCreate}
-            >
+            <Button className="rounded-full" variant="primary" onPress={openCreate}>
               <span className="inline-flex items-center gap-2">
                 <PlusIcon className="h-4 w-4" />
                 {t("posts.hero.new")}
@@ -337,17 +333,25 @@ export function PostsRoute() {
                 </Select.Trigger>
                 <Select.Popover>
                   <ListBox>
-                    <ListBox.Item className="text-sm" id="all" textValue={t("posts.filters.all")}>
+                    <ListBox.Item
+                      className="text-sm"
+                      id={`${statusFieldId}-all`}
+                      textValue={t("posts.filters.all")}
+                    >
                       {t("posts.filters.all")}
                       <ListBox.ItemIndicator />
                     </ListBox.Item>
-                    <ListBox.Item className="text-sm" id="draft" textValue={t("posts.filters.draft")}>
+                    <ListBox.Item
+                      className="text-sm"
+                      id={`${statusFieldId}-draft`}
+                      textValue={t("posts.filters.draft")}
+                    >
                       {t("posts.filters.draft")}
                       <ListBox.ItemIndicator />
                     </ListBox.Item>
                     <ListBox.Item
                       className="text-sm"
-                      id="published"
+                      id={`${statusFieldId}-published`}
                       textValue={t("posts.filters.published")}
                     >
                       {t("posts.filters.published")}
@@ -395,6 +399,7 @@ export function PostsRoute() {
                 deleteMutation.isPending && deleteMutation.variables?.id === row.id;
 
               return (
+                // biome-ignore lint/a11y/useSemanticElements: post row card with nested action buttons
                 <Card
                   key={row.id}
                   role="button"
@@ -621,103 +626,100 @@ export function PostsRoute() {
         }}
       >
         <Modal.Backdrop>
-        <Modal.Container scroll="inside" size="lg" className="max-w-5xl">
-          <Modal.Dialog>
-            <form
-              className="contents"
-              onSubmit={onSubmit}
-            >
-              <Modal.Header className="flex flex-col gap-2 px-6 pt-6">
-                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.28em] text-amber-700/80">
-                  {editorState.id ? t("posts.editor.editEyebrow") : t("posts.editor.newEyebrow")}
-                </p>
-                <Modal.Heading className="font-editorial text-4xl leading-none text-ink">
-                  {editorState.id ? t("posts.editor.editTitle") : t("posts.editor.newTitle")}
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="grid gap-4 px-6 pb-2">
-                <div className="grid gap-2">
-                  <Label className="text-sm font-medium" htmlFor={editorTitleId}>
-                    {t("posts.editor.fields.title")}
-                  </Label>
-                  <Input
-                    id={editorTitleId}
-                    className="rounded-lg"
-                    variant="secondary"
-                    value={editorState.title}
-                    onChange={(event) =>
-                      setEditorState((state) => ({ ...state, title: event.target.value }))
-                    }
-                    isRequired
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-sm font-medium" htmlFor={editorSlugId}>
-                    {t("posts.editor.fields.slug")}
-                  </Label>
-                  <Input
-                    id={editorSlugId}
-                    className="rounded-lg"
-                    variant="secondary"
-                    value={editorState.slug}
-                    onChange={(event) =>
-                      setEditorState((state) => ({ ...state, slug: event.target.value }))
-                    }
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-sm font-medium" htmlFor={editorExcerptId}>
-                    {t("posts.editor.fields.excerpt")}
-                  </Label>
-                  <TextArea
-                    id={editorExcerptId}
-                    className="rounded-lg min-h-[5.5rem]"
-                    variant="secondary"
-                    rows={3}
-                    value={editorState.excerpt}
-                    onChange={(event) =>
-                      setEditorState((state) => ({ ...state, excerpt: event.target.value }))
-                    }
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-sm font-medium" htmlFor={editorContentId}>
-                    {t("posts.editor.fields.content")}
-                  </Label>
-                  <TextArea
-                    id={editorContentId}
-                    className="rounded-lg min-h-[12rem]"
-                    variant="secondary"
-                    rows={10}
-                    value={editorState.content}
-                    onChange={(event) =>
-                      setEditorState((state) => ({ ...state, content: event.target.value }))
-                    }
-                    isRequired
-                  />
-                </div>
-              </Modal.Body>
-              <Modal.Footer className="px-6 pb-6">
-                <Button
-                  className="rounded-full"
-                  variant="tertiary"
-                  type="button"
-                  onPress={() => setIsEditorOpen(false)}
-                >
-                  {t("posts.editor.cancel")}
-                </Button>
-                <Button
-                  className="rounded-full"
-                  variant="primary"
-                  type="submit"
-                  isPending={createMutation.isPending || updateMutation.isPending}
-                >
-                  {editorState.id ? t("posts.editor.save") : t("posts.editor.create")}
-                </Button>
-              </Modal.Footer>
-            </form>
-          </Modal.Dialog>
-        </Modal.Container>
+          <Modal.Container scroll="inside" size="lg" className="max-w-5xl">
+            <Modal.Dialog>
+              <form className="contents" onSubmit={onSubmit}>
+                <Modal.Header className="flex flex-col gap-2 px-6 pt-6">
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.28em] text-amber-700/80">
+                    {editorState.id ? t("posts.editor.editEyebrow") : t("posts.editor.newEyebrow")}
+                  </p>
+                  <Modal.Heading className="font-editorial text-4xl leading-none text-ink">
+                    {editorState.id ? t("posts.editor.editTitle") : t("posts.editor.newTitle")}
+                  </Modal.Heading>
+                </Modal.Header>
+                <Modal.Body className="grid gap-4 px-6 pb-2">
+                  <div className="grid gap-2">
+                    <Label className="text-sm font-medium" htmlFor={editorTitleId}>
+                      {t("posts.editor.fields.title")}
+                    </Label>
+                    <Input
+                      id={editorTitleId}
+                      className="rounded-lg"
+                      variant="secondary"
+                      value={editorState.title}
+                      onChange={(event) =>
+                        setEditorState((state) => ({ ...state, title: event.target.value }))
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-sm font-medium" htmlFor={editorSlugId}>
+                      {t("posts.editor.fields.slug")}
+                    </Label>
+                    <Input
+                      id={editorSlugId}
+                      className="rounded-lg"
+                      variant="secondary"
+                      value={editorState.slug}
+                      onChange={(event) =>
+                        setEditorState((state) => ({ ...state, slug: event.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-sm font-medium" htmlFor={editorExcerptId}>
+                      {t("posts.editor.fields.excerpt")}
+                    </Label>
+                    <TextArea
+                      id={editorExcerptId}
+                      className="rounded-lg min-h-[5.5rem]"
+                      variant="secondary"
+                      rows={3}
+                      value={editorState.excerpt}
+                      onChange={(event) =>
+                        setEditorState((state) => ({ ...state, excerpt: event.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-sm font-medium" htmlFor={editorContentId}>
+                      {t("posts.editor.fields.content")}
+                    </Label>
+                    <TextArea
+                      id={editorContentId}
+                      className="rounded-lg min-h-[12rem]"
+                      variant="secondary"
+                      rows={10}
+                      value={editorState.content}
+                      onChange={(event) =>
+                        setEditorState((state) => ({ ...state, content: event.target.value }))
+                      }
+                      required
+                    />
+                  </div>
+                </Modal.Body>
+                <Modal.Footer className="px-6 pb-6">
+                  <Button
+                    className="rounded-full"
+                    variant="tertiary"
+                    type="button"
+                    onPress={() => setIsEditorOpen(false)}
+                  >
+                    {t("posts.editor.cancel")}
+                  </Button>
+                  <Button
+                    className="rounded-full"
+                    variant="primary"
+                    type="submit"
+                    isPending={createMutation.isPending || updateMutation.isPending}
+                  >
+                    {editorState.id ? t("posts.editor.save") : t("posts.editor.create")}
+                  </Button>
+                </Modal.Footer>
+              </form>
+            </Modal.Dialog>
+          </Modal.Container>
         </Modal.Backdrop>
       </Modal>
     </div>

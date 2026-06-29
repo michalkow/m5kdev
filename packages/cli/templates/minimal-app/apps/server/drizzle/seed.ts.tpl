@@ -1,10 +1,13 @@
+import { hashPassword } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
+import { v4 as uuidv4 } from "uuid";
 import { orm, schema } from "../src/db";
-import { auth } from "../src/lib/auth";
 import { syncDatabase } from "./sync";
 
 const DEMO_EMAIL = "admin@{{APP_SLUG}}.local";
 const DEMO_PASSWORD = "password1234";
+const ORGANIZATION_ID = "{{APP_SLUG}}-org";
+const TEAM_ID = "{{APP_SLUG}}-team";
 
 async function ensureDemoUser() {
   const [existingUser] = await orm
@@ -17,26 +20,103 @@ async function ensureDemoUser() {
     return existingUser;
   }
 
-  await auth.api.createUser({
-    body: {
+  const userId = uuidv4();
+  const [user] = await orm
+    .insert(schema.users)
+    .values({
+      id: userId,
       name: "Demo Editor",
       email: DEMO_EMAIL,
-      password: DEMO_PASSWORD,
+      emailVerified: true,
       role: "admin",
-    },
-  } as never);
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .returning();
 
-  const [createdUser] = await orm
-    .select()
-    .from(schema.users)
-    .where(eq(schema.users.email, DEMO_EMAIL))
-    .limit(1);
-
-  if (!createdUser) {
+  if (!user) {
     throw new Error("Failed to create demo user.");
   }
 
-  return createdUser;
+  await orm.insert(schema.accounts).values({
+    id: uuidv4(),
+    accountId: user.id,
+    providerId: "credential",
+    userId: user.id,
+    password: await hashPassword(DEMO_PASSWORD),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  return user;
+}
+
+async function ensureOrganization(userId: string) {
+  const [existingOrganization] = await orm
+    .select()
+    .from(schema.organizations)
+    .where(eq(schema.organizations.id, ORGANIZATION_ID))
+    .limit(1);
+
+  if (!existingOrganization) {
+    await orm.insert(schema.organizations).values({
+      id: ORGANIZATION_ID,
+      name: "{{APP_NAME}}",
+      slug: "{{APP_SLUG}}",
+      type: "enterprise",
+      createdAt: new Date(),
+    });
+  }
+
+  const [existingMember] = await orm
+    .select()
+    .from(schema.members)
+    .where(eq(schema.members.userId, userId))
+    .limit(1);
+
+  if (!existingMember) {
+    await orm.insert(schema.members).values({
+      id: uuidv4(),
+      organizationId: ORGANIZATION_ID,
+      userId,
+      role: "owner",
+      createdAt: new Date(),
+    });
+  }
+
+  const [existingTeam] = await orm
+    .select()
+    .from(schema.teams)
+    .where(eq(schema.teams.id, TEAM_ID))
+    .limit(1);
+
+  if (!existingTeam) {
+    await orm.insert(schema.teams).values({
+      id: TEAM_ID,
+      name: "Editorial",
+      organizationId: ORGANIZATION_ID,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+
+  const [existingTeamMember] = await orm
+    .select()
+    .from(schema.teamMembers)
+    .where(eq(schema.teamMembers.userId, userId))
+    .limit(1);
+
+  if (!existingTeamMember) {
+    await orm.insert(schema.teamMembers).values({
+      id: uuidv4(),
+      teamId: TEAM_ID,
+      userId,
+      role: "owner",
+      createdAt: new Date(),
+    });
+  }
+
+  return { organizationId: ORGANIZATION_ID, teamId: TEAM_ID };
 }
 
 async function seedPosts(userId: string, organizationId: string | null, teamId: string | null) {
@@ -64,7 +144,7 @@ async function seedPosts(userId: string, organizationId: string | null, teamId: 
       organizationId,
       teamId,
       title: "Three habits that keep CRUD apps from drifting into chaos",
-      slug: "three-habits-that-keep-crud-apps-focused",
+      slug: "three-habits-that-keep-crud{{PACKAGE_SCOPE}}s-focused",
       excerpt: "A draft about explicit composition, typed contracts, and URL state.",
       content:
         "Keep your composition explicit, keep your schemas honest, and keep the URL involved in user intent. Those three choices do most of the architectural work in a small product.",
@@ -90,22 +170,11 @@ async function seedPosts(userId: string, organizationId: string | null, teamId: 
 async function seed() {
   await syncDatabase();
   const user = await ensureDemoUser();
+  const { organizationId, teamId } = await ensureOrganization(user.id);
 
-  const [member] = await orm
-    .select()
-    .from(schema.members)
-    .where(eq(schema.members.userId, user.id))
-    .limit(1);
-
-  const [teamMember] = await orm
-    .select()
-    .from(schema.teamMembers)
-    .where(eq(schema.teamMembers.userId, user.id))
-    .limit(1);
-
-  await seedPosts(user.id, member?.organizationId ?? null, teamMember?.teamId ?? null);
+  await seedPosts(user.id, organizationId, teamId);
 
   console.info(`Seed completed. Demo login: ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
 }
 
-seed();
+void seed();
