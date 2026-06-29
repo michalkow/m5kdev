@@ -105,7 +105,10 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     return this.mastra;
   }
 
-  prepareModel(model: string): ReturnType<OpenRouterProvider["chat"]> {
+  prepareModel(
+    model: string,
+    options?: { objectGeneration?: boolean }
+  ): ReturnType<OpenRouterProvider["chat"]> {
     if (!this.openrouter) {
       throw new Error("OpenRouter is not configured");
     }
@@ -113,6 +116,16 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       usage: {
         include: true,
       },
+      ...(options?.objectGeneration
+        ? {
+            extraBody: {
+              provider: {
+                require_parameters: true,
+                allow_fallbacks: false,
+              },
+            },
+          }
+        : {}),
     });
   }
 
@@ -408,13 +421,13 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     const request = messages
       ? {
           ...rest,
-          model: this.prepareModel(model),
+          model: this.prepareModel(model, { objectGeneration: true }),
           messages,
           output,
         }
       : {
           ...rest,
-          model: this.prepareModel(model),
+          model: this.prepareModel(model, { objectGeneration: true }),
           prompt,
           output,
         };
