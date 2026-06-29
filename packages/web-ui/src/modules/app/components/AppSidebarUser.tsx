@@ -1,13 +1,5 @@
 import { Avatar, Dropdown, Separator } from "@heroui/react";
-import {
-  Building2,
-  ChevronsUpDown,
-  CreditCard,
-  LogOut,
-  Settings,
-  Sparkles,
-  User,
-} from "lucide-react";
+import { Building2, ChevronsUpDown, CreditCard, LogOut, Settings, User } from "lucide-react";
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
@@ -88,7 +80,7 @@ export function AppSidebarUser({ user, onSignOut, organizationSettingsPath }: Ap
               </div>
             </div>
             <Dropdown.Menu aria-label={menuLabel}>
-              <Dropdown.Item
+              {/* <Dropdown.Item
                 key="upgrade"
                 id={itemId("upgrade")}
                 textValue={t("web-ui:sidebar.user.upgradeToPro")}
@@ -99,7 +91,8 @@ export function AppSidebarUser({ user, onSignOut, organizationSettingsPath }: Ap
                   {t("web-ui:sidebar.user.upgradeToPro")}
                 </span>
               </Dropdown.Item>
-              <Separator className="my-1" />
+              <Separator className="my-1" /> */}
+
               {isAdmin ? (
                 <Dropdown.Item
                   key="admin"

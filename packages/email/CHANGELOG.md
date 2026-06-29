@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.21.3
+
+### Patch Changes
+
+- hide upgrade
+
 ## 0.21.2
 
 ### Patch Changes
