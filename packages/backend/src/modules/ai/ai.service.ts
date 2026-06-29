@@ -121,7 +121,6 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
             extraBody: {
               provider: {
                 require_parameters: true,
-                allow_fallbacks: false,
               },
             },
           }
