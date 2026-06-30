@@ -45,6 +45,7 @@ app.use(
       "Authorization",
       "Waitlist-Invitation-Code",
       "Organization-Invitation-Code",
+      "Admin-Create-Verified-User",
     ],
   })
 );

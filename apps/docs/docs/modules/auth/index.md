@@ -11,7 +11,7 @@ session hooks, and web UI route components.
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/commons` | Shared auth schemas. |
+| `@m5kdev/commons` | Shared auth schemas and auth request header constants. |
 | `@m5kdev/backend` | Auth DB tables, middleware, service logic, tRPC procedures, and Better Auth integration. |
 | `@m5kdev/frontend` | Auth provider and session/admin hooks. |
 | `@m5kdev/web-ui` | Login, signup, profile, organization, and protected route UI. |
@@ -20,3 +20,6 @@ session hooks, and web UI route components.
 
 This page is scaffolded. Fill it by documenting app-level auth setup first, then
 backend service behavior, frontend hooks, and route-level UI components.
+
+For app upgrades, see [Admin create verified user migration](/guides/admin-create-verified-user-migration)
+when enabling admin-panel user creation with verified email.

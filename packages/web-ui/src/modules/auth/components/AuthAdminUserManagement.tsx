@@ -11,6 +11,10 @@ import {
 } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
+import {
+  ADMIN_CREATE_VERIFIED_USER_HEADER,
+  ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE,
+} from "@m5kdev/commons/modules/auth/auth.constants";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import {
   invalidateListUsersQuery,
@@ -291,12 +295,19 @@ export function AuthAdminUserManagement({
 
     try {
       setIsCreatingUser(true);
-      await authClient.admin.createUser({
-        name: newUserData.name,
-        email: newUserData.email,
-        password: newUserData.password,
-        role: newUserData.role as "user" | "admin",
-      });
+      await authClient.admin.createUser(
+        {
+          name: newUserData.name,
+          email: newUserData.email,
+          password: newUserData.password,
+          role: newUserData.role as "user" | "admin",
+        },
+        {
+          headers: {
+            [ADMIN_CREATE_VERIFIED_USER_HEADER]: ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE,
+          },
+        }
+      );
 
       toast.success(`User ${newUserData.name} has been created`);
       setIsCreateUserModalOpen(false);

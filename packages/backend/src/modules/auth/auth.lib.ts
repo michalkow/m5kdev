@@ -15,6 +15,10 @@ import { logger as rootLogger } from "../../utils/logger";
 import { posthogCapture } from "../../utils/posthog";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
+import {
+  ADMIN_CREATE_VERIFIED_USER_HEADER,
+  ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE,
+} from "@m5kdev/commons/modules/auth/auth.constants";
 import * as auth from "./auth.db";
 import {
   createOrganizationAndTeam,
@@ -157,6 +161,17 @@ export function createBetterAuth<
   const isProvisionedAccountEmail = (email: string) => {
     if (!normalizedProvisionedAccountEmailDomain) return false;
     return email.toLowerCase().endsWith(`@${normalizedProvisionedAccountEmailDomain}`);
+  };
+
+  const shouldVerifyEmailForAdminCreate = (
+    ctx?: { headers?: Headers | null } | null
+  ): boolean => {
+    const header = ctx?.headers?.get(ADMIN_CREATE_VERIFIED_USER_HEADER.toLowerCase());
+    if (header !== ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE) return false;
+    const role = (
+      ctx as { context?: { session?: { user?: { role?: string | null } } | null } } | null
+    )?.context?.session?.user?.role;
+    return role === "admin";
   };
 
   return betterAuth({
@@ -460,6 +475,14 @@ export function createBetterAuth<
                   message,
                 });
               }
+              return {
+                data: {
+                  ...user,
+                  emailVerified: true,
+                },
+              };
+            }
+            if (shouldVerifyEmailForAdminCreate(ctx)) {
               return {
                 data: {
                   ...user,
