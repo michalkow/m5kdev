@@ -1,4 +1,15 @@
-import { Button, Form, Label, ListBox, NumberField, Select, Switch, toast } from "@heroui/react";
+import {
+  Button,
+  Form,
+  Label,
+  ListBox,
+  NumberField,
+  Select,
+  Switch,
+  TimeField,
+  toast,
+} from "@heroui/react";
+import { parseTime } from "@internationalized/date";
 import type { FormEvent, ReactElement } from "react";
 import type { z } from "zod";
 
@@ -10,7 +21,7 @@ export type UpdatePreferencesOptions = {
 
 export interface ControlDefinition {
   label: string;
-  element: "switch" | "select" | "number";
+  element: "switch" | "select" | "number" | "time";
   options?: { label: string; value: string }[];
   min?: number;
   max?: number;
@@ -65,6 +76,10 @@ export function AuthUtilityPreferencesEditor<S extends z.ZodObject<z.ZodRawShape
       if (control.element === "number") {
         const value = formData.get(String(key));
         raw[String(key)] = value == null || value === "" ? undefined : Number(value);
+      }
+      if (control.element === "time") {
+        const value = formData.get(String(key));
+        raw[String(key)] = value == null || value === "" ? undefined : value.toString();
       }
     }
 
@@ -163,6 +178,24 @@ export function AuthUtilityPreferencesEditor<S extends z.ZodObject<z.ZodRawShape
                     <NumberField.IncrementButton />
                   </NumberField.Group>
                 </NumberField>
+              </div>
+            );
+          case "time":
+            return (
+              <div key={String(key)} className="grid gap-2">
+                <Label className="text-sm font-medium">{control.label}</Label>
+                <TimeField
+                  id={`pref-${String(key)}`}
+                  name={String(key)}
+                  defaultValue={parseTime(value as string)}
+                >
+                  <Label />
+                  <TimeField.Group>
+                    <TimeField.Input>
+                      {(segment) => <TimeField.Segment segment={segment} />}
+                    </TimeField.Input>
+                  </TimeField.Group>
+                </TimeField>
               </div>
             );
           default:
