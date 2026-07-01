@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/config",
-  "version": "0.21.4",
+  "version": "0.21.7",
   "license": "GPL-3.0-only",
   "scripts": {
     "version:patch": "npm version patch"

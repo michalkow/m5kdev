@@ -1,5 +1,15 @@
 # m5kdev-auth-e2e-expo
 
+## 1.1.5
+
+### Patch Changes
+
+- emails
+- Updated dependencies
+  - @m5kdev/frontend@0.21.7
+  - @m5kdev/commons@0.21.7
+  - m5kdev-auth-e2e-shared@0.0.0
+
 ## 1.1.4
 
 ### Patch Changes

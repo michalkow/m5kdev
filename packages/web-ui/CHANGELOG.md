@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.21.7
+
+### Patch Changes
+
+- emails
+- Updated dependencies
+  - @m5kdev/frontend@0.21.7
+  - @m5kdev/commons@0.21.7
+
 ## 0.21.4
 
 ### Patch Changes
