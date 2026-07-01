@@ -183,13 +183,14 @@ export function AuthUtilityPreferencesEditor<S extends z.ZodObject<z.ZodRawShape
           case "time":
             return (
               <div key={String(key)} className="grid gap-2">
-                <Label className="text-sm font-medium">{control.label}</Label>
                 <TimeField
                   id={`pref-${String(key)}`}
                   name={String(key)}
-                  defaultValue={parseTime(value as string)}
+                  defaultValue={
+                    value == null || value === "" ? undefined : parseTime(value as string)
+                  }
                 >
-                  <Label />
+                  <Label className="text-sm font-medium">{control.label}</Label>
                   <TimeField.Group>
                     <TimeField.Input>
                       {(segment) => <TimeField.Segment segment={segment} />}
