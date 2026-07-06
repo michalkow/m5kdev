@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.21.9
+
+### Patch Changes
+
+- table columns
+- Updated dependencies
+  - @m5kdev/commons@0.21.9
+
 ## 0.21.7
 
 ### Patch Changes

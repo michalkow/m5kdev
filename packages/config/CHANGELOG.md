@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.21.9
+
+### Patch Changes
+
+- table columns
+
 ## 0.21.7
 
 ### Patch Changes

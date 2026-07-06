@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.21.6
+
+### Patch Changes
+
+- table columns
+
 ## 0.21.5
 
 ### Patch Changes
