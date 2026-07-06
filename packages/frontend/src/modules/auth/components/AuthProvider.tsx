@@ -1,4 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { syncI18nLocale } from "../../app/utils/locale";
 import { AppConfigContext } from "../../app/components/AppConfigProvider";
 import { type AuthSession, authProviderContext } from "../auth.context";
 import { type AuthClient, configureAuthClient } from "../auth.lib";
@@ -33,6 +34,10 @@ export function AuthProvider({
         .then(({ data: nextSession }) => {
           setIsLoading(false);
           setSession(nextSession);
+          const userLocale = (nextSession?.user as { locale?: string | null } | undefined)?.locale;
+          if (userLocale) {
+            void syncI18nLocale(userLocale);
+          }
           onSession?.(nextSession);
           onSuccess?.();
         })

@@ -11,6 +11,11 @@ import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
+import {
+  type AuthLocaleConfig,
+  resolveAppLocale,
+  toCanonicalLocale,
+} from "@m5kdev/commons/modules/auth/auth.locale";
 import * as auth from "./auth.db";
 import {
   accountClaimMagicLinkSchemas,
@@ -62,6 +67,7 @@ export class AuthService extends BasePermissionService<
 > {
   private readonly appUrls?: BackendAppMetadata["urls"];
   private readonly hooks?: AuthServiceHooks;
+  private readonly localeConfig?: AuthLocaleConfig;
 
   constructor(
     repository: {
@@ -74,11 +80,18 @@ export class AuthService extends BasePermissionService<
     service: AuthServiceDependencies,
     grants: ResourceGrant[],
     appUrls?: BackendAppMetadata["urls"],
-    hooks?: AuthServiceHooks
+    hooks?: AuthServiceHooks,
+    moduleConfig?: { locales?: AuthLocaleConfig }
   ) {
     super(repository, service, grants);
     this.appUrls = appUrls;
     this.hooks = hooks;
+    this.localeConfig = moduleConfig?.locales;
+  }
+
+  private resolveDefaultLocale(): string {
+    if (!this.localeConfig) return "en";
+    return resolveAppLocale(null, this.localeConfig);
   }
 
   private getBillingService(): BillingService | null {
@@ -199,6 +212,44 @@ export class AuthService extends BasePermissionService<
       return ok(preferences);
     });
 
+  getLocale = this.procedure("getLocale")
+    .requireAuth()
+    .loadResource("user", ({ ctx }) => this.repository.user.findById(ctx.actor.userId))
+    .access({
+      action: "read",
+      entities: ({ state }) => ({
+        userId: state.user.id,
+      }),
+    })
+    .handle(({ state }): ServerResult<string> => {
+      return ok(state.user.locale ?? this.resolveDefaultLocale());
+    });
+
+  setLocale = this.procedure<{ locale: string }>("setLocale")
+    .requireAuth()
+    .loadResource("user", ({ ctx }) => this.repository.user.findById(ctx.actor.userId))
+    .access({
+      action: "write",
+      entities: ({ state }) => ({
+        userId: state.user.id,
+      }),
+    })
+    .handle(async ({ ctx, input }): ServerResultAsync<string> => {
+      if (!this.localeConfig) {
+        return this.error("BAD_REQUEST", "Locale configuration is not available");
+      }
+      const canonical = toCanonicalLocale(input.locale, this.localeConfig.allowedLocales);
+      if (!canonical) {
+        return this.error("BAD_REQUEST", "Invalid locale");
+      }
+      const result = await this.repository.user.update({
+        id: ctx.actor.userId,
+        locale: canonical,
+      });
+      if (result.isErr()) return err(result.error);
+      return ok(canonical);
+    });
+
   getMetadata = this.procedure("getMetadata")
     .requireAuth()
     .loadResource("user", ({ ctx }) => this.repository.user.findById(ctx.actor.userId))
@@ -271,11 +322,15 @@ export class AuthService extends BasePermissionService<
     .handle(async ({ ctx, input }) => {
       const access = this.assertCanCreateChildOrganizations(ctx);
       if (access.isErr()) return err(access.error);
+      const userResult = await this.repository.user.findById(ctx.actor.userId);
+      if (userResult.isErr()) return err(userResult.error);
+      const locale = userResult.value?.locale ?? this.resolveDefaultLocale();
       const result = await this.repository.organization.createOrganization({
         name: input.name,
         parentId: access.value.parentId,
         userId: ctx.actor.userId,
         role: access.value.organizationType === "agency" ? "admin" : "owner",
+        locale,
       });
       if (result.isErr()) return err(result.error);
       if (this.hooks?.afterCreateOrganization) {
@@ -327,6 +382,7 @@ export class AuthService extends BasePermissionService<
             "createdAt",
             "metadata",
             "onboarding",
+            "locale",
           ],
         }
       );
@@ -374,7 +430,14 @@ export class AuthService extends BasePermissionService<
     .output(organizationSchemas.output.admin)
     .requireAuth("admin")
     .handle(async ({ input }) => {
-      return this.repository.organization.create({ ...input, parentId: null });
+      if (!this.localeConfig) {
+        return this.error("BAD_REQUEST", "Locale configuration is not available");
+      }
+      const locale = toCanonicalLocale(input.locale, this.localeConfig.allowedLocales);
+      if (!locale) {
+        return this.error("BAD_REQUEST", "Invalid locale");
+      }
+      return this.repository.organization.create({ ...input, parentId: null, locale });
     });
 
   updateAdminOrganization = this.procedure("updateAdminOrganization")
@@ -414,7 +477,7 @@ export class AuthService extends BasePermissionService<
       const organization = await this.repository.organization.findById(
         input.organizationId,
         undefined,
-        ["id", "name", "slug", "logo", "type", "parentId", "createdAt", "onboarding"]
+        ["id", "name", "slug", "logo", "type", "parentId", "createdAt", "onboarding", "locale"]
       );
       if (organization.isErr()) return err(organization.error);
       if (!organization.value) return this.error("NOT_FOUND", "Organization not found");

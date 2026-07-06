@@ -207,6 +207,17 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.setPreferences(input, ctx));
       }),
 
+    getLocale: procedure.output(settingsSchemas.output.locale).query(async ({ ctx }) => {
+      return handleTRPCResult(await authService.getLocale(undefined, ctx));
+    }),
+
+    setLocale: procedure
+      .input(z.object({ locale: z.string() }))
+      .output(settingsSchemas.output.locale)
+      .mutation(async ({ ctx, input }) => {
+        return handleTRPCResult(await authService.setLocale(input, ctx));
+      }),
+
     getOrganizationPreferences: organizationProcedure
       .output(z.record(z.string(), z.unknown()))
       .query(async ({ ctx }) => {

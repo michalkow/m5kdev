@@ -183,9 +183,11 @@ export async function getActiveOrganizationAndTeam<O extends Orm, S extends Sche
 export async function createOrganizationAndTeam<O extends Orm, S extends Schema>(
   orm: O,
   schema: S,
-  user: { id: string; email: string }
+  user: { id: string; email: string; locale?: string | null },
+  locale?: string | null
 ): Promise<{ organizationId: string; teamId: string }> {
   const organizationId = uuidv4();
+  const organizationLocale = locale ?? user.locale ?? undefined;
   return await orm.transaction(async (tx) => {
     const [organization] = await tx
       .insert(schema.organizations)
@@ -193,6 +195,7 @@ export async function createOrganizationAndTeam<O extends Orm, S extends Schema>
         id: organizationId,
         name: organizationId,
         slug: organizationId,
+        ...(organizationLocale ? { locale: organizationLocale } : {}),
       })
       .returning();
 

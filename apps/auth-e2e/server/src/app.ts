@@ -7,6 +7,8 @@ import cors from "cors";
 import express from "express";
 import { templates } from "m5kdev-auth-e2e-email";
 import { APP_NAME, type AuthE2EProfile } from "m5kdev-auth-e2e-shared/modules/app/app.constants";
+import { AUTH_LOCALE_CONFIG } from "m5kdev-auth-e2e-shared/modules/app/locale.constants";
+import { USER_LOCALE_HEADER } from "@m5kdev/commons/modules/auth/auth.constants";
 import { schema } from "./generated/schema";
 import { PostsModule } from "./modules/posts/posts.module";
 import { TestHarnessModule } from "./modules/test-harness/test-harness.module";
@@ -31,6 +33,7 @@ app.use(
       "Waitlist-Invitation-Code",
       "Organization-Invitation-Code",
       "Admin-Create-Verified-User",
+      USER_LOCALE_HEADER,
     ],
   })
 );
@@ -67,6 +70,7 @@ export const builtBackendApp = createBackendApp(
           config: {
             waitlist: profile === "waitlist",
             provisionedAccountEmailDomain: "provisioned.auth-e2e.local",
+            locales: AUTH_LOCALE_CONFIG,
           },
           options: {
             secret: process.env.BETTER_AUTH_SECRET ?? "auth-e2e-local-secret-auth-e2e-local-secret",
@@ -77,7 +81,7 @@ export const builtBackendApp = createBackendApp(
   },
   [
     new EmailModule(templates),
-    new AuthModule(),
+    new AuthModule(undefined, undefined, { locales: AUTH_LOCALE_CONFIG }),
     new PostsModule(),
     new TestHarnessModule(),
     new EmailPreviewModule({ allowDelete: true }),

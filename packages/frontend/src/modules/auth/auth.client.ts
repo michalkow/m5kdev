@@ -60,6 +60,10 @@ export function createM5KAuthClient(baseURL?: string, plugins?: any[]) {
             type: "string",
             required: false,
           },
+          locale: {
+            type: "string",
+            required: false,
+          },
           stripeCustomerId: {
             type: "string",
             required: false,

@@ -1,6 +1,7 @@
 import { queryListOutput, querySchema } from "@m5kdev/commons/modules/schemas/query.schema";
 import { createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
+import { createLocaleValueSchema, type AuthLocaleConfig } from "@m5kdev/commons/modules/auth/auth.locale";
 import { accountClaimMagicLinks, members, organizations, users, waitlist } from "./auth.db";
 
 const organizationRoleSchema = z.enum(["member", "admin", "owner"]);
@@ -10,11 +11,16 @@ export const settingsSchemas = {
     record: z.record(z.string(), z.unknown()),
     flags: z.array(z.string()),
     onboarding: z.number(),
+    locale: z.string(),
   },
   input: {
     patchRecord: z.record(z.string(), z.unknown()),
     flags: z.array(z.string()),
     onboarding: z.number(),
+    setLocale: (config: AuthLocaleConfig) =>
+      z.object({
+        locale: createLocaleValueSchema(config),
+      }),
   },
 };
 
@@ -79,6 +85,7 @@ export const organizationSchemas = {
       name: z.string(),
       slug: z.string(),
       type: organizationSchema.shape.type.optional(),
+      locale: z.string(),
     }),
     updateAdmin: z.object({
       id: z.string(),

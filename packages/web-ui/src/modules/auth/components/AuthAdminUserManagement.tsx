@@ -14,7 +14,9 @@ import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import {
   ADMIN_CREATE_VERIFIED_USER_HEADER,
   ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE,
+  USER_LOCALE_HEADER,
 } from "@m5kdev/commons/modules/auth/auth.constants";
+import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import {
   invalidateListUsersQuery,
@@ -41,6 +43,7 @@ import { toast } from "sonner";
 
 import { NuqsTable, type NuqsTableColumn } from "../../table/components/NuqsTable";
 import useNuqsTable from "../../table/hooks/useNuqsTable";
+import { AuthLocaleSelect } from "./AuthLocaleSelect";
 
 type AdminUserRow = NonNullable<ListUsersQueryData["users"]>[number];
 
@@ -60,6 +63,7 @@ export function AuthAdminUserManagement({
   enableAccountClaimActions = true,
   enableAiUsage = false,
 }: AuthAdminUserManagementProps) {
+  const { locales } = useAppConfig();
   const banReasonInputId = useId();
   const customDurationId = useId();
   const nameInputId = useId();
@@ -80,6 +84,7 @@ export function AuthAdminUserManagement({
     email: "",
     password: "",
     role: "user",
+    locale: locales?.defaultLocale ?? "en",
   });
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [userForUsage, setUserForUsage] = useState<{ id: string; name: string } | null>(null);
@@ -283,6 +288,7 @@ export function AuthAdminUserManagement({
       email: "",
       password: "",
       role: "user",
+      locale: locales?.defaultLocale ?? "en",
     });
     setIsCreateUserModalOpen(true);
   };
@@ -305,6 +311,7 @@ export function AuthAdminUserManagement({
         {
           headers: {
             [ADMIN_CREATE_VERIFIED_USER_HEADER]: ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE,
+            ...(locales ? { [USER_LOCALE_HEADER]: newUserData.locale } : {}),
           },
         }
       );
@@ -867,6 +874,13 @@ export function AuthAdminUserManagement({
                       </Select.Popover>
                     </Select>
                   </div>
+
+                  {locales ? (
+                    <AuthLocaleSelect
+                      value={newUserData.locale}
+                      onChange={(locale) => handleNewUserDataChange("locale", locale)}
+                    />
+                  ) : null}
                 </Modal.Body>
 
                 <Modal.Footer>

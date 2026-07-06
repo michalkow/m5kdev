@@ -27,6 +27,7 @@ export const users = sqliteTable("users", {
   metadata: text("metadata", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
   onboarding: integer("onboarding"),
   flags: text("flags", { mode: "json" }).default([]).$type<string[]>(),
+  locale: text("locale"),
 });
 
 export const sessions = sqliteTable("sessions", {
@@ -104,6 +105,7 @@ export const organizations = sqliteTable("organizations", {
   preferences: text("preferences", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
   metadata: text("metadata", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
   flags: text("flags", { mode: "json" }).default([]).$type<string[]>(),
+  locale: text("locale"),
 });
 
 export const members = sqliteTable("members", {

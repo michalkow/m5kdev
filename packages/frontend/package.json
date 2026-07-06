@@ -31,10 +31,12 @@
     "luxon": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "i18next": "catalog:",
     "zod": "catalog:"
   },
   "peerDependencies": {
-    "@trpc/server": "catalog:"
+    "@trpc/server": "catalog:",
+    "i18next": "catalog:"
   },
   "devDependencies": {
     "@m5kdev/config": "workspace:*",
@@ -78,6 +80,16 @@
       "require": {
         "types": "./dist/src/modules/app/hooks/*.d.ts",
         "default": "./dist/src/modules/app/hooks/*.js"
+      }
+    },
+    "./modules/app/utils/*": {
+      "import": {
+        "types": "./dist/src/modules/app/utils/*.d.mts",
+        "default": "./dist/src/modules/app/utils/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/app/utils/*.d.ts",
+        "default": "./dist/src/modules/app/utils/*.js"
       }
     },
     "./modules/auth/components/*": {

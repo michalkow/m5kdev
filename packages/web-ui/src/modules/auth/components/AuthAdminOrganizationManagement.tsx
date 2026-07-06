@@ -16,6 +16,7 @@ import {
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
+import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import { Pencil, Plus, Trash2, UserPlus, Users } from "lucide-react";
@@ -24,6 +25,7 @@ import { toast } from "sonner";
 
 import { NuqsTable, type NuqsTableColumn } from "../../table/components/NuqsTable";
 import useNuqsTable from "../../table/hooks/useNuqsTable";
+import { AuthLocaleSelect } from "./AuthLocaleSelect";
 
 type OrganizationType = "solo" | "organization" | "agency" | "enterprise";
 
@@ -77,12 +79,14 @@ function slugifyOrganizationName(value: string): string {
 export function AuthAdminOrganizationManagement() {
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();
+  const { locales } = useAppConfig();
 
   const [pinnedOrganizationId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createSlug, setCreateSlug] = useState("");
   const [createType, setCreateType] = useState<Key>("organization");
+  const [createLocale, setCreateLocale] = useState(locales?.defaultLocale ?? "en");
   const isSlugManuallyEdited = useRef(false);
   const [editingOrg, setEditingOrg] = useState<OrganizationAdminRow | null>(null);
   const [editName, setEditName] = useState("");
@@ -183,8 +187,9 @@ export function AuthAdminOrganizationManagement() {
     setCreateName("");
     setCreateSlug("");
     setCreateType("organization");
+    setCreateLocale(locales?.defaultLocale ?? "en");
     isSlugManuallyEdited.current = false;
-  }, []);
+  }, [locales?.defaultLocale]);
 
   const { mutate: createOrg, isPending: isCreating } = useMutation(
     trpc.auth.createAdminOrganization.mutationOptions({
@@ -225,6 +230,7 @@ export function AuthAdminOrganizationManagement() {
       name,
       slug,
       type: String(createType) as OrganizationType,
+      locale: createLocale,
     });
   };
 
@@ -486,6 +492,10 @@ export function AuthAdminOrganizationManagement() {
                     </ListBox>
                   </Select.Popover>
                 </Select>
+
+                {locales ? (
+                  <AuthLocaleSelect value={createLocale} onChange={setCreateLocale} />
+                ) : null}
               </Modal.Body>
               <Modal.Footer>
                 <Button variant="secondary" slot="close">

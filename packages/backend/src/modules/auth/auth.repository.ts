@@ -124,7 +124,14 @@ export class AuthOrganizationRepository extends BaseTableRepository<
       parentId,
       userId,
       role,
-    }: { name: string; parentId: string | null; userId: string; role: string },
+      locale,
+    }: {
+      name: string;
+      parentId: string | null;
+      userId: string;
+      role: string;
+      locale?: string | null;
+    },
     tx?: Orm
   ): ServerResultAsync<{ organization: OrganizationRow; member: MemberRow }> {
     const db = tx ?? this.orm;
@@ -132,7 +139,13 @@ export class AuthOrganizationRepository extends BaseTableRepository<
       db.transaction(async (t) => {
         const [organization] = await t
           .insert(this.schema.organizations)
-          .values({ name, slug: uuidv4(), type: "organization", parentId })
+          .values({
+            name,
+            slug: uuidv4(),
+            type: "organization",
+            parentId,
+            ...(locale ? { locale } : {}),
+          })
           .returning();
 
         if (!organization) throw new Error("Failed to create organization");
@@ -161,6 +174,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
             type: this.schema.organizations.type,
             parentId: this.schema.organizations.parentId,
             onboarding: this.schema.organizations.onboarding,
+            locale: this.schema.organizations.locale,
             createdAt: this.schema.organizations.createdAt,
           })
           .from(this.schema.organizations)

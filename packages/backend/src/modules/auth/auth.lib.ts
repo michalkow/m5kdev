@@ -18,7 +18,13 @@ import type { EmailService } from "../email/email.service";
 import {
   ADMIN_CREATE_VERIFIED_USER_HEADER,
   ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE,
+  USER_LOCALE_HEADER,
 } from "@m5kdev/commons/modules/auth/auth.constants";
+import {
+  type AuthLocaleConfig,
+  resolveAppLocale,
+  toCanonicalLocale,
+} from "@m5kdev/commons/modules/auth/auth.locale";
 import * as auth from "./auth.db";
 import {
   createOrganizationAndTeam,
@@ -51,6 +57,7 @@ export type CreateBetterAuthConfigParams = {
   config?: {
     waitlist: boolean;
     provisionedAccountEmailDomain?: string;
+    locales?: AuthLocaleConfig;
   };
 };
 
@@ -129,7 +136,7 @@ export function createBetterAuth<
   config,
 }: CreateBetterAuthParams<O, S, E, B>): BetterAuth {
   const { email: emailService, billing: billingService } = services;
-  const { waitlist = false, provisionedAccountEmailDomain } = config ?? {};
+  const { waitlist = false, provisionedAccountEmailDomain, locales: localeConfig } = config ?? {};
   const webUrl = app?.urls?.web ?? process.env.VITE_APP_URL;
   const apiUrl = app?.urls?.api ?? process.env.VITE_SERVER_URL;
   const normalizedProvisionedAccountEmailDomain = provisionedAccountEmailDomain
@@ -172,6 +179,69 @@ export function createBetterAuth<
       ctx as { context?: { session?: { user?: { role?: string | null } } | null } } | null
     )?.context?.session?.user?.role;
     return role === "admin";
+  };
+
+  const getUserLocaleFromContext = async (ctx?: { headers?: Headers | null } | null) => {
+    let locale = ctx?.headers?.get(USER_LOCALE_HEADER.toLowerCase());
+    if (locale) return locale;
+    const oauthState = await getOAuthState();
+    if (oauthState && typeof oauthState.userLocale === "string") {
+      locale = oauthState.userLocale;
+    }
+    return locale ?? null;
+  };
+
+  const getOrganizationLocaleForInvitation = async (organizationId: string) => {
+    const [organization] = await orm
+      .select({ locale: schema.organizations.locale })
+      .from(schema.organizations)
+      .where(eq(schema.organizations.id, organizationId))
+      .limit(1);
+    return organization?.locale ?? null;
+  };
+
+  const resolveUserCreateLocale = async (
+    ctx: { headers?: Headers | null } | null | undefined,
+    organizationInvitationCode: string | null | undefined,
+    organizationId?: string | null
+  ): Promise<string | undefined> => {
+    if (!localeConfig) return undefined;
+
+    const requestedLocale = await getUserLocaleFromContext(ctx);
+    const isAdminCreate = shouldVerifyEmailForAdminCreate(ctx);
+
+    if (organizationInvitationCode) {
+      const orgLocale =
+        organizationId != null ? await getOrganizationLocaleForInvitation(organizationId) : null;
+      if (requestedLocale && toCanonicalLocale(requestedLocale, localeConfig.allowedLocales)) {
+        return resolveAppLocale(requestedLocale, localeConfig);
+      }
+      if (orgLocale) {
+        return resolveAppLocale(orgLocale, localeConfig);
+      }
+      return resolveAppLocale(null, localeConfig);
+    }
+
+    if (isAdminCreate && requestedLocale) {
+      return resolveAppLocale(requestedLocale, localeConfig);
+    }
+
+    if (requestedLocale) {
+      return resolveAppLocale(requestedLocale, localeConfig);
+    }
+
+    return resolveAppLocale(null, localeConfig);
+  };
+
+  const withResolvedLocale = async <T extends Record<string, unknown>>(
+    user: T,
+    ctx: { headers?: Headers | null } | null | undefined,
+    organizationInvitationCode: string | null | undefined,
+    organizationId?: string | null
+  ): Promise<T & { locale?: string }> => {
+    const locale = await resolveUserCreateLocale(ctx, organizationInvitationCode, organizationId);
+    if (!locale) return user;
+    return { ...user, locale };
   };
 
   return betterAuth({
@@ -263,6 +333,12 @@ export function createBetterAuth<
           required: false,
           defaultValue: null,
           input: false,
+        },
+        locale: {
+          type: "string",
+          required: false,
+          defaultValue: null,
+          input: true,
         },
       },
     },
@@ -441,6 +517,12 @@ export function createBetterAuth<
                 required: false,
                 defaultValue: null,
               },
+              locale: {
+                type: "string",
+                required: false,
+                defaultValue: null,
+                input: true,
+              },
             },
           },
         },
@@ -475,17 +557,24 @@ export function createBetterAuth<
                   message,
                 });
               }
+              const userWithLocale = await withResolvedLocale(
+                user,
+                ctx,
+                organizationInvitationCode,
+                invitation.organizationId
+              );
               return {
                 data: {
-                  ...user,
+                  ...userWithLocale,
                   emailVerified: true,
                 },
               };
             }
             if (shouldVerifyEmailForAdminCreate(ctx)) {
+              const userWithLocale = await withResolvedLocale(user, ctx, null);
               return {
                 data: {
-                  ...user,
+                  ...userWithLocale,
                   emailVerified: true,
                 },
               };
@@ -518,9 +607,10 @@ export function createBetterAuth<
                     updatedAt: new Date(),
                   })
                   .where(eq(schema.waitlist.id, waitlistInvitation.id));
+                const userWithLocale = await withResolvedLocale(user, ctx, null);
                 return {
                   data: {
-                    ...user,
+                    ...userWithLocale,
                     emailVerified: true,
                   },
                 };
@@ -529,7 +619,8 @@ export function createBetterAuth<
               logger.error({ message, waitlistCode });
               throw new APIError("NOT_FOUND", { message });
             }
-            return;
+            const userWithLocale = await withResolvedLocale(user, ctx, null);
+            return { data: userWithLocale };
           },
           after: async (user, ctx) => {
             const organizationInvitationCode = await getOrganizationInvitationCode(ctx);
@@ -574,7 +665,9 @@ export function createBetterAuth<
               if (hooks?.afterCreateUser)
                 await hooks.afterCreateUser(user, { organizationId: invitation.organizationId });
             } else {
-              const membership = await createOrganizationAndTeam(orm, schema, user);
+              const userLocale =
+                typeof user.locale === "string" ? user.locale : undefined;
+              const membership = await createOrganizationAndTeam(orm, schema, user, userLocale);
               if (hooks?.afterCreateUser) await hooks.afterCreateUser(user, membership);
             }
 

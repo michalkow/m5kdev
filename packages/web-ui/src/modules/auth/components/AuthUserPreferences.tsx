@@ -11,12 +11,14 @@ import {
   type PreferenceEditorLabels,
 } from "./AuthUtilityPreferencesEditor";
 import { AuthUtilityThemePicker } from "./AuthUtilityThemePicker";
+import { AuthUtilityLocalePicker } from "./AuthUtilityLocalePicker";
 
 export interface AuthUserPreferencesProps<S extends z.ZodObject<z.ZodRawShape>> {
   schema: S;
   controls: ControlsFor<z.infer<S>>;
   hideProfileEditor?: boolean;
   hideThemePicker?: boolean;
+  hideLocalePicker?: boolean;
 }
 
 export function AuthUserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
@@ -24,6 +26,7 @@ export function AuthUserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
   controls,
   hideProfileEditor = false,
   hideThemePicker = false,
+  hideLocalePicker = false,
 }: AuthUserPreferencesProps<S>): ReactElement {
   const { t } = useTranslation("web-ui");
   const trpc = useAppTRPC<BackendTRPCRouter>();
@@ -48,6 +51,7 @@ export function AuthUserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
       <div className="flex flex-col gap-8">
         {!hideProfileEditor && <AuthUserProfileEditor />}
         {!hideThemePicker && <AuthUtilityThemePicker />}
+        {!hideLocalePicker && <AuthUtilityLocalePicker />}
         <AuthUtilityPreferencesEditor
           schema={schema}
           controls={controls}

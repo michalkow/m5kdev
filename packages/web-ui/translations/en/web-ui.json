@@ -259,5 +259,12 @@
   "theme.description": "Select your preferred color theme.",
   "theme.system": "System",
   "theme.light": "Light",
-  "theme.dark": "Dark"
+  "theme.dark": "Dark",
+  "locale.title": "Language",
+  "locale.description": "Select your preferred language.",
+  "locale.label": "Language",
+  "locale.updated": "Language updated",
+  "locale.updateError": "Failed to update language",
+  "locale.options.en": "English",
+  "locale.options.en_GB": "English (UK)"
 }

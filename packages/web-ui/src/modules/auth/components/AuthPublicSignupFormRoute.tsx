@@ -1,6 +1,8 @@
 import { Alert, Button, FieldError, Form, Input, Label, TextField, toast } from "@heroui/react";
+import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
+import { createUserLocaleHeaders } from "../utils/authLocale";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
@@ -50,6 +52,7 @@ export function AuthPublicSignupForm({
   waitlist?: boolean;
 }) {
   const { t } = useTranslation();
+  const { locales } = useAppConfig();
   const [status, setStatus] = useState("start");
   const [userEmail, setUserEmail] = useState<string>(email || "");
   const { registerSession } = useSession();
@@ -76,6 +79,7 @@ export function AuthPublicSignupForm({
           headers: {
             "Waitlist-Invitation-Code": code || "",
             "Organization-Invitation-Code": invitation || "",
+            ...(locales ? createUserLocaleHeaders(locales) : {}),
           },
         }
       )
