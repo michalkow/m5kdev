@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.23.0
+
+### Minor Changes
+
+- i18next
+
 ## 0.22.0
 
 ### Minor Changes
