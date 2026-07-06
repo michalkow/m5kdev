@@ -10,7 +10,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@heroui/react";
 import type { ColumnOrderState, VisibilityState } from "@tanstack/react-table";
 import { EyeIcon, EyeOffIcon, GripVertical } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ColumnItem } from "./table.types";
 
 interface ColumnOrderAndVisibilityItemProps {
@@ -67,6 +67,10 @@ export const ColumnOrderAndVisibility = ({
   onClose,
 }: ColumnOrderAndVisibilityProps) => {
   const [activeLayout, setActiveLayout] = useState<ColumnItem[]>([...layout]);
+
+  useEffect(() => {
+    setActiveLayout([...layout]);
+  }, [layout]);
 
   const onChangeVisibilityState = useCallback((columnId: string) => {
     setActiveLayout((prev) => {

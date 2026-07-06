@@ -246,3 +246,20 @@ export const Empty: Story = {
     empty: true,
   },
 };
+
+/**
+ * Manual verification for column visibility and reordering:
+ * 1. Open **Columns** → hide **Email** → **Apply**: header and cells for Email disappear.
+ * 2. Drag **Status** above **Name** → **Apply**: header and row order update.
+ * 3. Refresh: layout persists from localStorage.
+ */
+export const ColumnConfiguration: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Use the Columns popover to hide columns and reorder them. After Apply, both headers and body cells should reflect changes with no empty column gaps.",
+      },
+    },
+  },
+};

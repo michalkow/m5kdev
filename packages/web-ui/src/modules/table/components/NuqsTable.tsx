@@ -363,22 +363,25 @@ export const NuqsTable = <T,>({
 
   const isRowSelectionEnabled = Boolean(BulkActions);
 
-  const visibleLeafColumnsRaw = useMemo(() => table.getVisibleLeafColumns(), [table]);
-
   const visibleLeafColumns = useMemo(() => {
-    if (!isGrouped || grouping.length === 0) return visibleLeafColumnsRaw;
-    const groupedId = grouping[0];
-    const grouped = visibleLeafColumnsRaw.filter((col) => col.id === groupedId);
-    const rest = visibleLeafColumnsRaw.filter((col) => col.id !== groupedId);
-    return [...grouped, ...rest];
-  }, [visibleLeafColumnsRaw, isGrouped, grouping]);
+    const byId = new Map(table.getAllLeafColumns().map((col) => [col.id, col]));
+    const ordered = layout
+      .filter((col) => col.visibility)
+      .map((col) => byId.get(col.id))
+      .filter((col): col is NonNullable<typeof col> => col != null);
 
-  const leafHeadersById = useMemo(() => {
-    const groups = table.getHeaderGroups();
-    const leaf = groups[groups.length - 1];
-    const entries = (leaf?.headers ?? []).map((h) => [String(h.column.id), h] as const);
-    return new Map(entries);
-  }, [table]);
+    if (!isGrouped || grouping.length === 0) return ordered;
+
+    const groupedId = grouping[0];
+    const grouped = ordered.filter((col) => col.id === groupedId);
+    const rest = ordered.filter((col) => col.id !== groupedId);
+    return [...grouped, ...rest];
+  }, [layout, table, isGrouped, grouping]);
+
+  const leafHeaderGroup = table.getHeaderGroups().at(-1);
+  const leafHeadersById = new Map(
+    (leafHeaderGroup?.headers ?? []).map((h) => [String(h.column.id), h] as const)
+  );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: TanStack `useReactTable` keeps one instance; row model updates require data/grouping/sorting, not `[table]` identity
   const allRows = useMemo(() => {
@@ -424,9 +427,9 @@ export const NuqsTable = <T,>({
 
   const treeColumnId = useMemo(() => {
     if (isGrouped && grouping.length > 0) return grouping[0];
-    const first = table.getVisibleLeafColumns()[0] ?? table.getAllLeafColumns()[0];
+    const first = visibleLeafColumns[0];
     return first?.id ? String(first.id) : undefined;
-  }, [table, isGrouped, grouping]);
+  }, [visibleLeafColumns, isGrouped, grouping]);
 
   const toggleExpanded = (rowId: string) => {
     setExpandedKeys((prev) => {
@@ -530,15 +533,11 @@ export const NuqsTable = <T,>({
           </Checkbox>
         </Table.Cell>
       ) : null}
-      {visibleLeafColumns.map((column) => {
-        const cell = row.getVisibleCells().find((c) => c.column.id === column.id);
-        if (!cell) return <Table.Cell key={`${row.id}__${column.id}`} />;
-        return (
-          <Table.Cell key={cell.id}>
-            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-          </Table.Cell>
-        );
-      })}
+      {row.getVisibleCells().map((cell) => (
+        <Table.Cell key={cell.id}>
+          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+        </Table.Cell>
+      ))}
     </Table.Row>
   );
 
