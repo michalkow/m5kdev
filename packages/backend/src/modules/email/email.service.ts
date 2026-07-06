@@ -6,12 +6,14 @@ import { createElement, type FunctionComponent } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Resend } from "resend";
 import { toI18nLanguageTag } from "@m5kdev/commons/modules/auth/auth.locale";
-import type { TFunction } from "i18next";
 import type { BackendAppEmailMode, BackendAppEmailOptions, BackendAppMetadata } from "../../app";
 import type { AppI18n } from "../../i18n/app-i18n";
 import { BaseService } from "../base/base.service";
 
-export type EmailTranslateFn = TFunction;
+export type EmailTranslateFn = (
+  key: string,
+  options?: Record<string, unknown>
+) => string;
 
 export type Brand = {
   name: string;
@@ -105,7 +107,7 @@ function buildEmailTranslationContext(
 }
 
 function resolveTranslatedTemplateText(
-  t: TFunction | undefined,
+  t: EmailTranslateFn | undefined,
   key: string | undefined,
   context: Record<string, unknown>
 ): string | undefined {

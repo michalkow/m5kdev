@@ -1,5 +1,17 @@
 # @m5kdev/backend
 
+## 0.22.0
+
+### Minor Changes
+
+- i18n
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.22.0
+  - @m5kdev/config@0.22.0
+
 ## 0.21.9
 
 ### Patch Changes

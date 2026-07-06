@@ -8,7 +8,7 @@ import {
 } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
-export function createM5KAuthClient(baseURL?: string, plugins?: any[]) {
+export function createM5KAuthClient(baseURL?: string) {
   return createAuthClient({
     ...(baseURL ? { baseURL } : {}),
     plugins: [
@@ -76,7 +76,6 @@ export function createM5KAuthClient(baseURL?: string, plugins?: any[]) {
           },
         },
       }),
-      ...(plugins ?? []),
     ],
   });
 }

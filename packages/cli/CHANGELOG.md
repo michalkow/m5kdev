@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.22.0
+
+### Minor Changes
+
+- i18n
+
 ## 0.21.6
 
 ### Patch Changes

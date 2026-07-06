@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.22.0
+
+### Minor Changes
+
+- i18n
+
 ## 0.21.9
 
 ### Patch Changes

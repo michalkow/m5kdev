@@ -1,5 +1,16 @@
 # @m5kdev/frontend
 
+## 0.22.0
+
+### Minor Changes
+
+- i18n
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.22.0
+
 ## 0.21.9
 
 ### Patch Changes
