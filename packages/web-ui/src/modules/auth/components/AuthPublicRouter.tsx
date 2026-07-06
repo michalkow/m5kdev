@@ -12,11 +12,17 @@ interface AuthRouterProps {
   header: ReactNode;
   providers?: string[];
   waitlist?: boolean;
+  onLocaleChange?: (locale: string) => void | Promise<void>;
 }
 
-export function AuthPublicRouter({ header, providers, waitlist }: AuthRouterProps) {
+export function AuthPublicRouter({
+  header,
+  providers,
+  waitlist,
+  onLocaleChange,
+}: AuthRouterProps) {
   return (
-    <Route element={<AuthPublicLayout header={header} />}>
+    <Route element={<AuthPublicLayout header={header} onLocaleChange={onLocaleChange} />}>
       <Route path="/login" element={<AuthPublicLoginRoute providers={providers} />} />
       <Route
         path="/signup"

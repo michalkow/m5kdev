@@ -8,7 +8,9 @@ import {
   Label,
   TextField,
 } from "@heroui/react";
+import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
+import { createUserLocaleHeaders } from "../utils/authLocale";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router";
@@ -16,6 +18,7 @@ import { toast } from "sonner";
 
 export function AuthPublicResetPasswordForm() {
   const { t } = useTranslation();
+  const { locales } = useAppConfig();
   const [searchParams] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const token = searchParams.get("token");
@@ -39,10 +42,15 @@ export function AuthPublicResetPasswordForm() {
     }
 
     authClient
-      .resetPassword({
-        newPassword,
-        token,
-      })
+      .resetPassword(
+        {
+          newPassword,
+          token,
+        },
+        {
+          headers: locales ? createUserLocaleHeaders(locales) : {},
+        }
+      )
       .then(() => {
         toast.success(t("web-ui:auth.resetPassword.success"));
         // Optionally, redirect

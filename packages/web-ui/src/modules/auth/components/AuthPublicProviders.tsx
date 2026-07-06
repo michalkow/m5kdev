@@ -1,6 +1,6 @@
 import { Button, toast } from "@heroui/react";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
-import { getBrowserLocale } from "@m5kdev/frontend/modules/app/utils/locale";
+import { resolvePublicLocale } from "../utils/authLocale";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useTranslation } from "react-i18next";
 import { GoogleIcon } from "../../../icons/GoogleIcon";
@@ -29,7 +29,7 @@ export function AuthPublicProviders({
   const additionalData = {
     ...(code ? { waitlistInvitationCode: code } : {}),
     ...(invitation ? { organizationInvitationCode: invitation } : {}),
-    ...(locales ? { userLocale: getBrowserLocale(locales) } : {}),
+    ...(locales ? { userLocale: resolvePublicLocale(locales) } : {}),
   };
 
   const callbackURL = `${appUrl}${returnTo}`;

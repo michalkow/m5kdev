@@ -1,3 +1,9 @@
+import {
+  type AuthLocaleConfig,
+  getAllowedLocaleCodes,
+  resolveAppLocale,
+  toCanonicalLocale,
+} from "@m5kdev/commons/modules/auth/auth.locale";
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { InferSelectModel } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
@@ -13,12 +19,6 @@ import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
-import {
-  type AuthLocaleConfig,
-  getAllowedLocaleCodes,
-  resolveAppLocale,
-  toCanonicalLocale,
-} from "@m5kdev/commons/modules/auth/auth.locale";
 import * as auth from "./auth.db";
 import {
   accountClaimMagicLinkSchemas,
@@ -52,8 +52,8 @@ export type AuthServiceHooks = {
   afterCreateOrganization?: (props: {
     orm: Orm;
     organization: Organization;
-    member: Member;
-    user: User;
+    member?: Member;
+    user?: User;
     i18n?: AppI18n;
     locale?: string;
     t?: TFunction;
@@ -324,6 +324,42 @@ export class AuthService extends BasePermissionService<
   // * SECTION: Organizations
   // * =============================================================================
 
+  async onCreateOrganization({
+    organization,
+    member,
+    user,
+    locale,
+  }: {
+    organization: Organization;
+    member?: Member;
+    user?: User;
+    locale?: string;
+  }): ServerResultAsync<void> {
+    if (this.hooks?.afterCreateOrganization) {
+      try {
+        const hookProps = {
+          orm: this.repository.organization.getOrm(),
+          organization,
+          member,
+          user,
+          ...(this.i18n
+            ? {
+                i18n: this.i18n,
+                locale,
+                t: this.i18n.getFixedT(locale),
+              }
+            : {}),
+        };
+        await this.hooks.afterCreateOrganization(hookProps);
+      } catch (error) {
+        return this.error("INTERNAL_SERVER_ERROR", "Failed to call afterCreateOrganization hook", {
+          cause: error,
+        });
+      }
+    }
+    return ok();
+  }
+
   createOrganization = this.procedure("createOrganization")
     .input(organizationSchemas.input.create)
     .output(organizationSchemas.output.single)
@@ -342,34 +378,13 @@ export class AuthService extends BasePermissionService<
         locale,
       });
       if (result.isErr()) return err(result.error);
-      if (this.hooks?.afterCreateOrganization) {
-        try {
-          const hookLocale =
-            ctx.user.locale ?? result.value.organization.locale ?? this.resolveDefaultLocale();
-          const hookProps = {
-            orm: this.repository.organization.getOrm(),
-            organization: result.value.organization,
-            member: result.value.member,
-            user: ctx.user,
-            ...(this.i18n
-              ? {
-                  i18n: this.i18n,
-                  locale: hookLocale,
-                  t: this.i18n.getFixedT(hookLocale),
-                }
-              : {}),
-          };
-          await this.hooks.afterCreateOrganization(hookProps);
-        } catch (error) {
-          return this.error(
-            "INTERNAL_SERVER_ERROR",
-            "Failed to call afterCreateOrganization hook",
-            {
-              cause: error,
-            }
-          );
-        }
-      }
+      const onCreateOrganizationResult = await this.onCreateOrganization({
+        organization: result.value.organization,
+        member: result.value.member,
+        user: userResult.value,
+        locale,
+      });
+      if (onCreateOrganizationResult.isErr()) return err(onCreateOrganizationResult.error);
       return ok(result.value.organization);
     });
 
@@ -448,7 +463,7 @@ export class AuthService extends BasePermissionService<
     .input(organizationSchemas.input.createAdmin)
     .output(organizationSchemas.output.admin)
     .requireAuth("admin")
-    .handle(async ({ input }) => {
+    .handle(async ({ input, ctx }) => {
       if (!this.localeConfig) {
         return this.error("BAD_REQUEST", "Locale configuration is not available");
       }
@@ -456,7 +471,22 @@ export class AuthService extends BasePermissionService<
       if (!locale) {
         return this.error("BAD_REQUEST", "Invalid locale");
       }
-      return this.repository.organization.create({ ...input, parentId: null, locale });
+
+      const organizationResult = await this.repository.organization.create({
+        ...input,
+        parentId: null,
+        locale,
+      });
+      if (organizationResult.isErr()) return err(organizationResult.error);
+
+      const onCreateOrganizationResult = await this.onCreateOrganization({
+        organization: organizationResult.value,
+        // FIXME: passing admin user just to fit userId constraints
+        user: ctx.user,
+        locale,
+      });
+      if (onCreateOrganizationResult.isErr()) return err(onCreateOrganizationResult.error);
+      return ok(organizationResult.value);
     });
 
   updateAdminOrganization = this.procedure("updateAdminOrganization")

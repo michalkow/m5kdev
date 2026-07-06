@@ -66,6 +66,7 @@ export function Router() {
       {AuthPublicRouter({
         header: <AuthHeader />,
         waitlist: isWaitlist,
+        onLocaleChange: syncI18nLocale,
       })}
 
       <Route
