@@ -140,7 +140,8 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
   }): ServerResultAsync<WorkflowReadOutputSchema> {
     const now = new Date();
     const conflictSet = {
-      status: "running" as const,
+      // Never regress a terminal completed row (e.g. stale active listener after completed).
+      status: sql<WorkflowReadOutputSchema["status"]>`CASE WHEN ${this.schema.workflows.status} = 'completed' THEN 'completed' ELSE 'running' END`,
       updatedAt: now,
       processedAt: now,
       ...(userId !== undefined ? { userId } : {}),

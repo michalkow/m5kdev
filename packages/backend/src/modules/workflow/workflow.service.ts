@@ -518,8 +518,14 @@ export class WorkflowService extends Base {
         try {
           const queue = this.getQueue(queueName);
           const job = await queue.getJob(jobId);
-          const jobName = job?.name ?? "__unknown__";
-          const userId = WorkflowService.readUserIdFromJobData(job?.data);
+          if (!job) return;
+
+          // getJob is async; the job may already have finished before we persist "running".
+          const state = await job.getState();
+          if (state !== "active") return;
+
+          const jobName = job.name ?? "__unknown__";
+          const userId = WorkflowService.readUserIdFromJobData(job.data);
           await this.workflowRepository.started({ jobId, jobName, queueName, userId });
         } catch (error) {
           this.logger.error({ jobId, queueName, error }, "Failed to log job active event");

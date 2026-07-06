@@ -500,6 +500,7 @@ describe("WorkflowService", () => {
       mockQueueGetJob.mockResolvedValue({
         name: "myJob",
         data: { userId: "user-42", x: 1 },
+        getState: jest.fn().mockResolvedValue("active"),
       });
 
       const activeEntry = mockQueueEventsOn.mock.calls.find((c) => c[0] === "active");
@@ -515,6 +516,23 @@ describe("WorkflowService", () => {
         queueName: "fast",
         userId: "user-42",
       });
+    });
+
+    it("active listener skips started when job is no longer active (race with failed)", async () => {
+      const { repo } = createService();
+      mockQueueGetJob.mockResolvedValue({
+        name: "myJob",
+        data: { userId: "user-42" },
+        getState: jest.fn().mockResolvedValue("failed"),
+      });
+
+      const activeEntry = mockQueueEventsOn.mock.calls.find((c) => c[0] === "active");
+      const activeHandler = activeEntry?.[1] as (ev: { jobId: string }) => void;
+
+      activeHandler({ jobId: "bull-1" });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(repo.started).not.toHaveBeenCalled();
     });
   });
 });

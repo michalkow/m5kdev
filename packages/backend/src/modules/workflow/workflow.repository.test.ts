@@ -114,4 +114,34 @@ describe("WorkflowRepository.started", () => {
     expect(row?.status).toBe("running");
     expect(row?.jobName).toBe("myJob");
   });
+
+  it("does not regress completed status on conflict", async () => {
+    await orm.insert(workflowSchema.workflows).values({
+      id: "wf-done",
+      jobId: "done-1",
+      jobName: "myJob",
+      queueName: "fast",
+      status: "completed",
+      output: { ok: true },
+      retries: 0,
+      tags: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      finishedAt: new Date(),
+    });
+
+    const result = await repo.started({
+      jobId: "done-1",
+      jobName: "myJob",
+      queueName: "fast",
+    });
+
+    expect(result.isOk()).toBe(true);
+    const [row] = await orm
+      .select()
+      .from(workflowSchema.workflows)
+      .where(eq(workflowSchema.workflows.jobId, "done-1"));
+    expect(row?.status).toBe("completed");
+    expect(row?.output).toEqual({ ok: true });
+  });
 });
