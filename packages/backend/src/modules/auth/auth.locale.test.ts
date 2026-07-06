@@ -7,27 +7,32 @@ import {
 
 const TEST_LOCALE_CONFIG: AuthLocaleConfig = {
   defaultLocale: "en",
-  allowedLocales: ["en", "en_GB"],
+  locales: [
+    { code: "en", displayName: "English" },
+    { code: "en_GB", displayName: "English (UK)" },
+  ],
 };
+
+const TEST_ALLOWED_LOCALES = ["en", "en_GB"] as const;
 
 describe("auth.locale", () => {
   describe("toCanonicalLocale", () => {
     it("maps en-GB and en_GB to en_GB when both en and en_GB are allowed", () => {
-      expect(toCanonicalLocale("en-GB", TEST_LOCALE_CONFIG.allowedLocales)).toBe("en_GB");
-      expect(toCanonicalLocale("en_GB", TEST_LOCALE_CONFIG.allowedLocales)).toBe("en_GB");
-      expect(toCanonicalLocale("en-gb", TEST_LOCALE_CONFIG.allowedLocales)).toBe("en_GB");
+      expect(toCanonicalLocale("en-GB", TEST_ALLOWED_LOCALES)).toBe("en_GB");
+      expect(toCanonicalLocale("en_GB", TEST_ALLOWED_LOCALES)).toBe("en_GB");
+      expect(toCanonicalLocale("en-gb", TEST_ALLOWED_LOCALES)).toBe("en_GB");
     });
 
     it("maps en to en without upgrading to en_GB", () => {
-      expect(toCanonicalLocale("en", TEST_LOCALE_CONFIG.allowedLocales)).toBe("en");
+      expect(toCanonicalLocale("en", TEST_ALLOWED_LOCALES)).toBe("en");
     });
 
     it("maps en-US to en when only en and en_GB are allowed", () => {
-      expect(toCanonicalLocale("en-US", TEST_LOCALE_CONFIG.allowedLocales)).toBe("en");
+      expect(toCanonicalLocale("en-US", TEST_ALLOWED_LOCALES)).toBe("en");
     });
 
     it("returns null for invalid locales", () => {
-      expect(toCanonicalLocale("pl", TEST_LOCALE_CONFIG.allowedLocales)).toBeNull();
+      expect(toCanonicalLocale("pl", TEST_ALLOWED_LOCALES)).toBeNull();
     });
   });
 

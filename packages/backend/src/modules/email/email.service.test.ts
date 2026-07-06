@@ -154,7 +154,10 @@ describe("EmailService", () => {
     try {
       const localeConfig = {
         defaultLocale: "en",
-        allowedLocales: ["en", "en_GB"],
+        locales: [
+          { code: "en", displayName: "English" },
+          { code: "en_GB", displayName: "English (UK)" },
+        ],
       };
       const appI18n = createAppI18n(localeConfig, {
         en: {
@@ -226,7 +229,10 @@ describe("EmailService", () => {
     try {
       const localeConfig = {
         defaultLocale: "en_GB",
-        allowedLocales: ["en", "en_GB"],
+        locales: [
+          { code: "en", displayName: "English" },
+          { code: "en_GB", displayName: "English (UK)" },
+        ],
       };
       const appI18n = createAppI18n(localeConfig, {
         en_GB: {

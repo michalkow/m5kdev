@@ -19,6 +19,7 @@ export interface AuthUserPreferencesProps<S extends z.ZodObject<z.ZodRawShape>> 
   hideProfileEditor?: boolean;
   hideThemePicker?: boolean;
   hideLocalePicker?: boolean;
+  onLocaleChange?: (locale: string) => void | Promise<void>;
 }
 
 export function AuthUserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
@@ -27,6 +28,7 @@ export function AuthUserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
   hideProfileEditor = false,
   hideThemePicker = false,
   hideLocalePicker = false,
+  onLocaleChange,
 }: AuthUserPreferencesProps<S>): ReactElement {
   const { t } = useTranslation("web-ui");
   const trpc = useAppTRPC<BackendTRPCRouter>();
@@ -51,7 +53,7 @@ export function AuthUserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
       <div className="flex flex-col gap-8">
         {!hideProfileEditor && <AuthUserProfileEditor />}
         {!hideThemePicker && <AuthUtilityThemePicker />}
-        {!hideLocalePicker && <AuthUtilityLocalePicker />}
+        {!hideLocalePicker && <AuthUtilityLocalePicker onLocaleChange={onLocaleChange} />}
         <AuthUtilityPreferencesEditor
           schema={schema}
           controls={controls}

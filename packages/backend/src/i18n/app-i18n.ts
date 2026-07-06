@@ -1,5 +1,6 @@
 import {
   type AuthLocaleConfig,
+  getAllowedLocaleCodes,
   resolveAppLocale,
   toCanonicalLocale,
   toI18nLanguageTag,
@@ -24,16 +25,17 @@ export interface AppI18n {
 
 function buildFallbackLocales(locales: AuthLocaleConfig): string[] {
   const fallbacks = new Set<string>();
+  const allowedLocales = getAllowedLocaleCodes(locales);
 
-  for (const locale of locales.allowedLocales) {
-    const normalized = toCanonicalLocale(locale, locales.allowedLocales);
+  for (const locale of allowedLocales) {
+    const normalized = toCanonicalLocale(locale, allowedLocales);
     if (!normalized) continue;
 
     fallbacks.add(toI18nLanguageTag(normalized));
 
     const languageOnly = normalized.split("_")[0];
     if (languageOnly && languageOnly !== normalized) {
-      const languageCanonical = toCanonicalLocale(languageOnly, locales.allowedLocales);
+      const languageCanonical = toCanonicalLocale(languageOnly, allowedLocales);
       if (languageCanonical) {
         fallbacks.add(toI18nLanguageTag(languageCanonical));
       }
@@ -76,9 +78,11 @@ export function createAppI18n(
     initImmediate: false,
   });
 
+  const allowedLocales = getAllowedLocaleCodes(locales);
+
   const resolveLocale = (locale?: string | null): string => {
     if (locale) {
-      const canonical = toCanonicalLocale(locale, locales.allowedLocales);
+      const canonical = toCanonicalLocale(locale, allowedLocales);
       if (canonical) return canonical;
     }
 

@@ -15,6 +15,7 @@ import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
 import {
   type AuthLocaleConfig,
+  getAllowedLocaleCodes,
   resolveAppLocale,
   toCanonicalLocale,
 } from "@m5kdev/commons/modules/auth/auth.locale";
@@ -246,7 +247,7 @@ export class AuthService extends BasePermissionService<
       if (!this.localeConfig) {
         return this.error("BAD_REQUEST", "Locale configuration is not available");
       }
-      const canonical = toCanonicalLocale(input.locale, this.localeConfig.allowedLocales);
+      const canonical = toCanonicalLocale(input.locale, getAllowedLocaleCodes(this.localeConfig));
       if (!canonical) {
         return this.error("BAD_REQUEST", "Invalid locale");
       }
@@ -451,7 +452,7 @@ export class AuthService extends BasePermissionService<
       if (!this.localeConfig) {
         return this.error("BAD_REQUEST", "Locale configuration is not available");
       }
-      const locale = toCanonicalLocale(input.locale, this.localeConfig.allowedLocales);
+      const locale = toCanonicalLocale(input.locale, getAllowedLocaleCodes(this.localeConfig));
       if (!locale) {
         return this.error("BAD_REQUEST", "Invalid locale");
       }

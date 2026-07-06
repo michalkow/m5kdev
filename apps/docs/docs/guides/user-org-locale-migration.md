@@ -11,12 +11,12 @@ persistence, localized transactional email, and i18next sync.
 
 | Layer | Change |
 | --- | --- |
-| `@m5kdev/commons` | `auth.locale` helpers (`resolveAppLocale`, `toI18nLanguageTag`) and `USER_LOCALE_HEADER`. |
+| `@m5kdev/commons` | `AuthLocaleConfig` with `locales[].code` and `displayName`; `resolveAppLocale`, `toI18nLanguageTag`, `USER_LOCALE_HEADER`. |
 | `@m5kdev/backend` | `users.locale` and `organizations.locale` columns; locale resolution in Better Auth signup hooks; `getLocale` / `setLocale` tRPC; `BackendAppMetadata.locales` for app-wide locale config. |
 | `@m5kdev/backend` | `createAppI18n` / `AppI18n` shared server i18next instance; exposed on module contexts and library hooks. |
 | `@m5kdev/backend` email | `EmailService` resolves `subject` / `previewText` translation keys via `AppI18n`; injects `props.t` and `props.htmlLang` into templates. |
 | `@m5kdev/frontend` | `AppConfigProvider.locales`, browser locale helpers, session → i18next sync, `useAuthLocale`. |
-| `@m5kdev/web-ui` | Signup locale header, admin locale pickers, user preferences locale picker. |
+| `@m5kdev/web-ui` | Signup locale header, admin locale pickers, user preferences locale picker; `AuthUserRouter` accepts `onLocaleChange`. |
 | `@m5kdev/email` | `EmailLayout`, `CtaButton`, `EmailTranslateFn`, and template prop types. |
 | App email package | Exports `emailResources` for server bootstrap; templates use injected `props.t` for React copy. |
 
@@ -47,9 +47,14 @@ Regenerate your composed schema and apply with your normal Drizzle workflow (`pu
 // apps/<app>/shared/src/modules/app/locale.constants.ts
 export const AUTH_LOCALE_CONFIG = {
   defaultLocale: "en",
-  allowedLocales: ["en", "en_GB"],
+  locales: [
+    { code: "en", displayName: "English" },
+    { code: "en_GB", displayName: "English (UK)" },
+  ],
 } as const;
 ```
+
+Each locale entry provides a canonical `code` (stored in DB) and a `displayName` for UI selects. Display names are not translated — they are defined in app config so language names stay stable regardless of the active UI language.
 
 Canonical storage uses underscore region tags (`en_GB`). Browser inputs like `en-GB` normalize before persistence. i18next receives `en-GB` via `toI18nLanguageTag`.
 
@@ -120,6 +125,22 @@ createBetterAuth({
 ```
 
 Pass `i18n` from the auth factory context (`factory({ ..., i18n })`).
+
+### User preferences locale picker
+
+`AuthUserRouter` forwards `onLocaleChange` to the preferences locale picker. Use it to sync your app i18n instance when the user changes language:
+
+```tsx
+import { syncI18nLocale } from "@m5kdev/frontend/modules/app/utils/locale";
+
+{AuthUserRouter({
+  schema: preferenceSchema,
+  controls: preferenceControls,
+  onLocaleChange: syncI18nLocale,
+})}
+```
+
+`useAuthLocale` already persists the locale server-side and calls `syncI18nLocale` on success. Pass `onLocaleChange` when you need additional client-side handling beyond the default sync.
 
 ### Email templates
 
@@ -237,6 +258,8 @@ Do not add a per-email-package layout shell or i18next singleton. Use `@m5kdev/e
 
 | Old pattern | New pattern |
 | --- | --- |
+| `allowedLocales: ["en", "en_GB"]` | `locales: [{ code: "en", displayName: "English" }, ...]` |
+| `web-ui:locale.options.*` translation keys | `displayName` on each locale in `AUTH_LOCALE_CONFIG` |
 | Local `i18n.ts` / `getEmailT(locale)` | Register `emailResources` in `createBackendApp`; use `props.t` |
 | Custom `EmailShell` / `BaseEmail` layout | `EmailLayout` and `CtaButton` from `@m5kdev/email` |
 | `subject: ({ locale, props }) => ...` functions | `subject: "verification.subject"` string key |
@@ -280,8 +303,9 @@ Register hook-specific keys in the same `i18n.resources` map in `app.ts`.
 5. Add `User-Locale` to CORS `allowedHeaders`.
 6. Register `i18n.resources` in `createBackendApp` (email + any server-only strings).
 7. Change template `subject` / `previewText` to translation keys; update React components to use `props.t`.
-8. Pass `locales` into `AppConfigProvider` in the webapp.
-9. Verify signup, admin create, preferences, hooks, and stored email subjects match locale.
+8. Pass `onLocaleChange` to `AuthUserRouter` when the app needs custom i18n sync beyond the default.
+9. Pass `locales` into `AppConfigProvider` in the webapp.
+10. Verify signup, admin create, preferences, hooks, and stored email subjects match locale.
 
 ## Troubleshooting
 

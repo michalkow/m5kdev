@@ -7,7 +7,10 @@ import { createAppI18n } from "./app-i18n";
 
 const localeConfig: AuthLocaleConfig = {
   defaultLocale: "en",
-  allowedLocales: ["en", "en_GB"],
+  locales: [
+    { code: "en", displayName: "English" },
+    { code: "en_GB", displayName: "English (UK)" },
+  ],
 };
 
 describe("app-i18n", () => {

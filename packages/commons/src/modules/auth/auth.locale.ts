@@ -1,8 +1,21 @@
 import { z } from "zod";
 
+export interface AuthLocaleDefinition {
+  code: string;
+  displayName: string;
+}
+
 export interface AuthLocaleConfig {
   defaultLocale: string;
-  allowedLocales: readonly string[];
+  locales: readonly AuthLocaleDefinition[];
+}
+
+export function getAllowedLocaleCodes(config: AuthLocaleConfig): readonly string[] {
+  return config.locales.map((locale) => locale.code);
+}
+
+export function getLocaleDisplayName(config: AuthLocaleConfig, code: string): string {
+  return config.locales.find((locale) => locale.code === code)?.displayName ?? code;
 }
 
 export interface NormalizedLocaleTag {
@@ -72,17 +85,18 @@ export function resolveAppLocale(
   requested: string | null | undefined,
   config: AuthLocaleConfig
 ): string {
+  const allowedLocales = getAllowedLocaleCodes(config);
   if (requested) {
-    const canonical = toCanonicalLocale(requested, config.allowedLocales);
+    const canonical = toCanonicalLocale(requested, allowedLocales);
     if (canonical) return canonical;
   }
 
-  const defaultCanonical = toCanonicalLocale(config.defaultLocale, config.allowedLocales);
-  return defaultCanonical ?? config.allowedLocales[0] ?? config.defaultLocale;
+  const defaultCanonical = toCanonicalLocale(config.defaultLocale, allowedLocales);
+  return defaultCanonical ?? allowedLocales[0] ?? config.defaultLocale;
 }
 
 export function createLocaleValueSchema(config: AuthLocaleConfig) {
-  const allowed = [...config.allowedLocales];
+  const allowed = [...getAllowedLocaleCodes(config)];
   if (allowed.length === 0) {
     return z.string();
   }

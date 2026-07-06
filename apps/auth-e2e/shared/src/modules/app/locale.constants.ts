@@ -1,4 +1,7 @@
 export const AUTH_LOCALE_CONFIG = {
   defaultLocale: "en",
-  allowedLocales: ["en", "en_GB"],
+  locales: [
+    { code: "en", displayName: "English" },
+    { code: "en_GB", displayName: "English (UK)" },
+  ],
 } as const;

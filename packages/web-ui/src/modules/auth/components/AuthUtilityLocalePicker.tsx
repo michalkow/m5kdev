@@ -1,10 +1,15 @@
 import { Label, ListBox, Select, toast } from "@heroui/react";
+import type { AuthLocaleDefinition } from "@m5kdev/commons/modules/auth/auth.locale";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useAuthLocale } from "@m5kdev/frontend/modules/auth/hooks/useAuthLocale";
 import type { Key } from "@react-types/shared";
 import { useTranslation } from "react-i18next";
 
-export function AuthUtilityLocalePicker() {
+export interface AuthUtilityLocalePickerProps {
+  onLocaleChange?: (locale: string) => void | Promise<void>;
+}
+
+export function AuthUtilityLocalePicker({ onLocaleChange }: AuthUtilityLocalePickerProps) {
   const { t } = useTranslation("web-ui");
   const { locales } = useAppConfig();
   const { locale, isLoading, setLocale, isSettingLocale } = useAuthLocale();
@@ -18,7 +23,8 @@ export function AuthUtilityLocalePicker() {
     setLocale(
       { locale: String(key) },
       {
-        onSuccess: () => {
+        onSuccess: async (nextLocale) => {
+          await onLocaleChange?.(nextLocale);
           toast.success(t("web-ui:locale.updated"));
         },
         onError: (error: unknown) => {
@@ -48,13 +54,13 @@ export function AuthUtilityLocalePicker() {
         </Select.Trigger>
         <Select.Popover>
           <ListBox>
-            {locales.allowedLocales.map((optionLocale) => (
+            {locales.locales.map((localeOption: AuthLocaleDefinition) => (
               <ListBox.Item
-                key={optionLocale}
-                id={optionLocale}
-                textValue={t(`web-ui:locale.options.${optionLocale}`)}
+                key={localeOption.code}
+                id={localeOption.code}
+                textValue={localeOption.displayName}
               >
-                <Label>{t(`web-ui:locale.options.${optionLocale}`)}</Label>
+                <Label>{localeOption.displayName}</Label>
                 <ListBox.ItemIndicator />
               </ListBox.Item>
             ))}

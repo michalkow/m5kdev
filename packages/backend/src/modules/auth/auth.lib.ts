@@ -24,6 +24,7 @@ import {
 } from "@m5kdev/commons/modules/auth/auth.constants";
 import {
   type AuthLocaleConfig,
+  getAllowedLocaleCodes,
   resolveAppLocale,
   toCanonicalLocale,
 } from "@m5kdev/commons/modules/auth/auth.locale";
@@ -245,7 +246,7 @@ export function createBetterAuth<
     if (organizationInvitationCode) {
       const orgLocale =
         organizationId != null ? await getOrganizationLocaleForInvitation(organizationId) : null;
-      if (requestedLocale && toCanonicalLocale(requestedLocale, localeConfig.allowedLocales)) {
+      if (requestedLocale && toCanonicalLocale(requestedLocale, getAllowedLocaleCodes(localeConfig))) {
         return resolveAppLocale(requestedLocale, localeConfig);
       }
       if (orgLocale) {

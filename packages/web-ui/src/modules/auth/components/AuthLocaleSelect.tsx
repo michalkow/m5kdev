@@ -1,4 +1,5 @@
 import { Label, ListBox, Select } from "@heroui/react";
+import type { AuthLocaleDefinition } from "@m5kdev/commons/modules/auth/auth.locale";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import type { Key } from "@react-types/shared";
 import { useTranslation } from "react-i18next";
@@ -43,9 +44,13 @@ export function AuthLocaleSelect({
         </Select.Trigger>
         <Select.Popover>
           <ListBox>
-            {locales.allowedLocales.map((localeOption) => (
-              <ListBox.Item key={localeOption} id={localeOption} textValue={t(`web-ui:locale.options.${localeOption}`)}>
-                <Label>{t(`web-ui:locale.options.${localeOption}`)}</Label>
+            {locales.locales.map((localeOption: AuthLocaleDefinition) => (
+              <ListBox.Item
+                key={localeOption.code}
+                id={localeOption.code}
+                textValue={localeOption.displayName}
+              >
+                <Label>{localeOption.displayName}</Label>
                 <ListBox.ItemIndicator />
               </ListBox.Item>
             ))}
