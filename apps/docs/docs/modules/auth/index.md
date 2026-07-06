@@ -21,5 +21,7 @@ session hooks, and web UI route components.
 This page is scaffolded. Fill it by documenting app-level auth setup first, then
 backend service behavior, frontend hooks, and route-level UI components.
 
-For app upgrades, see [Admin create verified user migration](/guides/admin-create-verified-user-migration)
-when enabling admin-panel user creation with verified email.
+For app upgrades, see:
+
+- [User and organization locale migration](/guides/user-org-locale-migration)
+- [Admin create verified user migration](/guides/admin-create-verified-user-migration)

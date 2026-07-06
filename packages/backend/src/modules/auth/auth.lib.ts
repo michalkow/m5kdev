@@ -10,11 +10,13 @@ import { admin, apiKey, lastLoginMethod, magicLink, organization } from "better-
 import { and, desc, eq, gte, type InferSelectModel } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { z } from "zod";
+import type { TFunction } from "i18next";
 import type { BackendAppMetadata } from "../../app";
 import { logger as rootLogger } from "../../utils/logger";
 import { posthogCapture } from "../../utils/posthog";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
+import type { AppI18n } from "../../i18n/app-i18n";
 import {
   ADMIN_CREATE_VERIFIED_USER_HEADER,
   ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE,
@@ -44,12 +46,40 @@ export type Member = InferSelectModel<typeof auth.members>;
 
 export type BetterAuth = ReturnType<typeof betterAuth>;
 
+function getRecordLocale(record: unknown): string | undefined {
+  if (
+    record !== null &&
+    typeof record === "object" &&
+    "locale" in record &&
+    typeof (record as { locale: unknown }).locale === "string"
+  ) {
+    return (record as { locale: string }).locale;
+  }
+
+  return undefined;
+}
+
+function createUserHookI18nContext(
+  user: unknown,
+  appI18n?: AppI18n
+): { i18n: AppI18n; locale: string; t: TFunction } | undefined {
+  if (!appI18n) return undefined;
+
+  const locale = getRecordLocale(user) ?? appI18n.defaultLocale;
+  return {
+    i18n: appI18n,
+    locale,
+    t: appI18n.getFixedT(locale),
+  };
+}
+
 export type CreateBetterAuthConfigParams = {
   hooks?: {
     onError?: (error: unknown) => void;
     afterCreateUser?: (
       user: Pick<User, "id" | "email" | "emailVerified" | "name" | "createdAt" | "updatedAt">,
-      membership: { organizationId: string; teamId?: string }
+      membership: { organizationId: string; teamId?: string },
+      ctx?: { i18n: AppI18n; locale: string; t: TFunction }
     ) => Promise<void>;
   };
   options?: BetterAuthOptions;
@@ -57,7 +87,6 @@ export type CreateBetterAuthConfigParams = {
   config?: {
     waitlist: boolean;
     provisionedAccountEmailDomain?: string;
-    locales?: AuthLocaleConfig;
   };
 };
 
@@ -73,6 +102,7 @@ type CreateBetterAuthParams<
     email?: E;
     billing?: B;
   };
+  i18n?: AppI18n;
 } & CreateBetterAuthConfigParams;
 
 function setPasswordEndpointPlugin(): BetterAuthPlugin {
@@ -134,9 +164,11 @@ export function createBetterAuth<
   options,
   app,
   config,
+  i18n,
 }: CreateBetterAuthParams<O, S, E, B>): BetterAuth {
   const { email: emailService, billing: billingService } = services;
-  const { waitlist = false, provisionedAccountEmailDomain, locales: localeConfig } = config ?? {};
+  const { waitlist = false, provisionedAccountEmailDomain } = config ?? {};
+  const localeConfig = app?.locales;
   const webUrl = app?.urls?.web ?? process.env.VITE_APP_URL;
   const apiUrl = app?.urls?.api ?? process.env.VITE_SERVER_URL;
   const normalizedProvisionedAccountEmailDomain = provisionedAccountEmailDomain
@@ -281,7 +313,10 @@ export function createBetterAuth<
       deleteUser: {
         enabled: true,
         sendDeleteAccountVerification: async ({ user, url }) => {
-          const result = await emailService?.sendDeleteAccountVerification(user.email, url);
+          const locale = getRecordLocale(user);
+          const result = await emailService?.sendDeleteAccountVerification(user.email, url, {
+            locale,
+          });
           if (result?.isErr()) {
             logger.error(result.error);
             hooks?.onError?.(result.error);
@@ -351,7 +386,8 @@ export function createBetterAuth<
       enabled: true,
       requireEmailVerification: !waitlist,
       sendResetPassword: async ({ user, url }) => {
-        const result = await emailService?.sendResetPassword(user.email, url);
+        const locale = getRecordLocale(user);
+        const result = await emailService?.sendResetPassword(user.email, url, { locale });
         if (result?.isErr()) {
           logger.error(result.error);
           hooks?.onError?.(result.error);
@@ -361,7 +397,8 @@ export function createBetterAuth<
     },
     emailVerification: {
       sendVerificationEmail: async ({ user, url }) => {
-        const result = await emailService?.sendVerification(user.email, url);
+        const locale = getRecordLocale(user);
+        const result = await emailService?.sendVerification(user.email, url, { locale });
         if (result?.isErr()) {
           logger.error(result.error);
           hooks?.onError?.(result.error);
@@ -430,12 +467,14 @@ export function createBetterAuth<
         sendInvitationEmail: async (data) => {
           const invitationUrl = `${webUrl}/organization/accept-invitation?id=${data.id}`;
           const inviterName = data.inviter.user.name || data.inviter.user.email;
+          const organizationLocale = getRecordLocale(data.organization);
           const result = await emailService?.sendOrganizationInvite(
             data.email,
             data.organization.name,
             inviterName,
             data.role,
-            invitationUrl
+            invitationUrl,
+            { locale: organizationLocale }
           );
           if (result?.isErr()) {
             logger.error(result.error);
@@ -662,13 +701,22 @@ export function createBetterAuth<
                   status: "accepted",
                 })
                 .where(eq(schema.invitations.id, organizationInvitationCode));
-              if (hooks?.afterCreateUser)
-                await hooks.afterCreateUser(user, { organizationId: invitation.organizationId });
+              if (hooks?.afterCreateUser) {
+                const i18nCtx = createUserHookI18nContext(user, i18n);
+                await hooks.afterCreateUser(
+                  user,
+                  { organizationId: invitation.organizationId },
+                  i18nCtx
+                );
+              }
             } else {
               const userLocale =
                 typeof user.locale === "string" ? user.locale : undefined;
               const membership = await createOrganizationAndTeam(orm, schema, user, userLocale);
-              if (hooks?.afterCreateUser) await hooks.afterCreateUser(user, membership);
+              if (hooks?.afterCreateUser) {
+                const i18nCtx = createUserHookI18nContext(user, i18n);
+                await hooks.afterCreateUser(user, membership, i18nCtx);
+              }
             }
 
             if (!isProvisionedAccountEmail(user.email)) {

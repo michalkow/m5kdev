@@ -1,4 +1,5 @@
 import { type Client, createClient, type Config as LibSQLClientConfig } from "@libsql/client";
+import type { AuthLocaleConfig } from "@m5kdev/commons/modules/auth/auth.locale";
 import { transformer } from "@m5kdev/commons/utils/trpc";
 import type { AnyRouter, TRPCCreateRouterOptions } from "@trpc/server";
 import * as trpcExpress from "@trpc/server/adapters/express";
@@ -14,6 +15,7 @@ import type * as authTables from "./modules/auth/auth.db";
 import type { BetterAuth } from "./modules/auth/auth.lib";
 import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/auth.middleware";
 import type { BaseModule } from "./modules/base/base.module";
+import { createAppI18n, type AppI18n, type BackendAppI18nResources } from "./i18n/app-i18n";
 import { WorkflowRegistry } from "./modules/workflow/workflow.registry";
 import { WorkflowService } from "./modules/workflow/workflow.service";
 import { logger as rootLogger } from "./utils/logger";
@@ -107,6 +109,7 @@ export type BackendAppMetadata = {
     logo?: string;
     tagline?: string;
   };
+  locales?: AuthLocaleConfig;
 };
 
 export type BackendAppEmailMode = "send" | "log" | "store";
@@ -128,6 +131,7 @@ type ResolvedBackendAppMetadata = {
     logo?: string;
     tagline?: string;
   };
+  locales?: AuthLocaleConfig;
 };
 
 type ResolvedBackendAppEmailOptions = {
@@ -152,6 +156,7 @@ export type BackendModuleRepositoriesContext<Tables extends TableMap = TableMap>
   logger: Logger;
   appConfig: ResolvedBackendAppMetadata;
   emailConfig: ResolvedBackendAppEmailOptions;
+  i18n?: AppI18n;
   deps: BackendModuleDependencyMap;
   db: {
     client: Client;
@@ -170,6 +175,7 @@ export type BackendModuleServicesContext = {
   logger: Logger;
   appConfig: ResolvedBackendAppMetadata;
   emailConfig: ResolvedBackendAppEmailOptions;
+  i18n?: AppI18n;
   deps: BackendModuleDependencyMap;
   repositories: AnyRecord;
   modules: ModuleRuntimeMap;
@@ -250,6 +256,7 @@ export type BackendAppAuthFactoryContext = {
   logger: Logger;
   appConfig: ResolvedBackendAppMetadata;
   emailConfig: ResolvedBackendAppEmailOptions;
+  i18n?: AppI18n;
   express: Express;
   redis?: IORedis;
   resend?: Resend;
@@ -293,6 +300,9 @@ export type BackendAppConfig = {
         apiKey: string;
       };
   email?: BackendAppEmailOptions;
+  i18n?: {
+    resources: BackendAppI18nResources;
+  };
   trpc?: {
     mountPath?: string;
   };
@@ -346,6 +356,7 @@ function normalizeAppConfig(
         config?.brand?.tagline ??
         (config?.name ? `${config.name} publishing workspace` : undefined),
     },
+    locales: config?.locales,
   };
 }
 
@@ -515,6 +526,9 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   const logger = config.logger ?? rootLogger;
   const appConfig = normalizeAppConfig(config.app, env);
   const emailConfig = normalizeEmailConfig(config.email, env);
+  const appI18n = appConfig.locales
+    ? createAppI18n(appConfig.locales, config.i18n?.resources ?? {})
+    : undefined;
 
   const orderedModules = resolveModuleOrder(registeredModules);
   const expressApp = config.express ?? express();
@@ -547,6 +561,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         logger,
         appConfig,
         emailConfig,
+        i18n: appI18n,
         deps,
         db: {
           client: dbClientState.client,
@@ -572,6 +587,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         logger,
         appConfig,
         emailConfig,
+        i18n: appI18n,
         deps,
         repositories: state.repositories,
         modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
@@ -595,6 +611,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     logger,
     appConfig,
     emailConfig,
+    i18n: appI18n,
     express: expressApp,
     redis: redisState.redis,
     resend: resendState.resend,
@@ -614,6 +631,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       logger,
       appConfig,
       emailConfig,
+      i18n: appI18n,
       deps: createDependencyMap(module, moduleStates),
       repositories: moduleStates.get(module.id)!.repositories,
       services: moduleStates.get(module.id)!.services,
@@ -684,6 +702,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         logger,
         appConfig,
         emailConfig,
+        i18n: appI18n,
         deps: createDependencyMap(module, moduleStates),
         repositories: state.repositories,
         services: state.services,
@@ -742,6 +761,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       logger,
       appConfig,
       emailConfig,
+      i18n: appI18n,
       deps: createDependencyMap(module, moduleStates),
       repositories: state.repositories,
       services: state.services,
@@ -770,6 +790,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         logger,
         appConfig,
         emailConfig,
+        i18n: appI18n,
         deps: createDependencyMap(module, moduleStates),
         repositories: state.repositories,
         services: state.services,
@@ -794,6 +815,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     logger,
     appConfig,
     emailConfig,
+    i18n: appI18n,
     deps: {},
     repositories: {},
     services: {},
@@ -840,6 +862,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     config: {
       app: appConfig,
       email: emailConfig,
+      i18n: appI18n,
     },
     express: {
       app: expressApp,
@@ -852,6 +875,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         }
       : undefined,
     workflow: workflowRuntime,
+    i18n: appI18n,
     trpc: {
       router: appRouter,
       methods: trpcMethods,

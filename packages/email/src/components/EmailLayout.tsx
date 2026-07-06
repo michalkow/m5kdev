@@ -12,19 +12,18 @@ import {
   pixelBasedPreset,
   Tailwind,
 } from "@react-email/components";
-import type { Brand } from "../types";
+import type { BrandEmailTemplateProps } from "../types";
 import { BrandFooter } from "./BrandFooter";
 import { BrandHeader } from "./BrandHeader";
 
-interface EmailLayoutProps {
-  readonly previewText: string;
-  readonly brand: Brand;
-  readonly children: React.ReactNode;
-}
-
-export function EmailLayout({ previewText, brand, children }: EmailLayoutProps) {
+export function EmailLayout({
+  previewText,
+  brand,
+  children,
+  htmlLang,
+}: BrandEmailTemplateProps & { children: React.ReactNode }) {
   return (
-    <Html>
+    <Html lang={htmlLang}>
       <Head />
       <Tailwind
         config={{

@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/backend",
-  "version": "0.21.9",
+  "version": "0.21.10",
   "description": "Composable Express server stack with Drizzle ORM and tRPC.",
   "license": "GPL-3.0-only",
   "repository": {
@@ -50,6 +50,7 @@
     "drizzle-zod": "catalog:",
     "express": "catalog:",
     "ffmpeg-ffprobe-static": "catalog:",
+    "i18next": "catalog:",
     "firebase-admin": "catalog:",
     "ioredis": "catalog:",
     "jsonrepair": "catalog:",
@@ -327,6 +328,16 @@
       "require": {
         "types": "./dist/src/utils/*.d.cts",
         "default": "./dist/src/utils/*.cjs"
+      }
+    },
+    "./i18n/*": {
+      "import": {
+        "types": "./dist/src/i18n/*.d.mts",
+        "default": "./dist/src/i18n/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/i18n/*.d.cts",
+        "default": "./dist/src/i18n/*.cjs"
       }
     },
     "./app": {

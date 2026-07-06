@@ -1,30 +1,34 @@
-import { Text } from "@react-email/components";
-import { BaseEmail } from "../components/BaseEmail";
+import { Heading, Text } from "@react-email/components";
+import { CtaButton } from "@m5kdev/email/components/CtaButton";
+import { EmailLayout } from "@m5kdev/email/components/EmailLayout";
+import type { Brand, EmailTranslateFn } from "@m5kdev/email/types";
+
+function resolveT(t?: EmailTranslateFn): EmailTranslateFn {
+  return t ?? ((key: string) => key);
+}
 
 export default function AccountDeletionEmail({
-  previewText = "Confirm your account deletion",
+  previewText,
   url,
+  brand,
+  t,
+  htmlLang,
 }: {
-  previewText?: string;
+  previewText: string;
   url: string;
+  brand: Brand;
+  t?: EmailTranslateFn;
+  htmlLang?: string;
 }) {
+  const translate = resolveT(t);
+
   return (
-    <BaseEmail
-      previewText={previewText}
-      eyebrow="Account Safety"
-      title="Confirm account deletion"
-      ctaLabel="Review deletion"
-      ctaUrl={url}
-      body={
-        <>
-          <Text style={{ margin: "0" }}>
-            We received a request to delete your {{APP_NAME}} account.
-          </Text>
-          <Text style={{ margin: "0" }}>
-            If that was you, use the link below to confirm the action.
-          </Text>
-        </>
-      }
-    />
+    <EmailLayout previewText={previewText} brand={brand} htmlLang={htmlLang}>
+      <Heading className="mb-4 text-2xl font-bold text-black">
+        {translate("accountDeletion.title")}
+      </Heading>
+      <Text className="mb-6 text-base text-gray-700">{translate("accountDeletion.body")}</Text>
+      <CtaButton href={url}>{translate("accountDeletion.action")}</CtaButton>
+    </EmailLayout>
   );
 }

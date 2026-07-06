@@ -1,16 +1,16 @@
-import type { EmailTemplates } from "@m5kdev/backend/modules/email/email.service";
-import type { FunctionComponent, ReactNode } from "react";
-
-type Brand = {
-  name?: string;
-  logo?: string;
-  tagline?: string;
-};
+import type { EmailTemplates, EmailTranslateFn } from "@m5kdev/backend/modules/email/email.service";
+import { Heading, Text } from "@react-email/components";
+import { CtaButton } from "@m5kdev/email/components/CtaButton";
+import { EmailLayout } from "@m5kdev/email/components/EmailLayout";
+import type { Brand } from "@m5kdev/email/types";
+import type { FunctionComponent } from "react";
 
 type BaseEmailProps = {
   brand?: Brand;
   previewText?: string;
   url?: string;
+  t?: EmailTranslateFn;
+  htmlLang?: string;
 };
 
 type OrganizationInviteProps = BaseEmailProps & {
@@ -24,72 +24,23 @@ type WaitlistInviteProps = BaseEmailProps & {
   name?: string;
 };
 
-function brandName(brand?: Brand) {
-  return brand?.name ?? "Auth E2E Blog";
-}
-
-function emailBrand(brand?: Brand) {
+function resolveBrand(brand?: Partial<Brand>): Brand {
   return {
-    name: brandName(brand),
+    name: brand?.name ?? "Auth E2E Blog",
     logo: brand?.logo ?? "",
     tagline: brand?.tagline ?? "Authentication test workspace",
   };
 }
 
-function EmailShell({
-  brand,
-  previewText,
-  children,
-}: BaseEmailProps & {
-  children: ReactNode;
-}) {
-  const resolvedBrand = emailBrand(brand);
-  return (
-    <html lang="en">
-      <head>
-        <meta charSet="utf-8" />
-        <title>{previewText ?? resolvedBrand.name}</title>
-      </head>
-      <body
-        style={{
-          margin: 0,
-          background: "#f7f7f4",
-          color: "#1f2933",
-          fontFamily: "Arial, sans-serif",
-        }}
-      >
-        <div style={{ display: "none", opacity: 0, overflow: "hidden" }}>{previewText}</div>
-        <main
-          style={{
-            maxWidth: 640,
-            margin: "0 auto",
-            padding: "32px 20px",
-          }}
-        >
-          <p style={{ color: "#52606d", fontSize: 13, margin: "0 0 12px" }}>{resolvedBrand.name}</p>
-          <section
-            style={{
-              background: "#ffffff",
-              border: "1px solid #d9e2ec",
-              borderRadius: 8,
-              padding: 28,
-            }}
-          >
-            {children}
-          </section>
-          <p style={{ color: "#7b8794", fontSize: 12, margin: "18px 0 0" }}>
-            {resolvedBrand.tagline}
-          </p>
-        </main>
-      </body>
-    </html>
-  );
+function resolveT(t?: EmailTranslateFn): EmailTranslateFn {
+  return t ?? ((key: string) => key);
 }
 
 function ActionEmail({
   brand,
   previewText,
   url,
+  htmlLang,
   title,
   body,
   action,
@@ -99,183 +50,185 @@ function ActionEmail({
   action: string;
 }) {
   return (
-    <EmailShell brand={brand} previewText={previewText ?? title}>
-      <h1 style={{ fontSize: 28, lineHeight: "34px", margin: "0 0 12px" }}>{title}</h1>
-      <p style={{ fontSize: 16, lineHeight: "24px", margin: "0 0 22px" }}>{body}</p>
-      {url && (
-        <a
-          href={url}
-          style={{
-            display: "inline-block",
-            background: "#0f766e",
-            borderRadius: 6,
-            color: "#ffffff",
-            fontSize: 15,
-            fontWeight: 700,
-            padding: "12px 18px",
-            textDecoration: "none",
-          }}
-        >
-          {action}
-        </a>
-      )}
-    </EmailShell>
+    <EmailLayout
+      previewText={previewText ?? title}
+      brand={resolveBrand(brand)}
+      htmlLang={htmlLang}
+    >
+      <Heading className="mb-4 text-2xl font-bold text-black">{title}</Heading>
+      <Text className="mb-6 text-base text-gray-700">{body}</Text>
+      {url ? <CtaButton href={url}>{action}</CtaButton> : null}
+    </EmailLayout>
   );
 }
 
-const VerificationEmail: FunctionComponent<Record<string, unknown>> = (props) => (
-  <ActionEmail
-    {...(props as BaseEmailProps)}
-    title="Verify your email"
-    body="Confirm this email address to finish creating your account."
-    action="Verify account"
-  />
-);
-
-const PasswordResetEmail: FunctionComponent<Record<string, unknown>> = (props) => (
-  <ActionEmail
-    {...(props as BaseEmailProps)}
-    title="Reset your password"
-    body="Use this link to choose a new password for your account."
-    action="Reset password"
-  />
-);
-
-const AccountDeletionEmail: FunctionComponent<Record<string, unknown>> = (props) => (
-  <ActionEmail
-    {...(props as BaseEmailProps)}
-    title="Confirm account deletion"
-    body="Use this link to confirm deleting your account."
-    action="Confirm deletion"
-  />
-);
-
-const WaitlistConfirmationEmail: FunctionComponent<Record<string, unknown>> = (props) => (
-  <ActionEmail
-    {...(props as BaseEmailProps)}
-    title="You joined the waitlist"
-    body="Your waitlist request was recorded."
-    action="Open app"
-  />
-);
-
-const WaitlistInviteEmail: FunctionComponent<Record<string, unknown>> = (props) => (
-  <ActionEmail
-    {...(props as BaseEmailProps)}
-    title="Your invitation is ready"
-    body="Use this invitation link to create your account."
-    action="Create account"
-  />
-);
-
-const WaitlistUserInviteEmail: FunctionComponent<Record<string, unknown>> = (props) => {
-  const emailProps = props as WaitlistInviteProps;
-  const inviter = emailProps.inviter ?? "A teammate";
-  const invitee = emailProps.name ? ` for ${emailProps.name}` : "";
+const VerificationEmail: FunctionComponent<Record<string, unknown>> = (props) => {
+  const emailProps = props as BaseEmailProps;
+  const t = resolveT(emailProps.t);
   return (
     <ActionEmail
       {...emailProps}
-      title={`${inviter} invited you${invitee}`}
-      body="This invite lets you skip the waitlist and create your account now."
-      action="Accept invite"
+      title={t("verification.title")}
+      body={t("verification.body")}
+      action={t("verification.action")}
     />
   );
 };
 
-const SystemWaitlistNotificationEmail: FunctionComponent<Record<string, unknown>> = (props) => (
-  <ActionEmail
-    {...(props as BaseEmailProps)}
-    title="New waitlist signup"
-    body="A user joined the auth E2E waitlist."
-    action="Open admin"
-  />
-);
+const PasswordResetEmail: FunctionComponent<Record<string, unknown>> = (props) => {
+  const emailProps = props as BaseEmailProps;
+  const t = resolveT(emailProps.t);
+  return (
+    <ActionEmail
+      {...emailProps}
+      title={t("passwordReset.title")}
+      body={t("passwordReset.body")}
+      action={t("passwordReset.action")}
+    />
+  );
+};
+
+const AccountDeletionEmail: FunctionComponent<Record<string, unknown>> = (props) => {
+  const emailProps = props as BaseEmailProps;
+  const t = resolveT(emailProps.t);
+  return (
+    <ActionEmail
+      {...emailProps}
+      title={t("accountDeletion.title")}
+      body={t("accountDeletion.body")}
+      action={t("accountDeletion.action")}
+    />
+  );
+};
+
+const WaitlistConfirmationEmail: FunctionComponent<Record<string, unknown>> = (props) => {
+  const emailProps = props as BaseEmailProps;
+  const t = resolveT(emailProps.t);
+  return (
+    <ActionEmail
+      {...emailProps}
+      title={t("waitlistConfirmation.title")}
+      body={t("waitlistConfirmation.body")}
+      action={t("waitlistConfirmation.action")}
+    />
+  );
+};
+
+const WaitlistInviteEmail: FunctionComponent<Record<string, unknown>> = (props) => {
+  const emailProps = props as BaseEmailProps;
+  const t = resolveT(emailProps.t);
+  return (
+    <ActionEmail
+      {...emailProps}
+      title={t("waitlistInvite.title")}
+      body={t("waitlistInvite.body")}
+      action={t("waitlistInvite.action")}
+    />
+  );
+};
+
+const WaitlistUserInviteEmail: FunctionComponent<Record<string, unknown>> = (props) => {
+  const emailProps = props as WaitlistInviteProps;
+  const t = resolveT(emailProps.t);
+  const inviter = emailProps.inviter ?? "A teammate";
+  const invitee = emailProps.name
+    ? t("waitlistUserInvite.inviteeSuffix", { name: emailProps.name })
+    : "";
+
+  return (
+    <ActionEmail
+      {...emailProps}
+      title={t("waitlistUserInvite.title", { inviter, invitee })}
+      body={t("waitlistUserInvite.body")}
+      action={t("waitlistUserInvite.action")}
+    />
+  );
+};
+
+const SystemWaitlistNotificationEmail: FunctionComponent<Record<string, unknown>> = (props) => {
+  const emailProps = props as BaseEmailProps;
+  const t = resolveT(emailProps.t);
+  return (
+    <ActionEmail
+      {...emailProps}
+      title={t("systemWaitlistNotification.title")}
+      body={t("systemWaitlistNotification.body")}
+      action={t("systemWaitlistNotification.action")}
+    />
+  );
+};
 
 const OrganizationInviteEmail: FunctionComponent<Record<string, unknown>> = (props) => {
   const emailProps = props as OrganizationInviteProps;
+  const t = resolveT(emailProps.t);
   const organization = emailProps.organizationName ?? "an organization";
   const inviter = emailProps.inviterName ?? "A teammate";
   const role = emailProps.role ?? "member";
 
   return (
-    <EmailShell
-      brand={emailProps.brand}
-      previewText={emailProps.previewText ?? `${inviter} invited you to ${organization}`}
+    <EmailLayout
+      previewText={emailProps.previewText ?? t("organizationInvite.previewText", { inviterName: inviter, organizationName: organization })}
+      brand={resolveBrand(emailProps.brand)}
+      htmlLang={emailProps.htmlLang}
     >
-      <h1 style={{ fontSize: 28, lineHeight: "34px", margin: "0 0 12px" }}>
-        {inviter} invited you to {organization}
-      </h1>
-      <p style={{ fontSize: 16, lineHeight: "24px", margin: "0 0 22px" }}>
-        You have been invited as {role}. Create an account or sign in to accept.
-      </p>
-      {emailProps.url && (
-        <a
-          href={emailProps.url}
-          style={{
-            display: "inline-block",
-            background: "#0f766e",
-            borderRadius: 6,
-            color: "#ffffff",
-            fontSize: 15,
-            fontWeight: 700,
-            padding: "12px 18px",
-            textDecoration: "none",
-          }}
-        >
-          Accept organization invite
-        </a>
-      )}
-    </EmailShell>
+      <Heading className="mb-4 text-2xl font-bold text-black">
+        {t("organizationInvite.title", { inviterName: inviter, organizationName: organization })}
+      </Heading>
+      <Text className="mb-6 text-base text-gray-700">{t("organizationInvite.body", { role })}</Text>
+      {emailProps.url ? (
+        <CtaButton href={emailProps.url}>{t("organizationInvite.action")}</CtaButton>
+      ) : null}
+    </EmailLayout>
   );
 };
 
 export const templates = {
   accountDeletion: {
     id: "account-deletion",
-    subject: "Delete your account",
-    previewText: "Confirm your account deletion",
+    subject: "accountDeletion.subject",
+    previewText: "accountDeletion.previewText",
     react: AccountDeletionEmail,
   },
   verification: {
     id: "verification",
-    subject: "Verify your email",
-    previewText: "Verify your email address",
+    subject: "verification.subject",
+    previewText: "verification.previewText",
     react: VerificationEmail,
   },
   waitlistConfirmation: {
     id: "waitlist-confirmation",
-    subject: "You joined the waitlist",
-    previewText: "Your waitlist request was recorded",
+    subject: "waitlistConfirmation.subject",
+    previewText: "waitlistConfirmation.previewText",
     react: WaitlistConfirmationEmail,
   },
   passwordReset: {
     id: "password-reset",
-    subject: "Reset your password",
-    previewText: "Reset your password request",
+    subject: "passwordReset.subject",
+    previewText: "passwordReset.previewText",
     react: PasswordResetEmail,
   },
   systemWaitlistNotification: {
     id: "system-waitlist-notification",
-    subject: "New waitlist signup",
-    previewText: "A user joined the waitlist",
+    subject: "systemWaitlistNotification.subject",
+    previewText: "systemWaitlistNotification.previewText",
     react: SystemWaitlistNotificationEmail,
   },
   waitlistInvite: {
     id: "waitlist-invite",
-    subject: "Your invitation is ready",
-    previewText: "Create your account",
+    subject: "waitlistInvite.subject",
+    previewText: "waitlistInvite.previewText",
     react: WaitlistInviteEmail,
   },
   waitlistUserInvite: {
     id: "waitlist-user-invite",
-    subject: "You were invited",
-    previewText: "Skip the waitlist",
+    subject: "waitlistUserInvite.subject",
+    previewText: "waitlistUserInvite.previewText",
     react: WaitlistUserInviteEmail,
   },
   organizationInvite: {
     id: "organization-invite",
-    subject: "Join the organization",
-    previewText: "You have been invited to join an organization",
+    subject: "organizationInvite.subject",
+    previewText: "organizationInvite.previewText",
     react: OrganizationInviteEmail,
   },
 } satisfies EmailTemplates;

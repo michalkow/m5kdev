@@ -5,6 +5,7 @@ import { createClient, type Client } from "@libsql/client";
 import type { FunctionComponent } from "react";
 import type { Logger } from "pino";
 import { createBackendApp } from "../../app";
+import { createAppI18n } from "../../i18n/app-i18n";
 import { EmailModule } from "./email.module";
 import { EmailService, type EmailTemplates } from "./email.service";
 
@@ -138,10 +139,192 @@ describe("EmailService", () => {
         };
       };
 
-      expect(payload.subject).toBe("Owner Name has invited you to join Example App!");
+      expect(payload.subject).toBe("waitlistUserInvite");
       expect(payload.props.url).toBe(
         "http://localhost:5173/signup?code=invite-code&email=person@example.com"
       );
+    } finally {
+      await fs.rm(outputDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it("translates subject and previewText keys and injects props.t", async () => {
+    const outputDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "m5kdev-email-"));
+
+    try {
+      const localeConfig = {
+        defaultLocale: "en",
+        allowedLocales: ["en", "en_GB"],
+      };
+      const appI18n = createAppI18n(localeConfig, {
+        en: {
+          translation: {
+            verification: {
+              subject: "Verify your email",
+              previewText: "Verify your email address",
+            },
+          },
+        },
+      });
+
+      const localizedTemplates: EmailTemplates = {
+        ...templates,
+        verification: {
+          id: "verification",
+          subject: "verification.subject",
+          previewText: "verification.previewText",
+          react: Template,
+        },
+      };
+
+      const service = new EmailService({
+        templates: localizedTemplates,
+        appConfig: {
+          locales: localeConfig,
+        },
+        emailConfig: {
+          mode: "store",
+          from: "no-reply@example.com",
+          outputDirectory,
+        },
+        i18n: appI18n,
+      });
+
+      const result = await service.sendVerification("person@example.com", "https://example.com/verify", {
+        locale: "en_GB",
+      });
+
+      expect(result.isOk()).toBe(true);
+
+      const files = await fs.readdir(outputDirectory);
+      const first = files[0];
+      if (!first) {
+        throw new Error("Expected rendered email to be stored");
+      }
+
+      const payload = JSON.parse(
+        await fs.readFile(path.join(outputDirectory, first), "utf8")
+      ) as {
+        subject: string;
+        previewText: string;
+        props: {
+          htmlLang: string;
+        };
+      };
+
+      expect(payload.subject).toBe("Verify your email");
+      expect(payload.previewText).toBe("Verify your email address");
+      expect(payload.props.htmlLang).toBe("en-GB");
+    } finally {
+      await fs.rm(outputDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back to app default locale when override locale is omitted", async () => {
+    const outputDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "m5kdev-email-"));
+
+    try {
+      const localeConfig = {
+        defaultLocale: "en_GB",
+        allowedLocales: ["en", "en_GB"],
+      };
+      const appI18n = createAppI18n(localeConfig, {
+        en_GB: {
+          translation: {
+            verification: {
+              subject: "Verify your email (UK)",
+            },
+          },
+        },
+      });
+
+      const localizedTemplates: EmailTemplates = {
+        ...templates,
+        verification: {
+          id: "verification",
+          subject: "verification.subject",
+          react: Template,
+        },
+      };
+
+      const service = new EmailService({
+        templates: localizedTemplates,
+        appConfig: {
+          locales: localeConfig,
+        },
+        emailConfig: {
+          mode: "store",
+          from: "no-reply@example.com",
+          outputDirectory,
+        },
+        i18n: appI18n,
+      });
+
+      const result = await service.sendVerification("person@example.com", "https://example.com/verify");
+
+      expect(result.isOk()).toBe(true);
+
+      const files = await fs.readdir(outputDirectory);
+      const first = files[0];
+      if (!first) {
+        throw new Error("Expected rendered email to be stored");
+      }
+
+      const payload = JSON.parse(
+        await fs.readFile(path.join(outputDirectory, first), "utf8")
+      ) as {
+        subject: string;
+        props: {
+          htmlLang: string;
+        };
+      };
+
+      expect(payload.subject).toBe("Verify your email (UK)");
+      expect(payload.props.htmlLang).toBe("en-GB");
+    } finally {
+      await fs.rm(outputDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it("uses subject key as literal when i18n is not configured", async () => {
+    const outputDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "m5kdev-email-"));
+
+    try {
+      const localizedTemplates: EmailTemplates = {
+        ...templates,
+        verification: {
+          id: "verification",
+          subject: "verification.subject",
+          react: Template,
+        },
+      };
+
+      const service = new EmailService({
+        templates: localizedTemplates,
+        emailConfig: {
+          mode: "store",
+          from: "no-reply@example.com",
+          outputDirectory,
+        },
+      });
+
+      const result = await service.sendVerification("person@example.com", "https://example.com/verify");
+
+      expect(result.isOk()).toBe(true);
+
+      const files = await fs.readdir(outputDirectory);
+      const first = files[0];
+      if (!first) {
+        throw new Error("Expected rendered email to be stored");
+      }
+
+      const payload = JSON.parse(
+        await fs.readFile(path.join(outputDirectory, first), "utf8")
+      ) as {
+        subject: string;
+      };
+
+      expect(payload.subject).toBe("verification.subject");
     } finally {
       await fs.rm(outputDirectory, { recursive: true, force: true });
     }

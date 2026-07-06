@@ -9,7 +9,6 @@ import {
 import type { BillingModule } from "../billing/billing.module";
 import type { EmailModule } from "../email/email.module";
 import type * as authTables from "./auth.db";
-import type { AuthLocaleConfig } from "@m5kdev/commons/modules/auth/auth.locale";
 import { defaultAuthGrants } from "./auth.grants";
 import {
   AuthAccountClaimRepository,
@@ -36,9 +35,6 @@ type AuthModuleServices = {
 type AuthModuleRouters = {
   auth: ReturnType<typeof createAuthTRPC>;
 };
-export type AuthModuleConfig = {
-  locales?: AuthLocaleConfig;
-};
 export class AuthModule extends BaseModule<
   AuthModuleDeps,
   AuthModuleTables,
@@ -51,13 +47,11 @@ export class AuthModule extends BaseModule<
   override readonly optionalDependsOn = ["billing"] as const;
   private readonly grants: Grant[];
   private readonly hooks?: AuthServiceHooks;
-  private readonly config?: AuthModuleConfig;
 
-  constructor(grants?: Grant[], hooks?: AuthServiceHooks, config?: AuthModuleConfig) {
+  constructor(grants?: Grant[], hooks?: AuthServiceHooks) {
     super();
     this.grants = grants ?? defaultAuthGrants;
     this.hooks = hooks;
-    this.config = config;
   }
 
   override repositories({ db }: ModuleRepositoriesContext<AuthModuleDeps, AuthModuleTables>) {
@@ -94,6 +88,7 @@ export class AuthModule extends BaseModule<
     repositories,
     deps,
     appConfig,
+    i18n,
   }: ModuleServicesContext<AuthModuleDeps, AuthModuleRepositories>) {
     return {
       auth: new AuthService(
@@ -105,7 +100,8 @@ export class AuthModule extends BaseModule<
         this.grants,
         appConfig.urls,
         this.hooks,
-        this.config
+        appConfig.locales,
+        i18n
       ),
     };
   }

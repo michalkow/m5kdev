@@ -10,11 +10,14 @@
     "email:dev": "react-email dev --dir src/emails"
   },
   "dependencies": {
+    "@m5kdev/commons": "workspace:*",
+    "@m5kdev/email": "workspace:*",
     "@react-email/components": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
   },
   "devDependencies": {
+    "@m5kdev/backend": "workspace:*",
     "@m5kdev/config": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
@@ -23,5 +26,9 @@
     "tslib": "catalog:",
     "typescript": "catalog:"
   },
-  "main": "./src/index.ts"
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./resources": "./src/resources.ts"
+  }
 }

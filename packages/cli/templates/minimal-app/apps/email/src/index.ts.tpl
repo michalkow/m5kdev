@@ -7,26 +7,26 @@ import VerificationEmail from "./emails/verificationEmail";
 export const templates = {
   accountDeletion: {
     id: "account-deletion",
-    subject: "Delete your account",
-    previewText: "Confirm your account deletion",
+    subject: "accountDeletion.subject",
+    previewText: "accountDeletion.previewText",
     react: AccountDeletionEmail as FunctionComponent<Record<string, unknown>>,
   },
   passwordReset: {
     id: "password-reset",
-    subject: "Reset your password",
-    previewText: "Reset your password request",
+    subject: "passwordReset.subject",
+    previewText: "passwordReset.previewText",
     react: PasswordResetEmail as FunctionComponent<Record<string, unknown>>,
   },
   verification: {
     id: "verification",
-    subject: "Verify your email",
-    previewText: "Verify your email address",
+    subject: "verification.subject",
+    previewText: "verification.previewText",
     react: VerificationEmail as FunctionComponent<Record<string, unknown>>,
   },
   organizationInvite: {
     id: "organization-invite",
-    subject: "Join the organization",
-    previewText: "You have been invited to join an organization",
+    subject: "organizationInvite.subject",
+    previewText: "organizationInvite.previewText",
     react: OrganizationInviteEmail as FunctionComponent<Record<string, unknown>>,
   },
 };

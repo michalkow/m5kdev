@@ -1,26 +1,36 @@
-import { Text } from "@react-email/components";
-import { BaseEmail } from "../components/BaseEmail";
+import { Heading, Text } from "@react-email/components";
+import { CtaButton } from "@m5kdev/email/components/CtaButton";
+import { EmailLayout } from "@m5kdev/email/components/EmailLayout";
+import type { Brand, EmailTranslateFn } from "@m5kdev/email/types";
+
+function resolveT(t?: EmailTranslateFn): EmailTranslateFn {
+  return t ?? ((key: string) => key);
+}
 
 export default function VerificationEmail({
-  previewText = "Verify your email",
+  previewText,
   url,
+  brand,
+  t,
+  htmlLang,
 }: {
-  previewText?: string;
+  previewText: string;
   url: string;
+  brand: Brand;
+  t?: EmailTranslateFn;
+  htmlLang?: string;
 }) {
+  const translate = resolveT(t);
+
   return (
-    <BaseEmail
-      previewText={previewText}
-      eyebrow="Welcome"
-      title="Verify your email"
-      ctaLabel="Verify account"
-      ctaUrl={url}
-      body={
-        <Text style={{ margin: "0" }}>
-          Confirm your email address to finish setting up {{APP_NAME}} and access your editorial
-          workspace.
-        </Text>
-      }
-    />
+    <EmailLayout previewText={previewText} brand={brand} htmlLang={htmlLang}>
+      <Heading className="mb-4 text-2xl font-bold text-black">
+        {translate("verification.title")}
+      </Heading>
+      <Text className="mb-6 text-base text-gray-700">
+        {translate("verification.body", { appName: "{{APP_NAME}}" })}
+      </Text>
+      <CtaButton href={url}>{translate("verification.action")}</CtaButton>
+    </EmailLayout>
   );
 }

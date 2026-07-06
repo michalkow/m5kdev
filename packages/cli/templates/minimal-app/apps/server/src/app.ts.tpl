@@ -5,7 +5,10 @@ import { EmailModule } from "@m5kdev/backend/modules/email/email.module";
 import { NotificationModule } from "@m5kdev/backend/modules/notification/notification.module";
 import { WorkflowModule } from "@m5kdev/backend/modules/workflow/workflow.module";
 import { templates } from "{{PACKAGE_SCOPE}}/email";
+import { emailResources } from "{{PACKAGE_SCOPE}}/email/resources";
 import { APP_NAME } from "{{PACKAGE_SCOPE}}/shared/modules/app/app.constants";
+import { AUTH_LOCALE_CONFIG } from "{{PACKAGE_SCOPE}}/shared/modules/app/locale.constants";
+import { USER_LOCALE_HEADER } from "@m5kdev/commons/modules/auth/auth.constants";
 import cors from "cors";
 import express from "express";
 import { schema } from "./generated/schema";
@@ -46,6 +49,7 @@ app.use(
       "Waitlist-Invitation-Code",
       "Organization-Invitation-Code",
       "Admin-Create-Verified-User",
+      USER_LOCALE_HEADER,
     ],
   })
 );
@@ -61,6 +65,10 @@ export const builtBackendApp = createBackendApp(
         web: appUrl,
         api: serverUrl,
       },
+      locales: AUTH_LOCALE_CONFIG,
+    },
+    i18n: {
+      resources: emailResources,
     },
     redis: {
       url: redisUrl,
@@ -74,7 +82,7 @@ export const builtBackendApp = createBackendApp(
       outputDirectory: ".emails",
     },
     auth: {
-      factory({ db, services, appConfig }) {
+      factory({ db, services, appConfig, i18n }) {
         return createBetterAuth({
           orm: db.orm as never,
           schema: db.schema as never,
@@ -82,6 +90,7 @@ export const builtBackendApp = createBackendApp(
             email: services.email.email,
           },
           app: appConfig,
+          i18n,
           config: {
             waitlist: enableWaitlist,
             provisionedAccountEmailDomain: "provisioned.{{APP_SLUG}}.local",

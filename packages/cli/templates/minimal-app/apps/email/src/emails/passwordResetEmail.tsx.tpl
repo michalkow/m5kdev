@@ -1,25 +1,34 @@
-import { Text } from "@react-email/components";
-import { BaseEmail } from "../components/BaseEmail";
+import { Heading, Text } from "@react-email/components";
+import { CtaButton } from "@m5kdev/email/components/CtaButton";
+import { EmailLayout } from "@m5kdev/email/components/EmailLayout";
+import type { Brand, EmailTranslateFn } from "@m5kdev/email/types";
+
+function resolveT(t?: EmailTranslateFn): EmailTranslateFn {
+  return t ?? ((key: string) => key);
+}
 
 export default function PasswordResetEmail({
-  previewText = "Reset your password",
+  previewText,
   url,
+  brand,
+  t,
+  htmlLang,
 }: {
-  previewText?: string;
+  previewText: string;
   url: string;
+  brand: Brand;
+  t?: EmailTranslateFn;
+  htmlLang?: string;
 }) {
+  const translate = resolveT(t);
+
   return (
-    <BaseEmail
-      previewText={previewText}
-      eyebrow="Access"
-      title="Reset your password"
-      ctaLabel="Choose a new password"
-      ctaUrl={url}
-      body={
-        <Text style={{ margin: "0" }}>
-          Use the secure link below to choose a new password for your {{APP_NAME}} account.
-        </Text>
-      }
-    />
+    <EmailLayout previewText={previewText} brand={brand} htmlLang={htmlLang}>
+      <Heading className="mb-4 text-2xl font-bold text-black">
+        {translate("passwordReset.title")}
+      </Heading>
+      <Text className="mb-6 text-base text-gray-700">{translate("passwordReset.body")}</Text>
+      <CtaButton href={url}>{translate("passwordReset.action")}</CtaButton>
+    </EmailLayout>
   );
 }

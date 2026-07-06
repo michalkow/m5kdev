@@ -6,6 +6,7 @@ import { EmailPreviewModule } from "@m5kdev/backend/modules/email/email.preview.
 import cors from "cors";
 import express from "express";
 import { templates } from "m5kdev-auth-e2e-email";
+import { emailResources } from "m5kdev-auth-e2e-email/resources";
 import { APP_NAME, type AuthE2EProfile } from "m5kdev-auth-e2e-shared/modules/app/app.constants";
 import { AUTH_LOCALE_CONFIG } from "m5kdev-auth-e2e-shared/modules/app/locale.constants";
 import { USER_LOCALE_HEADER } from "@m5kdev/commons/modules/auth/auth.constants";
@@ -51,6 +52,10 @@ export const builtBackendApp = createBackendApp(
         web: appUrl,
         api: serverUrl,
       },
+      locales: AUTH_LOCALE_CONFIG,
+    },
+    i18n: {
+      resources: emailResources,
     },
     email: {
       mode: "store",
@@ -59,7 +64,7 @@ export const builtBackendApp = createBackendApp(
       outputDirectory: emailOutputDirectory,
     },
     auth: {
-      factory({ db, services, appConfig }) {
+      factory({ db, services, appConfig, i18n }) {
         return createBetterAuth({
           orm: db.orm as never,
           schema: db.schema as never,
@@ -67,10 +72,10 @@ export const builtBackendApp = createBackendApp(
             email: services.email.email,
           },
           app: appConfig,
+          i18n,
           config: {
             waitlist: profile === "waitlist",
             provisionedAccountEmailDomain: "provisioned.auth-e2e.local",
-            locales: AUTH_LOCALE_CONFIG,
           },
           options: {
             secret: process.env.BETTER_AUTH_SECRET ?? "auth-e2e-local-secret-auth-e2e-local-secret",
@@ -81,7 +86,7 @@ export const builtBackendApp = createBackendApp(
   },
   [
     new EmailModule(templates),
-    new AuthModule(undefined, undefined, { locales: AUTH_LOCALE_CONFIG }),
+    new AuthModule(),
     new PostsModule(),
     new TestHarnessModule(),
     new EmailPreviewModule({ allowDelete: true }),

@@ -1,9 +1,11 @@
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { InferSelectModel } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { TFunction } from "i18next";
 import { err, ok } from "neverthrow";
 import { z } from "zod";
 import type { BackendAppMetadata } from "../../app";
+import type { AppI18n } from "../../i18n/app-i18n";
 import { posthogCapture } from "../../utils/posthog";
 import type { OrganizationContext, RequestContext } from "../../utils/trpc";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
@@ -51,6 +53,9 @@ export type AuthServiceHooks = {
     organization: Organization;
     member: Member;
     user: User;
+    i18n?: AppI18n;
+    locale?: string;
+    t?: TFunction;
   }) => Promise<void>;
 };
 
@@ -68,6 +73,7 @@ export class AuthService extends BasePermissionService<
   private readonly appUrls?: BackendAppMetadata["urls"];
   private readonly hooks?: AuthServiceHooks;
   private readonly localeConfig?: AuthLocaleConfig;
+  private readonly i18n?: AppI18n;
 
   constructor(
     repository: {
@@ -81,12 +87,14 @@ export class AuthService extends BasePermissionService<
     grants: ResourceGrant[],
     appUrls?: BackendAppMetadata["urls"],
     hooks?: AuthServiceHooks,
-    moduleConfig?: { locales?: AuthLocaleConfig }
+    locales?: AuthLocaleConfig,
+    i18n?: AppI18n
   ) {
     super(repository, service, grants);
     this.appUrls = appUrls;
     this.hooks = hooks;
-    this.localeConfig = moduleConfig?.locales;
+    this.localeConfig = locales;
+    this.i18n = i18n;
   }
 
   private resolveDefaultLocale(): string {
@@ -335,12 +343,22 @@ export class AuthService extends BasePermissionService<
       if (result.isErr()) return err(result.error);
       if (this.hooks?.afterCreateOrganization) {
         try {
-          await this.hooks.afterCreateOrganization({
+          const hookLocale =
+            ctx.user.locale ?? result.value.organization.locale ?? this.resolveDefaultLocale();
+          const hookProps = {
             orm: this.repository.organization.getOrm(),
             organization: result.value.organization,
             member: result.value.member,
             user: ctx.user,
-          });
+            ...(this.i18n
+              ? {
+                  i18n: this.i18n,
+                  locale: hookLocale,
+                  t: this.i18n.getFixedT(hookLocale),
+                }
+              : {}),
+          };
+          await this.hooks.afterCreateOrganization(hookProps);
         } catch (error) {
           return this.error(
             "INTERNAL_SERVER_ERROR",
@@ -918,7 +936,8 @@ export class AuthService extends BasePermissionService<
         email,
         waitlist.value.code,
         ctx.user.name,
-        name
+        name,
+        { locale: ctx.user.locale ?? this.resolveDefaultLocale() }
       );
       posthogCapture({
         distinctId: ctx.user.id,

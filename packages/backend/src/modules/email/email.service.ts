@@ -5,8 +5,13 @@ import { ok } from "neverthrow";
 import { createElement, type FunctionComponent } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Resend } from "resend";
+import { toI18nLanguageTag } from "@m5kdev/commons/modules/auth/auth.locale";
+import type { TFunction } from "i18next";
 import type { BackendAppEmailMode, BackendAppEmailOptions, BackendAppMetadata } from "../../app";
+import type { AppI18n } from "../../i18n/app-i18n";
 import { BaseService } from "../base/base.service";
+
+export type EmailTranslateFn = TFunction;
 
 export type Brand = {
   name: string;
@@ -18,11 +23,14 @@ export type OverrideOptions = {
   from?: string;
   subject?: string;
   previewText?: string;
+  locale?: string;
 };
 
 export type EmailTemplate = {
   id: string;
+  /** Translation key resolved by EmailService when i18n is configured. */
   subject?: string;
+  /** Translation key resolved by EmailService when i18n is configured. */
   previewText?: string;
   from?: string;
   react: FunctionComponent<Record<string, unknown>>;
@@ -52,6 +60,7 @@ type EmailServiceProps = {
   mode?: BackendAppEmailMode;
   resendApiKey?: string;
   noReplyFrom?: string;
+  i18n?: AppI18n;
 };
 
 export type EmailDeliveryPayload = {
@@ -85,6 +94,26 @@ function buildAppUrl(baseUrl: string | undefined, pathname: string) {
   return new URL(pathname, normalizeBaseUrl(baseUrl)).toString();
 }
 
+function buildEmailTranslationContext(
+  props: Record<string, unknown>
+): Record<string, unknown> {
+  const brand = props.brand as Brand | undefined;
+  return {
+    ...props,
+    brandName: brand?.name,
+  };
+}
+
+function resolveTranslatedTemplateText(
+  t: TFunction | undefined,
+  key: string | undefined,
+  context: Record<string, unknown>
+): string | undefined {
+  if (key === undefined) return undefined;
+  if (!t) return key;
+  return t(key, context);
+}
+
 export class EmailService extends BaseService<never, never> {
   public client?: Resend;
   public brand: Brand;
@@ -94,6 +123,7 @@ export class EmailService extends BaseService<never, never> {
   public mode: BackendAppEmailMode;
   public outputDirectory: string;
   public appConfig: BackendAppMetadata;
+  public i18n?: AppI18n;
 
   constructor(props: EmailServiceProps) {
     super(undefined, undefined);
@@ -121,6 +151,7 @@ export class EmailService extends BaseService<never, never> {
     this.mode = props.mode ?? props.emailConfig?.mode ?? "send";
     this.outputDirectory = props.outputDirectory ?? props.emailConfig?.outputDirectory ?? ".emails";
     this.appConfig = appConfig;
+    this.i18n = props.i18n;
   }
 
   private resolveTemplate(templateKey: keyof EmailTemplates) {
@@ -332,17 +363,34 @@ export class EmailService extends BaseService<never, never> {
       return this.error("NOT_FOUND", `Email template not found: ${String(templateKey)}`);
     }
 
+    const locale = options?.locale ?? this.i18n?.defaultLocale ?? this.appConfig.locales?.defaultLocale;
+    const mergedProps: Record<string, unknown> = { ...templateProps };
+    const translationContext = buildEmailTranslationContext(mergedProps);
+    const t = this.i18n ? this.i18n.getFixedT(locale) : undefined;
+    if (t) {
+      mergedProps.t = t;
+      if (locale) {
+        mergedProps.htmlLang = toI18nLanguageTag(locale);
+      }
+    }
     const from = options?.from ?? template.from ?? this.noReplyFrom;
-    const subject = options?.subject ?? template.subject ?? String(templateKey);
-    const previewText = options?.previewText ?? template.previewText ?? subject;
-    const react = createElement(template.react, { ...templateProps, previewText });
+    const subject =
+      options?.subject ??
+      resolveTranslatedTemplateText(t, template.subject, translationContext) ??
+      String(templateKey);
+    const previewText =
+      options?.previewText ??
+      resolveTranslatedTemplateText(t, template.previewText, translationContext) ??
+      subject;
+    const reactProps = { ...mergedProps, previewText };
+    const react = createElement(template.react, reactProps);
     const payload = this.renderTemplatePayload(
       template,
       to,
       subject,
       previewText,
       from,
-      templateProps
+      mergedProps
     );
 
     return this.deliverPayload(payload, react);
@@ -432,11 +480,7 @@ export class EmailService extends BaseService<never, never> {
         inviter,
         name,
       },
-      {
-        previewText: `Create your ${this.brand.name} account today!`,
-        subject: `${inviter} has invited you to join ${this.brand.name}!`,
-        ...overrideOptions,
-      }
+      overrideOptions
     );
   }
 
@@ -458,11 +502,7 @@ export class EmailService extends BaseService<never, never> {
         inviterName,
         role,
       },
-      {
-        previewText: `${inviterName} invited you to ${organizationName}`,
-        subject: `${inviterName} invited you to join ${organizationName}`,
-        ...overrideOptions,
-      }
+      overrideOptions
     );
   }
 

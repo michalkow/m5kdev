@@ -9,6 +9,9 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
+    "@m5kdev/commons": "workspace:*",
+    "@m5kdev/email": "workspace:*",
+    "@react-email/components": "catalog:",
     "react": "catalog:"
   },
   "devDependencies": {
@@ -20,6 +23,7 @@
   },
   "main": "./src/index.tsx",
   "exports": {
-    ".": "./src/index.tsx"
+    ".": "./src/index.tsx",
+    "./resources": "./src/resources.ts"
   }
 }
