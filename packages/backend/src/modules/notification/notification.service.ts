@@ -57,6 +57,7 @@ export class NotificationService extends BasePermissionService<
     .job<NotificationServiceJobPayload>({
       name: NOTIFICATION_DELIVER_JOB_NAME,
       queue: "fast",
+      timeout: 60_000,
       id: (p) => p.batchId,
       meta: (p) => ({ userId: p.userId }),
     })
