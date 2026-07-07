@@ -57,6 +57,7 @@ Do not import services into repositories.
 - Guard action names must exactly match grant action names.
 - Prefer canonical actions: `read`, `write`, `delete`, `publish`.
 - If a service does not actually enforce permissions, use `BaseService` instead of `BasePermissionService`.
+- Define role keys in `apps/*/shared/src/modules/app/roles.constants.ts` and pass `roles` through `createBackendApp` metadata and `AppConfigProvider`. When adding custom roles, extend module grants so permission maps match role keys. See [Custom app roles migration](apps/docs/docs/guides/custom-app-roles-migration.md) in the docs site.
 
 ## Transactions and DB Discipline
 

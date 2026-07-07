@@ -322,3 +322,4 @@ Register hook-specific keys in the same `i18n.resources` map in `app.ts`.
 
 - [Auth module](/modules/auth)
 - [Admin create verified user migration](/guides/admin-create-verified-user-migration)
+- [Custom app roles migration](/guides/custom-app-roles-migration)

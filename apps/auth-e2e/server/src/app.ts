@@ -9,6 +9,7 @@ import { templates } from "m5kdev-auth-e2e-email";
 import { emailResources } from "m5kdev-auth-e2e-email/resources";
 import { APP_NAME, type AuthE2EProfile } from "m5kdev-auth-e2e-shared/modules/app/app.constants";
 import { AUTH_LOCALE_CONFIG } from "m5kdev-auth-e2e-shared/modules/app/locale.constants";
+import { APP_ROLES_CONFIG } from "m5kdev-auth-e2e-shared/modules/app/roles.constants";
 import { USER_LOCALE_HEADER } from "@m5kdev/commons/modules/auth/auth.constants";
 import { schema } from "./generated/schema";
 import { PostsModule } from "./modules/posts/posts.module";
@@ -53,6 +54,7 @@ export const builtBackendApp = createBackendApp(
         api: serverUrl,
       },
       locales: AUTH_LOCALE_CONFIG,
+      roles: APP_ROLES_CONFIG,
     },
     i18n: {
       resources: emailResources,

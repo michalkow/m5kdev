@@ -1,5 +1,10 @@
 import { type Client, createClient, type Config as LibSQLClientConfig } from "@libsql/client";
 import type { AuthLocaleConfig } from "@m5kdev/commons/modules/auth/auth.locale";
+import {
+  normalizeAuthRolesConfig,
+  type AuthRolesConfig,
+  type NormalizedAuthRolesConfig,
+} from "@m5kdev/commons/modules/auth/auth.roles";
 import { transformer } from "@m5kdev/commons/utils/trpc";
 import type { AnyRouter, TRPCCreateRouterOptions } from "@trpc/server";
 import * as trpcExpress from "@trpc/server/adapters/express";
@@ -110,6 +115,7 @@ export type BackendAppMetadata = {
     tagline?: string;
   };
   locales?: AuthLocaleConfig;
+  roles?: AuthRolesConfig;
 };
 
 export type BackendAppEmailMode = "send" | "log" | "store";
@@ -132,6 +138,7 @@ type ResolvedBackendAppMetadata = {
     tagline?: string;
   };
   locales?: AuthLocaleConfig;
+  roles: NormalizedAuthRolesConfig;
 };
 
 type ResolvedBackendAppEmailOptions = {
@@ -357,6 +364,7 @@ function normalizeAppConfig(
         (config?.name ? `${config.name} publishing workspace` : undefined),
     },
     locales: config?.locales,
+    roles: normalizeAuthRolesConfig(config?.roles),
   };
 }
 

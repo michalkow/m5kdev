@@ -17,6 +17,8 @@ import {
   USER_LOCALE_HEADER,
 } from "@m5kdev/commons/modules/auth/auth.constants";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
+import { useAppRoles } from "@m5kdev/frontend/modules/app/hooks/useAppRoles";
+import { useRoleLabel } from "@m5kdev/frontend/modules/app/hooks/useRoleLabel";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import {
   invalidateListUsersQuery,
@@ -37,7 +39,7 @@ import {
   MoreHorizontal,
   UserPlus,
 } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import { toast } from "sonner";
 
@@ -64,6 +66,16 @@ export function AuthAdminUserManagement({
   enableAiUsage = false,
 }: AuthAdminUserManagementProps) {
   const { locales } = useAppConfig();
+  const userRoles = useAppRoles("user");
+  const getUserRoleLabel = useRoleLabel("user");
+  const userRoleOptions = useMemo(
+    (): { value: string; label: string }[] =>
+      userRoles.assignableRoles.map((role) => ({
+        value: role,
+        label: getUserRoleLabel(role),
+      })),
+    [getUserRoleLabel, userRoles.assignableRoles]
+  );
   const banReasonInputId = useId();
   const customDurationId = useId();
   const nameInputId = useId();
@@ -83,7 +95,7 @@ export function AuthAdminUserManagement({
     name: "",
     email: "",
     password: "",
-    role: "user",
+    role: userRoles.defaultRole,
     locale: locales?.defaultLocale ?? "en",
   });
   const [isCreatingUser, setIsCreatingUser] = useState(false);
@@ -287,7 +299,7 @@ export function AuthAdminUserManagement({
       name: "",
       email: "",
       password: "",
-      role: "user",
+      role: userRoles.defaultRole,
       locale: locales?.defaultLocale ?? "en",
     });
     setIsCreateUserModalOpen(true);
@@ -306,8 +318,8 @@ export function AuthAdminUserManagement({
           name: newUserData.name,
           email: newUserData.email,
           password: newUserData.password,
-          role: newUserData.role as "user" | "admin",
-        },
+          role: newUserData.role,
+        } as Parameters<typeof authClient.admin.createUser>[0],
         {
           headers: {
             [ADMIN_CREATE_VERIFIED_USER_HEADER]: ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE,
@@ -452,7 +464,7 @@ export function AuthAdminUserManagement({
       id: "role",
       accessorKey: "role",
       header: "Role",
-      cell: ({ row }) => row.original.role || "user",
+      cell: ({ row }) => getUserRoleLabel(row.original.role || userRoles.defaultRole),
       enableSorting: true,
     },
     {
@@ -860,16 +872,17 @@ export function AuthAdminUserManagement({
                       </Select.Trigger>
                       <Select.Popover>
                         <ListBox>
-                          {/* biome-ignore lint/correctness/useUniqueElementIds: id is the Select option key */}
-                          <ListBox.Item className="text-sm" id="user" textValue="User">
-                            User
-                            <ListBox.ItemIndicator />
-                          </ListBox.Item>
-                          {/* biome-ignore lint/correctness/useUniqueElementIds: id is the Select option key */}
-                          <ListBox.Item className="text-sm" id="admin" textValue="Admin">
-                            Admin
-                            <ListBox.ItemIndicator />
-                          </ListBox.Item>
+                          {userRoleOptions.map((roleOption) => (
+                            <ListBox.Item
+                              className="text-sm"
+                              key={roleOption.value}
+                              id={roleOption.value}
+                              textValue={roleOption.label}
+                            >
+                              {roleOption.label}
+                              <ListBox.ItemIndicator />
+                            </ListBox.Item>
+                          ))}
                         </ListBox>
                       </Select.Popover>
                     </Select>

@@ -1,4 +1,5 @@
 import { Button, Card, Chip, Input, Label, ListBox, Select, Spinner, Table } from "@heroui/react";
+import { useRoleLabel } from "@m5kdev/frontend/modules/app/hooks/useRoleLabel";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useAuthMemberInvite } from "@m5kdev/frontend/modules/auth/hooks/useMemberInvite";
 import {
@@ -63,11 +64,7 @@ type CombinedMemberRow =
       invitationId: string;
     };
 
-const ORGANIZATION_ROLES = ["member", "admin", "owner"] as const;
-
-function isAuthOrganizationRole(role: string): role is AuthOrganizationRole {
-  return (ORGANIZATION_ROLES as readonly string[]).includes(role);
-}
+const ORGANIZATION_ROLE_FALLBACK = "member";
 
 export interface AuthOrganizationMembersRouteLabels {
   loadError: string;
@@ -129,9 +126,7 @@ function OrganizationStateCard({ title, message }: { title: string; message: str
   );
 }
 
-function useOrganizationConfig({
-  assignableRoles,
-}: Pick<AuthOrganizationMembersRouteProps, "assignableRoles">) {
+function useOrganizationConfig() {
   const { t } = useTranslation();
 
   const translatedLabels = useMemo<AuthOrganizationMembersRouteLabels>(
@@ -180,25 +175,8 @@ function useOrganizationConfig({
     [t]
   );
 
-  const translatedRoleLabels = useMemo<Record<string, string>>(
-    () => ({
-      member: t("web-ui:organization.roles.member"),
-      admin: t("web-ui:organization.roles.admin"),
-      owner: t("web-ui:organization.roles.owner"),
-    }),
-    [t]
-  );
-
-  const resolvedAssignableRoles = useMemo(
-    () =>
-      assignableRoles && assignableRoles.length > 0 ? assignableRoles : [...ORGANIZATION_ROLES],
-    [assignableRoles]
-  );
-
   return {
     resolvedLabels: translatedLabels,
-    resolvedRoleLabels: translatedRoleLabels,
-    resolvedAssignableRoles,
   };
 }
 
@@ -208,20 +186,28 @@ export function AuthOrganizationMembersRoute({
   invitationAcceptPath,
   onInvalidateScopedQueries,
 }: AuthOrganizationMembersRouteProps) {
-  const { resolvedLabels, resolvedRoleLabels, resolvedAssignableRoles } = useOrganizationConfig({
-    assignableRoles,
-  });
+  const { resolvedLabels } = useOrganizationConfig();
+  const getRoleLabel = useRoleLabel("organization");
 
   const {
     activeOrganizationId,
     activeOrganizationRole,
     canManageOrganization,
     refreshOrganizationQueries,
+    assignableRoles: configAssignableRoles,
   } = useOrganizationAccess({ managerRoles, onInvalidateScopedQueries });
+
+  const resolvedAssignableRoles = useMemo(
+    () =>
+      assignableRoles && assignableRoles.length > 0
+        ? assignableRoles
+        : [...configAssignableRoles],
+    [assignableRoles, configAssignableRoles]
+  );
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<AuthOrganizationRole>(
-    resolvedAssignableRoles[0] ?? "member"
+    resolvedAssignableRoles[0] ?? ORGANIZATION_ROLE_FALLBACK
   );
   const isMountedRef = useRef(true);
   useEffect(() => {
@@ -249,7 +235,7 @@ export function AuthOrganizationMembersRoute({
         memberId,
         role,
         organizationId,
-      });
+      } as Parameters<typeof authClient.organization.updateMemberRole>[0]);
       if (error) throw new Error(error.message ?? resolvedLabels.roleUpdateError);
     },
     onSuccess: async () => {
@@ -476,8 +462,6 @@ export function AuthOrganizationMembersRoute({
     }
   };
 
-  const getRoleLabel = (role: string) => resolvedRoleLabels[role] ?? resolvedLabels.roleUnknown;
-
   if (!activeOrganizationId) {
     return (
       <OrganizationStateCard
@@ -520,7 +504,7 @@ export function AuthOrganizationMembersRoute({
             </div>
           </div>
           <Chip variant="soft" color="accent">
-            {getRoleLabel(activeOrganizationRole || "member")}
+            {getRoleLabel(activeOrganizationRole || ORGANIZATION_ROLE_FALLBACK)}
           </Chip>
         </Card.Header>
         <Card.Content className="space-y-4">
@@ -542,11 +526,7 @@ export function AuthOrganizationMembersRoute({
                 selectedKey={inviteRole}
                 onSelectionChange={(key) => {
                   const role = key == null ? undefined : String(key);
-                  if (
-                    role &&
-                    isAuthOrganizationRole(role) &&
-                    resolvedAssignableRoles.includes(role)
-                  ) {
+                  if (role && resolvedAssignableRoles.includes(role)) {
                     setInviteRole(role);
                   }
                 }}
@@ -615,7 +595,6 @@ export function AuthOrganizationMembersRoute({
                                 if (
                                   role &&
                                   role !== row.role &&
-                                  isAuthOrganizationRole(role) &&
                                   resolvedAssignableRoles.includes(role)
                                 ) {
                                   void onUpdateMemberRole(row.memberId, role);

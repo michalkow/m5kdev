@@ -77,21 +77,14 @@ export function Router() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Navigate to="/posts" replace />} />
           <Route path="posts" element={<PostsRoute />} />
-          <Route
-            path="organization/members"
-            element={<AuthOrganizationMembersRoute managerRoles={["admin", "owner"]} />}
-          />
-          <Route
-            path="organization/manage"
-            element={<AuthOrganizationChildOrganizationsRoute managerRoles={["admin", "owner"]} />}
-          />
+          <Route path="organization/members" element={<AuthOrganizationMembersRoute />} />
+          <Route path="organization/manage" element={<AuthOrganizationChildOrganizationsRoute />} />
           <Route
             path="organization/preferences"
             element={
               <AuthOrganizationPreferences
                 schema={preferenceSchema}
                 controls={preferenceControls}
-                managerRoles={["admin", "owner"]}
               />
             }
           />

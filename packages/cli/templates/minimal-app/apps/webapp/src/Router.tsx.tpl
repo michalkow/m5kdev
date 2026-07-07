@@ -80,11 +80,11 @@ export function Router() {
           <Route path="posts" element={<PostsRoute />} />
           <Route
             path="organization/members"
-            element={<AuthOrganizationMembersRoute managerRoles={["admin", "owner"]} />}
+            element={<AuthOrganizationMembersRoute />}
           />
           <Route
             path="organization/manage"
-            element={<AuthOrganizationChildOrganizationsRoute managerRoles={["admin", "owner"]} />}
+            element={<AuthOrganizationChildOrganizationsRoute />}
           />
           <Route
             path="organization/preferences"
@@ -92,7 +92,6 @@ export function Router() {
               <AuthOrganizationPreferences
                 schema={preferenceSchema}
                 controls={preferenceControls}
-                managerRoles={["admin", "owner"]}
               />
             }
           />

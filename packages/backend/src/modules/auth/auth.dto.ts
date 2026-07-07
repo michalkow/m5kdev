@@ -1,10 +1,15 @@
 import { queryListOutput, querySchema } from "@m5kdev/commons/modules/schemas/query.schema";
+import {
+  createRoleValueSchema,
+  DEFAULT_AUTH_ROLES,
+  normalizeAuthRolesConfig,
+  type AuthRolesConfig,
+  type NormalizedAuthRolesConfig,
+} from "@m5kdev/commons/modules/auth/auth.roles";
+import { createLocaleValueSchema, type AuthLocaleConfig } from "@m5kdev/commons/modules/auth/auth.locale";
 import { createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
-import { createLocaleValueSchema, type AuthLocaleConfig } from "@m5kdev/commons/modules/auth/auth.locale";
 import { accountClaimMagicLinks, members, organizations, users, waitlist } from "./auth.db";
-
-const organizationRoleSchema = z.enum(["member", "admin", "owner"]);
 
 export const settingsSchemas = {
   output: {
@@ -38,78 +43,88 @@ const organizationMemberSchema = createSelectSchema(members).extend({
   user: adminUserSummarySchema,
 });
 
-export const organizationSchemas = {
-  output: {
-    single: organizationSchema,
-    list: queryListOutput(organizationSchema),
-    simple: organizationSchema.omit({
-      metadata: true,
-      preferences: true,
-      flags: true,
-    }),
-    child: organizationSchema.omit({
-      preferences: true,
-      flags: true,
-    }),
-    admin: organizationSchema.omit({
-      metadata: true,
-      preferences: true,
-      flags: true,
-    }),
-    member: organizationMemberSchema,
-    members: z.object({
-      organization: organizationSchema.omit({
+export function createOrganizationSchemas(roles: AuthRolesConfig | NormalizedAuthRolesConfig) {
+  const normalizedRoles = normalizeAuthRolesConfig(roles);
+  const organizationRoleSchema = createRoleValueSchema(normalizedRoles.organization);
+
+  return {
+    output: {
+      single: organizationSchema,
+      list: queryListOutput(organizationSchema),
+      simple: organizationSchema.omit({
         metadata: true,
         preferences: true,
         flags: true,
       }),
-      members: organizationMemberSchema.array(),
-    }),
-    adminUsers: queryListOutput(adminUserSummarySchema),
-  },
-  input: {
-    list: querySchema,
+      child: organizationSchema.omit({
+        preferences: true,
+        flags: true,
+      }),
+      admin: organizationSchema.omit({
+        metadata: true,
+        preferences: true,
+        flags: true,
+      }),
+      member: organizationMemberSchema,
+      members: z.object({
+        organization: organizationSchema.omit({
+          metadata: true,
+          preferences: true,
+          flags: true,
+        }),
+        members: organizationMemberSchema.array(),
+      }),
+      adminUsers: queryListOutput(adminUserSummarySchema),
+    },
+    input: {
+      list: querySchema,
 
-    adminMembers: z.object({
-      organizationId: z.string(),
-    }),
-    create: z.object({
-      name: z.string(),
-    }),
-    updateChild: z.object({
-      id: z.string(),
-      name: z.string().min(1),
-      metadata: z.record(z.string(), z.unknown()).optional(),
-    }),
-    createAdmin: z.object({
-      name: z.string(),
-      slug: z.string(),
-      type: organizationSchema.shape.type.optional(),
-      locale: z.string(),
-    }),
-    updateAdmin: z.object({
-      id: z.string(),
-      name: z.string().min(1).optional(),
-      slug: z.string().min(1).optional(),
-      type: organizationSchema.shape.type.optional(),
-      parentId: z.string().nullable().optional(),
-    }),
-    addAdminMember: z.object({
-      organizationId: z.string(),
-      userId: z.string(),
-      role: organizationRoleSchema,
-    }),
-    updateAdminMemberRole: z.object({
-      organizationId: z.string(),
-      memberId: z.string(),
-      role: organizationRoleSchema,
-    }),
-    removeAdminMember: z.object({
-      organizationId: z.string(),
-      memberId: z.string(),
-    }),
-  },
-};
+      adminMembers: z.object({
+        organizationId: z.string(),
+      }),
+      create: z.object({
+        name: z.string(),
+      }),
+      updateChild: z.object({
+        id: z.string(),
+        name: z.string().min(1),
+        metadata: z.record(z.string(), z.unknown()).optional(),
+      }),
+      createAdmin: z.object({
+        name: z.string(),
+        slug: z.string(),
+        type: organizationSchema.shape.type.optional(),
+        locale: z.string(),
+      }),
+      updateAdmin: z.object({
+        id: z.string(),
+        name: z.string().min(1).optional(),
+        slug: z.string().min(1).optional(),
+        type: organizationSchema.shape.type.optional(),
+        parentId: z.string().nullable().optional(),
+      }),
+      addAdminMember: z.object({
+        organizationId: z.string(),
+        userId: z.string(),
+        role: organizationRoleSchema,
+      }),
+      updateAdminMemberRole: z.object({
+        organizationId: z.string(),
+        memberId: z.string(),
+        role: organizationRoleSchema,
+      }),
+      removeAdminMember: z.object({
+        organizationId: z.string(),
+        memberId: z.string(),
+      }),
+    },
+    roles: normalizedRoles,
+  };
+}
+
+export type OrganizationSchemas = ReturnType<typeof createOrganizationSchemas>;
+
+export const organizationSchemas = createOrganizationSchemas(DEFAULT_AUTH_ROLES);
 
 export const waitlistSchema = createSelectSchema(waitlist);
 

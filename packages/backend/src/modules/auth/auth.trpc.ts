@@ -3,9 +3,10 @@ import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 import {
   accountClaimMagicLinkSchemas,
   invitationSchemas,
-  organizationSchemas,
+  organizationSchemas as defaultOrganizationSchemas,
   settingsSchemas,
   waitlistSchemas,
+  type OrganizationSchemas,
 } from "./auth.dto";
 import type { AuthService } from "./auth.service";
 
@@ -17,7 +18,8 @@ export function createAuthTRPC(
     adminProcedure,
     organizationProcedure,
   }: TRPCMethods,
-  authService: AuthService
+  authService: AuthService,
+  organizationSchemas: OrganizationSchemas = defaultOrganizationSchemas
 ) {
   return router({
     getUserWaitlistCount: procedure.output(z.number()).query(async ({ ctx }) => {

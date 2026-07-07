@@ -4,6 +4,11 @@ import {
   resolveAppLocale,
   toCanonicalLocale,
 } from "@m5kdev/commons/modules/auth/auth.locale";
+import {
+  DEFAULT_AUTH_ROLES,
+  isAllowedRole,
+  type NormalizedAuthRolesConfig,
+} from "@m5kdev/commons/modules/auth/auth.roles";
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { InferSelectModel } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
@@ -75,6 +80,7 @@ export class AuthService extends BasePermissionService<
   private readonly hooks?: AuthServiceHooks;
   private readonly localeConfig?: AuthLocaleConfig;
   private readonly i18n?: AppI18n;
+  private readonly rolesConfig: NormalizedAuthRolesConfig;
 
   constructor(
     repository: {
@@ -89,13 +95,22 @@ export class AuthService extends BasePermissionService<
     appUrls?: BackendAppMetadata["urls"],
     hooks?: AuthServiceHooks,
     locales?: AuthLocaleConfig,
-    i18n?: AppI18n
+    i18n?: AppI18n,
+    rolesConfig: NormalizedAuthRolesConfig = DEFAULT_AUTH_ROLES
   ) {
     super(repository, service, grants);
     this.appUrls = appUrls;
     this.hooks = hooks;
     this.localeConfig = locales;
     this.i18n = i18n;
+    this.rolesConfig = rolesConfig;
+  }
+
+  private validateOrganizationRole(role: string): ServerResult<true> {
+    if (!isAllowedRole(this.rolesConfig, "organization", role)) {
+      return this.error("BAD_REQUEST", "Invalid organization role");
+    }
+    return ok(true);
   }
 
   private resolveDefaultLocale(): string {
@@ -540,18 +555,34 @@ export class AuthService extends BasePermissionService<
     });
 
   addAdminOrganizationMember = this.procedure("addAdminOrganizationMember")
-    .input(organizationSchemas.input.addAdminMember)
+    .input(
+      z.object({
+        organizationId: z.string(),
+        userId: z.string(),
+        role: z.string(),
+      })
+    )
     .output(organizationSchemas.output.member)
     .requireAuth("admin")
     .handle(async ({ input }) => {
+      const roleCheck = this.validateOrganizationRole(input.role);
+      if (roleCheck.isErr()) return err(roleCheck.error);
       return this.repository.organization.addOrganizationMember(input);
     });
 
   updateAdminOrganizationMemberRole = this.procedure("updateAdminOrganizationMemberRole")
-    .input(organizationSchemas.input.updateAdminMemberRole)
+    .input(
+      z.object({
+        organizationId: z.string(),
+        memberId: z.string(),
+        role: z.string(),
+      })
+    )
     .output(organizationSchemas.output.member)
     .requireAuth("admin")
     .handle(async ({ input }) => {
+      const roleCheck = this.validateOrganizationRole(input.role);
+      if (roleCheck.isErr()) return err(roleCheck.error);
       return this.repository.organization.updateOrganizationMemberRole(input);
     });
 

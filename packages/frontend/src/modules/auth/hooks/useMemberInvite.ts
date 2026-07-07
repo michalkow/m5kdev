@@ -25,7 +25,7 @@ export function useAuthMemberInvite(
         organizationId: activeOrganizationId,
         email: email.trim(),
         role,
-      });
+      } as Parameters<typeof authClient.organization.inviteMember>[0]);
       if (error) throw new Error(error.message);
     },
 

@@ -1,6 +1,7 @@
 import { Button, Card, Input, Label, Modal, Spinner, Table } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
+import { useAppRoles } from "@m5kdev/frontend/modules/app/hooks/useAppRoles";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -50,6 +51,7 @@ function useChildOrganizationAccess({
 }: AuthOrganizationChildOrganizationsRouteProps) {
   const { data: session, registerSession } = useSession();
   const queryClient = useQueryClient();
+  const organizationRoles = useAppRoles("organization");
 
   const activeOrganizationId = session?.session.activeOrganizationId ?? "";
   const activeOrganizationRole =
@@ -59,7 +61,8 @@ function useChildOrganizationAccess({
     (session?.session as { activeOrganizationType?: string } | undefined)?.activeOrganizationType ??
     "";
 
-  const managerRoleSet = useMemo(() => new Set(managerRoles ?? ["admin", "owner"]), [managerRoles]);
+  const resolvedManagerRoles = managerRoles ?? organizationRoles.managerRoles;
+  const managerRoleSet = useMemo(() => new Set(resolvedManagerRoles), [resolvedManagerRoles]);
   const canManageOrganization = managerRoleSet.has(activeOrganizationRole);
   const canUseChildOrganizations =
     Boolean(activeOrganizationId) && ["enterprise", "agency"].includes(activeOrganizationType);

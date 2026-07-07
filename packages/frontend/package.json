@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/frontend",
-  "version": "0.23.0",
+  "version": "0.23.1",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -36,7 +36,8 @@
   },
   "peerDependencies": {
     "@trpc/server": "catalog:",
-    "i18next": "catalog:"
+    "i18next": "catalog:",
+    "react-i18next": "catalog:"
   },
   "devDependencies": {
     "@m5kdev/config": "workspace:*",
@@ -47,6 +48,7 @@
     "@types/luxon": "catalog:",
     "@trpc/server": "catalog:",
     "globals": "catalog:",
+    "react-i18next": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:"

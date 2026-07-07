@@ -17,6 +17,8 @@ import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
+import { useAppRoles } from "@m5kdev/frontend/modules/app/hooks/useAppRoles";
+import { useRoleLabel } from "@m5kdev/frontend/modules/app/hooks/useRoleLabel";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import { Pencil, Plus, Trash2, UserPlus, Users } from "lucide-react";
@@ -37,6 +39,12 @@ type AdminOrganizationMember =
 type ListAdminOrganizationsInput =
   inferRouterInputs<BackendTRPCRouter>["auth"]["listAdminOrganizations"];
 
+type AddAdminOrganizationMemberInput =
+  inferRouterInputs<BackendTRPCRouter>["auth"]["addAdminOrganizationMember"];
+
+type UpdateAdminOrganizationMemberRoleInput =
+  inferRouterInputs<BackendTRPCRouter>["auth"]["updateAdminOrganizationMemberRole"];
+
 type ListAdminOrganizationsOutput =
   inferRouterOutputs<BackendTRPCRouter>["auth"]["listAdminOrganizations"];
 
@@ -50,12 +58,6 @@ const organizationTypeOptions: { value: OrganizationType; label: string; descrip
     description: "Can manage child organizations (owners).",
   },
 ];
-
-const organizationRoleOptions = [
-  { value: "member", label: "Member" },
-  { value: "admin", label: "Admin" },
-  { value: "owner", label: "Owner" },
-] as const;
 
 function formatOrgDate(date: Date | string | null | undefined): string {
   if (!date) return "—";
@@ -80,6 +82,16 @@ export function AuthAdminOrganizationManagement() {
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();
   const { locales } = useAppConfig();
+  const organizationRoles = useAppRoles("organization");
+  const getRoleLabel = useRoleLabel("organization");
+  const organizationRoleOptions = useMemo(
+    (): { value: string; label: string }[] =>
+      organizationRoles.roles.map((role) => ({
+        value: role,
+        label: getRoleLabel(role),
+      })),
+    [getRoleLabel, organizationRoles.roles]
+  );
 
   const [pinnedOrganizationId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -99,7 +111,9 @@ export function AuthAdminOrganizationManagement() {
   const [userSearch, setUserSearch] = useState("");
   const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<Key | null>(null);
-  const [newMemberRole, setNewMemberRole] = useState<Key>("member");
+  const [newMemberRole, setNewMemberRole] = useState<Key>(
+    organizationRoles.defaultRole
+  );
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedParentSearch(parentSearch), 300);
@@ -314,8 +328,8 @@ export function AuthAdminOrganizationManagement() {
     addMemberMutation.mutate({
       organizationId: membersOrg.id,
       userId: String(selectedUserId),
-      role: String(newMemberRole) as "member" | "admin" | "owner",
-    });
+      role: String(newMemberRole),
+    } as AddAdminOrganizationMemberInput);
   };
 
   const rows = orgListQuery.data?.rows ?? [];
@@ -346,8 +360,8 @@ export function AuthAdminOrganizationManagement() {
     [currentMemberUserIds, userSearchQuery.data?.rows]
   );
 
-  const getRoleLabel = (role: string) =>
-    organizationRoleOptions.find((option) => option.value === role)?.label ?? role;
+  const getRoleLabelForMember = (role: string) =>
+    organizationRoleOptions.find((option) => option.value === role)?.label ?? getRoleLabel(role);
 
   const columns: NuqsTableColumn<OrganizationAdminRow>[] = [
     {
@@ -792,12 +806,12 @@ export function AuthAdminOrganizationManagement() {
                                     updateMemberRoleMutation.mutate({
                                       organizationId: membersOrg.id,
                                       memberId: member.id,
-                                      role: String(key) as "member" | "admin" | "owner",
-                                    });
+                                      role: String(key),
+                                    } as UpdateAdminOrganizationMemberRoleInput);
                                   }}
                                 >
                                   <Select.Trigger className="min-h-9">
-                                    <Select.Value>{getRoleLabel(member.role)}</Select.Value>
+                                    <Select.Value>{getRoleLabelForMember(member.role)}</Select.Value>
                                     <Select.Indicator />
                                   </Select.Trigger>
                                   <Select.Popover>

@@ -9,6 +9,7 @@ import {
 import type { BillingModule } from "../billing/billing.module";
 import type { EmailModule } from "../email/email.module";
 import type * as authTables from "./auth.db";
+import { createOrganizationSchemas } from "./auth.dto";
 import { defaultAuthGrants } from "./auth.grants";
 import {
   AuthAccountClaimRepository,
@@ -101,12 +102,21 @@ export class AuthModule extends BaseModule<
         appConfig.urls,
         this.hooks,
         appConfig.locales,
-        i18n
+        i18n,
+        appConfig.roles
       ),
     };
   }
 
-  override trpc({ trpc, services }: ModuleTRPCContext<AuthModuleDeps, AuthModuleServices>) {
-    return createBackendRouterMap("auth", createAuthTRPC(trpc, services.auth));
+  override trpc({
+    trpc,
+    services,
+    appConfig,
+  }: ModuleTRPCContext<AuthModuleDeps, AuthModuleServices>) {
+    const organizationSchemas = createOrganizationSchemas(appConfig.roles);
+    return createBackendRouterMap(
+      "auth",
+      createAuthTRPC(trpc, services.auth, organizationSchemas)
+    );
   }
 }

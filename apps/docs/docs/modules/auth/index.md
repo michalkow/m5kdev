@@ -25,3 +25,4 @@ For app upgrades, see:
 
 - [User and organization locale migration](/guides/user-org-locale-migration)
 - [Admin create verified user migration](/guides/admin-create-verified-user-migration)
+- [Custom app roles migration](/guides/custom-app-roles-migration)

@@ -8,6 +8,7 @@ import { templates } from "{{PACKAGE_SCOPE}}/email";
 import { emailResources } from "{{PACKAGE_SCOPE}}/email/resources";
 import { APP_NAME } from "{{PACKAGE_SCOPE}}/shared/modules/app/app.constants";
 import { AUTH_LOCALE_CONFIG } from "{{PACKAGE_SCOPE}}/shared/modules/app/locale.constants";
+import { APP_ROLES_CONFIG } from "{{PACKAGE_SCOPE}}/shared/modules/app/roles.constants";
 import { USER_LOCALE_HEADER } from "@m5kdev/commons/modules/auth/auth.constants";
 import cors from "cors";
 import express from "express";
@@ -66,6 +67,7 @@ export const builtBackendApp = createBackendApp(
         api: serverUrl,
       },
       locales: AUTH_LOCALE_CONFIG,
+      roles: APP_ROLES_CONFIG,
     },
     i18n: {
       resources: emailResources,

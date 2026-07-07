@@ -1,6 +1,7 @@
 import { Card, Spinner } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
+import { useAppRoles } from "@m5kdev/frontend/modules/app/hooks/useAppRoles";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useQuery } from "@tanstack/react-query";
@@ -24,17 +25,19 @@ export function AuthOrganizationAcceptInvitationRoute({
   signupPath = "/signup",
   defaultRedirectPath = "/",
   managerRedirectPath = "/organization/members",
-  managerRoles = ["admin", "owner"],
+  managerRoles,
   onInvalidateScopedQueries,
 }: AuthOrganizationAcceptInvitationRouteProps) {
   const { t } = useTranslation();
+  const organizationRoles = useAppRoles("organization");
+  const resolvedManagerRoles = managerRoles ?? organizationRoles.managerRoles;
   const [searchParams] = useSearchParams();
   const { data: session, registerSession } = useSession();
   const navigate = useNavigate();
   const invitationId = searchParams.get("id");
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const managerRoleSet = useMemo(() => new Set(managerRoles), [managerRoles]);
+  const managerRoleSet = useMemo(() => new Set(resolvedManagerRoles), [resolvedManagerRoles]);
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const { data: invitationData } = useQuery(
     trpc.auth.readInvitation.queryOptions({ id: invitationId || "" }, { enabled: !!invitationId })
