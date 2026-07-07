@@ -1,5 +1,29 @@
 # @m5kdev/backend
 
+## 0.25.0
+
+### Minor Changes
+
+- roles
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.25.0
+  - @m5kdev/config@0.25.0
+
+## 0.24.0
+
+### Minor Changes
+
+- roles
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.24.0
+  - @m5kdev/config@0.24.0
+
 ## 0.23.0
 
 ### Minor Changes

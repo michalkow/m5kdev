@@ -652,7 +652,7 @@ importers:
         version: 4.1.17
       uniwind:
         specifier: ^1.5.0
-        version: 1.9.0(@expo/metro-config@56.0.14(bufferutil@4.1.0)(expo@56.0.12)(typescript@6.0.3)(utf-8-validate@5.0.10))(metro-cache@0.84.4)(metro-transform-worker@0.84.4(bufferutil@4.1.0)(utf-8-validate@5.0.10))(metro@0.84.4(bufferutil@4.1.0)(utf-8-validate@5.0.10))(react-native@0.85.3(@babel/core@7.28.5)(@react-native/metro-config@0.85.3(@babel/core@7.28.5)(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@types/react@19.2.17)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@5.0.10))(react@19.2.3)(tailwindcss@4.1.17)
+        version: 1.9.0(@expo/metro-config@56.0.14(bufferutil@4.1.0)(expo@56.0.12)(typescript@6.0.3)(utf-8-validate@5.0.10))(metro-cache@0.84.4)(metro-transform-worker@0.84.4)(metro@0.84.4(bufferutil@4.1.0)(utf-8-validate@5.0.10))(react-native@0.85.3(@babel/core@7.28.5)(@react-native/metro-config@0.85.3(@babel/core@7.28.5)(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@types/react@19.2.17)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@5.0.10))(react@19.2.3)(tailwindcss@4.1.17)
     devDependencies:
       '@biomejs/biome':
         specifier: 'catalog:'
@@ -751,6 +751,9 @@ importers:
 
   apps/auth-e2e/shared:
     dependencies:
+      '@m5kdev/commons':
+        specifier: workspace:*
+        version: link:../../../packages/commons
       zod:
         specifier: 'catalog:'
         version: 4.2.1
@@ -24840,6 +24843,20 @@ snapshots:
       react-dom: 19.2.1(react@19.2.1)
       typescript: 6.0.3
 
+  '@tsdown/css@0.21.7(jiti@2.7.0)(postcss@8.5.15)(tsdown@0.21.7)(tsx@4.19.2)(yaml@2.8.1)':
+    dependencies:
+      lightningcss: 1.32.0
+      postcss-load-config: 6.0.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.19.2)(yaml@2.8.1)
+      rolldown: 1.0.0-rc.12
+      tsdown: 0.21.7(@tsdown/css@0.21.7)(oxc-resolver@11.19.1)(synckit@0.11.11)(typescript@6.0.3)
+    optionalDependencies:
+      postcss: 8.5.15
+    transitivePeerDependencies:
+      - jiti
+      - tsx
+      - yaml
+    optional: true
+
   '@tsdown/css@0.21.7(jiti@2.7.0)(postcss@8.5.15)(tsdown@0.21.7)(tsx@4.20.4)(yaml@2.8.1)':
     dependencies:
       lightningcss: 1.32.0
@@ -25467,7 +25484,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 2.0.0
-      vitest: 3.0.0(@types/node@22.19.1)(@vitest/ui@3.0.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.2)(tsx@4.20.4)(yaml@2.8.1)
+      vitest: 3.0.0(@types/node@20.19.11)(@vitest/ui@3.0.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.2)(tsx@4.19.2)(yaml@2.8.1)
     optional: true
 
   '@vitest/utils@3.0.0':
@@ -27835,7 +27852,7 @@ snapshots:
 
   eventsource@3.0.7:
     dependencies:
-      eventsource-parser: 3.0.6
+      eventsource-parser: 3.1.0
 
   execa@5.1.1:
     dependencies:
@@ -34480,7 +34497,7 @@ snapshots:
       unconfig-core: 7.5.0
       unrun: 0.2.34(synckit@0.11.11)
     optionalDependencies:
-      '@tsdown/css': 0.21.7(jiti@2.7.0)(postcss@8.5.15)(tsdown@0.21.7)(tsx@4.20.4)(yaml@2.8.1)
+      '@tsdown/css': 0.21.7(jiti@2.7.0)(postcss@8.5.15)(tsdown@0.21.7)(tsx@4.19.2)(yaml@2.8.1)
       typescript: 6.0.3
     transitivePeerDependencies:
       - '@ts-macro/tsc'
@@ -34745,7 +34762,7 @@ snapshots:
 
   universalify@2.0.1: {}
 
-  uniwind@1.9.0(@expo/metro-config@56.0.14(bufferutil@4.1.0)(expo@56.0.12)(typescript@6.0.3)(utf-8-validate@5.0.10))(metro-cache@0.84.4)(metro-transform-worker@0.84.4(bufferutil@4.1.0)(utf-8-validate@5.0.10))(metro@0.84.4(bufferutil@4.1.0)(utf-8-validate@5.0.10))(react-native@0.85.3(@babel/core@7.28.5)(@react-native/metro-config@0.85.3(@babel/core@7.28.5)(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@types/react@19.2.17)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@5.0.10))(react@19.2.3)(tailwindcss@4.1.17):
+  uniwind@1.9.0(@expo/metro-config@56.0.14(bufferutil@4.1.0)(expo@56.0.12)(typescript@6.0.3)(utf-8-validate@5.0.10))(metro-cache@0.84.4)(metro-transform-worker@0.84.4)(metro@0.84.4(bufferutil@4.1.0)(utf-8-validate@5.0.10))(react-native@0.85.3(@babel/core@7.28.5)(@react-native/metro-config@0.85.3(@babel/core@7.28.5)(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@types/react@19.2.17)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@5.0.10))(react@19.2.3)(tailwindcss@4.1.17):
     dependencies:
       '@tailwindcss/node': 4.3.0
       '@tailwindcss/oxide': 4.3.0

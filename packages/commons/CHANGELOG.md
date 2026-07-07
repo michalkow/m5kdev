@@ -1,5 +1,17 @@
 # @m5kdev/commons
 
+## 0.25.0
+
+### Minor Changes
+
+- roles
+
+## 0.24.0
+
+### Minor Changes
+
+- roles
+
 ## 0.23.0
 
 ### Minor Changes
