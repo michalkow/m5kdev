@@ -12,13 +12,9 @@ export function useAuthMemberInvite(
   options: Omit<UseMutationOptions<void, Error, Variables, unknown>, "mutationFn">,
   props?: UseOrganizationAccessProps
 ): ReturnType<typeof useMutation<void, Error, Variables, unknown>> {
-  const { managerRoles = ["admin", "owner"], onInvalidateScopedQueries } = props ?? {};
   const { onSuccess, ...rest } = options;
   const authClient = useAuthClient();
-  const { refreshOrganizationQueries, activeOrganizationId } = useOrganizationAccess({
-    managerRoles,
-    onInvalidateScopedQueries,
-  });
+  const { refreshOrganizationQueries, activeOrganizationId } = useOrganizationAccess(props ?? {});
   return useMutation({
     mutationFn: async ({ email, role }: { email: string; role: AuthOrganizationRole }) => {
       const { error } = await authClient.organization.inviteMember({
