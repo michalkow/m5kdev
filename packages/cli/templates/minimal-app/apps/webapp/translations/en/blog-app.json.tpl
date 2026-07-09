@@ -13,6 +13,8 @@
     },
     "navigation": {
       "posts": "Posts",
+      "organization": "Organization",
+      "account": "Account",
       "members": "Members",
       "childOrgs": "Child orgs",
       "orgPreferences": "Org preferences",

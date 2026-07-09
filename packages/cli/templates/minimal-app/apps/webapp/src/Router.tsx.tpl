@@ -1,12 +1,10 @@
+import { syncI18nLocale } from "@m5kdev/frontend/modules/app/utils/locale";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { AuthAdminRouter } from "@m5kdev/web-ui/modules/auth/components/AuthAdminRouter";
-import { AuthOrganizationAcceptInvitationRoute } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationAcceptInvitationRoute";
-import { AuthOrganizationChildOrganizationsRoute } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationChildOrganizationsRoute";
-import { AuthOrganizationMembersRoute } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationMembersRoute";
-import { AuthOrganizationPreferences } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationPreferences";
+import { AuthOrganizationRouter } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationRouter";
 import { AuthPublicRouter } from "@m5kdev/web-ui/modules/auth/components/AuthPublicRouter";
-import { syncI18nLocale } from "@m5kdev/frontend/modules/app/utils/locale";
 import { AuthUserRouter } from "@m5kdev/web-ui/modules/auth/components/AuthUserRouter";
+import { BillingBetaPage } from "@m5kdev/web-ui/modules/billing/components/BillingBetaPage";
 import { APP_NAME } from "{{PACKAGE_SCOPE}}/shared/modules/app/app.constants";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,6 +12,7 @@ import { Navigate, Outlet, Route, Routes } from "react-router";
 import { z } from "zod";
 import { PostsRoute } from "@/modules/posts/PostsRoute";
 import { Layout } from "./Layout";
+import { APP_ROUTES } from "./navigation/navigation.config";
 
 const preferenceSchema = z.object({
   compactMode: z.boolean().optional(),
@@ -33,6 +32,8 @@ const preferenceControls = {
     step: 1,
   },
 } as const;
+
+const toRelativePath = (path: string): string => path.replace(/^\//, "");
 
 function ProtectedRoutes({ children }: { children?: ReactNode }) {
   const { data: session } = useSession();
@@ -63,38 +64,26 @@ export function Router() {
 
   return (
     <Routes>
+      {/* Built-in routers register as function calls so their <Route> elements
+          land directly in this tree. */}
       {AuthPublicRouter({
         header: <AuthHeader />,
         waitlist: isWaitlist,
         onLocaleChange: syncI18nLocale,
       })}
 
-      <Route
-        path="/organization/accept-invitation"
-        element={<AuthOrganizationAcceptInvitationRoute />}
-      />
-
       <Route element={<ProtectedRoutes />}>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Navigate to="/posts" replace />} />
-          <Route path="posts" element={<PostsRoute />} />
+        <Route path={APP_ROUTES.home} element={<Layout />}>
+          <Route index element={<Navigate to={APP_ROUTES.posts} replace />} />
+          <Route path={toRelativePath(APP_ROUTES.posts)} element={<PostsRoute />} />
           <Route
-            path="organization/members"
-            element={<AuthOrganizationMembersRoute />}
+            path={toRelativePath(APP_ROUTES.billing)}
+            element={<BillingBetaPage appName={APP_NAME} />}
           />
-          <Route
-            path="organization/manage"
-            element={<AuthOrganizationChildOrganizationsRoute />}
-          />
-          <Route
-            path="organization/preferences"
-            element={
-              <AuthOrganizationPreferences
-                schema={preferenceSchema}
-                controls={preferenceControls}
-              />
-            }
-          />
+          {AuthOrganizationRouter({
+            schema: preferenceSchema,
+            controls: preferenceControls,
+          })}
           {AuthUserRouter({
             schema: preferenceSchema,
             controls: preferenceControls,
