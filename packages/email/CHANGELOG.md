@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.25.1
+
+### Patch Changes
+
+- error handeling
+
 ## 0.25.0
 
 ### Minor Changes
