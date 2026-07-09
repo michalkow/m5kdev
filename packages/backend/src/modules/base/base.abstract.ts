@@ -1,6 +1,6 @@
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server";
 import { err, ok } from "neverthrow";
-import { reportError, ServerError } from "../../utils/errors";
+import { captureServerError, ServerError } from "../../utils/errors";
 import { logger } from "../../utils/logger";
 import type { ServerResult, ServerResultAsync } from "./base.dto";
 import type { ServerErrorLayer } from "./base.types";
@@ -21,7 +21,7 @@ export abstract class Base {
       cause,
       clientMessage,
       context,
-      log = process.env.NODE_ENV === "development",
+      log = true,
     }: {
       cause?: unknown;
       clientMessage?: string;
@@ -37,20 +37,28 @@ export abstract class Base {
       clientMessage,
       cause,
       context,
-      captureBoundary: true,
     });
     Error.captureStackTrace?.(serverError, this.error);
     serverError.refreshOrigin();
-    if (serverError.is5xxError()) reportError(serverError);
-    if (log) logger.error(serverError);
+    // capture at creation so the error survives even if the Result is dropped;
+    // log: false only demotes the log line to debug, Sentry still gets 5xx
+    captureServerError(serverError, {
+      logger: this.logger,
+      level: log ? undefined : "debug",
+    });
     return err(serverError);
   }
 
   handleUnknownError(error: unknown) {
-    return ServerError.fromUnknown("INTERNAL_SERVER_ERROR", error, {
+    // a thrown ServerError keeps its code and its original capture
+    if (error instanceof ServerError) {
+      return captureServerError(error, { logger: this.logger });
+    }
+    const serverError = ServerError.fromUnknown("INTERNAL_SERVER_ERROR", error, {
       layer: this.layer,
       layerName: this.constructor.name,
     });
+    return captureServerError(serverError, { logger: this.logger });
   }
 
   throwable<T>(fn: () => ServerResult<T>): ServerResult<T> {

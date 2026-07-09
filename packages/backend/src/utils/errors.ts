@@ -4,6 +4,7 @@ import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { camel } from "radashi";
 import type { ServerErrorLayer } from "../modules/base/base.types";
 import { logger } from "./logger";
+import { extractOrigin, trimStack } from "./stack";
 
 export type { ServerErrorLayer };
 export class ServerError extends Error {
@@ -12,8 +13,10 @@ export class ServerError extends Error {
   readonly layerName: string;
   readonly clientMessage?: string;
   context?: Record<string, unknown>;
-  readonly boundaryStack?: string; // where we wrapped it
   origin?: string;
+  /** Set by captureServerError: the error has been logged (and reported when 5xx). */
+  logged = false;
+  sentryEventId?: string;
 
   constructor({
     code,
@@ -23,7 +26,6 @@ export class ServerError extends Error {
     clientMessage,
     cause,
     context,
-    captureBoundary = true,
   }: {
     code: TRPC_ERROR_CODE_KEY;
     layer?: ServerErrorLayer;
@@ -32,7 +34,6 @@ export class ServerError extends Error {
     clientMessage?: string;
     cause?: unknown;
     context?: Record<string, unknown>;
-    captureBoundary?: boolean;
   }) {
     // keep native cause chain when the cause is an Error
     super(message ?? `server.error.${layer}.${camel(code)}`, {
@@ -44,7 +45,6 @@ export class ServerError extends Error {
     this.layerName = layerName ?? "UnknownLayer";
     this.clientMessage = clientMessage ?? `server.error.${layer}.${camel(code)}`;
     this.context = context;
-    if (captureBoundary) this.boundaryStack = new Error().stack;
 
     Error.captureStackTrace?.(this, ServerError);
     this.refreshOrigin();
@@ -72,7 +72,9 @@ export class ServerError extends Error {
     return new TRPCError({
       code: this.code,
       message: this.message,
-      cause: this.cause,
+      // keep `this` in the chain so transport boundaries can recognize
+      // an already-captured ServerError (this.cause stays reachable below it)
+      cause: this,
     });
   }
 
@@ -84,12 +86,12 @@ export class ServerError extends Error {
       message: this.message,
       origin: this.origin,
       context: this.context,
-      stack: process.env.NODE_ENV !== "production" ? this.stack : undefined,
-      boundaryStack: process.env.NODE_ENV !== "production" ? this.boundaryStack : undefined,
+      sentryEventId: this.sentryEventId,
+      stack: trimStack(this.stack),
       // Shallow representation of cause to avoid cycles
       cause:
         this.cause instanceof Error
-          ? { name: this.cause.name, message: this.cause.message, stack: this.cause.stack }
+          ? { name: this.cause.name, message: this.cause.message, stack: trimStack(this.cause.stack) }
           : this.cause,
     };
   }
@@ -107,9 +109,45 @@ export class ServerError extends Error {
       message: msg,
       cause,
       context: opts?.context,
-      captureBoundary: true,
     });
   }
+}
+
+type CaptureLogger = Pick<typeof logger, "error" | "warn" | "debug">;
+
+/**
+ * Terminal capture point for a ServerError: report to Sentry when 5xx and log once.
+ * Safe to call from multiple places — subsequent calls are no-ops (`logged` guard),
+ * so errors are captured where they happen and boundaries only echo.
+ */
+export function captureServerError(
+  error: ServerError,
+  { logger: log = logger, level }: { logger?: CaptureLogger; level?: "error" | "warn" | "debug" } = {}
+): ServerError {
+  if (error.logged) return error;
+  error.logged = true;
+
+  const critical = error.is5xxError();
+  if (critical) {
+    error.sentryEventId = reportError(error);
+  }
+
+  // code/layerName/origin drive the pretty message line (and are ignored as keys)
+  const fields = {
+    code: error.code,
+    layer: error.layer,
+    layerName: error.layerName,
+    origin: error.origin,
+  };
+  const logLevel = level ?? (critical ? "error" : "warn");
+  if (critical) {
+    // err carries trimmed stack, context, and sentryEventId via the err serializer
+    log[logLevel]({ ...fields, err: error }, error.message);
+  } else {
+    // expected failure: one line, no stack
+    log[logLevel]({ ...fields, context: error.context }, error.message);
+  }
+  return error;
 }
 
 export type ErrorReporter = {
@@ -154,21 +192,9 @@ export function reportError(
         message: err.message,
         clientMessage: err.clientMessage,
         origin: err.origin,
+        context: err.context,
       },
     } as Parameters<typeof captureException>[1];
   }
   return reporter.captureException(err, eventHint);
-}
-
-function extractOrigin(stack?: string): string | undefined {
-  if (!stack) return undefined;
-  const frame = stack
-    .split("\n")
-    .slice(1)
-    .find(
-      (line) =>
-        !line.includes("node_modules") &&
-        !/base\.(abstract|procedure)\.|utils[\\/]errors\./.test(line)
-    );
-  return frame?.trim().replace(/^at\s+/, "");
 }

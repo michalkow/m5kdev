@@ -28,6 +28,7 @@ import {
   createAuthContext,
   createRequestContext,
   createTRPCMethods,
+  handleTRPCBoundaryError,
   type RequestContext,
   type TRPCMethods,
 } from "./utils/trpc";
@@ -752,7 +753,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         router: appRouter as AnyRouter,
         createContext,
         onError: ({ error, type, path, input }) => {
-          logger.error({ error, type, path, input });
+          handleTRPCBoundaryError({ error, type, path, input });
         },
       })
     );

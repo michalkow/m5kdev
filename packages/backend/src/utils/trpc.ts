@@ -1,6 +1,7 @@
 import { transformer } from "@m5kdev/commons/utils/trpc";
-import { initTRPC } from "@trpc/server";
+import { initTRPC, type TRPCError } from "@trpc/server";
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
+import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { fromNodeHeaders } from "better-auth/node";
 import type { Result } from "neverthrow";
 import type { BetterAuth, Session, User } from "../modules/auth/auth.lib";
@@ -14,7 +15,7 @@ import {
   type UserActor,
   validateActor,
 } from "../modules/base/base.actor";
-import { ServerError } from "./errors";
+import { captureServerError, reportError, ServerError } from "./errors";
 import { logger } from "./logger";
 
 export type RequestContext = {
@@ -116,15 +117,49 @@ export async function handleAsyncTRPCResult<T>(result: Promise<Result<T, ServerE
 
 export function handleTRPCResult<T>(result: Result<T, ServerError>) {
   if (result.isErr()) {
-    logger.debug("Is tRPC Error");
-    logger.error({
-      layer: result.error.layer,
-      layerName: result.error.layerName,
-      error: result.error.toJSON(),
-    });
+    // no-op when the error was already captured at creation (Base helpers);
+    // fallback capture for ServerErrors constructed outside them
+    captureServerError(result.error);
     throw result.error.toTRPC();
   }
   return result.value;
+}
+
+/**
+ * tRPC middleware onError hook. Errors that went through our Result flow were
+ * already captured at creation — echo a compact warn line with transport
+ * context. Anything else never touched our error path, so capture it fully here.
+ */
+export function handleTRPCBoundaryError({
+  error,
+  type,
+  path,
+  input,
+}: {
+  error: TRPCError;
+  type: string;
+  path?: string;
+  input?: unknown;
+}) {
+  const cause = error.cause;
+  if (cause instanceof ServerError) {
+    captureServerError(cause); // no-op when already captured
+    logger.warn(
+      {
+        path,
+        type,
+        code: error.code,
+        origin: cause.origin,
+        sentryEventId: cause.sentryEventId,
+      },
+      error.message
+    );
+  } else {
+    const statusCode = getHTTPStatusCodeFromError(error);
+    if (statusCode >= 500) reportError(error);
+    logger[statusCode >= 500 ? "error" : "warn"]({ err: error, path, type }, error.message);
+  }
+  logger.debug({ path, type, input }, "trpc.request.input");
 }
 
 export function verifyProtectedProcedureContext(ctx: RequestContext): Context {
