@@ -67,6 +67,19 @@ describe("scaffoldProject", () => {
     expect(providers).toContain("AppTrpcQueryProvider");
     expect(appTs).toContain("createBackendApp(");
     expect(appTs).not.toContain(".build()");
+
+    const emailPackage = await fs.readFile(
+      path.join(result.targetDirectory, "apps/email/package.json"),
+      "utf8"
+    );
+    const workspaceYaml = await fs.readFile(
+      path.join(result.targetDirectory, "pnpm-workspace.yaml"),
+      "utf8"
+    );
+
+    expect(emailPackage).not.toMatch(/"@m5kdev\/[^"]+": "workspace:\*"/);
+    expect(emailPackage).toContain('"@m5kdev/email": "catalog:"');
+    expect(workspaceYaml).toContain("'@m5kdev/email':");
   });
 
   it("refuses to overwrite a non-empty directory without force", async () => {

@@ -6,11 +6,12 @@ catalog:
   '@heroui/react': 3.0.3
   '@heroui/styles': 3.0.3
   '@libsql/client': 0.17.0
-  '@m5kdev/backend': 0.21.3
-  '@m5kdev/commons': 0.21.3
-  '@m5kdev/config': 0.21.3
-  '@m5kdev/frontend': 0.21.3
-  '@m5kdev/web-ui': 0.21.3
+  '@m5kdev/backend': 0.25.1
+  '@m5kdev/commons': 0.25.1
+  '@m5kdev/config': 0.25.1
+  '@m5kdev/email': 0.25.1
+  '@m5kdev/frontend': 0.25.1
+  '@m5kdev/web-ui': 0.25.1
   '@react-email/components': 1.0.1
   '@tailwindcss/vite': 4.1.11
   '@tanstack/react-query': 5.83.0

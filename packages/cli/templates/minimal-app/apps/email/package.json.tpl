@@ -10,14 +10,14 @@
     "email:dev": "react-email dev --dir src/emails"
   },
   "dependencies": {
-    "@m5kdev/commons": "workspace:*",
-    "@m5kdev/email": "workspace:*",
+    "@m5kdev/commons": "catalog:",
+    "@m5kdev/email": "catalog:",
     "@react-email/components": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
   },
   "devDependencies": {
-    "@m5kdev/backend": "workspace:*",
+    "@m5kdev/backend": "catalog:",
     "@m5kdev/config": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
