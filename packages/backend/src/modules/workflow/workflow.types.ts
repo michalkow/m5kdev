@@ -27,6 +27,21 @@ export interface WorkflowServiceConfig {
     timeout?: number;
     jobOptions?: Partial<JobsOptions>;
   };
+  /**
+   * Periodic sweep that re-syncs stale DB rows from BullMQ — heals transitions
+   * missed while QueueEvents was down (deploys, reconnects). Enabled by default.
+   */
+  reconcile?: {
+    enabled?: boolean;
+    /** Cron pattern for the sweep. Default: every 5 minutes. */
+    pattern?: string;
+    /** Queue the sweep job runs on. Default: `defaultQueue`. */
+    queue?: string;
+    /** Ignore rows updated within this window. Default: 60 seconds. */
+    graceSeconds?: number;
+    /** Max rows checked per sweep. Default: 100. */
+    batch?: number;
+  };
 }
 
 export interface WorkflowJobConfig<Payload, Result = unknown, Awaitable extends boolean = false> {

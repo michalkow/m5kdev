@@ -411,8 +411,127 @@ describe("WorkflowService", () => {
         expect.arrayContaining([
           expect.objectContaining({ jobName: "batchJob", jobId: "job-1" }),
           expect.objectContaining({ jobName: "batchJob", jobId: "job-2" }),
-        ])
+        ]),
+        expect.objectContaining({ triggeredAt: expect.any(Date) })
       );
+    });
+
+    it("skips DB rows for deduplicated bulk jobs (pre-existing BullMQ timestamp)", async () => {
+      mockQueueAddBulk.mockResolvedValue([
+        { id: "job-1", timestamp: Date.now() - 60_000 }, // deduped: added long before this trigger
+        { id: "job-2", timestamp: Date.now() + 5 },
+      ]);
+      const { service, repo } = createService();
+      const def = service.job({ name: "batchJob" });
+
+      await def.triggerMany([{ a: 1 }, { a: 2 }]);
+
+      expect(repo.addedMany).toHaveBeenCalledWith(
+        [expect.objectContaining({ jobId: "job-2" })],
+        expect.objectContaining({ triggeredAt: expect.any(Date) })
+      );
+    });
+  });
+
+  describe("dedupe-aware trigger()", () => {
+    it("passes triggeredAt to repository.added for fresh jobs", async () => {
+      mockQueueAdd.mockResolvedValue({ id: "job-1", timestamp: Date.now() + 5 });
+      const { service, repo } = createService();
+      const def = service.job({ name: "freshJob" });
+
+      await def.trigger({ data: 1 });
+
+      expect(repo.added).toHaveBeenCalledWith(
+        expect.objectContaining({ jobId: "job-1", triggeredAt: expect.any(Date) })
+      );
+    });
+
+    it("skips repository.added when BullMQ deduplicated the job", async () => {
+      mockQueueAdd.mockResolvedValue({ id: "job-1", timestamp: Date.now() - 60_000 });
+      const { service, repo } = createService();
+      const def = service.job<{ key: string }>({
+        name: "dedupJob",
+        id: (p) => `dedup-${p.key}`,
+      });
+
+      const jobId = await def.trigger({ key: "abc" });
+
+      expect(jobId).toBe("job-1");
+      expect(repo.added).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("reconciliation", () => {
+    it("defines the reconcile cron by default and skips it when disabled", () => {
+      const { service } = createService();
+      expect(service.reconcileCron?.cronName).toBe("workflow.reconcile");
+      expect(service.reconcileCron?._handler).toBeDefined();
+
+      const repo = createMockRepository();
+      const disabled = new WorkflowService(repo, {
+        connection: { duplicate: mockDuplicate, disconnect: mockDisconnect } as unknown as IORedis,
+        queues: { fast: {} },
+        defaultQueue: "fast",
+        reconcile: { enabled: false },
+      });
+      expect(disabled.reconcileCron).toBeUndefined();
+    });
+
+    it("marks rows failed when the job is missing from Redis", async () => {
+      const { service, repo } = createService();
+      repo.listStale = jest.fn().mockResolvedValue({
+        isErr: () => false,
+        value: [{ jobId: "gone-1", queueName: "fast", jobName: "lostJob" }],
+      });
+      repo.failed = jest.fn().mockResolvedValue({ isErr: () => false, value: {} });
+      mockQueueGetJob.mockResolvedValue(undefined);
+
+      await service.reconcile();
+
+      expect(repo.failed).toHaveBeenCalledWith(
+        expect.objectContaining({
+          jobId: "gone-1",
+          queueName: "fast",
+          error: "reconciled: job missing from Redis",
+        })
+      );
+    });
+
+    it("adopts the terminal state from Redis for completed jobs", async () => {
+      const { service, repo } = createService();
+      repo.listStale = jest.fn().mockResolvedValue({
+        isErr: () => false,
+        value: [{ jobId: "done-1", queueName: "fast", jobName: "slowJob" }],
+      });
+      repo.completed = jest.fn().mockResolvedValue({ isErr: () => false, value: {} });
+      mockQueueGetJob.mockResolvedValue({
+        name: "slowJob",
+        returnvalue: { ok: true },
+        getState: jest.fn().mockResolvedValue("completed"),
+      });
+
+      await service.reconcile();
+
+      expect(repo.completed).toHaveBeenCalledWith(
+        expect.objectContaining({ jobId: "done-1", queueName: "fast", output: { ok: true } })
+      );
+    });
+
+    it("touches rows whose jobs are still waiting in Redis", async () => {
+      const { service, repo } = createService();
+      repo.listStale = jest.fn().mockResolvedValue({
+        isErr: () => false,
+        value: [{ jobId: "wait-1", queueName: "fast", jobName: "queuedJob" }],
+      });
+      repo.touch = jest.fn().mockResolvedValue({ isErr: () => false, value: undefined });
+      mockQueueGetJob.mockResolvedValue({
+        name: "queuedJob",
+        getState: jest.fn().mockResolvedValue("waiting"),
+      });
+
+      await service.reconcile();
+
+      expect(repo.touch).toHaveBeenCalledWith("wait-1");
     });
   });
 

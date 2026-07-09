@@ -27,6 +27,10 @@ import type {
 
 const DEFAULT_TIMEOUT = 60_000;
 const DEFAULT_AWAIT_CONCURRENCY = 10;
+const DEFAULT_RECONCILE_PATTERN = "*/5 * * * *";
+const DEFAULT_RECONCILE_GRACE_SECONDS = 60;
+const DEFAULT_RECONCILE_BATCH = 100;
+export const RECONCILE_CRON_NAME = "workflow.reconcile";
 
 export class WorkflowService extends Base {
   private readonly queues = new Map<string, Queue>();
@@ -36,6 +40,8 @@ export class WorkflowService extends Base {
   private readonly connection: IORedis;
   private readonly queueConfigs: Record<string, WorkflowQueueConfig>;
   private readonly cronsByName = new Map<string, WorkflowCronDefinition>();
+  /** Picked up by WorkflowRegistry.registerService — heals rows whose queue events were missed. */
+  readonly reconcileCron?: WorkflowCronDefinition;
 
   constructor(
     private readonly workflowRepository: WorkflowRepository,
@@ -57,6 +63,14 @@ export class WorkflowService extends Base {
       });
       this.attachLifecycleListeners(events, queueName);
       this.queueEvents.set(queueName, events);
+    }
+
+    if (config.reconcile?.enabled !== false) {
+      this.reconcileCron = this.cron({
+        name: RECONCILE_CRON_NAME,
+        queue: config.reconcile?.queue ?? config.defaultQueue,
+        pattern: config.reconcile?.pattern ?? DEFAULT_RECONCILE_PATTERN,
+      }).handle(() => this.reconcile());
     }
   }
 
@@ -382,6 +396,16 @@ export class WorkflowService extends Base {
     };
   }
 
+  /**
+   * With a deterministic `idFn`, BullMQ ignores an add whose jobId still exists
+   * (even completed, until retention removes it) and returns the existing job.
+   * Its `timestamp` then predates this trigger — writing an "added" row for it
+   * would describe a run that will never happen.
+   */
+  private static wasDeduplicated(job: Job, triggeredAt: Date): boolean {
+    return typeof job.timestamp === "number" && job.timestamp < triggeredAt.getTime();
+  }
+
   private async triggerJob<Payload, Result>(
     resolved: ResolvedJobConfig,
     payload: Payload,
@@ -391,6 +415,7 @@ export class WorkflowService extends Base {
     const jobId = resolved.idFn ? resolved.idFn(payload) : uuidv4();
     const mergedOptions = this.mergeJobOptions(resolved, overrides);
     const meta = this.resolveMeta(resolved, payload, overrides);
+    const triggeredAt = new Date();
 
     const job = await queue.add(resolved.name, payload, {
       ...mergedOptions,
@@ -401,17 +426,20 @@ export class WorkflowService extends Base {
       throw new Error("Failed to add job to queue");
     }
 
-    const added = await this.workflowRepository.added({
-      userId: meta.userId,
-      jobId: job.id,
-      jobName: resolved.name,
-      queueName: resolved.queueName,
-      timeout: resolved.timeout,
-      tags: meta.tags,
-      input: payload,
-    });
-    // the job is already queued; a missing bookkeeping row must not fail the trigger
-    this.logLifecyclePersistFailure(added, job.id, resolved.queueName, "added");
+    if (!WorkflowService.wasDeduplicated(job, triggeredAt)) {
+      const added = await this.workflowRepository.added({
+        userId: meta.userId,
+        jobId: job.id,
+        jobName: resolved.name,
+        queueName: resolved.queueName,
+        timeout: resolved.timeout,
+        tags: meta.tags,
+        input: payload,
+        triggeredAt,
+      });
+      // the job is already queued; a missing bookkeeping row must not fail the trigger
+      this.logLifecyclePersistFailure(added, job.id, resolved.queueName, "added");
+    }
 
     if (resolved.awaitable) {
       const events = this.queueEvents.get(resolved.queueName);
@@ -419,16 +447,9 @@ export class WorkflowService extends Base {
         throw new Error(`QueueEvents not found for queue "${resolved.queueName}"`);
       }
 
-      const result = await Promise.race([
-        job.waitUntilFinished(events, resolved.timeout),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`Job "${resolved.name}" timed out after ${resolved.timeout}ms`)),
-            resolved.timeout
-          )
-        ),
-      ]);
-
+      // waitUntilFinished enforces the ttl itself; the job keeps running in
+      // Redis on timeout — the DB row will reflect its real outcome later.
+      const result = await job.waitUntilFinished(events, resolved.timeout);
       return result as Result;
     }
 
@@ -442,6 +463,7 @@ export class WorkflowService extends Base {
   ): Promise<Result[] | string[]> {
     const queue = this.getQueue(resolved.queueName);
     const mergedOptions = this.mergeJobOptions(resolved, overrides);
+    const triggeredAt = new Date();
 
     const bulkData = payloads.map((payload) => {
       const jobId = resolved.idFn ? resolved.idFn(payload) : uuidv4();
@@ -458,20 +480,23 @@ export class WorkflowService extends Base {
       throw new Error("Failed to add jobs to queue");
     }
 
-    const metaEntries = payloads.map((payload, i) => {
+    const metaEntries = payloads.flatMap((payload, i) => {
+      if (WorkflowService.wasDeduplicated(jobs[i], triggeredAt)) return [];
       const meta = this.resolveMeta(resolved, payload, overrides);
-      return {
-        userId: meta.userId,
-        jobId: jobs[i].id as string,
-        jobName: resolved.name,
-        queueName: resolved.queueName,
-        timeout: resolved.timeout,
-        tags: meta.tags,
-        input: payload,
-      };
+      return [
+        {
+          userId: meta.userId,
+          jobId: jobs[i].id as string,
+          jobName: resolved.name,
+          queueName: resolved.queueName,
+          timeout: resolved.timeout,
+          tags: meta.tags,
+          input: payload,
+        },
+      ];
     });
 
-    const addedMany = await this.workflowRepository.addedMany(metaEntries);
+    const addedMany = await this.workflowRepository.addedMany(metaEntries, { triggeredAt });
     this.logLifecyclePersistFailure(addedMany, "bulk", resolved.queueName, "added");
 
     if (resolved.awaitable) {
@@ -487,16 +512,7 @@ export class WorkflowService extends Base {
       for (let i = 0; i < jobs.length; i++) {
         const job = jobs[i];
         const p = (async () => {
-          const result = await Promise.race([
-            job.waitUntilFinished(events, resolved.timeout),
-            new Promise<never>((_, reject) =>
-              setTimeout(
-                () =>
-                  reject(new Error(`Job "${resolved.name}" timed out after ${resolved.timeout}ms`)),
-                resolved.timeout
-              )
-            ),
-          ]);
+          const result = await job.waitUntilFinished(events, resolved.timeout);
           results[i] = result as Result;
         })();
 
@@ -567,20 +583,104 @@ export class WorkflowService extends Base {
         output = returnvalue;
       }
 
-      void this.workflowRepository.completed({ jobId, output }).then((result) => {
+      void this.workflowRepository.completed({ jobId, queueName, output }).then((result) => {
         this.logLifecyclePersistFailure(result, jobId, queueName, "completed");
       });
     });
 
     events.on("failed", ({ jobId, failedReason }) => {
-      void this.workflowRepository
-        .failed({
+      void (async () => {
+        // best effort: read the true attempt count; fall back to increment
+        let retries: number | undefined;
+        try {
+          const job = await this.getQueue(queueName).getJob(jobId);
+          retries = job?.attemptsMade;
+        } catch {
+          retries = undefined;
+        }
+        const result = await this.workflowRepository.failed({
           jobId,
+          queueName,
           error: failedReason,
-        })
-        .then((result) => {
-          this.logLifecyclePersistFailure(result, jobId, queueName, "failed");
+          retries,
         });
+        this.logLifecyclePersistFailure(result, jobId, queueName, "failed");
+      })();
     });
+
+    events.on("stalled", ({ jobId }) => {
+      this.logger.warn({ jobId, queueName }, "Job stalled; BullMQ will retry or fail it");
+    });
+  }
+
+  // -- Reconciliation --
+
+  /**
+   * Re-syncs stale non-terminal DB rows from BullMQ (the source of truth).
+   * Queue events are delivered from "now" — transitions that fire while this
+   * process is down (deploys, reconnects) are missed forever, so ordering care
+   * alone cannot keep the stores in sync. Runs via {@link reconcileCron}.
+   */
+  async reconcile(): Promise<void> {
+    const graceSeconds = this.config.reconcile?.graceSeconds ?? DEFAULT_RECONCILE_GRACE_SECONDS;
+    const batch = this.config.reconcile?.batch ?? DEFAULT_RECONCILE_BATCH;
+    const before = new Date(Date.now() - graceSeconds * 1000);
+
+    const staleResult = await this.workflowRepository.listStale({ before, limit: batch });
+    if (staleResult.isErr()) return; // captured at creation
+
+    for (const row of staleResult.value) {
+      const queue = this.queues.get(row.queueName);
+      if (!queue) continue; // row belongs to a queue this deployment doesn't own
+
+      try {
+        const job = await queue.getJob(row.jobId);
+
+        if (!job) {
+          // gone from Redis (crash, retention, manual removal) — it can never progress
+          await this.workflowRepository.failed({
+            jobId: row.jobId,
+            queueName: row.queueName,
+            jobName: row.jobName,
+            error: "reconciled: job missing from Redis",
+          });
+          continue;
+        }
+
+        const state = await job.getState();
+        if (state === "completed") {
+          await this.workflowRepository.completed({
+            jobId: row.jobId,
+            queueName: row.queueName,
+            jobName: job.name ?? row.jobName,
+            output: job.returnvalue ?? null,
+          });
+        } else if (state === "failed") {
+          await this.workflowRepository.failed({
+            jobId: row.jobId,
+            queueName: row.queueName,
+            jobName: job.name ?? row.jobName,
+            error: job.failedReason ?? "reconciled: failed",
+            retries: job.attemptsMade,
+          });
+        } else if (state === "active") {
+          await this.workflowRepository.started({
+            jobId: row.jobId,
+            jobName: job.name ?? row.jobName,
+            queueName: row.queueName,
+            userId: WorkflowService.readUserIdFromJobData(job.data),
+          });
+        } else {
+          // waiting/delayed/prioritized/etc — alive; bump so it isn't re-checked immediately
+          await this.workflowRepository.touch(row.jobId);
+        }
+      } catch (error) {
+        this.handleUnknownError(error).addContext({
+          jobId: row.jobId,
+          queueName: row.queueName,
+          phase: "reconcile",
+        });
+      }
+    }
   }
 }
