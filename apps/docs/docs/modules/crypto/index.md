@@ -4,17 +4,36 @@ sidebar_position: 15
 
 # Crypto module
 
-The crypto module contains shared crypto contracts and backend crypto service
-logic.
+The crypto module handles cryptocurrency payment addresses: it derives Bitcoin
+receive addresses from an app seed and tracks payments in a dedicated table.
 
 ## Package map
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/commons` | Shared crypto module exports. |
-| `@m5kdev/backend` | Crypto DB tables, repository, service, and module registration. |
+| `@m5kdev/backend` | `CryptoModule`: `crypto_payments` table, repository, `CryptoService`. |
 
-## Documentation status
+## Registration
 
-This page is scaffolded. Fill it by documenting supported operations, key
-management assumptions, and service usage.
+```ts
+import { CryptoModule } from "@m5kdev/backend/modules/crypto/crypto.module";
+
+backendApp.use(new CryptoModule());
+```
+
+No tRPC surface — the service is consumed by app code.
+
+## Service API
+
+| Method | Description |
+| --- | --- |
+| `createBitcoinAddress(derivationIndex)` | Derive a Bitcoin address at the given index from the `BITCOIN_SEED` environment variable |
+
+Payments are persisted in `crypto_payments` (amount, address, status) via the
+repository; watching the chain and reconciling payments is app-level logic.
+
+## Environment
+
+| Variable | Purpose |
+| --- | --- |
+| `BITCOIN_SEED` | HD wallet seed used for address derivation — treat as a production secret |

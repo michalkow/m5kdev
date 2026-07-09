@@ -4,15 +4,28 @@ sidebar_position: 19
 
 # PDF module
 
-The PDF module contains backend PDF service logic.
+The PDF module extracts text from PDF files so app features (AI prompts, search,
+imports) can work with document content.
 
 ## Package map
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/backend` | PDF module registration and service behavior. |
+| `@m5kdev/backend` | `PdfModule` and `PdfService`. |
 
-## Documentation status
+## Usage
 
-This page is scaffolded. Fill it by documenting supported PDF operations, inputs,
-outputs, and file handling expectations.
+```ts
+backendApp.use(new PdfModule());
+
+const text = await this.service.pdf.convertToText(url);
+```
+
+## Service API
+
+| Method | Description |
+| --- | --- |
+| `convertToText(url)` | Fetch a PDF by URL and return its extracted text (`ServerResultAsync<string>`) |
+
+Pair with the [file module](/modules/file) — `getS3DownloadUrl` produces a
+short-lived URL you can pass straight to `convertToText`.

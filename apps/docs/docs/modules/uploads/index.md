@@ -2,18 +2,21 @@
 sidebar_position: 22
 ---
 
-# Uploads module
+# Uploads directory
 
-The uploads module is a backend module area reserved for upload-related behavior
-outside the main file module.
+`packages/backend/src/modules/uploads/` is not a code module — it is the local
+working directory where backend services write files at runtime.
 
-## Package map
+## Who writes here
 
-| Package | What it owns |
-| --- | --- |
-| `@m5kdev/backend` | Upload-related backend module code. |
+- The [file module](/modules/file) local upload route stores browser uploads
+  here before they are served or pushed to S3.
+- The [video module](/modules/video) writes ffmpeg outputs (trims, WAV/MP3
+  conversions) here.
 
-## Documentation status
+## Operational notes
 
-This page is scaffolded. Fill it by clarifying the boundary between uploads and
-the [file module](/modules/file).
+- The directory is created automatically on startup.
+- Contents are transient runtime artifacts; do not commit them and do not rely
+  on them surviving deploys. Durable storage belongs in S3 via the
+  [file module](/modules/file).

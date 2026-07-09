@@ -4,16 +4,19 @@ sidebar_position: 18
 
 # Operations module
 
-The operations module contains frontend hooks and utilities for operational app
-workflows.
+The operations module is a reserved area in `@m5kdev/frontend` for hooks and
+utilities around long-running operations (progress, polling, optimistic
+updates).
 
 ## Package map
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/frontend` | Operations hooks and utilities. |
+| `@m5kdev/frontend` | `modules/operations/hooks` and `modules/operations/utils` (currently empty placeholders). |
 
-## Documentation status
+## Status
 
-This page is scaffolded. Fill it by documenting available hooks, query patterns,
-and expected app usage.
+The module directories exist but contain no exports yet. For tracking
+long-running backend work today, poll workflow runs through the
+[workflow module](/modules/workflow) tRPC procedures (`workflow.read`,
+`workflow.list`).
