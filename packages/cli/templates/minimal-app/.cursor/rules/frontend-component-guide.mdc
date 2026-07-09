@@ -1,0 +1,95 @@
+---
+globs: apps/**/webapp/src/**/*.tsx
+alwaysApply: false
+---
+
+# Frontend Component Style Guide
+
+Conventions for React components in the webapp. The stack is fixed: React 19,
+HeroUI v3, Tailwind CSS v4, react-router v7, nuqs, TanStack Query over tRPC,
+i18next. Do not introduce alternatives.
+
+## HeroUI before raw Tailwind
+
+When a HeroUI component exists for the element you are building, use it instead
+of hand-rolled HTML + Tailwind: `Button`, `Input`, `TextField`, `TextArea`,
+`Select`, `ListBox`, `Modal`, `Card`, `Chip`, `Skeleton`, `Form`, `Label`,
+`FieldError`, `toast`. Tailwind utilities are for layout, spacing, and visual
+styling on top of these primitives — not for rebuilding them.
+
+```tsx
+// GOOD
+<Button variant="primary" isPending={isSaving} onPress={openCreate}>...</Button>
+
+// BAD — hand-rolled button
+<div className="cursor-pointer rounded bg-blue-600 px-4 py-2" onClick={...}>
+```
+
+## Components stay readable, logic lives in hooks
+
+The measure is readability, not dogma: someone editing the JSX should not have
+to scroll through business logic to find it. Data fetching, mutations, URL
+state, and effect chains belong in custom hooks (see the frontend hook guide).
+
+Allowed directly in a component:
+
+- `useTranslation` and small formatting helpers (dates, reading time).
+- `useId` for accessibility wiring.
+- Ephemeral UI state that never leaves the component: modal open/closed,
+  selected row, hover/expanded toggles.
+- A few small hooks that comfortably fit before the returned JSX.
+
+Not allowed directly in feature/route components:
+
+- `useQuery` / `useMutation` clusters, `queryClient` calls, tRPC wiring.
+- `useEffect` chains that synchronize state.
+- nuqs URL-state definitions for filters/pagination/tabs.
+
+```tsx
+// GOOD — one feature hook, ephemeral UI state local, display-focused JSX
+export function PostsRoute() {
+  const { t } = useTranslation("blog");
+  const posts = usePostsRoute();
+  const [selectedPostId, setSelectedPostId] = useState<string>();
+  const selectedPost = posts.rows.find((r) => r.id === selectedPostId) ?? posts.rows[0];
+  return (/* JSX built from `posts` + local UI state */);
+}
+```
+
+## Derive, don't sync
+
+Compute values from data during render instead of mirroring them into state
+with `useEffect`.
+
+```tsx
+// GOOD
+const selectedPost = rows.find((r) => r.id === selectedPostId) ?? rows[0];
+
+// BAD — effect that re-syncs state after every data change
+useEffect(() => {
+  if (!rows.some((r) => r.id === selectedPostId)) setSelectedPostId(rows[0]?.id);
+}, [rows, selectedPostId]);
+```
+
+## React 19 idioms
+
+- No `forwardRef` — pass `ref` as a regular prop.
+- No `defaultProps` — use parameter defaults.
+- Use `startTransition` / `useDeferredValue` for low-priority updates such as
+  search inputs that feed queries.
+
+## Required states
+
+Every data-driven view renders explicit loading (`Skeleton`), empty, and error
+states. Never return `null` while data is loading.
+
+## Subcomponents
+
+Presentational subcomponents receive everything via props — no data fetching,
+no feature hooks inside them. Co-locate them under
+`modules/<feature>/components/` (or in-file when tiny).
+
+## Text
+
+All user-facing strings go through `useTranslation` — no hardcoded copy. See
+the frontend i18n guide.

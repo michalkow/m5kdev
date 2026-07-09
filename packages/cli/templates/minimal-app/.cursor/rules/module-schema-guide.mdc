@@ -1,5 +1,5 @@
 ---
-globs: apps/*/shared/src/modules/**/*.schema.ts
+globs: apps/**/shared/src/modules/**/*.schema.ts
 alwaysApply: false
 ---
 

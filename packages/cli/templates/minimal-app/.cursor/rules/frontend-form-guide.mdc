@@ -1,0 +1,80 @@
+---
+globs: apps/**/webapp/src/**/*.tsx
+alwaysApply: false
+---
+
+# Frontend Form Style Guide
+
+Forms are uncontrolled HeroUI v3 forms with native HTML validation. The server
+already validates every input through tRPC + Zod — the client only needs the
+built-in validators, which HeroUI renders nicely.
+
+## Never use form libraries
+
+Do not add react-hook-form, formik, react-final-form, or any controlled-form
+state manager. No `useState` per field, no `onChange` mirroring.
+
+## The pattern
+
+`Form` + `TextField`/`TextArea` with `name`, `defaultValue`, and `isRequired` /
+`type` / `minLength` for validation; `FieldError` renders the native message.
+Read values from `FormData` on submit.
+
+```tsx
+export function PostEditorForm({ post, isSaving, onSave, onClose }: Props) {
+  const { t } = useTranslation("blog");
+
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const payload = {
+      title: String(formData.get("title") ?? "").trim(),
+      content: String(formData.get("content") ?? "").trim(),
+    };
+    if (await onSave(payload, post?.id)) onClose();
+  };
+
+  return (
+    // key remounts the form so defaultValue updates when editing another row
+    <Form key={post?.id ?? "new"} onSubmit={onSubmit}>
+      <TextField isRequired name="title" defaultValue={post?.title ?? ""}>
+        <Label>{t("posts.editor.fields.title")}</Label>
+        <Input />
+        <FieldError />
+      </TextField>
+      <TextField isRequired name="content" defaultValue={post?.content ?? ""}>
+        <Label>{t("posts.editor.fields.content")}</Label>
+        <TextArea rows={10} />
+        <FieldError />
+      </TextField>
+      <Button type="submit" variant="primary" isPending={isSaving}>
+        {t("posts.editor.save")}
+      </Button>
+    </Form>
+  );
+}
+```
+
+The HeroUI `Form` blocks submission and shows `FieldError` messages until
+native constraints pass — no validation code needed for required fields,
+email formats, or lengths.
+
+## Extra validation on submit only
+
+When a rule cannot be expressed with native HTML validation (for example,
+password and confirm-password matching), check it inside the submit handler
+after reading `FormData`, and surface the failure with a toast or field-level
+message. Do not reach for a validation library for this.
+
+```tsx
+if (formData.get("password") !== formData.get("confirmPassword")) {
+  toast.error(t("auth.errors.passwordMismatch"));
+  return;
+}
+```
+
+## Submission state
+
+- The submit `Button` gets `isPending` from the mutation's pending flag.
+- The mutation itself (and its success/error toasts) lives in a custom hook;
+  the form component only parses `FormData` and calls the action.

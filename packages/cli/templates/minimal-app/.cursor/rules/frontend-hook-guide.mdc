@@ -1,0 +1,79 @@
+---
+globs: apps/**/webapp/src/**/hooks/**
+alwaysApply: false
+---
+
+# Frontend Custom Hook Style Guide
+
+Feature logic lives in custom hooks so components stay display-focused.
+
+## When to create a hook
+
+Create a custom hook when a component accumulates real logic: multiple
+`useQuery`/`useMutation` calls, `queryClient` invalidation, nuqs URL state,
+or `useEffect` orchestration. A component that only needs one small hook and
+some ephemeral UI state does not need a wrapper — this rule is about keeping
+the JSX editable, not about ceremony.
+
+## Structure
+
+- Location: `src/modules/<feature>/hooks/use<Name>.ts`
+- Compose small, focused hooks into one screen-level hook so the route
+  component makes a single call:
+
+```
+modules/posts/hooks/
+  usePostsList.ts    // list query + URL state (search, status, page)
+  usePostActions.ts  // reusable mutations: save, publish, delete
+  usePostsRoute.ts   // composes both for the PostsRoute screen
+```
+
+```ts
+export function usePostsRoute() {
+  const list = usePostsList();
+  const actions = usePostActions();
+  return { ...list, ...actions };
+}
+```
+
+## Reusable actions get their own hook
+
+Mutations that more than one component may trigger (delete, publish, archive)
+are always extracted into their own hook — never inlined into a screen hook —
+so other components can reuse them with the same toasts, confirmation dialogs,
+and invalidation.
+
+## What a hook owns
+
+- tRPC queries/mutations and their `queryFilter()` invalidation.
+- nuqs URL state (filters, pagination, tabs) and its update functions
+  (wrap updates in `startTransition`).
+- Derived data (`useMemo`): rows, totals, page counts, stats.
+- Side effects of actions: success/error toasts, confirmation dialogs
+  (`useDialog`), cache invalidation.
+- Pending indicators: booleans (`isSaving`) or row-scoped ids
+  (`deletingId`) derived from `mutation.isPending` + `mutation.variables`.
+
+## Return shape
+
+Return a flat object of data, derived values, pending flags, and action
+functions. Action functions used by forms should resolve to a success boolean
+instead of throwing, so components can close dialogs without try/catch:
+
+```ts
+const savePost = async (payload: PostCreateInputSchema, id?: string): Promise<boolean> => {
+  try {
+    if (id) await updateMutation.mutateAsync({ id, ...payload });
+    else await createMutation.mutateAsync(payload);
+    return true;
+  } catch {
+    return false; // the mutation's onError already showed a toast
+  }
+};
+```
+
+## What a hook must not do
+
+- Return JSX or take React nodes as arguments.
+- Read DOM elements directly (the submit handler that parses `FormData`
+  stays in the form component — see the frontend form guide).

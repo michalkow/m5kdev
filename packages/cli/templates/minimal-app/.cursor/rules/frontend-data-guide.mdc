@@ -1,0 +1,59 @@
+---
+globs: apps/**/webapp/src/**/*.ts*
+alwaysApply: false
+---
+
+# Frontend Data Fetching Style Guide
+
+All server communication goes through tRPC with the TanStack React Query
+integration. No `fetch`, no axios, no hand-written API clients.
+
+## Queries
+
+Use `useTRPC()` and the generated `queryOptions`:
+
+```ts
+const trpc = useTRPC();
+const { data, isLoading, isFetching } = useQuery(
+  trpc.posts.list.queryOptions(listInput) as unknown as UseQueryOptions<PostsListOutputSchema>
+);
+```
+
+- Input and output types come from the shared Zod schemas in `apps/shared` —
+  never redeclare them locally.
+- Search inputs that feed queries go through `useDeferredValue`, and URL-state
+  updates are wrapped in `startTransition`.
+
+## Mutations
+
+Use `mutationOptions` with success/error handling declared where the mutation
+is created (inside a custom hook):
+
+```ts
+const createMutation = useMutation(
+  trpc.posts.create.mutationOptions({
+    onSuccess: async () => {
+      toast.success(t("posts.toast.created"));
+      await queryClient.invalidateQueries(trpc.posts.list.queryFilter());
+    },
+    onError: (error) => toast.error(error.message),
+  })
+);
+```
+
+## Invalidation discipline
+
+- Invalidate intentionally with the matching `queryFilter()` after mutations.
+- Never call `queryClient.clear()` or invalidate everything.
+
+## Pending state
+
+- Screen-level: `mutation.isPending`.
+- Row-level (a list where one item is being deleted):
+  `mutation.isPending && mutation.variables?.id === row.id`, exposed from the
+  hook as `deletingId` / `publishingId`.
+
+## Placement
+
+Queries and mutations live in custom hooks under
+`modules/<feature>/hooks/`, not in components — see the frontend hook guide.

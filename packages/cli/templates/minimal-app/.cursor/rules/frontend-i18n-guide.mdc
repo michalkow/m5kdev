@@ -1,0 +1,45 @@
+---
+globs: apps/**/webapp/src/**/*.tsx
+alwaysApply: false
+---
+
+# Frontend i18n Style Guide
+
+All user-facing copy goes through i18next. No hardcoded strings in JSX,
+toasts, aria-labels, or placeholders.
+
+## Usage
+
+```tsx
+const { t } = useTranslation("<app-namespace>");
+<h2>{t("posts.hero.title")}</h2>
+<Input placeholder={t("posts.filters.searchPlaceholder")} aria-label={t("posts.filters.searchLabel")} />
+toast.success(t("posts.toast.created"));
+```
+
+- `useTranslation(...)` is one of the few hooks always allowed directly inside
+  display components.
+- Interpolate variables through i18next, never string concatenation:
+  `t("posts.pagination.summary", { page, pageCount })`.
+
+## Where keys live
+
+- App copy: `apps/webapp/translations/en/<namespace>.json` — add the key in
+  the same change that uses it.
+- Role labels and app-level chrome: `apps/webapp/translations/app.json`
+  (resolved as `app:...`, e.g. `app:organization.role.editor`).
+- Auth/billing route copy ships with `@m5kdev/web-ui` (`web-ui:` namespace) —
+  do not duplicate it.
+
+## Key conventions
+
+- Structure keys as `<feature>.<section>.<name>`:
+  `posts.editor.fields.title`, `posts.toast.created`, `layout.push.cta`.
+- Reuse existing keys before adding near-duplicates.
+
+## Server errors
+
+Backend `ServerError` responses carry i18n-style client messages
+(`server.error.<layer>.<code>`). When surfacing mutation errors, prefer a
+translated, human message; fall back to `error.message` only when no
+translation exists.

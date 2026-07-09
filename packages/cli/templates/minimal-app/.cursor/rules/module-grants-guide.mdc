@@ -1,5 +1,5 @@
 ---
-globs: apps/*/server/src/modules/**/*.grants.ts
+globs: apps/**/server/src/modules/**/*.grants.ts
 alwaysApply: false
 ---
 

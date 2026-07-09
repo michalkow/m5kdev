@@ -32,3 +32,10 @@
 - For upgrading existing apps, see the docs site guide `apps/docs/docs/guides/custom-app-roles-migration.md`.
 - Use `nuqs` for URL state, React Router for routing, HeroUI for UI primitives, and Tailwind v4 for styling.
 - Prefer shared framework utilities from `@m5kdev/frontend` and `@m5kdev/web-ui` before adding local duplicates.
+- React 19 idioms: no `forwardRef` (pass `ref` as a prop), no `defaultProps`, use `startTransition`/`useDeferredValue` for low-priority updates.
+- Prefer HeroUI v3 components over hand-rolled HTML + Tailwind whenever an equivalent exists; Tailwind is for layout and styling on top of them.
+- Keep components display-focused: data fetching, mutations, URL state, and effect chains live in custom hooks under `modules/<feature>/hooks/` (small focused hooks composed into one screen-level hook, e.g. `usePostsRoute`). Ephemeral UI state (modal open, selected row) may stay in the component. Extract reusable tRPC actions (delete, publish) into their own hooks.
+- Fetch all server data with TanStack Query over tRPC (`useTRPC()` + `queryOptions`/`mutationOptions`); invalidate with the matching `queryFilter()` after mutations. No `fetch`/axios.
+- Forms are uncontrolled HeroUI `Form` + `TextField`/`TextArea` with native HTML validation (`isRequired`, `type`, `minLength`) and `FieldError`; read values from `FormData` on submit. Never add form libraries (react-hook-form, formik). Validation that HTML cannot express (e.g. confirm-password) happens in the submit handler.
+- All user-facing copy goes through i18next (`useTranslation`); keys live in `apps/webapp/translations/`.
+- The `posts` feature (`apps/webapp/src/modules/posts/`) is the reference implementation for these conventions; see `.cursor/rules/frontend-*.mdc` for the detailed guides.
