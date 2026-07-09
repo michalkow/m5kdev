@@ -30,7 +30,8 @@ export class AccessService<T extends Statements> extends BaseService<
     try {
       return !!this.acr[level][role].authorize(request, connector).success;
     } catch (error) {
-      console.error(error);
+      // captured at creation (log + Sentry); authorization stays deny-by-default
+      this.handleUnknownError(error).addContext({ level, role });
       return false;
     }
   }

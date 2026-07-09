@@ -401,7 +401,7 @@ export class WorkflowService extends Base {
       throw new Error("Failed to add job to queue");
     }
 
-    await this.workflowRepository.added({
+    const added = await this.workflowRepository.added({
       userId: meta.userId,
       jobId: job.id,
       jobName: resolved.name,
@@ -410,6 +410,8 @@ export class WorkflowService extends Base {
       tags: meta.tags,
       input: payload,
     });
+    // the job is already queued; a missing bookkeeping row must not fail the trigger
+    this.logLifecyclePersistFailure(added, job.id, resolved.queueName, "added");
 
     if (resolved.awaitable) {
       const events = this.queueEvents.get(resolved.queueName);
@@ -469,7 +471,8 @@ export class WorkflowService extends Base {
       };
     });
 
-    await this.workflowRepository.addedMany(metaEntries);
+    const addedMany = await this.workflowRepository.addedMany(metaEntries);
+    this.logLifecyclePersistFailure(addedMany, "bulk", resolved.queueName, "added");
 
     if (resolved.awaitable) {
       const events = this.queueEvents.get(resolved.queueName);
@@ -512,6 +515,22 @@ export class WorkflowService extends Base {
     return jobs.map((j) => j.id as string);
   }
 
+  /**
+   * Repository lifecycle methods return neverthrow Results and never reject —
+   * err Results are already captured at creation, so we only add job context here.
+   */
+  private logLifecyclePersistFailure(
+    result: unknown,
+    jobId: string,
+    queueName: string,
+    event: string
+  ): void {
+    // duck-typed: repositories return neverthrow Results, but stubs/overrides may not
+    if (!result || typeof (result as { isErr?: unknown }).isErr !== "function") return;
+    if (!(result as { isErr(): boolean }).isErr()) return;
+    this.logger.warn({ jobId, queueName, event }, `Failed to persist job ${event} event`);
+  }
+
   private attachLifecycleListeners(events: QueueEvents, queueName: string): void {
     events.on("active", ({ jobId }) => {
       void (async () => {
@@ -526,9 +545,16 @@ export class WorkflowService extends Base {
 
           const jobName = job.name ?? "__unknown__";
           const userId = WorkflowService.readUserIdFromJobData(job.data);
-          await this.workflowRepository.started({ jobId, jobName, queueName, userId });
+          const result = await this.workflowRepository.started({
+            jobId,
+            jobName,
+            queueName,
+            userId,
+          });
+          this.logLifecyclePersistFailure(result, jobId, queueName, "active");
         } catch (error) {
-          this.logger.error({ jobId, queueName, error }, "Failed to log job active event");
+          // BullMQ lookup (getJob/getState) threw — capture, this path has no other reporter
+          this.handleUnknownError(error).addContext({ jobId, queueName, event: "active" });
         }
       })();
     });
@@ -541,19 +567,19 @@ export class WorkflowService extends Base {
         output = returnvalue;
       }
 
-      this.workflowRepository.completed({ jobId, output }).catch((error) => {
-        this.logger.error({ jobId, error }, "Failed to log job completed event");
+      void this.workflowRepository.completed({ jobId, output }).then((result) => {
+        this.logLifecyclePersistFailure(result, jobId, queueName, "completed");
       });
     });
 
     events.on("failed", ({ jobId, failedReason }) => {
-      this.workflowRepository
+      void this.workflowRepository
         .failed({
           jobId,
           error: failedReason,
         })
-        .catch((error) => {
-          this.logger.error({ jobId, error }, "Failed to log job failed event");
+        .then((result) => {
+          this.logLifecyclePersistFailure(result, jobId, queueName, "failed");
         });
     });
   }

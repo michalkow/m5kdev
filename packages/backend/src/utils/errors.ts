@@ -102,7 +102,7 @@ export class ServerError extends Error {
     opts?: { layer?: ServerErrorLayer; layerName?: string; context?: Record<string, unknown> }
   ) {
     const msg = cause instanceof Error ? cause.message : undefined;
-    return new ServerError({
+    const serverError = new ServerError({
       code,
       layer: opts?.layer,
       layerName: opts?.layerName,
@@ -110,6 +110,11 @@ export class ServerError extends Error {
       cause,
       context: opts?.context,
     });
+    // the wrapper call site is plumbing — point origin at where the cause was thrown
+    if (cause instanceof Error) {
+      serverError.origin = extractOrigin(cause.stack) ?? serverError.origin;
+    }
+    return serverError;
   }
 }
 

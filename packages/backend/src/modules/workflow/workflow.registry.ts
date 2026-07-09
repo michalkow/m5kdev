@@ -1,4 +1,5 @@
-import type { Worker } from "bullmq";
+import type { Job, Worker } from "bullmq";
+import { captureServerError, ServerError } from "../../utils/errors";
 import { logger as rootLogger } from "../../utils/logger";
 import { runWithPosthogRequestState } from "../../utils/posthog";
 import type { WorkflowService } from "./workflow.service";
@@ -44,6 +45,18 @@ function isCronDefinition(value: unknown): value is WorkflowCronDefinition {
 
 function getTimeoutMs(entry: RegisteredHandler): number {
   return entry.config.timeout;
+}
+
+/** Duck-typed neverthrow Result (avoids depending on a specific neverthrow instance). */
+function isNeverthrowResult(
+  value: unknown
+): value is { isErr(): boolean; isOk(): boolean; error?: unknown; value?: unknown } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { isErr?: unknown }).isErr === "function" &&
+    typeof (value as { isOk?: unknown }).isOk === "function"
+  );
 }
 
 export class WorkflowRegistry {
@@ -184,6 +197,11 @@ export class WorkflowRegistry {
                 entry.kind === "cron" ? entry.handler(undefined) : entry.handler(job.data),
                 timeoutPromise,
               ]);
+              // a handler returning err(...) must fail the job, not complete it
+              if (isNeverthrowResult(result)) {
+                if (result.isErr()) throw result.error;
+                return result.value ?? null;
+              }
               return result ?? null;
             } finally {
               if (timer) clearTimeout(timer);
@@ -193,8 +211,20 @@ export class WorkflowRegistry {
         workerOptionOverrides
       );
 
+      worker.on("failed", (job, error) => {
+        this.captureJobFailure(queueName, job, error);
+      });
+
       worker.on("error", (error) => {
-        this.logger.error({ queue: queueName, error: error.message }, "Worker error");
+        // infra-level worker error (e.g. Redis connection) — never passes a request boundary
+        captureServerError(
+          ServerError.fromUnknown("INTERNAL_SERVER_ERROR", error, {
+            layer: "workflow",
+            layerName: "WorkflowRegistry",
+            context: { queue: queueName },
+          }),
+          { logger: this.logger }
+        );
       });
 
       this.workers.set(queueName, worker);
@@ -256,6 +286,50 @@ export class WorkflowRegistry {
   async stop(): Promise<void> {
     await this.workflowService.closeWorkers();
     this.workers.clear();
+  }
+
+  /**
+   * Terminal capture for background job failures — jobs never reach a request
+   * boundary, so this is their only chance to be reported. Intermediate retry
+   * attempts only log a warn; the final attempt is captured (Sentry for 5xx).
+   */
+  private captureJobFailure(queueName: string, job: Job | undefined, error: Error): void {
+    const context = {
+      queue: queueName,
+      jobName: job?.name,
+      jobId: job?.id,
+      attemptsMade: job?.attemptsMade,
+    };
+
+    const maxAttempts = job?.opts?.attempts ?? 1;
+    const isFinalAttempt = !job || (job.attemptsMade ?? 0) >= maxAttempts;
+    if (!isFinalAttempt) {
+      this.logger.warn({ ...context, err: error }, `Job attempt failed, will retry: ${error.message}`);
+      return;
+    }
+
+    if (error instanceof ServerError) {
+      error.addContext(context);
+      if (error.logged) {
+        // captured at creation — echo with job context so the failure is traceable
+        this.logger.warn(
+          { ...context, code: error.code, origin: error.origin, sentryEventId: error.sentryEventId },
+          `Job failed: ${error.message}`
+        );
+      } else {
+        captureServerError(error, { logger: this.logger });
+      }
+      return;
+    }
+
+    captureServerError(
+      ServerError.fromUnknown("INTERNAL_SERVER_ERROR", error, {
+        layer: "workflow",
+        layerName: "WorkflowRegistry",
+        context,
+      }),
+      { logger: this.logger }
+    );
   }
 
   private mergeWorkerOptions(

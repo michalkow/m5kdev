@@ -222,8 +222,8 @@ export async function exchangeCodeForTokens(
       scope: tokenSet.scope,
     };
   } catch (error: unknown) {
-    // Enhanced error logging for OAuth issues
-    logger.error("Token exchange error", { error, provider: provider.id });
+    // context line only — the rethrown error is captured by the caller's throwablePromise
+    logger.warn({ err: error, provider: provider.id }, "Token exchange failed");
 
     if (error instanceof Error) {
       const errorMessage = error.message || "Unknown error";
@@ -238,8 +238,8 @@ export async function exchangeCodeForTokens(
         // Try to extract access token from the error response if available
         // This is a workaround for LinkedIn's ID token validation issues
         logger.warn(
-          "LinkedIn ID token validation failed, but token exchange may have succeeded. Check if access token is available.",
-          { error: errorMessage }
+          { error: errorMessage },
+          "LinkedIn ID token validation failed, but token exchange may have succeeded. Check if access token is available."
         );
         // Re-throw for now - we need the access token to continue
         // In a production scenario, you might want to manually parse the token response

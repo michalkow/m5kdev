@@ -4,9 +4,21 @@ import bodyParser from "body-parser";
 import express, { type Request, type Response, type Router } from "express";
 import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
+import { captureServerError, ServerError } from "../../utils/errors";
 import type { AuthMiddleware, AuthRequest } from "../auth/auth.middleware";
 import { createActorFromContext } from "../base/base.actor";
 import type { FileService } from "./file.service";
+
+/** Terminal capture for raw throws inside upload routes (no tRPC boundary here). */
+function captureRouteError(err: unknown, context: Record<string, unknown>): void {
+  captureServerError(
+    ServerError.fromUnknown("INTERNAL_SERVER_ERROR", err, {
+      layer: "controller",
+      layerName: "FileRouter",
+      context,
+    })
+  );
+}
 
 function validateMimeType(type: string, file: Express.Multer.File): boolean {
   return fileTypes[type]?.mimetypes.includes(file.mimetype);
@@ -86,12 +98,12 @@ export function createUploadRouter({
       }
       const url = await fileService.getS3DownloadUrl(key);
       if (url.isErr()) {
-        console.error(url.error);
+        captureServerError(url.error); // no-op when already captured at creation
         return res.status(500).json({ error: url.error.message });
       }
       return res.json({ url: url.value });
     } catch (err: unknown) {
-      console.error(err);
+      captureRouteError(err, { route: "GET /files/:path" });
       const message = err instanceof Error ? err.message : "Failed to generate presigned URL";
       return res.status(500).json({ error: message });
     }
@@ -202,7 +214,7 @@ export function createUploadRouter({
       }
       return res.json({ url: url.value });
     } catch (err: unknown) {
-      console.error(err);
+      captureRouteError(err, { route: "POST /s3-presigned-url" });
       const message = err instanceof Error ? err.message : "Failed to generate presigned URL";
       return res.status(500).json({ error: message });
     }
@@ -216,12 +228,12 @@ export function createUploadRouter({
       }
       const result = await fileService.deleteS3Object(key);
       if (result.isErr()) {
-        console.error(result.error);
+        captureServerError(result.error); // no-op when already captured at creation
         return res.status(500).json({ error: result.error.message });
       }
       return res.json({ success: true });
     } catch (err: unknown) {
-      console.error(err);
+      captureRouteError(err, { route: "DELETE /files/:path" });
       const message = err instanceof Error ? err.message : "Failed to delete S3 object";
       return res.status(500).json({ error: message });
     }

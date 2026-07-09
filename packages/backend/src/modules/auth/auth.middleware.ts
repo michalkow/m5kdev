@@ -3,7 +3,18 @@ import type { InferSelectModel } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
 import * as auth from "./auth.db";
 import type { BetterAuth } from "./auth.lib";
+import { captureServerError, ServerError } from "../../utils/errors";
 import { runWithPosthogRequestState } from "../../utils/posthog";
+
+/** getSession rejected (auth backend/DB down) — without capture every request silently 500s. */
+function captureSessionFailure(error: unknown): void {
+  captureServerError(
+    ServerError.fromUnknown("INTERNAL_SERVER_ERROR", error, {
+      layer: "auth",
+      layerName: "AuthMiddleware",
+    })
+  );
+}
 
 const { users, sessions } = auth;
 
@@ -31,7 +42,8 @@ export function createAuthMiddleware(auth: BetterAuth): AuthMiddleware {
           );
         }
       })
-      .catch(() => {
+      .catch((error) => {
+        captureSessionFailure(error);
         res.status(500).json({ message: "Unable to authenticate" });
       });
   };
@@ -55,7 +67,8 @@ export function createRoleAuthMiddleware(auth: BetterAuth): (role: string) => Au
           );
         }
       })
-      .catch(() => {
+      .catch((error) => {
+        captureSessionFailure(error);
         res.status(500).json({ message: "Unable to authenticate" });
       });
   };

@@ -12,6 +12,7 @@ import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { z } from "zod";
 import type { TFunction } from "i18next";
 import type { BackendAppMetadata } from "../../app";
+import { captureServerError } from "../../utils/errors";
 import { logger as rootLogger } from "../../utils/logger";
 import { posthogCapture } from "../../utils/posthog";
 import type { BillingService } from "../billing/billing.service";
@@ -318,7 +319,7 @@ export function createBetterAuth<
             locale,
           });
           if (result?.isErr()) {
-            logger.error(result.error);
+            captureServerError(result.error, { logger }); // no-op when captured at creation
             hooks?.onError?.(result.error);
             throw result.error;
           }
@@ -389,7 +390,7 @@ export function createBetterAuth<
         const locale = getRecordLocale(user);
         const result = await emailService?.sendResetPassword(user.email, url, { locale });
         if (result?.isErr()) {
-          logger.error(result.error);
+          captureServerError(result.error, { logger }); // no-op when captured at creation
           hooks?.onError?.(result.error);
           throw result.error;
         }
@@ -400,7 +401,7 @@ export function createBetterAuth<
         const locale = getRecordLocale(user);
         const result = await emailService?.sendVerification(user.email, url, { locale });
         if (result?.isErr()) {
-          logger.error(result.error);
+          captureServerError(result.error, { logger }); // no-op when captured at creation
           hooks?.onError?.(result.error);
           throw result.error;
         }
@@ -477,7 +478,7 @@ export function createBetterAuth<
             { locale: organizationLocale }
           );
           if (result?.isErr()) {
-            logger.error(result.error);
+            captureServerError(result.error, { logger }); // no-op when captured at creation
             hooks?.onError?.(result.error);
             throw result.error;
           }
