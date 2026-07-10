@@ -179,6 +179,12 @@ export class WorkflowRegistry {
         async (job) => {
           const entry = handlers.get(job.name);
           if (!entry) {
+            // scheduler-produced jobs with no handler (version skew, removed
+            // crons) would otherwise fire forever — self-heal instead of crashlooping
+            if (job.repeatJobKey) {
+              await this.removeStaleScheduler(queueName, job.name, job.repeatJobKey);
+              return null;
+            }
             throw new Error(`No handler registered for job: ${job.name}`);
           }
 
@@ -245,7 +251,10 @@ export class WorkflowRegistry {
       set.add(name);
     }
 
-    for (const [queueName, allowed] of allowedCronKeysByQueue) {
+    // Sweep every queue this process works — including queues with no registered
+    // crons, which previously never pruned stale schedulers left by other versions.
+    for (const queueName of queueHandlers.keys()) {
+      const allowed = allowedCronKeysByQueue.get(queueName) ?? new Set<string>();
       for (const [cronName, entry] of this.handlers) {
         if (entry.kind !== "cron" || entry.queueName !== queueName) continue;
         const cfg = entry.config;
@@ -286,6 +295,35 @@ export class WorkflowRegistry {
   async stop(): Promise<void> {
     await this.workflowService.closeWorkers();
     this.workers.clear();
+  }
+
+  /**
+   * A job scheduler produced a job this process has no handler for — typically
+   * version skew (a newer deployment registered a cron an older worker doesn't
+   * know) or a cron that was removed while its scheduler survived in Redis.
+   * Remove the scheduler so it stops firing, and report once.
+   */
+  private async removeStaleScheduler(
+    queueName: string,
+    jobName: string,
+    schedulerId: string
+  ): Promise<void> {
+    let removed = false;
+    try {
+      removed = await this.workflowService._removeJobScheduler(queueName, schedulerId);
+    } catch {
+      removed = false;
+    }
+    captureServerError(
+      new ServerError({
+        code: "NOT_IMPLEMENTED",
+        layer: "workflow",
+        layerName: "WorkflowRegistry",
+        message: `No handler for scheduled job "${jobName}" — stale scheduler ${removed ? "removed" : "removal failed"}`,
+        context: { queue: queueName, jobName, schedulerId, removed },
+      }),
+      { logger: this.logger }
+    );
   }
 
   /**

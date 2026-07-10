@@ -90,6 +90,7 @@ interface MockJob {
   name: string;
   data: unknown;
   id: string;
+  repeatJobKey?: string;
 }
 
 function expectCapturedProcessor(
@@ -269,6 +270,23 @@ describe("WorkflowRegistry", () => {
       expect(mockRemoveJobScheduler).not.toHaveBeenCalledWith("fast", "keepMe");
     });
 
+    it("prunes stale schedulers on worked queues that have no registered crons", async () => {
+      const registry = new WorkflowRegistry(mockService as WorkflowService);
+      // only a plain job on this queue — previously such queues were never swept
+      registry.register(
+        createMockDefinition("jobA", "fast"),
+        jest.fn().mockResolvedValue(undefined),
+      );
+      mockGetJobSchedulers
+        .mockResolvedValueOnce([{ key: "workflow.reconcile", name: "workflow.reconcile" }])
+        .mockResolvedValue([]);
+
+      await registry.start();
+
+      expect(mockUpsertCronScheduler).not.toHaveBeenCalled();
+      expect(mockRemoveJobScheduler).toHaveBeenCalledWith("fast", "workflow.reconcile");
+    });
+
     it("rejects if called twice", async () => {
       const registry = new WorkflowRegistry(mockService as WorkflowService);
       registry.register(
@@ -324,6 +342,26 @@ describe("WorkflowRegistry", () => {
       await expect(
         expectCapturedProcessor(capturedProcessor)({ name: "unknownJob", data: {}, id: "j1" }),
       ).rejects.toThrow("No handler registered for job: unknownJob");
+    });
+
+    it("removes the scheduler instead of throwing for unknown scheduler-produced jobs", async () => {
+      const registry = new WorkflowRegistry(mockService as WorkflowService);
+      registry.register(
+        createMockDefinition("jobA", "fast"),
+        jest.fn().mockResolvedValue(undefined),
+      );
+      await registry.start();
+
+      // e.g. an older worker receiving "workflow.reconcile" from a newer deployment
+      const result = await expectCapturedProcessor(capturedProcessor)({
+        name: "workflow.reconcile",
+        data: {},
+        id: "j1",
+        repeatJobKey: "workflow.reconcile",
+      });
+
+      expect(result).toBeNull();
+      expect(mockRemoveJobScheduler).toHaveBeenCalledWith("fast", "workflow.reconcile");
     });
 
     it("returns null when handler returns undefined", async () => {
