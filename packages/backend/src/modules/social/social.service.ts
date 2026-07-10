@@ -76,7 +76,8 @@ export class SocialService extends BaseService<
 
     const accessToken = connection.value.accessToken;
     if (!accessToken) {
-      return this.error("BAD_REQUEST", "Missing access token for connection");
+      // the connect callback always stores a token — a missing one is a data-integrity fault
+      return this.error("INTERNAL_SERVER_ERROR", "Missing access token for connection");
     }
 
     const result = await this.throwablePromise(() =>

@@ -27,7 +27,8 @@ export class ClayRepository extends BaseExternaRepository {
 
     const response = responseResult.value;
     if (!response.ok) {
-      return this.error("BAD_REQUEST", `HTTP error! status: ${response.status}`, {
+      // upstream Clay call failed — not the caller's fault
+      return this.error("BAD_GATEWAY", `HTTP error! status: ${response.status}`, {
         cause: response,
       });
     }

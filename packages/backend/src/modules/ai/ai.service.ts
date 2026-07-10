@@ -453,7 +453,8 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         if (parsed.success) return ok(parsed.data);
 
         if (repairAttempts <= 0)
-          return this.error("PARSE_ERROR", "AI: Agent strict object failed", {
+          // BAD_GATEWAY: provider output failing the schema is an upstream fault (PARSE_ERROR maps to HTTP 400)
+          return this.error("BAD_GATEWAY", "AI: Agent strict object failed", {
             cause: parsed.error,
           });
 
@@ -502,7 +503,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
           if (parsed.success) return ok(parsed.data);
 
           if (repairAttempts === 0)
-            return this.error("PARSE_ERROR", "AI: Agent object failed", { cause: error });
+            return this.error("BAD_GATEWAY", "AI: Agent object failed", { cause: error });
 
           return this.generateObject({
             ...rest,
@@ -516,12 +517,12 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
             ctx,
           });
         }
-        return this.error("PARSE_ERROR", "AI: Agent object failed without text", {
+        return this.error("BAD_GATEWAY", "AI: Agent object failed without text", {
           cause: error,
         });
       }
       if (retryAttempts <= 0)
-        return this.error("BAD_REQUEST", "AI: Provider failed to generate object", {
+        return this.error("BAD_GATEWAY", "AI: Provider failed to generate object", {
           cause: error,
         });
       this.logger.warn(`generateObject failed, retrying (${retryAttempts} attempts left)`, {

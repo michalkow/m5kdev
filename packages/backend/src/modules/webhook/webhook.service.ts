@@ -49,7 +49,8 @@ export class WebhookService extends BaseService<{ webhook: WebhookRepository }, 
         if (currentTime > endTime) {
           await this.repository.webhook.timeout(webhook.value.id);
           clearInterval(intervalId);
-          return reject(this.error("TIMEOUT", "Wait for request timeout"));
+          // GATEWAY_TIMEOUT (504): the external system never called back — not the caller being slow
+          return reject(this.error("GATEWAY_TIMEOUT", "Wait for request timeout"));
         }
         const result = await this.repository.webhook.findById(webhook.value.id);
         if (result.isErr()) {
@@ -59,7 +60,10 @@ export class WebhookService extends BaseService<{ webhook: WebhookRepository }, 
 
         if (!result.value) {
           clearInterval(intervalId);
-          return reject(this.error("NOT_FOUND", "Wait for request failed: cannot find webhook"));
+          // the service created this row itself — losing it is an invariant violation
+          return reject(
+            this.error("INTERNAL_SERVER_ERROR", "Wait for request failed: cannot find webhook")
+          );
         }
         const { status, payload } = result.value;
         if (status === "COMPLETED") {
@@ -69,7 +73,8 @@ export class WebhookService extends BaseService<{ webhook: WebhookRepository }, 
         }
         if (status !== "WAITING") {
           clearInterval(intervalId);
-          return reject(this.error("BAD_REQUEST", "Wait for request failed"));
+          // row entered an ERROR_* status — integration failure, not the caller
+          return reject(this.error("INTERNAL_SERVER_ERROR", "Wait for request failed"));
         }
       }, 1000);
     });

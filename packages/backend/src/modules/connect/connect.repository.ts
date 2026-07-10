@@ -75,7 +75,7 @@ export class ConnectRepository extends BaseTableRepository<
     );
     if (createdResult.isErr()) return createdResult;
     const [created] = createdResult.value;
-    if (!created) return this.error("UNPROCESSABLE_CONTENT");
+    if (!created) return this.error("INTERNAL_SERVER_ERROR");
     return ok(created);
   }
 }

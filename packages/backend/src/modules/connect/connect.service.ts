@@ -130,7 +130,9 @@ export class ConnectService extends BasePermissionService<
 
     const provider = this.getProvider(conn.provider);
     if (!provider) {
-      return this.error("BAD_REQUEST", `Unknown provider: ${conn.provider}`);
+      // provider id comes from a stored connection row — unknown means the app
+      // dropped a provider that still has live connections
+      return this.error("INTERNAL_SERVER_ERROR", `Unknown provider: ${conn.provider}`);
     }
 
     const tokensResult = await this.throwablePromise(() =>

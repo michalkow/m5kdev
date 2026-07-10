@@ -474,7 +474,8 @@ export class BaseTableRepository<
     if (rowsResult.isErr()) return err(rowsResult.error);
 
     const rows = rowsResult.value as unknown as Row[];
-    if (rows.length === 0) return this.error("UNPROCESSABLE_CONTENT");
+    // a successful INSERT returning no rows is a DB anomaly, not a client-content problem
+    if (rows.length === 0) return this.error("INTERNAL_SERVER_ERROR");
     return ok(rows[0] as Row);
   }
 

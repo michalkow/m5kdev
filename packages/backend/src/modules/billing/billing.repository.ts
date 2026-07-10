@@ -94,7 +94,8 @@ export class BillingRepository extends BaseTableRepository<
   }
 
   async createTrialSubscription(customerId: string): ServerResultAsync<Stripe.Subscription> {
-    if (!this.trial) return this.error("NOT_FOUND", "Trial plan not found");
+    // reaching the trial flow without a configured trial plan is a module-config fault
+    if (!this.trial) return this.error("INTERNAL_SERVER_ERROR", "Trial plan not found");
     const stripeSubscription = await this.createSubscription({
       customerId,
       priceId: this.trial.priceId,

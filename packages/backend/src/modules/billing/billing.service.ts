@@ -100,7 +100,8 @@ export class BillingService extends BasePermissionService<
     if (readGuard.isErr()) return err(readGuard.error);
 
     if (!ctx.user.stripeCustomerId)
-      return this.error("NOT_FOUND", "User has no stripe customer id");
+      // the signup hook should have created the customer — its absence means that hook failed
+      return this.error("INTERNAL_SERVER_ERROR", "User has no stripe customer id");
     return this.repository.billing.listInvoices(ctx.user.stripeCustomerId);
   }
 

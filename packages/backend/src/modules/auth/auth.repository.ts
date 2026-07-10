@@ -252,7 +252,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     );
     if (insertResult.isErr()) return err(insertResult.error);
     const [inserted] = insertResult.value;
-    if (!inserted) return this.error("UNPROCESSABLE_CONTENT");
+    if (!inserted) return this.error("INTERNAL_SERVER_ERROR");
 
     const memberResult = await this.throwableQuery(() =>
       this.selectMemberRows(organizationId, { memberId: inserted.id }).limit(1)

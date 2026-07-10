@@ -149,7 +149,7 @@ export class FileService extends BasePermissionService<
   ): ServerResultAsync<void> {
     const fileRepo = this.repository.file;
     if (!fileRepo) {
-      return this.error("BAD_REQUEST", "File inventory is not configured");
+      return this.error("INTERNAL_SERVER_ERROR", "File inventory is not configured");
     }
 
     const rowResult = await fileRepo.findActiveById(input.fileId);
@@ -182,7 +182,7 @@ export class FileService extends BasePermissionService<
   async deleteUploadedFileById(actor: AuthenticatedActor, fileId: string): ServerResultAsync<void> {
     const fileRepo = this.repository.file;
     if (!fileRepo) {
-      return this.error("BAD_REQUEST", "File inventory is not configured");
+      return this.error("INTERNAL_SERVER_ERROR", "File inventory is not configured");
     }
 
     const rowResult = await fileRepo.findActiveById(fileId);
@@ -266,7 +266,7 @@ export class FileService extends BasePermissionService<
     if (result.isErr()) return err(result.error);
 
     const body = result.value.Body;
-    if (!body) return this.error("NOT_FOUND", "S3 object body is empty");
+    if (!body) return this.error("INTERNAL_SERVER_ERROR", "S3 object body is empty");
 
     const mkdirResult = await this.throwablePromise(() =>
       mkdir(dirname(destinationPath), { recursive: true })

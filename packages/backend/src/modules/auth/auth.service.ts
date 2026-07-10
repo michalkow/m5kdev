@@ -260,7 +260,7 @@ export class AuthService extends BasePermissionService<
     })
     .handle(async ({ ctx, input }): ServerResultAsync<string> => {
       if (!this.localeConfig) {
-        return this.error("BAD_REQUEST", "Locale configuration is not available");
+        return this.error("INTERNAL_SERVER_ERROR", "Locale configuration is not available");
       }
       const canonical = toCanonicalLocale(input.locale, getAllowedLocaleCodes(this.localeConfig));
       if (!canonical) {
@@ -480,7 +480,7 @@ export class AuthService extends BasePermissionService<
     .requireAuth("admin")
     .handle(async ({ input, ctx }) => {
       if (!this.localeConfig) {
-        return this.error("BAD_REQUEST", "Locale configuration is not available");
+        return this.error("INTERNAL_SERVER_ERROR", "Locale configuration is not available");
       }
       const locale = toCanonicalLocale(input.locale, getAllowedLocaleCodes(this.localeConfig));
       if (!locale) {

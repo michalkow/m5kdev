@@ -362,7 +362,8 @@ export class EmailService extends BaseService<never, never> {
   ) {
     const template = this.resolveTemplate(templateKey);
     if (!template) {
-      return this.error("NOT_FOUND", `Email template not found: ${String(templateKey)}`);
+      // templates are registered at boot — a missing one is a config bug, not a client error
+      return this.error("INTERNAL_SERVER_ERROR", `Email template not found: ${String(templateKey)}`);
     }
 
     const locale = options?.locale ?? this.i18n?.defaultLocale ?? this.appConfig.locales?.defaultLocale;
