@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.25.3
+
+### Patch Changes
+
+- reconcile
+
 ## 0.25.2
 
 ### Patch Changes

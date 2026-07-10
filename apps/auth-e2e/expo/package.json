@@ -1,6 +1,6 @@
 {
   "name": "m5kdev-auth-e2e-expo",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {

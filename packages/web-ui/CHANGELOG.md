@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.25.3
+
+### Patch Changes
+
+- reconcile
+- Updated dependencies
+  - @m5kdev/commons@0.25.3
+  - @m5kdev/frontend@0.25.3
+
 ## 0.25.2
 
 ### Patch Changes
