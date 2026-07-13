@@ -52,3 +52,4 @@ yarn-error.log*
 
 # Package tgz
 *.tgz
+packages/cli/templates/

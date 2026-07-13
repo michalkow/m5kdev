@@ -97,14 +97,21 @@ function normalizeCliArgv(argv: readonly string[]): readonly string[] {
 }
 
 function isBooleanFlag(value: string): boolean {
-  return ["yes", "force", "skip-install", "skip-git"].includes(value);
+  return ["yes", "force", "skip-install", "skip-git", "with-test-harness"].includes(value);
 }
 
 function toCreateCommandOptions(parsed: ParsedCli): CreateCommandOptions {
+  const platform = getStringOption(parsed.options, "platform");
+  if (platform && !["web", "expo", "both"].includes(platform)) {
+    throw new Error(`Invalid --platform "${platform}". Use web, expo, or both.`);
+  }
+
   return {
     targetDirectory: parsed.directory,
     appName: getStringOption(parsed.options, "name"),
     appDescription: getStringOption(parsed.options, "description"),
+    platform: platform as CreateCommandOptions["platform"],
+    testHarness: parsed.options["with-test-harness"] ? true : undefined,
     yes: Boolean(parsed.options.yes),
     force: Boolean(parsed.options.force),
     skipInstall: Boolean(parsed.options["skip-install"]),
@@ -131,6 +138,8 @@ function printHelp(): void {
   console.log("Options:");
   console.log("  --name <value>           Set the app name");
   console.log("  --description <value>    Set the app description");
+  console.log("  --platform <value>       App platform: web (default), expo, or both");
+  console.log("  --with-test-harness      Include the e2e test harness (default: no)");
   console.log("  --yes                    Accept defaults for missing prompts");
   console.log("  --force                  Allow writing into a non-empty directory");
   console.log("  --skip-install           Skip pnpm install");

@@ -1,7 +1,11 @@
+export type AppPlatform = "web" | "expo" | "both";
+
 export interface PromptValues {
   targetDirectory?: string;
   appName?: string;
   appDescription?: string;
+  platform?: AppPlatform;
+  testHarness?: boolean;
 }
 
 export interface CreateCommandOptions extends PromptValues {
@@ -17,4 +21,8 @@ export interface TemplateContext {
   appSlug: string;
   packageScope: string;
   betterAuthSecret: string;
+}
+
+export interface TemplateFeatureManifest {
+  features: Record<string, { paths: readonly string[] }>;
 }

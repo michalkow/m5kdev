@@ -1,5 +1,6 @@
+import { querySchema } from "@m5kdev/commons/modules/schemas/query.schema";
 import { getTableColumns, type InferSelectModel, type Table } from "drizzle-orm";
-import { createSelectSchema } from "drizzle-zod";
+import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-zod";
 import type { Result } from "neverthrow";
 import { z } from "zod";
 import type { ServerError } from "../../utils/errors";
@@ -204,3 +205,36 @@ export const scheduleManyOutput = z.object({
 export const deleteOutput = uuidOutput;
 
 export const deleteManyOutput = uuidManyOutput;
+
+export const createListOutputSchema = <T extends z.ZodTypeAny>(schema: T) =>
+  z.object({
+    rows: z.array(schema),
+    total: z.number(),
+  });
+
+export function createZodSchemas<T extends Table>(table: T) {
+  const selectSchema = createSelectSchema(table);
+  const insertSchema = createInsertSchema(table);
+  const updateSchema = createUpdateSchema(table);
+
+  return {
+    selectSchema,
+    insertSchema,
+    updateSchema,
+    output: {
+      single: selectSchema,
+      list: createListOutputSchema(selectSchema),
+      uuid: uuidOutput,
+      uuids: uuidManyOutput,
+    },
+    input: {
+      read: uuidOutput,
+      readMany: uuidManyOutput,
+      list: querySchema,
+      create: insertSchema,
+      update: updateSchema.extend({ id: z.string() }),
+      delete: uuidOutput,
+      deleteMany: uuidManyOutput,
+    },
+  };
+}

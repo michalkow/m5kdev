@@ -16,6 +16,12 @@ export const scheduleManyOutputSchema = z.object({
   jobIds: z.array(z.string()),
 });
 
+export const createListOutputSchema = <T extends z.ZodTypeAny>(schema: T) =>
+  z.object({
+    rows: z.array(schema),
+    total: z.number(),
+  });
+
 export const deleteOutputSchema = uuidSchema;
 export const deleteManyOutputSchema = uuidManySchema;
 

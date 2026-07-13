@@ -20,13 +20,13 @@
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "check-types": "turbo run check-types",
-    "test:e2e:auth": "pnpm --filter m5kdev-auth-e2e-tests test:e2e",
     "cs:add": "pnpm dlx @changesets/cli add",
     "cs:patch": "pnpm cs:add --all --patch && pnpm cs:version",
     "cs:publish": "pnpm build && pnpm dlx @changesets/cli publish && git push --follow-tags",
     "cs:version": "pnpm dlx @changesets/cli version",
     "cs:deploy": "read -p 'Message: ' msg && pnpm cs:add -m \"$msg\" && pnpm cs:version && pnpm build && pnpm dlx @changesets/cli publish && git push --follow-tags && git add . && git commit -m \"$msg\" && git push",
-    "knip": "knip"
+    "knip": "knip",
+    "test:e2e": "pnpm --filter @starter-app/e2e test:e2e"
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",

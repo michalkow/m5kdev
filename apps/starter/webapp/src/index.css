@@ -1,0 +1,15 @@
+/* biome-ignore-all lint/suspicious/noUnknownAtRules: Tailwind v4 */
+
+@import "tailwindcss";
+@import "@heroui/styles";
+@import "tw-animate-css";
+
+@source "./node_modules/@m5kdev/web-ui/dist/src/**/*.{mjs}";
+@source "../node_modules/@m5kdev/web-ui/dist/src/**/*.{mjs}";
+@source "../../node_modules/@m5kdev/web-ui/dist/src/**/*.{mjs}";
+@source "../../../node_modules/@m5kdev/web-ui/dist/src/**/*.{mjs}";
+@source "../../../../node_modules/@m5kdev/web-ui/dist/src/**/*.{mjs}";
+
+:root {
+  --accent: oklch(0.6204 0.195 253.83);
+}

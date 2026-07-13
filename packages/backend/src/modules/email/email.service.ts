@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { ok } from "neverthrow";
 import { createElement, type FunctionComponent } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { prerender } from "react-dom/static";
 import { Resend } from "resend";
 import { toI18nLanguageTag } from "@m5kdev/commons/modules/auth/auth.locale";
 import type { BackendAppEmailMode, BackendAppEmailOptions, BackendAppMetadata } from "../../app";
@@ -197,21 +197,27 @@ export class EmailService extends BaseService<never, never> {
     };
   }
 
-  private renderTemplatePayload(
+  private async renderTemplatePayload(
     template: EmailTemplate,
     to: string | string[],
     subject: string,
     previewText: string,
     from: string | undefined,
     templateProps: Record<string, unknown>
-  ): EmailDeliveryPayload {
+  ): Promise<EmailDeliveryPayload> {
     const reactProps = { ...templateProps, previewText };
     let html: string | undefined;
 
     try {
-      html = renderToStaticMarkup(createElement(template.react, reactProps));
+      // prerender supports Suspense — react-email components (Tailwind, Font)
+      // suspend during render, which renderToStaticMarkup cannot handle
+      const { prelude } = await prerender(createElement(template.react, reactProps));
+      html = await readableStreamToString(prelude);
     } catch (error) {
-      this.logger.warn({ error, templateId: template.id }, "Failed to render email template HTML");
+      this.logger.warn(
+        { err: error, templateId: template.id },
+        "Failed to render email template HTML"
+      );
       html = undefined;
     }
 
@@ -387,7 +393,7 @@ export class EmailService extends BaseService<never, never> {
       subject;
     const reactProps = { ...mergedProps, previewText };
     const react = createElement(template.react, reactProps);
-    const payload = this.renderTemplatePayload(
+    const payload = await this.renderTemplatePayload(
       template,
       to,
       subject,
@@ -548,4 +554,16 @@ export class EmailService extends BaseService<never, never> {
       overrideOptions
     );
   }
+}
+
+async function readableStreamToString(stream: ReadableStream<Uint8Array>): Promise<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let result = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    result += decoder.decode(value, { stream: true });
+  }
+  return result + decoder.decode();
 }

@@ -1,0 +1,23 @@
+{
+  "name": "@starter-app/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write",
+    "check-types": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "test:e2e:expo": "playwright test --config playwright.expo.config.ts --headed"
+  },
+  "devDependencies": {
+    "@m5kdev/backend": "workspace:*",
+    "@m5kdev/commons": "workspace:*",
+    "@m5kdev/config": "workspace:*",
+    "@playwright/test": "catalog:",
+    "@starter-app/shared": "workspace:*",
+    "@trpc/client": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

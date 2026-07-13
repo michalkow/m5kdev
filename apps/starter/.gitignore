@@ -1,0 +1,13 @@
+# runtime artifacts
+server/local.db*
+server/.e2e/
+server/.emails/
+server/uploads/
+
+# e2e output
+e2e/test-results/
+e2e/playwright-report/
+
+# expo
+expo/.expo/
+expo/dist/

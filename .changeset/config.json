@@ -8,11 +8,12 @@
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "ignore": [
-    "m5kdev-auth-e2e-email",
-    "m5kdev-auth-e2e-server",
-    "m5kdev-auth-e2e-shared",
-    "m5kdev-auth-e2e-tests",
-    "m5kdev-auth-e2e-webapp",
+    "@starter-app/e2e",
+    "@starter-app/email",
+    "@starter-app/expo",
+    "@starter-app/server",
+    "@starter-app/shared",
+    "@starter-app/webapp",
     "m5kdev-docs"
   ]
 }

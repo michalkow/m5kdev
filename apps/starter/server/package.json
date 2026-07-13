@@ -1,0 +1,55 @@
+{
+  "name": "@starter-app/server",
+  "version": "0.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch --env-file=../shared/.env src/index.ts",
+    "build": "tsup",
+    "start": "node dist/index.js",
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write",
+    "check-types": "tsc --noEmit",
+    "drizzle:generate": "drizzle-kit generate",
+    "drizzle:migrate": "drizzle-kit migrate",
+    "drizzle:studio": "drizzle-kit studio",
+    "drizzle:sync": "tsx --env-file=../shared/.env drizzle/sync.ts",
+    "drizzle:seed": "tsx --env-file=../shared/.env drizzle/seed.ts"
+  },
+  "dependencies": {
+    "@starter-app/email": "workspace:*",
+    "@starter-app/shared": "workspace:*",
+    "@libsql/client": "catalog:",
+    "@m5kdev/backend": "workspace:*",
+    "@m5kdev/commons": "workspace:*",
+    "@trpc/server": "catalog:",
+    "better-auth": "catalog:",
+    "cors": "catalog:",
+    "dotenv": "catalog:",
+    "drizzle-orm": "catalog:",
+    "drizzle-zod": "catalog:",
+    "express": "catalog:",
+    "ioredis": "catalog:",
+    "neverthrow": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "uuid": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@m5kdev/config": "workspace:*",
+    "@types/cors": "catalog:",
+    "@types/express": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "drizzle-kit": "catalog:",
+    "tslib": "catalog:",
+    "tsup": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:"
+  },
+  "exports": {
+    "./types": "./src/types.ts"
+  }
+}
