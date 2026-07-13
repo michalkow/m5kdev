@@ -37,7 +37,8 @@ test("signup, verification email, login, protected app, and logout", async ({ pa
   const email = `signup.${Date.now()}@auth-e2e.local`;
   const password = "password1234";
 
-  await page.goto("/posts");
+  // posts live on the protected index route
+  await page.goto("/");
   await expect(page).toHaveURL(/\/login/);
 
   await signUp(page, email, password);

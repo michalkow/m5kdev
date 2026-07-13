@@ -223,6 +223,8 @@ export function createZodSchemas<T extends Table>(table: T) {
     updateSchema,
     output: {
       single: selectSchema,
+      /** For find-style queries that legitimately return no row. */
+      found: selectSchema.optional(),
       list: createListOutputSchema(selectSchema),
       uuid: uuidOutput,
       uuids: uuidManyOutput,

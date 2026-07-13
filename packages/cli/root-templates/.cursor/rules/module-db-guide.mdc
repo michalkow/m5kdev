@@ -5,7 +5,10 @@ alwaysApply: false
 
 # Module DB File Style Guide
 
-Conventions for database table definitions in app modules.
+Conventions for database table definitions in app modules. The table is the
+**source of truth** for the module: the DTO (`<module>.dto.ts`) derives its
+Zod schemas from it, and row types flow from there through the router to the
+client.
 
 ## Conventions
 
@@ -23,6 +26,17 @@ Conventions for database table definitions in app modules.
 - Composite join tables define primary keys with `primaryKey({ columns: [t.aId, t.bId] })`.
 - Table names are plural; column names are snake_case at DB level, camelCase in code.
 - Inline union types are acceptable for simple status columns: `.$type<"draft" | "published">()`.
+- Include `deletedAt` when the module needs soft deletes — `queryList`
+  automatically excludes soft-deleted rows when the column exists.
+
+## Registration and migrations
+
+- Register every new table in `apps/server/src/schema.ts` with a plain
+  re-export: `export { posts } from "./modules/posts/posts.db";`. The schema
+  file is maintained by hand — there is no generation step.
+- After changing tables, run `pnpm drizzle:generate` (creates a migration in
+  `drizzle/`) and `pnpm drizzle:migrate` (applies it). Never write migration
+  SQL by hand and never edit files under `drizzle/meta/`.
 
 ## File Location
 

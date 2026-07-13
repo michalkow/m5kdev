@@ -37,7 +37,7 @@ export async function runCli(argv: readonly string[]): Promise<void> {
   if (options.skipInstall) {
     console.log("  pnpm install");
   }
-  console.log("  pnpm --filter ./apps/server sync");
+  console.log("  pnpm --filter ./apps/server drizzle:migrate");
   console.log("  pnpm dev");
 }
 

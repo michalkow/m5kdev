@@ -1,10 +1,5 @@
 import { useDialog } from "@m5kdev/web-ui/components/DialogProvider";
-import type {
-  PostCreateInputSchema,
-  PostPublishInputSchema,
-  PostSoftDeleteInputSchema,
-  PostUpdateInputSchema,
-} from "@starter-app/shared/modules/posts/posts.schema";
+import type { PostCreateInputSchema } from "@starter-app/shared/modules/posts/posts.schema";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -84,9 +79,8 @@ export function usePostActions() {
   };
 
   const publishPost = (id: string) => {
-    void publishMutation
-      .mutateAsync({ id } satisfies PostPublishInputSchema)
-      .catch(() => undefined);
+    // input shape is enforced by the router's inferred mutation type
+    void publishMutation.mutateAsync({ id }).catch(() => undefined);
   };
 
   const deletePost = (id: string) => {
@@ -98,9 +92,7 @@ export function usePostActions() {
       confirmLabel: t("posts.deleteDialog.confirm"),
       cancelLabel: t("posts.deleteDialog.cancel"),
       onConfirm: () => {
-        void deleteMutation
-          .mutateAsync({ id } satisfies PostSoftDeleteInputSchema)
-          .catch(() => undefined);
+        void deleteMutation.mutateAsync({ id }).catch(() => undefined);
       },
     });
   };

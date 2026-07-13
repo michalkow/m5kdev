@@ -1,0 +1,60 @@
+---
+globs: apps/**/server/src/modules/**/*.dto.ts
+alwaysApply: false
+---
+
+# Module DTO Style Guide
+
+The DTO is the module's API surface, **derived from the Drizzle table** —
+database schema first. Services, repositories, and tRPC files import the DTO
+*object* (`postSchemas`) and reference `postSchemas.input.x` /
+`postSchemas.output.y`; they do not import hand-written types.
+
+## The pattern
+
+```ts
+import { createZodSchemas } from "@m5kdev/backend/modules/base/base.dto";
+import {
+  postCreateInputSchema,
+  postUpdateInputSchema,
+} from "{{PACKAGE_SCOPE}}/shared/modules/posts/posts.schema";
+import { z } from "zod";
+import { posts } from "./posts.db";
+
+const { output, input } = createZodSchemas(posts);
+
+export const postSchemas = {
+  output,
+  input: {
+    ...input,
+    // create/update come from shared: the same schemas validate the webapp
+    // form, so the API contract and frontend validation cannot drift
+    create: postCreateInputSchema,
+    update: postUpdateInputSchema,
+    publish: z.object({ id: z.string() }),
+  },
+};
+```
+
+## What `createZodSchemas(table)` provides
+
+- `output.single` — the row (from `createSelectSchema`).
+- `output.found` — `single.optional()`, for find-style queries that may
+  return nothing.
+- `output.list` — `{ rows, total }` envelope.
+- `output.uuid` / `output.uuids` — id acknowledgements.
+- `input.list` — the generic `querySchema` (pagination, sorting, `q`,
+  `filters`).
+- `input.read/readMany/delete/deleteMany` — id inputs.
+- `input.create` / `input.update` — raw insert/update schemas from the table.
+
+## Rules
+
+- **Always override `input.create` and `input.update`** with narrower schemas:
+  the raw insert schema exposes server-managed columns (`id`, timestamps,
+  owner ids) that clients must never send. If the frontend validates the same
+  form, import the schema from shared instead of redefining it.
+- Add action-specific inputs (`publish`, `archive`) as plain Zod objects here.
+- Extend `input.list` only when a custom list contract is genuinely needed;
+  prefer the generic `q`/`filters` contract (see repository guide).
+- One exported `<module>Schemas` object per module — no loose schema exports.

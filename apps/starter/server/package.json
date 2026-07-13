@@ -14,7 +14,8 @@
     "drizzle:migrate": "drizzle-kit migrate",
     "drizzle:studio": "drizzle-kit studio",
     "drizzle:sync": "tsx --env-file=../shared/.env drizzle/sync.ts",
-    "drizzle:seed": "tsx --env-file=../shared/.env drizzle/seed.ts"
+    "drizzle:seed": "tsx --env-file=../shared/.env drizzle/seed.ts",
+    "drizzle:reset": "tsx --env-file=../shared/.env drizzle/reset.ts"
   },
   "dependencies": {
     "@starter-app/email": "workspace:*",

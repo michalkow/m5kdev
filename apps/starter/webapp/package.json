@@ -47,6 +47,7 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-i18next-loader": "catalog:",
-    "vite-tsconfig-paths": "catalog:"
+    "vite-tsconfig-paths": "catalog:",
+    "@trpc/server": "catalog:"
   }
 }

@@ -8,6 +8,23 @@ alwaysApply: false
 All server communication goes through tRPC with the TanStack React Query
 integration. No `fetch`, no axios, no hand-written API clients.
 
+## Types come from the server — never hand-mirror them
+
+Row and payload types are **inferred from the router**, not redeclared:
+
+```ts
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "{{PACKAGE_SCOPE}}/server/types";
+
+type PostsListOutput = inferRouterOutputs<AppRouter>["posts"]["list"];
+export type PostRow = PostsListOutput["rows"][number];
+```
+
+Shared Zod schemas (`apps/shared`) are only for runtime needs — form
+validation, or schemas the server DTO also imports. Never write a shared
+schema that just mirrors a server response; it will drift (see the shared
+schema guide).
+
 ## Queries
 
 Use `useTRPC()` and the generated `queryOptions`:
@@ -15,14 +32,37 @@ Use `useTRPC()` and the generated `queryOptions`:
 ```ts
 const trpc = useTRPC();
 const { data, isLoading, isFetching } = useQuery(
-  trpc.posts.list.queryOptions(listInput) as unknown as UseQueryOptions<PostsListOutputSchema>
+  trpc.posts.list.queryOptions(listInput) as unknown as UseQueryOptions<PostsListOutput>
 );
 ```
 
-- Input and output types come from the shared Zod schemas in `apps/shared` —
-  never redeclare them locally.
 - Search inputs that feed queries go through `useDeferredValue`, and URL-state
   updates are wrapped in `startTransition`.
+
+## List endpoints speak the generic query contract
+
+Module list procedures accept `QueryInput` from
+`@m5kdev/commons/modules/schemas/query.schema` — `page`, `limit`, `sort`,
+`order`, `q` (global search), and `filters`. Do not invent per-module fields
+like `search` or `status` at the top level; they will be stripped by input
+validation and silently ignored.
+
+```ts
+const listInput = useMemo<QueryInput>(
+  () => ({
+    page,
+    limit: PAGE_SIZE,
+    q: deferredSearch || undefined,
+    filters:
+      status === "all"
+        ? undefined
+        : [{ columnId: "status", type: "enum", method: "equals", value: status }],
+    sort: "updatedAt",
+    order: "desc",
+  }),
+  [deferredSearch, page, status]
+);
+```
 
 ## Mutations
 
@@ -40,6 +80,9 @@ const createMutation = useMutation(
   })
 );
 ```
+
+Mutation input shapes are enforced by the router's inferred types — no
+`satisfies SomeSchema` casts needed for simple `{ id }` payloads.
 
 ## Invalidation discipline
 

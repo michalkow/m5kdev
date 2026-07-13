@@ -1,18 +1,20 @@
+import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import {
   POST_FILTER_VALUES,
   POSTS_PAGE_SIZE,
 } from "@starter-app/shared/modules/posts/posts.constants";
-import type {
-  PostsListInputSchema,
-  PostsListOutputSchema,
-} from "@starter-app/shared/modules/posts/posts.schema";
+import type { AppRouter } from "@starter-app/server/types";
 import { type UseQueryOptions, useQuery } from "@tanstack/react-query";
+import type { inferRouterOutputs } from "@trpc/server";
 import { parseAsInteger, parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { startTransition, useDeferredValue, useMemo } from "react";
 import { useTRPC } from "@/utils/trpc";
 
 export type PostStatusFilter = (typeof POST_FILTER_VALUES)[number];
-export type PostRow = PostsListOutputSchema["rows"][number];
+
+// row/list types are inferred from the server router — no hand-written mirrors
+type PostsListOutput = inferRouterOutputs<AppRouter>["posts"]["list"];
+export type PostRow = PostsListOutput["rows"][number];
 
 const STATUS_PARSER = parseAsStringLiteral(POST_FILTER_VALUES).withDefault("all");
 
@@ -26,12 +28,16 @@ export function usePostsList() {
 
   const deferredSearch = useDeferredValue(search);
 
-  const listInput = useMemo<PostsListInputSchema>(
+  // the generic list contract: q for global search, filters for column filters
+  const listInput = useMemo<QueryInput>(
     () => ({
       page,
       limit: POSTS_PAGE_SIZE,
-      search: deferredSearch || undefined,
-      status: status === "all" ? undefined : status,
+      q: deferredSearch || undefined,
+      filters:
+        status === "all"
+          ? undefined
+          : [{ columnId: "status", type: "enum", method: "equals", value: status }],
       sort: "updatedAt",
       order: "desc",
     }),
@@ -39,7 +45,7 @@ export function usePostsList() {
   );
 
   const { data, isLoading, isFetching } = useQuery(
-    trpc.posts.list.queryOptions(listInput) as unknown as UseQueryOptions<PostsListOutputSchema>
+    trpc.posts.list.queryOptions(listInput) as unknown as UseQueryOptions<PostsListOutput>
   );
 
   const rows = data?.rows ?? [];

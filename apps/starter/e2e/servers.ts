@@ -43,8 +43,8 @@ export function serverWebServer(profile: E2EProfile, { expo = false } = {}) {
   const env = serverEnv(profile, expo);
   return {
     command: [
-      `${SERVER_FILTER} tsx scripts/reset.ts`,
-      `${SERVER_FILTER} tsx drizzle/sync.ts`,
+      `${SERVER_FILTER} tsx drizzle/reset.ts`,
+      `${SERVER_FILTER} drizzle-kit migrate`,
       `${SERVER_FILTER} tsx drizzle/seed.e2e.ts`,
       `${SERVER_FILTER} tsx src/index.ts`,
     ].join(" && "),

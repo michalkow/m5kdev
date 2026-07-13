@@ -931,6 +931,9 @@ importers:
       '@tailwindcss/vite':
         specifier: 'catalog:'
         version: 4.1.11(vite@7.0.4(@types/node@22.19.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.2)(tsx@4.20.4)(yaml@2.8.1))
+      '@trpc/server':
+        specifier: 'catalog:'
+        version: 11.4.3(typescript@6.0.3)
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.7

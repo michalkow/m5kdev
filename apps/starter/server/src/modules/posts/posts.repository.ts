@@ -24,7 +24,7 @@ export class PostsRepository extends BaseTableRepository<
         excludeId: z.string().optional(),
       })
     )
-    .output(postSchemas.output.single)
+    .output(postSchemas.output.found)
     .handle(async ({ excludeId, slug }) => {
       const whereClause = excludeId
         ? and(eq(this.table.slug, slug), ne(this.table.id, excludeId), isNull(this.table.deletedAt))

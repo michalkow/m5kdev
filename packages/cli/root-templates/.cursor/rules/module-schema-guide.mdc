@@ -3,109 +3,36 @@ globs: apps/**/shared/src/modules/**/*.schema.ts
 alwaysApply: false
 ---
 
-# Module Schema File Style Guide
+# Shared Schema Style Guide
 
-Conventions for shared Zod schema files that define the contract between server and client.
+Shared schemas have a **deliberately narrow role**. Do not mirror server types
+here — types flow from the server:
 
-## File Location
+- Row and list types are **inferred from the tRPC router**:
+  `inferRouterOutputs<AppRouter>` with `AppRouter` from
+  `{{PACKAGE_SCOPE}}/server/types`.
+- The API surface (inputs/outputs) is defined by the server module's DTO
+  (`<module>.dto.ts`), derived from the Drizzle table.
 
-```
-apps/<app>/shared/src/modules/<module>/<module>.schema.ts
-```
+## When a schema belongs in shared
 
-Companion constants file:
+Put a Zod schema here only when at least one of these holds:
 
-```
-apps/<app>/shared/src/modules/<module>/<module>.constants.ts
-```
+1. **The frontend needs it at runtime** — e.g. validating a form beyond native
+   HTML validation.
+2. **Both sides genuinely share it** — then the server DTO must import it
+   (`postSchemas.input.create = postCreateInputSchema`), so the API contract
+   and the frontend validation are the same object and cannot drift.
+3. **It cannot be re-exported from the server** because the server version
+   depends on Drizzle (`drizzle-zod` schemas) and shipping that dependency to
+   the client is not acceptable.
 
-## Core Philosophy
+Everything else — row schemas, list outputs, trivial `{ id }` inputs — must
+NOT be duplicated in shared. Hand-written mirrors silently drift from the real
+contract.
 
-- Define all Zod schemas and their inferred types in the shared package so both server and webapp can import them.
-- Import constants (enum values, page sizes) from the companion `<module>.constants.ts` file.
-- Extend `querySchema` from `@m5kdev/commons/modules/schemas/query.schema` for list inputs that need pagination, sorting, and filtering.
-- Export both the schema and its inferred `type` for every schema.
-
-## Naming Conventions
-
-| Kind | Pattern | Example |
-|---|---|---|
-| Entity schema | `{entity}Schema` | `postSchema` |
-| Entity type | `{Entity}Schema` | `PostSchema` |
-| Enum schema | `{entity}{Field}Schema` | `postStatusSchema` |
-| List input | `{entities}ListInputSchema` | `postsListInputSchema` |
-| List output | `{entities}ListOutputSchema` | `postsListOutputSchema` |
-| Operation input | `{entity}{Action}InputSchema` | `postCreateInputSchema` |
-| Operation output | `{entity}{Action}OutputSchema` | `postCreateOutputSchema` |
-
-## File Structure
-
-```typescript
-import { querySchema } from "@m5kdev/commons/modules/schemas/query.schema";
-import { z } from "zod";
-import { STATUS_VALUES } from "./<module>.constants";
-
-// 1. Enum schemas (from constants)
-// 2. Main entity schema
-// 3. List input/output schemas
-// 4. Operation input/output schemas
-```
-
-## Section 1: Enum Schemas
-
-Derive Zod enums from constant tuples defined in the constants file:
-
-```typescript
-export const postStatusSchema = z.enum(POST_STATUS_VALUES);
-export type PostStatusSchema = z.infer<typeof postStatusSchema>;
-```
-
-## Section 2: Main Entity Schema
-
-Define the full entity shape as a `z.object`. This is the canonical representation of the entity:
-
-```typescript
-export const postSchema = z.object({
-  id: z.string(),
-  authorUserId: z.string().nullish(),
-  organizationId: z.string().nullish(),
-  teamId: z.string().nullish(),
-  title: z.string(),
-  slug: z.string(),
-  excerpt: z.string().nullish(),
-  content: z.string(),
-  status: postStatusSchema,
-  publishedAt: z.date().nullish(),
-  createdAt: z.date(),
-  updatedAt: z.date().nullish(),
-  deletedAt: z.date().nullish(),
-});
-export type PostSchema = z.infer<typeof postSchema>;
-```
-
-## Section 3: List Input/Output Schemas
-
-Extend `querySchema` for list inputs with module-specific filters. Define list output as `{ rows, total }`:
-
-```typescript
-export const postsListInputSchema = querySchema.extend({
-  search: z.string().optional(),
-  status: postStatusSchema.optional(),
-});
-export type PostsListInputSchema = z.infer<typeof postsListInputSchema>;
-
-export const postsListOutputSchema = z.object({
-  rows: z.array(postSchema),
-  total: z.number(),
-});
-export type PostsListOutputSchema = z.infer<typeof postsListOutputSchema>;
-```
-
-## Section 4: Operation Input/Output Schemas
-
-Define per-operation schemas. Output schemas can reuse the main entity schema or a subset:
-
-```typescript
+```ts
+// GOOD — form-validation schema, imported by both the DTO and the webapp form
 export const postCreateInputSchema = z.object({
   title: z.string().min(1),
   slug: z.string().optional(),
@@ -114,60 +41,13 @@ export const postCreateInputSchema = z.object({
 });
 export type PostCreateInputSchema = z.infer<typeof postCreateInputSchema>;
 
-export const postCreateOutputSchema = postSchema;
-export type PostCreateOutputSchema = z.infer<typeof postCreateOutputSchema>;
+// BAD — hand-mirrored row schema; the table already defines this shape
+export const postSchema = z.object({ id: z.string(), title: z.string(), /* ... */ });
 ```
 
-## Patterns
+## Conventions
 
-### Reuse Entity Schema for Output
-
-When the operation returns the full entity, alias the main schema:
-
-```typescript
-export const postUpdateOutputSchema = postSchema;
-```
-
-### Minimal Operation Schemas
-
-For operations that take only an ID and return a subset:
-
-```typescript
-export const postSoftDeleteInputSchema = z.object({
-  id: z.string(),
-});
-
-export const postSoftDeleteOutputSchema = z.object({
-  id: z.string(),
-});
-```
-
-### Omitting Fields for Lighter Outputs
-
-Use `.omit()` or `.pick()` on the main schema to create lighter variants:
-
-```typescript
-export const postSimpleSchema = postSchema.omit({
-  content: true,
-  deletedAt: true,
-});
-```
-
-## Constants File Conventions
-
-Keep enum values, filter presets, and page sizes in `<module>.constants.ts`:
-
-```typescript
-export const POST_STATUS_VALUES = ["draft", "published"] as const;
-export const POST_FILTER_VALUES = ["all", ...POST_STATUS_VALUES] as const;
-export const POSTS_PAGE_SIZE = 6;
-```
-
-## Best Practices
-
-1. Always export both the Zod schema and its inferred type.
-2. Use `.nullish()` for optional nullable fields, `.optional()` for optional-only.
-3. Extend `querySchema` for list inputs rather than redefining pagination fields.
-4. Reuse the main entity schema as operation output when the full entity is returned.
-5. Keep validation rules (`.min()`, `.max()`, `.regex()`) in input schemas.
-6. Keep schemas flat and avoid deep nesting when possible.
+- File location: `apps/shared/src/modules/<module>/<module>.schema.ts`, with
+  enum values and constants in the companion `<module>.constants.ts`.
+- Export both the schema and its inferred `type`.
+- Build enums from constants: `z.enum(POST_STATUS_VALUES)`.

@@ -13,13 +13,13 @@
 
 ```sh
 pnpm install
-pnpm --filter ./apps/server sync
-pnpm --filter ./apps/server seed
+pnpm --filter ./apps/server drizzle:migrate
+pnpm --filter ./apps/server drizzle:seed
 pnpm dev
 ```
 
 The starter uses a local LibSQL file by default and writes local auth emails to `apps/server/.emails`.
-Before running `drizzle-kit`, the starter generates `apps/server/src/generated/schema.ts` from the registered backend modules.
+Database tables are registered by hand in `apps/server/src/schema.ts`; after changing any `*.db.ts`, run `drizzle:generate` and `drizzle:migrate`.
 
 ## Demo Credentials
 

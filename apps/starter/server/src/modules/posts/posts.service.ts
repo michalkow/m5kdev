@@ -15,7 +15,9 @@ export class PostsService extends BasePermissionService<
     .output(postSchemas.output.list)
     .requireAuth()
     .handle(({ input }) => {
-      return this.repository.posts.queryList(input);
+      return this.repository.posts.queryList(input, {
+        globalSearchColumns: ["title", "excerpt", "content"],
+      });
     });
 
   readonly create = this.procedure("create")

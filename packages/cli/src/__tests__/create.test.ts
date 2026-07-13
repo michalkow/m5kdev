@@ -47,8 +47,9 @@ describe("scaffoldProject", () => {
       path.join(result.targetDirectory, "apps/shared/src/modules/app/app.constants.ts"),
       "utf8"
     );
+    // global providers are composed in App.tsx
     const providers = await fs.readFile(
-      path.join(result.targetDirectory, "apps/webapp/src/Providers.tsx"),
+      path.join(result.targetDirectory, "apps/webapp/src/App.tsx"),
       "utf8"
     );
     const appTs = await fs.readFile(

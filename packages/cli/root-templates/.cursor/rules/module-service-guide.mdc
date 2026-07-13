@@ -5,7 +5,10 @@ alwaysApply: false
 
 # Module Service File Style Guide
 
-Conventions for service classes in app modules.
+Conventions for service classes in app modules. Services consume the module
+DTO object (`postSchemas`) — they do not import hand-written request/response
+types. Input and output schemas are attached to each procedure and validated
+at runtime.
 
 ## File Location
 
@@ -15,226 +18,116 @@ apps/<app>/server/src/modules/<module>/<module>.service.ts
 
 ## Conventions
 
-- Extend `BaseService<Repositories, Services>` or `BasePermissionService<Repositories, Services>` from `@m5kdev/backend/modules/base/base.service`.
+- Extend `BaseService<Repositories, Services>` or `BasePermissionService<Repositories, Services, Context>` from `@m5kdev/backend/modules/base/base.service`.
 - Declare repository and service dependencies as explicit named maps in generics.
 - Keep orchestration and business logic in services; repositories handle persistence only.
-- Implement service methods as procedures using `this.procedure("name")` builder chains.
-- Propagate `ServerResultAsync` consistently and use `err(...)`/`ok(...)` composition.
-
-## Schema Type Imports
-
-Import types from the shared schema file for procedure type parameters:
-
-```typescript
-import type {
-  PostCreateInputSchema,
-  PostCreateOutputSchema,
-  PostsListInputSchema,
-  PostsListOutputSchema,
-} from "@appname/shared/modules/posts/posts.schema";
-```
-
-## Context Type
-
-Define a `RequestContext` alias from the framework's `Context` type:
-
-```typescript
-import type { Context } from "@m5kdev/backend/utils/trpc";
-
-type RequestContext = Context;
-```
-
-Pass this as the third generic to `BasePermissionService` or `BaseService`.
+- Implement service methods as `readonly` procedures using the `this.procedure("name")` builder.
+- Propagate `ServerResultAsync` consistently with `err(...)`/`ok(...)` composition.
 
 ## Procedure Builder
 
-Service methods are defined using a chainable procedure builder. Each procedure handles input typing, authentication, resource loading, access control, and the final handler.
+Each procedure declares its schemas from the DTO, then auth, resource loading,
+access control, and the handler:
 
-### Builder Methods (in typical call order)
-
-1. `.requireAuth(scope?)` — Enforces authentication. Scope: `"user"` (default), `"organization"`, `"team"`, `"admin"`.
-2. `.use(name, step)` — Runs an arbitrary step and stores the result in `state`.
-3. `.loadResource(name, loader)` — Loads a value and stores it in `state`; returns `NOT_FOUND` if falsy.
-4. `.access(config)` — Permission check (only on `BasePermissionService`). Action must match a grant.
-5. `.handle(handler)` — Terminal method; runs the handler with `{ input, ctx, state, repository, service, logger }`.
-
-### Input Typing
-
-Use the generic type parameter with shared schema types:
-
-```typescript
-readonly create = this.procedure<PostCreateInputSchema>("create")
-  .requireAuth()
-  .handle(async ({ input, ctx }): ServerResultAsync<PostCreateOutputSchema> => {
-    // ...
-  });
-```
+1. `.input(schema)` / `.output(schema)` — DTO schemas; both are validated at runtime.
+2. `.requireAuth(scope?)` — `"user"` (default), `"organization"`, `"team"`, `"admin"`.
+3. `.loadResource(name, loader)` — loads a value into `state`; returns `NOT_FOUND` when falsy.
+4. `.use(name, step)` — arbitrary step storing its result in `state`.
+5. `.access(config)` — permission check (`BasePermissionService` only); action must match a grant.
+6. `.handle(handler)` — terminal; receives `{ input, ctx, state }`.
 
 ## Procedure Patterns
 
-### Simple List
+### List — delegate to `queryList`, never hand-roll list logic
 
 ```typescript
-readonly list = this.procedure<PostsListInputSchema>("list")
+readonly list = this.procedure("list")
+  .input(postSchemas.input.list)
+  .output(postSchemas.output.list)
   .requireAuth()
-  .handle(({ input }): ServerResultAsync<PostsListOutputSchema> => {
-    return this.repository.posts.list(input);
+  .handle(({ input }) => {
+    return this.repository.posts.queryList(input, {
+      globalSearchColumns: ["title", "excerpt", "content"],
+    });
   });
 ```
 
-### Create with Business Logic
+### Create with business logic
 
 ```typescript
-readonly create = this.procedure<PostCreateInputSchema>("create")
+readonly create = this.procedure("create")
   .requireAuth()
-  .access({
-    action: "write",
-    entities: ({ ctx }) => ({
-      organizationId: ctx.session.activeOrganizationId ?? null,
-      teamId: ctx.session.activeTeamId ?? null,
-    }),
-  })
-  .handle(async ({ input, ctx }): ServerResultAsync<PostCreateOutputSchema> => {
-    const uniqueSlug = await this.repository.posts.resolveUniqueSlug(
-      this.slugify(input.slug ?? input.title)
-    );
+  .input(postSchemas.input.create)
+  .output(postSchemas.output.single)
+  .access({ action: "write" })
+  .handle(async ({ input, ctx }) => {
+    const uniqueSlug = await this.repository.posts.resolveUniqueSlug({
+      candidate: slugify(input.slug ?? input.title),
+    });
     if (uniqueSlug.isErr()) return err(uniqueSlug.error);
 
     return this.repository.posts.create({
       authorUserId: ctx.user.id,
       organizationId: ctx.session.activeOrganizationId ?? null,
-      teamId: ctx.session.activeTeamId ?? null,
       title: input.title.trim(),
       slug: uniqueSlug.value,
       content: input.content.trim(),
       status: "draft",
-    }) as ServerResultAsync<PostCreateOutputSchema>;
-  });
-```
-
-### Update with Resource Loading and Access Control
-
-```typescript
-readonly update = this.procedure<PostUpdateInputSchema>("update")
-  .requireAuth()
-  .use("post", async ({ input }) => {
-    const current = await this.repository.posts.findById(input.id);
-    if (current.isErr()) return err(current.error);
-    if (!current.value || current.value.deletedAt) {
-      return this.error("NOT_FOUND", "Post not found");
-    }
-    return current.value;
-  })
-  .access({
-    action: "write",
-    entityStep: "post",
-  })
-  .handle(async ({ input }): ServerResultAsync<PostUpdateOutputSchema> => {
-    return this.repository.posts.update(input);
-  });
-```
-
-### Soft Delete
-
-```typescript
-readonly softDelete = this.procedure<PostSoftDeleteInputSchema>("softDelete")
-  .requireAuth()
-  .use("post", async ({ input }) => {
-    const current = await this.repository.posts.findById(input.id);
-    if (current.isErr()) return err(current.error);
-    if (!current.value || current.value.deletedAt) {
-      return this.error("NOT_FOUND", "Post not found");
-    }
-    return current.value;
-  })
-  .access({
-    action: "delete",
-    entityStep: "post",
-  })
-  .handle(async ({ input }): ServerResultAsync<PostSoftDeleteOutputSchema> => {
-    const updated = await this.repository.posts.update({
-      id: input.id,
-      deletedAt: new Date(),
     });
+  });
+```
+
+### Update with resource loading and access control
+
+```typescript
+readonly update = this.procedure("update")
+  .requireAuth()
+  .input(postSchemas.input.update)
+  .output(postSchemas.output.single)
+  .loadResource("post", ({ input }) => this.repository.posts.findById(input.id))
+  .access({ action: "write", entityStep: "post" })
+  .handle(async ({ input, state }) => {
+    return this.repository.posts.update({
+      id: input.id,
+      title: input.title ? input.title.trim() : state.post.title,
+      content: (input.content?.trim() ?? state.post.content).trim(),
+    });
+  });
+```
+
+### Soft delete
+
+```typescript
+readonly softDelete = this.procedure("softDelete")
+  .input(postSchemas.input.delete)
+  .output(postSchemas.output.uuid)
+  .requireAuth()
+  .loadResource("post", ({ input }) => this.repository.posts.findById(input.id))
+  .access({ action: "delete", entityStep: "post" })
+  .handle(async ({ input }) => {
+    const updated = await this.repository.posts.update({ id: input.id, deletedAt: new Date() });
     if (updated.isErr()) return err(updated.error);
     return ok({ id: updated.value.id });
   });
 ```
 
-### Public (No Auth)
-
-```typescript
-readonly getPublic = this.procedure<GetPublicInputSchema>("getPublic")
-  .handle(async ({ input }): ServerResultAsync<PostSchema> => {
-    return this.repository.posts.findPublished(input.slug);
-  });
-```
-
 ## Access Control Modes
 
-The `.access()` step supports two entity resolution strategies:
+- **`entityStep`** — references a value stored by `.loadResource()`/`.use()`;
+  the entity's `userId`, `organizationId`, and `teamId` are read automatically.
+- **`entities`** — inline function returning `{ userId?, organizationId?, teamId? }`
+  when the entity is not loaded into state.
 
-- **`entityStep`** — References a value stored by a prior `.use()` or `.loadResource()` step. The entity's `userId`, `organizationId`, and `teamId` are read automatically.
-- **`entities`** — Inline function returning `{ userId?, organizationId?, teamId? }` for cases where the entity is not loaded into state.
+## Permissions and Grants
 
-## Permission and Grants
-
-- If extending `BasePermissionService`, keep action names aligned with grants (`read`, `write`, `delete`, `publish`).
-- Do not use undeclared action aliases (e.g., guard `"update"` when grants only define `"write"`).
-- If a module has no `.access()` usage, prefer `BaseService` over `BasePermissionService`.
-
-## Example Skeleton
-
-```typescript
-import type {
-  PostCreateInputSchema,
-  PostCreateOutputSchema,
-  PostsListInputSchema,
-  PostsListOutputSchema,
-} from "@appname/shared/modules/posts/posts.schema";
-import { BasePermissionService } from "@m5kdev/backend/modules/base/base.service";
-import type { ServerResultAsync } from "@m5kdev/backend/utils/types";
-import type { Context } from "@m5kdev/backend/utils/trpc";
-import { err, ok } from "neverthrow";
-import type { PostsRepository } from "./posts.repository";
-
-type RequestContext = Context;
-
-export class PostsService extends BasePermissionService<
-  { posts: PostsRepository },
-  Record<string, never>,
-  RequestContext
-> {
-  readonly list = this.procedure<PostsListInputSchema>("list")
-    .requireAuth()
-    .handle(({ input }): ServerResultAsync<PostsListOutputSchema> => {
-      return this.repository.posts.list(input);
-    });
-
-  readonly create = this.procedure<PostCreateInputSchema>("create")
-    .requireAuth()
-    .access({
-      action: "write",
-      entities: ({ ctx }) => ({
-        organizationId: ctx.session.activeOrganizationId ?? null,
-        teamId: ctx.session.activeTeamId ?? null,
-      }),
-    })
-    .handle(async ({ input, ctx }): ServerResultAsync<PostCreateOutputSchema> => {
-      return this.repository.posts.create({
-        authorUserId: ctx.user.id,
-        title: input.title.trim(),
-        content: input.content.trim(),
-        status: "draft",
-      }) as ServerResultAsync<PostCreateOutputSchema>;
-    });
-}
-```
+- Keep action names aligned with grants (`read`, `write`, `delete`, `publish`).
+- Do not use undeclared aliases (e.g. guarding `"update"` when grants define `"write"`).
+- If a module never uses `.access()`, extend `BaseService` instead of `BasePermissionService`.
 
 ## Best Practices
 
-1. Keep procedures as `readonly` class properties for consistent initialization.
-2. Use `.use()` steps for resource loading with validation before `.access()`.
-3. Return `this.error("NOT_FOUND")` or `this.error("FORBIDDEN")` for expected failures.
-4. Keep private helper methods (slugify, excerpt generation) as regular class methods.
+1. Keep procedures as `readonly` class properties.
+2. `.loadResource()` before `.access({ entityStep })` — it 404s on missing rows for free.
+3. Return `this.error("NOT_FOUND")` / `this.error("FORBIDDEN")` for expected failures; reserve 5xx codes for server faults (they report to Sentry).
+4. Keep pure helpers (slugify, excerpt) in `<module>.utils.ts`.
 5. Propagate `err(...)` from repository results rather than throwing.

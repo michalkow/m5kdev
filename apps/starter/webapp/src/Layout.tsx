@@ -38,12 +38,12 @@ export function Layout() {
             <AppSidebarContent
               navigationItems={[
                 {
-                  label: "Posts",
+                  label: t("layout.navigation.posts"),
                   icon: <FileIcon />,
                   link: "/",
                 },
                 {
-                  label: "Team",
+                  label: t("layout.navigation.members"),
                   icon: <UsersIcon />,
                   link: "/organization/members",
                 },
