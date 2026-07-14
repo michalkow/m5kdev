@@ -2,7 +2,7 @@ import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { USER_LOCALE_HEADER } from "@m5kdev/commons/modules/auth/auth.constants";
 import { resolveAppLocale } from "@m5kdev/commons/modules/auth/auth.locale";
-import { AUTH_LOCALE_CONFIG } from "@starter-app/shared/modules/app/locale.constants";
+import { APP_LOCALE_CONFIG } from "@starter-app/shared/modules/app/app.constants";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useEffect, useMemo, useState } from "react";
@@ -101,7 +101,7 @@ export default function SignupScreen() {
     setStatus(null);
     try {
       const deviceLocale = Intl.DateTimeFormat().resolvedOptions().locale;
-      const userLocale = resolveAppLocale(deviceLocale, AUTH_LOCALE_CONFIG);
+      const userLocale = resolveAppLocale(deviceLocale, APP_LOCALE_CONFIG);
       const result = await authClient.signUp.email(
         {
           name: email,

@@ -1,5 +1,26 @@
 # @m5kdev/backend
 
+## 0.26.1
+
+### Patch Changes
+
+- ai starte
+- Updated dependencies
+  - @m5kdev/commons@0.26.1
+  - @m5kdev/config@0.26.1
+
+## 0.26.0
+
+### Minor Changes
+
+- ai agent object
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.26.0
+  - @m5kdev/config@0.26.0
+
 ## 0.25.3
 
 ### Patch Changes

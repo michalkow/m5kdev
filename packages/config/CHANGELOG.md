@@ -1,5 +1,17 @@
 # @m5kdev/config
 
+## 0.26.1
+
+### Patch Changes
+
+- ai starte
+
+## 0.26.0
+
+### Minor Changes
+
+- ai agent object
+
 ## 0.25.3
 
 ### Patch Changes
