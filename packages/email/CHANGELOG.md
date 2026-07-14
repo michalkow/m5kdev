@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.26.3
+
+### Patch Changes
+
+- ai opt
+
 ## 0.26.2
 
 ### Patch Changes
