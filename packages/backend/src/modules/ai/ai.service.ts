@@ -19,7 +19,7 @@ import {
 import { jsonrepair } from "jsonrepair";
 import { err, ok } from "neverthrow";
 import type Replicate from "replicate";
-import type { ZodType, z } from "zod";
+import { type ZodType, z } from "zod";
 import type { RequiredServiceActor } from "../base/base.actor";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
@@ -34,10 +34,7 @@ type MastraAgentObjectGeneration<T extends ZodType> = MastraAgentGenerateOptions
   schema: T;
   prompt?: string;
   messages?: MessageListInput;
-  extractor?: {
-    model?: string;
-    prompt?: string;
-  };
+  extractor?: Omit<AIServiceExtractObjectParams<T>, "text" | "schema">;
 };
 type MessageListInput = { role: "user" | "assistant" | "system"; content: string }[];
 type GenerateTextParams = Parameters<typeof generateText>[0];
@@ -78,10 +75,7 @@ export type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
 
 export type AIServiceGenerateExtractedObjectParams<T extends ZodType> =
   AIServiceGenerateObjectParams<T> & {
-    extractor?: {
-      model?: string;
-      prompt?: string;
-    };
+    extractor?: Omit<AIServiceExtractObjectParams<T>, "text" | "schema">;
   };
 
 export type AIServiceExtractObjectParams<T extends ZodType> = {
@@ -89,6 +83,14 @@ export type AIServiceExtractObjectParams<T extends ZodType> = {
   prompt?: string;
   text: string;
   schema: T;
+  safeSchema?: ZodType<any, any, any>;
+  objectType?: "object" | "array";
+  repairAttempts?: number;
+  repairModel?: string;
+  retryAttempts?: number;
+  initialRetryAttempts?: number;
+  retryModels?: string[];
+  ctx?: AIServiceActorContext;
 };
 
 type AIServiceOptions = {
@@ -247,13 +249,14 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       return this.error("SERVICE_UNAVAILABLE", "AI: Agent object failed", { cause: text.error });
 
     const result = await this.extractObject({
+      ctx,
       ...extractor,
       schema,
       text: text.value,
     });
     if (result.isErr())
       return this.error("SERVICE_UNAVAILABLE", "AI: Agent object failed", { cause: result.error });
-    return ok(result.value.object);
+    return ok(result.value);
   }
 
   async agentObjectResult<T extends ZodType<any>>(
@@ -262,18 +265,21 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     ctx?: AIServiceActorContext & { model?: string }
   ): ServerResultAsync<FullOutput<any> & { object: z.infer<T> }> {
     const { schema, extractor, ...rest } = options;
-    const text = await this.agentText(agent, rest, ctx);
-    if (text.isErr())
-      return this.error("SERVICE_UNAVAILABLE", "AI: Agent object failed", { cause: text.error });
+    const fullOutput = await this.agentTextResult(agent, rest, ctx);
+    if (fullOutput.isErr())
+      return this.error("SERVICE_UNAVAILABLE", "AI: Agent object failed", {
+        cause: fullOutput.error,
+      });
 
     const result = await this.extractObject({
+      ctx,
       ...extractor,
       schema,
-      text: text.value,
+      text: fullOutput.value.text,
     });
     if (result.isErr())
       return this.error("SERVICE_UNAVAILABLE", "AI: Agent object failed", { cause: result.error });
-    return ok(result.value);
+    return ok({ ...fullOutput.value, object: result.value });
   }
 
   async upsertEmbedDocument(params: {
@@ -502,14 +508,20 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
             issues: JSON.stringify(parsed.error.issues),
           }),
         };
+        const baseMessages: ModelMessage[] =
+          messages ??
+          (Array.isArray(prompt)
+            ? prompt
+            : [{ role: "user", content: prompt ?? "" } as ModelMessage]);
         return this.generateObject({
           ...rest,
-          messages: messages
-            ? [...messages, assistantMessage, userMessage]
-            : [{ role: "user", content: prompt } as ModelMessage, assistantMessage, userMessage],
+          messages: [...baseMessages, assistantMessage, userMessage],
           repairAttempts: repairAttempts - 1,
+          repairModel,
           model: repairModel ?? model,
           schema,
+          safeSchema,
+          objectType,
           ctx,
         });
       }
@@ -532,22 +544,33 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
           if (createUsageResult.isErr()) return err(createUsageResult.error);
         }
         if (error.text) {
-          const repairedText = jsonrepair(error.text);
-          const parsed = schema.safeParse(repairedText);
-          if (parsed.success) return ok(parsed.data);
+          try {
+            const repaired: unknown = JSON.parse(jsonrepair(error.text));
+            const parsed = schema.safeParse(repaired);
+            if (parsed.success) return ok(parsed.data);
+          } catch {
+            // jsonrepair throws on unrepairable text; fall through to LLM repair
+          }
 
-          if (repairAttempts === 0)
+          if (repairAttempts <= 0)
             return this.error("BAD_GATEWAY", "AI: Agent object failed", { cause: error });
 
           return this.generateObject({
             ...rest,
             prompt: repairJsonPrompt.compile({
               text: error.text,
-              error: JSON.stringify(error.cause ?? "Unknown error"),
+              error:
+                error.cause instanceof Error
+                  ? error.cause.message
+                  : JSON.stringify(error.cause ?? "Unknown error"),
+              schema: this.stringifySchema(schema),
             }),
             repairAttempts: repairAttempts - 1,
+            repairModel,
             model: repairModel ?? model,
             schema,
+            safeSchema,
+            objectType,
             ctx,
           });
         }
@@ -574,6 +597,8 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         ...(messages ? { messages } : { prompt: prompt! }),
         model: nextModel,
         schema,
+        safeSchema,
+        objectType,
         repairAttempts,
         repairModel,
         ctx,
@@ -598,6 +623,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     if (textResult.isErr()) return err(textResult.error);
 
     const result = await this.extractObject({
+      ctx: rest.ctx,
       ...extractor,
       text: textResult.value,
       schema,
@@ -611,15 +637,29 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     prompt = extractObjectPrompt,
     text,
     schema,
+    ...rest
   }: AIServiceExtractObjectParams<T>): ServerResultAsync<z.infer<T>> {
+    // Function replacers so "$"-patterns in the interpolated values are not treated as substitutions
+    const compiledPrompt = prompt
+      .replaceAll("{{schema}}", () => this.stringifySchema(schema))
+      .replaceAll("{{text}}", () => text);
     const result = await this.generateObject({
+      ...rest,
       schema,
-      prompt: prompt.replaceAll("{{text}}", text),
+      prompt: compiledPrompt,
       model,
       temperature: 0,
     });
     if (result.isErr()) return err(result.error);
     return ok(result.value);
+  }
+
+  private stringifySchema(schema: ZodType): string {
+    try {
+      return JSON.stringify(z.toJSONSchema(schema, { unrepresentable: "any" }));
+    } catch {
+      return "";
+    }
   }
 
   async generateReplicate(

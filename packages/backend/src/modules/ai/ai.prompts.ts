@@ -3,16 +3,21 @@ import { Prompt } from "./ai.prompt";
 export const repairJsonPrompt = new Prompt<{
   text: string;
   error: string;
+  schema: string;
 }>(`
-You are a JSON repair expert. You are given a JSON string that is invalid, error message and a schema that is used to parse the JSON string. You need to repair the JSON string and return the repaired JSON adher to the schema.
+You are a JSON repair expert. You are given an invalid JSON string, the error message produced when parsing it, and the JSON schema the output must conform to. Repair the JSON string and return repaired JSON that adheres to the schema.
+
+## Schema
+
+{{{schema}}}
 
 ## Text
 
-{{text}}
+{{{text}}}
 
 ## Error
 
-{{error}}
+{{{error}}}
 
 `);
 
@@ -23,11 +28,15 @@ The returned JSON didn't follow all the constraints for the Zod schema. Below ar
 
 ## Issues
 
-{{issues}}
+{{{issues}}}
 `);
 
 export const extractObjectPrompt = `
-You are a JSON extractor expert. You are given a text response of an AI model that contains all the data you need to create an JSON response. Extract the data from the text and return the JSON response acording to the provided schema.
+You are a JSON extractor expert. You are given a text response of an AI model that contains all the data you need to create a JSON response. Extract the data from the text and return the JSON response according to the provided schema.
+
+<schema>
+{{schema}}
+</schema>
 
 <text>
 {{text}}
