@@ -18,6 +18,7 @@ export const O3 = "openai/o3";
 
 // Models < $1/M tokens
 export const GPT_5_MINI = "openai/gpt-5-mini";
+export const GPT_4O_MINI = "openai/gpt-4o-mini";
 export const GEMINI_2_5_FLASH = "google/gemini-2.5-flash";
 export const GROK_3_MINI = "x-ai/grok-3-mini";
 export const GROK_4_FAST = "x-ai/grok-4-fast";
@@ -50,9 +51,9 @@ export const SCORER_FAST = KIMI_K2_5;
 export const RESONING_BEST = GEMINI_3_1_PRO;
 export const RESONING_FAST = KIMI_K2_5;
 export const STRUCTURED_OUTPUT_BEST = CLAUDE_SONNET_4_5;
-export const STRUCTURED_OUTPUT_FAST = GPT_5_MINI;
+export const STRUCTURED_OUTPUT_FAST = GPT_4O_MINI;
 export const TOOL_CALL_BEST = CLAUDE_SONNET_4_5;
-export const TOOL_CALL_FAST = GPT_5_MINI;
+export const TOOL_CALL_FAST = GPT_4O_MINI;
 
 export const AI_MODELS = [
   LLAMA_3_3_70B_INSTRUCT,
