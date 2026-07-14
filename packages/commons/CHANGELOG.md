@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.26.5
+
+### Patch Changes
+
+- man fix
+
 ## 0.26.4
 
 ### Patch Changes

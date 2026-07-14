@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.26.5
+
+### Patch Changes
+
+- man fix
+- Updated dependencies
+  - @m5kdev/commons@0.26.5
+
 ## 0.26.4
 
 ### Patch Changes
