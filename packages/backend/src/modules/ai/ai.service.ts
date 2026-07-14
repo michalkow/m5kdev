@@ -1,4 +1,7 @@
-import { OPENAI_TEXT_EMBEDDING_3_SMALL } from "@m5kdev/commons/modules/ai/ai.constants";
+import {
+  OPENAI_TEXT_EMBEDDING_3_SMALL,
+  STRUCTURED_OUTPUT_FAST,
+} from "@m5kdev/commons/modules/ai/ai.constants";
 import { arrayToPseudoXML } from "@m5kdev/commons/modules/ai/ai.utils";
 import type { Mastra } from "@mastra/core";
 import { RequestContext } from "@mastra/core/request-context";
@@ -20,13 +23,22 @@ import type { ZodType, z } from "zod";
 import type { RequiredServiceActor } from "../base/base.actor";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
-import { repairJsonPrompt, repairZodPrompt } from "./ai.prompts";
+import { extractObjectPrompt, repairJsonPrompt, repairZodPrompt } from "./ai.prompts";
 import type { AiUsageRepository, AiUsageRow, AiVectorRepository } from "./ai.repository";
 import type { IdeogramV3GenerateInput, IdeogramV3GenerateOutput } from "./ideogram/ideogram.dto";
 import type { IdeogramService } from "./ideogram/ideogram.service";
 
 type MastraAgent = ReturnType<Mastra["getAgent"]>;
 type MastraAgentGenerateOptions = Parameters<MastraAgent["generate"]>[1];
+type MastraAgentObjectGeneration<T extends ZodType> = MastraAgentGenerateOptions & {
+  schema: T;
+  prompt?: string;
+  messages?: MessageListInput;
+  extractor?: {
+    model?: string;
+    prompt?: string;
+  };
+};
 type MessageListInput = { role: "user" | "assistant" | "system"; content: string }[];
 type GenerateTextParams = Parameters<typeof generateText>[0];
 type GenerateTextInput =
@@ -63,6 +75,21 @@ export type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
     retryModels?: string[];
     objectType?: "object" | "array";
   };
+
+export type AIServiceGenerateExtractedObjectParams<T extends ZodType> =
+  AIServiceGenerateObjectParams<T> & {
+    extractor?: {
+      model?: string;
+      prompt?: string;
+    };
+  };
+
+export type AIServiceExtractObjectParams<T extends ZodType> = {
+  model?: string;
+  prompt?: string;
+  text: string;
+  schema: T;
+};
 
 type AIServiceOptions = {
   retryAttempts?: number;
@@ -211,35 +238,42 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
 
   async agentObject<T extends ZodType<any>>(
     agent: string,
-    options: MastraAgentGenerateOptions & {
-      schema: T;
-      prompt?: string;
-      messages?: MessageListInput;
-    },
+    options: MastraAgentObjectGeneration<T>,
     ctx?: AIServiceActorContext & { model?: string }
   ): ServerResultAsync<z.infer<T>> {
-    const { schema, ...rest } = options;
-    const result = await this.agentUse(agent, { ...rest, structuredOutput: { schema } }, ctx);
+    const { schema, extractor, ...rest } = options;
+    const text = await this.agentText(agent, rest, ctx);
+    if (text.isErr())
+      return this.error("SERVICE_UNAVAILABLE", "AI: Agent object failed", { cause: text.error });
+
+    const result = await this.extractObject({
+      ...extractor,
+      schema,
+      text: text.value,
+    });
     if (result.isErr())
       return this.error("SERVICE_UNAVAILABLE", "AI: Agent object failed", { cause: result.error });
-    return ok(result.value.object as z.infer<T>);
+    return ok(result.value.object);
   }
 
   async agentObjectResult<T extends ZodType<any>>(
     agent: string,
-    options: MastraAgentGenerateOptions & {
-      schema: T;
-      prompt?: string;
-      messages?: MessageListInput;
-    },
+    options: MastraAgentObjectGeneration<T>,
     ctx?: AIServiceActorContext & { model?: string }
   ): ServerResultAsync<FullOutput<any> & { object: z.infer<T> }> {
-    this.logger.info("AGENT OBJECT RESULT");
-    const { schema, ...rest } = options;
-    const result = await this.agentUse(agent, { ...rest, structuredOutput: { schema } }, ctx);
-    if (result.isErr()) return err(result.error);
-    this.logger.info("AGENT OBJECT RESULT DONE");
-    return ok({ ...result.value, object: result.value.object as z.infer<T> });
+    const { schema, extractor, ...rest } = options;
+    const text = await this.agentText(agent, rest, ctx);
+    if (text.isErr())
+      return this.error("SERVICE_UNAVAILABLE", "AI: Agent object failed", { cause: text.error });
+
+    const result = await this.extractObject({
+      ...extractor,
+      schema,
+      text: text.value,
+    });
+    if (result.isErr())
+      return this.error("SERVICE_UNAVAILABLE", "AI: Agent object failed", { cause: result.error });
+    return ok(result.value);
   }
 
   async upsertEmbedDocument(params: {
@@ -548,6 +582,44 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         retryModels: nextRetryModels,
       } as AIServiceGenerateObjectParams<T>);
     }
+  }
+
+  async generateExtractedObject<T extends ZodType>(
+    params: AIServiceGenerateExtractedObjectParams<T>
+  ): ServerResultAsync<z.infer<T>> {
+    const { schema, extractor, ...rest } = params;
+    const textResult = await this.generateText({ ...rest });
+    if (textResult.isErr()) return err(textResult.error);
+
+    if (rest.messages)
+      return this.error(
+        "INTERNAL_SERVER_ERROR",
+        "Messages are not supported for extracted object generation"
+      );
+
+    const result = await this.extractObject({
+      ...extractor,
+      text: textResult.value,
+      schema,
+    });
+    if (result.isErr()) return err(result.error);
+    return ok(result.value);
+  }
+
+  async extractObject<T extends ZodType>({
+    model = STRUCTURED_OUTPUT_FAST,
+    prompt = extractObjectPrompt,
+    text,
+    schema,
+  }: AIServiceExtractObjectParams<T>): ServerResultAsync<z.infer<T>> {
+    const result = await this.generateObject({
+      schema,
+      prompt: prompt.replace("{{text}}", text),
+      model,
+      temperature: 0,
+    });
+    if (result.isErr()) return err(result.error);
+    return ok(result.value);
   }
 
   async generateReplicate(
