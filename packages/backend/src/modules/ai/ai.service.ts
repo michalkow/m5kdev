@@ -588,14 +588,14 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     params: AIServiceGenerateExtractedObjectParams<T>
   ): ServerResultAsync<z.infer<T>> {
     const { schema, extractor, ...rest } = params;
-    const textResult = await this.generateText({ ...rest });
-    if (textResult.isErr()) return err(textResult.error);
-
     if (rest.messages)
       return this.error(
         "INTERNAL_SERVER_ERROR",
         "Messages are not supported for extracted object generation"
       );
+
+    const textResult = await this.generateText({ ...rest });
+    if (textResult.isErr()) return err(textResult.error);
 
     const result = await this.extractObject({
       ...extractor,
@@ -614,7 +614,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   }: AIServiceExtractObjectParams<T>): ServerResultAsync<z.infer<T>> {
     const result = await this.generateObject({
       schema,
-      prompt: prompt.replace("{{text}}", text),
+      prompt: prompt.replaceAll("{{text}}", text),
       model,
       temperature: 0,
     });
