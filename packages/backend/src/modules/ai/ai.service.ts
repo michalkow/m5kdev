@@ -15,6 +15,7 @@ import {
   type ModelMessage,
   NoObjectGeneratedError,
   Output,
+  RetryError,
 } from "ai";
 import { jsonrepair } from "jsonrepair";
 import { err, ok } from "neverthrow";
@@ -377,9 +378,12 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     // Service-level retries handle failover with model rotation; the SDK's internal
     // retries (default 2, with their own backoff) would only delay rotating models.
     const maxRetries = initialRetryAttempts > 0 ? 0 : undefined;
+    const { maxRetries: _ignoredMaxRetries, ...generateTextRest } = rest as {
+      maxRetries?: number;
+    };
     const request = messages
-      ? { maxRetries, ...rest, model: this.prepareModel(model), messages }
-      : { maxRetries, ...rest, model: this.prepareModel(model), prompt };
+      ? { ...generateTextRest, maxRetries, model: this.prepareModel(model), messages }
+      : { ...generateTextRest, maxRetries, model: this.prepareModel(model), prompt };
     try {
       const result = await generateText(request);
       this.trackUsage({
@@ -411,7 +415,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         await new Promise<void>((resolve) => setTimeout(resolve, delay));
       }
       return this.generateText({
-        ...rest,
+        ...generateTextRest,
         ...(messages ? { messages } : { prompt: prompt! }),
         model: nextModel,
         removeMDash,
@@ -446,6 +450,9 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     // Service-level retries handle failover with model rotation; the SDK's internal
     // retries (default 2, with their own backoff) would only delay rotating models.
     const maxRetries = initialRetryAttempts > 0 ? 0 : undefined;
+    const { maxRetries: _ignoredMaxRetries, ...generateTextRest } = rest as {
+      maxRetries?: number;
+    };
     const output =
       objectType === "object"
         ? safeSchema
@@ -456,19 +463,24 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
           : Output.array({ element: (schema as unknown as z.ZodArray<any>).unwrap() });
     const request = messages
       ? {
+          ...generateTextRest,
           maxRetries,
-          ...rest,
           model: this.prepareModel(model, { objectGeneration: true }),
           messages,
           output,
         }
       : {
+          ...generateTextRest,
           maxRetries,
-          ...rest,
           model: this.prepareModel(model, { objectGeneration: true }),
           prompt,
           output,
         };
+    const retryContext = {
+      retryAttempts,
+      initialRetryAttempts,
+      retryModels,
+    };
     try {
       const result = await generateText(request);
       this.trackUsage({
@@ -488,76 +500,25 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
 
         if (parsed.success) return ok(parsed.data);
 
-        if (repairAttempts <= 0)
-          // BAD_GATEWAY: provider output failing the schema is an upstream fault (PARSE_ERROR maps to HTTP 400)
-          return this.error("BAD_GATEWAY", "AI: Agent strict object failed", {
-            cause: parsed.error,
-          });
-
-        const assistantMessage: ModelMessage = {
-          role: "assistant",
-          content: JSON.stringify(result.output),
-        };
-        const userMessage: ModelMessage = {
-          role: "user",
-          content: repairZodPrompt.compile({
-            issues: JSON.stringify(parsed.error.issues),
-          }),
-        };
-        const baseMessages: ModelMessage[] =
-          messages ??
-          (Array.isArray(prompt)
-            ? prompt
-            : [{ role: "user", content: prompt ?? "" } as ModelMessage]);
-        return this.generateObject({
-          ...rest,
-          messages: [...baseMessages, assistantMessage, userMessage],
-          repairAttempts: repairAttempts - 1,
-          repairModel,
-          model: repairModel ?? model,
-          schema,
-          safeSchema,
-          objectType,
-          ctx,
-        });
-      }
-
-      return ok(result.output as z.infer<T>);
-    } catch (error) {
-      if (NoObjectGeneratedError.isInstance(error)) {
-        this.trackUsage({
-          userId: ctx?.actor?.userId,
-          model,
-          provider: "openrouter",
-          feature: "generateObject",
-          traceId: null,
-          inputTokens: error?.usage?.inputTokens,
-          outputTokens: error?.usage?.outputTokens,
-          totalTokens: error?.usage?.totalTokens,
-          cost: 0,
-        });
-        if (error.text) {
-          try {
-            const repaired: unknown = JSON.parse(jsonrepair(error.text));
-            const parsed = schema.safeParse(repaired);
-            if (parsed.success) return ok(parsed.data);
-          } catch {
-            // jsonrepair throws on unrepairable text; fall through to LLM repair
-          }
-
-          if (repairAttempts <= 0)
-            return this.error("BAD_GATEWAY", "AI: Agent object failed", { cause: error });
-
-          return this.generateObject({
-            ...rest,
-            prompt: repairJsonPrompt.compile({
-              text: error.text,
-              error:
-                error.cause instanceof Error
-                  ? error.cause.message
-                  : JSON.stringify(error.cause ?? "Unknown error"),
-              schema: this.stringifySchema(schema),
+        if (repairAttempts > 0) {
+          const assistantMessage: ModelMessage = {
+            role: "assistant",
+            content: JSON.stringify(result.output),
+          };
+          const userMessage: ModelMessage = {
+            role: "user",
+            content: repairZodPrompt.compile({
+              issues: JSON.stringify(parsed.error.issues),
             }),
+          };
+          const baseMessages: ModelMessage[] =
+            messages ??
+            (Array.isArray(prompt)
+              ? prompt
+              : [{ role: "user", content: prompt ?? "" } as ModelMessage]);
+          return this.generateObject({
+            ...generateTextRest,
+            messages: [...baseMessages, assistantMessage, userMessage],
             repairAttempts: repairAttempts - 1,
             repairModel,
             model: repairModel ?? model,
@@ -565,42 +526,137 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
             safeSchema,
             objectType,
             ctx,
+            ...retryContext,
           });
         }
+
+        const retried = this.retryGenerateObject({
+          error: parsed.error,
+          generateTextRest,
+          model,
+          prompt,
+          messages,
+          schema,
+          safeSchema,
+          objectType,
+          repairAttempts,
+          repairModel,
+          ctx,
+          ...retryContext,
+        });
+        if (retried) return retried;
+
+        // BAD_GATEWAY: provider output failing the schema is an upstream fault (PARSE_ERROR maps to HTTP 400)
+        return this.error("BAD_GATEWAY", "AI: Agent strict object failed", {
+          cause: parsed.error,
+        });
+      }
+
+      return ok(result.output as z.infer<T>);
+    } catch (error) {
+      const objectError = this.resolveNoObjectGeneratedError(error);
+      if (objectError) {
+        this.trackUsage({
+          userId: ctx?.actor?.userId,
+          model,
+          provider: "openrouter",
+          feature: "generateObject",
+          traceId: null,
+          inputTokens: objectError?.usage?.inputTokens,
+          outputTokens: objectError?.usage?.outputTokens,
+          totalTokens: objectError?.usage?.totalTokens,
+          cost: 0,
+        });
+        if (objectError.text) {
+          try {
+            const repaired: unknown = JSON.parse(jsonrepair(objectError.text));
+            const parsed = schema.safeParse(repaired);
+            if (parsed.success) return ok(parsed.data);
+          } catch {
+            // jsonrepair throws on unrepairable text; fall through to LLM repair
+          }
+
+          if (repairAttempts > 0) {
+            return this.generateObject({
+              ...generateTextRest,
+              prompt: repairJsonPrompt.compile({
+                text: objectError.text,
+                error:
+                  objectError.cause instanceof Error
+                    ? objectError.cause.message
+                    : JSON.stringify(objectError.cause ?? "Unknown error"),
+                schema: this.stringifySchema(schema),
+              }),
+              repairAttempts: repairAttempts - 1,
+              repairModel,
+              model: repairModel ?? model,
+              schema,
+              safeSchema,
+              objectType,
+              ctx,
+              ...retryContext,
+            });
+          }
+
+          const retried = this.retryGenerateObject({
+            error: objectError,
+            generateTextRest,
+            model,
+            prompt,
+            messages,
+            schema,
+            safeSchema,
+            objectType,
+            repairAttempts,
+            repairModel,
+            ctx,
+            ...retryContext,
+          });
+          if (retried) return retried;
+
+          return this.error("BAD_GATEWAY", "AI: Agent object failed", { cause: objectError });
+        }
+
+        const retried = this.retryGenerateObject({
+          error: objectError,
+          generateTextRest,
+          model,
+          prompt,
+          messages,
+          schema,
+          safeSchema,
+          objectType,
+          repairAttempts,
+          repairModel,
+          ctx,
+          ...retryContext,
+        });
+        if (retried) return retried;
+
         return this.error("BAD_GATEWAY", "AI: Agent object failed without text", {
-          cause: error,
+          cause: objectError,
         });
       }
-      if (retryAttempts <= 0)
-        return this.error("BAD_GATEWAY", "AI: Provider failed to generate object", {
-          cause: error,
-        });
-      this.logger.warn(`generateObject failed, retrying (${retryAttempts} attempts left)`, {
-        model,
+
+      const retried = this.retryGenerateObject({
         error,
-      });
-      const nextModel = retryModels?.[0] ?? model;
-      const nextRetryModels = retryModels ? [...retryModels.slice(1), model] : undefined;
-      if (nextModel === model) {
-        // Exponential backoff only when re-hitting the same model; a different model can be tried immediately
-        const attempt = Math.max(0, initialRetryAttempts - retryAttempts);
-        const delay = Math.min(1000 * 2 ** attempt, 10000);
-        await new Promise<void>((resolve) => setTimeout(resolve, delay));
-      }
-      return this.generateObject({
-        ...rest,
-        ...(messages ? { messages } : { prompt: prompt! }),
-        model: nextModel,
+        generateTextRest,
+        model,
+        prompt,
+        messages,
         schema,
         safeSchema,
         objectType,
         repairAttempts,
         repairModel,
         ctx,
-        retryAttempts: retryAttempts - 1,
-        initialRetryAttempts,
-        retryModels: nextRetryModels,
-      } as AIServiceGenerateObjectParams<T>);
+        ...retryContext,
+      });
+      if (retried) return retried;
+
+      return this.error("BAD_GATEWAY", "AI: Provider failed to generate object", {
+        cause: error,
+      });
     }
   }
 
@@ -650,6 +706,116 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   }
 
   private schemaJsonCache = new WeakMap<ZodType, string>();
+
+  private resolveNoObjectGeneratedError(
+    error: unknown
+  ): InstanceType<typeof NoObjectGeneratedError> | null {
+    let current: unknown = error;
+    const visited = new Set<unknown>();
+
+    while (current != null && !visited.has(current)) {
+      visited.add(current);
+
+      if (NoObjectGeneratedError.isInstance(current)) {
+        return current;
+      }
+
+      if (RetryError.isInstance(current)) {
+        current = current.lastError ?? current.errors.at(-1);
+        continue;
+      }
+
+      if (current instanceof Error && current.cause != null) {
+        current = current.cause;
+        continue;
+      }
+
+      break;
+    }
+
+    return null;
+  }
+
+  private retryGenerateObject<T extends ZodType>({
+    error,
+    generateTextRest,
+    model,
+    prompt,
+    messages,
+    schema,
+    safeSchema,
+    objectType,
+    repairAttempts,
+    repairModel,
+    ctx,
+    retryAttempts,
+    initialRetryAttempts,
+    retryModels,
+  }: {
+    error: unknown;
+    generateTextRest: Omit<
+      AIServiceGenerateObjectParams<T>,
+      | "model"
+      | "schema"
+      | "safeSchema"
+      | "objectType"
+      | "prompt"
+      | "messages"
+      | "repairAttempts"
+      | "repairModel"
+      | "ctx"
+      | "retryAttempts"
+      | "initialRetryAttempts"
+      | "retryModels"
+    >;
+    model: string;
+    prompt?: AIServiceGenerateObjectParams<T>["prompt"];
+    messages?: AIServiceGenerateObjectParams<T>["messages"];
+    schema: T;
+    safeSchema?: AIServiceGenerateObjectParams<T>["safeSchema"];
+    objectType: NonNullable<AIServiceGenerateObjectParams<T>["objectType"]>;
+    repairAttempts: number;
+    repairModel: string;
+    ctx?: AIServiceGenerateObjectParams<T>["ctx"];
+    retryAttempts: number;
+    initialRetryAttempts: number;
+    retryModels: string[];
+  }): ServerResultAsync<z.infer<T>> | null {
+    if (retryAttempts <= 0) return null;
+
+    this.logger.warn(`generateObject failed, retrying (${retryAttempts} attempts left)`, {
+      model,
+      error,
+    });
+
+    const nextModel = retryModels[0] ?? model;
+    const nextRetryModels = retryModels.length > 0 ? [...retryModels.slice(1), model] : undefined;
+    const attempt = Math.max(0, initialRetryAttempts - retryAttempts);
+    const delay = nextModel === model ? Math.min(1000 * 2 ** attempt, 10000) : 0;
+
+    const runRetry = async (): ServerResultAsync<z.infer<T>> => {
+      if (delay > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      }
+
+      return this.generateObject({
+        ...generateTextRest,
+        ...(messages ? { messages } : { prompt: prompt! }),
+        model: nextModel,
+        schema,
+        safeSchema,
+        objectType,
+        repairAttempts,
+        repairModel,
+        ctx,
+        retryAttempts: retryAttempts - 1,
+        initialRetryAttempts,
+        retryModels: nextRetryModels,
+      });
+    };
+
+    return runRetry();
+  }
 
   private stringifySchema(schema: ZodType): string {
     const cached = this.schemaJsonCache.get(schema);

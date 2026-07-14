@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.26.4
+
+### Patch Changes
+
+- ai fix
+
 ## 0.26.3
 
 ### Patch Changes

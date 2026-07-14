@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.26.4
+
+### Patch Changes
+
+- ai fix
+- Updated dependencies
+  - @m5kdev/commons@0.26.4
+  - @m5kdev/config@0.26.4
+
 ## 0.26.3
 
 ### Patch Changes
