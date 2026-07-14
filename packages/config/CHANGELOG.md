@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.26.2
+
+### Patch Changes
+
+- model
+
 ## 0.26.1
 
 ### Patch Changes
