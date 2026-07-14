@@ -6,12 +6,13 @@ catalog:
   '@heroui/react': 3.0.3
   '@heroui/styles': 3.0.3
   '@libsql/client': 0.17.0
-  '@m5kdev/backend': 0.25.1
-  '@m5kdev/commons': 0.25.1
-  '@m5kdev/config': 0.25.1
-  '@m5kdev/email': 0.25.1
-  '@m5kdev/frontend': 0.25.1
-  '@m5kdev/web-ui': 0.25.1
+  '@m5kdev/backend': 0.26.2
+  '@m5kdev/commons': 0.26.2
+  '@m5kdev/config': 0.26.2
+  '@m5kdev/email': 0.26.2
+  '@m5kdev/frontend': 0.26.2
+  '@m5kdev/web-ui': 0.26.2
+  '@playwright/test': 1.57.0
   '@react-email/components': 1.0.1
   '@tailwindcss/vite': 4.1.11
   '@tanstack/react-query': 5.83.0
@@ -30,6 +31,7 @@ catalog:
   dotenv: 16.6.1
   drizzle-kit: 0.31.4
   drizzle-orm: 0.44.3
+  drizzle-zod: 0.8.2
   express: 4.21.2
   i18next: 25.3.2
   ioredis: 5.7.0
@@ -42,6 +44,7 @@ catalog:
   react-email: 5.0.5
   react-hook-form: 7.61.1
   react-i18next: 15.6.1
+  react-native-web: ^0.21.2
   react-router: 7.10.1
   sonner: 1.7.4
   tailwindcss: 4.1.11

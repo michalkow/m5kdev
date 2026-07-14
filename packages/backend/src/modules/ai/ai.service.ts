@@ -99,6 +99,7 @@ type AIServiceOptions = {
   repairAttempts?: number;
   repairModel?: string;
   removeMDash?: boolean;
+  providerSort?: "latency" | "throughput" | "price";
 };
 
 export class AIService<MastraInstance extends Mastra> extends BaseService<
@@ -141,19 +142,15 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     if (!this.openrouter) {
       throw new Error("OpenRouter is not configured");
     }
+    const provider = {
+      ...(this.options?.providerSort ? { sort: this.options.providerSort } : {}),
+      ...(options?.objectGeneration ? { require_parameters: true } : {}),
+    };
     return this.openrouter.chat(model, {
       usage: {
         include: true,
       },
-      ...(options?.objectGeneration
-        ? {
-            extraBody: {
-              provider: {
-                require_parameters: true,
-              },
-            },
-          }
-        : {}),
+      ...(Object.keys(provider).length > 0 ? { extraBody: { provider } } : {}),
     });
   }
 
@@ -199,21 +196,17 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     if (result.isErr()) return err(result.error);
     this.logger.info("AGENT USE DONE");
 
-    if (this.repository.aiUsage) {
-      const createUsageResult = await this.repository.aiUsage.create({
-        userId: ctx?.actor?.userId,
-        model: ctx?.model ?? "unknown",
-        provider: "openrouter",
-        feature: agent,
-        traceId: result.value.traceId,
-        inputTokens: result.value.usage.inputTokens,
-        outputTokens: result.value.usage.outputTokens,
-        totalTokens: result.value.usage.totalTokens,
-        cost: (result.value?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
-      });
-      if (createUsageResult.isErr()) return err(createUsageResult.error);
-    }
-    this.logger.info("AGENT USE CREATED USAGE");
+    this.trackUsage({
+      userId: ctx?.actor?.userId,
+      model: ctx?.model ?? "unknown",
+      provider: "openrouter",
+      feature: agent,
+      traceId: result.value.traceId,
+      inputTokens: result.value.usage.inputTokens,
+      outputTokens: result.value.usage.outputTokens,
+      totalTokens: result.value.usage.totalTokens,
+      cost: (result.value?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
+    });
     return ok(result.value);
   }
 
@@ -270,7 +263,6 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       return this.error("SERVICE_UNAVAILABLE", "AI: Agent object failed", {
         cause: fullOutput.error,
       });
-
     const result = await this.extractObject({
       ctx,
       ...extractor,
@@ -382,25 +374,25 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     } = params;
     const retryAttempts = retryAttemptsRaw;
     const initialRetryAttempts = initialRetryAttemptsRaw ?? retryAttemptsRaw;
+    // Service-level retries handle failover with model rotation; the SDK's internal
+    // retries (default 2, with their own backoff) would only delay rotating models.
+    const maxRetries = initialRetryAttempts > 0 ? 0 : undefined;
     const request = messages
-      ? { ...rest, model: this.prepareModel(model), messages }
-      : { ...rest, model: this.prepareModel(model), prompt };
+      ? { maxRetries, ...rest, model: this.prepareModel(model), messages }
+      : { maxRetries, ...rest, model: this.prepareModel(model), prompt };
     try {
       const result = await generateText(request);
-      if (this.repository.aiUsage) {
-        const createUsageResult = await this.repository.aiUsage.create({
-          userId: ctx?.actor?.userId,
-          model,
-          provider: "openrouter",
-          feature: "generateText",
-          traceId: result.providerMetadata?.openrouter?.traceId?.toString(),
-          inputTokens: result.usage.inputTokens,
-          outputTokens: result.usage.outputTokens,
-          totalTokens: result.usage.totalTokens,
-          cost: (result?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
-        });
-        if (createUsageResult.isErr()) return err(createUsageResult.error);
-      }
+      this.trackUsage({
+        userId: ctx?.actor?.userId,
+        model,
+        provider: "openrouter",
+        feature: "generateText",
+        traceId: result.providerMetadata?.openrouter?.traceId?.toString(),
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+        totalTokens: result.usage.totalTokens,
+        cost: (result?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
+      });
       return ok(removeMDash ? result.text.replace(/\u2013|\u2014/g, "-") : result.text);
     } catch (error) {
       if (retryAttempts <= 0) {
@@ -410,12 +402,14 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         model,
         error,
       });
-      // Exponential backoff: wait before retrying
-      const attempt = Math.max(0, initialRetryAttempts - retryAttempts);
-      const delay = Math.min(1000 * 2 ** attempt, 10000);
-      await new Promise<void>((resolve) => setTimeout(resolve, delay));
       const nextModel = retryModels?.[0] ?? model;
       const nextRetryModels = retryModels ? [...retryModels.slice(1), model] : undefined;
+      if (nextModel === model) {
+        // Exponential backoff only when re-hitting the same model; a different model can be tried immediately
+        const attempt = Math.max(0, initialRetryAttempts - retryAttempts);
+        const delay = Math.min(1000 * 2 ** attempt, 10000);
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      }
       return this.generateText({
         ...rest,
         ...(messages ? { messages } : { prompt: prompt! }),
@@ -449,6 +443,9 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     } = params;
     const retryAttempts = retryAttemptsRaw;
     const initialRetryAttempts = initialRetryAttemptsRaw ?? retryAttemptsRaw;
+    // Service-level retries handle failover with model rotation; the SDK's internal
+    // retries (default 2, with their own backoff) would only delay rotating models.
+    const maxRetries = initialRetryAttempts > 0 ? 0 : undefined;
     const output =
       objectType === "object"
         ? safeSchema
@@ -459,12 +456,14 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
           : Output.array({ element: (schema as unknown as z.ZodArray<any>).unwrap() });
     const request = messages
       ? {
+          maxRetries,
           ...rest,
           model: this.prepareModel(model, { objectGeneration: true }),
           messages,
           output,
         }
       : {
+          maxRetries,
           ...rest,
           model: this.prepareModel(model, { objectGeneration: true }),
           prompt,
@@ -472,20 +471,17 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         };
     try {
       const result = await generateText(request);
-      if (this.repository.aiUsage) {
-        const createUsageResult = await this.repository.aiUsage.create({
-          userId: ctx?.actor?.userId,
-          model,
-          provider: "openrouter",
-          feature: "generateObject",
-          traceId: result.providerMetadata?.openrouter?.traceId?.toString(),
-          inputTokens: result.usage.inputTokens,
-          outputTokens: result.usage.outputTokens,
-          totalTokens: result.usage.totalTokens,
-          cost: (result?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
-        });
-        if (createUsageResult.isErr()) return err(createUsageResult.error);
-      }
+      this.trackUsage({
+        userId: ctx?.actor?.userId,
+        model,
+        provider: "openrouter",
+        feature: "generateObject",
+        traceId: result.providerMetadata?.openrouter?.traceId?.toString(),
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+        totalTokens: result.usage.totalTokens,
+        cost: (result?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
+      });
 
       if (safeSchema) {
         const parsed = schema.safeParse(result.output);
@@ -529,20 +525,17 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       return ok(result.output as z.infer<T>);
     } catch (error) {
       if (NoObjectGeneratedError.isInstance(error)) {
-        if (this.repository.aiUsage) {
-          const createUsageResult = await this.repository.aiUsage.create({
-            userId: ctx?.actor?.userId,
-            model,
-            provider: "openrouter",
-            feature: "generateObject",
-            traceId: null,
-            inputTokens: error?.usage?.inputTokens,
-            outputTokens: error?.usage?.outputTokens,
-            totalTokens: error?.usage?.totalTokens,
-            cost: 0,
-          });
-          if (createUsageResult.isErr()) return err(createUsageResult.error);
-        }
+        this.trackUsage({
+          userId: ctx?.actor?.userId,
+          model,
+          provider: "openrouter",
+          feature: "generateObject",
+          traceId: null,
+          inputTokens: error?.usage?.inputTokens,
+          outputTokens: error?.usage?.outputTokens,
+          totalTokens: error?.usage?.totalTokens,
+          cost: 0,
+        });
         if (error.text) {
           try {
             const repaired: unknown = JSON.parse(jsonrepair(error.text));
@@ -586,12 +579,14 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         model,
         error,
       });
-      // Exponential backoff: wait before retrying
-      const attempt = Math.max(0, initialRetryAttempts - retryAttempts);
-      const delay = Math.min(1000 * 2 ** attempt, 10000);
-      await new Promise<void>((resolve) => setTimeout(resolve, delay));
       const nextModel = retryModels?.[0] ?? model;
       const nextRetryModels = retryModels ? [...retryModels.slice(1), model] : undefined;
+      if (nextModel === model) {
+        // Exponential backoff only when re-hitting the same model; a different model can be tried immediately
+        const attempt = Math.max(0, initialRetryAttempts - retryAttempts);
+        const delay = Math.min(1000 * 2 ** attempt, 10000);
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      }
       return this.generateObject({
         ...rest,
         ...(messages ? { messages } : { prompt: prompt! }),
@@ -654,12 +649,31 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     return ok(result.value);
   }
 
+  private schemaJsonCache = new WeakMap<ZodType, string>();
+
   private stringifySchema(schema: ZodType): string {
+    const cached = this.schemaJsonCache.get(schema);
+    if (cached !== undefined) return cached;
+    let json: string;
     try {
-      return JSON.stringify(z.toJSONSchema(schema, { unrepresentable: "any" }));
+      json = JSON.stringify(z.toJSONSchema(schema, { unrepresentable: "any" }));
     } catch {
-      return "";
+      json = "";
     }
+    this.schemaJsonCache.set(schema, json);
+    return json;
+  }
+
+  // Fire-and-forget so the usage row write never sits on the response's critical path
+  private trackUsage(row: Parameters<AiUsageRepository["create"]>[0]): void {
+    const aiUsage = this.repository.aiUsage;
+    if (!aiUsage) return;
+    void Promise.resolve()
+      .then(() => aiUsage.create(row))
+      .then((result) => {
+        if (result.isErr()) this.logger.warn("AI usage tracking failed", { error: result.error });
+      })
+      .catch((error) => this.logger.warn("AI usage tracking failed", { error }));
   }
 
   async generateReplicate(

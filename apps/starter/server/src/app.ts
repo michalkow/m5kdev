@@ -18,9 +18,8 @@ import express from "express";
 import { PostsModule } from "./modules/posts/posts.module";
 // m5k:test-harness:start
 import { TestHarnessModule } from "./modules/test-harness/test-harness.module";
-import * as schema from "./schema";
-
 // m5k:test-harness:end
+import * as schema from "./schema";
 
 const app = express();
 const appUrl = process.env.VITE_APP_URL ?? "http://localhost:5173";
