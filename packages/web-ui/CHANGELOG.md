@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.27.1
+
+### Patch Changes
+
+- ai types
+- Updated dependencies
+  - @m5kdev/commons@0.27.1
+  - @m5kdev/frontend@0.27.1
+
 ## 0.27.0
 
 ### Minor Changes

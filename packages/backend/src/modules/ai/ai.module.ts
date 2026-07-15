@@ -14,6 +14,7 @@ import type * as aiTables from "./ai.db";
 import { AiUsageRepository, AiVectorRepository } from "./ai.repository";
 import { AIService } from "./ai.service";
 import { createAITRPC } from "./ai.trpc";
+import type { PresetModels } from "./ai.utils";
 import { IdeogramRepository } from "./ideogram/ideogram.repository";
 import { IdeogramService } from "./ideogram/ideogram.service";
 
@@ -31,6 +32,8 @@ export type AIModuleConfig<MastraInstance extends Mastra, Namespace extends stri
     repairAttempts?: number;
     repairModel?: string;
     removeMDash?: boolean;
+    objectPreset?: PresetModels;
+    textPreset?: PresetModels;
   };
   vectorStore?: LibSQLVector;
 };

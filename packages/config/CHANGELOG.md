@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.27.1
+
+### Patch Changes
+
+- ai types
+
 ## 0.27.0
 
 ### Minor Changes
