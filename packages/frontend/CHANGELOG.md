@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.26.6
+
+### Patch Changes
+
+- objec extraction fix
+- Updated dependencies
+  - @m5kdev/commons@0.26.6
+
 ## 0.26.5
 
 ### Patch Changes

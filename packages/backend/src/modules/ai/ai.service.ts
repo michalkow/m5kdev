@@ -254,7 +254,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     });
     if (result.isErr())
       return this.error("SERVICE_UNAVAILABLE", "AI: Agent object failed", { cause: result.error });
-    return ok(result.value.object);
+    return ok(result.value);
   }
 
   async agentObjectResult<T extends ZodType<any>>(

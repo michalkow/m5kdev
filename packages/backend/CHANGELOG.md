@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.26.6
+
+### Patch Changes
+
+- objec extraction fix
+- Updated dependencies
+  - @m5kdev/commons@0.26.6
+  - @m5kdev/config@0.26.6
+
 ## 0.26.5
 
 ### Patch Changes

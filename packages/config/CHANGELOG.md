@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.26.6
+
+### Patch Changes
+
+- objec extraction fix
+
 ## 0.26.5
 
 ### Patch Changes
