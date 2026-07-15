@@ -12,6 +12,7 @@ import {
   generateText,
   type ModelMessage,
   NoObjectGeneratedError,
+  NoOutputGeneratedError,
   Output,
 } from "ai";
 import { jsonrepair } from "jsonrepair";
@@ -560,22 +561,16 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         model: preparedModel,
         output,
       });
-      this.logger.info({
-        label: "AI: generateObject result",
-        keys: Object.keys(result ?? {}),
-      });
       await this.trackUsage({
         ctx,
         model: resolvedModel,
         feature: "generateObject",
         result,
       });
-      this.logger.info({ label: "AI: generateObject tracked usage" });
-      this.logger.info({ label: "AI: generateObject safe schema maybe", safeSchema });
+
       if (safeSchema) {
-        this.logger.info({ label: "AI: generateObject safe schema" });
         const parsed = schema.safeParse(result.output);
-        this.logger.info({ label: "AI: generateObject parsed", parsed });
+
         if (parsed.success) return ok(parsed.data);
 
         if (repairAttempts <= 0) {
@@ -599,11 +594,6 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       this.logger.info({ label: "AI: generateObject output", output: result.output });
       return ok(result.output);
     } catch (error) {
-      this.logger.warn({
-        label: "AI: generateObject caught error",
-        instanceOf: NoObjectGeneratedError.isInstance(error),
-        error,
-      });
       if (NoObjectGeneratedError.isInstance(error)) {
         await this.trackUsage({
           ctx,
