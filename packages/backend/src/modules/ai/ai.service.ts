@@ -1,7 +1,4 @@
-import {
-  OPENAI_TEXT_EMBEDDING_3_SMALL,
-  STRUCTURED_OUTPUT_FAST,
-} from "@m5kdev/commons/modules/ai/ai.constants";
+import { OPENAI_TEXT_EMBEDDING_3_SMALL } from "@m5kdev/commons/modules/ai/ai.constants";
 import { arrayToPseudoXML } from "@m5kdev/commons/modules/ai/ai.utils";
 import { safeParseJson } from "@m5kdev/commons/utils/json";
 import type { Mastra } from "@mastra/core";
@@ -26,6 +23,7 @@ import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
 import { extractObjectPrompt, repairJsonPrompt, repairZodPrompt } from "./ai.prompts";
 import type { AiUsageRepository, AiUsageRow, AiVectorRepository } from "./ai.repository";
+import { type PresetModels, resolveModels, resolveRetryModels } from "./ai.utils";
 import type { IdeogramV3GenerateInput, IdeogramV3GenerateOutput } from "./ideogram/ideogram.dto";
 import type { IdeogramService } from "./ideogram/ideogram.service";
 
@@ -43,7 +41,7 @@ type MastraAgentObjectGeneration<T extends ZodType> = MastraAgentGenerateOptions
 type MessageListInput = { role: "user" | "assistant" | "system"; content: string }[];
 type GenerateTextParams = Parameters<typeof generateText>[0];
 type GenerateTextInput =
-  | { prompt: string | ModelMessage[]; messages?: never }
+  | { prompt: string; messages?: never }
   | { messages: ModelMessage[]; prompt?: never };
 type AIServiceActorContext = { actor: RequiredServiceActor<"user"> };
 
@@ -52,12 +50,13 @@ export type AIServiceGenerateTextParams = Omit<
   "model" | "prompt" | "messages"
 > &
   GenerateTextInput & {
-    model: string;
+    presetModels?: PresetModels;
+    models?: string[];
+    model?: string;
     removeMDash?: boolean;
     ctx?: AIServiceActorContext;
     retryAttempts?: number;
     initialRetryAttempts?: number;
-    retryModels?: string[];
   };
 
 export type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
@@ -65,16 +64,22 @@ export type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
   "model" | "prompt" | "messages" | "output"
 > &
   GenerateTextInput & {
-    model: string;
+    prompt?: string;
+    messages?: ModelMessage[];
+    presetModels?: PresetModels;
+    models?: string[];
+    model?: string;
     schema: T;
     safeSchema?: ZodType<any, any, any>;
     repairAttempts?: number;
+    initialRepairAttempts?: number;
+    repairModels?: string[];
     repairModel?: string;
     ctx?: AIServiceActorContext;
     retryAttempts?: number;
     initialRetryAttempts?: number;
-    retryModels?: string[];
     objectType?: "object" | "array";
+    originalContent?: GenerateTextInput;
   };
 
 export type AIServiceGenerateExtractedObjectParams<T extends ZodType> =
@@ -363,87 +368,137 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     return ok(result.value);
   }
 
+  async trackUsage(params: {
+    ctx?: AIServiceActorContext;
+    model: string;
+    result: {
+      usage?: {
+        inputTokens?: number;
+        outputTokens?: number;
+        totalTokens?: number;
+      };
+      providerMetadata?: {
+        openrouter?: {
+          traceId?: string;
+          usage?: {
+            cost?: number;
+          };
+        };
+      };
+    };
+  }): Promise<void> {
+    if (!this.repository.aiUsage) return Promise.resolve();
+    try {
+      await this.repository.aiUsage.create({
+        userId: params.ctx?.actor?.userId,
+        model: params.model,
+        provider: "openrouter",
+        feature: "generateText",
+        traceId: params.result.providerMetadata?.openrouter?.traceId?.toString(),
+        inputTokens: params.result.usage?.inputTokens ?? 0,
+        outputTokens: params.result.usage?.outputTokens ?? 0,
+        totalTokens: params.result.usage?.totalTokens ?? 0,
+        cost: (params.result?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
+      });
+    } catch (error) {
+      this.logger.error({ label: "AI: trackUsage", error });
+    }
+  }
+
   async generateText(params: AIServiceGenerateTextParams): ServerResultAsync<string> {
+    const resolvedParams = Object.assign({}, params, {
+      removeMDash: params.removeMDash ?? this.options?.removeMDash ?? true,
+      retryAttempts: params.retryAttempts ?? this.options?.retryAttempts ?? 0,
+      initialRetryAttempts: params.initialRetryAttempts ?? params.retryAttempts ?? 0,
+    });
+
     const {
-      removeMDash = this.options?.removeMDash ?? true,
+      removeMDash,
       model,
+      models,
+      presetModels,
       prompt,
       messages,
       ctx,
-      retryAttempts: retryAttemptsRaw = this.options?.retryAttempts ?? 0,
-      initialRetryAttempts: initialRetryAttemptsRaw,
-      retryModels = this.options?.retryModels ?? [],
+      retryAttempts,
+      initialRetryAttempts,
       ...rest
-    } = params;
-    const retryAttempts = retryAttemptsRaw;
-    const initialRetryAttempts = initialRetryAttemptsRaw ?? retryAttemptsRaw;
-    const request = messages
-      ? { ...rest, model: this.prepareModel(model), messages }
-      : { ...rest, model: this.prepareModel(model), prompt };
+    } = resolvedParams;
+
+    const resolvedModels = resolveModels({ models, presetModels, model, defaultCategory: "chat" });
+    const [resolvedModel] = resolvedModels;
+
+    if (!resolvedModel) return this.error("INTERNAL_SERVER_ERROR", "AI: No models not provided");
+
+    const preparedModel = this.prepareModel(resolvedModel);
+    const content = messages ? { messages } : prompt ? { prompt } : undefined;
+    if (!content)
+      return this.error("INTERNAL_SERVER_ERROR", "AI: No messages or prompt not provided");
+
     try {
-      const result = await generateText(request);
-      if (this.repository.aiUsage) {
-        const createUsageResult = await this.repository.aiUsage.create({
-          userId: ctx?.actor?.userId,
-          model,
-          provider: "openrouter",
-          feature: "generateText",
-          traceId: result.providerMetadata?.openrouter?.traceId?.toString(),
-          inputTokens: result.usage.inputTokens,
-          outputTokens: result.usage.outputTokens,
-          totalTokens: result.usage.totalTokens,
-          cost: (result?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
-        });
-        if (createUsageResult.isErr()) return err(createUsageResult.error);
-      }
+      const result = await generateText({ ...rest, ...content, model: preparedModel });
+      await this.trackUsage({
+        ctx,
+        model: resolvedModel,
+        result,
+      });
       return ok(removeMDash ? result.text.replace(/\u2013|\u2014/g, "-") : result.text);
     } catch (error) {
       if (retryAttempts <= 0) {
         return this.error("INTERNAL_SERVER_ERROR", "AI: generateText failed", { cause: error });
       }
-      this.logger.warn(`generateText failed, retrying (${retryAttempts} attempts left)`, {
-        model,
-        error,
-      });
-      // Exponential backoff: wait before retrying
-      const attempt = Math.max(0, initialRetryAttempts - retryAttempts);
-      const delay = Math.min(1000 * 2 ** attempt, 10000);
-      await new Promise<void>((resolve) => setTimeout(resolve, delay));
-      const nextModel = retryModels?.[0] ?? model;
-      const nextRetryModels = retryModels ? [...retryModels.slice(1), model] : undefined;
+      this.logger.warn(
+        `generateText failed, retrying (${retryAttempts}/${initialRetryAttempts} attempts left)`,
+        {
+          model,
+          error,
+        }
+      );
+
       return this.generateText({
-        ...rest,
-        ...(messages ? { messages } : { prompt: prompt! }),
-        model: nextModel,
-        removeMDash,
-        ctx,
+        ...resolvedParams,
+        models: resolveRetryModels(resolvedModels),
         retryAttempts: retryAttempts - 1,
-        initialRetryAttempts,
-        retryModels: nextRetryModels,
-      } as AIServiceGenerateTextParams);
+      });
     }
   }
 
   async generateObject<T extends ZodType>(
     params: AIServiceGenerateObjectParams<T>
   ): ServerResultAsync<z.infer<T>> {
+    const resolvedParams = Object.assign({}, params, {
+      objectType: params.objectType ?? "object",
+      repairAttempts: params.repairAttempts ?? this.options?.repairAttempts ?? 0,
+      repairModel: params.repairModel ?? this.options?.repairModel,
+      initialRepairAttempts: params.initialRepairAttempts ?? this.options?.repairAttempts ?? 0,
+      retryAttempts: params.retryAttempts ?? this.options?.retryAttempts ?? 0,
+      initialRetryAttempts: params.initialRetryAttempts ?? params.retryAttempts ?? 0,
+    });
+
     const {
       model,
+      models,
+      presetModels,
       schema,
       safeSchema,
-      objectType = "object",
+      objectType,
       prompt,
       messages,
-      repairAttempts = this.options?.repairAttempts ?? 0,
-      repairModel = this.options?.repairModel ?? model,
+      repairAttempts,
+      initialRepairAttempts,
+      originalContent,
+      repairModel,
       ctx,
-      retryAttempts: retryAttemptsRaw = this.options?.retryAttempts ?? 0,
-      initialRetryAttempts: initialRetryAttemptsRaw,
-      retryModels = this.options?.retryModels ?? [],
+      retryAttempts,
+      initialRetryAttempts,
       ...rest
-    } = params;
-    const retryAttempts = retryAttemptsRaw;
-    const initialRetryAttempts = initialRetryAttemptsRaw ?? retryAttemptsRaw;
+    } = resolvedParams;
+
+    if (initialRetryAttempts !== retryAttempts || initialRepairAttempts !== repairAttempts)
+      this.logger.warn(
+        `Last attempt at object generation failed: (repair: ${initialRepairAttempts}/${repairAttempts}, retry: ${initialRetryAttempts}/${retryAttempts})`
+      );
+
     const output =
       objectType === "object"
         ? safeSchema
@@ -452,139 +507,130 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         : safeSchema
           ? Output.array({ element: (safeSchema as unknown as z.ZodArray<any>).unwrap() })
           : Output.array({ element: (schema as unknown as z.ZodArray<any>).unwrap() });
-    const request = messages
-      ? {
-          ...rest,
-          model: this.prepareModel(model, { objectGeneration: true }),
-          messages,
-          output,
-        }
-      : {
-          ...rest,
-          model: this.prepareModel(model, { objectGeneration: true }),
-          prompt,
-          output,
-        };
+
+    const resolvedModels = resolveModels({
+      models,
+      presetModels,
+      model,
+      defaultCategory: "structured_output",
+    });
+    const [resolvedModel] = resolvedModels;
+
+    if (!resolvedModel) return this.error("INTERNAL_SERVER_ERROR", "AI: No models not provided");
+
+    const preparedModel = this.prepareModel(resolvedModel);
+
+    const content = messages ? { messages } : prompt ? { prompt } : undefined;
+    if (!content)
+      return this.error("INTERNAL_SERVER_ERROR", "AI: No messages or prompt not provided");
+
+    function getRetryParams() {
+      return {
+        ...resolvedParams,
+        ...(originalContent as { prompt: string; messages: never }),
+        models: resolveRetryModels(resolvedModels),
+        retryAttempts: retryAttempts - 1,
+        repairAttempts: initialRepairAttempts,
+      };
+    }
+
+    function getRepairParams(prompt: string) {
+      return {
+        ...resolvedParams,
+        models: repairAttempts ? resolvedModels : resolveRetryModels(resolvedModels),
+        messages: undefined,
+        originalContent: content as GenerateTextParams,
+        repairAttempts: repairAttempts - 1,
+        prompt,
+      } as AIServiceGenerateObjectParams<T>;
+    }
+
     try {
-      const result = await generateText(request);
-      if (this.repository.aiUsage) {
-        const createUsageResult = await this.repository.aiUsage.create({
-          userId: ctx?.actor?.userId,
-          model,
-          provider: "openrouter",
-          feature: "generateObject",
-          traceId: result.providerMetadata?.openrouter?.traceId?.toString(),
-          inputTokens: result.usage.inputTokens,
-          outputTokens: result.usage.outputTokens,
-          totalTokens: result.usage.totalTokens,
-          cost: (result?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
-        });
-        if (createUsageResult.isErr()) return err(createUsageResult.error);
-      }
+      const result = await generateText({
+        ...rest,
+        ...content,
+        model: preparedModel,
+        output,
+      });
+      await this.trackUsage({
+        ctx,
+        model: resolvedModel,
+        result,
+      });
 
       if (safeSchema) {
         const parsed = schema.safeParse(result.output);
 
         if (parsed.success) return ok(parsed.data);
 
-        if (repairAttempts <= 0)
+        if (repairAttempts <= 0) {
+          if (retryAttempts > 0) return this.generateObject(getRetryParams());
+
           // BAD_GATEWAY: provider output failing the schema is an upstream fault (PARSE_ERROR maps to HTTP 400)
-          return this.error("BAD_GATEWAY", "AI: Agent strict object failed", {
+          return this.error("BAD_GATEWAY", "AI: Strict object failed", {
             cause: parsed.error,
           });
+        }
 
-        const assistantMessage: ModelMessage = {
-          role: "assistant",
-          content: JSON.stringify(result.output),
-        };
-        const userMessage: ModelMessage = {
-          role: "user",
-          content: repairZodPrompt.compile({
-            issues: JSON.stringify(parsed.error.issues),
-          }),
-        };
-        return this.generateObject({
-          ...rest,
-          messages: messages
-            ? [...messages, assistantMessage, userMessage]
-            : [{ role: "user", content: prompt } as ModelMessage, assistantMessage, userMessage],
-          repairAttempts: repairAttempts - 1,
-          objectType,
-          model: repairModel ?? model,
-          schema,
-          ctx,
-        });
+        return this.generateObject(
+          getRepairParams(
+            repairZodPrompt.compile({
+              issues: JSON.stringify(parsed.error.issues),
+              schema: JSON.stringify(result.output),
+            })
+          )
+        );
       }
 
-      return ok(result.output as z.infer<T>);
+      return ok(result.output);
     } catch (error) {
       if (NoObjectGeneratedError.isInstance(error)) {
-        if (this.repository.aiUsage) {
-          const createUsageResult = await this.repository.aiUsage.create({
-            userId: ctx?.actor?.userId,
-            model,
-            provider: "openrouter",
-            feature: "generateObject",
-            traceId: null,
-            inputTokens: error?.usage?.inputTokens,
-            outputTokens: error?.usage?.outputTokens,
-            totalTokens: error?.usage?.totalTokens,
-            cost: 0,
-          });
-          if (createUsageResult.isErr()) return err(createUsageResult.error);
-        }
+        await this.trackUsage({
+          ctx,
+          model: resolvedModel,
+          result: {
+            usage: error.usage,
+          },
+        });
+
         if (error.text) {
           const repairedText = jsonrepair(error.text);
           const repairedObject = safeParseJson(repairedText);
           const parsed = schema.safeParse(repairedObject);
+
           if (parsed.success) return ok(parsed.data);
 
-          if (repairAttempts === 0)
-            return this.error("BAD_GATEWAY", "AI: Agent object failed", { cause: error });
+          if (repairAttempts <= 0) {
+            if (retryAttempts > 0) return this.generateObject(getRetryParams());
 
-          return this.generateObject({
-            ...rest,
-            prompt: repairJsonPrompt.compile({
-              text: error.text,
-              error: JSON.stringify(error.cause ?? "Unknown error"),
-            }),
-            repairAttempts: repairAttempts - 1,
-            model: repairModel ?? model,
-            objectType,
-            schema,
-            ctx,
-          });
+            // BAD_GATEWAY: provider output failing the schema is an upstream fault (PARSE_ERROR maps to HTTP 400)
+            return this.error("BAD_GATEWAY", "AI: Strict object failed", {
+              cause: parsed.error,
+            });
+          }
+
+          return this.generateObject(
+            getRepairParams(
+              repairJsonPrompt.compile({
+                text: error.text,
+                error: JSON.stringify(error.cause ?? "Unknown error"),
+              })
+            )
+          );
         }
+
+        if (retryAttempts > 0) return this.generateObject(getRetryParams());
+
         return this.error("BAD_GATEWAY", "AI: Agent object failed without text", {
           cause: error,
         });
       }
-      if (retryAttempts <= 0)
-        return this.error("BAD_GATEWAY", "AI: Provider failed to generate object", {
-          cause: error,
-        });
-      this.logger.warn(`generateObject failed, retrying (${retryAttempts} attempts left)`, {
-        model,
-        error,
+
+      if (retryAttempts > 0) return this.generateObject(getRetryParams());
+
+      return this.error("BAD_GATEWAY", "AI: Provider failed to generate object", {
+        cause: error,
       });
-      // Exponential backoff: wait before retrying
-      const attempt = Math.max(0, initialRetryAttempts - retryAttempts);
-      const delay = Math.min(1000 * 2 ** attempt, 10000);
-      await new Promise<void>((resolve) => setTimeout(resolve, delay));
-      const nextModel = retryModels?.[0] ?? model;
-      const nextRetryModels = retryModels ? [...retryModels.slice(1), model] : undefined;
-      return this.generateObject({
-        ...rest,
-        ...(messages ? { messages } : { prompt: prompt! }),
-        model: nextModel,
-        schema,
-        repairAttempts,
-        repairModel,
-        ctx,
-        retryAttempts: retryAttempts - 1,
-        initialRetryAttempts,
-        retryModels: nextRetryModels,
-      } as AIServiceGenerateObjectParams<T>);
     }
   }
 
@@ -611,15 +657,18 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   }
 
   async extractObject<T extends ZodType>({
-    model = STRUCTURED_OUTPUT_FAST,
+    model,
     prompt = extractObjectPrompt,
     text,
     schema,
   }: AIServiceExtractObjectParams<T>): ServerResultAsync<z.infer<T>> {
+    const resolvedModels = resolveModels({ model, defaultCategory: "structured_output" });
+    const [resolvedModel] = resolvedModels;
+    if (!resolvedModel) return this.error("INTERNAL_SERVER_ERROR", "AI: No models not provided");
     const result = await this.generateObject({
       schema,
       prompt: prompt.replaceAll("{{text}}", text),
-      model,
+      model: resolvedModel,
       temperature: 0,
     });
     if (result.isErr()) return err(result.error);

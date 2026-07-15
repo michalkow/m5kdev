@@ -18,8 +18,13 @@ You are a JSON repair expert. You are given an invalid JSON string, the error me
 
 export const repairZodPrompt = new Prompt<{
   issues: string;
+  schema: string;
 }>(`
 The returned JSON didn't follow all the constraints for the Zod schema. Below are the issues that were found. Please fix the issues and return the repaired JSON.
+
+## Schema
+
+{{{schema}}}
 
 ## Issues
 
