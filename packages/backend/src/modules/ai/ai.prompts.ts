@@ -22,7 +22,7 @@ export const repairZodPrompt = new Prompt<{
 }>(`
 The returned JSON didn't follow all the constraints for the Zod schema. Below are the issues that were found. Please fix the issues and return the repaired JSON.
 
-## Schema
+## JSON
 
 {{{schema}}}
 

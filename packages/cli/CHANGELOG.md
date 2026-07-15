@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.27.0
+
+### Minor Changes
+
+- ai rework
+
 ## 0.26.6
 
 ### Patch Changes

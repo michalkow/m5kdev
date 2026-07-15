@@ -103,6 +103,8 @@ type AIServiceOptions = {
   repairAttempts?: number;
   repairModel?: string;
   removeMDash?: boolean;
+  objectPreset?: PresetModels;
+  textPreset?: PresetModels;
 };
 
 export class AIService<MastraInstance extends Mastra> extends BaseService<
@@ -370,6 +372,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
 
   async trackUsage(params: {
     ctx?: AIServiceActorContext;
+    feature: string;
     model: string;
     result: {
       usage?: {
@@ -393,7 +396,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         userId: params.ctx?.actor?.userId,
         model: params.model,
         provider: "openrouter",
-        feature: "generateText",
+        feature: params.feature,
         traceId: params.result.providerMetadata?.openrouter?.traceId?.toString(),
         inputTokens: params.result.usage?.inputTokens ?? 0,
         outputTokens: params.result.usage?.outputTokens ?? 0,
@@ -407,6 +410,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
 
   async generateText(params: AIServiceGenerateTextParams): ServerResultAsync<string> {
     const resolvedParams = Object.assign({}, params, {
+      presetModels: params.presetModels ?? this.options?.textPreset,
       removeMDash: params.removeMDash ?? this.options?.removeMDash ?? true,
       retryAttempts: params.retryAttempts ?? this.options?.retryAttempts ?? 0,
       initialRetryAttempts: params.initialRetryAttempts ?? params.retryAttempts ?? 0,
@@ -440,6 +444,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       await this.trackUsage({
         ctx,
         model: resolvedModel,
+        feature: "generateText",
         result,
       });
       return ok(removeMDash ? result.text.replace(/\u2013|\u2014/g, "-") : result.text);
@@ -467,10 +472,12 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     params: AIServiceGenerateObjectParams<T>
   ): ServerResultAsync<z.infer<T>> {
     const resolvedParams = Object.assign({}, params, {
+      presetModels: params.presetModels ?? this.options?.objectPreset,
       objectType: params.objectType ?? "object",
       repairAttempts: params.repairAttempts ?? this.options?.repairAttempts ?? 0,
       repairModel: params.repairModel ?? this.options?.repairModel,
-      initialRepairAttempts: params.initialRepairAttempts ?? this.options?.repairAttempts ?? 0,
+      initialRepairAttempts:
+        params.initialRepairAttempts ?? params.repairAttempts ?? this.options?.repairAttempts ?? 0,
       retryAttempts: params.retryAttempts ?? this.options?.retryAttempts ?? 0,
       initialRetryAttempts: params.initialRetryAttempts ?? params.retryAttempts ?? 0,
     });
@@ -518,7 +525,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
 
     if (!resolvedModel) return this.error("INTERNAL_SERVER_ERROR", "AI: No models not provided");
 
-    const preparedModel = this.prepareModel(resolvedModel);
+    const preparedModel = this.prepareModel(resolvedModel, { objectGeneration: true });
 
     const content = messages ? { messages } : prompt ? { prompt } : undefined;
     if (!content)
@@ -555,6 +562,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       await this.trackUsage({
         ctx,
         model: resolvedModel,
+        feature: "generateObject",
         result,
       });
 
@@ -588,6 +596,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         await this.trackUsage({
           ctx,
           model: resolvedModel,
+          feature: "generateObject",
           result: {
             usage: error.usage,
           },
