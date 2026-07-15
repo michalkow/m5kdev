@@ -472,6 +472,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     params: AIServiceGenerateObjectParams<T>
   ): ServerResultAsync<z.infer<T>> {
     const resolvedParams = Object.assign({}, params, {
+      temperature: params.temperature ?? 0,
       presetModels: params.presetModels ?? this.options?.objectPreset,
       objectType: params.objectType ?? "object",
       repairAttempts: params.repairAttempts ?? this.options?.repairAttempts ?? 0,
@@ -479,7 +480,8 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       initialRepairAttempts:
         params.initialRepairAttempts ?? params.repairAttempts ?? this.options?.repairAttempts ?? 0,
       retryAttempts: params.retryAttempts ?? this.options?.retryAttempts ?? 0,
-      initialRetryAttempts: params.initialRetryAttempts ?? params.retryAttempts ?? 0,
+      initialRetryAttempts:
+        params.initialRetryAttempts ?? params.retryAttempts ?? this.options?.retryAttempts ?? 0,
     });
 
     const {
@@ -501,11 +503,6 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       ...rest
     } = resolvedParams;
 
-    if (initialRetryAttempts !== retryAttempts || initialRepairAttempts !== repairAttempts)
-      this.logger.warn(
-        `Last attempt at object generation failed: (repair: ${initialRepairAttempts}/${repairAttempts}, retry: ${initialRetryAttempts}/${retryAttempts})`
-      );
-
     const output =
       objectType === "object"
         ? safeSchema
@@ -524,7 +521,14 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     const [resolvedModel] = resolvedModels;
 
     if (!resolvedModel) return this.error("INTERNAL_SERVER_ERROR", "AI: No models not provided");
-
+    if (initialRetryAttempts !== retryAttempts || initialRepairAttempts !== repairAttempts)
+      this.logger.warn(
+        `Last attempt at object generation failed: (model: ${resolvedModel}, retry: ${initialRetryAttempts}/${retryAttempts}, repair: ${initialRepairAttempts}/${repairAttempts})`
+      );
+    else
+      this.logger.info(
+        `First attempt at object generation: (model: ${resolvedModel}, retry: ${initialRetryAttempts}/${retryAttempts}, repair: ${initialRepairAttempts}/${repairAttempts})`
+      );
     const preparedModel = this.prepareModel(resolvedModel, { objectGeneration: true });
 
     const content = messages ? { messages } : prompt ? { prompt } : undefined;
@@ -613,7 +617,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
             if (retryAttempts > 0) return this.generateObject(getRetryParams());
 
             // BAD_GATEWAY: provider output failing the schema is an upstream fault (PARSE_ERROR maps to HTTP 400)
-            return this.error("BAD_GATEWAY", "AI: Strict object failed", {
+            return this.error("BAD_GATEWAY", "AI: Strict object from JSON repair failed", {
               cause: parsed.error,
             });
           }
@@ -630,14 +634,18 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
 
         if (retryAttempts > 0) return this.generateObject(getRetryParams());
 
-        return this.error("BAD_GATEWAY", "AI: Agent object failed without text", {
-          cause: error,
-        });
+        return this.error(
+          "BAD_GATEWAY",
+          "AI: Provider object from JSON repair failed without text",
+          {
+            cause: error,
+          }
+        );
       }
 
       if (retryAttempts > 0) return this.generateObject(getRetryParams());
 
-      return this.error("BAD_GATEWAY", "AI: Provider failed to generate object", {
+      return this.error("BAD_GATEWAY", "AI: Provider failed to generate object: Unknown error", {
         cause: error,
       });
     }

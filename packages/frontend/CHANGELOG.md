@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.27.2
+
+### Patch Changes
+
+- temperature
+- Updated dependencies
+  - @m5kdev/commons@0.27.2
+
 ## 0.27.1
 
 ### Patch Changes

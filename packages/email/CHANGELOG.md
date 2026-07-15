@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.27.2
+
+### Patch Changes
+
+- temperature
+
 ## 0.27.1
 
 ### Patch Changes
