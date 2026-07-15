@@ -3,7 +3,7 @@ packages:
   - packages/*
 
 catalog:
-  '@ai-sdk/openai': 3.0.0
+  '@ai-sdk/openai': 4.0.15
   '@aws-sdk/client-s3': 3.891.0
   '@aws-sdk/client-sts': 3.891.0
   '@aws-sdk/s3-request-presigner': 3.891.0
@@ -36,7 +36,7 @@ catalog:
   '@mastra/posthog': 1.0.0
   '@mastra/rag': 2.0.0
   '@mdx-js/react': 3.1.1
-  '@openrouter/ai-sdk-provider': 2.9.0
+  '@openrouter/ai-sdk-provider': 3.0.0
   '@parse/node-apn': 8.0.0
   '@playwright/test': 1.57.0
   '@pmmmwh/react-refresh-webpack-plugin': 0.5.7
@@ -107,7 +107,7 @@ catalog:
   '@uiw/react-color-colorful': 2.7.3
   '@vitejs/plugin-react': 4.2.0
   '@vitest/ui': 3.0.0
-  ai: 6.0.191
+  ai: 7.0.28
   apify-client: 2.21.0
   autoprefixer: 10.4.20
   babel-plugin-react-compiler: 1.0.0

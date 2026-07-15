@@ -167,11 +167,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     if (!this.openrouter) {
       throw new Error("OpenRouter is not configured");
     }
-    const openrouter = this.openrouter as OpenRouterProvider & {
-      embeddingModel?: (modelId: string) => unknown;
-    };
-    return (openrouter.embeddingModel?.(model) ??
-      openrouter.textEmbeddingModel(model)) as ReturnType<OpenRouterProvider["textEmbeddingModel"]>;
+    return this.openrouter.textEmbeddingModel(model);
   }
 
   async agentUse(
@@ -566,7 +562,6 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       });
       this.logger.info({
         label: "AI: generateObject result",
-        output: result?.output ?? null,
         keys: Object.keys(result ?? {}),
       });
       await this.trackUsage({
