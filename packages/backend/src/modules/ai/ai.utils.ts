@@ -31,7 +31,9 @@ export function resolveModels(params: {
     return recommendedModels;
   }
   if (model) return [model];
-  return getSortedRecommendedModelIds(defaultCategory);
+  const defaultModels = getSortedRecommendedModelIds(defaultCategory);
+  if (preferredModels) return Array.from(new Set([...preferredModels, ...defaultModels]));
+  return defaultModels;
 }
 
 export function resolveRetryModels(retryModels: string[]): string[] {
