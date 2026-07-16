@@ -1,9 +1,5 @@
-import { trace } from "@opentelemetry/api";
-import {
-  BasicTracerProvider,
-  InMemorySpanExporter,
-  SimpleSpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
+import { InMemorySpanExporter } from "@opentelemetry/sdk-trace-base";
+import { registerTestTracerProvider, shutdownTestTracerProvider } from "../test/stubs/otel";
 import {
   actorTelemetryFromJobData,
   actorTelemetryFromRequestContext,
@@ -80,17 +76,15 @@ describe("runWithActorTelemetry", () => {
 
 describe("withSpan actor attributes", () => {
   let exporter: InMemorySpanExporter;
+  let provider: ReturnType<typeof registerTestTracerProvider>;
 
   beforeEach(() => {
     exporter = new InMemorySpanExporter();
-    const provider = new BasicTracerProvider();
-    provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
-    trace.setGlobalTracerProvider(provider);
+    provider = registerTestTracerProvider(exporter);
   });
 
-  afterEach(() => {
-    exporter.reset();
-    trace.disable();
+  afterEach(async () => {
+    await shutdownTestTracerProvider(provider, exporter);
   });
 
   it("inherits ALS attrs on nested spans", async () => {
@@ -119,5 +113,18 @@ describe("withSpan actor attributes", () => {
     const [span] = exporter.getFinishedSpans();
     expect(span?.attributes["user.id"]).toBe("override-user");
     expect(span?.attributes["organization.id"]).toBe("org-1");
+  });
+
+  it("nests child spans under the active parent span", async () => {
+    await withSpan({ name: "workflow.cron.example" }, async () => {
+      await withSpan({ name: "service.Example.run" }, async () => undefined);
+    });
+
+    const spans = exporter.getFinishedSpans();
+    expect(spans).toHaveLength(2);
+
+    const root = spans.find((span) => span.name === "workflow.cron.example");
+    const child = spans.find((span) => span.name === "service.Example.run");
+    expect(child?.parentSpanId).toBe(root?.spanContext().spanId);
   });
 });

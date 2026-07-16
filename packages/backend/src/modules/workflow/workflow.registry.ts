@@ -256,8 +256,8 @@ export class WorkflowRegistry {
       });
 
       this.workers.set(queueName, worker);
-      this.logger.info(
-        { queue: queueName, jobs: [...handlers.keys()] },
+      this.logger.debug(
+        { queue: queueName, jobs: [...handlers.keys()], workflow: "worker-start" },
         `Worker started for queue "${queueName}"`
       );
     }

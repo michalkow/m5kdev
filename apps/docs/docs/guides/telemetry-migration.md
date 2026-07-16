@@ -138,8 +138,20 @@ Background work uses workflow spans as trace roots:
 
 ```text
 workflow.cron.<name>  or  workflow.job.<name>
-└── service.* / repository.* (when handlers use traced query builders)
+└── service.<Service>.<procedure>   ← when the handler calls a service procedure
+    └── repository.<Repo>.<query>   ← when using .query().handle()
 ```
+
+The workflow root span is created automatically for every job/cron run. **Nested
+spans only appear when the handler uses traced APIs** — `service.procedure()`
+handlers, `repository.query().handle()`, or custom `withSpan()` calls. Direct
+service/repository method calls (bypassing procedures or named queries) will
+show as a single flat span even if the job runs for several seconds.
+
+`Worker started for queue "..."` logs are emitted once at process bootstrap
+(debug level, no `trace_id`). Job execution logs (`workflow: job-start` /
+`job-complete`) are emitted inside the workflow span and include `trace_id` for
+SigNoz correlation.
 
 `this.logger` calls inside an active span automatically include `trace_id`,
 `span_id`, and `trace_flags` on the log record. When `OTEL_EXPORTER_OTLP_ENDPOINT`

@@ -74,7 +74,7 @@ export const logger = pino({
             messageFormat:
               "{if layerName}[{layerName}] {end}{if code}{code} {end}{msg}{if origin} → {origin}{end}",
             // these keys are already rendered in the message line
-            ignore: "pid,hostname,layer,layerName,code,origin,body",
+            ignore: "pid,hostname,layer,layerName,code,origin,body,trace_id,span_id,trace_flags,user.id,organization.id",
           },
         },
       }),
