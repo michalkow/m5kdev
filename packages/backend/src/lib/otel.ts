@@ -1,12 +1,15 @@
+import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { ExpressInstrumentation } from "@opentelemetry/instrumentation-express";
 import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
+import { PinoInstrumentation } from "@opentelemetry/instrumentation-pino";
 import {
   detectResourcesSync,
   envDetectorSync,
   processDetectorSync,
   Resource,
 } from "@opentelemetry/resources";
+import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
@@ -51,18 +54,35 @@ export function initTelemetry({
   const traceExporter = resolveTraceExporter(env);
   if (!traceExporter) return;
 
+  const hasOtlp = Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT);
+
   sdk = new NodeSDK({
     resource: createResource(serviceName),
     traceExporter,
-    instrumentations: [new HttpInstrumentation(), new ExpressInstrumentation()],
+    ...(hasOtlp
+      ? { logRecordProcessors: [new BatchLogRecordProcessor(new OTLPLogExporter())] }
+      : {}),
+    instrumentations: [
+      new HttpInstrumentation(),
+      new ExpressInstrumentation(),
+      new PinoInstrumentation({
+        // Correlation and OTLP export are handled in utils/logger.ts so they work
+        // under ESM/tsx; instrumentation-pino only patches CJS require() loads.
+        disableLogCorrelation: true,
+        disableLogSending: true,
+      }),
+    ],
   });
 
   sdk.start();
-  const exporterKind =
+  const traceExporterKind =
     traceExporter instanceof ConsoleSpanExporter
       ? "console"
       : `otlp (${process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "default"})`;
-  console.info(`[otel] tracing enabled: ${exporterKind}`);
+  const logsExporterKind = hasOtlp
+    ? `otlp (${process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "default"})`
+    : "correlation-only";
+  console.info(`[otel] tracing enabled: ${traceExporterKind}; logs: ${logsExporterKind}`);
 }
 
 export async function shutdownTelemetry(): Promise<void> {

@@ -1,7 +1,15 @@
 import pino from "pino";
+import {
+  emitOtelLogRecord,
+  getOtelLogMixin,
+  parsePinoLogArgs,
+} from "./otel-logging";
 import { trimStack } from "./stack";
 
+// OTel log correlation (trace_id/span_id) and OTLP export are wired here so they
+// work under ESM/tsx. initTelemetry() must run before this module is first imported.
 const isProduction = process.env.NODE_ENV === "production";
+const otelLogsEnabled = Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT);
 
 type ErrorLike = Error & {
   code?: string;
@@ -42,6 +50,16 @@ function errSerializer(err: unknown) {
 export const logger = pino({
   level: process.env.LOG_LEVEL ?? "debug",
   serializers: { err: errSerializer },
+  mixin: () => getOtelLogMixin(),
+  hooks: otelLogsEnabled
+    ? {
+        logMethod(inputArgs, method, level) {
+          const { mergeObject, message } = parsePinoLogArgs(inputArgs);
+          emitOtelLogRecord(level, mergeObject, message);
+          return method.apply(this, inputArgs);
+        },
+      }
+    : undefined,
   // Pretty console in dev; raw structured JSON in production (full data for
   // log aggregation, no pino-pretty on the hot path).
   ...(isProduction

@@ -75,6 +75,12 @@ catalogs:
     '@openrouter/ai-sdk-provider':
       specifier: 3.0.0
       version: 3.0.0
+    '@opentelemetry/api-logs':
+      specifier: 0.57.2
+      version: 0.57.2
+    '@opentelemetry/exporter-logs-otlp-http':
+      specifier: 0.57.2
+      version: 0.57.2
     '@opentelemetry/exporter-trace-otlp-http':
       specifier: 0.57.2
       version: 0.57.2
@@ -84,9 +90,15 @@ catalogs:
     '@opentelemetry/instrumentation-http':
       specifier: 0.57.2
       version: 0.57.2
+    '@opentelemetry/instrumentation-pino':
+      specifier: 0.46.1
+      version: 0.46.1
     '@opentelemetry/resources':
       specifier: 1.30.1
       version: 1.30.1
+    '@opentelemetry/sdk-logs':
+      specifier: 0.57.2
+      version: 0.57.2
     '@opentelemetry/sdk-node':
       specifier: 0.57.2
       version: 0.57.2
@@ -1015,6 +1027,12 @@ importers:
       '@opentelemetry/api':
         specifier: 1.9.0
         version: 1.9.0
+      '@opentelemetry/api-logs':
+        specifier: 'catalog:'
+        version: 0.57.2
+      '@opentelemetry/exporter-logs-otlp-http':
+        specifier: 'catalog:'
+        version: 0.57.2(@opentelemetry/api@1.9.0)
       '@opentelemetry/exporter-trace-otlp-http':
         specifier: 'catalog:'
         version: 0.57.2(@opentelemetry/api@1.9.0)
@@ -1024,9 +1042,15 @@ importers:
       '@opentelemetry/instrumentation-http':
         specifier: 'catalog:'
         version: 0.57.2(@opentelemetry/api@1.9.0)
+      '@opentelemetry/instrumentation-pino':
+        specifier: 'catalog:'
+        version: 0.46.1(@opentelemetry/api@1.9.0)
       '@opentelemetry/resources':
         specifier: 'catalog:'
         version: 1.30.1(@opentelemetry/api@1.9.0)
+      '@opentelemetry/sdk-logs':
+        specifier: 'catalog:'
+        version: 0.57.2(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-node':
         specifier: 'catalog:'
         version: 0.57.2(@opentelemetry/api@1.9.0)
@@ -5352,6 +5376,12 @@ packages:
   '@opentelemetry/instrumentation-pg@0.57.0':
     resolution: {integrity: sha512-dWLGE+r5lBgm2A8SaaSYDE3OKJ/kwwy5WLyGyzor8PLhUL9VnJRiY6qhp4njwhnljiLtzeffRtG2Mf/YyWLeTw==}
     engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': 1.9.0
+
+  '@opentelemetry/instrumentation-pino@0.46.1':
+    resolution: {integrity: sha512-HB8gD/9CNAKlTV+mdZehnFC4tLUtQ7e+729oGq88e4WipxzZxmMYuRwZ2vzOA9/APtq+MRkERJ9PcoDqSIjZ+g==}
+    engines: {node: '>=14'}
     peerDependencies:
       '@opentelemetry/api': 1.9.0
 
@@ -22388,6 +22418,15 @@ snapshots:
       '@opentelemetry/sql-common': 0.41.0(@opentelemetry/api@1.9.0)
       '@types/pg': 8.15.5
       '@types/pg-pool': 2.0.6
+    transitivePeerDependencies:
+      - supports-color
+
+  '@opentelemetry/instrumentation-pino@0.46.1(@opentelemetry/api@1.9.0)':
+    dependencies:
+      '@opentelemetry/api': 1.9.0
+      '@opentelemetry/api-logs': 0.57.2
+      '@opentelemetry/core': 1.30.1(@opentelemetry/api@1.9.0)
+      '@opentelemetry/instrumentation': 0.57.2(@opentelemetry/api@1.9.0)
     transitivePeerDependencies:
       - supports-color
 

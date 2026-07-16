@@ -4,7 +4,6 @@ import type { ServerError } from "./errors";
 
 const TRACER_NAME = "@m5kdev/backend";
 const MAX_SPAN_VALUE_LENGTH = 4096;
-
 export function getTracer(): Tracer {
   return trace.getTracer(TRACER_NAME);
 }
