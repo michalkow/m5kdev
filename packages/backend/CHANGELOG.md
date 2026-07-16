@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.28.1
+
+### Patch Changes
+
+- otel db.query
+- Updated dependencies
+  - @m5kdev/commons@0.28.1
+  - @m5kdev/config@0.28.1
+
 ## 0.28.0
 
 ### Minor Changes

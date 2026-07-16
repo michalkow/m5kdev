@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.28.1
+
+### Patch Changes
+
+- otel db.query
+
 ## 0.28.0
 
 ### Minor Changes
