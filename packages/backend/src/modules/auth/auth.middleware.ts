@@ -3,6 +3,7 @@ import type { InferSelectModel } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
 import { captureServerError, ServerError } from "../../utils/errors";
 import { runWithPosthogRequestState } from "../../utils/posthog";
+import { runWithActorTelemetry } from "../../utils/telemetry";
 import * as auth from "./auth.db";
 import type { BetterAuth } from "./auth.lib";
 
@@ -37,8 +38,16 @@ export function createAuthMiddleware(auth: BetterAuth): AuthMiddleware {
         } else {
           req.user = data.user as User;
           req.session = data.session as Session;
-          runWithPosthogRequestState({ disableCapture: Boolean(req.session?.impersonatedBy) }, () =>
-            next()
+          runWithActorTelemetry(
+            {
+              userId: req.user.id,
+              organizationId: req.session.activeOrganizationId ?? undefined,
+            },
+            () =>
+              runWithPosthogRequestState(
+                { disableCapture: Boolean(req.session?.impersonatedBy) },
+                () => next()
+              )
           );
         }
       })
@@ -62,8 +71,16 @@ export function createRoleAuthMiddleware(auth: BetterAuth): (role: string) => Au
         } else {
           req.user = user;
           req.session = data?.session as Session;
-          runWithPosthogRequestState({ disableCapture: Boolean(req.session?.impersonatedBy) }, () =>
-            next()
+          runWithActorTelemetry(
+            {
+              userId: req.user.id,
+              organizationId: req.session.activeOrganizationId ?? undefined,
+            },
+            () =>
+              runWithPosthogRequestState(
+                { disableCapture: Boolean(req.session?.impersonatedBy) },
+                () => next()
+              )
           );
         }
       })

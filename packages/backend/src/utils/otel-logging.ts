@@ -1,5 +1,6 @@
 import { context, isSpanContextValid, trace } from "@opentelemetry/api";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
+import { getActorTelemetrySpanAttributes } from "./telemetry";
 
 const LOGGER_NAME = "@m5kdev/backend";
 const MAX_LOG_ATTRIBUTE_LENGTH = 4096;
@@ -70,11 +71,13 @@ export function formatLogBody(
 }
 
 export function getOtelLogMixin(): Record<string, string> {
+  const actorAttributes = getActorTelemetrySpanAttributes();
   const span = trace.getSpan(context.active());
-  if (!span) return {};
+  if (!span) return actorAttributes;
   const spanContext = span.spanContext();
-  if (!isSpanContextValid(spanContext)) return {};
+  if (!isSpanContextValid(spanContext)) return actorAttributes;
   return {
+    ...actorAttributes,
     trace_id: spanContext.traceId,
     span_id: spanContext.spanId,
     trace_flags: `0${spanContext.traceFlags.toString(16)}`,

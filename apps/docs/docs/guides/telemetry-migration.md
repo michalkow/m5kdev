@@ -150,6 +150,24 @@ No changes are required at individual `this.logger.info(...)` call sites in
 services or repositories — child loggers from `BaseService` / `BaseRepository`
 inherit the root Pino configuration.
 
+## Trace identity attributes
+
+Authenticated requests and workflow jobs automatically attach identity to spans
+and correlated logs:
+
+| Attribute | Source |
+| --- | --- |
+| `user.id` | Authenticated user (`ctx.user.id`, auth middleware, or `job.data.userId`) |
+| `organization.id` | Active org (`ctx.session.activeOrganizationId`, actor, or `job.data.organizationId`) |
+
+These attributes are set on tRPC, service, repository, workflow, and custom
+`withSpan` spans via request-scoped context — not only on the top-level tRPC
+span. Log records inside an active request also include `user.id` and
+`organization.id` when available (alongside `trace_id` / `span_id`).
+
+Auto-instrumented HTTP root spans from Express may not include identity; filter
+on child spans such as `trpc.*` or `workflow.job.*` in SigNoz.
+
 ## Custom spans in app services
 
 Use `withSpan` from `@m5kdev/backend/utils/telemetry` for domain-specific

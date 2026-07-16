@@ -2,7 +2,7 @@ import type { Job, Worker } from "bullmq";
 import { captureServerError, ServerError } from "../../utils/errors";
 import { logger as rootLogger } from "../../utils/logger";
 import { runWithPosthogRequestState } from "../../utils/posthog";
-import { serializeSpanValue, withSpan } from "../../utils/telemetry";
+import { actorTelemetryFromJobData, runWithActorTelemetry, serializeSpanValue, withSpan } from "../../utils/telemetry";
 import type { WorkflowService } from "./workflow.service";
 import type {
   RegisteredHandler,
@@ -190,7 +190,8 @@ export class WorkflowRegistry {
           }
 
           return runWithPosthogRequestState({ disableCapture: false }, () =>
-            withSpan(
+            runWithActorTelemetry(actorTelemetryFromJobData(job.data), () =>
+              withSpan(
               {
                 name:
                   entry.kind === "cron"
@@ -231,6 +232,7 @@ export class WorkflowRegistry {
                   if (timer) clearTimeout(timer);
                 }
               }
+            )
             )
           );
         },

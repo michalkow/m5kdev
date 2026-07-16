@@ -1,9 +1,78 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { type Span, SpanStatusCode, type Tracer, trace } from "@opentelemetry/api";
 import type { Result } from "neverthrow";
 import type { ServerError } from "./errors";
 
 const TRACER_NAME = "@m5kdev/backend";
 const MAX_SPAN_VALUE_LENGTH = 4096;
+
+export interface ActorTelemetry {
+  userId?: string;
+  organizationId?: string;
+}
+
+export interface ActorTelemetryRequestContext {
+  user?: { id?: string } | null;
+  session?: { activeOrganizationId?: string | null } | null;
+  actor?: { organizationId?: string | null } | null;
+}
+
+const actorTelemetryStorage = new AsyncLocalStorage<ActorTelemetry>();
+
+function mergeActorTelemetry(
+  parent: ActorTelemetry | undefined,
+  attrs: ActorTelemetry
+): ActorTelemetry {
+  return {
+    userId: attrs.userId ?? parent?.userId,
+    organizationId: attrs.organizationId ?? parent?.organizationId,
+  };
+}
+
+function applyActorTelemetryToSpan(span: Span, telemetry: ActorTelemetry): void {
+  if (telemetry.userId) span.setAttribute("user.id", telemetry.userId);
+  if (telemetry.organizationId) span.setAttribute("organization.id", telemetry.organizationId);
+}
+
+export function getActorTelemetrySpanAttributes(): Record<string, string> {
+  const telemetry = actorTelemetryStorage.getStore();
+  if (!telemetry) return {};
+  const attributes: Record<string, string> = {};
+  if (telemetry.userId) attributes["user.id"] = telemetry.userId;
+  if (telemetry.organizationId) attributes["organization.id"] = telemetry.organizationId;
+  return attributes;
+}
+
+export function actorTelemetryFromRequestContext(
+  ctx: ActorTelemetryRequestContext
+): ActorTelemetry {
+  const userId = ctx.user?.id;
+  const organizationId =
+    ctx.actor?.organizationId ?? ctx.session?.activeOrganizationId ?? undefined;
+  return {
+    ...(userId ? { userId } : {}),
+    ...(organizationId ? { organizationId } : {}),
+  };
+}
+
+export function actorTelemetryFromJobData(data: unknown): ActorTelemetry {
+  if (!data || typeof data !== "object") return {};
+  const record = data as Record<string, unknown>;
+  const userId = typeof record.userId === "string" ? record.userId : undefined;
+  const organizationId =
+    typeof record.organizationId === "string" ? record.organizationId : undefined;
+  return {
+    ...(userId ? { userId } : {}),
+    ...(organizationId ? { organizationId } : {}),
+  };
+}
+
+export function runWithActorTelemetry<T>(attrs: ActorTelemetry, callback: () => T): T {
+  const merged = mergeActorTelemetry(actorTelemetryStorage.getStore(), attrs);
+  const activeSpan = trace.getActiveSpan();
+  if (activeSpan) applyActorTelemetryToSpan(activeSpan, merged);
+  return actorTelemetryStorage.run(merged, callback);
+}
 export function getTracer(): Tracer {
   return trace.getTracer(TRACER_NAME);
 }
@@ -79,7 +148,11 @@ export async function withSpan<T>(
   fn: (span: Span) => Promise<T> | T
 ): Promise<T> {
   const tracer = getTracer();
-  return tracer.startActiveSpan(options.name, { attributes: options.attributes }, async (span) => {
+  const attributes = {
+    ...getActorTelemetrySpanAttributes(),
+    ...options.attributes,
+  };
+  return tracer.startActiveSpan(options.name, { attributes }, async (span) => {
     try {
       const result = await fn(span);
       return finalizeSpanResult(span, result);

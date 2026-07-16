@@ -17,7 +17,7 @@ import {
 } from "../modules/base/base.actor";
 import { captureServerError, reportError, ServerError } from "./errors";
 import { logger } from "./logger";
-import { serializeSpanValue, withSpan } from "./telemetry";
+import { serializeSpanValue, withSpan, actorTelemetryFromRequestContext, runWithActorTelemetry, getActorTelemetrySpanAttributes } from "./telemetry";
 
 export type RequestContext = {
   session: Session | null;
@@ -51,17 +51,19 @@ export type AdminContext = {
 
 const t = initTRPC.context<RequestContext>().create({ transformer });
 const baseProcedure = t.procedure.use(async ({ path, type, ctx, input, next }) => {
-  return withSpan(
-    {
-      name: `trpc.${path ?? "unknown"}`,
-      attributes: {
-        "trpc.type": type,
-        "trpc.path": path ?? "unknown",
-        input: serializeSpanValue(input),
-        ...(ctx.user?.id ? { "user.id": ctx.user.id } : {}),
+  return runWithActorTelemetry(actorTelemetryFromRequestContext(ctx), () =>
+    withSpan(
+      {
+        name: `trpc.${path ?? "unknown"}`,
+        attributes: {
+          "trpc.type": type,
+          "trpc.path": path ?? "unknown",
+          input: serializeSpanValue(input),
+          ...getActorTelemetrySpanAttributes(),
+        },
       },
-    },
-    () => next()
+      () => next()
+    )
   );
 });
 const publicProcedure = baseProcedure;
