@@ -30,3 +30,10 @@ Start with these module pages:
 
 Keep persistence logic in repositories, business logic in services, and transport
 wiring in routers or tRPC files.
+
+## Telemetry
+
+OpenTelemetry tracing and correlated Pino logging are opt-in via app server
+bootstrap and `OTEL_*` environment variables. See
+[Telemetry migration](/guides/telemetry-migration) for wiring `instrumentation.ts`,
+shutdown handling, and OTLP export to SigNoz or other backends.
