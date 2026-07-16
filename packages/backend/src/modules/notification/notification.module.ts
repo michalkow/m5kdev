@@ -11,7 +11,7 @@ import type { WorkflowModule } from "../workflow/workflow.module";
 import type * as notificationTables from "./notification.db";
 import { defaultNotificationGrants } from "./notification.grants";
 import { NotificationRepository } from "./notification.repository";
-import { NotificationService } from "./notification.service";
+import { NotificationService, type NotificationServiceOptions } from "./notification.service";
 import { createNotificationTRPC } from "./notification.trpc";
 
 type NotificationModuleDeps = { auth: AuthModule; workflow: WorkflowModule };
@@ -36,10 +36,18 @@ export class NotificationModule<const Namespace extends string = "notification">
   readonly id = "notification";
   override readonly dependsOn = ["auth", "workflow"] as const;
   private readonly grants: Grant[];
+  private readonly config: NotificationServiceOptions;
 
-  constructor(private readonly options: { namespace?: Namespace; grants?: Grant[] } = {}) {
+  constructor(
+    private readonly options: {
+      namespace?: Namespace;
+      grants?: Grant[];
+      config?: NotificationServiceOptions;
+    } = {}
+  ) {
     super();
     this.grants = options.grants ?? defaultNotificationGrants;
+    this.config = options.config ?? {};
   }
 
   override repositories({
@@ -61,7 +69,8 @@ export class NotificationModule<const Namespace extends string = "notification">
       notification: new NotificationService(
         { notification: repositories.notification },
         { workflow: deps.workflow.services.workflow },
-        this.grants
+        this.grants,
+        this.config
       ),
     };
   }

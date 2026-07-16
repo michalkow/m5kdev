@@ -9,8 +9,10 @@ import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
 import type { Context } from "../../utils/trpc";
 import type { ServerResultAsync } from "../base/base.dto";
+import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
 import type { WorkflowService } from "../workflow/workflow.service";
+import type { FireAndForgetJobDefinition } from "../workflow/workflow.types";
 import {
   providerForPermanentTokenFailure,
   readVapidPublicKey,
@@ -23,6 +25,11 @@ import type { NotificationRepository } from "./notification.repository";
 export interface NotificationServiceJobPayload {
   readonly batchId: string;
   readonly userId: string;
+}
+
+export interface NotificationServiceOptions {
+  deliveryTimeout?: number;
+  notificationQueue?: string;
 }
 
 function platformToProvider(platform: NotificationPlatform): NotificationProvider {
@@ -53,17 +60,28 @@ export class NotificationService extends BasePermissionService<
   { notification: NotificationRepository },
   { workflow: WorkflowService }
 > {
-  readonly deliverNotificationJob = this.service.workflow
-    .job<NotificationServiceJobPayload>({
-      name: NOTIFICATION_DELIVER_JOB_NAME,
-      queue: "fast",
-      timeout: 60_000,
-      id: (p) => p.batchId,
-      meta: (p) => ({ userId: p.userId }),
-    })
-    .handle(async (payload) => {
-      await this.deliverBatch(payload);
-    });
+  readonly deliverNotificationJob: FireAndForgetJobDefinition<NotificationServiceJobPayload>;
+
+  constructor(
+    repositories: { notification: NotificationRepository },
+    services: { workflow: WorkflowService },
+    grants: ResourceGrant[],
+    options?: NotificationServiceOptions
+  ) {
+    super(repositories, services, grants);
+
+    this.deliverNotificationJob = this.service.workflow
+      .job<NotificationServiceJobPayload>({
+        name: NOTIFICATION_DELIVER_JOB_NAME,
+        ...(options?.notificationQueue ? { queue: options.notificationQueue } : {}),
+        timeout: options?.deliveryTimeout ?? 60_000,
+        id: (p) => p.batchId,
+        meta: (p) => ({ userId: p.userId }),
+      })
+      .handle(async (payload) => {
+        await this.deliverBatch(payload);
+      });
+  }
 
   async vapidPublicKey(): ServerResultAsync<{ publicKey: string }> {
     const publicKey = readVapidPublicKey();
