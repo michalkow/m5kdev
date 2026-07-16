@@ -1,6 +1,7 @@
 import pino from "pino";
 import {
   emitOtelLogRecord,
+  enrichPinoLogArgs,
   getOtelLogMixin,
   parsePinoLogArgs,
 } from "./otel-logging";
@@ -51,15 +52,16 @@ export const logger = pino({
   level: process.env.LOG_LEVEL ?? "debug",
   serializers: { err: errSerializer },
   mixin: () => getOtelLogMixin(),
-  hooks: otelLogsEnabled
-    ? {
-        logMethod(inputArgs, method, level) {
-          const { mergeObject, message } = parsePinoLogArgs(inputArgs);
-          emitOtelLogRecord(level, mergeObject, message);
-          return method.apply(this, inputArgs);
-        },
+  hooks: {
+    logMethod(inputArgs, method, level) {
+      const enrichedArgs = enrichPinoLogArgs(inputArgs);
+      if (otelLogsEnabled) {
+        const { mergeObject, message } = parsePinoLogArgs(enrichedArgs);
+        emitOtelLogRecord(level, mergeObject, message);
       }
-    : undefined,
+      return method.apply(this, enrichedArgs);
+    },
+  },
   // Pretty console in dev; raw structured JSON in production (full data for
   // log aggregation, no pino-pretty on the hot path).
   ...(isProduction
@@ -72,7 +74,7 @@ export const logger = pino({
             messageFormat:
               "{if layerName}[{layerName}] {end}{if code}{code} {end}{msg}{if origin} → {origin}{end}",
             // these keys are already rendered in the message line
-            ignore: "pid,hostname,layer,layerName,code,origin",
+            ignore: "pid,hostname,layer,layerName,code,origin,body",
           },
         },
       }),

@@ -13,6 +13,8 @@ const PINO_LEVEL_TO_SEVERITY: Record<number, SeverityNumber> = {
   60: SeverityNumber.FATAL,
 };
 
+const BODY_HINT_KEYS = ["body", "label", "msg", "message"] as const;
+
 function serializeLogAttribute(value: unknown): string {
   if (value === undefined) return "";
   try {
@@ -22,6 +24,49 @@ function serializeLogAttribute(value: unknown): string {
   } catch {
     return "[unserializable]";
   }
+}
+
+function readErrorMessage(value: unknown): string | undefined {
+  if (value instanceof Error) return value.message;
+  if (typeof value === "string" && value.length > 0) return value;
+  return undefined;
+}
+
+function formatPrimitiveLogBody(mergeObject: Record<string, unknown>): string | undefined {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(mergeObject)) {
+    if (value === undefined || value === null) continue;
+    if (key === "err" || key === "error") {
+      const message = readErrorMessage(value);
+      if (message) parts.push(`${key}=${message}`);
+      continue;
+    }
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      parts.push(`${key}=${String(value)}`);
+    }
+  }
+  return parts.length > 0 ? parts.join(" ") : undefined;
+}
+
+export function formatLogBody(
+  mergeObject: Record<string, unknown>,
+  message?: string
+): string {
+  if (message) return message;
+
+  for (const key of BODY_HINT_KEYS) {
+    const value = mergeObject[key];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+
+  const errorMessage =
+    readErrorMessage(mergeObject.err) ?? readErrorMessage(mergeObject.error);
+  if (errorMessage) return errorMessage;
+
+  const primitiveBody = formatPrimitiveLogBody(mergeObject);
+  if (primitiveBody) return primitiveBody;
+
+  return serializeLogAttribute(mergeObject);
 }
 
 export function getOtelLogMixin(): Record<string, string> {
@@ -60,11 +105,12 @@ export function emitOtelLogRecord(
     return;
   }
 
+  const body = formatLogBody(mergeObject, message);
   const otelLogger = logs.getLogger(LOGGER_NAME);
   otelLogger.emit({
     severityNumber: PINO_LEVEL_TO_SEVERITY[level] ?? SeverityNumber.UNSPECIFIED,
-    body: message ?? "",
-    attributes: toOtelLogAttributes(mergeObject),
+    body,
+    attributes: toOtelLogAttributes({ ...mergeObject, body }),
     context: context.active(),
   });
 }
@@ -80,4 +126,25 @@ export function parsePinoLogArgs(
       : { value: args[0] };
   const message = typeof args[1] === "string" ? args[1] : undefined;
   return { mergeObject, message };
+}
+
+/** Ensures object-only logs get a readable `body` field and pino `msg` string. */
+export function enrichPinoLogArgs(args: unknown[]): unknown[] {
+  if (args.length === 0) return args;
+  if (typeof args[0] === "string") return args;
+
+  const mergeObject =
+    typeof args[0] === "object" && args[0] !== null
+      ? (args[0] as Record<string, unknown>)
+      : { value: args[0] };
+  const message = typeof args[1] === "string" ? args[1] : undefined;
+  const body = formatLogBody(mergeObject, message);
+
+  const enrichedObject =
+    typeof mergeObject.body === "string" && mergeObject.body.length > 0
+      ? mergeObject
+      : { ...mergeObject, body };
+
+  if (message) return [enrichedObject, message, ...args.slice(2)];
+  return [enrichedObject, body, ...args.slice(1)];
 }
