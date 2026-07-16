@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.28.2
+
+### Patch Changes
+
+- otel logs
+- Updated dependencies
+  - @m5kdev/commons@0.28.2
+  - @m5kdev/config@0.28.2
+
 ## 0.28.1
 
 ### Patch Changes

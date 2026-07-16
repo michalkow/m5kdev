@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.28.2
+
+### Patch Changes
+
+- otel logs
+
 ## 0.28.1
 
 ### Patch Changes
