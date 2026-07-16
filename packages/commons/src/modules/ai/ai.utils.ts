@@ -175,7 +175,8 @@ export function getSortedRankedModel(
   models: RankedModel[],
   category: Category = "chat",
   weights?: SortType | [SortType, SortType, SortType] | [number, number, number],
-  tokenProfile?: TokenProfile | number | TokenSize
+  tokenProfile?: TokenProfile | number | TokenSize,
+  filter?: (model: RankedModel) => boolean
 ): RankedModel[] {
   const profile =
     typeof tokenProfile === "string"
@@ -194,7 +195,8 @@ export function getSortedRankedModel(
 export function getSortedRecommendedModels(
   category: Category = "chat",
   weights?: SortType | [SortType, SortType, SortType] | [number, number, number],
-  tokenProfile?: TokenProfile | number | TokenSize
+  tokenProfile?: TokenProfile | number | TokenSize,
+  filter?: (model: RankedModel) => boolean
 ): RankedModel[] {
   return getSortedRankedModel(RANKED_MODELS, category, weights, tokenProfile);
 }
@@ -202,7 +204,8 @@ export function getSortedRecommendedModels(
 export function getSortedRecommendedModelIds(
   category: Category = "chat",
   weights?: SortType | [SortType, SortType, SortType] | [number, number, number],
-  tokenProfile?: TokenProfile | number | TokenSize
+  tokenProfile?: TokenProfile | number | TokenSize,
+  filter?: (model: RankedModel) => boolean
 ): string[] {
   return getSortedRankedModel(RANKED_MODELS, category, weights, tokenProfile).map(
     (model) => model.id

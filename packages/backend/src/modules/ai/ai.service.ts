@@ -5,14 +5,13 @@ import type { Mastra } from "@mastra/core";
 import { RequestContext } from "@mastra/core/request-context";
 import type { FullOutput, MastraModelOutput } from "@mastra/core/stream";
 import { MDocument } from "@mastra/rag";
-import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
+import type { OpenRouterChatSettings, OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import {
   embed,
   embedMany,
   generateText,
   type ModelMessage,
   NoObjectGeneratedError,
-  NoOutputGeneratedError,
   Output,
 } from "ai";
 import { jsonrepair } from "jsonrepair";
@@ -143,15 +142,29 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
 
   prepareModel(
     model: string,
-    options?: { objectGeneration?: boolean }
-  ): ReturnType<OpenRouterProvider["chat"]> {
-    if (!this.openrouter) {
-      throw new Error("OpenRouter is not configured");
+    options?: {
+      objectGeneration?: boolean;
+      webSearch?: {
+        maxResults?: number;
+        searchPrompt?: string;
+      };
     }
+  ): ReturnType<OpenRouterProvider["chat"]> {
+    if (!this.openrouter) throw new Error("OpenRouter is not configured");
+
+    const plugins: OpenRouterChatSettings["plugins"] = [];
+    if (options?.objectGeneration) plugins.push({ id: "response-healing" });
+    if (options?.webSearch)
+      plugins.push({
+        id: "web",
+        max_results: options.webSearch.maxResults,
+        search_prompt: options.webSearch.searchPrompt,
+      });
     return this.openrouter.chat(model, {
       usage: {
         include: true,
       },
+      ...(plugins.length > 0 ? { plugins } : {}),
       ...(options?.objectGeneration
         ? {
             extraBody: {
