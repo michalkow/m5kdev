@@ -1,5 +1,17 @@
 # @m5kdev/backend
 
+## 0.28.0
+
+### Minor Changes
+
+- otel
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.28.0
+  - @m5kdev/config@0.28.0
+
 ## 0.27.2
 
 ### Patch Changes

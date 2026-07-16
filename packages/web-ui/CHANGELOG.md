@@ -1,5 +1,17 @@
 # @m5kdev/web-ui
 
+## 0.28.0
+
+### Minor Changes
+
+- otel
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.28.0
+  - @m5kdev/frontend@0.28.0
+
 ## 0.27.2
 
 ### Patch Changes
