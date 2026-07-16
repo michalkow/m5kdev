@@ -1,19 +1,16 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { toI18nLanguageTag } from "@m5kdev/commons/modules/auth/auth.locale";
 import { ok } from "neverthrow";
 import { createElement, type FunctionComponent } from "react";
 import { prerender } from "react-dom/static";
 import { Resend } from "resend";
-import { toI18nLanguageTag } from "@m5kdev/commons/modules/auth/auth.locale";
 import type { BackendAppEmailMode, BackendAppEmailOptions, BackendAppMetadata } from "../../app";
 import type { AppI18n } from "../../i18n/app-i18n";
 import { BaseService } from "../base/base.service";
 
-export type EmailTranslateFn = (
-  key: string,
-  options?: Record<string, unknown>
-) => string;
+export type EmailTranslateFn = (key: string, options?: Record<string, unknown>) => string;
 
 export type Brand = {
   name: string;
@@ -96,9 +93,7 @@ function buildAppUrl(baseUrl: string | undefined, pathname: string) {
   return new URL(pathname, normalizeBaseUrl(baseUrl)).toString();
 }
 
-function buildEmailTranslationContext(
-  props: Record<string, unknown>
-): Record<string, unknown> {
+function buildEmailTranslationContext(props: Record<string, unknown>): Record<string, unknown> {
   const brand = props.brand as Brand | undefined;
   return {
     ...props,
@@ -369,10 +364,14 @@ export class EmailService extends BaseService<never, never> {
     const template = this.resolveTemplate(templateKey);
     if (!template) {
       // templates are registered at boot — a missing one is a config bug, not a client error
-      return this.error("INTERNAL_SERVER_ERROR", `Email template not found: ${String(templateKey)}`);
+      return this.error(
+        "INTERNAL_SERVER_ERROR",
+        `Email template not found: ${String(templateKey)}`
+      );
     }
 
-    const locale = options?.locale ?? this.i18n?.defaultLocale ?? this.appConfig.locales?.defaultLocale;
+    const locale =
+      options?.locale ?? this.i18n?.defaultLocale ?? this.appConfig.locales?.defaultLocale;
     const mergedProps: Record<string, unknown> = { ...templateProps };
     const translationContext = buildEmailTranslationContext(mergedProps);
     const t = this.i18n ? this.i18n.getFixedT(locale) : undefined;

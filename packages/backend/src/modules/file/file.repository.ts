@@ -12,7 +12,7 @@ import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseExternaRepository, BaseTableRepository } from "../base/base.repository";
-import { files, type FileUploadStatus } from "./file.db";
+import { type FileUploadStatus, files } from "./file.db";
 
 const schema = { files };
 type Schema = typeof schema;

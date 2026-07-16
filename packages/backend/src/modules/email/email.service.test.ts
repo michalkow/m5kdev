@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createClient, type Client } from "@libsql/client";
-import type { FunctionComponent } from "react";
+import { type Client, createClient } from "@libsql/client";
 import type { Logger } from "pino";
+import type { FunctionComponent } from "react";
 import { createBackendApp } from "../../app";
 import { createAppI18n } from "../../i18n/app-i18n";
 import { EmailModule } from "./email.module";
@@ -21,7 +21,8 @@ jest.mock("better-auth/node", () => ({
   fromNodeHeaders: (headers: unknown) => headers,
 }));
 
-const Template: FunctionComponent<Record<string, unknown>> = ({ previewText }) => previewText as never;
+const Template: FunctionComponent<Record<string, unknown>> = ({ previewText }) =>
+  previewText as never;
 
 const templates: EmailTemplates = {
   accountDeletion: {
@@ -130,9 +131,7 @@ describe("EmailService", () => {
         throw new Error("Expected rendered email to be stored");
       }
 
-      const payload = JSON.parse(
-        await fs.readFile(path.join(outputDirectory, first), "utf8")
-      ) as {
+      const payload = JSON.parse(await fs.readFile(path.join(outputDirectory, first), "utf8")) as {
         subject: string;
         props: {
           url: string;
@@ -193,9 +192,13 @@ describe("EmailService", () => {
         i18n: appI18n,
       });
 
-      const result = await service.sendVerification("person@example.com", "https://example.com/verify", {
-        locale: "en_GB",
-      });
+      const result = await service.sendVerification(
+        "person@example.com",
+        "https://example.com/verify",
+        {
+          locale: "en_GB",
+        }
+      );
 
       expect(result.isOk()).toBe(true);
 
@@ -205,9 +208,7 @@ describe("EmailService", () => {
         throw new Error("Expected rendered email to be stored");
       }
 
-      const payload = JSON.parse(
-        await fs.readFile(path.join(outputDirectory, first), "utf8")
-      ) as {
+      const payload = JSON.parse(await fs.readFile(path.join(outputDirectory, first), "utf8")) as {
         subject: string;
         previewText: string;
         props: {
@@ -266,7 +267,10 @@ describe("EmailService", () => {
         i18n: appI18n,
       });
 
-      const result = await service.sendVerification("person@example.com", "https://example.com/verify");
+      const result = await service.sendVerification(
+        "person@example.com",
+        "https://example.com/verify"
+      );
 
       expect(result.isOk()).toBe(true);
 
@@ -276,9 +280,7 @@ describe("EmailService", () => {
         throw new Error("Expected rendered email to be stored");
       }
 
-      const payload = JSON.parse(
-        await fs.readFile(path.join(outputDirectory, first), "utf8")
-      ) as {
+      const payload = JSON.parse(await fs.readFile(path.join(outputDirectory, first), "utf8")) as {
         subject: string;
         props: {
           htmlLang: string;
@@ -314,7 +316,10 @@ describe("EmailService", () => {
         },
       });
 
-      const result = await service.sendVerification("person@example.com", "https://example.com/verify");
+      const result = await service.sendVerification(
+        "person@example.com",
+        "https://example.com/verify"
+      );
 
       expect(result.isOk()).toBe(true);
 
@@ -324,9 +329,7 @@ describe("EmailService", () => {
         throw new Error("Expected rendered email to be stored");
       }
 
-      const payload = JSON.parse(
-        await fs.readFile(path.join(outputDirectory, first), "utf8")
-      ) as {
+      const payload = JSON.parse(await fs.readFile(path.join(outputDirectory, first), "utf8")) as {
         subject: string;
       };
 

@@ -45,7 +45,9 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
       this.orm
         .select()
         .from(this.schema.workflows)
-        .where(and(eq(this.schema.workflows.jobId, jobId), eq(this.schema.workflows.userId, userId)))
+        .where(
+          and(eq(this.schema.workflows.jobId, jobId), eq(this.schema.workflows.userId, userId))
+        )
     );
     if (wfResult.isErr()) return err(wfResult.error);
     const [wf] = wfResult.value;

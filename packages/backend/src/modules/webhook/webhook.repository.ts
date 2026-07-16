@@ -9,7 +9,12 @@ const schema = { webhook };
 type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;
 
-export class WebhookRepository extends BaseTableRepository<Orm, Schema, Record<string, never>, Schema["webhook"]> {
+export class WebhookRepository extends BaseTableRepository<
+  Orm,
+  Schema,
+  Record<string, never>,
+  Schema["webhook"]
+> {
   async completed(id: string, payload: unknown, tx?: Orm): ServerResultAsync<void> {
     const webhook = await this.findById(id, tx);
     if (webhook.isErr()) return err(webhook.error);

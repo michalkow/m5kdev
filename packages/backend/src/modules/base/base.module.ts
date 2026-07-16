@@ -17,7 +17,9 @@ type AnyRecord = Record<string, any>;
 export type TableMap = Record<string, SQLiteTableWithColumns<any>>;
 
 /** Allow `never` / `{}` as “no deps” in first generic (e.g. legacy `BaseModule<never>`). */
-export type BaseModuleDeps = Record<string, BaseModule<any, any, any, any, any>> | Record<string, never>;
+export type BaseModuleDeps =
+  | Record<string, BaseModule<any, any, any, any, any>>
+  | Record<string, never>;
 
 /** True when `Deps` has no keys (e.g. `never` or `{}` for modules with no declared deps). */
 type IsDepsEmpty<Deps extends BaseModuleDeps> = [keyof Deps] extends [never] ? true : false;

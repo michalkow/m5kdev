@@ -1,4 +1,5 @@
 import { BasePermissionService } from "@m5kdev/backend/modules/base/base.service";
+import { serializeSpanValue, withSpan } from "@m5kdev/backend/utils/telemetry";
 import type { Context } from "@m5kdev/backend/utils/trpc";
 import { err, ok } from "neverthrow";
 import { postSchemas } from "./posts.dto";
@@ -14,10 +15,19 @@ export class PostsService extends BasePermissionService<
     .input(postSchemas.input.list)
     .output(postSchemas.output.list)
     .requireAuth()
-    .handle(({ input }) => {
-      return this.repository.posts.queryList(input, {
-        globalSearchColumns: ["title", "excerpt", "content"],
-      });
+    .handle(async ({ input }) => {
+      return withSpan(
+        {
+          name: "posts.list.query",
+          attributes: { input: serializeSpanValue(input) },
+        },
+        (span) => {
+          span.addEvent("span started");
+          return this.repository.posts.queryList(input, {
+            globalSearchColumns: ["title", "excerpt", "content"],
+          });
+        }
+      );
     });
 
   readonly create = this.procedure("create")

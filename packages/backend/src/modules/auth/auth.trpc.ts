@@ -2,11 +2,11 @@ import { z } from "zod";
 import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 import {
   accountClaimMagicLinkSchemas,
-  invitationSchemas,
   organizationSchemas as defaultOrganizationSchemas,
+  invitationSchemas,
+  type OrganizationSchemas,
   settingsSchemas,
   waitlistSchemas,
-  type OrganizationSchemas,
 } from "./auth.dto";
 import type { AuthService } from "./auth.service";
 

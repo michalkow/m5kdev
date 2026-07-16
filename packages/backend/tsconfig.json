@@ -9,17 +9,8 @@
     "declarationMap": false,
     "emitDeclarationOnly": false,
     "noEmit": false,
-    "types": [
-      "jest"
-    ]
+    "types": ["jest"]
   },
-  "exclude": [
-    "node_modules",
-    "dist",
-    "tsdown.config.ts"
-  ],
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.d.ts"
-  ]
+  "exclude": ["node_modules", "dist", "tsdown.config.ts"],
+  "include": ["src/**/*.ts", "src/**/*.d.ts"]
 }

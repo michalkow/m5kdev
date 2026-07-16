@@ -1,9 +1,9 @@
 import { type Client, createClient, type Config as LibSQLClientConfig } from "@libsql/client";
 import type { AuthLocaleConfig } from "@m5kdev/commons/modules/auth/auth.locale";
 import {
-  normalizeAuthRolesConfig,
   type AuthRolesConfig,
   type NormalizedAuthRolesConfig,
+  normalizeAuthRolesConfig,
 } from "@m5kdev/commons/modules/auth/auth.roles";
 import { transformer } from "@m5kdev/commons/utils/trpc";
 import type { AnyRouter, TRPCCreateRouterOptions } from "@trpc/server";
@@ -15,12 +15,11 @@ import express, { type Express } from "express";
 import IORedis, { type RedisOptions } from "ioredis";
 import type { Logger } from "pino";
 import { Resend } from "resend";
-
+import { type AppI18n, type BackendAppI18nResources, createAppI18n } from "./i18n/app-i18n";
 import type * as authTables from "./modules/auth/auth.db";
 import type { BetterAuth } from "./modules/auth/auth.lib";
 import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/auth.middleware";
 import type { BaseModule } from "./modules/base/base.module";
-import { createAppI18n, type AppI18n, type BackendAppI18nResources } from "./i18n/app-i18n";
 import { WorkflowRegistry } from "./modules/workflow/workflow.registry";
 import { WorkflowService } from "./modules/workflow/workflow.service";
 import { logger as rootLogger } from "./utils/logger";

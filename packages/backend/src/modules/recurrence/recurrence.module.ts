@@ -42,7 +42,9 @@ export class RecurrenceModule<const Namespace extends string = "recurrence"> ext
     this.grants = options.grants ?? defaultRecurrenceGrants;
   }
 
-  override repositories({ db }: ModuleRepositoriesContext<RecurrenceModuleDeps, RecurrenceModuleTables>) {
+  override repositories({
+    db,
+  }: ModuleRepositoriesContext<RecurrenceModuleDeps, RecurrenceModuleTables>) {
     return {
       recurrence: new RecurrenceRepository({
         orm: db.orm,
@@ -72,7 +74,10 @@ export class RecurrenceModule<const Namespace extends string = "recurrence"> ext
     };
   }
 
-  override trpc({ trpc, services }: ModuleTRPCContext<RecurrenceModuleDeps, RecurrenceModuleServices>) {
+  override trpc({
+    trpc,
+    services,
+  }: ModuleTRPCContext<RecurrenceModuleDeps, RecurrenceModuleServices>) {
     const namespace = (this.options.namespace ?? "recurrence") as Namespace;
     return createBackendRouterMap(namespace, createRecurrenceTRPC(trpc, services.recurrence));
   }

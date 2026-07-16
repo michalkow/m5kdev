@@ -20,10 +20,7 @@ import { escapeLikeUserInput } from "./getGlobalSearchCondition";
 
 type ColumnDataType = "string" | "number" | "date" | "boolean" | "enum" | "jsonArray";
 
-function getJsonArrayLikeCondition(
-  column: SQLiteColumn,
-  value: string
-): ReturnType<typeof sql> {
+function getJsonArrayLikeCondition(column: SQLiteColumn, value: string): ReturnType<typeof sql> {
   // We store JSON arrays as TEXT (e.g. ["a","b"]). To avoid partial token matches,
   // search for the JSON-stringified element, including quotes/escapes.
   const needle = JSON.stringify(value);
@@ -189,7 +186,9 @@ export const getConditionsFromFilters = <T extends SQLiteTableWithColumns<any>>(
             // Logic: columnId <= valueTo AND (endColumnId IS NULL OR endColumnId >= value)
             if (!valueTo || !filter.endColumnId) break;
 
-            const endColumn = (table as unknown as Record<string, SQLiteColumn>)[filter.endColumnId];
+            const endColumn = (table as unknown as Record<string, SQLiteColumn>)[
+              filter.endColumnId
+            ];
             if (!endColumn) break;
 
             const { start } = getUTCDateBoundaries(value);

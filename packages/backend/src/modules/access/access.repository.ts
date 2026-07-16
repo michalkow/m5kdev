@@ -15,7 +15,9 @@ export class AccessRepository extends BaseRepository<Orm, Schema, Record<string,
       this.orm
         .select({ role: schema.members.role })
         .from(schema.members)
-        .where(and(eq(schema.members.organizationId, organizationId), eq(schema.members.userId, userId)))
+        .where(
+          and(eq(schema.members.organizationId, organizationId), eq(schema.members.userId, userId))
+        )
         .limit(1)
     );
     if (memberResult.isErr()) return err(memberResult.error);

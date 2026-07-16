@@ -7,20 +7,13 @@ import {
 } from "@m5kdev/commons/modules/auth/auth.locale";
 import { createInstance, type i18n, type TFunction } from "i18next";
 
-export type BackendAppI18nResources = Record<
-  string,
-  { translation: Record<string, unknown> }
->;
+export type BackendAppI18nResources = Record<string, { translation: Record<string, unknown> }>;
 
 export interface AppI18n {
   readonly instance: i18n;
   readonly defaultLocale: string;
   getFixedT(locale?: string | null): TFunction;
-  t(
-    locale: string | null | undefined,
-    key: string,
-    options?: Record<string, unknown>
-  ): string;
+  t(locale: string | null | undefined, key: string, options?: Record<string, unknown>): string;
 }
 
 function buildFallbackLocales(locales: AuthLocaleConfig): string[] {
@@ -48,10 +41,9 @@ function buildFallbackLocales(locales: AuthLocaleConfig): string[] {
   return [...fallbacks];
 }
 
-function toI18nResources(resources: BackendAppI18nResources): Record<
-  string,
-  { translation: Record<string, unknown> }
-> {
+function toI18nResources(
+  resources: BackendAppI18nResources
+): Record<string, { translation: Record<string, unknown> }> {
   const mapped: Record<string, { translation: Record<string, unknown> }> = {};
 
   for (const [locale, bundle] of Object.entries(resources)) {
@@ -95,11 +87,7 @@ export function createAppI18n(
     getFixedT(locale?: string | null): TFunction {
       return instance.getFixedT(toI18nLanguageTag(resolveLocale(locale)));
     },
-    t(
-      locale: string | null | undefined,
-      key: string,
-      options?: Record<string, unknown>
-    ): string {
+    t(locale: string | null | undefined, key: string, options?: Record<string, unknown>): string {
       return this.getFixedT(locale)(key, options);
     },
   };

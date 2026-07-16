@@ -1,13 +1,13 @@
 import { createBackendRouterMap } from "../../app";
 import type { AuthModule } from "../auth/auth.module";
 import type { Grant } from "../base/base.grants";
-import type { WorkflowModule } from "../workflow/workflow.module";
 import {
   BaseModule,
   type ModuleRepositoriesContext,
   type ModuleServicesContext,
   type ModuleTRPCContext,
 } from "../base/base.module";
+import type { WorkflowModule } from "../workflow/workflow.module";
 import type * as notificationTables from "./notification.db";
 import { defaultNotificationGrants } from "./notification.grants";
 import { NotificationRepository } from "./notification.repository";

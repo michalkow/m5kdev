@@ -1,5 +1,9 @@
+import {
+  BaseModule,
+  type ModuleRepositoriesContext,
+  type ModuleServicesContext,
+} from "../base/base.module";
 import type * as cryptoTables from "./crypto.db";
-import { BaseModule, type ModuleRepositoriesContext, type ModuleServicesContext } from "../base/base.module";
 import { CryptoRepository } from "./crypto.repository";
 import { CryptoService } from "./crypto.service";
 

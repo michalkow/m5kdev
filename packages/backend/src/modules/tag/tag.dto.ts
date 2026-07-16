@@ -1,8 +1,8 @@
 import type { Result } from "neverthrow";
 import type { z } from "zod";
+import type { ServerError } from "../../utils/errors";
 import { createSelectDTO } from "../base/base.dto";
 import { taggings, tags } from "./tag.db";
-import type { ServerError } from "../../utils/errors";
 
 export const tagsSelectDTO = createSelectDTO(tags);
 export const taggingsSelectDTO = createSelectDTO(taggings);

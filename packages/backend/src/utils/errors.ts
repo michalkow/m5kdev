@@ -91,7 +91,11 @@ export class ServerError extends Error {
       // Shallow representation of cause to avoid cycles
       cause:
         this.cause instanceof Error
-          ? { name: this.cause.name, message: this.cause.message, stack: trimStack(this.cause.stack) }
+          ? {
+              name: this.cause.name,
+              message: this.cause.message,
+              stack: trimStack(this.cause.stack),
+            }
           : this.cause,
     };
   }
@@ -127,7 +131,10 @@ type CaptureLogger = Pick<typeof logger, "error" | "warn" | "debug">;
  */
 export function captureServerError(
   error: ServerError,
-  { logger: log = logger, level }: { logger?: CaptureLogger; level?: "error" | "warn" | "debug" } = {}
+  {
+    logger: log = logger,
+    level,
+  }: { logger?: CaptureLogger; level?: "error" | "warn" | "debug" } = {}
 ): ServerError {
   if (error.logged) return error;
   error.logged = true;

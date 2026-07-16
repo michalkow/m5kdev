@@ -37,10 +37,7 @@ export class RecurrenceRepository extends BaseTableRepository<
 
     const txResult = await this.throwableQuery(() =>
       db.transaction(async (trx) => {
-        const [createdRecurrence] = await trx
-          .insert(this.table)
-          .values(recurrenceData)
-          .returning();
+        const [createdRecurrence] = await trx.insert(this.table).values(recurrenceData).returning();
         if (!createdRecurrence) throw new Error("Failed to create recurrence");
 
         const rulesWithRecurrenceId: RecurrenceRulesInsert[] = rulesData.map((rule) => ({

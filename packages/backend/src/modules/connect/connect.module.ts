@@ -1,7 +1,5 @@
-import type { ConnectProvider } from "./connect.types";
 import { createBackendRouterMap } from "../../app";
 import type { Grant } from "../base/base.grants";
-import type * as connectTables from "./connect.db";
 import {
   BaseModule,
   type ModuleExpressContext,
@@ -9,11 +7,13 @@ import {
   type ModuleServicesContext,
   type ModuleTRPCContext,
 } from "../base/base.module";
+import type * as connectTables from "./connect.db";
 import { defaultConnectGrants } from "./connect.grants";
 import { ConnectRepository } from "./connect.repository";
 import { createConnectRouter } from "./connect.router";
 import { ConnectService } from "./connect.service";
 import { createConnectTRPC } from "./connect.trpc";
+import type { ConnectProvider } from "./connect.types";
 
 type ConnectModuleDeps = never;
 type ConnectModuleTables = typeof connectTables;
@@ -59,7 +59,9 @@ export class ConnectModule<const Namespace extends string = "connect"> extends B
     };
   }
 
-  override services({ repositories }: ModuleServicesContext<ConnectModuleDeps, ConnectModuleRepositories>) {
+  override services({
+    repositories,
+  }: ModuleServicesContext<ConnectModuleDeps, ConnectModuleRepositories>) {
     return {
       connect: new ConnectService({ connect: repositories.connect }, this.providers, this.grants),
     };

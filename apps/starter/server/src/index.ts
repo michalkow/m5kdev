@@ -1,4 +1,6 @@
+import "./instrumentation";
 import type { Server } from "node:http";
+import { shutdownTelemetry } from "@m5kdev/backend/lib/otel";
 import { builtBackendApp } from "./app";
 
 const port = process.env.PORT ? Number.parseInt(process.env.PORT, 10) : 8080;
@@ -14,6 +16,11 @@ async function shutdown(): Promise<void> {
     await builtBackendApp.shutdown();
   } catch (e) {
     logError("builtBackendApp.shutdown() failed", e);
+  }
+  try {
+    await shutdownTelemetry();
+  } catch (e) {
+    logError("shutdownTelemetry() failed", e);
   }
   if (httpServer) {
     await new Promise<void>((resolve) => {

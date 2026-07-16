@@ -263,15 +263,19 @@ export class WorkflowService extends Base {
     queueName: string,
     cronName: string,
     pattern: string,
-    resolved: ResolvedCronConfig,
+    resolved: ResolvedCronConfig
   ): Promise<Job | undefined> {
     const queue = this.getQueue(queueName);
     const mergedOpts = this.mergeCronTemplateJobOptions(resolved);
-    const job = await queue.upsertJobScheduler(cronName, { pattern }, {
-      name: cronName,
-      data: {},
-      opts: mergedOpts,
-    });
+    const job = await queue.upsertJobScheduler(
+      cronName,
+      { pattern },
+      {
+        name: cronName,
+        data: {},
+        opts: mergedOpts,
+      }
+    );
     return job ?? undefined;
   }
 
@@ -282,7 +286,7 @@ export class WorkflowService extends Base {
     queueName: string,
     start: number,
     end: number,
-    asc?: boolean,
+    asc?: boolean
   ): ReturnType<Queue["getJobSchedulers"]> {
     const queue = this.getQueue(queueName);
     return queue.getJobSchedulers(start, end, asc);

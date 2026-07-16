@@ -29,12 +29,7 @@ export function createGoogleProvider(): ConnectProvider {
     clientId,
     clientSecret,
     redirectUri: `${baseUrl}/connect/google/callback`,
-    scopes: [
-      "openid",
-      "email",
-      "profile",
-      "https://www.googleapis.com/auth/drive.readonly",
-    ],
+    scopes: ["openid", "email", "profile", "https://www.googleapis.com/auth/drive.readonly"],
     issuerUrl: "https://accounts.google.com",
     authorizationExtraParams: {
       access_type: "offline",

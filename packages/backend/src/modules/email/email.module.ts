@@ -24,10 +24,12 @@ export class EmailModule extends BaseModule<
     this.templates = templates;
   }
 
-  override services({ appConfig, emailConfig, infra, i18n }: ModuleServicesContext<
-    EmailModuleDeps,
-    EmailModuleRepositories
-  >) {
+  override services({
+    appConfig,
+    emailConfig,
+    infra,
+    i18n,
+  }: ModuleServicesContext<EmailModuleDeps, EmailModuleRepositories>) {
     return {
       email: new EmailService({
         appConfig,

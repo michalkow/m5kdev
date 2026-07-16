@@ -1,6 +1,6 @@
-import { createClient, type Client } from "@libsql/client";
-import { BaseModule, type TableMap } from "./modules/base/base.module";
+import { type Client, createClient } from "@libsql/client";
 import { createBackendApp } from "./app";
+import { BaseModule, type TableMap } from "./modules/base/base.module";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {
@@ -158,4 +158,3 @@ describe("createBackendApp", () => {
     );
   });
 });
-

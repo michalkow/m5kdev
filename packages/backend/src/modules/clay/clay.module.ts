@@ -1,6 +1,6 @@
 import type { z } from "zod";
-import type { WebhookModule } from "../webhook/webhook.module";
 import { BaseModule, type ModuleServicesContext, type TableMap } from "../base/base.module";
+import type { WebhookModule } from "../webhook/webhook.module";
 import { ClayRepository } from "./clay.repository";
 import { ClayService } from "./clay.service";
 
@@ -48,7 +48,10 @@ export class ClayModule<K extends string> extends BaseModule<
     };
   }
 
-  override services({ repositories, deps }: ModuleServicesContext<ClayModuleDeps, ClayModuleRepositories>) {
+  override services({
+    repositories,
+    deps,
+  }: ModuleServicesContext<ClayModuleDeps, ClayModuleRepositories>) {
     return {
       clay: new ClayService(
         { clay: repositories.clay },

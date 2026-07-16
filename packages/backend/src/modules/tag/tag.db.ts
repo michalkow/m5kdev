@@ -23,9 +23,7 @@ export const tags = sqliteTable("tags", {
   parentId: text("parent_id").references((): AnySQLiteColumn => tags.id, {
     onDelete: "set null",
   }),
-  assignableTo: text("assignable_to", { mode: "json" })
-    .notNull()
-    .$type<string[]>(),
+  assignableTo: text("assignable_to", { mode: "json" }).notNull().$type<string[]>(),
 });
 
 export const taggings = sqliteTable("taggings", {

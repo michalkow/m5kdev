@@ -35,7 +35,7 @@ function createMockCronResolved(overrides?: Partial<ResolvedCronConfig>): Resolv
 function createMockDefinition<P = unknown, R = unknown>(
   name: string,
   queueName = "fast",
-  configOverrides?: Partial<ResolvedJobConfig>,
+  configOverrides?: Partial<ResolvedJobConfig>
 ): WorkflowJobDefinition<P, R> {
   return {
     jobName: name,
@@ -50,7 +50,7 @@ function createMockDefinition<P = unknown, R = unknown>(
 function createMockCronDefinition(
   name: string,
   queueName = "fast",
-  configOverrides?: Partial<ResolvedCronConfig>,
+  configOverrides?: Partial<ResolvedCronConfig>
 ): WorkflowCronDefinition {
   const resolved = createMockCronResolved({ name, queueName, ...configOverrides });
   return {
@@ -69,7 +69,7 @@ function createMockCronDefinition(
 function createMockDefinitionWithHandler<P = unknown, R = unknown>(
   name: string,
   queueName = "fast",
-  configOverrides?: Partial<ResolvedJobConfig>,
+  configOverrides?: Partial<ResolvedJobConfig>
 ): WorkflowJobDefinition<P, R> {
   const def = createMockDefinition<P, R>(name, queueName, configOverrides);
   def._handler = jest.fn().mockResolvedValue(undefined);
@@ -79,7 +79,7 @@ function createMockDefinitionWithHandler<P = unknown, R = unknown>(
 function createMockCronWithHandler(
   name: string,
   queueName = "fast",
-  configOverrides?: Partial<ResolvedCronConfig>,
+  configOverrides?: Partial<ResolvedCronConfig>
 ): WorkflowCronDefinition {
   const def = createMockCronDefinition(name, queueName, configOverrides);
   def._handler = jest.fn().mockResolvedValue(undefined);
@@ -94,7 +94,7 @@ interface MockJob {
 }
 
 function expectCapturedProcessor(
-  processor: ((job: MockJob) => Promise<unknown>) | null,
+  processor: ((job: MockJob) => Promise<unknown>) | null
 ): (job: MockJob) => Promise<unknown> {
   expect(processor).not.toBeNull();
   return processor as (job: MockJob) => Promise<unknown>;
@@ -124,14 +124,14 @@ describe("WorkflowRegistry", () => {
     createdWorkers.length = 0;
     mockWorkerOn = jest.fn();
     mockWorkerClose = jest.fn().mockResolvedValue(undefined);
-    mockCreateWorker = jest.fn().mockImplementation(
-      (_queueName: string, processor: (job: MockJob) => Promise<unknown>) => {
+    mockCreateWorker = jest
+      .fn()
+      .mockImplementation((_queueName: string, processor: (job: MockJob) => Promise<unknown>) => {
         capturedProcessor = processor;
         const worker = { on: mockWorkerOn, close: mockWorkerClose };
         createdWorkers.push(worker);
         return worker;
-      },
-    );
+      });
 
     mockCloseWorkers = jest.fn().mockImplementation(async () => {
       await Promise.all(createdWorkers.map((w) => w.close()));
@@ -187,7 +187,7 @@ describe("WorkflowRegistry", () => {
       const registry = new WorkflowRegistry(mockService as WorkflowService);
       registry.register(createMockDefinition("sync"), jest.fn().mockResolvedValue(undefined));
       expect(() =>
-        registry.register(createMockCronDefinition("sync"), jest.fn().mockResolvedValue(undefined)),
+        registry.register(createMockCronDefinition("sync"), jest.fn().mockResolvedValue(undefined))
       ).toThrow('already registered for job "sync"');
     });
 
@@ -210,11 +210,11 @@ describe("WorkflowRegistry", () => {
 
       registry.register(
         createMockDefinition("jobA", "fast"),
-        jest.fn().mockResolvedValue(undefined),
+        jest.fn().mockResolvedValue(undefined)
       );
       registry.register(
         createMockDefinition("jobB", "slow"),
-        jest.fn().mockResolvedValue(undefined),
+        jest.fn().mockResolvedValue(undefined)
       );
 
       await registry.start();
@@ -231,11 +231,11 @@ describe("WorkflowRegistry", () => {
 
       registry.register(
         createMockDefinition("jobA", "fast"),
-        jest.fn().mockResolvedValue(undefined),
+        jest.fn().mockResolvedValue(undefined)
       );
       registry.register(
         createMockDefinition("jobB", "fast"),
-        jest.fn().mockResolvedValue(undefined),
+        jest.fn().mockResolvedValue(undefined)
       );
 
       await registry.start();
@@ -248,7 +248,7 @@ describe("WorkflowRegistry", () => {
       const registry = new WorkflowRegistry(mockService as WorkflowService);
       registry.register(
         createMockCronDefinition("keepMe", "fast", { pattern: "*/10 * * * *" }),
-        jest.fn().mockResolvedValue(undefined),
+        jest.fn().mockResolvedValue(undefined)
       );
       mockGetJobSchedulers
         .mockResolvedValueOnce([
@@ -263,7 +263,7 @@ describe("WorkflowRegistry", () => {
         "fast",
         "keepMe",
         "*/10 * * * *",
-        expect.objectContaining({ name: "keepMe", queueName: "fast" }),
+        expect.objectContaining({ name: "keepMe", queueName: "fast" })
       );
       expect(mockGetJobSchedulers).toHaveBeenCalledWith("fast", 0, 99);
       expect(mockRemoveJobScheduler).toHaveBeenCalledWith("fast", "staleCron");
@@ -275,7 +275,7 @@ describe("WorkflowRegistry", () => {
       // only a plain job on this queue — previously such queues were never swept
       registry.register(
         createMockDefinition("jobA", "fast"),
-        jest.fn().mockResolvedValue(undefined),
+        jest.fn().mockResolvedValue(undefined)
       );
       mockGetJobSchedulers
         .mockResolvedValueOnce([{ key: "workflow.reconcile", name: "workflow.reconcile" }])
@@ -289,10 +289,7 @@ describe("WorkflowRegistry", () => {
 
     it("rejects if called twice", async () => {
       const registry = new WorkflowRegistry(mockService as WorkflowService);
-      registry.register(
-        createMockDefinition("jobA"),
-        jest.fn().mockResolvedValue(undefined),
-      );
+      registry.register(createMockDefinition("jobA"), jest.fn().mockResolvedValue(undefined));
 
       await registry.start();
       await expect(registry.start()).rejects.toThrow("already been started");
@@ -335,12 +332,12 @@ describe("WorkflowRegistry", () => {
       const registry = new WorkflowRegistry(mockService as WorkflowService);
       registry.register(
         createMockDefinition("jobA", "fast"),
-        jest.fn().mockResolvedValue(undefined),
+        jest.fn().mockResolvedValue(undefined)
       );
       await registry.start();
 
       await expect(
-        expectCapturedProcessor(capturedProcessor)({ name: "unknownJob", data: {}, id: "j1" }),
+        expectCapturedProcessor(capturedProcessor)({ name: "unknownJob", data: {}, id: "j1" })
       ).rejects.toThrow("No handler registered for job: unknownJob");
     });
 
@@ -348,7 +345,7 @@ describe("WorkflowRegistry", () => {
       const registry = new WorkflowRegistry(mockService as WorkflowService);
       registry.register(
         createMockDefinition("jobA", "fast"),
-        jest.fn().mockResolvedValue(undefined),
+        jest.fn().mockResolvedValue(undefined)
       );
       await registry.start();
 
@@ -406,7 +403,7 @@ describe("WorkflowRegistry", () => {
         "fast",
         "nightly",
         "0 * * * *",
-        expect.objectContaining({ name: "nightly" }),
+        expect.objectContaining({ name: "nightly" })
       );
     });
 
@@ -417,7 +414,7 @@ describe("WorkflowRegistry", () => {
       };
 
       expect(() => registry.registerService(fakeService)).toThrow(
-        'Job "myJob" on queue "fast" (property "myJob") has no .handle() attached',
+        'Job "myJob" on queue "fast" (property "myJob") has no .handle() attached'
       );
     });
 
@@ -426,10 +423,8 @@ describe("WorkflowRegistry", () => {
       expect(() =>
         registry.registerService({
           c: createMockCronDefinition("noHandle", "fast"),
-        }),
-      ).toThrow(
-        'Cron "noHandle" on queue "fast" (property "c") has no .handle() attached',
-      );
+        })
+      ).toThrow('Cron "noHandle" on queue "fast" (property "c") has no .handle() attached');
     });
 
     it("throws on duplicate job name across services", () => {
@@ -438,9 +433,7 @@ describe("WorkflowRegistry", () => {
       const serviceB = { duplicateJob: createMockDefinitionWithHandler("jobA") };
 
       registry.registerService(serviceA);
-      expect(() => registry.registerService(serviceB)).toThrow(
-        'already registered for job "jobA"',
-      );
+      expect(() => registry.registerService(serviceB)).toThrow('already registered for job "jobA"');
     });
 
     it("throws if called after start()", async () => {
@@ -492,11 +485,11 @@ describe("WorkflowRegistry", () => {
       const registry = new WorkflowRegistry(mockService as WorkflowService);
       registry.register(
         createMockDefinition("jobA", "fast"),
-        jest.fn().mockResolvedValue(undefined),
+        jest.fn().mockResolvedValue(undefined)
       );
       registry.register(
         createMockDefinition("jobB", "slow"),
-        jest.fn().mockResolvedValue(undefined),
+        jest.fn().mockResolvedValue(undefined)
       );
 
       await registry.start();

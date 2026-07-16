@@ -10,6 +10,10 @@ export type E2EProfile = "standard" | "waitlist";
 const SERVER_FILTER = "pnpm --filter @starter-app/server exec";
 const WEBAPP_FILTER = "pnpm --filter @starter-app/webapp exec";
 
+const SIGNOZ_OTLP_ENDPOINT =
+  process.env.OTEL_EXPORTER_OTLP_ENDPOINT ??
+  "https://signoz-ingester-production-9090.up.railway.app";
+
 const PORTS: Record<E2EProfile, { web: number; server: number; expoWeb: number; expoServer: number; redisDb: number; expoRedisDb: number }> = {
   standard: { web: 15173, server: 18180, expoWeb: 15183, expoServer: 18182, redisDb: 1, expoRedisDb: 3 },
   waitlist: { web: 15174, server: 18181, expoWeb: 15184, expoServer: 18183, redisDb: 2, expoRedisDb: 4 },
@@ -36,6 +40,14 @@ function serverEnv(profile: E2EProfile, expo: boolean): Record<string, string> {
     // hermetic: a real key in the invoking shell would flip email mode to
     // "send" and the stored-email assertions would find nothing
     RESEND_API_KEY: "",
+    ...(process.env.OTEL_SDK_DISABLED === "true"
+      ? {}
+      : {
+          OTEL_EXPORTER_OTLP_ENDPOINT: SIGNOZ_OTLP_ENDPOINT,
+          OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf",
+          OTEL_SERVICE_NAME: `starter-server-e2e-${suffix}`,
+          OTEL_RESOURCE_ATTRIBUTES: `deployment.environment=e2e,e2e.profile=${profile},e2e.platform=${expo ? "expo" : "web"}`,
+        }),
   };
 }
 

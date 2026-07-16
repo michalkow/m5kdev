@@ -14,6 +14,10 @@ export abstract class Base {
     this.logger = logger.child({ layer: this.layer, layerName: this.constructor.name });
   }
 
+  get layerName(): string {
+    return this.constructor.name;
+  }
+
   error(
     code: TRPC_ERROR_CODE_KEY,
     message?: string,

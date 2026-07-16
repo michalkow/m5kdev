@@ -1,4 +1,9 @@
-import { BaseModule, type ModuleExpressContext, type ModuleRepositoriesContext, type ModuleServicesContext } from "../base/base.module";
+import {
+  BaseModule,
+  type ModuleExpressContext,
+  type ModuleRepositoriesContext,
+  type ModuleServicesContext,
+} from "../base/base.module";
 import type { webhook } from "./webhook.db";
 import { WebhookRepository } from "./webhook.repository";
 import { createWebhookRouter } from "./webhook.router";
@@ -27,9 +32,7 @@ export class WebhookModule extends BaseModule<
     super();
   }
 
-  override repositories({
-    db,
-  }: ModuleRepositoriesContext<WebhookModuleDeps, WebhookModuleTables>) {
+  override repositories({ db }: ModuleRepositoriesContext<WebhookModuleDeps, WebhookModuleTables>) {
     return {
       webhook: new WebhookRepository({
         orm: db.orm,
@@ -47,7 +50,10 @@ export class WebhookModule extends BaseModule<
     };
   }
 
-  override express({ infra, services }: ModuleExpressContext<WebhookModuleDeps, WebhookModuleServices>) {
+  override express({
+    infra,
+    services,
+  }: ModuleExpressContext<WebhookModuleDeps, WebhookModuleServices>) {
     infra.express.use(this.mountPath, createWebhookRouter(services.webhook));
   }
 }

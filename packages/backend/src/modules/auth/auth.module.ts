@@ -114,9 +114,6 @@ export class AuthModule extends BaseModule<
     appConfig,
   }: ModuleTRPCContext<AuthModuleDeps, AuthModuleServices>) {
     const organizationSchemas = createOrganizationSchemas(appConfig.roles);
-    return createBackendRouterMap(
-      "auth",
-      createAuthTRPC(trpc, services.auth, organizationSchemas)
-    );
+    return createBackendRouterMap("auth", createAuthTRPC(trpc, services.auth, organizationSchemas));
   }
 }

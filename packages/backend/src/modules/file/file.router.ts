@@ -120,15 +120,8 @@ export function createUploadRouter({
         return res.status(401).json({ message: "Unauthorized" });
       }
       const userId = user.id;
-      const {
-        organizationId,
-        teamId,
-        contentType,
-        originalName,
-        sizeBytes,
-        pathHint,
-        metadata,
-      } = req.body ?? {};
+      const { organizationId, teamId, contentType, originalName, sizeBytes, pathHint, metadata } =
+        req.body ?? {};
 
       if (!contentType || !originalName) {
         return res.status(400).json({ error: "Missing contentType or originalName" });

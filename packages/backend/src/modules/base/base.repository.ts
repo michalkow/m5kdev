@@ -20,6 +20,7 @@ import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import type { SQLiteColumn, SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
 import { err, ok } from "neverthrow";
 import { ServerError } from "../../utils/errors";
+import { withSpan } from "../../utils/telemetry";
 import { applyPagination } from "../utils/applyPagination";
 import { applySorting } from "../utils/applySorting";
 import { getConditionsFromFilters } from "../utils/getConditionsFromFilters";
@@ -123,16 +124,23 @@ export class BaseRepository<
     return new TableConditionBuilder(table);
   }
   throwableQuery<T>(fn: () => Promise<T>): ServerResultAsync<T> {
-    return this.throwablePromise(
-      () => fn(),
-      (error) =>
-        new ServerError({
-          code: "INTERNAL_SERVER_ERROR",
-          layer: "repository",
-          layerName: this.constructor.name,
-          message: "Database query failed",
-          cause: error,
-        })
+    return withSpan(
+      {
+        name: "db.query",
+        attributes: { "repository.layerName": this.layerName },
+      },
+      () =>
+        this.throwablePromise(
+          () => fn(),
+          (error) =>
+            new ServerError({
+              code: "INTERNAL_SERVER_ERROR",
+              layer: "repository",
+              layerName: this.constructor.name,
+              message: "Database query failed",
+              cause: error,
+            })
+        )
     );
   }
 

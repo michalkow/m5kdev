@@ -1,3 +1,13 @@
+import {
+  ADMIN_CREATE_VERIFIED_USER_HEADER,
+  ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE,
+  USER_LOCALE_HEADER,
+} from "@m5kdev/commons/modules/auth/auth.constants";
+import {
+  getAllowedLocaleCodes,
+  resolveAppLocale,
+  toCanonicalLocale,
+} from "@m5kdev/commons/modules/auth/auth.locale";
 import { type BetterAuthOptions, type BetterAuthPlugin, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import {
@@ -9,25 +19,15 @@ import {
 import { admin, apiKey, lastLoginMethod, magicLink, organization } from "better-auth/plugins";
 import { and, desc, eq, gte, type InferSelectModel } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
-import { z } from "zod";
 import type { TFunction } from "i18next";
+import { z } from "zod";
 import type { BackendAppMetadata } from "../../app";
+import type { AppI18n } from "../../i18n/app-i18n";
 import { captureServerError } from "../../utils/errors";
 import { logger as rootLogger } from "../../utils/logger";
 import { posthogCapture } from "../../utils/posthog";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
-import type { AppI18n } from "../../i18n/app-i18n";
-import {
-  ADMIN_CREATE_VERIFIED_USER_HEADER,
-  ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE,
-  USER_LOCALE_HEADER,
-} from "@m5kdev/commons/modules/auth/auth.constants";
-import {
-  getAllowedLocaleCodes,
-  resolveAppLocale,
-  toCanonicalLocale,
-} from "@m5kdev/commons/modules/auth/auth.locale";
 import * as auth from "./auth.db";
 import {
   createOrganizationAndTeam,
@@ -203,9 +203,7 @@ export function createBetterAuth<
     return email.toLowerCase().endsWith(`@${normalizedProvisionedAccountEmailDomain}`);
   };
 
-  const shouldVerifyEmailForAdminCreate = (
-    ctx?: { headers?: Headers | null } | null
-  ): boolean => {
+  const shouldVerifyEmailForAdminCreate = (ctx?: { headers?: Headers | null } | null): boolean => {
     const header = ctx?.headers?.get(ADMIN_CREATE_VERIFIED_USER_HEADER.toLowerCase());
     if (header !== ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE) return false;
     const role = (
@@ -246,7 +244,10 @@ export function createBetterAuth<
     if (organizationInvitationCode) {
       const orgLocale =
         organizationId != null ? await getOrganizationLocaleForInvitation(organizationId) : null;
-      if (requestedLocale && toCanonicalLocale(requestedLocale, getAllowedLocaleCodes(localeConfig))) {
+      if (
+        requestedLocale &&
+        toCanonicalLocale(requestedLocale, getAllowedLocaleCodes(localeConfig))
+      ) {
         return resolveAppLocale(requestedLocale, localeConfig);
       }
       if (orgLocale) {
@@ -711,8 +712,7 @@ export function createBetterAuth<
                 );
               }
             } else {
-              const userLocale =
-                typeof user.locale === "string" ? user.locale : undefined;
+              const userLocale = typeof user.locale === "string" ? user.locale : undefined;
               const membership = await createOrganizationAndTeam(orm, schema, user, userLocale);
               if (hooks?.afterCreateUser) {
                 const i18nCtx = createUserHookI18nContext(user, i18n);

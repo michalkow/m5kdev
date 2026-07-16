@@ -25,4 +25,3 @@ export interface ConnectProfile {
   parentId?: string;
   metadata?: Record<string, unknown>;
 }
-

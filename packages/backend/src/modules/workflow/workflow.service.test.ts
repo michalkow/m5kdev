@@ -216,15 +216,15 @@ describe("WorkflowService", () => {
       const { service } = createService();
       service.cron({ name: "dup", pattern: "* * * * *" });
       expect(() => service.cron({ name: "dup", pattern: "0 0 * * *" })).toThrow(
-        'Cron "dup" is already defined on this WorkflowService',
+        'Cron "dup" is already defined on this WorkflowService'
       );
     });
 
     it("throws if the queue is not configured", () => {
       const { service } = createService();
-      expect(() =>
-        service.cron({ name: "x", queue: "missing", pattern: "* * * * *" }),
-      ).toThrow('Queue "missing" is not configured in WorkflowService');
+      expect(() => service.cron({ name: "x", queue: "missing", pattern: "* * * * *" })).toThrow(
+        'Queue "missing" is not configured in WorkflowService'
+      );
     });
 
     it("maps retries to job template attempts when attempts unset", () => {
@@ -267,7 +267,7 @@ describe("WorkflowService", () => {
             priority: 2,
             attempts: 3,
           }),
-        }),
+        })
       );
     });
 

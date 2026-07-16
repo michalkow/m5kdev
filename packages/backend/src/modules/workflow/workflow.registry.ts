@@ -342,7 +342,10 @@ export class WorkflowRegistry {
     const maxAttempts = job?.opts?.attempts ?? 1;
     const isFinalAttempt = !job || (job.attemptsMade ?? 0) >= maxAttempts;
     if (!isFinalAttempt) {
-      this.logger.warn({ ...context, err: error }, `Job attempt failed, will retry: ${error.message}`);
+      this.logger.warn(
+        { ...context, err: error },
+        `Job attempt failed, will retry: ${error.message}`
+      );
       return;
     }
 
@@ -351,7 +354,12 @@ export class WorkflowRegistry {
       if (error.logged) {
         // captured at creation — echo with job context so the failure is traceable
         this.logger.warn(
-          { ...context, code: error.code, origin: error.origin, sentryEventId: error.sentryEventId },
+          {
+            ...context,
+            code: error.code,
+            origin: error.origin,
+            sentryEventId: error.sentryEventId,
+          },
           `Job failed: ${error.message}`
         );
       } else {

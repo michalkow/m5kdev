@@ -7,7 +7,11 @@ jest.mock("better-auth/plugins/access", () => {
     connector: Connector
   ): { success: boolean } {
     const requestEntries = Object.entries(request ?? {});
-    const checkResource = (resource: string, actions: readonly string[], resourceConnector: Connector) => {
+    const checkResource = (
+      resource: string,
+      actions: readonly string[],
+      resourceConnector: Connector
+    ) => {
       const allowed = (roleStatements as any)?.[resource] as readonly string[] | undefined;
       if (!allowed) return false;
       return resourceConnector === "OR"
@@ -45,10 +49,10 @@ import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { drizzle } from "drizzle-orm/libsql";
 import fs from "fs";
 import path from "path";
+import * as authSchema from "../auth/auth.db";
 import { AccessRepository } from "./access.repository";
 import { AccessService } from "./access.service";
 import { createAccessRoles } from "./access.utils";
-import * as authSchema from "../auth/auth.db";
 
 describe("AccessService", () => {
   const statements = {

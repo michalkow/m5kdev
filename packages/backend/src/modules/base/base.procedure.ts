@@ -4,6 +4,7 @@ import { ok } from "neverthrow";
 import type { z } from "zod";
 import type { ServerError } from "../../utils/errors";
 import type { logger } from "../../utils/logger";
+import { serializeSpanValue, withSpan } from "../../utils/telemetry";
 import type { Base } from "./base.abstract";
 import { type Actor, type ActorScope, type AuthenticatedActor, validateActor } from "./base.actor";
 import type { ServerResult, ServerResultAsync } from "./base.dto";
@@ -382,6 +383,7 @@ type BaseServiceProcedureHost<Repositories extends RepositoryMap, Services exten
   repository: Repositories;
   service: Services;
   logger: ServiceLogger;
+  layerName: string;
   addContextFilter(
     actor: AuthenticatedActor,
     include?: { user?: boolean; organization?: boolean; team?: boolean },
@@ -774,107 +776,134 @@ function createProcedureHandler<
   handler: ServiceProcedureHandler<TInput, TCtx, Repositories, Services, State, TOutput>
 ): ServiceProcedure<TInput, TCtx, TOutput> {
   return async (input, ctx) =>
-    host.throwableAsync(async () => {
-      const state: ServiceProcedureState = {};
-      const startTime = Date.now();
-      const typedCtx = ctx as ServiceProcedureContext;
-      let currentInput: unknown = input;
+    withSpan(
+      {
+        name: `service.${host.layerName}.${config.name}`,
+        attributes: { input: serializeSpanValue(input) },
+      },
+      () =>
+        host.throwableAsync(async () => {
+          const state: ServiceProcedureState = {};
+          const startTime = Date.now();
+          const typedCtx = ctx as ServiceProcedureContext;
+          let currentInput: unknown = input;
 
-      logProcedureStage(host, config.name, typedCtx, "start");
+          logProcedureStage(host, config.name, typedCtx, "start");
 
-      try {
-        for (const step of config.steps) {
-          const stepResult = await step.run({
-            input: currentInput,
-            ctx: typedCtx,
-            state,
-            repository: host.repository,
-            service: host.service,
-            logger: host.logger,
-          });
+          try {
+            for (const step of config.steps) {
+              const stepResult = await withSpan(
+                {
+                  name: `${config.name}.${step.stepName}`,
+                  attributes: { input: serializeSpanValue(currentInput) },
+                },
+                () =>
+                  step.run({
+                    input: currentInput,
+                    ctx: typedCtx,
+                    state,
+                    repository: host.repository,
+                    service: host.service,
+                    logger: host.logger,
+                  })
+              );
 
-          if (stepResult.isErr()) {
-            addProcedureContext(stepResult, config.name);
-            logProcedureStage(host, config.name, typedCtx, getFailureStage(stepResult.error.code), {
-              stepName: step.stepName,
-              durationMs: Date.now() - startTime,
-              errorCode: stepResult.error.code,
-            });
-            return stepResult as ServerResult<TOutput>;
-          }
+              if (stepResult.isErr()) {
+                addProcedureContext(stepResult, config.name);
+                logProcedureStage(
+                  host,
+                  config.name,
+                  typedCtx,
+                  getFailureStage(stepResult.error.code),
+                  {
+                    stepName: step.stepName,
+                    durationMs: Date.now() - startTime,
+                    errorCode: stepResult.error.code,
+                  }
+                );
+                return stepResult as ServerResult<TOutput>;
+              }
 
-          state[step.stepName] = stepResult.value;
+              state[step.stepName] = stepResult.value;
 
-          if (step.stage === "input") {
-            currentInput = stepResult.value;
-          }
+              if (step.stage === "input") {
+                currentInput = stepResult.value;
+              }
 
-          if (step.stage === "auth") {
-            logProcedureStage(host, config.name, typedCtx, "auth_passed", {
-              stepName: step.stepName,
-            });
-          }
+              if (step.stage === "auth") {
+                logProcedureStage(host, config.name, typedCtx, "auth_passed", {
+                  stepName: step.stepName,
+                });
+              }
 
-          if (step.stage === "access") {
-            logProcedureStage(host, config.name, typedCtx, "access_passed", {
-              stepName: step.stepName,
-            });
-          }
-        }
-
-        const handlerResult = await normalizeProcedureResult(
-          handler({
-            input: currentInput as TInput,
-            ctx: ctx as TCtx,
-            state: state as State,
-            repository: host.repository,
-            service: host.service,
-            logger: host.logger,
-          })
-        );
-
-        if (handlerResult.isErr()) {
-          addProcedureContext(handlerResult, config.name);
-          logProcedureStage(
-            host,
-            config.name,
-            typedCtx,
-            getFailureStage(handlerResult.error.code),
-            {
-              durationMs: Date.now() - startTime,
-              errorCode: handlerResult.error.code,
+              if (step.stage === "access") {
+                logProcedureStage(host, config.name, typedCtx, "access_passed", {
+                  stepName: step.stepName,
+                });
+              }
             }
-          );
-          return handlerResult;
-        }
 
-        if (config.outputSchema) {
-          const parsed = config.outputSchema.safeParse(handlerResult.value);
-          if (!parsed.success) {
-            return addProcedureContext(
-              host.error("INTERNAL_SERVER_ERROR", parsed.error.message),
-              config.name
+            const handlerResult = await withSpan(
+              {
+                name: `${config.name}.handle`,
+                attributes: { input: serializeSpanValue(currentInput) },
+              },
+              () =>
+                normalizeProcedureResult(
+                  handler({
+                    input: currentInput as TInput,
+                    ctx: ctx as TCtx,
+                    state: state as State,
+                    repository: host.repository,
+                    service: host.service,
+                    logger: host.logger,
+                  })
+                )
             );
-          }
-          logProcedureStage(host, config.name, typedCtx, "success", {
-            durationMs: Date.now() - startTime,
-          });
-          return ok(parsed.data as TOutput);
-        }
 
-        logProcedureStage(host, config.name, typedCtx, "success", {
-          durationMs: Date.now() - startTime,
-        });
-        return handlerResult;
-      } catch (error) {
-        const serverError = host.handleUnknownError(error);
-        logProcedureStage(host, config.name, typedCtx, getFailureStage(serverError.code), {
-          durationMs: Date.now() - startTime,
-          errorCode: serverError.code,
-        });
-        throw error;
-      }
-    });
+            if (handlerResult.isErr()) {
+              addProcedureContext(handlerResult, config.name);
+              logProcedureStage(
+                host,
+                config.name,
+                typedCtx,
+                getFailureStage(handlerResult.error.code),
+                {
+                  durationMs: Date.now() - startTime,
+                  errorCode: handlerResult.error.code,
+                }
+              );
+              return handlerResult;
+            }
+
+            if (config.outputSchema) {
+              const parsed = config.outputSchema.safeParse(handlerResult.value);
+              if (!parsed.success) {
+                return addProcedureContext(
+                  host.error("INTERNAL_SERVER_ERROR", parsed.error.message),
+                  config.name
+                );
+              }
+              logProcedureStage(host, config.name, typedCtx, "success", {
+                durationMs: Date.now() - startTime,
+              });
+              return ok(parsed.data as TOutput);
+            }
+
+            logProcedureStage(host, config.name, typedCtx, "success", {
+              durationMs: Date.now() - startTime,
+            });
+            return handlerResult;
+          } catch (error) {
+            const serverError = host.handleUnknownError(error);
+            logProcedureStage(host, config.name, typedCtx, getFailureStage(serverError.code), {
+              durationMs: Date.now() - startTime,
+              errorCode: serverError.code,
+            });
+            throw error;
+          }
+        })
+    );
 }
 
 export function createServiceProcedureBuilder<

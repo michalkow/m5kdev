@@ -27,12 +27,7 @@ describe("auth.roles", () => {
         team: { roles: ["member", "manager", "owner"], defaultRole: "member" },
       });
 
-      expect(getRoleKeys(config, "organization")).toEqual([
-        "member",
-        "admin",
-        "owner",
-        "editor",
-      ]);
+      expect(getRoleKeys(config, "organization")).toEqual(["member", "admin", "owner", "editor"]);
       expect(config.organization.managerRoles).toEqual(["admin", "owner"]);
       expect(config.organization.assignableRoles).toEqual(["member", "admin", "editor"]);
       expect(config.organization.defaultRole).toBe("member");
@@ -82,9 +77,7 @@ describe("auth.roles", () => {
   describe("getAppRoleTranslationKey", () => {
     it("builds app namespace translation keys", () => {
       expect(getAppRoleTranslationKey("user", "admin")).toBe("user.role.admin");
-      expect(getAppRoleTranslationKey("organization", "editor")).toBe(
-        "organization.role.editor"
-      );
+      expect(getAppRoleTranslationKey("organization", "editor")).toBe("organization.role.editor");
       expect(getAppRoleTranslationKey("team", "manager")).toBe("team.role.manager");
     });
   });

@@ -145,8 +145,7 @@ describe("escapeLinkedInText", () => {
 
   describe("mixed content", () => {
     it("handles mentions, hashtags, and special chars together", () => {
-      const input =
-        "Hello @[John](urn:li:person:123)! Check out #Tech & (amazing) *stuff*";
+      const input = "Hello @[John](urn:li:person:123)! Check out #Tech & (amazing) *stuff*";
       const result = escapeLinkedInText(input);
       expect(result).toBe(
         "Hello @[John](urn:li:person:123)! Check out {hashtag|\\#|Tech} & \\(amazing\\) \\*stuff\\*"
@@ -154,8 +153,7 @@ describe("escapeLinkedInText", () => {
     });
 
     it("handles pre-formatted hashtag template with mentions", () => {
-      const input =
-        "@[Company](urn:li:organization:123) is doing {hashtag|\\#|GreatThings}!";
+      const input = "@[Company](urn:li:organization:123) is doing {hashtag|\\#|GreatThings}!";
       const result = escapeLinkedInText(input);
       expect(result).toBe(
         "@[Company](urn:li:organization:123) is doing {hashtag|\\#|GreatThings}!"

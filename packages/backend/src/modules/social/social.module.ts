@@ -1,8 +1,8 @@
-import { SocialService } from "./social.service";
-import type { SocialProvider } from "./social.types";
+import { BaseModule, type ModuleServicesContext, type TableMap } from "../base/base.module";
 import type { ConnectModule } from "../connect/connect.module";
 import type { FileModule } from "../file/file.module";
-import { BaseModule, type ModuleServicesContext, type TableMap } from "../base/base.module";
+import { SocialService } from "./social.service";
+import type { SocialProvider } from "./social.types";
 
 type SocialModuleDeps = { connect: ConnectModule; file: FileModule };
 type SocialModuleTables = TableMap;

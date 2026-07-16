@@ -2,6 +2,7 @@ import type { TRPC_ERROR_CODE_KEY } from "@trpc/server";
 import { ok } from "neverthrow";
 import type { z } from "zod";
 import type { ServerError } from "../../utils/errors";
+import { serializeSpanValue, withSpan } from "../../utils/telemetry";
 import type { ServerResult, ServerResultAsync } from "./base.dto";
 
 export type RepositoryQuery<TInput, TOutput> = (input: TInput) => ServerResultAsync<TOutput>;
@@ -30,6 +31,7 @@ export interface RepositoryQueryBuilder<TInput, TExpectedOutput = void> {
 }
 
 type QueryBuilderHost = {
+  layerName: string;
   error(
     code: TRPC_ERROR_CODE_KEY,
     message?: string,
@@ -74,33 +76,40 @@ function createQueryHandler<TInput, TOutput>(
   handler: (input: TInput) => RepositoryQueryResultLike<TOutput>
 ): RepositoryQuery<TInput, TOutput> {
   return async (input) =>
-    host.throwableAsync(async () => {
-      let currentInput: unknown = input;
+    withSpan(
+      {
+        name: `repository.${host.layerName}.${config.name}`,
+        attributes: { input: serializeSpanValue(input) },
+      },
+      () =>
+        host.throwableAsync(async () => {
+          let currentInput: unknown = input;
 
-      if (config.inputSchema) {
-        const parsed = config.inputSchema.safeParse(currentInput);
-        if (!parsed.success) {
-          return host.error("BAD_REQUEST", parsed.error.message);
-        }
-        currentInput = parsed.data;
-      }
+          if (config.inputSchema) {
+            const parsed = config.inputSchema.safeParse(currentInput);
+            if (!parsed.success) {
+              return host.error("BAD_REQUEST", parsed.error.message);
+            }
+            currentInput = parsed.data;
+          }
 
-      const handlerResult = await normalizeQueryResult(handler(currentInput as TInput));
+          const handlerResult = await normalizeQueryResult(handler(currentInput as TInput));
 
-      if (handlerResult.isErr()) {
-        return handlerResult;
-      }
+          if (handlerResult.isErr()) {
+            return handlerResult;
+          }
 
-      if (config.outputSchema) {
-        const parsed = config.outputSchema.safeParse(handlerResult.value);
-        if (!parsed.success) {
-          return host.error("INTERNAL_SERVER_ERROR", parsed.error.message);
-        }
-        return ok(parsed.data as TOutput);
-      }
+          if (config.outputSchema) {
+            const parsed = config.outputSchema.safeParse(handlerResult.value);
+            if (!parsed.success) {
+              return host.error("INTERNAL_SERVER_ERROR", parsed.error.message);
+            }
+            return ok(parsed.data as TOutput);
+          }
 
-      return handlerResult;
-    });
+          return handlerResult;
+        })
+    );
 }
 
 export function createRepositoryQueryBuilder<TInput, TExpectedOutput = void>(

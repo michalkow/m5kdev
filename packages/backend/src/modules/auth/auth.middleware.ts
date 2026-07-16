@@ -1,10 +1,10 @@
 import { fromNodeHeaders } from "better-auth/node";
 import type { InferSelectModel } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
-import * as auth from "./auth.db";
-import type { BetterAuth } from "./auth.lib";
 import { captureServerError, ServerError } from "../../utils/errors";
 import { runWithPosthogRequestState } from "../../utils/posthog";
+import * as auth from "./auth.db";
+import type { BetterAuth } from "./auth.lib";
 
 /** getSession rejected (auth backend/DB down) — without capture every request silently 500s. */
 function captureSessionFailure(error: unknown): void {
