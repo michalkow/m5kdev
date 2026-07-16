@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.28.4
+
+### Patch Changes
+
+- notif
+
 ## 0.28.3
 
 ### Patch Changes

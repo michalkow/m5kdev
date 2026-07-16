@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.28.8
+
+### Patch Changes
+
+- notif
+- Updated dependencies
+  - @m5kdev/commons@0.28.8
+
 ## 0.28.3
 
 ### Patch Changes
