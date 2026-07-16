@@ -48,6 +48,9 @@ export function createM5KAuthClient(baseURL?: string) {
             type: "number",
             required: false,
           },
+          // preferences/metadata/flags are writable via updateUser but
+          // returned: false on the server — never present in session
+          // responses; read them via authService procedures
           preferences: {
             type: "string",
             required: false,

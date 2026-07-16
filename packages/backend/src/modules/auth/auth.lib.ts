@@ -287,6 +287,8 @@ export function createBetterAuth<
       cookieCache: {
         enabled: true,
         maxAge: 60 * 5,
+        // v2: preferences/metadata/flags removed from the cached payload
+        version: "2",
       },
       additionalFields: {
         activeOrganizationRole: {
@@ -332,20 +334,25 @@ export function createBetterAuth<
           required: false,
           defaultValue: null,
         },
+        // returned: false keeps these out of session responses and the
+        // session cookie cache (4KB limit); read them via auth.service procedures
         preferences: {
           type: "string",
           required: false,
           defaultValue: null,
+          returned: false,
         },
         metadata: {
           type: "string",
           required: false,
           defaultValue: null,
+          returned: false,
         },
         flags: {
           type: "string",
           required: false,
           defaultValue: null,
+          returned: false,
         },
         stripeCustomerId: {
           type: "string",
