@@ -120,8 +120,25 @@ HTTP (auto)
 └── trpc.<router>.<procedure>
     └── service.<ServiceName>.<procedure>
         └── <procedure>.<step> / <procedure>.handle
-            └── repository.<RepositoryName>.<query>
-                └── db.query
+            └── repository.<RepositoryName>.<query>   ← only when using .query().handle()
+```
+
+Repository methods that call `throwableQuery` directly (for example `queryList`, `create`,
+`update`) are **not** traced at the DB layer. To trace a specific DB operation, wrap it
+in a named repository query:
+
+```ts
+findAccountClaimByCode = this.query("findAccountClaimByCode").handle(async ({ code }) => {
+  const result = await this.throwableQuery(() => /* drizzle */);
+  // ...
+});
+```
+
+Background work uses workflow spans as trace roots:
+
+```text
+workflow.cron.<name>  or  workflow.job.<name>
+└── service.* / repository.* (when handlers use traced query builders)
 ```
 
 `this.logger` calls inside an active span automatically include `trace_id`,

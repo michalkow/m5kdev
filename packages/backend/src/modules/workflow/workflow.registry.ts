@@ -2,6 +2,7 @@ import type { Job, Worker } from "bullmq";
 import { captureServerError, ServerError } from "../../utils/errors";
 import { logger as rootLogger } from "../../utils/logger";
 import { runWithPosthogRequestState } from "../../utils/posthog";
+import { serializeSpanValue, withSpan } from "../../utils/telemetry";
 import type { WorkflowService } from "./workflow.service";
 import type {
   RegisteredHandler,
@@ -188,31 +189,50 @@ export class WorkflowRegistry {
             throw new Error(`No handler registered for job: ${job.name}`);
           }
 
-          return runWithPosthogRequestState({ disableCapture: false }, async () => {
-            const timeoutMs = getTimeoutMs(entry);
-            let timer: ReturnType<typeof setTimeout> | undefined;
+          return runWithPosthogRequestState({ disableCapture: false }, () =>
+            withSpan(
+              {
+                name:
+                  entry.kind === "cron"
+                    ? `workflow.cron.${job.name}`
+                    : `workflow.job.${job.name}`,
+                attributes: {
+                  "workflow.queue": queueName,
+                  "workflow.kind": entry.kind,
+                  "workflow.job.name": job.name,
+                  ...(job.id !== undefined ? { "workflow.job.id": String(job.id) } : {}),
+                  ...(entry.kind === "job" ? { input: serializeSpanValue(job.data) } : {}),
+                },
+              },
+              async () => {
+                const timeoutMs = getTimeoutMs(entry);
+                let timer: ReturnType<typeof setTimeout> | undefined;
 
-            const timeoutPromise = new Promise<never>((_, reject) => {
-              timer = setTimeout(() => {
-                reject(new Error(`Job "${job.name}" (${job.id}) timed out after ${timeoutMs}ms`));
-              }, timeoutMs);
-            });
+                const timeoutPromise = new Promise<never>((_, reject) => {
+                  timer = setTimeout(() => {
+                    reject(
+                      new Error(`Job "${job.name}" (${job.id}) timed out after ${timeoutMs}ms`)
+                    );
+                  }, timeoutMs);
+                });
 
-            try {
-              const result = await Promise.race([
-                entry.kind === "cron" ? entry.handler(undefined) : entry.handler(job.data),
-                timeoutPromise,
-              ]);
-              // a handler returning err(...) must fail the job, not complete it
-              if (isNeverthrowResult(result)) {
-                if (result.isErr()) throw result.error;
-                return result.value ?? null;
+                try {
+                  const result = await Promise.race([
+                    entry.kind === "cron" ? entry.handler(undefined) : entry.handler(job.data),
+                    timeoutPromise,
+                  ]);
+                  // a handler returning err(...) must fail the job, not complete it
+                  if (isNeverthrowResult(result)) {
+                    if (result.isErr()) throw result.error;
+                    return result.value ?? null;
+                  }
+                  return result ?? null;
+                } finally {
+                  if (timer) clearTimeout(timer);
+                }
               }
-              return result ?? null;
-            } finally {
-              if (timer) clearTimeout(timer);
-            }
-          });
+            )
+          );
         },
         workerOptionOverrides
       );
