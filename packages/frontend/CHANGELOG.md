@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.28.9
+
+### Patch Changes
+
+- cookie fix
+- Updated dependencies
+  - @m5kdev/commons@0.28.9
+
 ## 0.28.8
 
 ### Patch Changes
