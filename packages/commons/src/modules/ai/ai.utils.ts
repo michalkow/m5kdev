@@ -189,7 +189,8 @@ export function getSortedRankedModel(
         : tokenProfile
           ? (tokenProfile as TokenProfile)
           : getDefaultTokenProfile(category);
-  return rankModels(models, profile, category, getDefaultWeights(weights));
+  const rankedModels = rankModels(models, profile, category, getDefaultWeights(weights));
+  return filter ? rankedModels.filter(filter) : rankedModels;
 }
 
 export function getSortedRecommendedModels(
@@ -198,7 +199,7 @@ export function getSortedRecommendedModels(
   tokenProfile?: TokenProfile | number | TokenSize,
   filter?: (model: RankedModel) => boolean
 ): RankedModel[] {
-  return getSortedRankedModel(RANKED_MODELS, category, weights, tokenProfile);
+  return getSortedRankedModel(RANKED_MODELS, category, weights, tokenProfile, filter);
 }
 
 export function getSortedRecommendedModelIds(
@@ -207,7 +208,7 @@ export function getSortedRecommendedModelIds(
   tokenProfile?: TokenProfile | number | TokenSize,
   filter?: (model: RankedModel) => boolean
 ): string[] {
-  return getSortedRankedModel(RANKED_MODELS, category, weights, tokenProfile).map(
+  return getSortedRankedModel(RANKED_MODELS, category, weights, tokenProfile, filter).map(
     (model) => model.id
   );
 }

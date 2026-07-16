@@ -15,21 +15,23 @@ export type PresetModels = {
 export function resolveModels(params: {
   models?: string[];
   presetModels?: PresetModels;
+  preferredModels?: string[];
   model?: string;
   defaultCategory?: Category;
 }): string[] {
-  const { models, presetModels, model, defaultCategory = "chat" } = params;
-  return models
-    ? models
-    : presetModels
-      ? getSortedRecommendedModelIds(
-          presetModels.category,
-          presetModels.weights,
-          presetModels.tokenProfile
-        )
-      : model
-        ? [model]
-        : getSortedRecommendedModelIds(defaultCategory);
+  const { models, presetModels, model, preferredModels, defaultCategory = "chat" } = params;
+  if (models) return models;
+  if (presetModels) {
+    const recommendedModels = getSortedRecommendedModelIds(
+      presetModels.category,
+      presetModels.weights,
+      presetModels.tokenProfile
+    );
+    if (preferredModels) return Array.from(new Set([...preferredModels, ...recommendedModels]));
+    return recommendedModels;
+  }
+  if (model) return [model];
+  return getSortedRecommendedModelIds(defaultCategory);
 }
 
 export function resolveRetryModels(retryModels: string[]): string[] {

@@ -51,6 +51,7 @@ export type AIServiceGenerateTextParams = Omit<
 > &
   GenerateTextInput & {
     presetModels?: PresetModels;
+    preferredModels?: string[];
     models?: string[];
     model?: string;
     removeMDash?: boolean;
@@ -67,6 +68,7 @@ export type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
     prompt?: string;
     messages?: ModelMessage[];
     presetModels?: PresetModels;
+    preferredModels?: string[];
     models?: string[];
     model?: string;
     schema: T;
@@ -431,6 +433,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       model,
       models,
       presetModels,
+      preferredModels,
       prompt,
       messages,
       ctx,
@@ -439,7 +442,13 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       ...rest
     } = resolvedParams;
 
-    const resolvedModels = resolveModels({ models, presetModels, model, defaultCategory: "chat" });
+    const resolvedModels = resolveModels({
+      models,
+      presetModels,
+      model,
+      defaultCategory: "chat",
+      preferredModels,
+    });
     const [resolvedModel] = resolvedModels;
 
     if (!resolvedModel) return this.error("INTERNAL_SERVER_ERROR", "AI: No models not provided");
@@ -498,6 +507,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       model,
       models,
       presetModels,
+      preferredModels,
       schema,
       safeSchema,
       objectType,
@@ -527,6 +537,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       presetModels,
       model,
       defaultCategory: "structured_output",
+      preferredModels,
     });
 
     const [resolvedModel] = resolvedModels;
