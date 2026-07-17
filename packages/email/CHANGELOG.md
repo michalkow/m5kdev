@@ -1,5 +1,17 @@
 # @m5kdev/email
 
+## 0.28.11
+
+### Patch Changes
+
+- types
+
+## 0.28.10
+
+### Patch Changes
+
+- types
+
 ## 0.28.9
 
 ### Patch Changes

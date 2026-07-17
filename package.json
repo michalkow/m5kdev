@@ -45,5 +45,10 @@
   "engines": {
     "node": ">=22"
   },
+  "pnpm": {
+    "overrides": {
+      "resolve": "1.22.10"
+    }
+  },
   "version": "0.0.1"
 }
