@@ -2,6 +2,7 @@ import { OPENAI_TEXT_EMBEDDING_3_SMALL } from "@m5kdev/commons/modules/ai/ai.con
 import { arrayToPseudoXML } from "@m5kdev/commons/modules/ai/ai.utils";
 import { safeParseJson } from "@m5kdev/commons/utils/json";
 import type { Mastra } from "@mastra/core";
+import type { AgentExecutionOptions } from "@mastra/core/agent";
 import { RequestContext } from "@mastra/core/request-context";
 import type { FullOutput, MastraModelOutput } from "@mastra/core/stream";
 import { MDocument } from "@mastra/rag";
@@ -27,8 +28,8 @@ import { type PresetModels, resolveModels, resolveRetryModels } from "./ai.utils
 import type { IdeogramV3GenerateInput, IdeogramV3GenerateOutput } from "./ideogram/ideogram.dto";
 import type { IdeogramService } from "./ideogram/ideogram.service";
 
-type MastraAgent = ReturnType<Mastra["getAgent"]>;
-type MastraAgentGenerateOptions = Parameters<MastraAgent["generate"]>[1];
+type MastraAgentGenerateOptions = AgentExecutionOptions;
+type MessageListInput = { role: "user" | "assistant" | "system"; content: string }[];
 type MastraAgentObjectGeneration<T extends ZodType> = MastraAgentGenerateOptions & {
   schema: T;
   prompt?: string;
@@ -38,7 +39,6 @@ type MastraAgentObjectGeneration<T extends ZodType> = MastraAgentGenerateOptions
     prompt?: string;
   };
 };
-type MessageListInput = { role: "user" | "assistant" | "system"; content: string }[];
 type GenerateTextParams = Parameters<typeof generateText>[0];
 type GenerateTextInput =
   | { prompt: string; messages?: never }
