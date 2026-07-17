@@ -8,7 +8,7 @@ import {
 } from "@m5kdev/frontend/modules/auth/hooks/useOrganizationAccess";
 import type { Key } from "@react-types/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Copy, Trash2, UserPlus, Users } from "lucide-react";
+import { Copy, Trash2, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -191,7 +191,6 @@ export function AuthOrganizationMembersRoute({
 
   const {
     activeOrganizationId,
-    activeOrganizationRole,
     canManageOrganization,
     refreshOrganizationQueries,
     assignableRoles: configAssignableRoles,

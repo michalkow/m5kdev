@@ -43,6 +43,7 @@
     "@opentelemetry/sdk-logs": "catalog:",
     "@opentelemetry/sdk-node": "catalog:",
     "@opentelemetry/sdk-trace-base": "catalog:",
+    "@opentelemetry/sdk-trace-node": "catalog:",
     "@opentelemetry/semantic-conventions": "catalog:",
     "@posthog/ai": "catalog:",
     "@sentry/node": "catalog:",

@@ -59,7 +59,7 @@ export const logger = pino({
         const { mergeObject, message } = parsePinoLogArgs(enrichedArgs);
         emitOtelLogRecord(level, mergeObject, message);
       }
-      return method.apply(this, enrichedArgs);
+      return method.apply(this, enrichedArgs as Parameters<typeof method>);
     },
   },
   // Pretty console in dev; raw structured JSON in production (full data for

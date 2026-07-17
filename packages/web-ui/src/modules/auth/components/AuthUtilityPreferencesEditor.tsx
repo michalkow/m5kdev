@@ -7,6 +7,7 @@ import {
   Select,
   Switch,
   TimeField,
+  type TimeValue,
   toast,
 } from "@heroui/react";
 import { parseTime } from "@internationalized/date";
@@ -187,7 +188,9 @@ export function AuthUtilityPreferencesEditor<S extends z.ZodObject<z.ZodRawShape
                   id={`pref-${String(key)}`}
                   name={String(key)}
                   defaultValue={
-                    value == null || value === "" ? undefined : parseTime(value as string)
+                    value == null || value === ""
+                      ? undefined
+                      : (parseTime(value as string) as unknown as TimeValue)
                   }
                 >
                   <Label className="text-sm font-medium">{control.label}</Label>
