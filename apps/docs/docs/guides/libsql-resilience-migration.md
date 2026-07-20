@@ -204,7 +204,7 @@ Resolution rules (`createAiVectorStore`):
 | `url` set | Direct remote connection; never an embedded replica. |
 | `url` unset, dev | Local file (`localUrl`, default `file:./vector.db`). |
 | `url` unset, `NODE_ENV=production` | Throws — local vector files are dev-only. |
-| Local file equals the app `DATABASE_URL` file | Throws — two clients on one file corrupt the WAL. |
+| Local file equals the app database file (`config.db.url` or `DATABASE_URL`) | Throws — two clients on one file corrupt the WAL. |
 
 Stores created from config are closed by the module's `shutdown` hook. A
 preconfigured `LibSQLVector` instance is still accepted, but then its lifecycle
@@ -235,7 +235,7 @@ preconfigured `LibSQLVector` instance is still accepted, but then its lifecycle
 3. Add `apps/<app>/server/drizzle/guard.ts`.
 4. Call `ensureDevServerStopped()` first in `seed.ts`, `sync.ts`, `reset.ts`, and `seed.e2e.ts`.
 5. Extend `reset.ts` to delete all database sidecar files.
-6. If using `AIModule` with vectors: switch `vectorStore` to the config form, set the remote URL in production, and verify the local fallback file differs from `DATABASE_URL`.
+6. If using `AIModule` with vectors: switch `vectorStore` to the config form, set the remote URL in production, and verify the local fallback file differs from the app database URL (`config.db.url` / `DATABASE_URL`).
 7. Restart the dev server and run a db script while it is up — confirm the script aborts with the guard warning.
 
 ## Related docs

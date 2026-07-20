@@ -159,6 +159,17 @@ export type BackendModuleDependencyMap = Record<
   }
 >;
 
+export type BackendAppDbContext<Tables extends TableMap = TableMap> = {
+  client: Client;
+  orm: LibSQLDatabase<any>;
+  schema: AppDbSchema<Tables>;
+  /**
+   * Configured libsql URL when the kernel created the client from connection
+   * options. Unset when the caller supplied a preconfigured `client`.
+   */
+  url?: string;
+};
+
 export type BackendModuleRepositoriesContext<Tables extends TableMap = TableMap> = {
   env: Record<string, string | undefined>;
   logger: Logger;
@@ -166,11 +177,7 @@ export type BackendModuleRepositoriesContext<Tables extends TableMap = TableMap>
   emailConfig: ResolvedBackendAppEmailOptions;
   i18n?: AppI18n;
   deps: BackendModuleDependencyMap;
-  db: {
-    client: Client;
-    orm: LibSQLDatabase<any>;
-    schema: AppDbSchema<Tables>;
-  };
+  db: BackendAppDbContext<Tables>;
   infra: {
     express: Express;
     redis?: IORedis;
@@ -187,11 +194,7 @@ export type BackendModuleServicesContext = {
   deps: BackendModuleDependencyMap;
   repositories: AnyRecord;
   modules: ModuleRuntimeMap;
-  db: {
-    client: Client;
-    orm: LibSQLDatabase<any>;
-    schema: AppDbSchema;
-  };
+  db: BackendAppDbContext;
   infra: {
     express: Express;
     redis?: IORedis;
@@ -268,11 +271,7 @@ export type BackendAppAuthFactoryContext = {
   express: Express;
   redis?: IORedis;
   resend?: Resend;
-  db: {
-    client: Client;
-    orm: LibSQLDatabase<any>;
-    schema: AppDbSchema;
-  };
+  db: BackendAppDbContext;
   modules: ModuleRuntimeMap;
   repositories: Record<string, AnyRecord>;
   services: Record<string, AnyRecord>;
@@ -384,7 +383,7 @@ function normalizeEmailConfig(
 function createDbClient(
   config: BackendAppConfig["db"],
   logger: Logger
-): { client: Client; owned: boolean } {
+): { client: Client; owned: boolean; url?: string } {
   if ("client" in config && config.client) {
     return {
       client: config.client,
@@ -395,6 +394,7 @@ function createDbClient(
   return {
     client: withLibsqlRetry(createClient(config), { logger }),
     owned: true,
+    url: config.url,
   };
 }
 
@@ -551,6 +551,12 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   const schema: AppDbSchema = config.schema ?? ({} as unknown as AppDbSchema);
 
   const orm = drizzle(dbClientState.client, { schema });
+  const db: BackendAppDbContext = {
+    client: dbClientState.client,
+    orm,
+    schema,
+    url: dbClientState.url,
+  };
   const repositoryModules: Record<string, AnyRecord> = {};
   const serviceModules: Record<string, AnyRecord> = {};
 
@@ -575,11 +581,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         emailConfig,
         i18n: appI18n,
         deps,
-        db: {
-          client: dbClientState.client,
-          orm,
-          schema,
-        },
+        db,
         infra: {
           express: expressApp,
           redis: redisState.redis,
@@ -603,11 +605,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         deps,
         repositories: state.repositories,
         modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
-        db: {
-          client: dbClientState.client,
-          orm,
-          schema,
-        },
+        db,
         infra: {
           express: expressApp,
           redis: redisState.redis,
@@ -627,11 +625,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     express: expressApp,
     redis: redisState.redis,
     resend: resendState.resend,
-    db: {
-      client: dbClientState.client,
-      orm,
-      schema,
-    },
+    db,
     modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
     repositories: repositoryModules,
     services: serviceModules,
@@ -648,11 +642,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       repositories: moduleStates.get(module.id)!.repositories,
       services: moduleStates.get(module.id)!.services,
       modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
-      db: {
-        client: dbClientState.client,
-        orm,
-        schema,
-      },
+      db,
       infra: {
         express: expressApp,
         redis: redisState.redis,
@@ -719,11 +709,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         repositories: state.repositories,
         services: state.services,
         modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
-        db: {
-          client: dbClientState.client,
-          orm,
-          schema,
-        },
+        db,
         infra: {
           express: expressApp,
           redis: redisState.redis,
@@ -778,11 +764,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       repositories: state.repositories,
       services: state.services,
       modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
-      db: {
-        client: dbClientState.client,
-        orm,
-        schema,
-      },
+      db,
       infra: {
         express: expressApp,
         redis: redisState.redis,
@@ -807,11 +789,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         repositories: state.repositories,
         services: state.services,
         modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
-        db: {
-          client: dbClientState.client,
-          orm,
-          schema,
-        },
+        db,
         infra: {
           express: expressApp,
           redis: redisState.redis,
@@ -832,11 +810,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     repositories: {},
     services: {},
     modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
-    db: {
-      client: dbClientState.client,
-      orm,
-      schema,
-    },
+    db,
     infra: {
       express: expressApp,
       redis: redisState.redis,
@@ -866,11 +840,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     modules: Object.fromEntries(moduleStates.entries()) as {
       [K in Modules[number]["id"]]: BuiltModuleRuntime;
     },
-    db: {
-      client: dbClientState.client,
-      orm,
-      schema,
-    },
+    db,
     config: {
       app: appConfig,
       email: emailConfig,

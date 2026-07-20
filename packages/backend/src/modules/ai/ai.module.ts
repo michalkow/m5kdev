@@ -78,15 +78,21 @@ export class AIModule<
     super();
   }
 
-  private resolveVectorStore(env: Record<string, string | undefined>): LibSQLVector | undefined {
+  private resolveVectorStore(args: {
+    env: Record<string, string | undefined>;
+    databaseUrl?: string;
+  }): LibSQLVector | undefined {
     if (!this.config.vectorStore) return undefined;
     if (this.config.vectorStore instanceof LibSQLVector) return this.config.vectorStore;
-    this.ownedVectorStore ??= createAiVectorStore(this.config.vectorStore, { env });
+    this.ownedVectorStore ??= createAiVectorStore(this.config.vectorStore, {
+      env: args.env,
+      databaseUrl: args.databaseUrl,
+    });
     return this.ownedVectorStore;
   }
 
   override repositories({ db, env }: ModuleRepositoriesContext<AIModuleDeps, AIModuleTables>) {
-    const vectorStore = this.resolveVectorStore(env);
+    const vectorStore = this.resolveVectorStore({ env, databaseUrl: db.url });
     return {
       aiUsage: new AiUsageRepository({
         orm: db.orm,

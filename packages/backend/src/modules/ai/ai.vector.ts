@@ -18,7 +18,10 @@ export type AiVectorStoreConfig = {
 
 export type AiVectorStoreContext = {
   env?: Record<string, string | undefined>;
-  /** Main app database URL; the vector store must not share its file. */
+  /**
+   * Main app database URL (`config.db.url` from the kernel, or `DATABASE_URL`).
+   * The vector store must not share its local file.
+   */
   databaseUrl?: string;
 };
 
