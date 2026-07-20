@@ -30,6 +30,7 @@ describe("scaffoldProject", () => {
     });
 
     await expect(fs.stat(path.join(result.targetDirectory, "AGENTS.md"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(result.targetDirectory, "CLAUDE.md"))).resolves.toBeTruthy();
     await expect(
       fs.stat(path.join(result.targetDirectory, "apps/server/src/modules/posts/posts.service.ts"))
     ).resolves.toBeTruthy();
@@ -60,6 +61,16 @@ describe("scaffoldProject", () => {
     expect(rootPackage).toContain("\"name\": \"editorial-desk\"");
     expect(rootAgents).toContain("Editorial Desk");
     expect(rootAgents).toContain("A clean newsroom starter.");
+
+    const rootClaude = await fs.readFile(path.join(result.targetDirectory, "CLAUDE.md"), "utf8");
+    expect(rootClaude).toContain("Editorial Desk");
+    expect(rootClaude).toContain("A clean newsroom starter.");
+    expect(rootClaude).toContain(".cursor/rules/module-db-guide.mdc");
+    expect(rootClaude).toContain("`apps/webapp`");
+    // web platform without the test harness: expo and e2e marker blocks are stripped
+    expect(rootClaude).not.toContain("apps/expo");
+    expect(rootClaude).not.toContain("apps/e2e");
+    expect(rootClaude).not.toContain("m5k:");
     expect(sharedEnv).toContain("VITE_APP_NAME=Editorial Desk");
     expect(sharedEnv).not.toContain("{{APP_NAME}}");
     expect(appConstants).toContain('APP_NAME = "Editorial Desk"');
