@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.28.13
+
+### Patch Changes
+
+- claude support
+- Updated dependencies
+  - @m5kdev/commons@0.28.13
+
 ## 0.28.12
 
 ### Patch Changes

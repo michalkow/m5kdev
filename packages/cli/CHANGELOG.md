@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.28.9
+
+### Patch Changes
+
+- claude support
+
 ## 0.28.8
 
 ### Patch Changes

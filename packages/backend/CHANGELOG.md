@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.29.1
+
+### Patch Changes
+
+- claude support
+- Updated dependencies
+  - @m5kdev/commons@0.28.13
+  - @m5kdev/config@0.28.13
+
 ## 0.29.0
 
 ### Minor Changes

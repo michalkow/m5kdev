@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.28.13
+
+### Patch Changes
+
+- claude support
+
 ## 0.28.12
 
 ### Patch Changes
