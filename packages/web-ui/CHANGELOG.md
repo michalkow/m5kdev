@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.28.12
+
+### Patch Changes
+
+- libsql
+- Updated dependencies
+  - @m5kdev/commons@0.28.12
+  - @m5kdev/frontend@0.28.12
+
 ## 0.28.11
 
 ### Patch Changes

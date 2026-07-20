@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.28.12
+
+### Patch Changes
+
+- libsql
+
 ## 0.28.11
 
 ### Patch Changes
