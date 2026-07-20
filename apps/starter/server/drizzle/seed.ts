@@ -2,6 +2,7 @@ import { hashPassword } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { isRemote, orm, schema } from "./db";
+import { ensureDevServerStopped } from "./guard";
 
 const DEMO_EMAIL = "admin@starter-app.local";
 const DEMO_PASSWORD = "password1234";
@@ -167,6 +168,7 @@ async function seedPosts(userId: string, organizationId: string | null, teamId: 
 }
 
 async function seed() {
+  await ensureDevServerStopped();
   if (isRemote) {
     await orm.$client.sync();
   }

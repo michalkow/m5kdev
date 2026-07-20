@@ -7,6 +7,7 @@ import { hashPassword } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { orm, schema } from "./db";
+import { ensureDevServerStopped } from "./guard";
 
 const profile = process.env.AUTH_E2E_PROFILE ?? "standard";
 const ADMIN_EMAIL = `admin.${profile}@auth-e2e.local`;
@@ -226,6 +227,7 @@ async function seedProvisionedClaimUser() {
 }
 
 async function seed() {
+  await ensureDevServerStopped();
   const admin = await ensureUser({
     id: `auth-e2e-admin-${profile}`,
     name: "Auth E2E Admin",

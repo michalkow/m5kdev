@@ -1,5 +1,5 @@
 import type { Mastra } from "@mastra/core";
-import type { LibSQLVector } from "@mastra/libsql";
+import { LibSQLVector } from "@mastra/libsql";
 import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import type Replicate from "replicate";
 import { createBackendRouterMap } from "../../app";
@@ -15,6 +15,7 @@ import { AiUsageRepository, AiVectorRepository } from "./ai.repository";
 import { AIService } from "./ai.service";
 import { createAITRPC } from "./ai.trpc";
 import type { PresetModels } from "./ai.utils";
+import { type AiVectorStoreConfig, createAiVectorStore } from "./ai.vector";
 import { IdeogramRepository } from "./ideogram/ideogram.repository";
 import { IdeogramService } from "./ideogram/ideogram.service";
 
@@ -35,7 +36,12 @@ export type AIModuleConfig<MastraInstance extends Mastra, Namespace extends stri
     objectPreset?: PresetModels;
     textPreset?: PresetModels;
   };
-  vectorStore?: LibSQLVector;
+  /**
+   * Either a preconfigured store (caller owns its lifecycle) or a config the
+   * module resolves via {@link createAiVectorStore} and closes on shutdown:
+   * remote URLs are used directly, a local file only as a dev fallback.
+   */
+  vectorStore?: LibSQLVector | AiVectorStoreConfig;
 };
 
 type AIModuleDeps = { auth: AuthModule };
@@ -66,11 +72,21 @@ export class AIModule<
   readonly id = "ai";
   override readonly dependsOn = ["auth"] as const;
 
+  private ownedVectorStore?: LibSQLVector;
+
   constructor(private readonly config: AIModuleConfig<MastraInstance, Namespace>) {
     super();
   }
 
-  override repositories({ db }: ModuleRepositoriesContext<AIModuleDeps, AIModuleTables>) {
+  private resolveVectorStore(env: Record<string, string | undefined>): LibSQLVector | undefined {
+    if (!this.config.vectorStore) return undefined;
+    if (this.config.vectorStore instanceof LibSQLVector) return this.config.vectorStore;
+    this.ownedVectorStore ??= createAiVectorStore(this.config.vectorStore, { env });
+    return this.ownedVectorStore;
+  }
+
+  override repositories({ db, env }: ModuleRepositoriesContext<AIModuleDeps, AIModuleTables>) {
+    const vectorStore = this.resolveVectorStore(env);
     return {
       aiUsage: new AiUsageRepository({
         orm: db.orm,
@@ -78,10 +94,12 @@ export class AIModule<
         table: db.schema.aiUsage,
       }),
       ...(this.config.enableIdeogram ? { ideogram: new IdeogramRepository() } : {}),
-      ...(this.config.vectorStore
-        ? { aiVector: new AiVectorRepository(this.config.vectorStore) }
-        : {}),
+      ...(vectorStore ? { aiVector: new AiVectorRepository(vectorStore) } : {}),
     };
+  }
+
+  override async shutdown() {
+    await this.ownedVectorStore?.close();
   }
 
   override services({ repositories }: ModuleServicesContext<AIModuleDeps, AIModuleRepositories>) {

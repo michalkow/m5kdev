@@ -16,6 +16,7 @@ import IORedis, { type RedisOptions } from "ioredis";
 import type { Logger } from "pino";
 import { Resend } from "resend";
 import { type AppI18n, type BackendAppI18nResources, createAppI18n } from "./i18n/app-i18n";
+import { withLibsqlRetry } from "./lib/libsql";
 import type * as authTables from "./modules/auth/auth.db";
 import type { BetterAuth } from "./modules/auth/auth.lib";
 import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/auth.middleware";
@@ -380,7 +381,10 @@ function normalizeEmailConfig(
   };
 }
 
-function createDbClient(config: BackendAppConfig["db"]): { client: Client; owned: boolean } {
+function createDbClient(
+  config: BackendAppConfig["db"],
+  logger: Logger
+): { client: Client; owned: boolean } {
   if ("client" in config && config.client) {
     return {
       client: config.client,
@@ -389,7 +393,7 @@ function createDbClient(config: BackendAppConfig["db"]): { client: Client; owned
   }
 
   return {
-    client: createClient(config),
+    client: withLibsqlRetry(createClient(config), { logger }),
     owned: true,
   };
 }
@@ -540,7 +544,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
 
   const orderedModules = resolveModuleOrder(registeredModules);
   const expressApp = config.express ?? express();
-  const dbClientState = createDbClient(config.db);
+  const dbClientState = createDbClient(config.db, logger);
   const redisState = createRedisClient(config.redis);
   const resendState = createResendClient(config.resend);
   const moduleStates = new Map<string, BuiltModuleRuntime>();

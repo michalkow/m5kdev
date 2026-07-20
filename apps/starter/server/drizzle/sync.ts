@@ -1,6 +1,8 @@
 import { isRemote, orm } from "./db";
+import { ensureDevServerStopped } from "./guard";
 
 async function sync() {
+  await ensureDevServerStopped();
   if (isRemote) {
     await orm.$client.sync();
   } else {
