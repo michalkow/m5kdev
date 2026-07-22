@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.29.0
+
+### Minor Changes
+
+- align
+
 ## 0.28.9
 
 ### Patch Changes

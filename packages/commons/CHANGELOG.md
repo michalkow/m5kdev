@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.29.0
+
+### Minor Changes
+
+- align
+
 ## 0.28.13
 
 ### Patch Changes
