@@ -661,7 +661,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   }
 
   async generateText(params: AIServiceGenerateTextParams): ServerResultAsync<string> {
-    return withSpan({ name: "serviceai.generateText" }, async () => {
+    return withSpan({ name: "service.ai.generateText" }, async () => {
       return this.generate(params as AIServiceGenerateParams<ZodString>);
     });
   }
