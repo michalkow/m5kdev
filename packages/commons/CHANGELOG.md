@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.30.0
+
+### Minor Changes
+
+- ai generate
+
 ## 0.29.0
 
 ### Minor Changes

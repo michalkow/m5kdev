@@ -1,5 +1,16 @@
 # @m5kdev/frontend
 
+## 0.30.0
+
+### Minor Changes
+
+- ai generate
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.30.0
+
 ## 0.29.0
 
 ### Minor Changes
