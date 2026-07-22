@@ -10,8 +10,11 @@ import type { OpenRouterChatSettings, OpenRouterProvider } from "@openrouter/ai-
 import {
   embed,
   embedMany,
+  type GenerateImageResult,
+  generateImage,
   generateText,
   type ModelMessage,
+  NoImageGeneratedError,
   NoObjectGeneratedError,
   Output,
 } from "ai";
@@ -44,6 +47,11 @@ type GenerateTextInput =
   | { prompt: string; messages?: never }
   | { messages: ModelMessage[]; prompt?: never };
 type AIServiceActorContext = { actor: RequiredServiceActor<"user"> };
+
+export type AIServiceGenerateImageParams = Parameters<typeof generateImage>[0] & {
+  model: string;
+  ctx?: AIServiceActorContext;
+};
 
 export type AIServiceGenerateParams<T extends ZodType> = Omit<
   GenerateTextParams,
@@ -180,10 +188,13 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     });
   }
 
+  prepareImageModel(model: string): ReturnType<OpenRouterProvider["imageModel"]> {
+    if (!this.openrouter) throw new Error("OpenRouter is not configured");
+    return this.openrouter.imageModel(model);
+  }
+
   prepareEmbeddingModel(model: string): ReturnType<OpenRouterProvider["textEmbeddingModel"]> {
-    if (!this.openrouter) {
-      throw new Error("OpenRouter is not configured");
-    }
+    if (!this.openrouter) throw new Error("OpenRouter is not configured");
     return this.openrouter.textEmbeddingModel(model);
   }
 
@@ -549,7 +560,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       await this.trackUsage({
         ctx,
         model: resolvedModel,
-        feature: "generateObject",
+        feature: isObject ? "generateObject" : "generateText",
         result,
       });
 
@@ -589,7 +600,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         await this.trackUsage({
           ctx,
           model: resolvedModel,
-          feature: "generateObject",
+          feature: isObject ? "generateObject" : "generateText",
           result: {
             usage: error.usage,
           },
@@ -648,6 +659,29 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     params: AIServiceGenerateObjectParams<T>
   ): ServerResultAsync<z.infer<T>> {
     return this.generate(params as AIServiceGenerateParams<T>) as ServerResultAsync<z.infer<T>>;
+  }
+
+  async generateImage(
+    params: AIServiceGenerateImageParams
+  ): ServerResultAsync<GenerateImageResult> {
+    const { model, ctx, ...rest } = params;
+    const preparedModel = this.prepareImageModel(model);
+
+    try {
+      const result = await generateImage({ ...rest, model: preparedModel });
+      await this.trackUsage({
+        ctx,
+        model,
+        feature: "generateImage",
+        result,
+      });
+      return ok(result);
+    } catch (error) {
+      if (NoImageGeneratedError.isInstance(error)) {
+        return this.error("BAD_GATEWAY", "AI: No image generated", { cause: error });
+      }
+      return this.error("BAD_GATEWAY", "AI: No image generated: Unknown error", { cause: error });
+    }
   }
 
   async extractObject<T extends ZodType>({
