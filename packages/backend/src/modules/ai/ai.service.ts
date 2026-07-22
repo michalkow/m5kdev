@@ -18,7 +18,7 @@ import {
 import { jsonrepair } from "jsonrepair";
 import { err, ok } from "neverthrow";
 import type Replicate from "replicate";
-import type { ZodType, z } from "zod";
+import type { ZodString, ZodType, z } from "zod";
 import type { RequiredServiceActor } from "../base/base.actor";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
@@ -45,34 +45,21 @@ type GenerateTextInput =
   | { messages: ModelMessage[]; prompt?: never };
 type AIServiceActorContext = { actor: RequiredServiceActor<"user"> };
 
-export type AIServiceGenerateTextParams = Omit<
-  GenerateTextParams,
-  "model" | "prompt" | "messages"
-> &
-  GenerateTextInput & {
-    presetModels?: PresetModels;
-    preferredModels?: string[];
-    models?: string[];
-    model?: string;
-    removeMDash?: boolean;
-    ctx?: AIServiceActorContext;
-    retryAttempts?: number;
-    initialRetryAttempts?: number;
-  };
-
-export type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
+export type AIServiceGenerateParams<T extends ZodType> = Omit<
   GenerateTextParams,
   "model" | "prompt" | "messages" | "output"
 > &
   GenerateTextInput & {
+    removeMDash?: boolean;
     prompt?: string;
     messages?: ModelMessage[];
     presetModels?: PresetModels;
     preferredModels?: string[];
     models?: string[];
     model?: string;
-    schema: T;
+    schema?: T;
     safeSchema?: ZodType<any, any, any>;
+    isRepairAttempt?: boolean;
     repairAttempts?: number;
     initialRepairAttempts?: number;
     repairModels?: string[];
@@ -83,6 +70,21 @@ export type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
     objectType?: "object" | "array";
     originalContent?: GenerateTextInput;
   };
+
+export type AIServiceGenerateTextParams = Omit<
+  AIServiceGenerateParams<ZodString>,
+  | "schema"
+  | "objectType"
+  | "safeSchema"
+  | "repairAttempts"
+  | "initialRepairAttempts"
+  | "repairModels"
+  | "repairModel"
+>;
+export type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
+  AIServiceGenerateParams<T>,
+  "removeMDash"
+>;
 
 export type AIServiceGenerateExtractedObjectParams<T extends ZodType> =
   AIServiceGenerateObjectParams<T> & {
@@ -135,10 +137,9 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     this.options = options;
   }
 
+  // #region: Utils
   getMastra(): MastraInstance {
-    if (!this.mastra) {
-      throw new Error("Mastra is not available");
-    }
+    if (!this.mastra) throw new Error("Mastra is not available");
     return this.mastra;
   }
 
@@ -186,6 +187,54 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     return this.openrouter.textEmbeddingModel(model);
   }
 
+  async getUsage(
+    userId: string
+  ): ServerResultAsync<Pick<AiUsageRow, "inputTokens" | "outputTokens" | "totalTokens" | "cost">> {
+    if (!this.repository.aiUsage)
+      return this.error("INTERNAL_SERVER_ERROR", "AI usage repository is not available");
+    return this.repository.aiUsage.getUsage(userId);
+  }
+
+  async trackUsage(params: {
+    ctx?: AIServiceActorContext;
+    feature: string;
+    model: string;
+    result: {
+      usage?: {
+        inputTokens?: number;
+        outputTokens?: number;
+        totalTokens?: number;
+      };
+      providerMetadata?: {
+        openrouter?: {
+          traceId?: string;
+          usage?: {
+            cost?: number;
+          };
+        };
+      };
+    };
+  }): Promise<void> {
+    if (!this.repository.aiUsage) return Promise.resolve();
+    try {
+      await this.repository.aiUsage.create({
+        userId: params.ctx?.actor?.userId,
+        model: params.model,
+        provider: "openrouter",
+        feature: params.feature,
+        traceId: params.result.providerMetadata?.openrouter?.traceId?.toString(),
+        inputTokens: params.result.usage?.inputTokens ?? 0,
+        outputTokens: params.result.usage?.outputTokens ?? 0,
+        totalTokens: params.result.usage?.totalTokens ?? 0,
+        cost: (params.result?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
+      });
+    } catch (error) {
+      this.logger.error({ label: "AI: trackUsage", error });
+    }
+  }
+  // #endregion: Utils
+
+  // #region: Agent
   async agentUse(
     agent: string,
     options: MastraAgentGenerateOptions & { prompt?: string; messages?: MessageListInput },
@@ -295,35 +344,35 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       return this.error("SERVICE_UNAVAILABLE", "AI: Agent object failed", { cause: result.error });
     return ok(result.value);
   }
+  // #endregion: Agent
 
-  async upsertEmbedDocument(params: {
-    indexName: string;
-    value: string;
-    options?: Parameters<ReturnType<typeof MDocument.fromText>["chunk"]>[0];
-    type?: "text" | "markdown" | "html" | "json";
-    model?: string;
-    metadata?: Record<string, unknown>;
-  }): ServerResultAsync<string[]> {
-    if (!this.repository.aiVector)
-      return this.error("INTERNAL_SERVER_ERROR", "AI vector repository is not available");
-
-    const embeddings = await this.embedDocument(
-      params.value,
-      params.options,
-      params.type,
-      params.model
+  // #region: Embeddings
+  async embed(
+    text: string,
+    model: string = OPENAI_TEXT_EMBEDDING_3_SMALL
+  ): ServerResultAsync<{ embedding: number[] }> {
+    const result = await this.throwablePromise(() =>
+      embed({
+        model: this.prepareEmbeddingModel(model),
+        value: text,
+      })
     );
-    if (embeddings.isErr()) return err(embeddings.error);
-    const embeddingsResult = await this.repository.aiVector.upsertEmbeddings({
-      indexName: params.indexName,
-      embed: {
-        embeddings: embeddings.value.embeddings,
-        chunks: embeddings.value.chunks,
-      },
-      metadata: params.metadata,
-    });
-    if (embeddingsResult.isErr()) return err(embeddingsResult.error);
-    return ok(embeddingsResult.value);
+    if (result.isErr()) return err(result.error);
+    return ok(result.value);
+  }
+
+  async embedMany(
+    chunks: { text: string }[],
+    model: string = OPENAI_TEXT_EMBEDDING_3_SMALL
+  ): ServerResultAsync<{ embeddings: number[][] }> {
+    const result = await this.throwablePromise(() =>
+      embedMany({
+        model: this.prepareEmbeddingModel(model),
+        values: chunks.map((chunk) => chunk.text),
+      })
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value);
   }
 
   async embedDocument(
@@ -354,153 +403,58 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     return this.error("BAD_REQUEST", "Unsupported document type");
   }
 
-  async embed(
-    text: string,
-    model: string = OPENAI_TEXT_EMBEDDING_3_SMALL
-  ): ServerResultAsync<{ embedding: number[] }> {
-    const result = await this.throwablePromise(() =>
-      embed({
-        model: this.prepareEmbeddingModel(model),
-        value: text,
-      })
+  async upsertEmbedDocument(params: {
+    indexName: string;
+    value: string;
+    options?: Parameters<ReturnType<typeof MDocument.fromText>["chunk"]>[0];
+    type?: "text" | "markdown" | "html" | "json";
+    model?: string;
+    metadata?: Record<string, unknown>;
+  }): ServerResultAsync<string[]> {
+    if (!this.repository.aiVector)
+      return this.error("INTERNAL_SERVER_ERROR", "AI vector repository is not available");
+
+    const embeddings = await this.embedDocument(
+      params.value,
+      params.options,
+      params.type,
+      params.model
     );
-    if (result.isErr()) return err(result.error);
-    return ok(result.value);
-  }
-
-  async embedMany(
-    chunks: { text: string }[],
-    model: string = OPENAI_TEXT_EMBEDDING_3_SMALL
-  ): ServerResultAsync<{ embeddings: number[][] }> {
-    const result = await this.throwablePromise(() =>
-      embedMany({
-        model: this.prepareEmbeddingModel(model),
-        values: chunks.map((chunk) => chunk.text),
-      })
-    );
-    if (result.isErr()) return err(result.error);
-    return ok(result.value);
-  }
-
-  async trackUsage(params: {
-    ctx?: AIServiceActorContext;
-    feature: string;
-    model: string;
-    result: {
-      usage?: {
-        inputTokens?: number;
-        outputTokens?: number;
-        totalTokens?: number;
-      };
-      providerMetadata?: {
-        openrouter?: {
-          traceId?: string;
-          usage?: {
-            cost?: number;
-          };
-        };
-      };
-    };
-  }): Promise<void> {
-    if (!this.repository.aiUsage) return Promise.resolve();
-    try {
-      await this.repository.aiUsage.create({
-        userId: params.ctx?.actor?.userId,
-        model: params.model,
-        provider: "openrouter",
-        feature: params.feature,
-        traceId: params.result.providerMetadata?.openrouter?.traceId?.toString(),
-        inputTokens: params.result.usage?.inputTokens ?? 0,
-        outputTokens: params.result.usage?.outputTokens ?? 0,
-        totalTokens: params.result.usage?.totalTokens ?? 0,
-        cost: (params.result?.providerMetadata?.openrouter?.usage as any)?.cost ?? 0,
-      });
-    } catch (error) {
-      this.logger.error({ label: "AI: trackUsage", error });
-    }
-  }
-
-  async generateText(params: AIServiceGenerateTextParams): ServerResultAsync<string> {
-    const resolvedParams = Object.assign({}, params, {
-      presetModels: params.presetModels ?? this.options?.textPreset,
-      removeMDash: params.removeMDash ?? this.options?.removeMDash ?? true,
-      retryAttempts: params.retryAttempts ?? this.options?.retryAttempts ?? 0,
-      initialRetryAttempts: params.initialRetryAttempts ?? params.retryAttempts ?? 0,
+    if (embeddings.isErr()) return err(embeddings.error);
+    const embeddingsResult = await this.repository.aiVector.upsertEmbeddings({
+      indexName: params.indexName,
+      embed: {
+        embeddings: embeddings.value.embeddings,
+        chunks: embeddings.value.chunks,
+      },
+      metadata: params.metadata,
     });
-
-    const {
-      removeMDash,
-      model,
-      models,
-      presetModels,
-      preferredModels,
-      prompt,
-      messages,
-      ctx,
-      retryAttempts,
-      initialRetryAttempts,
-      ...rest
-    } = resolvedParams;
-
-    const resolvedModels = resolveModels({
-      models,
-      presetModels,
-      model,
-      defaultCategory: "chat",
-      preferredModels,
-    });
-    const [resolvedModel] = resolvedModels;
-
-    if (!resolvedModel) return this.error("INTERNAL_SERVER_ERROR", "AI: No models not provided");
-
-    const preparedModel = this.prepareModel(resolvedModel);
-    const content = messages ? { messages } : prompt ? { prompt } : undefined;
-    if (!content)
-      return this.error("INTERNAL_SERVER_ERROR", "AI: No messages or prompt not provided");
-
-    try {
-      const result = await generateText({ ...rest, ...content, model: preparedModel });
-      await this.trackUsage({
-        ctx,
-        model: resolvedModel,
-        feature: "generateText",
-        result,
-      });
-      return ok(removeMDash ? result.text.replace(/\u2013|\u2014/g, "-") : result.text);
-    } catch (error) {
-      if (retryAttempts <= 0) {
-        return this.error("INTERNAL_SERVER_ERROR", "AI: generateText failed", { cause: error });
-      }
-      this.logger.warn(
-        `generateText failed, retrying (${retryAttempts}/${initialRetryAttempts} attempts left)`,
-        {
-          model,
-          error,
-        }
-      );
-
-      return this.generateText({
-        ...resolvedParams,
-        models: resolveRetryModels(resolvedModels),
-        retryAttempts: retryAttempts - 1,
-      });
-    }
+    if (embeddingsResult.isErr()) return err(embeddingsResult.error);
+    return ok(embeddingsResult.value);
   }
+  // #endregion: Embeddings
 
-  async generateObject<T extends ZodType>(
-    params: AIServiceGenerateObjectParams<T>
-  ): ServerResultAsync<z.infer<T>> {
+  // #region: AI SDK
+  async generate<T extends ZodType>(
+    params: AIServiceGenerateParams<T>
+  ): ServerResultAsync<z.infer<T> | string> {
+    const isObject = !!params.schema;
     const resolvedParams = Object.assign({}, params, {
-      temperature: params.temperature ?? 0,
+      objectType: isObject ? (params.objectType ?? "object") : undefined,
+      temperature: isObject ? (params.temperature ?? 0) : params.temperature,
+      removeMDash: !isObject ? (params.removeMDash ?? this.options?.removeMDash ?? true) : false,
       presetModels: params.presetModels ?? this.options?.objectPreset,
-      objectType: params.objectType ?? "object",
-      repairAttempts: params.repairAttempts ?? this.options?.repairAttempts ?? 0,
-      repairModel: params.repairModel ?? this.options?.repairModel,
-      initialRepairAttempts:
-        params.initialRepairAttempts ?? params.repairAttempts ?? this.options?.repairAttempts ?? 0,
       retryAttempts: params.retryAttempts ?? this.options?.retryAttempts ?? 0,
       initialRetryAttempts:
         params.initialRetryAttempts ?? params.retryAttempts ?? this.options?.retryAttempts ?? 0,
+      repairModel: params.repairModel ?? this.options?.repairModel,
+      repairAttempts: isObject ? (params.repairAttempts ?? this.options?.repairAttempts ?? 0) : 0,
+      initialRepairAttempts: isObject
+        ? (params.initialRepairAttempts ??
+          params.repairAttempts ??
+          this.options?.repairAttempts ??
+          0)
+        : 0,
     });
 
     const {
@@ -516,44 +470,49 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       repairAttempts,
       initialRepairAttempts,
       originalContent,
+      isRepairAttempt,
       repairModel,
-      ctx,
+      repairModels,
+      removeMDash,
       retryAttempts,
       initialRetryAttempts,
+      ctx,
       ...rest
     } = resolvedParams;
 
-    const output =
-      objectType === "object"
+    const output = schema
+      ? objectType === "object"
         ? safeSchema
           ? Output.object({ schema: safeSchema })
           : Output.object({ schema })
         : safeSchema
           ? Output.array({ element: (safeSchema as unknown as z.ZodArray<any>).unwrap() })
-          : Output.array({ element: (schema as unknown as z.ZodArray<any>).unwrap() });
+          : Output.array({ element: (schema as unknown as z.ZodArray<any>).unwrap() })
+      : Output.text();
 
     const resolvedModels = resolveModels({
       models,
       presetModels,
-      model,
-      defaultCategory: "structured_output",
-      preferredModels,
+      model: isRepairAttempt ? repairModel : model,
+      defaultCategory: isObject ? "structured_output" : "chat",
+      preferredModels: isRepairAttempt ? repairModels : preferredModels,
     });
 
     const [resolvedModel] = resolvedModels;
 
     if (!resolvedModel) return this.error("INTERNAL_SERVER_ERROR", "AI: No models not provided");
     if (initialRetryAttempts !== retryAttempts || initialRepairAttempts !== repairAttempts)
-      this.logger.warn(
+      this.logger.debug(
         `Last attempt at object generation failed: (model: ${resolvedModel}, retry: ${initialRetryAttempts}/${retryAttempts}, repair: ${initialRepairAttempts}/${repairAttempts})`
       );
     else
-      this.logger.info(
+      this.logger.debug(
         `First attempt at object generation: (model: ${resolvedModel}, retry: ${initialRetryAttempts}/${retryAttempts}, repair: ${initialRepairAttempts}/${repairAttempts})`
       );
-    const preparedModel = this.prepareModel(resolvedModel, { objectGeneration: true });
 
+    const preparedModel = this.prepareModel(resolvedModel, { objectGeneration: isObject });
     const content = messages ? { messages } : prompt ? { prompt } : undefined;
+
     if (!content)
       return this.error("INTERNAL_SERVER_ERROR", "AI: No messages or prompt not provided");
 
@@ -561,6 +520,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       return {
         ...resolvedParams,
         ...(originalContent as { prompt: string; messages: never }),
+        isRepairAttempt: false,
         models: resolveRetryModels(resolvedModels),
         retryAttempts: retryAttempts - 1,
         repairAttempts: initialRepairAttempts,
@@ -570,12 +530,13 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     function getRepairParams(prompt: string) {
       return {
         ...resolvedParams,
+        isRepairAttempt: true,
         models: repairAttempts ? resolvedModels : resolveRetryModels(resolvedModels),
         messages: undefined,
         originalContent: content as GenerateTextParams,
         repairAttempts: repairAttempts - 1,
         prompt,
-      } as AIServiceGenerateObjectParams<T>;
+      } as AIServiceGenerateParams<T>;
     }
 
     try {
@@ -592,13 +553,13 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         result,
       });
 
-      if (safeSchema) {
+      if (isObject && schema && safeSchema) {
         const parsed = schema.safeParse(result.output);
 
         if (parsed.success) return ok(parsed.data);
 
         if (repairAttempts <= 0) {
-          if (retryAttempts > 0) return this.generateObject(getRetryParams());
+          if (retryAttempts > 0) return this.generate(getRetryParams());
 
           // BAD_GATEWAY: provider output failing the schema is an upstream fault (PARSE_ERROR maps to HTTP 400)
           return this.error("BAD_GATEWAY", "AI: Strict object failed", {
@@ -606,7 +567,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
           });
         }
 
-        return this.generateObject(
+        return this.generate(
           getRepairParams(
             repairZodPrompt.compile({
               issues: JSON.stringify(parsed.error.issues),
@@ -615,10 +576,16 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
           )
         );
       }
-      this.logger.info({ label: "AI: generateObject output", output: result.output });
-      return ok(result.output);
+      this.logger.debug({ label: "AI: generateObject output", output: result.output });
+      return ok(
+        isObject
+          ? result.output
+          : removeMDash
+            ? result.text.replace(/\u2013|\u2014/g, "-")
+            : result.text
+      );
     } catch (error) {
-      if (NoObjectGeneratedError.isInstance(error)) {
+      if (NoObjectGeneratedError.isInstance(error) && isObject && schema) {
         await this.trackUsage({
           ctx,
           model: resolvedModel,
@@ -636,7 +603,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
           if (parsed.success) return ok(parsed.data);
 
           if (repairAttempts <= 0) {
-            if (retryAttempts > 0) return this.generateObject(getRetryParams());
+            if (retryAttempts > 0) return this.generate(getRetryParams());
 
             // BAD_GATEWAY: provider output failing the schema is an upstream fault (PARSE_ERROR maps to HTTP 400)
             return this.error("BAD_GATEWAY", "AI: Strict object from JSON repair failed", {
@@ -644,7 +611,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
             });
           }
 
-          return this.generateObject(
+          return this.generate(
             getRepairParams(
               repairJsonPrompt.compile({
                 text: error.text,
@@ -654,7 +621,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
           );
         }
 
-        if (retryAttempts > 0) return this.generateObject(getRetryParams());
+        if (retryAttempts > 0) return this.generate(getRetryParams());
 
         return this.error(
           "BAD_GATEWAY",
@@ -665,7 +632,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         );
       }
 
-      if (retryAttempts > 0) return this.generateObject(getRetryParams());
+      if (retryAttempts > 0) return this.generate(getRetryParams());
 
       return this.error("BAD_GATEWAY", "AI: Provider failed to generate object: Unknown error", {
         cause: error,
@@ -673,26 +640,14 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     }
   }
 
-  async generateExtractedObject<T extends ZodType>(
-    params: AIServiceGenerateExtractedObjectParams<T>
+  async generateText(params: AIServiceGenerateTextParams): ServerResultAsync<string> {
+    return this.generate(params as AIServiceGenerateParams<ZodString>);
+  }
+
+  async generateObject<T extends ZodType>(
+    params: AIServiceGenerateObjectParams<T>
   ): ServerResultAsync<z.infer<T>> {
-    const { schema, extractor, ...rest } = params;
-    if (rest.messages)
-      return this.error(
-        "INTERNAL_SERVER_ERROR",
-        "Messages are not supported for extracted object generation"
-      );
-
-    const textResult = await this.generateText({ ...rest });
-    if (textResult.isErr()) return err(textResult.error);
-
-    const result = await this.extractObject({
-      ...extractor,
-      text: textResult.value,
-      schema,
-    });
-    if (result.isErr()) return err(result.error);
-    return ok(result.value);
+    return this.generate(params as AIServiceGenerateParams<T>) as ServerResultAsync<z.infer<T>>;
   }
 
   async extractObject<T extends ZodType>({
@@ -713,6 +668,10 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     if (result.isErr()) return err(result.error);
     return ok(result.value);
   }
+
+  // #endregion: AI SDK
+
+  // #region: Special use cases
 
   async generateReplicate(
     model: Parameters<Replicate["run"]>[0],
@@ -756,13 +715,5 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     }
     return this.service.ideogram.generate(input);
   }
-
-  async getUsage(
-    userId: string
-  ): ServerResultAsync<Pick<AiUsageRow, "inputTokens" | "outputTokens" | "totalTokens" | "cost">> {
-    if (!this.repository.aiUsage) {
-      return this.error("INTERNAL_SERVER_ERROR", "AI usage repository is not available");
-    }
-    return this.repository.aiUsage.getUsage(userId);
-  }
+  // #endregion: Special use cases
 }
