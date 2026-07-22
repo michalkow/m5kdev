@@ -22,6 +22,7 @@ import { jsonrepair } from "jsonrepair";
 import { err, ok } from "neverthrow";
 import type Replicate from "replicate";
 import type { ZodString, ZodType, z } from "zod";
+import { withSpan } from "../../utils/telemetry";
 import type { RequiredServiceActor } from "../base/base.actor";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
@@ -515,11 +516,11 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     if (!resolvedModel) return this.error("INTERNAL_SERVER_ERROR", "AI: No models not provided");
     if (initialRetryAttempts !== retryAttempts || initialRepairAttempts !== repairAttempts)
       this.logger.debug(
-        `Last attempt at object generation failed: (model: ${resolvedModel}, retry: ${initialRetryAttempts}/${retryAttempts}, repair: ${initialRepairAttempts}/${repairAttempts})`
+        `Last attempt at ${isObject ? "object" : "text"} generation failed: (model: ${resolvedModel}, retry: ${initialRetryAttempts}/${retryAttempts}, repair: ${initialRepairAttempts}/${repairAttempts})`
       );
     else
       this.logger.debug(
-        `First attempt at object generation: (model: ${resolvedModel}, retry: ${initialRetryAttempts}/${retryAttempts}, repair: ${initialRepairAttempts}/${repairAttempts})`
+        `First attempt at ${isObject ? "object" : "text"} generation: (model: ${resolvedModel}, retry: ${initialRetryAttempts}/${retryAttempts}, repair: ${initialRepairAttempts}/${repairAttempts})`
       );
 
     const preparedModel = this.prepareModel(resolvedModel, { objectGeneration: isObject });
@@ -588,7 +589,10 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
           )
         );
       }
-      this.logger.debug({ label: "AI: generateObject output", output: result.output });
+      this.logger.debug({
+        label: `AI: ${isObject ? "object" : "text"} output`,
+        output: result.output,
+      });
       return ok(
         isObject
           ? result.output
@@ -646,43 +650,53 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
 
       if (retryAttempts > 0) return this.generate(getRetryParams());
 
-      return this.error("BAD_GATEWAY", "AI: Provider failed to generate object: Unknown error", {
-        cause: error,
-      });
+      return this.error(
+        "BAD_GATEWAY",
+        `AI: Provider failed to generate ${isObject ? "object" : "text"}: Unknown error`,
+        {
+          cause: error,
+        }
+      );
     }
   }
 
   async generateText(params: AIServiceGenerateTextParams): ServerResultAsync<string> {
-    return this.generate(params as AIServiceGenerateParams<ZodString>);
+    return withSpan({ name: "serviceai.generateText" }, async () => {
+      return this.generate(params as AIServiceGenerateParams<ZodString>);
+    });
   }
 
   async generateObject<T extends ZodType>(
     params: AIServiceGenerateObjectParams<T>
   ): ServerResultAsync<z.infer<T>> {
-    return this.generate(params as AIServiceGenerateParams<T>) as ServerResultAsync<z.infer<T>>;
+    return withSpan({ name: "service.ai.generateObject" }, async () => {
+      return this.generate(params as AIServiceGenerateParams<T>) as ServerResultAsync<z.infer<T>>;
+    });
   }
 
   async generateImage(
     params: AIServiceGenerateImageParams
   ): ServerResultAsync<GenerateImageResult> {
-    const { model, ctx, ...rest } = params;
-    const preparedModel = this.prepareImageModel(model);
+    return withSpan({ name: "service.ai.generateImage" }, async () => {
+      const { model, ctx, ...rest } = params;
+      const preparedModel = this.prepareImageModel(model);
 
-    try {
-      const result = await generateImage({ ...rest, model: preparedModel });
-      await this.trackUsage({
-        ctx,
-        model,
-        feature: "generateImage",
-        result,
-      });
-      return ok(result);
-    } catch (error) {
-      if (NoImageGeneratedError.isInstance(error)) {
-        return this.error("BAD_GATEWAY", "AI: No image generated", { cause: error });
+      try {
+        const result = await generateImage({ ...rest, model: preparedModel });
+        await this.trackUsage({
+          ctx,
+          model,
+          feature: "generateImage",
+          result,
+        });
+        return ok(result);
+      } catch (error) {
+        if (NoImageGeneratedError.isInstance(error)) {
+          return this.error("BAD_GATEWAY", "AI: No image generated", { cause: error });
+        }
+        return this.error("BAD_GATEWAY", "AI: No image generated: Unknown error", { cause: error });
       }
-      return this.error("BAD_GATEWAY", "AI: No image generated: Unknown error", { cause: error });
-    }
+    });
   }
 
   async extractObject<T extends ZodType>({
