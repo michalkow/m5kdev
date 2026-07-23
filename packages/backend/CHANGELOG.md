@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.31.1
+
+### Patch Changes
+
+- cli doctor
+- Updated dependencies
+  - @m5kdev/commons@0.31.1
+  - @m5kdev/config@0.31.1
+
 ## 0.31.0
 
 ### Minor Changes

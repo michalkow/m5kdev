@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.31.1
+
+### Patch Changes
+
+- cli doctor
+
 ## 0.31.0
 
 ### Minor Changes

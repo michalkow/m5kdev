@@ -1,5 +1,13 @@
 # create-m5kdev
 
+## 0.31.1
+
+### Patch Changes
+
+- cli doctor
+- a4c932e: Limit managed catalog baselines to dependencies referenced by enabled template
+  features, so web-only projects can initialize without Expo-only entries.
+
 ## 0.31.0
 
 ### Minor Changes
