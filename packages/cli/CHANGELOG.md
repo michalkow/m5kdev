@@ -1,5 +1,14 @@
 # create-m5kdev
 
+## 0.31.0
+
+### Minor Changes
+
+- cli tools
+- cc31427: Add versioned managed consumer state, generated catalog validation, doctor and
+  init commands, conflict-free dry-run updates, embedded AST migrations, and
+  three-way template reconciliation.
+
 ## 0.30.0
 
 ### Minor Changes

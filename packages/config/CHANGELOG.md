@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.31.0
+
+### Minor Changes
+
+- cli tools
+
 ## 0.30.0
 
 ### Minor Changes

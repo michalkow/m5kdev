@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.31.0
+
+### Minor Changes
+
+- cli tools
+
 ## 0.30.0
 
 ### Minor Changes
