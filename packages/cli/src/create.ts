@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import { TEMPLATE_NAME } from "./constants";
 import {
@@ -47,25 +48,32 @@ export async function scaffoldProject(
   const manifest = loadTemplateManifest(templateDirectory);
   const excludePrefixes = getExcludedFeaturePaths(manifest, enabledFeatures);
 
-  await ensureDirectoryState(targetDirectory, options.force);
-  await copyTemplateDirectory(templateDirectory, targetDirectory, context, {
-    excludePrefixes,
-    enabledFeatures,
-  });
-  const renderedFiles = await collectTemplateFiles(templateDirectory, context, {
-    excludePrefixes,
-    enabledFeatures,
-  });
-  await writeManagedState(
-    targetDirectory,
-    createManagedState({
-      templateVersion: getCliVersion(),
+  const createdTargetDirectory = await ensureDirectoryState(targetDirectory, options.force);
+  try {
+    await copyTemplateDirectory(templateDirectory, targetDirectory, context, {
+      excludePrefixes,
       enabledFeatures,
-      context,
-      renderedFiles,
-      manifest,
-    })
-  );
+    });
+    const renderedFiles = await collectTemplateFiles(templateDirectory, context, {
+      excludePrefixes,
+      enabledFeatures,
+    });
+    await writeManagedState(
+      targetDirectory,
+      createManagedState({
+        templateVersion: getCliVersion(),
+        enabledFeatures,
+        context,
+        renderedFiles,
+        manifest,
+      })
+    );
+  } catch (error) {
+    if (createdTargetDirectory) {
+      await fs.rm(targetDirectory, { recursive: true, force: true });
+    }
+    throw error;
+  }
 
   if (!options.skipGit) {
     await runGitInit(targetDirectory);

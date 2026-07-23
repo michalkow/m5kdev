@@ -13,6 +13,7 @@ import { getCliVersion, type ManagedState, readManagedState, sha256 } from "./st
 import { loadTemplateManifest } from "./template";
 
 const execFileAsync = promisify(execFile);
+const FULL_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 
 export interface DoctorOptions {
   repoRoot: string;
@@ -259,20 +260,39 @@ export async function diagnoseManagedRepo(options: DoctorOptions): Promise<Diagn
 
   if (options.full) {
     const packagePath = path.join(options.repoRoot, "package.json");
-    const packageManifest = JSON.parse(await fs.readFile(packagePath, "utf8")) as {
-      scripts?: Record<string, string>;
-    };
-    for (const script of ["check-types", "lint", "build"] as const) {
-      if (!packageManifest.scripts?.[script]) continue;
-      try {
-        await execFileAsync("pnpm", [script], { cwd: options.repoRoot, env: process.env });
-      } catch (error) {
-        diagnostics.push({
-          code: `COMMAND_${script.replace("-", "_").toUpperCase()}_FAILED`,
-          severity: "error",
-          message: `${script} failed: ${error instanceof Error ? error.message : String(error)}`,
-          path: "package.json",
-        });
+    let packageManifest: { scripts?: Record<string, string> } | undefined;
+    try {
+      packageManifest = JSON.parse(await fs.readFile(packagePath, "utf8")) as {
+        scripts?: Record<string, string>;
+      };
+    } catch (error) {
+      diagnostics.push({
+        code: "PACKAGE_JSON_UNREADABLE",
+        severity: "error",
+        message:
+          error instanceof Error
+            ? `Unable to read package.json: ${error.message}`
+            : "Unable to read package.json.",
+        path: "package.json",
+      });
+    }
+    if (packageManifest) {
+      for (const script of ["check-types", "lint", "build"] as const) {
+        if (!packageManifest.scripts?.[script]) continue;
+        try {
+          await execFileAsync("pnpm", [script], {
+            cwd: options.repoRoot,
+            env: process.env,
+            timeout: FULL_COMMAND_TIMEOUT_MS,
+          });
+        } catch (error) {
+          diagnostics.push({
+            code: `COMMAND_${script.replace("-", "_").toUpperCase()}_FAILED`,
+            severity: "error",
+            message: `${script} failed: ${error instanceof Error ? error.message : String(error)}`,
+            path: "package.json",
+          });
+        }
       }
     }
   }

@@ -11,6 +11,6 @@
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
     "types": ["node", "jest"]
   },
-  "exclude": ["node_modules", "dist", "tsdown.config.ts"],
+  "exclude": ["node_modules", "dist", "tsdown.config.ts", "jest-import-meta-transformer.cjs"],
   "include": ["src/**/*.ts"]
 }

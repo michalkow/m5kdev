@@ -36,6 +36,8 @@ export function printDiagnosticReport(report: DiagnosticReport): void {
     for (const diagnostic of entries) {
       const location = diagnostic.path ? ` (${diagnostic.path})` : "";
       console.log(`  [${diagnostic.code}] ${diagnostic.message}${location}`);
+      if (diagnostic.migrationId) console.log(`    migration: ${diagnostic.migrationId}`);
+      if (diagnostic.guide) console.log(`    guide: ${diagnostic.guide}`);
       if (diagnostic.suggestion) console.log(`    ${diagnostic.suggestion}`);
     }
     console.log("");

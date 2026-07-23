@@ -112,12 +112,19 @@ export async function collectTemplateFiles(
   return files;
 }
 
-export async function ensureDirectoryState(targetDirectory: string, force: boolean): Promise<void> {
+/**
+ * Ensures the target directory exists and may be written.
+ * Returns true when this call created the directory (safe to remove on failure).
+ */
+export async function ensureDirectoryState(
+  targetDirectory: string,
+  force: boolean
+): Promise<boolean> {
   const stat = await fs.stat(targetDirectory).catch(() => null);
 
   if (!stat) {
     await fs.mkdir(targetDirectory, { recursive: true });
-    return;
+    return true;
   }
 
   if (!stat.isDirectory()) {
@@ -130,6 +137,8 @@ export async function ensureDirectoryState(targetDirectory: string, force: boole
       `Target directory is not empty: ${targetDirectory}. Re-run with --force to overwrite.`
     );
   }
+
+  return false;
 }
 
 function isTextFile(fileName: string): boolean {

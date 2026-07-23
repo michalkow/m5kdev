@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { type ConsumerCatalog, readCatalog } from "./catalog";
 import { getTemplateFilePolicy } from "./template";
@@ -49,9 +50,10 @@ export function sha256(content: Uint8Array | string): string {
 }
 
 export function getCliVersion(): string {
+  const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [
-    path.resolve(__dirname, "../package.json"),
-    path.resolve(__dirname, "../../package.json"),
+    path.resolve(moduleDirectory, "../package.json"),
+    path.resolve(moduleDirectory, "../../package.json"),
   ];
   for (const candidate of candidates) {
     if (!fs.existsSync(candidate)) continue;

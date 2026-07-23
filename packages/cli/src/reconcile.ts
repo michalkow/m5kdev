@@ -78,7 +78,7 @@ async function mergeText(base: Buffer, local: Buffer, target: Buffer): Promise<s
       return result.stdout;
     } catch (error) {
       const mergeError = error as Error & { code?: number };
-      if (mergeError.code === 1) return undefined;
+      if (typeof mergeError.code === "number" && mergeError.code > 0) return undefined;
       throw error;
     }
   } finally {

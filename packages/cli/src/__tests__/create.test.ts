@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { scaffoldProject } from "../create";
+import * as fsHelpers from "../fs";
 
 describe("scaffoldProject", () => {
   let tempRoot = "";
@@ -14,6 +15,7 @@ describe("scaffoldProject", () => {
   });
 
   afterEach(async () => {
+    jest.restoreAllMocks();
     process.chdir(initialCwd);
     await fs.rm(tempRoot, { recursive: true, force: true });
   });
@@ -151,5 +153,51 @@ describe("scaffoldProject", () => {
         skipGit: true,
       })
     ).rejects.toThrow("Target directory is not empty");
+  });
+
+  it("removes a newly created target directory when scaffolding fails", async () => {
+    jest
+      .spyOn(fsHelpers, "copyTemplateDirectory")
+      .mockRejectedValueOnce(new Error("scaffold failed"));
+
+    await expect(
+      scaffoldProject({
+        targetDirectory: "fresh-fail",
+        appName: "Fresh Fail",
+        appDescription: "Cleanup test",
+        yes: true,
+        force: false,
+        skipInstall: true,
+        skipGit: true,
+      })
+    ).rejects.toThrow("scaffold failed");
+
+    await expect(fs.stat(path.join(tempRoot, "fresh-fail"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("preserves pre-existing content when a forced scaffold fails", async () => {
+    const occupied = path.join(tempRoot, "occupied-force");
+    await fs.mkdir(occupied, { recursive: true });
+    await fs.writeFile(path.join(occupied, "keep-me.txt"), "precious", "utf8");
+
+    jest
+      .spyOn(fsHelpers, "copyTemplateDirectory")
+      .mockRejectedValueOnce(new Error("scaffold failed"));
+
+    await expect(
+      scaffoldProject({
+        targetDirectory: "occupied-force",
+        appName: "Occupied Force",
+        appDescription: "Force cleanup test",
+        yes: true,
+        force: true,
+        skipInstall: true,
+        skipGit: true,
+      })
+    ).rejects.toThrow("scaffold failed");
+
+    await expect(fs.readFile(path.join(occupied, "keep-me.txt"), "utf8")).resolves.toBe("precious");
   });
 });

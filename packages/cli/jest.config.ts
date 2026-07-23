@@ -5,7 +5,7 @@ const config: Config = {
   roots: ["<rootDir>/src"],
   testMatch: ["**/*.test.ts"],
   transform: {
-    "^.+\\.(t|j)s$": ["ts-jest", { tsconfig: "tsconfig.json" }],
+    "^.+\\.(t|j)s$": "<rootDir>/jest-import-meta-transformer.cjs",
   },
   verbose: true,
 };
