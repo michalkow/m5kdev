@@ -1,9 +1,9 @@
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
+import type { AppRouter } from "@starter-app/server/types";
 import {
   POST_FILTER_VALUES,
   POSTS_PAGE_SIZE,
 } from "@starter-app/shared/modules/posts/posts.constants";
-import type { AppRouter } from "@starter-app/server/types";
 import { type UseQueryOptions, useQuery } from "@tanstack/react-query";
 import type { inferRouterOutputs } from "@trpc/server";
 import { parseAsInteger, parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";

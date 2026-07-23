@@ -18,17 +18,25 @@
   },
   "scripts": {
     "build": "tsx scripts/prepare-templates.ts && tsdown",
-    "lint": "biome check .",
-    "lint:fix": "biome check . --write",
+    "lint": "biome check src scripts root-templates package.json tsconfig.json jest.config.ts tsdown.config.ts",
+    "lint:fix": "biome check src scripts root-templates package.json tsconfig.json jest.config.ts tsdown.config.ts --write",
     "check-types": "tsc --noEmit",
     "test": "jest -c jest.config.ts",
     "test:smoke": "CLI_SMOKE=1 jest -c jest.config.ts src/__tests__/create.smoke.test.ts",
     "prepare:templates": "tsx scripts/prepare-templates.ts"
   },
   "dependencies": {
-    "tslib": "2.8.1"
+    "jscodeshift": "catalog:",
+    "pacote": "catalog:",
+    "semver": "catalog:",
+    "tslib": "2.8.1",
+    "yaml": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
+    "@types/jscodeshift": "catalog:",
+    "@types/pacote": "catalog:",
+    "@types/semver": "catalog:",
     "@types/jest": "catalog:",
     "@types/node": "catalog:",
     "jest": "catalog:",

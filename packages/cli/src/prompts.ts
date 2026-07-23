@@ -1,12 +1,14 @@
-import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
+import readline from "node:readline/promises";
 import { DEFAULT_APP_NAME, getDefaultDescription } from "./constants";
 import { slugifyAppName, toDisplayName } from "./strings";
 import type { AppPlatform, CreateCommandOptions } from "./types";
 
 function requireInteractive(yes: boolean): void {
   if (!yes && !process.stdin.isTTY) {
-    throw new Error("Missing required values in a non-interactive shell. Pass --yes or provide flags.");
+    throw new Error(
+      "Missing required values in a non-interactive shell. Pass --yes or provide flags."
+    );
   }
 }
 
@@ -41,7 +43,10 @@ export async function resolveCreateCommandOptions(
       ? resolved.targetDirectory
         ? toDisplayName(pathBaseName(resolved.targetDirectory))
         : DEFAULT_APP_NAME
-      : await promptValue("App name", resolved.targetDirectory ? pathBaseName(resolved.targetDirectory) : DEFAULT_APP_NAME);
+      : await promptValue(
+          "App name",
+          resolved.targetDirectory ? pathBaseName(resolved.targetDirectory) : DEFAULT_APP_NAME
+        );
   }
 
   resolved.appName = toDisplayName(resolved.appName);

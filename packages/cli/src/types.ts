@@ -24,5 +24,20 @@ export interface TemplateContext {
 }
 
 export interface TemplateFeatureManifest {
+  schemaVersion: number;
   features: Record<string, { paths: readonly string[] }>;
+  requiredPaths: readonly string[];
+  sync: {
+    defaultPolicy: TemplateFilePolicy;
+    rules: readonly { pattern: string; policy: TemplateFilePolicy }[];
+    renames?: readonly { from: string; to: string }[];
+  };
+}
+
+export type TemplateFilePolicy = "merge" | "ensure" | "ignore";
+
+export interface RenderedTemplateFile {
+  content: Buffer;
+  kind: "text" | "binary";
+  relativePath: string;
 }

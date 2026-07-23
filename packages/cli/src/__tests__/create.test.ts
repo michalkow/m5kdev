@@ -38,7 +38,10 @@ describe("scaffoldProject", () => {
       fs.stat(path.join(result.targetDirectory, "apps/webapp/src/modules/posts/PostsRoute.tsx"))
     ).resolves.toBeTruthy();
 
-    const rootPackage = await fs.readFile(path.join(result.targetDirectory, "package.json"), "utf8");
+    const rootPackage = await fs.readFile(
+      path.join(result.targetDirectory, "package.json"),
+      "utf8"
+    );
     const rootAgents = await fs.readFile(path.join(result.targetDirectory, "AGENTS.md"), "utf8");
     const sharedEnv = await fs.readFile(
       path.join(result.targetDirectory, "apps/shared/.env"),
@@ -58,7 +61,7 @@ describe("scaffoldProject", () => {
       "utf8"
     );
 
-    expect(rootPackage).toContain("\"name\": \"editorial-desk\"");
+    expect(rootPackage).toContain('"name": "editorial-desk"');
     expect(rootAgents).toContain("Editorial Desk");
     expect(rootAgents).toContain("A clean newsroom starter.");
 
@@ -91,8 +94,47 @@ describe("scaffoldProject", () => {
 
     expect(emailPackage).not.toMatch(/"@m5kdev\/[^"]+": "workspace:\*"/);
     expect(emailPackage).toContain('"@m5kdev/email": "catalog:"');
-    expect(workspaceYaml).toContain("'@m5kdev/email':");
+    expect(workspaceYaml).toContain('"@m5kdev/email":');
+
+    const managedStateSource = await fs.readFile(
+      path.join(result.targetDirectory, ".m5kdev.json"),
+      "utf8"
+    );
+    const managedState = JSON.parse(managedStateSource) as {
+      template: { features: string[]; context: Record<string, unknown> };
+    };
+    expect(managedState.template.features).toEqual(["webapp"]);
+    expect(managedState.template.context).not.toHaveProperty("betterAuthSecret");
+    expect(managedStateSource).not.toContain("BETTER_AUTH_SECRET");
   });
+
+  it.each([
+    ["expo", false, ["expo"]],
+    ["both", false, ["expo", "webapp"]],
+    ["web", true, ["test-harness", "webapp"]],
+  ] as const)(
+    "persists managed features for %s (test harness: %s)",
+    async (platform, testHarness, features) => {
+      const result = await scaffoldProject({
+        targetDirectory: `state-${platform}-${testHarness}`,
+        appName: "State Fixture",
+        appDescription: "Managed state fixture.",
+        platform,
+        testHarness,
+        yes: true,
+        force: false,
+        skipInstall: true,
+        skipGit: true,
+      });
+      const source = await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8");
+      const state = JSON.parse(source) as {
+        template: { features: string[]; context: Record<string, unknown> };
+      };
+      expect(state.template.features).toEqual(features);
+      expect(state.template.context).not.toHaveProperty("betterAuthSecret");
+      expect(source).not.toMatch(/betterAuthSecret|BETTER_AUTH_SECRET/);
+    }
+  );
 
   it("refuses to overwrite a non-empty directory without force", async () => {
     await fs.mkdir(path.join(tempRoot, "occupied"), { recursive: true });

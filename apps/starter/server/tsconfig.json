@@ -8,13 +8,6 @@
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
     "rootDir": "."
   },
-  "exclude": [
-    "node_modules"
-  ],
-  "include": [
-    "src/**/*.ts",
-    "drizzle/**/*.ts",
-    "drizzle.config.ts",
-    "tsup.config.ts"
-  ]
+  "exclude": ["node_modules"],
+  "include": ["src/**/*.ts", "drizzle/**/*.ts", "drizzle.config.ts", "tsup.config.ts"]
 }

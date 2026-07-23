@@ -7,14 +7,21 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!**/node_modules/**", "!**/dist/**", "!**/.react-router/**"]
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/.react-router",
+      "!**/.m5kdev.json",
+      "!**/drizzle/meta"
+    ]
   },
   "formatter": {
     "enabled": true,
     "indentWidth": 2,
     "indentStyle": "space",
     "lineWidth": 100,
-    "lineEnding": "crlf"
+    "lineEnding": "lf"
   },
   "linter": {
     "enabled": true,

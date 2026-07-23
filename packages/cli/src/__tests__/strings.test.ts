@@ -1,4 +1,9 @@
-import { renderTemplate, createBetterAuthSecret, derivePackageScope, slugifyAppName } from "../strings";
+import {
+  createBetterAuthSecret,
+  derivePackageScope,
+  renderTemplate,
+  slugifyAppName,
+} from "../strings";
 
 describe("string helpers", () => {
   it("slugifies app names into kebab-case", () => {

@@ -34,3 +34,18 @@ pnpm build
 pnpm check-types
 pnpm lint
 ```
+
+## Managed framework updates
+
+This app records its generated baseline in `.m5kdev.json`. The updater is run
+explicitly from the package registry and is not installed as an app dependency:
+
+```sh
+pnpm dlx create-m5kdev@<version> doctor
+pnpm dlx create-m5kdev@<version> update --dry-run
+pnpm dlx create-m5kdev@<version> update
+```
+
+Use an exact target version in CI and when coordinating an upgrade. Existing
+projects without `.m5kdev.json` can enroll at their current compatible baseline
+with `pnpm dlx create-m5kdev@<version> init`.

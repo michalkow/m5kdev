@@ -9,17 +9,8 @@
     "emitDeclarationOnly": false,
     "noEmit": false,
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
-    "types": [
-      "node",
-      "jest"
-    ]
+    "types": ["node", "jest"]
   },
-  "exclude": [
-    "node_modules",
-    "dist",
-    "tsdown.config.ts"
-  ],
-  "include": [
-    "src/**/*.ts"
-  ]
+  "exclude": ["node_modules", "dist", "tsdown.config.ts"],
+  "include": ["src/**/*.ts"]
 }

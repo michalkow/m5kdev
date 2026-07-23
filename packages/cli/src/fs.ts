@@ -2,14 +2,26 @@ import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import type { TemplateContext } from "./types";
 import { renderTemplate } from "./strings";
+import type { RenderedTemplateFile, TemplateContext } from "./types";
 
 const execFileAsync = promisify(execFile);
 
 const TEXT_EXTENSIONS = new Set([
-  ".ts", ".tsx", ".js", ".mjs", ".cjs", ".json", ".md", ".css", ".html",
-  ".svg", ".yaml", ".yml", ".txt", ".mdc",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".mjs",
+  ".cjs",
+  ".json",
+  ".md",
+  ".css",
+  ".html",
+  ".svg",
+  ".yaml",
+  ".yml",
+  ".txt",
+  ".mdc",
 ]);
 const TEXT_BASENAMES = new Set([".gitignore", ".env", ".env.example", ".npmrc"]);
 
@@ -21,12 +33,86 @@ export interface CopyTemplateOptions {
   excludePrefixes?: readonly string[];
   /** Features whose marker blocks should be kept (markers removed, content kept). */
   enabledFeatures?: ReadonlySet<string>;
+  /** Update inspection can retain ignored-file metadata without rendering secret content. */
+  ignoreContentFor?: (relativePath: string) => boolean;
 }
 
-export async function ensureDirectoryState(
-  targetDirectory: string,
-  force: boolean
-): Promise<void> {
+export async function collectTemplateFiles(
+  templateDirectory: string,
+  context: TemplateContext,
+  options: CopyTemplateOptions = {},
+  relativeBase = ""
+): Promise<RenderedTemplateFile[]> {
+  const entries = await fs.readdir(templateDirectory, { withFileTypes: true });
+  const excludePrefixes = options.excludePrefixes ?? [];
+  const enabledFeatures = options.enabledFeatures ?? new Set<string>();
+  const files: RenderedTemplateFile[] = [];
+
+  for (const entry of entries) {
+    const sourcePath = path.join(templateDirectory, entry.name);
+    const targetName = renderTemplate(
+      entry.name.endsWith(".tpl") ? entry.name.slice(0, -4) : entry.name,
+      context
+    );
+    const relativePath = relativeBase ? `${relativeBase}/${targetName}` : targetName;
+
+    if (relativePath === "template.manifest.json") continue;
+
+    const asDirPrefix = `${relativePath}/`;
+    if (
+      excludePrefixes.some(
+        (prefix) =>
+          relativePath === prefix || asDirPrefix === prefix || relativePath.startsWith(prefix)
+      )
+    ) {
+      continue;
+    }
+
+    if (entry.isDirectory()) {
+      files.push(...(await collectTemplateFiles(sourcePath, context, options, relativePath)));
+      continue;
+    }
+    if (entry.isSymbolicLink()) {
+      throw new Error(`Template symlinks are not supported: ${relativePath}`);
+    }
+    if (!entry.isFile()) continue;
+
+    if (options.ignoreContentFor?.(relativePath)) {
+      files.push({
+        content: Buffer.alloc(0),
+        kind: isTextFile(entry.name) ? "text" : "binary",
+        relativePath,
+      });
+      continue;
+    }
+
+    if (!isTextFile(entry.name)) {
+      files.push({
+        content: await fs.readFile(sourcePath),
+        kind: "binary",
+        relativePath,
+      });
+      continue;
+    }
+
+    const content = await fs.readFile(sourcePath, "utf8");
+    files.push({
+      content: Buffer.from(
+        applyFeatureMarkers(renderTemplate(content, context), enabledFeatures).replace(
+          /\r\n?/g,
+          "\n"
+        ),
+        "utf8"
+      ),
+      kind: "text",
+      relativePath,
+    });
+  }
+
+  return files;
+}
+
+export async function ensureDirectoryState(targetDirectory: string, force: boolean): Promise<void> {
   const stat = await fs.stat(targetDirectory).catch(() => null);
 
   if (!stat) {
@@ -84,55 +170,13 @@ export async function copyTemplateDirectory(
   templateDirectory: string,
   targetDirectory: string,
   context: TemplateContext,
-  options: CopyTemplateOptions = {},
-  relativeBase = ""
+  options: CopyTemplateOptions = {}
 ): Promise<void> {
-  const entries = await fs.readdir(templateDirectory, { withFileTypes: true });
-  const excludePrefixes = options.excludePrefixes ?? [];
-  const enabledFeatures = options.enabledFeatures ?? new Set<string>();
-
-  for (const entry of entries) {
-    const sourcePath = path.join(templateDirectory, entry.name);
-    const targetName = renderTemplate(
-      entry.name.endsWith(".tpl") ? entry.name.slice(0, -4) : entry.name,
-      context
-    );
-    const relativePath = relativeBase ? `${relativeBase}/${targetName}` : targetName;
-
-    if (relativePath === "template.manifest.json") {
-      continue;
-    }
-
-    const asDirPrefix = `${relativePath}/`;
-    if (excludePrefixes.some((p) => relativePath === p || asDirPrefix === p || relativePath.startsWith(p))) {
-      continue;
-    }
-
-    const targetPath = path.join(targetDirectory, targetName);
-
-    if (entry.isDirectory()) {
-      await fs.mkdir(targetPath, { recursive: true });
-      await copyTemplateDirectory(sourcePath, targetPath, context, options, relativePath);
-      continue;
-    }
-
-    if (!entry.isFile()) {
-      continue;
-    }
-
+  const files = await collectTemplateFiles(templateDirectory, context, options);
+  for (const file of files) {
+    const targetPath = path.join(targetDirectory, file.relativePath);
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
-
-    if (!isTextFile(entry.name)) {
-      await fs.copyFile(sourcePath, targetPath);
-      continue;
-    }
-
-    const content = await fs.readFile(sourcePath, "utf8");
-    const rendered = applyFeatureMarkers(
-      renderTemplate(content, context),
-      enabledFeatures
-    ).replace(/\r\n?/g, "\n");
-    await fs.writeFile(targetPath, rendered, "utf8");
+    await fs.writeFile(targetPath, file.content);
   }
 }
 

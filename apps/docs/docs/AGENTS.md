@@ -107,6 +107,26 @@ but it must not be silently omitted when relevant to upgrade safety.
 
 ## Content requirements
 
+### Migration registry and automation
+
+- Every guide that has an automatic source or configuration change must name
+  the matching entry in `packages/cli/src/migrations/registry.ts`. The guide's
+  `migration.id`, the registry `id`, target version, description, and guide path
+  must agree exactly.
+- Keep the production registry empty when a release needs no semantic
+  transform. Never invent a no-op migration merely to attach a guide.
+- Put structural TypeScript and TSX changes in embedded, in-memory transforms
+  under `packages/cli/src/migrations/`; do not require Codemod.com or add an
+  updater dependency to generated applications.
+- Every transform must have TS and/or TSX fixtures appropriate to its scope and
+  must be run twice in tests to prove idempotency.
+- Add reconciliation or command fixtures for non-AST automation. Tests must
+  cover the automatic result, the conflicting local-edit case, and validator
+  diagnostics.
+- In the guide, label each step `Automatic`, `Manual`, or `Conditional` and say
+  which `m5kdev update` phase performs it. Manual steps must remain explicit
+  even when an LLM could plausibly perform them.
+
 ### Summary and applicability
 
 - Explain the user-visible or architectural reason for the change.
@@ -188,6 +208,8 @@ but it must not be silently omitted when relevant to upgrade safety.
 Before considering the guide complete, verify that:
 
 - The filename, `migration.id`, and `target_version` agree.
+- Any automatic migration has a matching registry entry and idempotent fixture
+  coverage; a guide-only release leaves the production registry empty.
 - The applicability range is explicit.
 - All affected packages and exact compatible versions are listed.
 - The root catalog and generated-app catalog were both checked.

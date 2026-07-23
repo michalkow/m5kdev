@@ -16,7 +16,9 @@ import {
  * template receives are guaranteed by the corresponding EmailService.send*
  * method.
  */
-function asTemplate(component: FunctionComponent<never>): FunctionComponent<Record<string, unknown>> {
+function asTemplate(
+  component: FunctionComponent<never>
+): FunctionComponent<Record<string, unknown>> {
   return component as unknown as FunctionComponent<Record<string, unknown>>;
 }
 

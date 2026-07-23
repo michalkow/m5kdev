@@ -14,6 +14,12 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import {
+  assertCatalogKeys,
+  buildConsumerCatalog,
+  readCatalog,
+  renderConsumerWorkspace,
+} from "../src/catalog";
 
 const CLI_ROOT = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(CLI_ROOT, "../..");
@@ -22,8 +28,19 @@ const ROOT_TEMPLATES_DIR = path.join(CLI_ROOT, "root-templates");
 const OUT_DIR = path.join(CLI_ROOT, "templates/minimal-app");
 
 const TEXT_EXTENSIONS = new Set([
-  ".ts", ".tsx", ".js", ".mjs", ".cjs", ".json", ".md", ".css", ".html",
-  ".svg", ".yaml", ".yml", ".txt",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".mjs",
+  ".cjs",
+  ".json",
+  ".md",
+  ".css",
+  ".html",
+  ".svg",
+  ".yaml",
+  ".yml",
+  ".txt",
 ]);
 const TEXT_BASENAMES = new Set([".gitignore", ".env", ".env.example", ".npmrc"]);
 
@@ -46,6 +63,7 @@ const EXCLUDED = [
 
 /** Optional features `create` prompts for. Paths are relative to the generated repo root. */
 const FEATURE_MANIFEST = {
+  schemaVersion: 1,
   features: {
     "test-harness": {
       paths: [
@@ -60,6 +78,23 @@ const FEATURE_MANIFEST = {
     expo: {
       paths: ["apps/expo/"],
     },
+  },
+  requiredPaths: [
+    "package.json",
+    "pnpm-workspace.yaml",
+    "apps/shared/package.json",
+    "apps/server/package.json",
+    "apps/email/package.json",
+  ],
+  sync: {
+    defaultPolicy: "merge",
+    rules: [
+      { pattern: ".env", policy: "ignore" },
+      { pattern: "**/.env", policy: "ignore" },
+      { pattern: "**/drizzle/*.sql", policy: "ignore" },
+      { pattern: "**/drizzle/meta/**", policy: "ignore" },
+    ],
+    renames: [],
   },
 } as const;
 
@@ -111,7 +146,9 @@ function copyTree(src: string, dest: string): void {
 
 function main(): void {
   if (!fs.existsSync(STARTER_DIR)) {
-    throw new Error(`Starter app not found at ${STARTER_DIR} — templates can only be built inside the m5kdev repo.`);
+    throw new Error(
+      `Starter app not found at ${STARTER_DIR} — templates can only be built inside the m5kdev repo.`
+    );
   }
 
   fs.rmSync(OUT_DIR, { recursive: true, force: true });
@@ -127,7 +164,8 @@ function main(): void {
     if (isExcluded(rel)) continue;
 
     // starter/.gitignore covers app-relative runtime artifacts
-    const destRel = rel === ".gitignore" ? path.join("apps", ".gitignore") : path.join("apps", tokenizePath(rel));
+    const destRel =
+      rel === ".gitignore" ? path.join("apps", ".gitignore") : path.join("apps", tokenizePath(rel));
 
     if (isTextFile(file)) {
       const content = tokenize(fs.readFileSync(file, "utf8"));
@@ -149,7 +187,27 @@ function main(): void {
     "utf8"
   );
 
-  console.info(`Prepared templates: ${emitted} starter files -> ${OUT_DIR}`);
+  // 4. derive the generated-app catalog from actual starter usage and the
+  // monorepo's tested versions. Root templates intentionally do not pin it.
+  const consumerCatalog = buildConsumerCatalog({
+    repoRoot: REPO_ROOT,
+    starterDirectory: STARTER_DIR,
+    rootTemplatesDirectory: ROOT_TEMPLATES_DIR,
+  });
+  const workspaceTemplatePath = path.join(OUT_DIR, "pnpm-workspace.yaml.tpl");
+  const workspaceTemplate = fs.readFileSync(workspaceTemplatePath, "utf8");
+  assertCatalogKeys(readCatalog(workspaceTemplate), [], "root template catalog placeholder");
+  const renderedWorkspace = renderConsumerWorkspace(workspaceTemplate, consumerCatalog);
+  assertCatalogKeys(
+    readCatalog(renderedWorkspace),
+    Object.keys(consumerCatalog),
+    "generated consumer catalog"
+  );
+  fs.writeFileSync(workspaceTemplatePath, renderedWorkspace, "utf8");
+
+  console.info(
+    `Prepared templates: ${emitted} starter files, ${Object.keys(consumerCatalog).length} catalog entries -> ${OUT_DIR}`
+  );
 }
 
 main();

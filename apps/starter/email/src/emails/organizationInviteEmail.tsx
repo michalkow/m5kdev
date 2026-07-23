@@ -1,8 +1,9 @@
 /** @jsxRuntime automatic */
-import { Heading, Text } from "@react-email/components";
+
 import { CtaButton } from "@m5kdev/email/components/CtaButton";
 import { EmailLayout } from "@m5kdev/email/components/EmailLayout";
 import type { EmailTranslateFn, OrganizationInviteTemplateProps } from "@m5kdev/email/types";
+import { Heading, Text } from "@react-email/components";
 
 function resolveT(t?: EmailTranslateFn): EmailTranslateFn {
   return t ?? ((key: string) => key);

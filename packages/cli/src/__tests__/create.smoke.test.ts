@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { scaffoldProject } from "../create";
+import { diagnoseManagedRepo } from "../doctor";
 
 const execFileAsync = promisify(execFile);
 const maybeDescribe = process.env.CLI_SMOKE === "1" ? describe : describe.skip;
@@ -35,6 +36,12 @@ maybeDescribe("create command smoke test", () => {
         force: false,
         skipInstall: false,
         skipGit: true,
+      });
+
+      await expect(
+        diagnoseManagedRepo({ repoRoot: result.targetDirectory })
+      ).resolves.toMatchObject({
+        ok: true,
       });
 
       await execFileAsync("pnpm", ["--filter", "./apps/server", "generate:schema"], {

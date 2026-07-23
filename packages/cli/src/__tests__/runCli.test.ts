@@ -43,4 +43,26 @@ describe("parseCli", () => {
       options: {},
     });
   });
+
+  it.each(["init", "doctor", "update"])("recognizes the %s command", (command) => {
+    expect(parseCli([command, "--json"])).toEqual({
+      command,
+      directory: undefined,
+      help: false,
+      options: { json: true },
+    });
+  });
+
+  it("parses update dry-run flags", () => {
+    expect(parseCli(["update", "--dry-run", "--skip-install"])).toEqual({
+      command: "update",
+      directory: undefined,
+      help: false,
+      options: { "dry-run": true, "skip-install": true },
+    });
+  });
+
+  it("rejects unknown options during parsing", () => {
+    expect(() => parseCli(["doctor", "--wat"])).toThrow("Unknown option: --wat");
+  });
 });
