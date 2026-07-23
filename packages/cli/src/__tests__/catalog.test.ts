@@ -20,8 +20,14 @@ describe("consumer catalog", () => {
     expect(Object.keys(catalog)).toEqual(
       [...Object.keys(catalog)].sort((a, b) => a.localeCompare(b))
     );
-    expect(catalog["@m5kdev/backend"]).toBe("0.30.0");
-    expect(catalog["@m5kdev/frontend"]).toBe("0.30.0");
+    expect(catalog["@m5kdev/backend"]).toBe(
+      JSON.parse(fs.readFileSync(path.join(REPO_ROOT, "packages/backend/package.json"), "utf8"))
+        .version
+    );
+    expect(catalog["@m5kdev/frontend"]).toBe(
+      JSON.parse(fs.readFileSync(path.join(REPO_ROOT, "packages/frontend/package.json"), "utf8"))
+        .version
+    );
     expect(catalog["@libsql/client"]).toBe("0.17.4");
     expect(catalog["@types/react"]).toBe("19.2.17");
     expect(catalog["drizzle-kit"]).toBe("0.31.10");

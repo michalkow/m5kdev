@@ -104,8 +104,10 @@ describe("scaffoldProject", () => {
     );
     const managedState = JSON.parse(managedStateSource) as {
       template: { features: string[]; context: Record<string, unknown> };
+      catalog: Record<string, string>;
     };
     expect(managedState.template.features).toEqual(["webapp"]);
+    expect(managedState.catalog).not.toHaveProperty("react-native-web");
     expect(managedState.template.context).not.toHaveProperty("betterAuthSecret");
     expect(managedStateSource).not.toContain("BETTER_AUTH_SECRET");
   });
@@ -131,8 +133,14 @@ describe("scaffoldProject", () => {
       const source = await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8");
       const state = JSON.parse(source) as {
         template: { features: string[]; context: Record<string, unknown> };
+        catalog: Record<string, string>;
       };
       expect(state.template.features).toEqual(features);
+      if (new Set<string>(features).has("expo")) {
+        expect(state.catalog).toHaveProperty("react-native-web", "^0.21.2");
+      } else {
+        expect(state.catalog).not.toHaveProperty("react-native-web");
+      }
       expect(state.template.context).not.toHaveProperty("betterAuthSecret");
       expect(source).not.toMatch(/betterAuthSecret|BETTER_AUTH_SECRET/);
     }

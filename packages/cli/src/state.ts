@@ -4,7 +4,11 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { type ConsumerCatalog, readCatalog } from "./catalog";
+import {
+  type ConsumerCatalog,
+  collectConsumerDependencyNamesFromManifests,
+  readCatalog,
+} from "./catalog";
 import { getTemplateFilePolicy } from "./template";
 import type {
   RenderedTemplateFile,
@@ -85,6 +89,18 @@ export function createManagedState(options: {
       catalog = readCatalog(file.content.toString("utf8"));
     }
   }
+
+  const renderedPackageManifests = options.renderedFiles
+    .filter(
+      (file) => file.relativePath === "package.json" || file.relativePath.endsWith("/package.json")
+    )
+    .map((file) => JSON.parse(file.content.toString("utf8")) as Record<string, unknown>);
+  const referencedCatalogNames = new Set(
+    collectConsumerDependencyNamesFromManifests(renderedPackageManifests)
+  );
+  catalog = Object.fromEntries(
+    Object.entries(catalog).filter(([name]) => referencedCatalogNames.has(name))
+  );
 
   return {
     schemaVersion: STATE_SCHEMA_VERSION,

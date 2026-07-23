@@ -48,6 +48,21 @@ describe("managed repository commands", () => {
     expect(await readManagedState(repoRoot)).toEqual(result.state);
   });
 
+  it("does not require catalog entries belonging only to disabled features", async () => {
+    await fs.rm(path.join(repoRoot, ".m5kdev.json"));
+    const workspacePath = path.join(repoRoot, "pnpm-workspace.yaml");
+    const workspace = await fs.readFile(workspacePath, "utf8");
+    await fs.writeFile(workspacePath, workspace.replace(/^ {2}react-native-web:.*\n/m, ""), "utf8");
+
+    const result = await initializeManagedRepo({ repoRoot, yes: true, force: false });
+    expect(result.initialized).toBe(true);
+    expect(result.state.template.features).toEqual(["webapp"]);
+    expect(result.state.catalog).not.toHaveProperty("react-native-web");
+    expect(result.report.diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "CATALOG_ENTRY_MISSING" })
+    );
+  });
+
   it("requires explicit confirmation and refuses an existing state without force", async () => {
     await expect(initializeManagedRepo({ repoRoot, yes: true, force: false })).rejects.toThrow(
       "already exists"

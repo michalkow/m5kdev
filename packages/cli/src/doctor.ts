@@ -152,6 +152,7 @@ export async function diagnoseManagedRepo(options: DoctorOptions): Promise<Diagn
             severity: "error",
             message: `${name} is ${actualCatalog[name]}, expected managed version ${expected}.`,
             path: "pnpm-workspace.yaml",
+            suggestion: `Set ${name} to ${expected} in pnpm-workspace.yaml.`,
           });
         }
       }

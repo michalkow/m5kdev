@@ -28,11 +28,12 @@ function readJson(filePath: string): Record<string, unknown> {
   return JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>;
 }
 
-export function collectConsumerDependencyNames(packageFiles: readonly string[]): string[] {
+export function collectConsumerDependencyNamesFromManifests(
+  manifests: readonly Record<string, unknown>[]
+): string[] {
   const names = new Set<string>();
 
-  for (const filePath of packageFiles) {
-    const manifest = readJson(filePath);
+  for (const manifest of manifests) {
     for (const field of DEPENDENCY_FIELDS) {
       const dependencies = manifest[field] as Record<string, string> | undefined;
       for (const [name, specifier] of Object.entries(dependencies ?? {})) {
@@ -47,6 +48,10 @@ export function collectConsumerDependencyNames(packageFiles: readonly string[]):
   }
 
   return [...names].sort((left, right) => left.localeCompare(right));
+}
+
+export function collectConsumerDependencyNames(packageFiles: readonly string[]): string[] {
+  return collectConsumerDependencyNamesFromManifests(packageFiles.map(readJson));
 }
 
 export function buildConsumerCatalog(options: {
