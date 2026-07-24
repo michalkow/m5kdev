@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.31.2
+
+### Patch Changes
+
+- span rename
+
 ## 0.31.1
 
 ### Patch Changes

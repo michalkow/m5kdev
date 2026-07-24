@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.31.2
+
+### Patch Changes
+
+- span rename
+- Updated dependencies
+  - @m5kdev/commons@0.31.2
+  - @m5kdev/frontend@0.31.2
+
 ## 0.31.1
 
 ### Patch Changes

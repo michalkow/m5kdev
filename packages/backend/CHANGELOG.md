@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.31.2
+
+### Patch Changes
+
+- span rename
+- Updated dependencies
+  - @m5kdev/commons@0.31.2
+  - @m5kdev/config@0.31.2
+
 ## 0.31.1
 
 ### Patch Changes
