@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.31.7
+
+### Patch Changes
+
+- ai fallbacks
+- Updated dependencies
+  - @m5kdev/commons@0.31.7
+
 ## 0.31.6
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.31.7
+
+### Patch Changes
+
+- ai fallbacks
+
 ## 0.31.6
 
 ### Patch Changes

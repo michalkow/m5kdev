@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.31.6
+
+### Patch Changes
+
+- ai fallbacks
+
 ## 0.31.5
 
 ### Patch Changes
