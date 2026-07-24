@@ -2,7 +2,7 @@ import type { Mastra } from "@mastra/core";
 import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { NoObjectGeneratedError } from "ai";
 import { z } from "zod";
-import { AIService } from "./ai.service";
+import { AIService, type AIServiceOptions } from "./ai.service";
 
 const mockGenerateText = jest.fn();
 
@@ -93,10 +93,10 @@ function createNoObjectGeneratedError(text?: string): NoObjectGeneratedError {
   });
 }
 
-function createService() {
+function createService(options?: AIServiceOptions) {
   const chat = jest.fn((model: string) => ({ model }));
   const openrouter = { chat } as unknown as OpenRouterProvider;
-  const service = new AIService<Mastra>({}, {}, { openrouter });
+  const service = new AIService<Mastra>({}, {}, { openrouter }, options);
 
   return { chat, service };
 }
@@ -106,7 +106,7 @@ describe("AIService model failure cache", () => {
     jest.clearAllMocks();
   });
 
-  it("deprioritizes a failed preferred text model on the next run", async () => {
+  it("does not demote a preferred text model after one failure", async () => {
     const { chat, service } = createService();
     mockGenerateText
       .mockRejectedValueOnce(new Error("provider failed"))
@@ -124,18 +124,86 @@ describe("AIService model failure cache", () => {
     expect(failed.isErr()).toBe(true);
     expect(succeeded.isOk()).toBe(true);
     expect(chat.mock.calls[0]?.[0]).toBe("custom/preferred");
-    expect(chat.mock.calls[1]?.[0]).not.toBe("custom/preferred");
+    expect(chat.mock.calls[1]?.[0]).toBe("custom/preferred");
+  });
+
+  it("skips five fresh calls after the second failure, then probes and recovers", async () => {
+    const { chat, service } = createService();
+    mockGenerateText
+      .mockRejectedValueOnce(new Error("first failure"))
+      .mockRejectedValueOnce(new Error("second failure"))
+      .mockResolvedValue(successfulTextResult);
+
+    await service.generateText({
+      preferredModels: ["custom/preferred"],
+      prompt: "failure-1",
+    });
+    await service.generateText({
+      preferredModels: ["custom/preferred"],
+      prompt: "failure-2",
+    });
+
+    for (let run = 1; run <= 6; run += 1) {
+      await service.generateText({
+        preferredModels: ["custom/preferred"],
+        prompt: `recovery-${run}`,
+      });
+    }
+    await service.generateText({
+      preferredModels: ["custom/preferred"],
+      prompt: "after-recovery",
+    });
+
+    expect(chat.mock.calls[0]?.[0]).toBe("custom/preferred");
+    expect(chat.mock.calls[1]?.[0]).toBe("custom/preferred");
+    expect(chat.mock.calls.slice(2, 7).every(([model]) => model !== "custom/preferred")).toBe(true);
+    expect(chat.mock.calls[7]?.[0]).toBe("custom/preferred");
+    expect(chat.mock.calls[8]?.[0]).toBe("custom/preferred");
+  });
+
+  it("exponentially increases probe intervals up to the configured cap", async () => {
+    const { chat, service } = createService({
+      modelFailureThreshold: 2,
+      modelFailureInitialSkipRuns: 1,
+      modelFailureMaxSkipRuns: 4,
+    });
+    const preferredRuns = new Set([1, 2, 4, 7, 12, 17]);
+
+    for (let run = 1; run <= 17; run += 1) {
+      if (preferredRuns.has(run)) {
+        mockGenerateText.mockRejectedValueOnce(new Error(`failure-${run}`));
+      } else {
+        mockGenerateText.mockResolvedValueOnce(successfulTextResult);
+      }
+    }
+
+    for (let run = 1; run <= 17; run += 1) {
+      await service.generateText({
+        preferredModels: ["custom/preferred"],
+        prompt: `run-${run}`,
+      });
+    }
+
+    const actualPreferredRuns = chat.mock.calls.flatMap(([model], index) =>
+      model === "custom/preferred" ? [index + 1] : []
+    );
+    expect(actualPreferredRuns).toEqual([...preferredRuns]);
   });
 
   it("keeps object and text failure histories independent", async () => {
     const { chat, service } = createService();
     mockGenerateText
-      .mockRejectedValueOnce(new Error("text provider failed"))
+      .mockRejectedValueOnce(new Error("first text failure"))
+      .mockRejectedValueOnce(new Error("second text failure"))
       .mockResolvedValueOnce(successfulObjectResult);
 
     await service.generateText({
       preferredModels: ["custom/preferred"],
-      prompt: "text",
+      prompt: "text-1",
+    });
+    await service.generateText({
+      preferredModels: ["custom/preferred"],
+      prompt: "text-2",
     });
     const objectResult = await service.generateObject({
       preferredModels: ["custom/preferred"],
@@ -144,29 +212,37 @@ describe("AIService model failure cache", () => {
     });
 
     expect(objectResult.isOk()).toBe(true);
-    expect(chat.mock.calls[1]?.[0]).toBe("custom/preferred");
+    expect(chat.mock.calls[2]?.[0]).toBe("custom/preferred");
   });
 
-  it("deprioritizes a preferred model after unusable object output", async () => {
+  it("deprioritizes a preferred model after two unusable object outputs", async () => {
     const { chat, service } = createService();
     mockGenerateText
       .mockRejectedValueOnce(createNoObjectGeneratedError('{"value":123}'))
+      .mockRejectedValueOnce(createNoObjectGeneratedError('{"value":456}'))
       .mockResolvedValueOnce(successfulObjectResult);
 
-    const failed = await service.generateObject({
+    const firstFailure = await service.generateObject({
       preferredModels: ["custom/preferred"],
       prompt: "first",
       schema: z.object({ value: z.string() }),
     });
-    await service.generateObject({
+    const secondFailure = await service.generateObject({
       preferredModels: ["custom/preferred"],
       prompt: "second",
       schema: z.object({ value: z.string() }),
     });
+    await service.generateObject({
+      preferredModels: ["custom/preferred"],
+      prompt: "third",
+      schema: z.object({ value: z.string() }),
+    });
 
-    expect(failed.isErr()).toBe(true);
+    expect(firstFailure.isErr()).toBe(true);
+    expect(secondFailure.isErr()).toBe(true);
     expect(chat.mock.calls[0]?.[0]).toBe("custom/preferred");
-    expect(chat.mock.calls[1]?.[0]).not.toBe("custom/preferred");
+    expect(chat.mock.calls[1]?.[0]).toBe("custom/preferred");
+    expect(chat.mock.calls[2]?.[0]).not.toBe("custom/preferred");
   });
 
   it("does not penalize object output recovered by local JSON repair", async () => {
@@ -191,9 +267,43 @@ describe("AIService model failure cache", () => {
     expect(chat.mock.calls[1]?.[0]).toBe("custom/preferred");
   });
 
+  it("does not advance recovery counters during retries", async () => {
+    const { chat, service } = createService({
+      modelFailureThreshold: 1,
+      modelFailureInitialSkipRuns: 2,
+      modelFailureMaxSkipRuns: 2,
+    });
+    mockGenerateText
+      .mockRejectedValueOnce(new Error("preferred failed"))
+      .mockResolvedValue(successfulTextResult);
+
+    await service.generateText({
+      preferredModels: ["custom/preferred"],
+      prompt: "initial",
+      retryAttempts: 1,
+    });
+    for (let run = 2; run <= 4; run += 1) {
+      await service.generateText({
+        preferredModels: ["custom/preferred"],
+        prompt: `fresh-${run}`,
+      });
+    }
+
+    expect(chat.mock.calls[0]?.[0]).toBe("custom/preferred");
+    expect(chat.mock.calls[1]?.[0]).not.toBe("custom/preferred");
+    expect(chat.mock.calls[2]?.[0]).not.toBe("custom/preferred");
+    expect(chat.mock.calls[3]?.[0]).not.toBe("custom/preferred");
+    expect(chat.mock.calls[4]?.[0]).toBe("custom/preferred");
+  });
+
   it("isolates failure caches between service instances", async () => {
-    const first = createService();
-    const second = createService();
+    const options = {
+      modelFailureThreshold: 1,
+      modelFailureInitialSkipRuns: 5,
+      modelFailureMaxSkipRuns: 5,
+    };
+    const first = createService(options);
+    const second = createService(options);
     mockGenerateText
       .mockRejectedValueOnce(new Error("provider failed"))
       .mockResolvedValueOnce(successfulTextResult);

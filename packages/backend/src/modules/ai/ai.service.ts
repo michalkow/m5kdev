@@ -111,7 +111,7 @@ export type AIServiceGenerateExtractedObjectParams<T extends ZodType> =
     extractor?: Omit<AIServiceExtractObjectParams<T>, "text">;
   };
 
-type AIServiceOptions = {
+export type AIServiceOptions = {
   defaultModelSuffix?: string;
   retryAttempts?: number;
   retryModels?: string[];
@@ -120,7 +120,23 @@ type AIServiceOptions = {
   removeMDash?: boolean;
   objectPreset?: PresetModels;
   textPreset?: PresetModels;
+  modelFailureThreshold?: number;
+  modelFailureInitialSkipRuns?: number;
+  modelFailureMaxSkipRuns?: number;
 };
+
+type ModelFailureState = {
+  failures: number;
+  nextProbeRun: number;
+};
+
+const DEFAULT_MODEL_FAILURE_THRESHOLD = 2;
+const DEFAULT_MODEL_FAILURE_INITIAL_SKIP_RUNS = 5;
+const DEFAULT_MODEL_FAILURE_MAX_SKIP_RUNS = 40;
+
+function positiveInteger(value: number | undefined, fallback: number): number {
+  return value === undefined || !Number.isFinite(value) ? fallback : Math.max(1, Math.floor(value));
+}
 
 export class AIService<MastraInstance extends Mastra> extends BaseService<
   { aiUsage?: AiUsageRepository; aiVector?: AiVectorRepository },
@@ -134,8 +150,10 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   openrouter?: OpenRouterProvider;
   replicate?: Replicate;
   options?: AIServiceOptions;
-  private readonly objectModelFailures = new Map<string, number>();
-  private readonly textModelFailures = new Map<string, number>();
+  private readonly objectModelFailures = new Map<string, ModelFailureState>();
+  private readonly textModelFailures = new Map<string, ModelFailureState>();
+  private objectGenerationRun = 0;
+  private textGenerationRun = 0;
 
   constructor(
     repositories: { aiUsage?: AiUsageRepository; aiVector?: AiVectorRepository },
@@ -156,9 +174,67 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     return this.mastra;
   }
 
-  private incrementModelFailure(model: string, isObject: boolean): void {
-    const failureCounts = isObject ? this.objectModelFailures : this.textModelFailures;
-    failureCounts.set(model, (failureCounts.get(model) ?? 0) + 1);
+  private getModelFailureOptions() {
+    const threshold = positiveInteger(
+      this.options?.modelFailureThreshold,
+      DEFAULT_MODEL_FAILURE_THRESHOLD
+    );
+    const initialSkipRuns = positiveInteger(
+      this.options?.modelFailureInitialSkipRuns,
+      DEFAULT_MODEL_FAILURE_INITIAL_SKIP_RUNS
+    );
+    const maxSkipRuns = Math.max(
+      initialSkipRuns,
+      positiveInteger(this.options?.modelFailureMaxSkipRuns, DEFAULT_MODEL_FAILURE_MAX_SKIP_RUNS)
+    );
+
+    return { threshold, initialSkipRuns, maxSkipRuns };
+  }
+
+  private advanceGenerationRun(isObject: boolean): number {
+    if (isObject) {
+      this.objectGenerationRun += 1;
+      return this.objectGenerationRun;
+    }
+
+    this.textGenerationRun += 1;
+    return this.textGenerationRun;
+  }
+
+  private getActiveModelFailures(
+    isObject: boolean,
+    generationRun: number
+  ): ReadonlyMap<string, number> {
+    const modelFailures = isObject ? this.objectModelFailures : this.textModelFailures;
+    const activeFailures = new Map<string, number>();
+
+    for (const [model, state] of modelFailures) {
+      if (state.nextProbeRun > generationRun) activeFailures.set(model, state.failures);
+    }
+
+    return activeFailures;
+  }
+
+  private incrementModelFailure(model: string, isObject: boolean, generationRun: number): void {
+    const modelFailures = isObject ? this.objectModelFailures : this.textModelFailures;
+    const failures = (modelFailures.get(model)?.failures ?? 0) + 1;
+    const { threshold, initialSkipRuns, maxSkipRuns } = this.getModelFailureOptions();
+
+    if (failures < threshold) {
+      modelFailures.set(model, { failures, nextProbeRun: generationRun });
+      return;
+    }
+
+    const skipRuns = Math.min(initialSkipRuns * 2 ** (failures - threshold), maxSkipRuns);
+    modelFailures.set(model, {
+      failures,
+      nextProbeRun: generationRun + skipRuns + 1,
+    });
+  }
+
+  private clearModelFailures(model: string, isObject: boolean): void {
+    const modelFailures = isObject ? this.objectModelFailures : this.textModelFailures;
+    modelFailures.delete(model);
   }
 
   prepareModel(
@@ -452,6 +528,15 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     params: AIServiceGenerateParams<T>
   ): ServerResultAsync<z.infer<T> | string> {
     const isObject = !!params.schema;
+    const generationRun = this.advanceGenerationRun(isObject);
+    return this.generateAttempt(params, isObject, generationRun);
+  }
+
+  private async generateAttempt<T extends ZodType>(
+    params: AIServiceGenerateParams<T>,
+    isObject: boolean,
+    generationRun: number
+  ): ServerResultAsync<z.infer<T> | string> {
     const resolvedParams = Object.assign({}, params, {
       modelSuffix: params.modelSuffix ?? this.options?.defaultModelSuffix,
       objectType: isObject ? (params.objectType ?? "object") : undefined,
@@ -511,7 +596,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       model: isRepairAttempt ? repairModel : model,
       defaultCategory: isObject ? "structured_output" : "chat",
       preferredModels: isRepairAttempt ? repairModels : preferredModels,
-      failureCounts: isObject ? this.objectModelFailures : this.textModelFailures,
+      failureCounts: this.getActiveModelFailures(isObject, generationRun),
     });
 
     const [resolvedModel] = resolvedModels;
@@ -575,12 +660,16 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       if (isObject && schema && safeSchema) {
         const parsed = schema.safeParse(result.output);
 
-        if (parsed.success) return ok(parsed.data);
+        if (parsed.success) {
+          this.clearModelFailures(resolvedModel, isObject);
+          return ok(parsed.data);
+        }
 
-        this.incrementModelFailure(resolvedModel, isObject);
+        this.incrementModelFailure(resolvedModel, isObject, generationRun);
 
         if (repairAttempts <= 0) {
-          if (retryAttempts > 0) return this.generate(getRetryParams());
+          if (retryAttempts > 0)
+            return this.generateAttempt(getRetryParams(), isObject, generationRun);
 
           // BAD_GATEWAY: provider output failing the schema is an upstream fault (PARSE_ERROR maps to HTTP 400)
           return this.error("BAD_GATEWAY", "AI: Strict object failed", {
@@ -588,15 +677,18 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
           });
         }
 
-        return this.generate(
+        return this.generateAttempt(
           getRepairParams(
             repairZodPrompt.compile({
               issues: JSON.stringify(parsed.error.issues),
               schema: JSON.stringify(result.output),
             })
-          )
+          ),
+          isObject,
+          generationRun
         );
       }
+      this.clearModelFailures(resolvedModel, isObject);
       this.logger.debug({
         label: `AI: ${isObject ? "object" : "text"} output`,
         output: result.output,
@@ -627,16 +719,20 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
             const repairedObject = safeParseJson(repairedText);
             const parsed = schema.safeParse(repairedObject);
 
-            if (parsed.success) return ok(parsed.data);
+            if (parsed.success) {
+              this.clearModelFailures(resolvedModel, isObject);
+              return ok(parsed.data);
+            }
             parseFailure = parsed.error;
           } catch (repairError) {
             parseFailure = repairError;
           }
 
-          this.incrementModelFailure(resolvedModel, isObject);
+          this.incrementModelFailure(resolvedModel, isObject, generationRun);
 
           if (repairAttempts <= 0) {
-            if (retryAttempts > 0) return this.generate(getRetryParams());
+            if (retryAttempts > 0)
+              return this.generateAttempt(getRetryParams(), isObject, generationRun);
 
             // BAD_GATEWAY: provider output failing the schema is an upstream fault (PARSE_ERROR maps to HTTP 400)
             return this.error("BAD_GATEWAY", "AI: Strict object from JSON repair failed", {
@@ -644,19 +740,22 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
             });
           }
 
-          return this.generate(
+          return this.generateAttempt(
             getRepairParams(
               repairJsonPrompt.compile({
                 text: error.text,
                 error: JSON.stringify(error.cause ?? "Unknown error"),
               })
-            )
+            ),
+            isObject,
+            generationRun
           );
         }
 
-        this.incrementModelFailure(resolvedModel, isObject);
+        this.incrementModelFailure(resolvedModel, isObject, generationRun);
 
-        if (retryAttempts > 0) return this.generate(getRetryParams());
+        if (retryAttempts > 0)
+          return this.generateAttempt(getRetryParams(), isObject, generationRun);
 
         return this.error(
           "BAD_GATEWAY",
@@ -667,9 +766,9 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         );
       }
 
-      this.incrementModelFailure(resolvedModel, isObject);
+      this.incrementModelFailure(resolvedModel, isObject, generationRun);
 
-      if (retryAttempts > 0) return this.generate(getRetryParams());
+      if (retryAttempts > 0) return this.generateAttempt(getRetryParams(), isObject, generationRun);
 
       return this.error(
         "BAD_GATEWAY",
