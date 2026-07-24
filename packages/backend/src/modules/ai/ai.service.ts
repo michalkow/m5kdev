@@ -60,6 +60,7 @@ export type AIServiceGenerateParams<T extends ZodType> = Omit<
   "model" | "prompt" | "messages" | "output"
 > &
   GenerateTextInput & {
+    modelSufix?: string;
     removeMDash?: boolean;
     prompt?: string;
     messages?: ModelMessage[];
@@ -155,6 +156,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   prepareModel(
     model: string,
     options?: {
+      modelSufix?: string;
       objectGeneration?: boolean;
       webSearch?: {
         maxResults?: number;
@@ -172,7 +174,8 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         max_results: options.webSearch.maxResults,
         search_prompt: options.webSearch.searchPrompt,
       });
-    return this.openrouter.chat(model, {
+    const modelName = options?.modelSufix ? `${model}${options.modelSufix}` : model;
+    return this.openrouter.chat(modelName, {
       usage: {
         include: true,
       },
@@ -470,6 +473,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       prompt,
       messages,
       repairAttempts,
+      modelSufix,
       initialRepairAttempts,
       originalContent,
       isRepairAttempt,
@@ -512,7 +516,10 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         `First attempt at ${isObject ? "object" : "text"} generation: (model: ${resolvedModel}, retry: ${initialRetryAttempts}/${retryAttempts}, repair: ${initialRepairAttempts}/${repairAttempts})`
       );
 
-    const preparedModel = this.prepareModel(resolvedModel, { objectGeneration: isObject });
+    const preparedModel = this.prepareModel(resolvedModel, {
+      objectGeneration: isObject,
+      modelSufix,
+    });
     const content = messages ? { messages } : prompt ? { prompt } : undefined;
 
     if (!content)

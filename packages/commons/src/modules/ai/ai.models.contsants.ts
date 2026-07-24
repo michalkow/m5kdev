@@ -5,7 +5,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "openai/gpt-5.6-sol-pro",
     inputCost: 5,
     outputCost: 30,
-    speed: 3.35,
+    speed: 1.26,
     quality: {
       structured_output: 9.72,
       creative: 8.85,
@@ -20,7 +20,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "openai/gpt-5.6-sol",
     inputCost: 5,
     outputCost: 30,
-    speed: 3.85,
+    speed: 5.11,
     quality: {
       structured_output: 9.66,
       creative: 8.78,
@@ -35,7 +35,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "anthropic/claude-fable-5",
     inputCost: 10,
     outputCost: 50,
-    speed: 3.15,
+    speed: 1.72,
     quality: {
       structured_output: 8.82,
       creative: 9.95,
@@ -50,7 +50,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "anthropic/claude-opus-4.8",
     inputCost: 5,
     outputCost: 25,
-    speed: 3.25,
+    speed: 4.04,
     quality: {
       structured_output: 9.18,
       creative: 9.72,
@@ -65,7 +65,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "anthropic/claude-opus-4.7",
     inputCost: 5,
     outputCost: 25,
-    speed: 3.15,
+    speed: 4.8,
     quality: {
       structured_output: 9.92,
       creative: 9.55,
@@ -80,7 +80,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "anthropic/claude-opus-4.6",
     inputCost: 5,
     outputCost: 25,
-    speed: 3.05,
+    speed: 4.73,
     quality: {
       structured_output: 9.58,
       creative: 9.42,
@@ -95,7 +95,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "anthropic/claude-sonnet-5",
     inputCost: 2,
     outputCost: 10,
-    speed: 6.85,
+    speed: 1,
     quality: {
       structured_output: 9.86,
       creative: 9.82,
@@ -110,7 +110,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "anthropic/claude-sonnet-4.6",
     inputCost: 3,
     outputCost: 15,
-    speed: 5.85,
+    speed: 1.98,
     quality: {
       structured_output: 9.62,
       creative: 9.15,
@@ -125,7 +125,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "anthropic/claude-haiku-4.5",
     inputCost: 1,
     outputCost: 5,
-    speed: 9.05,
+    speed: 8.35,
     quality: {
       structured_output: 8.35,
       creative: 8.15,
@@ -140,7 +140,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "google/gemini-3.1-pro-preview",
     inputCost: 2,
     outputCost: 12,
-    speed: 6.05,
+    speed: 4.81,
     quality: {
       structured_output: 9.99,
       creative: 9.35,
@@ -155,7 +155,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "google/gemini-3.5-flash",
     inputCost: 1.5,
     outputCost: 9,
-    speed: 8.72,
+    speed: 5.8,
     quality: {
       structured_output: 9.77,
       creative: 8.1,
@@ -170,7 +170,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "google/gemini-3-flash-preview",
     inputCost: 0.5,
     outputCost: 3,
-    speed: 8.9,
+    speed: 7.35,
     quality: {
       structured_output: 9.32,
       creative: 8.2,
@@ -185,7 +185,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "google/gemini-3.1-flash-lite-preview",
     inputCost: 0.25,
     outputCost: 1.5,
-    speed: 9.72,
+    speed: 7.84,
     quality: {
       structured_output: 8.55,
       creative: 7.35,
@@ -200,7 +200,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "google/gemini-2.5-pro",
     inputCost: 1.25,
     outputCost: 10,
-    speed: 5.9,
+    speed: 5.43,
     quality: {
       structured_output: 9.72,
       creative: 9.18,
@@ -215,7 +215,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "google/gemini-2.5-flash",
     inputCost: 0.3,
     outputCost: 2.5,
-    speed: 9.55,
+    speed: 10,
     quality: {
       structured_output: 9.84,
       creative: 7.92,
@@ -230,7 +230,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "openai/gpt-5.6-terra-pro",
     inputCost: 2.5,
     outputCost: 15,
-    speed: 5.25,
+    speed: 1.35,
     quality: {
       structured_output: 9.55,
       creative: 8.68,
@@ -245,7 +245,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "openai/gpt-5.6-terra",
     inputCost: 2.5,
     outputCost: 15,
-    speed: 5.95,
+    speed: 7.89,
     quality: {
       structured_output: 9.38,
       creative: 8.52,
@@ -260,7 +260,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "openai/gpt-5.6-luna-pro",
     inputCost: 1,
     outputCost: 6,
-    speed: 7.95,
+    speed: 1.48,
     quality: {
       structured_output: 9.25,
       creative: 7.92,
@@ -275,7 +275,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "openai/gpt-5.6-luna",
     inputCost: 1,
     outputCost: 6,
-    speed: 8.7,
+    speed: 6.63,
     quality: {
       structured_output: 9.18,
       creative: 7.82,
@@ -290,7 +290,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "openai/gpt-5.5",
     inputCost: 5,
     outputCost: 30,
-    speed: 4.8,
+    speed: 2.34,
     quality: {
       structured_output: 9.82,
       creative: 9.42,
@@ -305,7 +305,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "openai/gpt-5.4",
     inputCost: 2.5,
     outputCost: 15,
-    speed: 5.9,
+    speed: 1.45,
     quality: {
       structured_output: 10,
       creative: 9.25,
@@ -320,7 +320,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "openai/gpt-5.4-mini",
     inputCost: 0.75,
     outputCost: 4.5,
-    speed: 8.85,
+    speed: 6.38,
     quality: {
       structured_output: 9.5,
       creative: 8.22,
@@ -335,7 +335,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "openai/gpt-5",
     inputCost: 2.5,
     outputCost: 15,
-    speed: 4.95,
+    speed: 2.16,
     quality: {
       structured_output: 9.56,
       creative: 8.55,
@@ -350,7 +350,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "openai/gpt-5-mini",
     inputCost: 0.75,
     outputCost: 4.5,
-    speed: 8.7,
+    speed: 2.48,
     quality: {
       structured_output: 9.12,
       creative: 7.65,
@@ -365,7 +365,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "openai/gpt-4.1",
     inputCost: 2,
     outputCost: 8,
-    speed: 6.85,
+    speed: 8.8,
     quality: {
       structured_output: 9.62,
       creative: 8.45,
@@ -380,7 +380,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "z-ai/glm-5.2",
     inputCost: 0.8694,
     outputCost: 2.7324,
-    speed: 6.45,
+    speed: 6.41,
     quality: {
       structured_output: 9.8,
       creative: 8.78,
@@ -395,7 +395,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "z-ai/glm-5.1",
     inputCost: 0.966,
     outputCost: 3.036,
-    speed: 6.85,
+    speed: 3.33,
     quality: {
       structured_output: 9.96,
       creative: 8.72,
@@ -425,7 +425,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "z-ai/glm-4.7",
     inputCost: 0.4,
     outputCost: 1.75,
-    speed: 7.85,
+    speed: 5.26,
     quality: {
       structured_output: 9.88,
       creative: 7.68,
@@ -440,7 +440,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "moonshotai/kimi-k2.6",
     inputCost: 0.66,
     outputCost: 3.41,
-    speed: 6.95,
+    speed: 1.49,
     quality: {
       structured_output: 9.58,
       creative: 8.45,
@@ -455,7 +455,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "deepseek/deepseek-v4-pro",
     inputCost: 0.435,
     outputCost: 0.87,
-    speed: 7.05,
+    speed: 3.09,
     quality: {
       structured_output: 9.58,
       creative: 7.62,
@@ -470,7 +470,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "deepseek/deepseek-v4-flash",
     inputCost: 0.15,
     outputCost: 0.45,
-    speed: 9.25,
+    speed: 3.81,
     quality: {
       structured_output: 8.9,
       creative: 6.92,
@@ -500,7 +500,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "qwen/qwen3.6-plus",
     inputCost: 0.325,
     outputCost: 1.95,
-    speed: 7.95,
+    speed: 2.04,
     quality: {
       structured_output: 8.72,
       creative: 7.42,
@@ -515,7 +515,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "qwen/qwen3.5-35b-a3b",
     inputCost: 0.14,
     outputCost: 1,
-    speed: 8.95,
+    speed: 5.73,
     quality: {
       structured_output: 9.88,
       creative: 7.28,
@@ -530,7 +530,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "qwen/qwen3.5-27b",
     inputCost: 0.195,
     outputCost: 1.56,
-    speed: 8.15,
+    speed: 4.47,
     quality: {
       structured_output: 9.54,
       creative: 7.18,
@@ -545,7 +545,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "qwen/qwen3.5-122b-a10b",
     inputCost: 0.4,
     outputCost: 2.4,
-    speed: 6.25,
+    speed: 5.75,
     quality: {
       structured_output: 9.32,
       creative: 7.35,
@@ -560,7 +560,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "qwen/qwen3-235b-a22b",
     inputCost: 0.455,
     outputCost: 1.82,
-    speed: 5.15,
+    speed: 7.14,
     quality: {
       structured_output: 9.74,
       creative: 7.42,
@@ -575,7 +575,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "qwen/qwen3-235b-a22b-thinking-2507",
     inputCost: 0.1495,
     outputCost: 1.495,
-    speed: 5.35,
+    speed: 3.99,
     quality: {
       structured_output: 9.76,
       creative: 7.45,
@@ -590,7 +590,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "qwen/qwen3-30b-a3b-instruct-2507",
     inputCost: 0.1,
     outputCost: 0.3,
-    speed: 9.1,
+    speed: 8.76,
     quality: {
       structured_output: 8.82,
       creative: 6.35,
@@ -605,7 +605,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "qwen/qwen3-coder",
     inputCost: 0.08,
     outputCost: 0.28,
-    speed: 8.15,
+    speed: 7.14,
     quality: {
       structured_output: 8.55,
       creative: 5.65,
@@ -620,7 +620,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "x-ai/grok-4.3",
     inputCost: 1.25,
     outputCost: 2.5,
-    speed: 7.75,
+    speed: 5.12,
     quality: {
       structured_output: 8.3,
       creative: 7.72,
@@ -635,7 +635,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "inception/mercury-2",
     inputCost: 0.25,
     outputCost: 0.75,
-    speed: 10,
+    speed: 9.05,
     quality: {
       structured_output: 8.05,
       creative: 5.35,
@@ -650,7 +650,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "nvidia/nemotron-3-nano-30b-a3b",
     inputCost: 0.1,
     outputCost: 0.3,
-    speed: 9.05,
+    speed: 8.88,
     quality: {
       structured_output: 8.88,
       creative: 6.45,
@@ -695,7 +695,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "ibm/granite-4.0",
     inputCost: 0.1,
     outputCost: 0.3,
-    speed: 8.05,
+    speed: 7.07,
     quality: {
       structured_output: 9.08,
       creative: 5.82,
@@ -725,7 +725,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "mistralai/ministral-3-14b",
     inputCost: 0.2,
     outputCost: 0.8,
-    speed: 7.95,
+    speed: 7.87,
     quality: {
       structured_output: 7.78,
       creative: 6.35,
@@ -740,7 +740,7 @@ export const RANKED_MODELS: RankedModel[] = [
     id: "openai/gpt-oss-20b",
     inputCost: 0.1,
     outputCost: 0.4,
-    speed: 8.1,
+    speed: 6.98,
     quality: {
       structured_output: 7.32,
       creative: 6.25,
