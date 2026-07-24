@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.31.6
+
+### Patch Changes
+
+- suffix
+
 ## 0.31.5
 
 ### Patch Changes

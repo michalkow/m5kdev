@@ -60,7 +60,7 @@ export type AIServiceGenerateParams<T extends ZodType> = Omit<
   "model" | "prompt" | "messages" | "output"
 > &
   GenerateTextInput & {
-    modelSufix?: string;
+    modelSuffix?: string;
     removeMDash?: boolean;
     prompt?: string;
     messages?: ModelMessage[];
@@ -156,7 +156,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   prepareModel(
     model: string,
     options?: {
-      modelSufix?: string;
+      modelSuffix?: string;
       objectGeneration?: boolean;
       webSearch?: {
         maxResults?: number;
@@ -174,7 +174,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         max_results: options.webSearch.maxResults,
         search_prompt: options.webSearch.searchPrompt,
       });
-    const modelName = options?.modelSufix ? `${model}${options.modelSufix}` : model;
+    const modelName = options?.modelSuffix ? `${model}${options.modelSuffix}` : model;
     return this.openrouter.chat(modelName, {
       usage: {
         include: true,
@@ -473,7 +473,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       prompt,
       messages,
       repairAttempts,
-      modelSufix,
+      modelSuffix,
       initialRepairAttempts,
       originalContent,
       isRepairAttempt,
@@ -509,16 +509,16 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     if (!resolvedModel) return this.error("INTERNAL_SERVER_ERROR", "AI: No models not provided");
     if (initialRetryAttempts !== retryAttempts || initialRepairAttempts !== repairAttempts)
       this.logger.debug(
-        `Last attempt at ${isObject ? "object" : "text"} generation failed: (model: ${resolvedModel}, retry: ${initialRetryAttempts}/${retryAttempts}, repair: ${initialRepairAttempts}/${repairAttempts})`
+        `Last attempt at ${isObject ? "object" : "text"} generation failed: (model: ${resolvedModel}${modelSuffix ?? ""}, retry: ${initialRetryAttempts}/${retryAttempts}, repair: ${initialRepairAttempts}/${repairAttempts})`
       );
     else
       this.logger.debug(
-        `First attempt at ${isObject ? "object" : "text"} generation: (model: ${resolvedModel}, retry: ${initialRetryAttempts}/${retryAttempts}, repair: ${initialRepairAttempts}/${repairAttempts})`
+        `First attempt at ${isObject ? "object" : "text"} generation: (model: ${resolvedModel}${modelSuffix ?? ""}, retry: ${initialRetryAttempts}/${retryAttempts}, repair: ${initialRepairAttempts}/${repairAttempts})`
       );
 
     const preparedModel = this.prepareModel(resolvedModel, {
       objectGeneration: isObject,
-      modelSufix,
+      modelSuffix,
     });
     const content = messages ? { messages } : prompt ? { prompt } : undefined;
 
