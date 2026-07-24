@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.31.4
+
+### Patch Changes
+
+- extract object
+
 ## 0.31.2
 
 ### Patch Changes
