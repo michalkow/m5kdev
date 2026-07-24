@@ -711,9 +711,10 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         initialRepairAttempts,
         repairModels,
         repairModel,
+        messages,
         ...rest
       } = params;
-      const textResult = await this.generateText({ ...rest, removeMDash, prompt });
+      const textResult = await this.generateText({ ...rest, removeMDash, prompt, messages });
       if (textResult.isErr()) return err(textResult.error);
 
       return this.extractObject({

@@ -184,7 +184,7 @@ export class WorkflowRegistry {
         queueName,
         async (job) => {
           const entry = handlers.get(job.name);
-          this.logger.debug({ job }, `Processing job: ${job.name}`);
+          this.logger.debug(`Processing job: ${job.name}`);
           if (!entry) {
             // scheduler-produced jobs with no handler (version skew, removed
             // crons) would otherwise fire forever — self-heal instead of crashlooping
