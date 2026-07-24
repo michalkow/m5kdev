@@ -35,6 +35,7 @@ export type AIModuleConfig<MastraInstance extends Mastra, Namespace extends stri
     removeMDash?: boolean;
     objectPreset?: PresetModels;
     textPreset?: PresetModels;
+    defaultModelSuffix?: string;
   };
   /**
    * Either a preconfigured store (caller owns its lifecycle) or a config the

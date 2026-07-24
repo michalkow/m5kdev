@@ -112,6 +112,7 @@ export type AIServiceGenerateExtractedObjectParams<T extends ZodType> =
   };
 
 type AIServiceOptions = {
+  defaultModelSuffix?: string;
   retryAttempts?: number;
   retryModels?: string[];
   repairAttempts?: number;
@@ -452,6 +453,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   ): ServerResultAsync<z.infer<T> | string> {
     const isObject = !!params.schema;
     const resolvedParams = Object.assign({}, params, {
+      modelSuffix: params.modelSuffix ?? this.options?.defaultModelSuffix,
       objectType: isObject ? (params.objectType ?? "object") : undefined,
       removeMDash: !isObject ? (params.removeMDash ?? this.options?.removeMDash ?? true) : false,
       presetModels:
