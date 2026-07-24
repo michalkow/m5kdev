@@ -26,6 +26,7 @@ import { withSpan } from "../../utils/telemetry";
 import type { RequiredServiceActor } from "../base/base.actor";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
+import type { Prompt } from "./ai.prompt";
 import { extractObjectPrompt, repairJsonPrompt, repairZodPrompt } from "./ai.prompts";
 import type { AiUsageRepository, AiUsageRow, AiVectorRepository } from "./ai.repository";
 import { type PresetModels, resolveModels, resolveRetryModels } from "./ai.utils";
@@ -40,7 +41,7 @@ type MastraAgentObjectGeneration<T extends ZodType> = MastraAgentGenerateOptions
   messages?: MessageListInput;
   extractor?: {
     model?: string;
-    prompt?: string;
+    prompt?: Prompt<{ text: string }>;
   };
 };
 type GenerateTextParams = Parameters<typeof generateText>[0];
@@ -90,25 +91,24 @@ export type AIServiceGenerateTextParams = Omit<
   | "repairModels"
   | "repairModel"
 >;
+
 export type AIServiceGenerateObjectParams<T extends ZodType> = Omit<
   AIServiceGenerateParams<T>,
   "removeMDash"
 >;
 
-export type AIServiceGenerateExtractedObjectParams<T extends ZodType> =
-  AIServiceGenerateObjectParams<T> & {
-    extractor?: {
-      model?: string;
-      prompt?: string;
-    };
-  };
-
-export type AIServiceExtractObjectParams<T extends ZodType> = {
-  model?: string;
-  prompt?: string;
+export type AIServiceExtractObjectParams<T extends ZodType> = Omit<
+  AIServiceGenerateParams<T>,
+  "prompt"
+> & {
   text: string;
-  schema: T;
+  prompt?: Prompt<{ text: string }>;
 };
+
+export type AIServiceGenerateExtractedObjectParams<T extends ZodType> =
+  AIServiceGenerateParams<T> & {
+    extractor?: Omit<AIServiceExtractObjectParams<T>, "text">;
+  };
 
 type AIServiceOptions = {
   retryAttempts?: number;
@@ -322,19 +322,9 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     options: MastraAgentObjectGeneration<T>,
     ctx?: AIServiceActorContext & { model?: string }
   ): ServerResultAsync<z.infer<T>> {
-    const { schema, extractor, ...rest } = options;
-    const text = await this.agentText(agent, rest, ctx);
-    if (text.isErr())
-      return this.error("SERVICE_UNAVAILABLE", "AI: Agent object failed", { cause: text.error });
-
-    const result = await this.extractObject({
-      ...extractor,
-      schema,
-      text: text.value,
-    });
-    if (result.isErr())
-      return this.error("SERVICE_UNAVAILABLE", "AI: Agent object failed", { cause: result.error });
-    return ok(result.value);
+    const result = await this.agentObjectResult(agent, options, ctx);
+    if (result.isErr()) return err(result.error);
+    return ok(result.value.object);
   }
 
   async agentObjectResult<T extends ZodType<any>>(
@@ -699,23 +689,46 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     });
   }
 
-  async extractObject<T extends ZodType>({
-    model,
-    prompt = extractObjectPrompt,
-    text,
-    schema,
-  }: AIServiceExtractObjectParams<T>): ServerResultAsync<z.infer<T>> {
-    const resolvedModels = resolveModels({ model, defaultCategory: "structured_output" });
-    const [resolvedModel] = resolvedModels;
-    if (!resolvedModel) return this.error("INTERNAL_SERVER_ERROR", "AI: No models not provided");
-    const result = await this.generateObject({
-      schema,
-      prompt: prompt.replaceAll("{{text}}", text),
-      model: resolvedModel,
-      temperature: 0,
+  async extractObject<T extends ZodType>(
+    params: AIServiceExtractObjectParams<T>
+  ): ServerResultAsync<z.infer<T>> {
+    const { text, prompt = extractObjectPrompt, ...rest } = params;
+    return this.generateObject({ ...rest, prompt: prompt.compile({ text }) });
+  }
+
+  async generateExtractedObject<T extends ZodType>(
+    params: AIServiceGenerateExtractedObjectParams<T>
+  ): ServerResultAsync<z.infer<T>> {
+    return withSpan({ name: "service.ai.generateExtractedObject" }, async () => {
+      const {
+        extractor,
+        removeMDash,
+        schema,
+        objectType,
+        safeSchema,
+        prompt,
+        repairAttempts,
+        initialRepairAttempts,
+        repairModels,
+        repairModel,
+        ...rest
+      } = params;
+      const textResult = await this.generateText({ ...rest, removeMDash, prompt });
+      if (textResult.isErr()) return err(textResult.error);
+
+      return this.extractObject({
+        schema,
+        objectType,
+        safeSchema,
+        repairAttempts,
+        initialRepairAttempts,
+        repairModels,
+        repairModel,
+        ...rest,
+        ...extractor,
+        text: textResult.value,
+      });
     });
-    if (result.isErr()) return err(result.error);
-    return ok(result.value);
   }
 
   // #endregion: AI SDK

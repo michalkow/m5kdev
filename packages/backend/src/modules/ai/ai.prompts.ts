@@ -31,10 +31,12 @@ The returned JSON didn't follow all the constraints for the Zod schema. Below ar
 {{{issues}}}
 `);
 
-export const extractObjectPrompt = `
+export const extractObjectPrompt = new Prompt<{
+  text: string;
+}>(`
 You are a JSON extractor expert. You are given a text response of an AI model that contains all the data you need to create a JSON response. Extract the data from the text and return the JSON response according to the provided schema.
 
 <text>
 {{text}}
 </text>
-`;
+`);
