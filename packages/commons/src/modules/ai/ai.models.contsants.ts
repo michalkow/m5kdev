@@ -1,6 +1,6 @@
 import type { RankedModel } from "./ai.types";
 
-export const  : RankedModel[] = [
+export const RANKED_MODELS: RankedModel[] = [
   {
     id: "openai/gpt-5.6-sol-pro",
     inputCost: 5,
