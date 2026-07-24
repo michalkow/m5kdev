@@ -443,7 +443,6 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     const isObject = !!params.schema;
     const resolvedParams = Object.assign({}, params, {
       objectType: isObject ? (params.objectType ?? "object") : undefined,
-      temperature: isObject ? (params.temperature ?? 0) : params.temperature,
       removeMDash: !isObject ? (params.removeMDash ?? this.options?.removeMDash ?? true) : false,
       presetModels:
         params.presetModels ?? (isObject ? this.options?.objectPreset : this.options?.textPreset),
