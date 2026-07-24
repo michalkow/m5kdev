@@ -1,0 +1,214 @@
+---
+globs: apps/**/server/src/modules/**/*.prompt.ts
+alwaysApply: false
+---
+
+# Module Prompt File Style Guide
+
+Conventions for complex AI prompt modules. A prompt file owns the complete
+configuration for one AI operation and exposes it through one factory
+function. Callers should not need to know how the prompt, schema, model
+settings, or extraction strategy are assembled.
+
+## File Location
+
+```text
+apps/<app>/server/src/modules/<module>/<use-case>.prompt.ts
+```
+
+Use one file per AI use case. If a module has unrelated operations, split them
+into separate prompt files instead of exporting multiple factories from one
+file.
+
+## Core Contract
+
+- The only exported runtime value is one named factory function:
+  `create<UseCase>Prompt(...)`.
+- The factory is synchronous and returns the options object for exactly one of:
+  `AIService.agentText`, `AIService.agentObject`, `AIService.generateText`, or
+  `AIService.generateObject`.
+- The consumer passes the returned object directly to the chosen AI method.
+- Keep prompt templates, Zod schemas, lookup tables, rules, and helper
+  functions private to the file.
+- Export types only when another module genuinely needs them; do not export
+  internal prompt-building details.
+- Do not call `AIService` from a prompt file. Prompt modules build parameters;
+  services own execution, error handling, and orchestration.
+
+For agent methods, the factory returns the method's second argument. The agent
+name remains explicit at the service call site.
+
+```ts
+await this.service.ai.agentText("researcher", createResearchPrompt(input));
+await this.service.ai.agentObject("classifier", createClassificationPrompt(input));
+await this.service.ai.generateText(createSummaryPrompt(input));
+await this.service.ai.generateObject(createEntryPrompt(input));
+```
+
+Do not spread extra prompt configuration into the result at the call site. If
+an option is part of the use case, accept the relevant domain input and decide
+the option inside the factory.
+
+## Type the Returned Parameters
+
+Use the public parameter types for direct generation:
+
+```ts
+import type {
+  AIServiceGenerateObjectParams,
+  AIServiceGenerateTextParams,
+} from "@m5kdev/backend/modules/ai/ai.service";
+```
+
+For agent options, derive the second-argument type from `AIService`:
+
+```ts
+import type { AIService } from "@m5kdev/backend/modules/ai/ai.service";
+
+type AgentTextPromptOptions = Parameters<AIService["agentText"]>[1];
+type AgentObjectPromptOptions = Parameters<AIService["agentObject"]>[1];
+```
+
+Prefer an explicit return type. When `satisfies` preserves a concrete schema
+more accurately, return the object with `satisfies` instead.
+
+## Canonical Object Prompt
+
+```ts
+import { Prompt } from "@m5kdev/backend/modules/ai/ai.prompt";
+import type { AIServiceGenerateObjectParams } from "@m5kdev/backend/modules/ai/ai.service";
+import { z } from "zod";
+
+type CreateEntryPromptParams = {
+  transcript: string;
+  category: "diary" | "review";
+};
+
+const entrySchema = z.object({
+  title: z.string().describe("A short entry title"),
+  content: z.string().describe("The formatted entry in Markdown"),
+});
+
+const categoryInstructions = {
+  diary: "Preserve the personal, chronological voice.",
+  review: "Organize the subject, impressions, and overall opinion.",
+} as const;
+
+const entryPrompt = new Prompt<{
+  transcript: string;
+  instructions: string;
+}>(`
+<instructions>
+{{instructions}}
+</instructions>
+
+<transcript>
+{{transcript}}
+</transcript>
+`);
+
+export function createEntryPrompt(
+  params: CreateEntryPromptParams
+): AIServiceGenerateObjectParams<typeof entrySchema> {
+  return {
+    schema: entrySchema,
+    presetModels: {
+      category: "creative",
+      tokenProfile: "lg",
+    },
+    prompt: entryPrompt.compile({
+      transcript: params.transcript,
+      instructions: categoryInstructions[params.category],
+    }),
+  };
+}
+```
+
+The service consumes it without reconstructing or overriding its options:
+
+```ts
+return this.service.ai.generateObject(createEntryPrompt(input));
+```
+
+## Text and Agent Variants
+
+### `generateText`
+
+```ts
+export function createSummaryPrompt(
+  params: SummaryPromptParams
+): AIServiceGenerateTextParams {
+  return {
+    prompt: summaryPrompt.compile(params),
+    presetModels: { category: "chat", tokenProfile: "md" },
+  };
+}
+```
+
+### `agentText`
+
+```ts
+type AgentTextPromptOptions = Parameters<AIService["agentText"]>[1];
+
+export function createResearchPrompt(
+  params: ResearchPromptParams
+): AgentTextPromptOptions {
+  return {
+    prompt: researchPrompt.compile(params),
+  };
+}
+```
+
+### `agentObject`
+
+```ts
+type AgentObjectPromptOptions = Parameters<AIService["agentObject"]>[1];
+
+export function createClassificationPrompt(params: ClassificationPromptParams) {
+  return {
+    schema: classificationSchema,
+    prompt: classificationPrompt.compile(params),
+  } satisfies AgentObjectPromptOptions;
+}
+```
+
+## Complex Prompt Composition
+
+Complexity belongs behind the factory boundary:
+
+- Define reusable `Prompt<Context>` instances at module scope and call
+  `.compile(...)` only inside the factory.
+- Use typed lookup maps for category-, locale-, or mode-specific instructions.
+- Select dynamic schemas and `safeSchema` inside the factory.
+- Keep static rules in named constants rather than one enormous interpolated
+  template.
+- Put model preferences, retry settings, token profiles, and other generation
+  options in the returned object.
+- Return either `prompt` or `messages` according to the target method's type;
+  do not build both.
+- Accept domain data such as transcript, category, or locale. Do not accept an
+  `AIService`, repository, request context, or other execution dependency.
+- Keep the factory deterministic and free of I/O, logging, mutation, and
+  environment reads.
+
+## Do Not
+
+```ts
+// Wrong: exports raw building blocks and makes every caller assemble options.
+export const prompt = new Prompt(...);
+export const schema = z.object(...);
+
+// Wrong: returns only a compiled string instead of method parameters.
+export function createEntryPrompt(input: Input) {
+  return prompt.compile(input);
+}
+
+// Wrong: executes the AI operation in the prompt module.
+export async function createEntryPrompt(ai: AIService, input: Input) {
+  return ai.generateObject({ schema, prompt: prompt.compile(input) });
+}
+
+// Wrong: multiple public prompt factories in one use-case file.
+export function createEntryPrompt(...) { ... }
+export function createTitlePrompt(...) { ... }
+```
