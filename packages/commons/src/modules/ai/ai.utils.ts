@@ -130,6 +130,49 @@ function clampScore(value: number): number {
   return Math.max(1, Math.min(10, value));
 }
 
+function getMedian(values: number[]): number | undefined {
+  if (values.length === 0) return undefined;
+
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+
+  return sorted.length % 2 === 0
+    ? ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2
+    : sorted[middle];
+}
+
+export function addSpeedScores<Model extends RankedModel>(
+  models: Model[]
+): Array<Model & { speedScore: number }> {
+  const measuredResponseTimes = models
+    .map((model) => model.responseTimeSeconds)
+    .filter(
+      (responseTime): responseTime is number =>
+        responseTime !== undefined && Number.isFinite(responseTime) && responseTime > 0
+    );
+  const medianResponseTime = getMedian(measuredResponseTimes);
+
+  if (medianResponseTime === undefined) {
+    return models.map((model) => ({ ...model, speedScore: 10 }));
+  }
+
+  const fastestResponseTime = Math.min(...measuredResponseTimes);
+
+  return models.map((model) => {
+    const responseTime =
+      model.responseTimeSeconds !== undefined &&
+      Number.isFinite(model.responseTimeSeconds) &&
+      model.responseTimeSeconds > 0
+        ? model.responseTimeSeconds
+        : medianResponseTime;
+
+    return {
+      ...model,
+      speedScore: 10 * (fastestResponseTime / responseTime),
+    };
+  });
+}
+
 function shapeScoreByWeight(value: number, weight: number, maxWeight: number): number {
   const score = clampScore(value);
   const normalized = score / 10;
@@ -144,13 +187,26 @@ function shapeScoreByWeight(value: number, weight: number, maxWeight: number): n
   return compressed + (expanded - compressed) * importance;
 }
 
+function shapeSpeedScoreByWeight(value: number, weight: number, maxWeight: number): number {
+  if (maxWeight <= 0 || weight <= 0) {
+    return 0;
+  }
+
+  const normalized = Math.max(0, Math.min(10, value)) / 10;
+  const importance = (weight / maxWeight) ** 2;
+
+  return (1 - (1 - normalized) * importance) * 10;
+}
+
 export function rankModels(
   models: RankedModel[],
   profile: TokenProfile,
   category: Category,
   weights: [number, number, number]
 ) {
-  const scoredModels = addPriceScores(models, profile, weightsToPriceSensitivity(weights));
+  const scoredModels = addSpeedScores(
+    addPriceScores(models, profile, weightsToPriceSensitivity(weights))
+  );
 
   const [qualityWeight, priceWeight, speedWeight] = weights;
   const maxWeight = Math.max(qualityWeight, priceWeight, speedWeight);
@@ -161,7 +217,7 @@ export function rankModels(
 
       const priceScore = shapeScoreByWeight(model.price, priceWeight, maxWeight);
 
-      const speedScore = shapeScoreByWeight(model.speed, speedWeight, maxWeight);
+      const speedScore = shapeSpeedScoreByWeight(model.speedScore, speedWeight, maxWeight);
 
       return {
         ...model,
