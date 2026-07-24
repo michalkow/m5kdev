@@ -133,6 +133,8 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   openrouter?: OpenRouterProvider;
   replicate?: Replicate;
   options?: AIServiceOptions;
+  private readonly objectModelFailures = new Map<string, number>();
+  private readonly textModelFailures = new Map<string, number>();
 
   constructor(
     repositories: { aiUsage?: AiUsageRepository; aiVector?: AiVectorRepository },
@@ -151,6 +153,11 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   getMastra(): MastraInstance {
     if (!this.mastra) throw new Error("Mastra is not available");
     return this.mastra;
+  }
+
+  private incrementModelFailure(model: string, isObject: boolean): void {
+    const failureCounts = isObject ? this.objectModelFailures : this.textModelFailures;
+    failureCounts.set(model, (failureCounts.get(model) ?? 0) + 1);
   }
 
   prepareModel(
@@ -502,6 +509,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       model: isRepairAttempt ? repairModel : model,
       defaultCategory: isObject ? "structured_output" : "chat",
       preferredModels: isRepairAttempt ? repairModels : preferredModels,
+      failureCounts: isObject ? this.objectModelFailures : this.textModelFailures,
     });
 
     const [resolvedModel] = resolvedModels;
@@ -567,6 +575,8 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
 
         if (parsed.success) return ok(parsed.data);
 
+        this.incrementModelFailure(resolvedModel, isObject);
+
         if (repairAttempts <= 0) {
           if (retryAttempts > 0) return this.generate(getRetryParams());
 
@@ -608,18 +618,27 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         });
 
         if (error.text) {
-          const repairedText = jsonrepair(error.text);
-          const repairedObject = safeParseJson(repairedText);
-          const parsed = schema.safeParse(repairedObject);
+          let parseFailure: unknown = error.cause ?? error;
 
-          if (parsed.success) return ok(parsed.data);
+          try {
+            const repairedText = jsonrepair(error.text);
+            const repairedObject = safeParseJson(repairedText);
+            const parsed = schema.safeParse(repairedObject);
+
+            if (parsed.success) return ok(parsed.data);
+            parseFailure = parsed.error;
+          } catch (repairError) {
+            parseFailure = repairError;
+          }
+
+          this.incrementModelFailure(resolvedModel, isObject);
 
           if (repairAttempts <= 0) {
             if (retryAttempts > 0) return this.generate(getRetryParams());
 
             // BAD_GATEWAY: provider output failing the schema is an upstream fault (PARSE_ERROR maps to HTTP 400)
             return this.error("BAD_GATEWAY", "AI: Strict object from JSON repair failed", {
-              cause: parsed.error,
+              cause: parseFailure,
             });
           }
 
@@ -633,6 +652,8 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
           );
         }
 
+        this.incrementModelFailure(resolvedModel, isObject);
+
         if (retryAttempts > 0) return this.generate(getRetryParams());
 
         return this.error(
@@ -643,6 +664,8 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
           }
         );
       }
+
+      this.incrementModelFailure(resolvedModel, isObject);
 
       if (retryAttempts > 0) return this.generate(getRetryParams());
 

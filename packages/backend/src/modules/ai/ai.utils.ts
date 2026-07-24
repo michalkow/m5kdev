@@ -12,14 +12,38 @@ export type PresetModels = {
   tokenProfile?: TokenProfile | number | TokenSize;
 };
 
+function sortModelsByFailures(
+  models: string[],
+  failureCounts?: ReadonlyMap<string, number>
+): string[] {
+  if (!failureCounts) return models;
+
+  return models
+    .map((model, index) => ({
+      failures: failureCounts.get(model) ?? 0,
+      index,
+      model,
+    }))
+    .sort((a, b) => a.failures - b.failures || a.index - b.index)
+    .map(({ model }) => model);
+}
+
 export function resolveModels(params: {
   models?: string[];
   presetModels?: PresetModels;
   preferredModels?: string[];
   model?: string;
   defaultCategory?: Category;
+  failureCounts?: ReadonlyMap<string, number>;
 }): string[] {
-  const { models, presetModels, model, preferredModels, defaultCategory = "chat" } = params;
+  const {
+    models,
+    presetModels,
+    model,
+    preferredModels,
+    defaultCategory = "chat",
+    failureCounts,
+  } = params;
   if (models) return models;
   if (presetModels) {
     const recommendedModels = getSortedRecommendedModelIds(
@@ -27,13 +51,17 @@ export function resolveModels(params: {
       presetModels.weights,
       presetModels.tokenProfile
     );
-    if (preferredModels) return Array.from(new Set([...preferredModels, ...recommendedModels]));
-    return recommendedModels;
+    const resolvedModels = preferredModels
+      ? Array.from(new Set([...preferredModels, ...recommendedModels]))
+      : recommendedModels;
+    return sortModelsByFailures(resolvedModels, failureCounts);
   }
   if (model) return [model];
   const defaultModels = getSortedRecommendedModelIds(defaultCategory);
-  if (preferredModels) return Array.from(new Set([...preferredModels, ...defaultModels]));
-  return defaultModels;
+  const resolvedModels = preferredModels
+    ? Array.from(new Set([...preferredModels, ...defaultModels]))
+    : defaultModels;
+  return sortModelsByFailures(resolvedModels, failureCounts);
 }
 
 export function resolveRetryModels(retryModels: string[]): string[] {
