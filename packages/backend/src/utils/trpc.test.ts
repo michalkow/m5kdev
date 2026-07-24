@@ -122,6 +122,7 @@ describe("trpc auth helpers", () => {
       teamId: "team-1",
       teamRole: "manager",
     });
+    expect(ctx.req).toEqual({ headers: {} });
   });
 
   it("throws FORBIDDEN when a broader actor scope is required than the session allows", () => {

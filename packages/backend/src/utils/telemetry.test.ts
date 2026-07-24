@@ -1,9 +1,14 @@
+import type { IncomingMessage } from "node:http";
 import { InMemorySpanExporter } from "@opentelemetry/sdk-trace-base";
 import { registerTestTracerProvider, shutdownTestTracerProvider } from "../test/stubs/otel";
 import {
   actorTelemetryFromJobData,
   actorTelemetryFromRequestContext,
+  applyTrpcAttributesOnHttpSpan,
+  attachTrpcPathToRequest,
+  formatTrpcHttpSpanName,
   getActorTelemetrySpanAttributes,
+  getTrpcPathsFromRequest,
   runWithActorTelemetry,
   withSpan,
 } from "./telemetry";
@@ -58,6 +63,97 @@ describe("actorTelemetryFromJobData", () => {
   it("ignores invalid shapes", () => {
     expect(actorTelemetryFromJobData(null)).toEqual({});
     expect(actorTelemetryFromJobData({ userId: 1 })).toEqual({});
+  });
+});
+
+describe("formatTrpcHttpSpanName", () => {
+  it("formats a single procedure as trpc.router.procedure", () => {
+    expect(formatTrpcHttpSpanName(["auth.getPreferences"])).toBe("trpc.auth.getPreferences");
+  });
+
+  it("joins batch procedure paths", () => {
+    expect(formatTrpcHttpSpanName(["auth.getPreferences", "billing.listInvoices"])).toBe(
+      "trpc.auth.getPreferences,billing.listInvoices"
+    );
+  });
+
+  it("returns undefined for empty paths", () => {
+    expect(formatTrpcHttpSpanName([])).toBeUndefined();
+  });
+});
+
+describe("attachTrpcPathToRequest", () => {
+  it("collects unique procedure paths on the request", () => {
+    const req = {} as IncomingMessage;
+    attachTrpcPathToRequest(req, "auth.getPreferences");
+    attachTrpcPathToRequest(req, "auth.getPreferences");
+    attachTrpcPathToRequest(req, "billing.listInvoices");
+    expect(getTrpcPathsFromRequest(req)).toEqual([
+      "auth.getPreferences",
+      "billing.listInvoices",
+    ]);
+  });
+
+  it("no-ops without a request or path", () => {
+    expect(() => attachTrpcPathToRequest(undefined, "auth.getPreferences")).not.toThrow();
+    const req = {} as IncomingMessage;
+    attachTrpcPathToRequest(req, undefined);
+    expect(getTrpcPathsFromRequest(req)).toEqual([]);
+  });
+});
+
+describe("applyTrpcAttributesOnHttpSpan", () => {
+  let exporter: InMemorySpanExporter;
+  let provider: ReturnType<typeof registerTestTracerProvider>;
+
+  beforeEach(() => {
+    exporter = new InMemorySpanExporter();
+    provider = registerTestTracerProvider(exporter);
+  });
+
+  afterEach(async () => {
+    await shutdownTestTracerProvider(provider, exporter);
+  });
+
+  it("renames the HTTP span to trpc.router.procedure", async () => {
+    const req = {} as IncomingMessage;
+    attachTrpcPathToRequest(req, "auth.getPreferences");
+
+    await withSpan({ name: "POST /trpc" }, async (span) => {
+      applyTrpcAttributesOnHttpSpan(span, req);
+    });
+
+    const spans = exporter.getFinishedSpans();
+    expect(spans).toHaveLength(1);
+    expect(spans[0]?.name).toBe("trpc.auth.getPreferences");
+    expect(spans[0]?.attributes["rpc.system"]).toBe("trpc");
+    expect(spans[0]?.attributes["rpc.method"]).toBe("auth.getPreferences");
+    expect(spans[0]?.attributes["trpc.path"]).toBe("auth.getPreferences");
+  });
+
+  it("marks batch requests", async () => {
+    const req = {} as IncomingMessage;
+    attachTrpcPathToRequest(req, "auth.getPreferences");
+    attachTrpcPathToRequest(req, "billing.listInvoices");
+
+    await withSpan({ name: "POST /trpc" }, async (span) => {
+      applyTrpcAttributesOnHttpSpan(span, req);
+    });
+
+    const spans = exporter.getFinishedSpans();
+    expect(spans[0]?.name).toBe("trpc.auth.getPreferences,billing.listInvoices");
+    expect(spans[0]?.attributes["rpc.method"]).toBe("batch");
+    expect(spans[0]?.attributes["trpc.batch"]).toBe(true);
+  });
+
+  it("leaves non-tRPC requests unchanged", async () => {
+    await withSpan({ name: "GET /health" }, async (span) => {
+      applyTrpcAttributesOnHttpSpan(span, {} as IncomingMessage);
+    });
+
+    const spans = exporter.getFinishedSpans();
+    expect(spans[0]?.name).toBe("GET /health");
+    expect(spans[0]?.attributes["rpc.system"]).toBeUndefined();
   });
 });
 

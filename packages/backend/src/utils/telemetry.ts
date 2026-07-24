@@ -1,10 +1,16 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import type { IncomingMessage } from "node:http";
 import { type Span, SpanStatusCode, type Tracer, trace } from "@opentelemetry/api";
 import type { Result } from "neverthrow";
 import type { ServerError } from "./errors";
 
 const TRACER_NAME = "@m5kdev/backend";
 const MAX_SPAN_VALUE_LENGTH = 4096;
+const TRPC_PATHS_KEY = Symbol.for("@m5kdev/backend.trpc.paths");
+
+type RequestWithTrpcPaths = IncomingMessage & {
+  [TRPC_PATHS_KEY]?: string[];
+};
 
 export interface ActorTelemetry {
   userId?: string;
@@ -75,6 +81,64 @@ export function runWithActorTelemetry<T>(attrs: ActorTelemetry, callback: () => 
 }
 export function getTracer(): Tracer {
   return trace.getTracer(TRACER_NAME);
+}
+
+/**
+ * Records a tRPC procedure path on the incoming HTTP request so the HTTP root
+ * span can be renamed after Express/HTTP instrumentation settles the route.
+ * Paths are already `router.procedure` (or nested) from tRPC.
+ */
+export function attachTrpcPathToRequest(
+  req: IncomingMessage | undefined,
+  path: string | undefined
+): void {
+  if (!req || !path) return;
+  const carrier = req as RequestWithTrpcPaths;
+  const existing = carrier[TRPC_PATHS_KEY];
+  if (!existing) {
+    carrier[TRPC_PATHS_KEY] = [path];
+    return;
+  }
+  if (!existing.includes(path)) {
+    existing.push(path);
+  }
+}
+
+export function getTrpcPathsFromRequest(req: IncomingMessage | undefined): string[] {
+  if (!req) return [];
+  return (req as RequestWithTrpcPaths)[TRPC_PATHS_KEY] ?? [];
+}
+
+/** HTTP root span label: `trpc.router.procedure` or comma-joined for batches. */
+export function formatTrpcHttpSpanName(paths: readonly string[]): string | undefined {
+  if (paths.length === 0) return undefined;
+  if (paths.length === 1) return `trpc.${paths[0]}`;
+  return `trpc.${paths.join(",")}`;
+}
+
+/**
+ * Renames the HTTP server span when tRPC procedure path(s) were attached to the
+ * request. Intended for HttpInstrumentation `applyCustomAttributesOnSpan`.
+ */
+export function applyTrpcAttributesOnHttpSpan(
+  span: Span,
+  request: IncomingMessage | unknown
+): void {
+  if (!request || typeof request !== "object") return;
+  const paths = getTrpcPathsFromRequest(request as IncomingMessage);
+  const name = formatTrpcHttpSpanName(paths);
+  if (!name) return;
+
+  span.updateName(name);
+  span.setAttribute("rpc.system", "trpc");
+  span.setAttribute("trpc.path", paths.join(","));
+  const [singlePath] = paths;
+  if (paths.length === 1 && singlePath) {
+    span.setAttribute("rpc.method", singlePath);
+  } else {
+    span.setAttribute("rpc.method", "batch");
+    span.setAttribute("trpc.batch", true);
+  }
 }
 
 export function serializeSpanValue(value: unknown): string {

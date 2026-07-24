@@ -1,3 +1,4 @@
+import type { IncomingMessage } from "node:http";
 import { transformer } from "@m5kdev/commons/utils/trpc";
 import { initTRPC, type TRPCError } from "@trpc/server";
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
@@ -17,12 +18,21 @@ import {
 } from "../modules/base/base.actor";
 import { captureServerError, reportError, ServerError } from "./errors";
 import { logger } from "./logger";
-import { serializeSpanValue, withSpan, actorTelemetryFromRequestContext, runWithActorTelemetry, getActorTelemetrySpanAttributes } from "./telemetry";
+import {
+  actorTelemetryFromRequestContext,
+  attachTrpcPathToRequest,
+  getActorTelemetrySpanAttributes,
+  runWithActorTelemetry,
+  serializeSpanValue,
+  withSpan,
+} from "./telemetry";
 
 export type RequestContext = {
   session: Session | null;
   user: User | null;
   actor: UserActor | null;
+  /** Express request; used to label the HTTP root span with the tRPC procedure. */
+  req?: IncomingMessage;
 };
 
 export type Context = {
@@ -51,6 +61,7 @@ export type AdminContext = {
 
 const t = initTRPC.context<RequestContext>().create({ transformer });
 const baseProcedure = t.procedure.use(async ({ path, type, ctx, input, next }) => {
+  attachTrpcPathToRequest(ctx.req, path);
   return runWithActorTelemetry(actorTelemetryFromRequestContext(ctx), () =>
     withSpan(
       {
@@ -87,11 +98,14 @@ export type TRPCMethods = {
 };
 
 export function createRequestContext() {
-  return async function createContext(): Promise<RequestContext> {
+  return async function createContext({
+    req,
+  }: CreateExpressContextOptions): Promise<RequestContext> {
     return {
       session: null,
       user: null,
       actor: null,
+      req,
     };
   };
 }
@@ -123,6 +137,7 @@ export function createAuthContext(auth: BetterAuth) {
       session,
       user,
       actor,
+      req,
     };
   };
 }

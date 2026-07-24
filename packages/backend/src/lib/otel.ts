@@ -13,6 +13,7 @@ import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
+import { applyTrpcAttributesOnHttpSpan } from "../utils/telemetry";
 
 export interface TelemetryInitOptions {
   serviceName: string;
@@ -63,7 +64,13 @@ export function initTelemetry({
       ? { logRecordProcessors: [new BatchLogRecordProcessor(new OTLPLogExporter())] }
       : {}),
     instrumentations: [
-      new HttpInstrumentation(),
+      new HttpInstrumentation({
+        // Runs after HTTP instrumentation renames from http.route; restore a
+        // procedure-aware label for tRPC so traces browse as trpc.router.procedure.
+        applyCustomAttributesOnSpan: (span, request) => {
+          applyTrpcAttributesOnHttpSpan(span, request);
+        },
+      }),
       new ExpressInstrumentation(),
       new PinoInstrumentation({
         // Correlation and OTLP export are handled in utils/logger.ts so they work

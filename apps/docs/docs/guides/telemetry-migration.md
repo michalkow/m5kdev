@@ -116,7 +116,7 @@ auto-instrumentations can conflict with it.
 Once wired, a typical request produces a span hierarchy like:
 
 ```text
-HTTP (auto)
+trpc.<router>.<procedure>   ← HTTP root (renamed from POST /trpc)
 └── trpc.<router>.<procedure>
     └── service.<ServiceName>.<procedure>
         └── <procedure>.<step> / <procedure>.handle
@@ -177,8 +177,10 @@ These attributes are set on tRPC, service, repository, workflow, and custom
 span. Log records inside an active request also include `user.id` and
 `organization.id` when available (alongside `trace_id` / `span_id`).
 
-Auto-instrumented HTTP root spans from Express may not include identity; filter
-on child spans such as `trpc.*` or `workflow.job.*` in SigNoz.
+HTTP root spans for tRPC requests are renamed to `trpc.<router>.<procedure>`
+(batch calls join paths with commas) once the procedure path is known. Identity
+attributes still attach primarily on child spans such as `trpc.*` /
+`workflow.job.*`; filter on those in SigNoz when needed.
 
 ## Custom spans in app services
 
