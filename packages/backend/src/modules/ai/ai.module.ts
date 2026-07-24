@@ -12,9 +12,8 @@ import {
 } from "../base/base.module";
 import type * as aiTables from "./ai.db";
 import { AiUsageRepository, AiVectorRepository } from "./ai.repository";
-import { AIService } from "./ai.service";
+import { AIService, type AIServiceOptions } from "./ai.service";
 import { createAITRPC } from "./ai.trpc";
-import type { PresetModels } from "./ai.utils";
 import { type AiVectorStoreConfig, createAiVectorStore } from "./ai.vector";
 import { IdeogramRepository } from "./ideogram/ideogram.repository";
 import { IdeogramService } from "./ideogram/ideogram.service";
@@ -27,16 +26,7 @@ export type AIModuleConfig<MastraInstance extends Mastra, Namespace extends stri
     openrouter?: OpenRouterProvider;
     replicate?: Replicate;
   };
-  options?: {
-    retryAttempts?: number;
-    retryModels?: string[];
-    repairAttempts?: number;
-    repairModel?: string;
-    removeMDash?: boolean;
-    objectPreset?: PresetModels;
-    textPreset?: PresetModels;
-    defaultModelSuffix?: string;
-  };
+  options?: AIServiceOptions;
   /**
    * Either a preconfigured store (caller owns its lifecycle) or a config the
    * module resolves via {@link createAiVectorStore} and closes on shutdown:
