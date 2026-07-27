@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.31.11
+
+### Patch Changes
+
+- agentobject
+
 ## 0.31.10
 
 ### Patch Changes

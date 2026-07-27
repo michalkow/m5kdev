@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.31.11
+
+### Patch Changes
+
+- agentobject
+- Updated dependencies
+  - @m5kdev/commons@0.31.11
+  - @m5kdev/config@0.31.11
+
 ## 0.31.10
 
 ### Patch Changes

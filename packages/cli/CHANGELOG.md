@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.31.10
+
+### Patch Changes
+
+- agentobject
+
 ## 0.31.9
 
 ### Patch Changes

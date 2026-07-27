@@ -411,14 +411,14 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
   ): ServerResultAsync<z.infer<T>> {
     const result = await this.agentObjectResult(agent, options, ctx);
     if (result.isErr()) return err(result.error);
-    return ok(result.value.object);
+    return ok(result.value);
   }
 
   async agentObjectResult<T extends ZodType<any>>(
     agent: string,
     options: MastraAgentObjectGeneration<T>,
     ctx?: AIServiceActorContext & { model?: string }
-  ): ServerResultAsync<FullOutput<any> & { object: z.infer<T> }> {
+  ): ServerResultAsync<z.infer<T>> {
     const { schema, extractor, ...rest } = options;
     const text = await this.agentText(agent, rest, ctx);
     if (text.isErr())
