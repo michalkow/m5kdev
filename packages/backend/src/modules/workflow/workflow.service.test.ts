@@ -44,6 +44,12 @@ jest.mock("bullmq", () => ({
   }),
 }));
 
+const mockBullMQOtelInstance = { tracer: {}, contextManager: {}, meter: {} };
+
+jest.mock("bullmq-otel", () => ({
+  BullMQOtel: jest.fn().mockImplementation(() => mockBullMQOtelInstance),
+}));
+
 jest.mock("ioredis", () =>
   jest.fn().mockImplementation(() => ({
     duplicate: mockDuplicate,
@@ -55,6 +61,8 @@ jest.mock("uuid", () => ({
   v4: jest.fn().mockReturnValue("test-uuid-1234"),
 }));
 
+import { Queue, Worker } from "bullmq";
+import { BullMQOtel } from "bullmq-otel";
 import type IORedis from "ioredis";
 import type { WorkflowRepository } from "./workflow.repository";
 import { WorkflowService } from "./workflow.service";
@@ -107,6 +115,42 @@ describe("WorkflowService", () => {
       { id: "job-1", waitUntilFinished: mockWaitUntilFinished, data: { payload: "a" } },
       { id: "job-2", waitUntilFinished: mockWaitUntilFinished, data: { payload: "b" } },
     ]);
+  });
+
+  describe("telemetry", () => {
+    it("constructs BullMQOtel with @m5kdev/backend tracer/meter and metrics enabled", () => {
+      createService();
+
+      expect(BullMQOtel).toHaveBeenCalledWith({
+        tracerName: "@m5kdev/backend",
+        meterName: "@m5kdev/backend",
+        enableMetrics: true,
+      });
+    });
+
+    it("passes shared telemetry to Queue constructors", () => {
+      createService();
+
+      expect(Queue).toHaveBeenCalledWith(
+        "fast",
+        expect.objectContaining({ telemetry: mockBullMQOtelInstance })
+      );
+      expect(Queue).toHaveBeenCalledWith(
+        "slow",
+        expect.objectContaining({ telemetry: mockBullMQOtelInstance })
+      );
+    });
+
+    it("passes shared telemetry to Worker constructors", () => {
+      const { service } = createService();
+      service._createWorker("fast", jest.fn());
+
+      expect(Worker).toHaveBeenCalledWith(
+        "fast",
+        expect.any(Function),
+        expect.objectContaining({ telemetry: mockBullMQOtelInstance })
+      );
+    });
   });
 
   describe(".job()", () => {

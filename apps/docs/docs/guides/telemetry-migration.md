@@ -4,10 +4,11 @@ sidebar_position: 7
 
 # Telemetry migration
 
-This guide covers enabling OpenTelemetry tracing and correlated Pino logging in
-existing m5kdev apps. The stack exports traces and logs via OTLP (for example to
+This guide covers enabling OpenTelemetry tracing, metrics, and correlated Pino logging in
+existing m5kdev apps. The stack exports traces, metrics, and logs via OTLP (for example to
 [self-hosted SigNoz](https://signoz.io/)) and falls back to console trace output
-in local development when no exporter endpoint is configured.
+in local development when no exporter endpoint is configured. Metrics export only when
+an OTLP endpoint is set.
 
 New apps scaffolded from the starter template already include the wiring described
 below. Existing apps follow the migration steps in this guide.
@@ -17,6 +18,7 @@ below. Existing apps follow the migration steps in this guide.
 | Layer | Change |
 | --- | --- |
 | `@m5kdev/backend` | `initTelemetry` / `shutdownTelemetry` in `lib/otel.ts`; automatic spans on HTTP, Express, tRPC, service procedures, repository queries, and DB calls; Pino log correlation (`trace_id`, `span_id`) and OTLP log export in `utils/logger.ts`. |
+| `@m5kdev/backend` | BullMQ OpenTelemetry via `bullmq-otel` on workflow `Queue` / `Worker` instances; OTLP metrics exporter when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. |
 | `@m5kdev/backend` | `withSpan`, `getTracer`, and `serializeSpanValue` helpers in `utils/telemetry.ts` for custom spans in app services. |
 | App server | `instrumentation.ts` bootstraps telemetry before the rest of the app loads; `index.ts` flushes telemetry on shutdown. |
 | App shared `.env` | Optional `OTEL_*` variables documented in `.env.example`. |
@@ -74,13 +76,13 @@ async function shutdown(): Promise<void> {
 On startup you should see a line similar to:
 
 ```text
-[otel] tracing enabled: console; logs: correlation-only
+[otel] tracing enabled: console; logs: correlation-only; metrics: off
 ```
 
 or, when OTLP is configured:
 
 ```text
-[otel] tracing enabled: otlp (https://your-ingester.example.com); logs: otlp (...)
+[otel] tracing enabled: otlp (https://your-ingester.example.com); logs: otlp (...); metrics: otlp (...)
 ```
 
 ### 3. Add environment variables
@@ -91,7 +93,7 @@ you want to export telemetry):
 ```env
 # Optional OpenTelemetry (SigNoz / OTLP). When unset, dev uses console exporter.
 # Railway public networking uses HTTPS on 443 — do not append :4317/:4318.
-# The same OTLP endpoint exports traces and Pino logs (correlated via trace_id/span_id).
+# The same OTLP endpoint exports traces, metrics, and Pino logs (correlated via trace_id/span_id).
 # OTEL_EXPORTER_OTLP_ENDPOINT=https://your-ingester.example.com
 # OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 # OTEL_SERVICE_NAME=<app>-server
@@ -101,15 +103,15 @@ you want to export telemetry):
 
 | Variable | Purpose |
 | --- | --- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP HTTP base URL for traces and logs. When set, both signals export to this endpoint. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP HTTP base URL for traces, metrics, and logs. When set, all three signals export to this endpoint. Metrics stay off when unset (local console tracing only). |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | Use `http/protobuf` for HTTP OTLP (port 4318 semantics over HTTPS on managed hosts). |
 | `OTEL_SERVICE_NAME` | `service.name` resource attribute; defaults to the name passed to `initTelemetry`. |
 | `OTEL_RESOURCE_ATTRIBUTES` | Extra resource tags (for example `deployment.environment=production`). |
 | `OTEL_SDK_DISABLED` | Set to `true` to disable the SDK entirely (tests, hermetic scripts). |
 
 **Do not** set `NODE_OPTIONS=--require @opentelemetry/auto-instrumentations-node/register`.
-The backend ships a focused SDK setup (`http`, `express`, Pino integration) and
-auto-instrumentations can conflict with it.
+The backend ships a focused SDK setup (`http`, `express`, Pino integration, BullMQ
+via `bullmq-otel`) and auto-instrumentations can conflict with it.
 
 ## What you get automatically
 
@@ -134,19 +136,28 @@ findAccountClaimByCode = this.query("findAccountClaimByCode").handle(async ({ co
 });
 ```
 
-Background work uses workflow spans as trace roots:
+Background work uses BullMQ lifecycle spans wrapping domain workflow spans:
 
 ```text
-workflow.cron.<name>  or  workflow.job.<name>
-└── service.<Service>.<procedure>   ← when the handler calls a service procedure
-    └── repository.<Repo>.<query>   ← when using .query().handle()
+{queue}.{jobName}                 ← BullMQ processJob (CONSUMER)
+└── workflow.cron.<name>  or  workflow.job.<name>
+    └── service.<Service>.<procedure>   ← when the handler calls a service procedure
+        └── repository.<Repo>.<query>   ← when using .query().handle()
 ```
 
-The workflow root span is created automatically for every job/cron run. **Nested
+Enqueue from an HTTP/tRPC request also produces BullMQ producer spans (for example
+`{queue}.add`) under the active request trace when context propagates.
+
+BullMQ metrics (job counts, processing durations, and related `bullmq.*` instruments)
+export via OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. They are disabled for
+console-only local tracing.
+
+The domain `workflow.*` span is created automatically for every job/cron run. **Nested
 spans only appear when the handler uses traced APIs** — `service.procedure()`
 handlers, `repository.query().handle()`, or custom `withSpan()` calls. Direct
 service/repository method calls (bypassing procedures or named queries) will
-show as a single flat span even if the job runs for several seconds.
+show as a single flat domain span under the BullMQ process span even if the job
+runs for several seconds.
 
 `Worker started for queue "..."` logs are emitted once at process bootstrap
 (debug level, no `trace_id`). Job execution logs (`workflow: job-start` /
@@ -218,8 +229,9 @@ to the active span).
 - **Protocol:** Set `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` to match the HTTP
   exporter used by `@m5kdev/backend`.
 - **Verification:** After starting the server, call any tRPC endpoint, then in
-  SigNoz open **Traces** (filter by `service.name`) and **Logs** (confirm
-  `trace_id` is present on records emitted during the request).
+  SigNoz open **Traces** (filter by `service.name`), **Metrics** (BullMQ instruments
+  when workflow queues are active), and **Logs** (confirm `trace_id` is present on
+  records emitted during the request).
 
 ## E2E / CI (optional)
 
@@ -232,7 +244,7 @@ that pattern if you want e2e traces in your observability backend; set
 
 | Scenario | Approach |
 | --- | --- |
-| Local dev, no exporter | Omit `OTEL_EXPORTER_OTLP_ENDPOINT` — traces print to the console; logs stay on stdout with correlation fields when inside a span. |
+| Local dev, no exporter | Omit `OTEL_EXPORTER_OTLP_ENDPOINT` — traces print to the console; metrics stay off; logs stay on stdout with correlation fields when inside a span. |
 | Tests / scripts | `OTEL_SDK_DISABLED=true` |
 | E2E hermetic runs | `OTEL_SDK_DISABLED=true` in the e2e server env |
 

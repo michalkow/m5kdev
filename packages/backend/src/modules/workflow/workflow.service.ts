@@ -6,6 +6,7 @@ import type {
 } from "@m5kdev/commons/modules/workflow/workflow.schema";
 import type { Job } from "bullmq";
 import { Queue, QueueEvents, Worker } from "bullmq";
+import { BullMQOtel } from "bullmq-otel";
 import type IORedis from "ioredis";
 import { v4 as uuidv4 } from "uuid";
 import { Base } from "../base/base.abstract";
@@ -40,6 +41,11 @@ export class WorkflowService extends Base {
   private readonly connection: IORedis;
   private readonly queueConfigs: Record<string, WorkflowQueueConfig>;
   private readonly cronsByName = new Map<string, WorkflowCronDefinition>();
+  private readonly telemetry = new BullMQOtel({
+    tracerName: "@m5kdev/backend",
+    meterName: "@m5kdev/backend",
+    enableMetrics: true,
+  });
   /** Picked up by WorkflowRegistry.registerService — heals rows whose queue events were missed. */
   readonly reconcileCron?: WorkflowCronDefinition;
 
@@ -55,6 +61,7 @@ export class WorkflowService extends Base {
     for (const queueName of Object.keys(config.queues)) {
       const queue = new Queue(queueName, {
         connection: this.connection.duplicate(),
+        telemetry: this.telemetry,
       });
       this.queues.set(queueName, queue);
 
@@ -249,6 +256,7 @@ export class WorkflowService extends Base {
       ...overrides,
       connection: this.connection.duplicate(),
       concurrency: overrides?.concurrency ?? queueConfig.concurrency,
+      telemetry: this.telemetry,
     };
 
     const worker = new Worker(queueName, processor, mergedOptions);

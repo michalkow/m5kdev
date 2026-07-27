@@ -1,4 +1,5 @@
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
+import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { ExpressInstrumentation } from "@opentelemetry/instrumentation-express";
 import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
@@ -10,6 +11,7 @@ import {
   Resource,
 } from "@opentelemetry/resources";
 import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
+import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
@@ -56,12 +58,18 @@ export function initTelemetry({
   if (!traceExporter) return;
 
   const hasOtlp = Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT);
+  const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "default";
 
   sdk = new NodeSDK({
     resource: createResource(serviceName),
     traceExporter,
     ...(hasOtlp
-      ? { logRecordProcessors: [new BatchLogRecordProcessor(new OTLPLogExporter())] }
+      ? {
+          logRecordProcessors: [new BatchLogRecordProcessor(new OTLPLogExporter())],
+          metricReader: new PeriodicExportingMetricReader({
+            exporter: new OTLPMetricExporter(),
+          }),
+        }
       : {}),
     instrumentations: [
       new HttpInstrumentation({
@@ -83,13 +91,12 @@ export function initTelemetry({
 
   sdk.start();
   const traceExporterKind =
-    traceExporter instanceof ConsoleSpanExporter
-      ? "console"
-      : `otlp (${process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "default"})`;
-  const logsExporterKind = hasOtlp
-    ? `otlp (${process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "default"})`
-    : "correlation-only";
-  console.info(`[otel] tracing enabled: ${traceExporterKind}; logs: ${logsExporterKind}`);
+    traceExporter instanceof ConsoleSpanExporter ? "console" : `otlp (${otlpEndpoint})`;
+  const logsExporterKind = hasOtlp ? `otlp (${otlpEndpoint})` : "correlation-only";
+  const metricsExporterKind = hasOtlp ? `otlp (${otlpEndpoint})` : "off";
+  console.info(
+    `[otel] tracing enabled: ${traceExporterKind}; logs: ${logsExporterKind}; metrics: ${metricsExporterKind}`
+  );
 }
 
 export async function shutdownTelemetry(): Promise<void> {
