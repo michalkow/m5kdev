@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.32.0
+
+### Minor Changes
+
+- member first
+
 ## 0.31.10
 
 ### Patch Changes

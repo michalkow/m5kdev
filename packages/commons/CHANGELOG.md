@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.32.0
+
+### Minor Changes
+
+- member first
+
 ## 0.31.11
 
 ### Patch Changes
