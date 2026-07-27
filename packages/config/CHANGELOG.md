@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.31.10
+
+### Patch Changes
+
+- otel errors
+
 ## 0.31.9
 
 ### Patch Changes

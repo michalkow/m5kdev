@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.31.9
+
+### Patch Changes
+
+- otel errors
+
 ## 0.31.8
 
 ### Patch Changes

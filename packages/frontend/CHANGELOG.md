@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.31.10
+
+### Patch Changes
+
+- otel errors
+- Updated dependencies
+  - @m5kdev/commons@0.31.10
+
 ## 0.31.9
 
 ### Patch Changes
