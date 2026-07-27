@@ -1,3 +1,4 @@
+import { SpanStatusCode, trace } from "@opentelemetry/api";
 import type { captureException } from "@sentry/node";
 import { type TRPC_ERROR_CODE_KEY, TRPCError } from "@trpc/server";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
@@ -181,6 +182,39 @@ export function setErrorReporter(reporter: ErrorReporter) {
   globalThis.m5ErrorReporter = reporter;
 }
 
+function recordErrorOnActiveSpan(err: ServerError | Error | unknown): void {
+  const span = trace.getActiveSpan();
+  if (!span) return;
+
+  if (err instanceof ServerError) {
+    span.setStatus({
+      code: SpanStatusCode.ERROR,
+      message: err.message,
+    });
+    span.setAttribute("error.code", err.code);
+    span.setAttribute("error.layer", err.layer);
+    span.setAttribute("error.layerName", err.layerName);
+    span.recordException(err);
+    return;
+  }
+
+  if (err instanceof Error) {
+    span.setStatus({
+      code: SpanStatusCode.ERROR,
+      message: err.message,
+    });
+    span.recordException(err);
+    return;
+  }
+
+  const message = typeof err === "string" ? err : "Unknown error";
+  span.setStatus({
+    code: SpanStatusCode.ERROR,
+    message,
+  });
+  span.recordException(new Error(message));
+}
+
 export function reportError(
   err: ServerError | Error | unknown,
   hint?: Parameters<typeof captureException>[1]
@@ -208,5 +242,6 @@ export function reportError(
       },
     } as Parameters<typeof captureException>[1];
   }
+  recordErrorOnActiveSpan(err);
   return reporter.captureException(err, eventHint);
 }
