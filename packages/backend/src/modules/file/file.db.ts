@@ -14,10 +14,10 @@ export const files = table(
       .$default(() => new Date()),
     updatedAt: integer("updated_at", { mode: "timestamp" }),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
-    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
     memberId: text("member_id").references(() => members.id, { onDelete: "set null" }),
     organizationId: text("organization_id").references(() => organizations.id, {
-      onDelete: "cascade",
+      onDelete: "set null",
     }),
     teamId: text("team_id").references(() => teams.id, { onDelete: "set null" }),
     bucket: text("bucket").notNull(),

@@ -16,6 +16,7 @@ export type AiUsageInsert = InferInsertModel<Schema["aiUsage"]>;
 
 export interface CreateAiUsageInput {
   userId?: string;
+  memberId?: string | null;
   teamId?: string;
   organizationId?: string;
   feature: string;

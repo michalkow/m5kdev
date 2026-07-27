@@ -318,6 +318,9 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     try {
       await this.repository.aiUsage.create({
         userId: params.ctx?.actor?.userId,
+        memberId: params.ctx?.actor?.memberId ?? null,
+        organizationId: params.ctx?.actor?.organizationId ?? undefined,
+        teamId: params.ctx?.actor?.teamId ?? undefined,
         model: params.model,
         provider: "openrouter",
         feature: params.feature,
@@ -368,6 +371,9 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     if (this.repository.aiUsage) {
       const createUsageResult = await this.repository.aiUsage.create({
         userId: ctx?.actor?.userId,
+        memberId: ctx?.actor?.memberId ?? null,
+        organizationId: ctx?.actor?.organizationId ?? undefined,
+        teamId: ctx?.actor?.teamId ?? undefined,
         model: ctx?.model ?? "unknown",
         provider: "openrouter",
         feature: agent,
