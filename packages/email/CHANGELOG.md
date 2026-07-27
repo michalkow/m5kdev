@@ -1,5 +1,17 @@
 # @m5kdev/email
 
+## 0.31.9
+
+### Patch Changes
+
+- hrana otel
+
+## 0.31.8
+
+### Patch Changes
+
+- otel hrana
+
 ## 0.31.7
 
 ### Patch Changes

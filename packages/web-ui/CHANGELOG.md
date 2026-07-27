@@ -1,5 +1,23 @@
 # @m5kdev/web-ui
 
+## 0.31.9
+
+### Patch Changes
+
+- hrana otel
+- Updated dependencies
+  - @m5kdev/frontend@0.31.9
+  - @m5kdev/commons@0.31.9
+
+## 0.31.8
+
+### Patch Changes
+
+- otel hrana
+- Updated dependencies
+  - @m5kdev/commons@0.31.8
+  - @m5kdev/frontend@0.31.8
+
 ## 0.31.7
 
 ### Patch Changes

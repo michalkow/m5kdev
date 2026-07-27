@@ -1,5 +1,25 @@
 # @m5kdev/backend
 
+## 0.31.9
+
+### Patch Changes
+
+- hrana otel
+- Updated dependencies
+  - @m5kdev/commons@0.31.9
+  - @m5kdev/config@0.31.9
+
+## 0.31.8
+
+### Patch Changes
+
+- 792de79: Enable BullMQ OpenTelemetry via `bullmq-otel` on workflow queues/workers (tracer/meter `@m5kdev/backend`, metrics on) and export OTLP metrics from `initTelemetry` when `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Bumps `bullmq` and `ioredis` for peer/type compatibility.
+- 0f6ab79: Recognize embedded-replica `Hrana(Api("status=404...stream not found"))` failures (surfaced as `SQLITE_*` LibsqlErrors) in `isRetryableLibsqlError` so `withLibsqlRetry` reconnects instead of leaving the process stuck on a dead stream.
+- otel hrana
+- Updated dependencies
+  - @m5kdev/commons@0.31.8
+  - @m5kdev/config@0.31.8
+
 ## 0.31.7
 
 ### Patch Changes
