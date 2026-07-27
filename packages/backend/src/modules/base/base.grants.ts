@@ -8,6 +8,7 @@ type Ownership = "member" | "organization";
 
 export type Entity = Partial<{
   userId: string | null;
+  memberId: string | null;
   teamId: string | null;
   organizationId: string | null;
   ownership: Ownership | null;
@@ -78,6 +79,7 @@ interface RoleContext {
 
 interface ContextValues {
   userId: string;
+  memberId: string | null;
   teamId: string | null;
   organizationId: string | null;
 }
@@ -93,10 +95,31 @@ function getRoleForLevel(level: GrantLevel, ctx: RoleContext): string | null {
   }
 }
 
+/**
+ * Ownership principal for "user"-level (personal) grants:
+ * - In org context with a memberId on the actor, prefer memberId ownership.
+ * - Fall back to userId only when the entity has no memberId (legacy rows)
+ *   or the actor has no organization member context (personal resources).
+ */
+function getUserLevelOwnership(
+  ctx: ContextValues,
+  entities?: Entity | Entity[]
+): { field: keyof Entity; value: string | null } {
+  const inOrgContext = Boolean(ctx.organizationId && ctx.memberId);
+  if (inOrgContext) {
+    const entityList = !entities ? [] : Array.isArray(entities) ? entities : [entities];
+    const hasMemberId = entityList.length === 0 || entityList.some((e) => e.memberId != null);
+    if (hasMemberId) {
+      return { field: "memberId", value: ctx.memberId };
+    }
+  }
+  return { field: "userId", value: ctx.userId };
+}
+
 function getContextValueForLevel(level: GrantLevel, ctx: ContextValues): string | null {
   switch (level) {
     case "user":
-      return ctx.userId;
+      return ctx.memberId && ctx.organizationId ? ctx.memberId : ctx.userId;
     case "team":
       return ctx.teamId;
     case "organization":
@@ -104,10 +127,10 @@ function getContextValueForLevel(level: GrantLevel, ctx: ContextValues): string 
   }
 }
 
-function getOwnershipFieldForLevel(level: GrantLevel): keyof Entity {
+function getOwnershipFieldForLevel(level: GrantLevel, ctx: ContextValues): keyof Entity {
   switch (level) {
     case "user":
-      return "userId";
+      return ctx.memberId && ctx.organizationId ? "memberId" : "userId";
     case "team":
       return "teamId";
     case "organization":
@@ -143,7 +166,22 @@ function checkOwnAccess(
       if (grant.access !== "own") continue;
       if (grant.role !== getRoleForLevel(level, roles)) continue;
 
-      const ownershipField = getOwnershipFieldForLevel(level);
+      if (level === "user") {
+        const { field, value } = getUserLevelOwnership(contextValues, entities);
+        if (checkOwnership(field, value, entities)) return true;
+        // Legacy dual-read: org assets without memberId still compare userId
+        if (
+          field === "memberId" &&
+          entities &&
+          (Array.isArray(entities) ? entities : [entities]).some((e) => e.memberId == null) &&
+          checkOwnership("userId", contextValues.userId, entities)
+        ) {
+          return true;
+        }
+        continue;
+      }
+
+      const ownershipField = getOwnershipFieldForLevel(level, contextValues);
       const contextValue = getContextValueForLevel(level, contextValues);
 
       if (checkOwnership(ownershipField, contextValue, entities)) return true;
@@ -184,6 +222,15 @@ function checkOwnershipAwareAccess(
   });
 }
 
+function toContextValues(actor: ServiceActor): ContextValues {
+  return {
+    userId: actor.userId,
+    memberId: actor.memberId,
+    teamId: actor.teamId,
+    organizationId: actor.organizationId,
+  };
+}
+
 export function checkPermissionSync<T extends Entity>(
   actor: ServiceActor,
   grants: ResourceActionGrant[],
@@ -197,11 +244,7 @@ export function checkPermissionSync<T extends Entity>(
     teamRole: actor.teamRole,
     organizationRole: actor.organizationRole,
   };
-  const contextValues = {
-    userId: actor.userId,
-    teamId: actor.teamId,
-    organizationId: actor.organizationId,
-  };
+  const contextValues = toContextValues(actor);
 
   if (options.ownership) {
     return checkOwnershipAwareAccess(grants, roles, contextValues, entities);
@@ -227,11 +270,7 @@ export async function checkPermissionAsync<T extends Entity>(
     teamRole: actor.teamRole,
     organizationRole: actor.organizationRole,
   };
-  const contextValues = {
-    userId: actor.userId,
-    teamId: actor.teamId,
-    organizationId: actor.organizationId,
-  };
+  const contextValues = toContextValues(actor);
 
   if (options.ownership) {
     const entities = await getEntities();

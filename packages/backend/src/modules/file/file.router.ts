@@ -130,6 +130,7 @@ export function createUploadRouter({
       const actor = createActorFromContext({ user, session }, "user");
       const result = await fileService.initiateS3Upload(actor, {
         userId,
+        memberId: session.activeOrganizationMemberId ?? undefined,
         organizationId,
         teamId,
         contentType,

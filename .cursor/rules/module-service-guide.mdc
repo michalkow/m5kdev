@@ -41,7 +41,11 @@ create = this.procedure("create")
   .output(itemSchemas.output.single)
   .requireAuth()
   .handle(async ({ input, ctx }) => {
-    return this.repository.item.create({ ...input, userId: ctx.actor.userId });
+    return this.repository.item.create({
+      ...input,
+      userId: ctx.actor.userId,
+      memberId: ctx.actor.memberId,
+    });
   });
 
 // Acceptable for simple primitives with no matching schema
@@ -64,7 +68,11 @@ list = this.procedure("list")
   .output(itemSchemas.output.list)
   .requireAuth()
   .handle(async ({ input, ctx }) => {
-    return this.repository.item.list({ ...input, userId: ctx.actor.userId });
+    return this.repository.item.list({
+      ...input,
+      userId: ctx.actor.userId,
+      memberId: ctx.actor.memberId,
+    });
   });
 
 create = this.procedure("create")
@@ -72,7 +80,11 @@ create = this.procedure("create")
   .output(itemSchemas.output.single)
   .requireAuth()
   .handle(async ({ input, ctx }) => {
-    return this.repository.item.create({ ...input, userId: ctx.actor.userId });
+    return this.repository.item.create({
+      ...input,
+      userId: ctx.actor.userId,
+      memberId: ctx.actor.memberId,
+    });
   });
 ```
 
@@ -86,7 +98,10 @@ update = this.procedure("update")
   .loadResource("item", ({ input }) => this.repository.item.findById(input.id))
   .access({
     action: "write",
-    entities: ({ state }) => ({ userId: state.item.userId }),
+    entities: ({ state }) => ({
+      userId: state.item.userId,
+      memberId: state.item.memberId,
+    }),
   })
   .handle(async ({ input }) => {
     return this.repository.item.update(input);
@@ -98,8 +113,8 @@ update = this.procedure("update")
 ```typescript
 list = this.procedure("list")
   .output(itemSchemas.output.list)
-  .requireAuth()
-  .addContextFilter(["user"])
+  .requireAuth("organization")
+  .addContextFilter(["member", "organization"])
   .handle(({ input }) => {
     return this.repository.item.queryList(input, {
       globalSearchColumns: ["name", "description"],
@@ -123,6 +138,7 @@ validateCode = this.procedure("validateCode")
 - If extending `BasePermissionService`, keep all guarded action names aligned with grants (`read`, `write`, `delete`, `publish`, etc.).
 - Do not use undeclared action aliases (e.g., guard `"update"` when grants only define `"write"`).
 - If a module has no effective `accessGuard*` usage, prefer `BaseService` over `BasePermissionService`.
+- For org-scoped assets, stamp and authorize with `memberId` (`ctx.actor.memberId`). Keep `userId` for authentication and personal resources (billing, devices, OAuth). Prefer the column name `memberId` over aliases like `authorMemberId`.
 
 ## Example Skeleton
 
@@ -141,7 +157,11 @@ export class ItemService extends BaseService<
     .output(itemSchemas.output.single.array())
     .requireAuth()
     .handle(async ({ input, ctx }) => {
-      return this.repository.item.list({ ...input, userId: ctx.actor.userId });
+      return this.repository.item.list({
+        ...input,
+        userId: ctx.actor.userId,
+        memberId: ctx.actor.memberId,
+      });
     });
 
   create = this.procedure("create")
@@ -149,7 +169,11 @@ export class ItemService extends BaseService<
     .output(itemSchemas.output.single)
     .requireAuth()
     .handle(async ({ input, ctx }) => {
-      return this.repository.item.create({ ...input, userId: ctx.actor.userId });
+      return this.repository.item.create({
+        ...input,
+        userId: ctx.actor.userId,
+        memberId: ctx.actor.memberId,
+      });
     });
 
   update = this.procedure("update")
@@ -158,7 +182,15 @@ export class ItemService extends BaseService<
     .requireAuth()
     .loadResource("item", ({ input }) => this.repository.item.findById(input.id))
     .use("owner", ({ ctx, state }) => {
-      if (state.item.userId !== ctx.actor.userId) return this.error("FORBIDDEN");
+      if (
+        state.item.memberId &&
+        state.item.memberId !== ctx.actor.memberId
+      ) {
+        return this.error("FORBIDDEN");
+      }
+      if (!state.item.memberId && state.item.userId !== ctx.actor.userId) {
+        return this.error("FORBIDDEN");
+      }
       return true;
     })
     .handle(async ({ input }) => {
@@ -170,7 +202,15 @@ export class ItemService extends BaseService<
     .requireAuth()
     .loadResource("item", ({ input }) => this.repository.item.findById(input.id))
     .use("owner", ({ ctx, state }) => {
-      if (state.item.userId !== ctx.actor.userId) return this.error("FORBIDDEN");
+      if (
+        state.item.memberId &&
+        state.item.memberId !== ctx.actor.memberId
+      ) {
+        return this.error("FORBIDDEN");
+      }
+      if (!state.item.memberId && state.item.userId !== ctx.actor.userId) {
+        return this.error("FORBIDDEN");
+      }
       return true;
     })
     .handle(async ({ input }) => {

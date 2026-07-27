@@ -24,6 +24,7 @@ type MockSessionOverrides = {
   activeTeamId?: string | null;
   activeOrganizationRole?: string | null;
   activeTeamRole?: string | null;
+  activeOrganizationMemberId?: string | null;
 };
 
 function createMockContext(
@@ -34,12 +35,16 @@ function createMockContext(
     sessionOverrides.activeOrganizationId ?? (sessionOverrides.activeTeamId ? "org-123" : null);
   const organizationRole =
     sessionOverrides.activeOrganizationRole ?? (sessionOverrides.activeTeamRole ? "member" : null);
+  const memberId =
+    sessionOverrides.activeOrganizationMemberId ??
+    (organizationId ? "member-123" : null);
 
   const actor = createServiceActor({
     userId: userOverrides.id ?? "user-123",
     userRole: userOverrides.role ?? "member",
     organizationId,
     organizationRole,
+    memberId,
     teamId: sessionOverrides.activeTeamId ?? null,
     teamRole: sessionOverrides.activeTeamRole ?? null,
   });
@@ -54,6 +59,7 @@ function createMockContext(
 function createMockEntity(overrides: Partial<Entity> = {}): Entity {
   return {
     userId: "user-123",
+    memberId: undefined,
     teamId: undefined,
     organizationId: undefined,
     ...overrides,
@@ -345,6 +351,46 @@ describe("checkPermissionSync", () => {
       expect(checkPermissionSync(ctx, grants, entity, { ownership: true })).toBe(true);
     });
 
+    it("allows member-owned resources via memberId in organization context", () => {
+      const ctx = createMockContext(
+        { id: "user-123", role: "member" },
+        {
+          activeOrganizationId: "org-1",
+          activeOrganizationRole: "member",
+          activeOrganizationMemberId: "member-123",
+        }
+      );
+      const grants: ResourceActionGrant[] = [{ level: "user", role: "member", access: "own" }];
+      const entity = createMockEntity({
+        ownership: "member",
+        memberId: "member-123",
+        userId: "user-123",
+        organizationId: "org-1",
+      });
+
+      expect(checkPermissionSync(ctx, grants, entity, { ownership: true })).toBe(true);
+    });
+
+    it("denies member-owned resources when memberId does not match in organization context", () => {
+      const ctx = createMockContext(
+        { id: "user-123", role: "member" },
+        {
+          activeOrganizationId: "org-1",
+          activeOrganizationRole: "member",
+          activeOrganizationMemberId: "member-123",
+        }
+      );
+      const grants: ResourceActionGrant[] = [{ level: "user", role: "member", access: "own" }];
+      const entity = createMockEntity({
+        ownership: "member",
+        memberId: "member-other",
+        userId: "other-user",
+        organizationId: "org-1",
+      });
+
+      expect(checkPermissionSync(ctx, grants, entity, { ownership: true })).toBe(false);
+    });
+
     it("allows member-owned resources with matching user-level 'all' access", () => {
       const ctx = createMockContext({ id: "user-123", role: "admin" });
       const grants: ResourceActionGrant[] = [{ level: "user", role: "admin", access: "all" }];
@@ -363,6 +409,7 @@ describe("checkPermissionSync", () => {
       ];
       const entity = createMockEntity({
         ownership: "member",
+        memberId: "member-other",
         userId: "other-user",
         organizationId: "org-1",
       });

@@ -25,7 +25,7 @@ export type ServiceProcedureLoadedResource<TOutput> = NonNullable<
   ServiceProcedureStoredValue<TOutput>
 >;
 export type ServiceProcedureResultLike<T> = T | ServerResult<T> | Promise<T | ServerResult<T>>;
-export type ServiceProcedureContextFilterScope = ActorScope;
+export type ServiceProcedureContextFilterScope = ActorScope | "member";
 export type ServiceProcedureContextFilteredInput<TInput> = Extract<NonNullable<TInput>, QueryInput>;
 type ServiceProcedureAuthContext<
   Scope extends ActorScope,
@@ -495,6 +495,7 @@ function getContextFilterInclude(
 ) {
   return {
     user: include.includes("user"),
+    member: include.includes("member"),
     organization: include.includes("organization"),
     team: include.includes("team"),
   };

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, ne } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNull, ne } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
@@ -12,6 +12,7 @@ import {
   waitlistSchema,
   waitlistSchemas,
 } from "./auth.dto";
+import { softDeleteOrganizationMember } from "./auth.utils";
 
 const schema = { ...auth };
 type Schema = typeof schema;
@@ -38,9 +39,10 @@ export class AuthOrganizationRepository extends BaseTableRepository<
 > {
   private selectMemberRows(
     organizationId: string,
-    filters?: { memberId?: string; userId?: string }
+    filters?: { memberId?: string; userId?: string; includeDeleted?: boolean }
   ) {
     const conditions = [eq(this.schema.members.organizationId, organizationId)];
+    if (!filters?.includeDeleted) conditions.push(isNull(this.schema.members.deletedAt));
     if (filters?.memberId) conditions.push(eq(this.schema.members.id, filters.memberId));
     if (filters?.userId) conditions.push(eq(this.schema.members.userId, filters.userId));
 
@@ -49,8 +51,11 @@ export class AuthOrganizationRepository extends BaseTableRepository<
         id: this.schema.members.id,
         organizationId: this.schema.members.organizationId,
         userId: this.schema.members.userId,
+        name: this.schema.members.name,
+        image: this.schema.members.image,
         role: this.schema.members.role,
         createdAt: this.schema.members.createdAt,
+        deletedAt: this.schema.members.deletedAt,
         preferences: this.schema.members.preferences,
         metadata: this.schema.members.metadata,
         onboarding: this.schema.members.onboarding,
@@ -59,6 +64,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
           id: this.schema.users.id,
           name: this.schema.users.name,
           email: this.schema.users.email,
+          image: this.schema.users.image,
           role: this.schema.users.role,
           banned: this.schema.users.banned,
           emailVerified: this.schema.users.emailVerified,
@@ -150,9 +156,21 @@ export class AuthOrganizationRepository extends BaseTableRepository<
 
         if (!organization) throw new Error("Failed to create organization");
 
+        const [user] = await t
+          .select({ name: this.schema.users.name, image: this.schema.users.image })
+          .from(this.schema.users)
+          .where(eq(this.schema.users.id, userId))
+          .limit(1);
+
         const [member] = await t
           .insert(this.schema.members)
-          .values({ userId, organizationId: organization.id, role })
+          .values({
+            userId,
+            organizationId: organization.id,
+            role,
+            name: user?.name ?? "",
+            image: user?.image ?? null,
+          })
           .returning();
         if (!member) throw new Error("Failed to create member");
 
@@ -182,7 +200,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
             this.schema.members,
             eq(this.schema.organizations.id, this.schema.members.organizationId)
           )
-          .where(eq(this.schema.members.userId, userId))
+          .where(and(eq(this.schema.members.userId, userId), isNull(this.schema.members.deletedAt)))
           .then((rows) => {
             const seen = new Set<string>();
             return rows.filter((row) => {
@@ -215,7 +233,11 @@ export class AuthOrganizationRepository extends BaseTableRepository<
 
     const userResult = await this.throwableQuery(() =>
       this.orm
-        .select({ id: this.schema.users.id })
+        .select({
+          id: this.schema.users.id,
+          name: this.schema.users.name,
+          image: this.schema.users.image,
+        })
         .from(this.schema.users)
         .where(eq(this.schema.users.id, userId))
         .limit(1)
@@ -226,7 +248,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
 
     const existingResult = await this.throwableQuery(() =>
       this.orm
-        .select({ id: this.schema.members.id })
+        .select()
         .from(this.schema.members)
         .where(
           and(
@@ -238,7 +260,36 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     );
     if (existingResult.isErr()) return err(existingResult.error);
     const [existing] = existingResult.value;
-    if (existing) return this.error("CONFLICT", "User is already a member");
+
+    if (existing && !existing.deletedAt) {
+      return this.error("CONFLICT", "User is already a member");
+    }
+
+    if (existing?.deletedAt) {
+      const reviveResult = await this.throwableQuery(() =>
+        this.orm
+          .update(this.schema.members)
+          .set({
+            deletedAt: null,
+            role,
+            name: user.name,
+            image: user.image ?? null,
+          })
+          .where(eq(this.schema.members.id, existing.id))
+          .returning({ id: this.schema.members.id })
+      );
+      if (reviveResult.isErr()) return err(reviveResult.error);
+      const [revived] = reviveResult.value;
+      if (!revived) return this.error("INTERNAL_SERVER_ERROR");
+
+      const memberResult = await this.throwableQuery(() =>
+        this.selectMemberRows(organizationId, { memberId: revived.id }).limit(1)
+      );
+      if (memberResult.isErr()) return err(memberResult.error);
+      const [member] = memberResult.value;
+      if (!member) return this.error("NOT_FOUND", "Member not found");
+      return ok(member);
+    }
 
     const insertResult = await this.throwableQuery(() =>
       this.orm
@@ -247,6 +298,8 @@ export class AuthOrganizationRepository extends BaseTableRepository<
           organizationId,
           userId,
           role,
+          name: user.name,
+          image: user.image ?? null,
         })
         .returning({ id: this.schema.members.id })
     );
@@ -328,35 +381,10 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     if (!existing) return this.error("NOT_FOUND", "Member not found");
 
     const removeResult = await this.throwableQuery(() =>
-      this.orm.transaction(async (tx) => {
-        const [removed] = await tx
-          .delete(this.schema.members)
-          .where(
-            and(
-              eq(this.schema.members.id, memberId),
-              eq(this.schema.members.organizationId, organizationId)
-            )
-          )
-          .returning({ id: this.schema.members.id });
-
-        await tx
-          .update(this.schema.sessions)
-          .set({
-            activeOrganizationId: null,
-            activeOrganizationRole: null,
-            activeOrganizationMemberId: null,
-            activeOrganizationType: null,
-            activeTeamId: null,
-            activeTeamRole: null,
-          })
-          .where(
-            and(
-              eq(this.schema.sessions.userId, existing.userId),
-              eq(this.schema.sessions.activeOrganizationId, organizationId)
-            )
-          );
-
-        return removed;
+      softDeleteOrganizationMember(this.orm, {
+        memberId,
+        organizationId,
+        userId: existing.userId,
       })
     );
     if (removeResult.isErr()) return err(removeResult.error);
@@ -595,6 +623,8 @@ export class AuthWaitlistRepository extends BaseTableRepository<
             userId: user.id,
             organizationId: organization.id,
             role: "owner",
+            name: user.name,
+            image: user.image ?? null,
           })
           .returning();
         if (!member) throw new Error("Failed to create organization membership");

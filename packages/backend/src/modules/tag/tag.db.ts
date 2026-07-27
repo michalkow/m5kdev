@@ -1,6 +1,6 @@
 import { type AnySQLiteColumn, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
-import { organizations, teams, users } from "../auth/auth.db";
+import { members, organizations, teams, users } from "../auth/auth.db";
 
 export const tags = sqliteTable("tags", {
   id: text("id").primaryKey().$default(uuidv4),
@@ -9,13 +9,12 @@ export const tags = sqliteTable("tags", {
     .$default(() => new Date()),
   updatedAt: integer("updated_at", { mode: "timestamp" }),
   deletedAt: integer("deleted_at", { mode: "timestamp" }),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
+  userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+  memberId: text("member_id").references(() => members.id, { onDelete: "set null" }),
   organizationId: text("organization_id").references(() => organizations.id, {
-    onDelete: "cascade",
+    onDelete: "set null",
   }),
-  teamId: text("team_id").references(() => teams.id, { onDelete: "cascade" }),
+  teamId: text("team_id").references(() => teams.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   color: text("color"),
   type: text("type"),

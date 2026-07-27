@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import * as auth from "../auth/auth.db";
@@ -16,7 +16,11 @@ export class AccessRepository extends BaseRepository<Orm, Schema, Record<string,
         .select({ role: schema.members.role })
         .from(schema.members)
         .where(
-          and(eq(schema.members.organizationId, organizationId), eq(schema.members.userId, userId))
+          and(
+            eq(schema.members.organizationId, organizationId),
+            eq(schema.members.userId, userId),
+            isNull(schema.members.deletedAt)
+          )
         )
         .limit(1)
     );

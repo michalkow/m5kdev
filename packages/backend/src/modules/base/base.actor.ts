@@ -6,7 +6,7 @@ export type UserActor = {
   userRole: string;
   organizationId: string | null;
   organizationRole: string | null;
-  organizationMemberId: string | null;
+  memberId: string | null;
   teamId: string | null;
   teamRole: string | null;
 };
@@ -16,7 +16,7 @@ export type OrganizationActor = {
   userRole: string;
   organizationId: string;
   organizationRole: string;
-  organizationMemberId: string;
+  memberId: string;
   teamId: string | null;
   teamRole: string | null;
 };
@@ -26,7 +26,7 @@ export type TeamActor = {
   userRole: string;
   organizationId: string;
   organizationRole: string;
-  organizationMemberId: string;
+  memberId: string;
   teamId: string;
   teamRole: string;
 };
@@ -36,7 +36,7 @@ export type AdminActor = {
   userRole: "admin";
   organizationId: string | null;
   organizationRole: string | null;
-  organizationMemberId: string | null;
+  memberId: string | null;
   teamId: string | null;
   teamRole: string | null;
 };
@@ -64,7 +64,7 @@ export type ServiceActorClaims = {
   userRole: string;
   organizationId?: string | null;
   organizationRole?: string | null;
-  organizationMemberId?: string | null;
+  memberId?: string | null;
   teamId?: string | null;
   teamRole?: string | null;
 };
@@ -100,7 +100,11 @@ export function createActorFromContext(
   }
 
   if (scope === "organization") {
-    if (!context.session.activeOrganizationId || !context.session.activeOrganizationRole) {
+    if (
+      !context.session.activeOrganizationId ||
+      !context.session.activeOrganizationRole ||
+      !context.session.activeOrganizationMemberId
+    ) {
       throw new ServerError({
         code: "FORBIDDEN",
         message: "Active organization context required",
@@ -111,7 +115,11 @@ export function createActorFromContext(
   }
 
   if (scope === "team") {
-    if (!context.session.activeOrganizationId || !context.session.activeOrganizationRole) {
+    if (
+      !context.session.activeOrganizationId ||
+      !context.session.activeOrganizationRole ||
+      !context.session.activeOrganizationMemberId
+    ) {
       throw new ServerError({
         code: "FORBIDDEN",
         message: "Active organization context required for team scope",
@@ -134,7 +142,7 @@ export function createActorFromContext(
     userRole: context.user.role,
     organizationId: context.session.activeOrganizationId,
     organizationRole: context.session.activeOrganizationRole,
-    organizationMemberId: context.session.activeOrganizationMemberId,
+    memberId: context.session.activeOrganizationMemberId,
     teamId: context.session.activeTeamId,
     teamRole: context.session.activeTeamRole,
   };
@@ -145,9 +153,15 @@ export function validateActor(actor: AuthenticatedActor, scope: ActorScope): boo
   if (scope === "admin") return actor.userRole === "admin";
   if (scope === "user") return true;
   if (scope === "organization") {
-    return Boolean(actor.organizationId && actor.organizationRole);
+    return Boolean(actor.organizationId && actor.organizationRole && actor.memberId);
   }
-  return Boolean(actor.organizationId && actor.organizationRole && actor.teamId && actor.teamRole);
+  return Boolean(
+    actor.organizationId &&
+      actor.organizationRole &&
+      actor.memberId &&
+      actor.teamId &&
+      actor.teamRole
+  );
 }
 
 /**
@@ -156,7 +170,7 @@ export function validateActor(actor: AuthenticatedActor, scope: ActorScope): boo
 export function createServiceActor(claims: ServiceActorClaims): AuthenticatedActor {
   const organizationId = claims.organizationId ?? null;
   const organizationRole = claims.organizationRole ?? null;
-  const organizationMemberId = claims.organizationMemberId ?? null;
+  const memberId = claims.memberId ?? null;
   const teamId = claims.teamId ?? null;
   const teamRole = claims.teamRole ?? null;
 
@@ -169,7 +183,7 @@ export function createServiceActor(claims: ServiceActorClaims): AuthenticatedAct
     userRole: claims.userRole,
     organizationId,
     organizationRole,
-    organizationMemberId,
+    memberId,
     teamId,
     teamRole,
   };

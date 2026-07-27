@@ -86,20 +86,21 @@ export class BaseService<
 
   addContextFilter(
     actor: AuthenticatedActor,
-    include?: { user?: boolean; organization?: boolean; team?: boolean },
+    include?: { user?: boolean; member?: boolean; organization?: boolean; team?: boolean },
     query?: undefined,
     map?: Record<string, { columnId: string; method: QueryFilter["method"] }>
   ): QueryInput;
   addContextFilter<TQuery extends QueryInput>(
     actor: AuthenticatedActor,
-    include: { user?: boolean; organization?: boolean; team?: boolean } | undefined,
+    include: { user?: boolean; member?: boolean; organization?: boolean; team?: boolean } | undefined,
     query: TQuery,
     map?: Record<string, { columnId: string; method: QueryFilter["method"] }>
   ): TQuery;
   addContextFilter(
     actor: AuthenticatedActor,
-    include: { user?: boolean; organization?: boolean; team?: boolean } = {
+    include: { user?: boolean; member?: boolean; organization?: boolean; team?: boolean } = {
       user: true,
+      member: false,
       organization: false,
       team: false,
     },
@@ -107,6 +108,10 @@ export class BaseService<
     map: Record<string, { columnId: string; method: QueryFilter["method"] }> = {
       userId: {
         columnId: "userId",
+        method: "equals",
+      },
+      memberId: {
+        columnId: "memberId",
         method: "equals",
       },
       organizationId: {
@@ -121,7 +126,21 @@ export class BaseService<
   ): QueryInput {
     const filters: QueryFilter[] = [];
 
-    if (include.user) {
+    const useMemberFilter =
+      include.member ||
+      (Boolean(include.user && include.organization) && Boolean(actor.memberId));
+
+    if (useMemberFilter) {
+      if (!actor.memberId) {
+        throw new Error("Member-scoped context filter requires an organization member actor");
+      }
+      filters.push({
+        columnId: map.memberId?.columnId ?? "memberId",
+        type: "string",
+        method: map.memberId?.method ?? "equals",
+        value: actor.memberId,
+      });
+    } else if (include.user) {
       filters.push({
         columnId: map.userId.columnId,
         type: "string",

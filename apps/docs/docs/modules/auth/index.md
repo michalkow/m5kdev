@@ -8,6 +8,12 @@ The auth module is the identity backbone of an m5kdev app: Better Auth wiring,
 users, organizations, teams, invitations, waitlists, API keys, and the settings
 storage (preferences, flags, metadata, onboarding) that other modules build on.
 
+Organizations are the **default tenancy** model: every user has at least one
+membership. Soft-deleted members keep a snapshot `name` for attribution; rejoin
+revives the same `memberId`. Org-scoped product data should key ownership on
+that membership — see
+[Organizations and members](/guides/organizations-and-members).
+
 ## Package map
 
 | Package | What it owns |
@@ -98,8 +104,26 @@ Better Auth's own HTTP endpoints stay under `/api/auth/*`.
 - Utilities — `AuthUtilityProtectedRoutes`, impersonation banner, locale and
   theme pickers.
 
+## Membership lifecycle
+
+- Active membership requires `members.deletedAt` to be null.
+- Leave / remove soft-deletes the row and clears active org session fields for
+  that organization.
+- Invite accept or add-member for an existing `(userId, organizationId)` pair
+  revives a soft-deleted membership when present.
+- `members.name` mirrors `users.name` while active and remains after leave for
+  historical display.
+- `members.image` mirrors `users.image` (including OAuth provider avatars on
+  signup) while active and remains after leave for attribution.
+
+Session context for org work includes `activeOrganizationId`,
+`activeOrganizationRole`, and `activeOrganizationMemberId`. Actors expose that
+membership as `memberId` (organization and team scopes require it).
+
 ## Migration guides
 
+- [Organizations and members](/guides/organizations-and-members) (intended usage)
+- [Member ownership migration](/guides/v0.32.0-memberid-ownership-migration)
 - [User and organization locale migration](/guides/user-org-locale-migration)
 - [Admin create verified user migration](/guides/admin-create-verified-user-migration)
 - [Custom app roles migration](/guides/custom-app-roles-migration)

@@ -55,6 +55,19 @@ That choice is what lets the framework go further than wiring:
 If you want a different database, auth provider, or UI kit, m5kdev is the wrong
 tool — that is by design.
 
+## Organizations as default
+
+Every user belongs to at least one **organization**. That is the tenancy model,
+not an optional multi-tenant feature. Single-user products still get an org at
+signup (it can stay invisible in the UI). Org-scoped assets should attribute and
+authorize with **`memberId`**; personal resources (billing, devices, OAuth) stay
+on **`userId`**.
+
+See [Organizations and members](/guides/organizations-and-members) for intended
+usage, and the
+[member ownership migration](/guides/v0.32.0-memberid-ownership-migration) when
+upgrading an existing app.
+
 ## Read by module
 
 Use the module docs when you are adding a feature to an app. A module page

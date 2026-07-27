@@ -30,6 +30,7 @@ function createOrganizationActor(
   return createActor({
     organizationId: "org-1",
     organizationRole: "owner",
+    memberId: "member-1",
     ...overrides,
   }) as ServiceOrganizationActor;
 }
@@ -38,6 +39,7 @@ function createTeamActor(overrides: Partial<ServiceActorClaims> = {}): ServiceTe
   return createActor({
     organizationId: "org-1",
     organizationRole: "owner",
+    memberId: "member-1",
     teamId: "team-1",
     teamRole: "member",
     ...overrides,
@@ -169,10 +171,10 @@ describe("BaseService procedure builder", () => {
       expect(authorized.value.stateMatches).toBe(true);
       expect(authorized.value.input.filters).toEqual([
         {
-          columnId: "userId",
+          columnId: "memberId",
           type: "string",
           method: "equals",
-          value: "user-1",
+          value: "member-1",
         },
         {
           columnId: "organizationId",
@@ -212,8 +214,8 @@ describe("BaseService procedure builder", () => {
         .requireAuth()
         .mapInput("scopedQuery", ({ input, ctx }) =>
           this.addContextFilter(ctx.actor, { user: true, organization: true, team: true }, input, {
-            userId: {
-              columnId: "authorUserId",
+            memberId: {
+              columnId: "memberId",
               method: "equals",
             },
             organizationId: {
@@ -251,10 +253,10 @@ describe("BaseService procedure builder", () => {
       expect(result.value.scopedInputMatches).toBe(true);
       expect(result.value.input.filters).toEqual([
         {
-          columnId: "authorUserId",
+          columnId: "memberId",
           type: "string",
           method: "equals",
-          value: "user-1",
+          value: "member-1",
         },
         {
           columnId: "organizationId",

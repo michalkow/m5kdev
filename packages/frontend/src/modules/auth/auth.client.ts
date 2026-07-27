@@ -38,6 +38,10 @@ export function createM5KAuthClient(baseURL?: string) {
             type: "string",
             required: false,
           },
+          activeOrganizationMemberId: {
+            type: "string",
+            required: false,
+          },
           activeOrganizationType: {
             type: "string",
             required: false,

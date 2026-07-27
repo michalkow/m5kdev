@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { v4 as uuidv4 } from "uuid";
 import * as auth from "./auth.db";
@@ -42,7 +42,11 @@ export async function getNewOrganization<O extends Orm, S extends Schema>(
     .from(schema.members)
     .orderBy(desc(schema.members.createdAt))
     .where(
-      and(eq(schema.members.userId, userId), eq(schema.members.organizationId, organizationId))
+      and(
+        eq(schema.members.userId, userId),
+        eq(schema.members.organizationId, organizationId),
+        isNull(schema.members.deletedAt)
+      )
     )
     .limit(1);
 
@@ -58,8 +62,8 @@ export async function getNewOrganization<O extends Orm, S extends Schema>(
 
   return {
     ...organization,
-    memberId: member.id,
-    role: member.role,
+    memberId: member?.id ?? null,
+    role: member?.role ?? "",
     teamId: teamMember?.teamId ?? null,
     teamRole: teamMember?.role ?? null,
   };
@@ -131,6 +135,30 @@ export async function getActiveOrganizationAndTeam<O extends Orm, S extends Sche
     organizationMemberId = lastSession.activeOrganizationMemberId ?? undefined;
   }
 
+  if (organizationId && organizationMemberId) {
+    const [activeMember] = await orm
+      .select({ id: schema.members.id, role: schema.members.role })
+      .from(schema.members)
+      .where(
+        and(
+          eq(schema.members.id, organizationMemberId),
+          eq(schema.members.organizationId, organizationId),
+          isNull(schema.members.deletedAt)
+        )
+      )
+      .limit(1);
+    if (!activeMember) {
+      organizationId = undefined;
+      organizationRole = undefined;
+      organizationMemberId = undefined;
+      teamId = undefined;
+      teamRole = undefined;
+      organizationType = undefined;
+    } else {
+      organizationRole = activeMember.role;
+    }
+  }
+
   if (!organizationId || !organizationRole || !organizationMemberId) {
     const [member] = await orm
       .select({
@@ -140,7 +168,7 @@ export async function getActiveOrganizationAndTeam<O extends Orm, S extends Sche
       })
       .from(schema.members)
       .orderBy(desc(schema.members.createdAt))
-      .where(eq(schema.members.userId, userId))
+      .where(and(eq(schema.members.userId, userId), isNull(schema.members.deletedAt)))
       .limit(1);
     organizationId = member?.organizationId;
     organizationRole = member?.role;
@@ -183,7 +211,13 @@ export async function getActiveOrganizationAndTeam<O extends Orm, S extends Sche
 export async function createOrganizationAndTeam<O extends Orm, S extends Schema>(
   orm: O,
   schema: S,
-  user: { id: string; email: string; locale?: string | null },
+  user: {
+    id: string;
+    email: string;
+    name?: string | null;
+    image?: string | null;
+    locale?: string | null;
+  },
   locale?: string | null
 ): Promise<{ organizationId: string; teamId: string }> {
   const organizationId = uuidv4();
@@ -207,6 +241,8 @@ export async function createOrganizationAndTeam<O extends Orm, S extends Schema>
         userId: user.id,
         organizationId: organization.id,
         role: "owner",
+        name: user.name ?? "",
+        image: user.image ?? null,
       })
       .returning();
 
@@ -233,5 +269,73 @@ export async function createOrganizationAndTeam<O extends Orm, S extends Schema>
 
     if (!teamMember) throw new Error("createOrganizationAndTeam: Failed to create team member");
     return { organizationId, teamId: team.id };
+  });
+}
+
+export async function syncActiveMemberProfiles(
+  orm: Orm,
+  userId: string,
+  profile: { name?: string; image?: string | null }
+): Promise<void> {
+  const update: { name?: string; image?: string | null } = {};
+  if (typeof profile.name === "string" && profile.name.length > 0) {
+    update.name = profile.name;
+  }
+  if (profile.image !== undefined) {
+    update.image = profile.image;
+  }
+  if (Object.keys(update).length === 0) return;
+
+  await orm
+    .update(schema.members)
+    .set(update)
+    .where(and(eq(schema.members.userId, userId), isNull(schema.members.deletedAt)));
+}
+
+export async function softDeleteOrganizationMember(
+  orm: Orm,
+  {
+    memberId,
+    organizationId,
+    userId,
+  }: {
+    memberId: string;
+    organizationId: string;
+    userId: string;
+  }
+): Promise<{ id: string } | null> {
+  return orm.transaction(async (tx) => {
+    const [removed] = await tx
+      .update(schema.members)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(
+          eq(schema.members.id, memberId),
+          eq(schema.members.organizationId, organizationId),
+          isNull(schema.members.deletedAt)
+        )
+      )
+      .returning({ id: schema.members.id });
+
+    if (!removed) return null;
+
+    await tx
+      .update(schema.sessions)
+      .set({
+        activeOrganizationId: null,
+        activeOrganizationRole: null,
+        activeOrganizationMemberId: null,
+        activeOrganizationType: null,
+        activeTeamId: null,
+        activeTeamRole: null,
+      })
+      .where(
+        and(
+          eq(schema.sessions.userId, userId),
+          eq(schema.sessions.activeOrganizationId, organizationId)
+        )
+      );
+
+    return removed;
   });
 }

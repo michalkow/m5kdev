@@ -748,7 +748,7 @@ export class AuthService extends BasePermissionService<
     .access({
       action: "read",
       entities: ({ state }) => ({
-        userId: state.member.userId,
+        memberId: state.member.id,
       }),
     })
     .handle(({ state }): ServerResult<number> => {
@@ -766,7 +766,7 @@ export class AuthService extends BasePermissionService<
     .access({
       action: "write",
       entities: ({ state }) => ({
-        userId: state.member.userId,
+        memberId: state.member.id,
       }),
     })
     .handle(async ({ input: onboarding, state }): ServerResultAsync<number> => {
@@ -789,7 +789,7 @@ export class AuthService extends BasePermissionService<
     .access({
       action: "read",
       entities: ({ state }) => ({
-        userId: state.member.userId,
+        memberId: state.member.id,
       }),
     })
     .handle(({ state }): ServerResult<Record<string, unknown>> => {
@@ -807,7 +807,7 @@ export class AuthService extends BasePermissionService<
     .access({
       action: "write",
       entities: ({ state }) => ({
-        userId: state.member.userId,
+        memberId: state.member.id,
       }),
     })
     .handle(async ({ input, state }): ServerResultAsync<Record<string, unknown>> => {
@@ -831,7 +831,7 @@ export class AuthService extends BasePermissionService<
     .access({
       action: "read",
       entities: ({ state }) => ({
-        userId: state.member.userId,
+        memberId: state.member.id,
       }),
     })
     .handle(({ state }): ServerResult<Record<string, unknown>> => {
@@ -849,7 +849,7 @@ export class AuthService extends BasePermissionService<
     .access({
       action: "write",
       entities: ({ state }) => ({
-        userId: state.member.userId,
+        memberId: state.member.id,
       }),
     })
     .handle(async ({ input, state }): ServerResultAsync<Record<string, unknown>> => {
@@ -873,7 +873,7 @@ export class AuthService extends BasePermissionService<
     .access({
       action: "read",
       entities: ({ state }) => ({
-        userId: state.member.userId,
+        memberId: state.member.id,
       }),
     })
     .handle(({ state }): ServerResult<string[]> => {
@@ -891,7 +891,7 @@ export class AuthService extends BasePermissionService<
     .access({
       action: "write",
       entities: ({ state }) => ({
-        userId: state.member.userId,
+        memberId: state.member.id,
       }),
     })
     .handle(async ({ input, state }): ServerResultAsync<string[]> => {

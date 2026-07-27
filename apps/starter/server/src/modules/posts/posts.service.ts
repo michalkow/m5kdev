@@ -47,6 +47,7 @@ export class PostsService extends BasePermissionService<
 
       return this.repository.posts.create({
         authorUserId: ctx.user.id,
+        memberId: ctx.actor.memberId ?? null,
         organizationId: ctx.session.activeOrganizationId ?? null,
         teamId: ctx.session.activeTeamId ?? null,
         title: input.title.trim(),

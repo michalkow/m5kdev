@@ -1,5 +1,6 @@
 export interface InitiateS3UploadInput {
   readonly userId: string;
+  readonly memberId?: string;
   readonly organizationId?: string;
   readonly teamId?: string;
   readonly contentType: string;

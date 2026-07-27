@@ -116,10 +116,16 @@ export const members = sqliteTable("members", {
   userId: text("user_id")
     .notNull()
     .references(() => users.id),
+  /** Snapshot of the user's display name for attribution after leave/remove. */
+  name: text("name").notNull().default(""),
+  /** Snapshot of the user's image (e.g. OAuth avatar) for attribution after leave/remove. */
+  image: text("image"),
   role: text("role").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$default(() => new Date()),
+  /** Soft-delete timestamp; active membership requires this to be null. */
+  deletedAt: integer("deleted_at", { mode: "timestamp" }),
   preferences: text("preferences", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
   metadata: text("metadata", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
   onboarding: integer("onboarding"),

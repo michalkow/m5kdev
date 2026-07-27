@@ -37,6 +37,11 @@ Service calls are made on behalf of an actor: `UserActor`, `OrganizationActor`,
 union used by permission checks; scopes are `user`, `organization`, `team`, and
 `admin`.
 
+Organization and team scopes require `memberId` in addition to org
+id/role (and team id/role for team scope). That member id is the principal for
+org-scoped `"own"` ownership — see
+[Organizations and members](/guides/organizations-and-members).
+
 ## Services and permissions
 
 - `BaseService<Repositories, Services>` — dependency-injected business logic
@@ -48,6 +53,13 @@ Grants are declared per module in `<module>.grants.ts` with
 `flattenNestedGrants({ module: { scope: { role: { action: "own" | "all" } } } })`.
 Canonical actions are `read`, `write`, `delete`, and `publish`; guard action
 names must match grant action names exactly.
+
+In organization context, user-level `"own"` compares `Entity.memberId` to the
+actor’s `memberId` when present (with legacy `userId` dual-read for
+rows that still lack `memberId`). Stamp and authorize org assets with
+`memberId`; keep `userId` for personal resources. `addContextFilter` accepts
+`"member"` (and remaps `["user", "organization"]` to `memberId` when the actor
+has an organization member id).
 
 ### Service procedures
 

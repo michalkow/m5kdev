@@ -89,7 +89,12 @@ export class FileService extends BasePermissionService<
     actor: AuthenticatedActor,
     input: InitiateS3UploadInput
   ): ServerResultAsync<InitiateS3UploadResult> {
-    const writeGuard = this.accessGuard(actor, "write", { userId: input.userId });
+    const writeGuard = this.accessGuard(actor, "write", {
+      userId: input.userId,
+      memberId: input.memberId ?? null,
+      organizationId: input.organizationId ?? null,
+      teamId: input.teamId ?? null,
+    });
     if (writeGuard.isErr()) return err(writeGuard.error);
 
     const bucket = this.repository.fileS3.getBucket();
@@ -123,6 +128,7 @@ export class FileService extends BasePermissionService<
       metadata: input.metadata,
       status: "PENDING",
       userId: input.userId,
+      memberId: input.memberId ?? null,
       organizationId: input.organizationId,
       teamId: input.teamId,
     });
@@ -159,7 +165,12 @@ export class FileService extends BasePermissionService<
       return this.error("NOT_FOUND", "File not found");
     }
 
-    const writeGuard = this.accessGuard(actor, "write", { userId: row.userId });
+    const writeGuard = this.accessGuard(actor, "write", {
+      userId: row.userId,
+      memberId: row.memberId,
+      organizationId: row.organizationId,
+      teamId: row.teamId,
+    });
     if (writeGuard.isErr()) return err(writeGuard.error);
 
     if (row.status === "UPLOADED") {
@@ -192,7 +203,12 @@ export class FileService extends BasePermissionService<
       return this.error("NOT_FOUND", "File not found");
     }
 
-    const deleteGuard = this.accessGuard(actor, "delete", { userId: row.userId });
+    const deleteGuard = this.accessGuard(actor, "delete", {
+      userId: row.userId,
+      memberId: row.memberId,
+      organizationId: row.organizationId,
+      teamId: row.teamId,
+    });
     if (deleteGuard.isErr()) return err(deleteGuard.error);
 
     const s3Result = await this.repository.fileS3.deleteS3Object(row.key);

@@ -53,7 +53,7 @@ export class RecurrenceService extends BasePermissionService<
 > {
   readonly list = this.procedure<QueryInput>("list")
     .requireAuth("organization")
-    .addContextFilter(["user", "organization"])
+    .addContextFilter(["member", "organization"])
     .handle(({ input }) =>
       this.repository.recurrence.queryList(input, {
         globalSearchColumns: ["name", "kind"],
@@ -70,6 +70,7 @@ export class RecurrenceService extends BasePermissionService<
         enabled: input.enabled,
         metadata: input.metadata ?? null,
         userId: actor.userId,
+        memberId: actor.memberId,
         organizationId: actor.organizationId,
         teamId: actor.teamId,
       };
@@ -84,7 +85,12 @@ export class RecurrenceService extends BasePermissionService<
         const result = await this.repository.recurrence.findById(input.id);
         if (result.isErr()) return err(result.error);
         if (!result.value) return ok(null);
-        const guard = this.accessGuard(ctx.actor, "read", { userId: result.value.userId });
+        const guard = this.accessGuard(ctx.actor, "read", {
+          userId: result.value.userId,
+          memberId: result.value.memberId,
+          organizationId: result.value.organizationId,
+          teamId: result.value.teamId,
+        });
         if (guard.isErr()) return err(guard.error);
         return ok(result.value);
       }

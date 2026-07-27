@@ -24,16 +24,24 @@ export class TagRepository extends BaseTableRepository<
   Schema["tags"]
 > {
   async link(
-    { userId, ...data }: TagLinkSchema & { userId: string },
+    {
+      userId,
+      memberId,
+      ...data
+    }: TagLinkSchema & { userId: string; memberId?: string | null },
     tx?: Orm
   ): Promise<TaggingSelectOutputResult> {
     const db = tx ?? this.orm;
+
+    const ownershipFilter = memberId
+      ? eq(this.schema.tags.memberId, memberId)
+      : eq(this.schema.tags.userId, userId);
 
     const foundTagResult = await this.throwableQuery(() =>
       db
         .select({ id: this.schema.tags.id })
         .from(this.schema.tags)
-        .where(and(eq(this.schema.tags.id, data.tagId), eq(this.schema.tags.userId, userId)))
+        .where(and(eq(this.schema.tags.id, data.tagId), ownershipFilter))
         .limit(1)
     );
     if (foundTagResult.isErr()) return err(foundTagResult.error);
@@ -106,16 +114,24 @@ export class TagRepository extends BaseTableRepository<
   }
 
   async unlink(
-    { userId, ...data }: TagLinkSchema & { userId: string },
+    {
+      userId,
+      memberId,
+      ...data
+    }: TagLinkSchema & { userId: string; memberId?: string | null },
     tx?: Orm
   ): Promise<TagSelectOutputResult> {
     const db = tx ?? this.orm;
+
+    const ownershipFilter = memberId
+      ? eq(this.schema.tags.memberId, memberId)
+      : eq(this.schema.tags.userId, userId);
 
     const foundTagResult = await this.throwableQuery(() =>
       db
         .select()
         .from(this.schema.tags)
-        .where(and(eq(this.schema.tags.id, data.tagId), eq(this.schema.tags.userId, userId)))
+        .where(and(eq(this.schema.tags.id, data.tagId), ownershipFilter))
         .limit(1)
     );
     if (foundTagResult.isErr()) return err(foundTagResult.error);
@@ -230,10 +246,20 @@ export class TagRepository extends BaseTableRepository<
     userId: string,
     tx?: Orm
   ): ServerResultAsync<TaggingSchema[]> {
+    return this.listTaggingsForOwner(input, { userId }, tx);
+  }
+
+  async listTaggingsForOwner(
+    input: { resourceType: string; resourceIds?: readonly string[] },
+    owner: { userId: string; memberId?: string | null },
+    tx?: Orm
+  ): ServerResultAsync<TaggingSchema[]> {
     const db = tx ?? this.orm;
     const filters = [
       eq(this.schema.taggings.resourceType, input.resourceType),
-      eq(this.schema.tags.userId, userId),
+      owner.memberId
+        ? eq(this.schema.tags.memberId, owner.memberId)
+        : eq(this.schema.tags.userId, owner.userId),
       isNull(this.schema.tags.deletedAt),
     ];
 

@@ -1,6 +1,6 @@
 import { integer, sqliteTable as table, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
-import { organizations, teams, users } from "../auth/auth.db";
+import { members, organizations, teams, users } from "../auth/auth.db";
 
 /** Lifecycle of a file row relative to S3 upload completion. */
 export type FileUploadStatus = "PENDING" | "UPLOADED" | "DELETED" | "FAILED";
@@ -14,9 +14,8 @@ export const files = table(
       .$default(() => new Date()),
     updatedAt: integer("updated_at", { mode: "timestamp" }),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    memberId: text("member_id").references(() => members.id, { onDelete: "set null" }),
     organizationId: text("organization_id").references(() => organizations.id, {
       onDelete: "cascade",
     }),

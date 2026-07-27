@@ -51,6 +51,8 @@ export const defaultAuthGrants = flattenNestedGrants({
 - **role** — role name at that level (e.g. `"admin"`, `"member"`, `"owner"`).
 - **action** — canonical action (`"read"`, `"write"`, `"delete"`, `"publish"`).
 - **Access** — `"all"` (any entity) or `"own"` (ownership check required).
+- For org-scoped assets, `"own"` at user-level compares `entity.memberId` to `actor.memberId` when an organization member context is present. Personal (non-org) resources still compare `userId`.
+- `ownership: "member"` means member-owned (authorize via `memberId` in org context), not the literal members-table role name.
 
 The function flattens this into a `Grant[]` consumed by `BasePermissionService`.
 

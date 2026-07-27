@@ -20,17 +20,22 @@ export class TagService extends BasePermissionService<
   readonly list = this.procedure<TagListInputSchema & TagListSchema>("list")
     .requireAuth()
     .handle(({ input, ctx }): ServerResultAsync<TagListOutputSchema> => {
+      const ownershipFilter = ctx.actor.memberId
+        ? {
+            columnId: "memberId",
+            type: "string" as const,
+            method: "equals" as const,
+            value: ctx.actor.memberId,
+          }
+        : {
+            columnId: "userId",
+            type: "string" as const,
+            method: "equals" as const,
+            value: ctx.actor.userId,
+          };
       return this.repository.tag.list({
         ...input,
-        filters: [
-          ...(input.filters ?? []),
-          {
-            columnId: "userId",
-            type: "string",
-            method: "equals",
-            value: ctx.actor.userId,
-          },
-        ],
+        filters: [...(input.filters ?? []), ownershipFilter],
       });
     });
 
@@ -39,13 +44,22 @@ export class TagService extends BasePermissionService<
   )
     .requireAuth()
     .handle(({ input, ctx }) => {
-      return this.repository.tag.listTaggingsForUser(input, ctx.actor.userId);
+      return this.repository.tag.listTaggingsForOwner(input, {
+        userId: ctx.actor.userId,
+        memberId: ctx.actor.memberId,
+      });
     });
 
   readonly create = this.procedure<TagCreateSchema>("create")
     .requireAuth()
     .handle(({ input, ctx }): Promise<TagSelectOutputResult> => {
-      return this.repository.tag.create({ ...input, userId: ctx.actor.userId });
+      return this.repository.tag.create({
+        ...input,
+        userId: ctx.actor.userId,
+        memberId: ctx.actor.memberId ?? null,
+        organizationId: ctx.actor.organizationId ?? null,
+        teamId: ctx.actor.teamId ?? null,
+      });
     });
 
   readonly update = this.procedure<TagUpdateSchema>("update")
@@ -62,7 +76,11 @@ export class TagService extends BasePermissionService<
   readonly link = this.procedure<TagLinkSchema>("link")
     .requireAuth()
     .handle(({ input, ctx }): Promise<TaggingSelectOutputResult> => {
-      return this.repository.tag.link({ ...input, userId: ctx.actor.userId });
+      return this.repository.tag.link({
+        ...input,
+        userId: ctx.actor.userId,
+        memberId: ctx.actor.memberId,
+      });
     });
 
   async linkBulk(data: TagLinkSchema[]): ServerResultAsync<TagSchema[]> {
@@ -76,7 +94,11 @@ export class TagService extends BasePermissionService<
   readonly unlink = this.procedure<TagLinkSchema>("unlink")
     .requireAuth()
     .handle(({ input, ctx }): Promise<TagSelectOutputResult> => {
-      return this.repository.tag.unlink({ ...input, userId: ctx.actor.userId });
+      return this.repository.tag.unlink({
+        ...input,
+        userId: ctx.actor.userId,
+        memberId: ctx.actor.memberId,
+      });
     });
 
   readonly delete = this.procedure<TagDeleteSchema>("delete")

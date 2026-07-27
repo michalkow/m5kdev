@@ -34,6 +34,7 @@ import {
   getActiveOrganizationAndTeam,
   getNewOrganization,
   getNewTeam,
+  syncActiveMemberProfiles,
 } from "./auth.utils";
 
 const schema = { ...auth };
@@ -507,6 +508,23 @@ export function createBetterAuth<
           member: {
             modelName: "member",
             additionalFields: {
+              name: {
+                type: "string",
+                required: false,
+                defaultValue: "",
+              },
+              image: {
+                type: "string",
+                required: false,
+                defaultValue: null,
+                input: false,
+              },
+              deletedAt: {
+                type: "date",
+                required: false,
+                defaultValue: null,
+                input: false,
+              },
               onboarding: {
                 type: "number",
                 required: false,
@@ -581,6 +599,15 @@ export function createBetterAuth<
 
     databaseHooks: {
       user: {
+        update: {
+          after: async (user) => {
+            await syncActiveMemberProfiles(orm, user.id, {
+              name: typeof user.name === "string" ? user.name : undefined,
+              image:
+                "image" in user ? ((user.image as string | null | undefined) ?? null) : undefined,
+            });
+          },
+        },
         create: {
           before: async (user, ctx) => {
             logger.info({ step: "before create user", user, ctx });
@@ -691,14 +718,43 @@ export function createBetterAuth<
                 throw new APIError("NOT_FOUND", { message });
               }
 
-              const [member] = await orm
-                .insert(schema.members)
-                .values({
-                  userId: user.id,
-                  organizationId: invitation.organizationId,
-                  role: invitation.role || "member",
-                })
-                .returning();
+              const [existingMember] = await orm
+                .select()
+                .from(schema.members)
+                .where(
+                  and(
+                    eq(schema.members.userId, user.id),
+                    eq(schema.members.organizationId, invitation.organizationId)
+                  )
+                )
+                .limit(1);
+
+              let member = existingMember;
+              if (existingMember?.deletedAt) {
+                const [revived] = await orm
+                  .update(schema.members)
+                  .set({
+                    deletedAt: null,
+                    role: invitation.role || "member",
+                    name: user.name,
+                    image: user.image ?? null,
+                  })
+                  .where(eq(schema.members.id, existingMember.id))
+                  .returning();
+                member = revived;
+              } else if (!existingMember) {
+                const [inserted] = await orm
+                  .insert(schema.members)
+                  .values({
+                    userId: user.id,
+                    organizationId: invitation.organizationId,
+                    role: invitation.role || "member",
+                    name: user.name,
+                    image: user.image ?? null,
+                  })
+                  .returning();
+                member = inserted;
+              }
               if (!member) {
                 const message = "Failed to add user to organization";
                 logger.error({ message });
