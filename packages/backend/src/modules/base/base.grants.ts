@@ -96,24 +96,32 @@ function getRoleForLevel(level: GrantLevel, ctx: RoleContext): string | null {
 }
 
 /**
- * Ownership principal for "user"-level (personal) grants:
- * - In org context with a memberId on the actor, prefer memberId ownership.
- * - Fall back to userId only when the entity has no memberId (legacy rows)
- *   or the actor has no organization member context (personal resources).
+ * Per-entity user-level ownership:
+ * - In org context, entities with `memberId` compare against the actor memberId.
+ * - Otherwise (legacy rows or personal resources) compare `userId`.
  */
-function getUserLevelOwnership(
+function ownsEntityAtUserLevel(ctx: ContextValues, entity: Entity): boolean {
+  const inOrgContext = Boolean(ctx.organizationId && ctx.memberId);
+  if (inOrgContext && entity.memberId != null) {
+    return entity.memberId === ctx.memberId;
+  }
+  return Boolean(ctx.userId) && entity.userId === ctx.userId;
+}
+
+/**
+ * User-level "own" check across a batch. Each entity is evaluated independently
+ * so mixed memberId / legacy userId rows can all pass when owned by the actor.
+ * Empty arrays still pass (same as `Array.every`); missing entities still deny.
+ * With no entities, org-context callers previously selected the memberId field
+ * then denied via `checkOwnership` — that deny is preserved here.
+ */
+function checkUserLevelOwnership(
   ctx: ContextValues,
   entities?: Entity | Entity[]
-): { field: keyof Entity; value: string | null } {
-  const inOrgContext = Boolean(ctx.organizationId && ctx.memberId);
-  if (inOrgContext) {
-    const entityList = !entities ? [] : Array.isArray(entities) ? entities : [entities];
-    const hasMemberId = entityList.length === 0 || entityList.some((e) => e.memberId != null);
-    if (hasMemberId) {
-      return { field: "memberId", value: ctx.memberId };
-    }
-  }
-  return { field: "userId", value: ctx.userId };
+): boolean {
+  if (!entities) return false;
+  const entityList = Array.isArray(entities) ? entities : [entities];
+  return entityList.every((entity) => ownsEntityAtUserLevel(ctx, entity));
 }
 
 function getContextValueForLevel(level: GrantLevel, ctx: ContextValues): string | null {
@@ -167,17 +175,7 @@ function checkOwnAccess(
       if (grant.role !== getRoleForLevel(level, roles)) continue;
 
       if (level === "user") {
-        const { field, value } = getUserLevelOwnership(contextValues, entities);
-        if (checkOwnership(field, value, entities)) return true;
-        // Legacy dual-read: org assets without memberId still compare userId
-        if (
-          field === "memberId" &&
-          entities &&
-          (Array.isArray(entities) ? entities : [entities]).some((e) => e.memberId == null) &&
-          checkOwnership("userId", contextValues.userId, entities)
-        ) {
-          return true;
-        }
+        if (checkUserLevelOwnership(contextValues, entities)) return true;
         continue;
       }
 

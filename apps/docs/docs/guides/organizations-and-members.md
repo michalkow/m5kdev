@@ -88,8 +88,9 @@ List filters for “my items in this org” should include member context:
 .addContextFilter(["member", "organization"])
 ```
 
-`addContextFilter(["user", "organization"])` also remaps to `memberId` when the
-actor has an organization member id.
+`addContextFilter(["member", "organization"])` for member-owned lists. Use
+`["user", "organization"]` only when you intentionally filter by `userId` within
+an organization (it does not remap to `memberId`).
 
 ### Use `userId` for personal resources
 

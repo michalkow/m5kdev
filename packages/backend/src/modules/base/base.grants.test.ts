@@ -391,6 +391,62 @@ describe("checkPermissionSync", () => {
       expect(checkPermissionSync(ctx, grants, entity, { ownership: true })).toBe(false);
     });
 
+    it("allows mixed memberId and legacy userId batches when each row is owned", () => {
+      const ctx = createMockContext(
+        { id: "user-123", role: "member" },
+        {
+          activeOrganizationId: "org-1",
+          activeOrganizationRole: "member",
+          activeOrganizationMemberId: "member-123",
+        }
+      );
+      const grants: ResourceActionGrant[] = [{ level: "user", role: "member", access: "own" }];
+      const entities = [
+        createMockEntity({
+          ownership: "member",
+          memberId: "member-123",
+          organizationId: "org-1",
+        }),
+        createMockEntity({
+          ownership: "member",
+          memberId: null,
+          userId: "user-123",
+          organizationId: "org-1",
+        }),
+      ];
+
+      expect(checkPermissionSync(ctx, grants, entities, { ownership: true })).toBe(true);
+      expect(checkPermissionSync(ctx, grants, entities)).toBe(true);
+    });
+
+    it("denies mixed batches when any row is not owned", () => {
+      const ctx = createMockContext(
+        { id: "user-123", role: "member" },
+        {
+          activeOrganizationId: "org-1",
+          activeOrganizationRole: "member",
+          activeOrganizationMemberId: "member-123",
+        }
+      );
+      const grants: ResourceActionGrant[] = [{ level: "user", role: "member", access: "own" }];
+      const entities = [
+        createMockEntity({
+          ownership: "member",
+          memberId: "member-123",
+          organizationId: "org-1",
+        }),
+        createMockEntity({
+          ownership: "member",
+          memberId: null,
+          userId: "other-user",
+          organizationId: "org-1",
+        }),
+      ];
+
+      expect(checkPermissionSync(ctx, grants, entities, { ownership: true })).toBe(false);
+      expect(checkPermissionSync(ctx, grants, entities)).toBe(false);
+    });
+
     it("allows member-owned resources with matching user-level 'all' access", () => {
       const ctx = createMockContext({ id: "user-123", role: "admin" });
       const grants: ResourceActionGrant[] = [{ level: "user", role: "admin", access: "all" }];

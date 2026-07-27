@@ -141,7 +141,7 @@ describe("BaseService procedure builder", () => {
 
     class QueryService extends BaseService<Record<string, never>, Record<string, never>> {
       readonly run = this.procedure<QueryWithSearch>("run")
-        .addContextFilter(["user", "organization"])
+        .addContextFilter(["member", "organization"])
         .handle(({ input, state }) =>
           ok({
             input,
@@ -186,6 +186,42 @@ describe("BaseService procedure builder", () => {
     }
   });
 
+  it("addContextFilter keeps user scoping when user and organization are both requested", async () => {
+    type QueryWithSearch = QueryInput & { search?: string };
+
+    class QueryService extends BaseService<Record<string, never>, Record<string, never>> {
+      readonly run = this.procedure<QueryWithSearch>("run")
+        .addContextFilter(["user", "organization"])
+        .handle(({ input }) => ok(input));
+    }
+
+    const service = new QueryService();
+    const result = await service.run(
+      { search: "hello" },
+      {
+        actor: createOrganizationActor(),
+      }
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.filters).toEqual([
+        {
+          columnId: "userId",
+          type: "string",
+          method: "equals",
+          value: "user-1",
+        },
+        {
+          columnId: "organizationId",
+          type: "string",
+          method: "equals",
+          value: "org-1",
+        },
+      ]);
+    }
+  });
+
   it("addContextFilter returns FORBIDDEN when the actor scope is too small", async () => {
     type QueryWithSearch = QueryInput & { search?: string };
 
@@ -213,7 +249,7 @@ describe("BaseService procedure builder", () => {
       readonly run = this.procedure<QueryWithSearch>("run")
         .requireAuth()
         .mapInput("scopedQuery", ({ input, ctx }) =>
-          this.addContextFilter(ctx.actor, { user: true, organization: true, team: true }, input, {
+          this.addContextFilter(ctx.actor, { member: true, organization: true, team: true }, input, {
             memberId: {
               columnId: "memberId",
               method: "equals",

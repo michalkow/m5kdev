@@ -601,11 +601,15 @@ export function createBetterAuth<
       user: {
         update: {
           after: async (user) => {
-            await syncActiveMemberProfiles(orm, user.id, {
-              name: typeof user.name === "string" ? user.name : undefined,
-              image:
-                "image" in user ? ((user.image as string | null | undefined) ?? null) : undefined,
-            });
+            try {
+              await syncActiveMemberProfiles(orm, user.id, {
+                name: typeof user.name === "string" ? user.name : undefined,
+                image:
+                  "image" in user ? ((user.image as string | null | undefined) ?? null) : undefined,
+              });
+            } catch (error) {
+              logger.error({ step: "syncActiveMemberProfiles", userId: user.id, error });
+            }
           },
         },
         create: {

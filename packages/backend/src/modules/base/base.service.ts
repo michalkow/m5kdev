@@ -126,9 +126,7 @@ export class BaseService<
   ): QueryInput {
     const filters: QueryFilter[] = [];
 
-    const useMemberFilter =
-      include.member ||
-      (Boolean(include.user && include.organization) && Boolean(actor.memberId));
+    const useMemberFilter = Boolean(include.member);
 
     if (useMemberFilter) {
       if (!actor.memberId) {

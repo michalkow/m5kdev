@@ -58,8 +58,8 @@ In organization context, user-level `"own"` compares `Entity.memberId` to the
 actor’s `memberId` when present (with legacy `userId` dual-read for
 rows that still lack `memberId`). Stamp and authorize org assets with
 `memberId`; keep `userId` for personal resources. `addContextFilter` accepts
-`"member"` (and remaps `["user", "organization"]` to `memberId` when the actor
-has an organization member id).
+`"member"` for member-owned lists; `["user", "organization"]` filters by
+`userId` and `organizationId` without remapping to `memberId`.
 
 ### Service procedures
 
