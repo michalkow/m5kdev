@@ -45,7 +45,7 @@ await this.service.ai.generateText(createSummaryPrompt(input));
 await this.service.ai.generateObject(createEntryPrompt(input));
 ```
 
-Do not spread extra prompt configuration into the result at the call site. If
+Spread extra prompt configuration into the result at the call site (like adding `ctx` if needed). If
 an option is part of the use case, accept the relevant domain input and decide
 the option inside the factory.
 
