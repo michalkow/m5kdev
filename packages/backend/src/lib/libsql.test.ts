@@ -37,6 +37,17 @@ describe("isRetryableLibsqlError", () => {
     ).toBe(false);
   });
 
+  it("matches embedded-replica Hrana(Api) stream-not-found SQLITE_* errors", () => {
+    const embedded = new LibsqlError(
+      'Hrana(Api("status=404 Not Found, body={\\"error\\":\\"stream not found: 32fa65f6:927a6\\"}"))',
+      "SQLITE_ERROR"
+    );
+    expect(isRetryableLibsqlError(embedded)).toBe(true);
+    expect(
+      isRetryableLibsqlError(new LibsqlError('Hrana(Api("status=404 Not Found"))', "SQLITE_IOERR"))
+    ).toBe(true);
+  });
+
   it("ignores non-libsql errors", () => {
     expect(isRetryableLibsqlError(new Error("stream not found"))).toBe(false);
   });
@@ -56,6 +67,23 @@ describe("withLibsqlRetry", () => {
 
     expect(result).toEqual({ rows: [{ ok: 1 }] });
     expect(inner.execute).toHaveBeenCalledTimes(2);
+    expect(inner.reconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("reconnects and retries embedded-replica SQLITE_* stream-not-found errors", async () => {
+    const embedded = new LibsqlError(
+      'Hrana(Api("status=404 Not Found, body={\\"error\\":\\"stream not found: dead:stream\\"}"))',
+      "SQLITE_ERROR"
+    );
+    const inner = makeClient({
+      execute: jest
+        .fn()
+        .mockRejectedValueOnce(embedded)
+        .mockResolvedValueOnce({ rows: [{ ok: 1 }] }) as never,
+    });
+    const client = withLibsqlRetry(inner, { backoffMs: 1 });
+
+    await expect(client.execute("select 1")).resolves.toEqual({ rows: [{ ok: 1 }] });
     expect(inner.reconnect).toHaveBeenCalledTimes(1);
   });
 

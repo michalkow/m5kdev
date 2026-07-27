@@ -36,8 +36,11 @@ tooling; the database contents are untouched.
 `syncUrl`), every write is forwarded to the primary over the hrana protocol.
 When the remote node restarts — or expires an idle stream — the next request on
 a cached stream fails with a "stream not found" style error even though a fresh
-attempt would succeed. Interactive transactions are the most exposed call sites
-because they hold a stream open for their duration.
+attempt would succeed. Embedded replicas surface this as a `SQLITE_*`
+`LibsqlError` whose message looks like
+`Hrana(Api("status=404 Not Found, body={\"error\":\"stream not found: ...\"}"))`
+rather than a `HRANA_*` / `SERVER_ERROR` code. Interactive transactions are the
+most exposed call sites because they hold a stream open for their duration.
 
 **Embedded replicas must have exactly one owner per file.** The replica sync
 process injects WAL frames into the local file; a second client syncing (or
@@ -221,7 +224,7 @@ preconfigured `LibSQLVector` instance is still accepted, but then its lifecycle
 
 | Symptom | Likely cause |
 | --- | --- |
-| Still seeing "stream not found" errors | Client passed as a preconfigured instance without `withLibsqlRetry`; or the failure is inside an interactive transaction (not retried by design). |
+| Still seeing "stream not found" / `Hrana(Api("status=404..."))` errors | Client passed as a preconfigured instance without `withLibsqlRetry`; failure inside an interactive transaction (not retried by design); or an older `@m5kdev/backend` that only retried `SERVER_ERROR`/`HRANA_*` codes — embedded replicas surface the same failure as `SQLITE_*` with a Rust `Hrana(Api(...))` message and need a backend version that matches those too. |
 | Repeated retry warnings in logs | The remote endpoint is flapping or unreachable — retries mask single restarts, not sustained outages. |
 | `[drizzle] A server is listening on port ...` | Working as intended: stop the dev server before running seed/sync/reset, or use `SKIP_DB_GUARD=true` if you are certain the listener is not holding the database file. |
 | WAL conflicts on boot after a reset | Reset script does not delete the sync metadata sidecars (`-info`, `-client_wal_index`); apply step 4. |

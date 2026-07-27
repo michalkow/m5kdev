@@ -4,22 +4,39 @@ import type { Logger } from "pino";
 /**
  * Hrana streams are stateful: when the remote sqld/Turso node restarts or
  * expires an idle stream, the next request on the cached stream fails even
- * though a fresh attempt would succeed. These are the error shapes the client
- * surfaces for that situation.
+ * though a fresh attempt would succeed.
+ *
+ * Remote (ws/http) clients usually use HRANA_* / SERVER_ERROR codes. Embedded
+ * replicas go through the native sqlite3 binding and surface the same failure
+ * as SQLITE_* with a Rust Debug message like
+ * `Hrana(Api("status=404 Not Found, body={\"error\":\"stream not found: ...\"}"))`.
  */
-const RETRYABLE_CODES = new Set([
+const RETRYABLE_TRANSPORT_CODES = new Set([
   "HRANA_WEBSOCKET_ERROR",
   "HRANA_PROTO_ERROR",
   "HRANA_CLOSED_ERROR",
   "WEBSOCKET_ERROR",
 ]);
 
-const RETRYABLE_SERVER_MESSAGE = /\bstream\b.*\b(?:not found|expired|closed)|baton|status 404/i;
+/**
+ * Message shapes shared by SERVER_ERROR (remote) and SQLITE_* (embedded replica)
+ * failures for dead/expired hrana streams. `[\s\S]*` spans the Rust Debug wrapper
+ * around JSON bodies (`Hrana(Api("...stream not found..."))`).
+ */
+const RETRYABLE_MESSAGE =
+  /\bstream\b[\s\S]*\b(?:not found|expired|closed)|\binvalid baton\b|\bbaton\b|status[= ]404/i;
+
+function libsqlErrorMessage(error: LibsqlError): string {
+  const parts = [error.message];
+  if (error.cause instanceof Error) parts.push(error.cause.message);
+  return parts.join("\n");
+}
 
 export function isRetryableLibsqlError(error: unknown): boolean {
   if (!(error instanceof LibsqlError)) return false;
-  if (RETRYABLE_CODES.has(error.code)) return true;
-  return error.code === "SERVER_ERROR" && RETRYABLE_SERVER_MESSAGE.test(error.message);
+  if (RETRYABLE_TRANSPORT_CODES.has(error.code)) return true;
+  // SERVER_ERROR / SQLITE_* / UNKNOWN — only retry when the message is a dead stream.
+  return RETRYABLE_MESSAGE.test(libsqlErrorMessage(error));
 }
 
 export type LibsqlRetryOptions = {
