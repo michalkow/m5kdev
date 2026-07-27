@@ -18,7 +18,7 @@ below. Existing apps follow the migration steps in this guide.
 | Layer | Change |
 | --- | --- |
 | `@m5kdev/backend` | `initTelemetry` / `shutdownTelemetry` in `lib/otel.ts`; automatic spans on HTTP, Express, tRPC, service procedures, repository queries, and DB calls; Pino log correlation (`trace_id`, `span_id`) and OTLP log export in `utils/logger.ts`. |
-| `@m5kdev/backend` | BullMQ OpenTelemetry via `bullmq-otel` on workflow `Queue` / `Worker` instances; OTLP metrics exporter when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. |
+| `@m5kdev/backend` | BullMQ OpenTelemetry via `bullmq-otel` on workflow `Queue` / `Worker` instances; OTLP metrics exporter when `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT` is set. |
 | `@m5kdev/backend` | `withSpan`, `getTracer`, and `serializeSpanValue` helpers in `utils/telemetry.ts` for custom spans in app services. |
 | App server | `instrumentation.ts` bootstraps telemetry before the rest of the app loads; `index.ts` flushes telemetry on shutdown. |
 | App shared `.env` | Optional `OTEL_*` variables documented in `.env.example`. |
@@ -94,6 +94,7 @@ you want to export telemetry):
 # Optional OpenTelemetry (SigNoz / OTLP). When unset, dev uses console exporter.
 # Railway public networking uses HTTPS on 443 — do not append :4317/:4318.
 # The same OTLP endpoint exports traces, metrics, and Pino logs (correlated via trace_id/span_id).
+# Optional: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://…/v1/metrics (overrides metrics URL)
 # OTEL_EXPORTER_OTLP_ENDPOINT=https://your-ingester.example.com
 # OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 # OTEL_SERVICE_NAME=<app>-server
@@ -103,7 +104,8 @@ you want to export telemetry):
 
 | Variable | Purpose |
 | --- | --- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP HTTP base URL for traces, metrics, and logs. When set, all three signals export to this endpoint. Metrics stay off when unset (local console tracing only). |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP HTTP base URL for traces and logs (and metrics when `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` is unset). |
+| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | Optional metrics-only OTLP URL. Takes precedence over `OTEL_EXPORTER_OTLP_ENDPOINT` for metrics. Include the full path (for example `…/v1/metrics`); it is not appended automatically. Enables metrics even when the generic endpoint is unset. |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | Use `http/protobuf` for HTTP OTLP (port 4318 semantics over HTTPS on managed hosts). |
 | `OTEL_SERVICE_NAME` | `service.name` resource attribute; defaults to the name passed to `initTelemetry`. |
 | `OTEL_RESOURCE_ATTRIBUTES` | Extra resource tags (for example `deployment.environment=production`). |
@@ -149,8 +151,8 @@ Enqueue from an HTTP/tRPC request also produces BullMQ producer spans (for examp
 `{queue}.add`) under the active request trace when context propagates.
 
 BullMQ metrics (job counts, processing durations, and related `bullmq.*` instruments)
-export via OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. They are disabled for
-console-only local tracing.
+export via OTLP when `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT`
+is set. They are disabled for console-only local tracing.
 
 The domain `workflow.*` span is created automatically for every job/cron run. **Nested
 spans only appear when the handler uses traced APIs** — `service.procedure()`
@@ -244,7 +246,7 @@ that pattern if you want e2e traces in your observability backend; set
 
 | Scenario | Approach |
 | --- | --- |
-| Local dev, no exporter | Omit `OTEL_EXPORTER_OTLP_ENDPOINT` — traces print to the console; metrics stay off; logs stay on stdout with correlation fields when inside a span. |
+| Local dev, no exporter | Omit OTLP endpoints — traces print to the console; metrics stay off; logs stay on stdout with correlation fields when inside a span. |
 | Tests / scripts | `OTEL_SDK_DISABLED=true` |
 | E2E hermetic runs | `OTEL_SDK_DISABLED=true` in the e2e server env |
 

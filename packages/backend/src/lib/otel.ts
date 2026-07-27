@@ -55,19 +55,35 @@ export function initTelemetry({
   if (sdk || process.env.OTEL_SDK_DISABLED === "true") return;
 
   const traceExporter = resolveTraceExporter(env);
-  if (!traceExporter) return;
-
   const hasOtlp = Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT);
+  // Metrics-specific endpoint takes precedence over the shared OTLP base URL.
+  const metricsEndpoint =
+    process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT ||
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT ||
+    undefined;
+  const hasMetrics = Boolean(metricsEndpoint);
+
+  // Metrics-only OTLP (no traces) must still start the SDK.
+  if (!traceExporter && !hasMetrics) return;
+
   const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "default";
 
   sdk = new NodeSDK({
     resource: createResource(serviceName),
-    traceExporter,
+    ...(traceExporter ? { traceExporter } : {}),
     ...(hasOtlp
+      ? { logRecordProcessors: [new BatchLogRecordProcessor(new OTLPLogExporter())] }
+      : {}),
+    ...(hasMetrics
       ? {
-          logRecordProcessors: [new BatchLogRecordProcessor(new OTLPLogExporter())],
           metricReader: new PeriodicExportingMetricReader({
-            exporter: new OTLPMetricExporter(),
+            // Prefer an explicit metrics URL; otherwise the exporter falls back to
+            // OTEL_EXPORTER_OTLP_ENDPOINT (+ /v1/metrics) via its own env handling.
+            exporter: new OTLPMetricExporter(
+              process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+                ? { url: process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT }
+                : undefined
+            ),
           }),
         }
       : {}),
@@ -90,10 +106,13 @@ export function initTelemetry({
   });
 
   sdk.start();
-  const traceExporterKind =
-    traceExporter instanceof ConsoleSpanExporter ? "console" : `otlp (${otlpEndpoint})`;
+  const traceExporterKind = !traceExporter
+    ? "off"
+    : traceExporter instanceof ConsoleSpanExporter
+      ? "console"
+      : `otlp (${otlpEndpoint})`;
   const logsExporterKind = hasOtlp ? `otlp (${otlpEndpoint})` : "correlation-only";
-  const metricsExporterKind = hasOtlp ? `otlp (${otlpEndpoint})` : "off";
+  const metricsExporterKind = hasMetrics ? `otlp (${metricsEndpoint})` : "off";
   console.info(
     `[otel] tracing enabled: ${traceExporterKind}; logs: ${logsExporterKind}; metrics: ${metricsExporterKind}`
   );
