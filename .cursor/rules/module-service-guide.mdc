@@ -15,6 +15,14 @@ alwaysApply: false
 - Propagate `ServerResultAsync` consistently and use `err(...)`/`ok(...)` composition.
 - Prefer helper methods for repeated workflows (prompt prep, query assembly, enrichment).
 
+## Avoid Trivial Service Delegation
+
+- Do not add a service method whose only behavior is calling another service.
+- Call the owning service directly when no business rule, authorization, validation, orchestration, transaction boundary, or meaningful domain translation is added.
+- Renaming the dependency method, repackaging arguments, constructing a prompt, or forwarding actor/context data alone does not justify a wrapper.
+- A delegating method is justified only when the current service genuinely owns the use case and adds behavior or protects a boundary callers must not bypass.
+- If removing the method and calling the dependency directly would lose nothing, do not add the method.
+
 ## Procedure Builder
 
 Service methods are defined using the procedure builder pattern. Each procedure is a chainable pipeline that handles input typing, authentication, resource loading, access control, and output typing before the final handler.

@@ -19,6 +19,8 @@
 - Register modules in `apps/server/src/app.ts` via `createBackendApp(config, [modules])`.
 - Use `BaseModule` subclasses for app modules; the kernel wires repositories, services, and tRPC.
 - Keep tRPC files focused on input/output wiring and delegate logic to services.
+- Do not add service methods that merely call another service. Call the owning service directly unless the method adds a business rule, authorization, validation, orchestration, a transaction boundary, or meaningful domain translation.
+- Renaming a dependency method, repackaging arguments, constructing a prompt, or forwarding actor/context data alone does not justify a service wrapper.
 - Do not create Drizzle migrations by hand. Use the scaffolded config and your project migration workflow later if you need generated migrations.
 
 ## Frontend Conventions

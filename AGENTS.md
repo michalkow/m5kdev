@@ -50,6 +50,14 @@ Do not import services into repositories.
 - Instantiate services in `apps/*/server/src/service.ts`.
 - Prefer router factories or injected services over constructing repos/services inside router files.
 
+## Avoid Trivial Service Delegation
+
+- Do not add service methods whose only purpose is to call another service.
+- Call the service that owns the operation directly when the wrapper adds no business rule, authorization, validation, orchestration, transaction boundary, or meaningful domain translation.
+- Renaming a dependency method, repackaging its arguments, constructing a prompt, or forwarding actor/context data alone does not justify a wrapper.
+- Delegate through another service only when that service genuinely owns the use case and adds behavior or protects a boundary callers must not bypass.
+- Before adding a service-to-service wrapper, ask whether removing it would lose a business rule, security guarantee, domain boundary, or orchestration. If not, do not add it.
+
 ## Permissions and Grants
 
 - Keep grants in `<module>.grants.ts`.

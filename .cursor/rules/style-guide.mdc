@@ -36,3 +36,10 @@ alwaysApply: true
 - Never use default exports; always use named exports.
 - Don't use barrel exports (`index.ts`)
 - Keep type definitions close to where they're used
+
+## Abstractions and Delegation
+
+- Avoid pass-through wrappers and trivial delegation.
+- Do not add a method whose only purpose is to rename another operation, repackage its arguments, or forward context to a dependency.
+- Call the dependency that owns the operation directly unless the wrapper adds a business rule, authorization, validation, orchestration, transaction boundary, or meaningful domain translation.
+- Before adding an abstraction, ask whether removing it would lose behavior or weaken an intentional boundary. If not, do not add it.
