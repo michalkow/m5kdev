@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.32.1
+
+### Patch Changes
+
+- web ai jobs
+- Updated dependencies
+  - @m5kdev/commons@0.32.1
+  - @m5kdev/config@0.32.1
+
 ## 0.32.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.32.1
+
+### Patch Changes
+
+- web ai jobs
+
 ## 0.32.0
 
 ### Minor Changes
