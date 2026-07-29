@@ -12,6 +12,9 @@ import type {
 export type { Job, JobsOptions, Processor, Queue, QueueEvents, Worker, WorkerOptions };
 
 import type IORedis from "ioredis";
+import type { z } from "zod";
+import type { ServerResultAsync } from "../base/base.dto";
+
 export interface WorkflowQueueConfig {
   concurrency?: number;
   limiter?: RateLimiterOptions;
@@ -44,7 +47,7 @@ export interface WorkflowServiceConfig {
   };
 }
 
-export interface WorkflowJobConfig<Payload, Result = unknown, Awaitable extends boolean = false> {
+export interface WorkflowJobConfig<Payload, Awaitable extends boolean = false> {
   name: string;
   queue?: string;
   awaitable?: Awaitable;
@@ -55,8 +58,6 @@ export interface WorkflowJobConfig<Payload, Result = unknown, Awaitable extends 
   meta?: (payload: Payload) => { userId?: string; tags?: string[] };
   jobOptions?: Partial<JobsOptions>;
   workerOptions?: Partial<WorkerOptions>;
-  /** @internal Phantom field for type inference — never set at runtime. */
-  readonly _resultType?: Result;
 }
 
 export interface ResolvedJobConfig {
@@ -69,7 +70,18 @@ export interface ResolvedJobConfig {
   metaFn?: (payload: unknown) => { userId?: string; tags?: string[] };
   jobOptions: Partial<JobsOptions>;
   workerOptions: Partial<WorkerOptions>;
+  inputSchema?: z.ZodType;
+  outputSchema?: z.ZodType;
+  validateInput?: boolean;
+  validateOutput?: boolean;
 }
+
+type WorkflowJobTriggerResult<TExpectedOutput, Awaitable extends boolean> = Awaitable extends true
+  ? // biome-ignore lint/suspicious/noConfusingVoidType: void is the sentinel for "no output schema"
+    [TExpectedOutput] extends [void]
+    ? null
+    : TExpectedOutput
+  : string;
 
 export interface WorkflowJobDefinitionBase<Payload> {
   readonly jobName: string;
@@ -78,22 +90,40 @@ export interface WorkflowJobDefinitionBase<Payload> {
   _handler?: (payload: Payload) => Promise<unknown>;
 }
 
-export interface AwaitableJobDefinition<Payload, Result>
-  extends WorkflowJobDefinitionBase<Payload> {
-  trigger(payload: Payload, overrides?: TriggerOverrides): Promise<Result>;
-  triggerMany(payloads: Payload[], overrides?: TriggerOverrides): Promise<Result[]>;
-  handle(fn: (payload: Payload) => Promise<Result>): this;
+export interface WorkflowJobDefinition<
+  Payload,
+  TExpectedOutput = void,
+  Awaitable extends boolean = false,
+> extends WorkflowJobDefinitionBase<Payload> {
+  input<TSchema extends z.ZodType>(
+    schema: TSchema,
+    validate?: boolean
+  ): WorkflowJobDefinition<z.infer<TSchema>, TExpectedOutput, Awaitable>;
+  output<TSchema extends z.ZodType>(
+    schema: TSchema,
+    validate?: boolean
+  ): WorkflowJobDefinition<Payload, z.infer<TSchema>, Awaitable>;
+  trigger(
+    payload: Payload,
+    overrides?: TriggerOverrides
+  ): Promise<WorkflowJobTriggerResult<TExpectedOutput, Awaitable>>;
+  triggerMany(
+    payloads: Payload[],
+    overrides?: TriggerOverrides
+  ): Promise<WorkflowJobTriggerResult<TExpectedOutput, Awaitable>[]>;
+  // biome-ignore lint/suspicious/noConfusingVoidType: void is the sentinel for "no output schema"
+  handle: [TExpectedOutput] extends [void]
+    ? (fn: (payload: Payload) => Promise<void>) => this
+    : (fn: (payload: Payload) => ServerResultAsync<TExpectedOutput>) => this;
 }
 
-export interface FireAndForgetJobDefinition<Payload> extends WorkflowJobDefinitionBase<Payload> {
-  trigger(payload: Payload, overrides?: TriggerOverrides): Promise<string>;
-  triggerMany(payloads: Payload[], overrides?: TriggerOverrides): Promise<string[]>;
-  handle(fn: (payload: Payload) => Promise<void>): this;
-}
+export type FireAndForgetJobDefinition<Payload> = WorkflowJobDefinition<Payload, void, false>;
 
-export type WorkflowJobDefinition<Payload, Result = unknown> =
-  | AwaitableJobDefinition<Payload, Result>
-  | FireAndForgetJobDefinition<Payload>;
+export type AwaitableJobDefinition<Payload, Result = null> = WorkflowJobDefinition<
+  Payload,
+  Result,
+  true
+>;
 
 /** Definition-time config for scheduled work (BullMQ job schedulers). Handlers take no payload. */
 export interface WorkflowCronConfig {

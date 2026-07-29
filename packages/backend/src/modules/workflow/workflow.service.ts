@@ -8,13 +8,13 @@ import type { Job } from "bullmq";
 import { Queue, QueueEvents, Worker } from "bullmq";
 import { BullMQOtel } from "bullmq-otel";
 import type IORedis from "ioredis";
+import { ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
+import type { z } from "zod";
 import { Base } from "../base/base.abstract";
-import type { ServerResultAsync } from "../base/base.dto";
+import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import type { WorkflowRepository } from "./workflow.repository";
 import type {
-  AwaitableJobDefinition,
-  FireAndForgetJobDefinition,
   Processor,
   ResolvedCronConfig,
   ResolvedJobConfig,
@@ -22,6 +22,7 @@ import type {
   WorkflowCronConfig,
   WorkflowCronDefinition,
   WorkflowJobConfig,
+  WorkflowJobDefinition,
   WorkflowQueueConfig,
   WorkflowServiceConfig,
 } from "./workflow.types";
@@ -32,6 +33,57 @@ const DEFAULT_RECONCILE_PATTERN = "*/5 * * * *";
 const DEFAULT_RECONCILE_GRACE_SECONDS = 60;
 const DEFAULT_RECONCILE_BATCH = 100;
 export const RECONCILE_CRON_NAME = "workflow.reconcile";
+
+function isServerResult<T>(value: unknown): value is ServerResult<T> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "isErr" in value &&
+    typeof (value as { isErr: unknown }).isErr === "function" &&
+    "isOk" in value &&
+    typeof (value as { isOk: unknown }).isOk === "function"
+  );
+}
+
+function wrapJobHandler(
+  config: ResolvedJobConfig,
+  fn: (payload: unknown) => Promise<unknown>
+): (payload: unknown) => Promise<unknown> {
+  const needsWrap = Boolean(
+    (config.validateInput && config.inputSchema) ||
+      (config.validateOutput && config.outputSchema)
+  );
+  if (!needsWrap) {
+    return fn;
+  }
+
+  return async (payload) => {
+    let input = payload;
+    if (config.validateInput && config.inputSchema) {
+      const parsed = config.inputSchema.safeParse(payload);
+      if (!parsed.success) {
+        throw new Error(parsed.error.message);
+      }
+      input = parsed.data;
+    }
+
+    const result = await fn(input);
+
+    if (config.validateOutput && config.outputSchema) {
+      const value = isServerResult(result) ? (result.isOk() ? result.value : undefined) : result;
+      if (isServerResult(result) && result.isErr()) {
+        return result;
+      }
+      const parsed = config.outputSchema.safeParse(value);
+      if (!parsed.success) {
+        throw new Error(parsed.error.message);
+      }
+      return isServerResult(result) ? ok(parsed.data) : parsed.data;
+    }
+
+    return result;
+  };
+}
 
 export class WorkflowService extends Base {
   private readonly queues = new Map<string, Queue>();
@@ -126,25 +178,21 @@ export class WorkflowService extends Base {
 
   // -- Job definition API --
 
-  job<Payload, Result>(
-    config: WorkflowJobConfig<Payload, Result, true>
-  ): AwaitableJobDefinition<Payload, Result>;
-
   job<Payload>(
-    config: WorkflowJobConfig<Payload, unknown, false>
-  ): FireAndForgetJobDefinition<Payload>;
+    config: WorkflowJobConfig<Payload, true> & { awaitable: true }
+  ): WorkflowJobDefinition<Payload, void, true>;
 
-  job<Payload>(config: WorkflowJobConfig<Payload>): FireAndForgetJobDefinition<Payload>;
+  job<Payload>(config: WorkflowJobConfig<Payload, false>): WorkflowJobDefinition<Payload, void, false>;
 
-  job<Payload, Result>(
-    config: WorkflowJobConfig<Payload, Result, boolean>
-  ): AwaitableJobDefinition<Payload, Result> | FireAndForgetJobDefinition<Payload> {
+  job<Payload, Awaitable extends boolean>(
+    config: WorkflowJobConfig<Payload, Awaitable>
+  ): WorkflowJobDefinition<Payload, void, Awaitable> {
     const queueName = config.queue ?? this.config.defaultQueue;
     if (!this.queues.has(queueName)) {
       throw new Error(`Queue "${queueName}" is not configured in WorkflowService`);
     }
 
-    const awaitable = config.awaitable ?? false;
+    const awaitable = (config.awaitable ?? false) as Awaitable;
     const timeout = config.timeout ?? this.config.defaults?.timeout ?? DEFAULT_TIMEOUT;
     const awaitConcurrency = config.awaitConcurrency ?? DEFAULT_AWAIT_CONCURRENCY;
 
@@ -171,18 +219,31 @@ export class WorkflowService extends Base {
       queueName,
       _config: resolved,
       _handler: undefined as ((payload: Payload) => Promise<unknown>) | undefined,
+      input(schema: z.ZodType, validate?: boolean) {
+        resolved.inputSchema = schema;
+        resolved.validateInput = Boolean(validate);
+        return this;
+      },
+      output(schema: z.ZodType, validate?: boolean) {
+        resolved.outputSchema = schema;
+        resolved.validateOutput = Boolean(validate);
+        return this;
+      },
       trigger: (payload: Payload, overrides?: TriggerOverrides) =>
-        this.triggerJob<Payload, Result>(resolved, payload, overrides),
+        this.triggerJob(resolved, payload, overrides),
       triggerMany: (payloads: Payload[], overrides?: TriggerOverrides) =>
-        this.triggerManyJobs<Payload, Result>(resolved, payloads, overrides),
-      handle(fn: (payload: Payload) => Promise<unknown>) {
-        this._handler = fn;
+        this.triggerManyJobs(resolved, payloads, overrides),
+      // biome-ignore lint/suspicious/noExplicitAny: conditional handle type requires untyped implementation
+      handle(fn: any) {
+        this._handler = wrapJobHandler(
+          resolved,
+          fn as (payload: unknown) => Promise<unknown>
+        ) as (payload: Payload) => Promise<unknown>;
         return this;
       },
     };
 
-    return definition as AwaitableJobDefinition<Payload, Result> &
-      FireAndForgetJobDefinition<Payload>;
+    return definition as WorkflowJobDefinition<Payload, void, Awaitable>;
   }
 
   // -- Read/list (absorbed from old service) --

@@ -72,15 +72,15 @@ export class WorkflowRegistry {
 
   constructor(private readonly workflowService: WorkflowService) {}
 
-  register<Payload, Result>(
-    definition: WorkflowJobDefinition<Payload, Result>,
-    handler: (payload: Payload) => Promise<Result>
+  register<Payload, Result = void>(
+    definition: WorkflowJobDefinition<Payload, Result, boolean>,
+    handler: (payload: Payload) => Promise<unknown>
   ): void;
 
   register(definition: WorkflowCronDefinition, handler: () => Promise<void>): void;
 
   register(
-    definition: WorkflowJobDefinition<unknown, unknown> | WorkflowCronDefinition,
+    definition: WorkflowJobDefinition<unknown, unknown, boolean> | WorkflowCronDefinition,
     handler: ((payload: unknown) => Promise<unknown>) | (() => Promise<void>)
   ): void {
     if (this.workers.size > 0) {
@@ -103,7 +103,7 @@ export class WorkflowRegistry {
       return;
     }
 
-    const jobDef = definition as WorkflowJobDefinition<unknown, unknown>;
+    const jobDef = definition as WorkflowJobDefinition<unknown, unknown, boolean>;
     if (this.handlers.has(jobDef.jobName)) {
       throw new Error(`Handler already registered for job "${jobDef.jobName}"`);
     }

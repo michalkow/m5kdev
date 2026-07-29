@@ -64,6 +64,8 @@ jest.mock("uuid", () => ({
 import { Queue, Worker } from "bullmq";
 import { BullMQOtel } from "bullmq-otel";
 import type IORedis from "ioredis";
+import { ok } from "neverthrow";
+import { z } from "zod";
 import type { WorkflowRepository } from "./workflow.repository";
 import { WorkflowService } from "./workflow.service";
 
@@ -197,7 +199,7 @@ describe("WorkflowService", () => {
 
     it("creates an awaitable job definition", () => {
       const { service } = createService();
-      const def = service.job<{ id: string }, string>({
+      const def = service.job<{ id: string }>({
         name: "awaitableJob",
         awaitable: true,
       });
@@ -243,6 +245,67 @@ describe("WorkflowService", () => {
         { data: "test" },
         expect.objectContaining({ jobId: "test-uuid-1234" })
       );
+    });
+
+    it(".input() and .output() return the same definition and store schemas", () => {
+      const { service } = createService();
+      const inputSchema = z.object({ id: z.string() });
+      const outputSchema = z.object({ ok: z.boolean() });
+      const def = service.job({ name: "schemaJob" });
+
+      const afterInput = def.input(inputSchema);
+      const afterOutput = afterInput.output(outputSchema);
+
+      expect(afterInput).toBe(def);
+      expect(afterOutput).toBe(def);
+      expect(def._config.inputSchema).toBe(inputSchema);
+      expect(def._config.outputSchema).toBe(outputSchema);
+      expect(def._config.validateInput).toBe(false);
+      expect(def._config.validateOutput).toBe(false);
+    });
+
+    it(".input(schema, true) rejects invalid payload before the user handler", async () => {
+      const { service } = createService();
+      const userHandler = jest.fn().mockResolvedValue(undefined);
+      const def = service
+        .job({ name: "validateInputJob" })
+        .input(z.object({ id: z.string() }), true)
+        .handle(userHandler);
+
+      await expect(def._handler?.({ id: 123 } as never)).rejects.toThrow();
+      expect(userHandler).not.toHaveBeenCalled();
+
+      await def._handler?.({ id: "abc" });
+      expect(userHandler).toHaveBeenCalledWith({ id: "abc" });
+    });
+
+    it(".output(schema, true) rejects invalid Ok values from the handler", async () => {
+      const { service } = createService();
+      const def = service
+        .job({ name: "validateOutputJob" })
+        .output(z.object({ count: z.number() }), true)
+        .handle(async () => ok({ count: "nope" as unknown as number }));
+
+      await expect(def._handler?.({})).rejects.toThrow();
+
+      const defOk = service
+        .job({ name: "validateOutputJobOk" })
+        .output(z.object({ count: z.number() }), true)
+        .handle(async () => ok({ count: 3 }));
+
+      const result = await defOk._handler?.({});
+      expect(result).toEqual(ok({ count: 3 }));
+    });
+
+    it(".output() without validate still stores a Result-returning handler", async () => {
+      const { service } = createService();
+      const def = service
+        .job({ name: "typedOutputJob" })
+        .output(z.string())
+        .handle(async () => ok("done"));
+
+      const result = await def._handler?.({});
+      expect(result).toEqual(ok("done"));
     });
   });
 
@@ -414,7 +477,7 @@ describe("WorkflowService", () => {
       mockWaitUntilFinished.mockResolvedValue("result-data");
 
       const { service } = createService();
-      const def = service.job<Record<string, never>, string>({
+      const def = service.job<Record<string, never>>({
         name: "awaitJob",
         awaitable: true,
         timeout: 5_000,

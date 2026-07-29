@@ -32,11 +32,11 @@ function createMockCronResolved(overrides?: Partial<ResolvedCronConfig>): Resolv
   };
 }
 
-function createMockDefinition<P = unknown, R = unknown>(
+function createMockDefinition<P = unknown, R = void>(
   name: string,
   queueName = "fast",
   configOverrides?: Partial<ResolvedJobConfig>
-): WorkflowJobDefinition<P, R> {
+): WorkflowJobDefinition<P, R, boolean> {
   return {
     jobName: name,
     queueName,
@@ -44,7 +44,7 @@ function createMockDefinition<P = unknown, R = unknown>(
     _handler: undefined,
     trigger: jest.fn(),
     triggerMany: jest.fn(),
-  } as unknown as WorkflowJobDefinition<P, R>;
+  } as unknown as WorkflowJobDefinition<P, R, boolean>;
 }
 
 function createMockCronDefinition(
@@ -66,11 +66,11 @@ function createMockCronDefinition(
   } as WorkflowCronDefinition;
 }
 
-function createMockDefinitionWithHandler<P = unknown, R = unknown>(
+function createMockDefinitionWithHandler<P = unknown, R = void>(
   name: string,
   queueName = "fast",
   configOverrides?: Partial<ResolvedJobConfig>
-): WorkflowJobDefinition<P, R> {
+): WorkflowJobDefinition<P, R, boolean> {
   const def = createMockDefinition<P, R>(name, queueName, configOverrides);
   def._handler = jest.fn().mockResolvedValue(undefined);
   return def;
