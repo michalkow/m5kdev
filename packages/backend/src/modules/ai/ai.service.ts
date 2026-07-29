@@ -80,6 +80,10 @@ export type AIServiceGenerateParams<T extends ZodType> = Omit<
     initialRetryAttempts?: number;
     objectType?: "object" | "array";
     originalContent?: GenerateTextInput;
+    webSearch?: {
+      maxResults?: number;
+      searchPrompt?: string;
+    };
   };
 
 export type AIServiceGenerateTextParams = Omit<
@@ -582,6 +586,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       removeMDash,
       retryAttempts,
       initialRetryAttempts,
+      webSearch,
       ctx,
       ...rest
     } = resolvedParams;
@@ -620,6 +625,7 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     const preparedModel = this.prepareModel(resolvedModel, {
       objectGeneration: isObject,
       modelSuffix,
+      webSearch,
     });
     const content = messages ? { messages } : prompt ? { prompt } : undefined;
 
