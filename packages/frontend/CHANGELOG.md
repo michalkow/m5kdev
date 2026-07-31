@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.32.3
+
+### Patch Changes
+
+- logger
+- Updated dependencies
+  - @m5kdev/commons@0.32.3
+
 ## 0.32.2
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.32.3
+
+### Patch Changes
+
+- logger
+
 ## 0.32.2
 
 ### Patch Changes
