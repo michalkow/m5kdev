@@ -701,7 +701,8 @@ describe("BasePermissionService procedure builder", () => {
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
-      expect(result.error.code).toBe("INTERNAL_SERVER_ERROR");
+      expect(result.error.code).toBe("NOT_FOUND");
+      expect(result.error.message).toBe("Missing entity");
     }
   });
 
@@ -827,6 +828,200 @@ describe("BasePermissionService procedure builder", () => {
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value).toBe(true);
+    }
+  });
+
+  it("soft-filters entityStep arrays and writes filtered results back to state", async () => {
+    const grants: ResourceGrant[] = [
+      {
+        action: "read",
+        level: "user",
+        role: "member",
+        access: "own",
+      },
+    ];
+
+    class PermissionService extends BasePermissionService<
+      Record<string, never>,
+      Record<string, never>
+    > {
+      constructor() {
+        super({} as Record<string, never>, {} as Record<string, never>, grants);
+      }
+
+      readonly run = this.procedure("run")
+        .use("records", () =>
+          ok([
+            {
+              id: "a",
+              userId: "user-1",
+              memberId: "member-1",
+              organizationId: "org-1",
+            },
+            {
+              id: "b",
+              userId: "other-user",
+              memberId: "other-member",
+              organizationId: "org-1",
+            },
+          ])
+        )
+        .access({
+          action: "read",
+          entityStep: "records",
+        })
+        .handle(({ state }) =>
+          ok({
+            accessIds: (state.access as { id: string }[]).map((row) => row.id),
+            stateIds: state.records.map((row) => row.id),
+          })
+        );
+    }
+
+    const service = new PermissionService();
+    const result = await service.run(undefined, {
+      actor: createOrganizationActor({
+        userRole: "member",
+        organizationRole: "member",
+      }),
+    } as never);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.accessIds).toEqual(["a"]);
+      expect(result.value.stateIds).toEqual(["a"]);
+    }
+  });
+
+  it("returns an empty array when no list entities are allowed", async () => {
+    const grants: ResourceGrant[] = [
+      {
+        action: "read",
+        level: "user",
+        role: "member",
+        access: "own",
+      },
+    ];
+
+    class PermissionService extends BasePermissionService<
+      Record<string, never>,
+      Record<string, never>
+    > {
+      constructor() {
+        super({} as Record<string, never>, {} as Record<string, never>, grants);
+      }
+
+      readonly run = this.procedure("run")
+        .use("records", () =>
+          ok([
+            {
+              id: "b",
+              userId: "other-user",
+              memberId: "other-member",
+              organizationId: "org-1",
+            },
+          ])
+        )
+        .access({
+          action: "read",
+          entityStep: "records",
+        })
+        .handle(({ state }) => ok(state.records));
+    }
+
+    const service = new PermissionService();
+    const result = await service.run(undefined, {
+      actor: createOrganizationActor({
+        userRole: "member",
+        organizationRole: "member",
+      }),
+    } as never);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toEqual([]);
+    }
+  });
+
+  it("blocks cross-org single entities when grants use 'org' access", async () => {
+    const grants: ResourceGrant[] = [
+      {
+        action: "write",
+        level: "organization",
+        role: "owner",
+        access: "org",
+      },
+    ];
+
+    class PermissionService extends BasePermissionService<
+      Record<string, never>,
+      Record<string, never>
+    > {
+      constructor() {
+        super({} as Record<string, never>, {} as Record<string, never>, grants);
+      }
+
+      readonly run = this.procedure("run")
+        .loadResource("record", () =>
+          ok({
+            id: "resource-1",
+            organizationId: "org-2",
+          })
+        )
+        .access({
+          action: "write",
+          entityStep: "record",
+        })
+        .handle(() => ok("updated"));
+    }
+
+    const service = new PermissionService();
+    const result = await service.run(undefined, { actor: createOrganizationActor() } as never);
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("FORBIDDEN");
+    }
+  });
+
+  it("allows same-org single entities when grants use 'org' access", async () => {
+    const grants: ResourceGrant[] = [
+      {
+        action: "write",
+        level: "organization",
+        role: "owner",
+        access: "org",
+      },
+    ];
+
+    class PermissionService extends BasePermissionService<
+      Record<string, never>,
+      Record<string, never>
+    > {
+      constructor() {
+        super({} as Record<string, never>, {} as Record<string, never>, grants);
+      }
+
+      readonly run = this.procedure("run")
+        .loadResource("record", () =>
+          ok({
+            id: "resource-1",
+            organizationId: "org-1",
+          })
+        )
+        .access({
+          action: "write",
+          entityStep: "record",
+        })
+        .handle(({ state }) => ok(state.record.id));
+    }
+
+    const service = new PermissionService();
+    const result = await service.run(undefined, { actor: createOrganizationActor() } as never);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toBe("resource-1");
     }
   });
 });

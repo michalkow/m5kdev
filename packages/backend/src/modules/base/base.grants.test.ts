@@ -5,6 +5,7 @@ import {
   checkPermissionAsync,
   checkPermissionSync,
   type Entity,
+  filterEntitiesByPermission,
   flattenNestedGrants,
   type NestedGrants,
   type ResourceActionGrant,
@@ -339,6 +340,56 @@ describe("checkPermissionSync", () => {
       const entity = createMockEntity({ organizationId: "org-2" });
 
       expect(checkPermissionSync(ctx, grants, entity)).toBe(false);
+    });
+
+    it("grants access with 'org' access when organizationId matches", () => {
+      const ctx = createMockContext(
+        {},
+        { activeOrganizationId: "org-1", activeOrganizationRole: "owner" }
+      );
+      const grants: ResourceActionGrant[] = [
+        { level: "organization", role: "owner", access: "org" },
+      ];
+      const entity = createMockEntity({ organizationId: "org-1" });
+
+      expect(checkPermissionSync(ctx, grants, entity)).toBe(true);
+    });
+
+    it("denies access with 'org' access when organizationId does not match", () => {
+      const ctx = createMockContext(
+        {},
+        { activeOrganizationId: "org-1", activeOrganizationRole: "owner" }
+      );
+      const grants: ResourceActionGrant[] = [
+        { level: "organization", role: "owner", access: "org" },
+      ];
+      const entity = createMockEntity({ organizationId: "org-2" });
+
+      expect(checkPermissionSync(ctx, grants, entity)).toBe(false);
+    });
+
+    it("denies access with 'org' access when actor has no organization", () => {
+      const ctx = createMockContext({ role: "admin" });
+      const grants: ResourceActionGrant[] = [
+        { level: "user", role: "admin", access: "org" },
+      ];
+      const entity = createMockEntity({ organizationId: "org-1" });
+
+      expect(checkPermissionSync(ctx, grants, entity)).toBe(false);
+    });
+
+    it("denies access with 'none' even when role matches", () => {
+      const ctx = createMockContext(
+        {},
+        { activeOrganizationId: "org-1", activeOrganizationRole: "member" }
+      );
+      const grants: ResourceActionGrant[] = [
+        { level: "organization", role: "member", access: "none" },
+      ];
+      const entity = createMockEntity({ organizationId: "org-1" });
+
+      expect(checkPermissionSync(ctx, grants, entity)).toBe(false);
+      expect(checkPermissionSync(ctx, grants)).toBe(false);
     });
   });
 
@@ -1096,5 +1147,94 @@ describe("checkPermissionAsync", () => {
       if (result.isOk()) expect(result.value).toBe(true);
       expect(getEntities).not.toHaveBeenCalled();
     });
+
+    it("checks organization-level 'org' access with entity fetch", async () => {
+      const ctx = createMockContext(
+        {},
+        { activeOrganizationId: "org-1", activeOrganizationRole: "owner" }
+      );
+      const grants: ResourceActionGrant[] = [
+        { level: "organization", role: "owner", access: "org" },
+      ];
+      const entity = createMockEntity({ organizationId: "org-1" });
+      const getEntities = jest.fn().mockResolvedValue(ok(entity));
+
+      const result = await checkPermissionAsync(ctx, grants, getEntities);
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) expect(result.value).toBe(true);
+      expect(getEntities).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe("filterEntitiesByPermission", () => {
+  it("returns empty array for empty input", () => {
+    const ctx = createMockContext(
+      {},
+      { activeOrganizationId: "org-1", activeOrganizationRole: "owner" }
+    );
+    const grants: ResourceActionGrant[] = [
+      { level: "organization", role: "owner", access: "org" },
+    ];
+
+    expect(filterEntitiesByPermission(ctx, grants, [])).toEqual([]);
+  });
+
+  it("returns empty array when grants are empty", () => {
+    const ctx = createMockContext();
+    const entities = [createMockEntity({ userId: "user-123" })];
+
+    expect(filterEntitiesByPermission(ctx, [], entities)).toEqual([]);
+  });
+
+  it("keeps only entities the actor may access with 'own'", () => {
+    const ctx = createMockContext({ id: "user-123", role: "member" });
+    const grants: ResourceActionGrant[] = [{ level: "user", role: "member", access: "own" }];
+    const owned = createMockEntity({ userId: "user-123" });
+    const other = createMockEntity({ userId: "other-user" });
+
+    expect(filterEntitiesByPermission(ctx, grants, [owned, other])).toEqual([owned]);
+  });
+
+  it("returns empty array when no entities are allowed", () => {
+    const ctx = createMockContext({ id: "user-123", role: "member" });
+    const grants: ResourceActionGrant[] = [{ level: "user", role: "member", access: "own" }];
+    const other = createMockEntity({ userId: "other-user" });
+
+    expect(filterEntitiesByPermission(ctx, grants, [other])).toEqual([]);
+  });
+
+  it("keeps same-org entities with 'org' access", () => {
+    const ctx = createMockContext(
+      {},
+      { activeOrganizationId: "org-1", activeOrganizationRole: "owner" }
+    );
+    const grants: ResourceActionGrant[] = [
+      { level: "organization", role: "owner", access: "org" },
+    ];
+    const sameOrg = createMockEntity({ organizationId: "org-1" });
+    const otherOrg = createMockEntity({ organizationId: "org-2" });
+
+    expect(filterEntitiesByPermission(ctx, grants, [sameOrg, otherOrg])).toEqual([sameOrg]);
+  });
+
+  it("returns all entities when 'all' access matches", () => {
+    const ctx = createMockContext({ role: "admin" });
+    const grants: ResourceActionGrant[] = [{ level: "user", role: "admin", access: "all" }];
+    const entities = [
+      createMockEntity({ userId: "a" }),
+      createMockEntity({ userId: "b" }),
+    ];
+
+    expect(filterEntitiesByPermission(ctx, grants, entities)).toEqual(entities);
+  });
+
+  it("filters nothing when grants are 'none'", () => {
+    const ctx = createMockContext({ role: "member" });
+    const grants: ResourceActionGrant[] = [{ level: "user", role: "member", access: "none" }];
+    const entities = [createMockEntity({ userId: "user-123" })];
+
+    expect(filterEntitiesByPermission(ctx, grants, entities)).toEqual([]);
   });
 });

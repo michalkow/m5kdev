@@ -16,13 +16,13 @@ export const defaultAuthGrants = flattenNestedGrants({
     },
     organization: {
       owner: {
-        read: "all",
-        write: "all",
-        delete: "all",
+        read: "org",
+        write: "org",
+        delete: "org",
       },
       admin: {
-        read: "all",
-        write: "all",
+        read: "org",
+        write: "org",
       },
       member: {
         read: "own",

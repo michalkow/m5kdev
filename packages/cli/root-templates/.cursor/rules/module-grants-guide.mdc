@@ -35,7 +35,14 @@ Each `ResourceGrant` has four fields:
 | `action` | `string` | The permission action (`"read"`, `"write"`, `"delete"`, `"publish"`) |
 | `level` | `"user" \| "team" \| "organization"` | The scope level at which the grant applies |
 | `role` | `string` | The role that receives this grant (`"owner"`, `"admin"`, `"member"`) |
-| `access` | `"all" \| "own"` | `"all"` grants access to any entity; `"own"` requires ownership match |
+| `access` | `"all" \| "own" \| "org" \| "none"` | See Access modes below |
+
+### Access modes
+
+- `"all"` — any entity (no ownership/org check). Use for platform/user-level admins only.
+- `"own"` — ownership check (`userId`/`memberId`, `teamId`, or `organizationId` depending on grant level).
+- `"org"` — same-organization only (`entity.organizationId === actor.organizationId`). Prefer for org owner/admin instead of `"all"`.
+- `"none"` — explicit deny for that role/action (clearer than omitting the action).
 
 ## Example
 
@@ -119,7 +126,14 @@ readonly update = this.procedure<UpdateInput>("update")
 The `.access()` step supports two entity resolution modes:
 
 - `entityStep` — reads entity from a previous `.use()` or `.loadResource()` step.
-- `entities` — inline function returning `{ userId?, organizationId?, teamId? }`.
+- `entities` — inline function returning `{ userId?, memberId?, organizationId?, teamId? }`.
+
+Behavior:
+
+- **Array entities** — soft-filtered to allowed rows (may be `[]`); filtered result is written back to `entityStep` state. Does not 403 the whole list.
+- **Single entity** — `FORBIDDEN` when denied (e.g. cross-org update with `"org"` grants).
+
+Prefer organization-level `"org"` (not `"all"`) for multi-tenant owner/admin roles so `findById` mutations cannot cross orgs.
 
 ## Service Choice
 

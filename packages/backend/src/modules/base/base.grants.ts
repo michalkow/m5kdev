@@ -3,7 +3,7 @@ import type { ServiceActor } from "./base.actor";
 import type { ServerResultAsync } from "./base.dto";
 
 type Level = "user" | "team" | "organization";
-type Access = "all" | "own";
+type Access = "all" | "own" | "org" | "none";
 type Ownership = "member" | "organization";
 
 export type Entity = Partial<{
@@ -161,6 +161,27 @@ function hasAllAccess(
   return false;
 }
 
+function checkOrgAccess(
+  grants: ResourceActionGrant[],
+  roles: RoleContext,
+  contextValues: ContextValues,
+  entities: Entity | Entity[] | undefined,
+  levels: readonly GrantLevel[] = LEVEL_PRIORITY
+): boolean {
+  if (!contextValues.organizationId) return false;
+
+  for (const level of levels) {
+    for (const grant of grants) {
+      if (grant.level !== level) continue;
+      if (grant.access !== "org") continue;
+      if (grant.role !== getRoleForLevel(level, roles)) continue;
+
+      if (checkOwnership("organizationId", contextValues.organizationId, entities)) return true;
+    }
+  }
+  return false;
+}
+
 function checkOwnAccess(
   grants: ResourceActionGrant[],
   roles: RoleContext,
@@ -199,6 +220,18 @@ function getOwnershipGrantLevel(entity: Entity): GrantLevel | null {
   }
 }
 
+function evaluateEntityAccess(
+  grants: ResourceActionGrant[],
+  roles: RoleContext,
+  contextValues: ContextValues,
+  entity: Entity,
+  levels: readonly GrantLevel[] = LEVEL_PRIORITY
+): boolean {
+  if (hasAllAccess(grants, roles, levels)) return true;
+  if (checkOrgAccess(grants, roles, contextValues, entity, levels)) return true;
+  return checkOwnAccess(grants, roles, contextValues, entity, levels);
+}
+
 function checkOwnershipAwareAccess(
   grants: ResourceActionGrant[],
   roles: RoleContext,
@@ -215,8 +248,7 @@ function checkOwnershipAwareAccess(
     if (!level) return false;
 
     const levels = [level] as const;
-    if (hasAllAccess(grants, roles, levels)) return true;
-    return checkOwnAccess(grants, roles, contextValues, entity, levels);
+    return evaluateEntityAccess(grants, roles, contextValues, entity, levels);
   });
 }
 
@@ -229,6 +261,14 @@ function toContextValues(actor: ServiceActor): ContextValues {
   };
 }
 
+function toRoleContext(actor: ServiceActor): RoleContext {
+  return {
+    userRole: actor.userRole,
+    teamRole: actor.teamRole,
+    organizationRole: actor.organizationRole,
+  };
+}
+
 export function checkPermissionSync<T extends Entity>(
   actor: ServiceActor,
   grants: ResourceActionGrant[],
@@ -237,11 +277,7 @@ export function checkPermissionSync<T extends Entity>(
 ): boolean {
   if (!grants || grants.length === 0) return false;
 
-  const roles = {
-    userRole: actor.userRole,
-    teamRole: actor.teamRole,
-    organizationRole: actor.organizationRole,
-  };
+  const roles = toRoleContext(actor);
   const contextValues = toContextValues(actor);
 
   if (options.ownership) {
@@ -251,8 +287,42 @@ export function checkPermissionSync<T extends Entity>(
   // Pass 1: Check for "all" access first (no ownership check needed)
   if (hasAllAccess(grants, roles)) return true;
 
-  // Pass 2: Check "own" access with ownership validation
+  // Pass 2: Org-scoped access (same organization)
+  if (checkOrgAccess(grants, roles, contextValues, entities)) return true;
+
+  // Pass 3: Check "own" access with ownership validation
   return checkOwnAccess(grants, roles, contextValues, entities);
+}
+
+/**
+ * Soft-filter entities to those the actor may access.
+ * Empty input returns []. Unlike checkPermissionSync on arrays (all-must-pass),
+ * this keeps only allowed rows.
+ */
+export function filterEntitiesByPermission<T extends Entity>(
+  actor: ServiceActor,
+  grants: ResourceActionGrant[],
+  entities: readonly T[],
+  options: PermissionCheckOptions = {}
+): T[] {
+  if (!entities.length) return [];
+  if (!grants || grants.length === 0) return [];
+
+  const roles = toRoleContext(actor);
+  const contextValues = toContextValues(actor);
+
+  if (!options.ownership && hasAllAccess(grants, roles)) {
+    return [...entities];
+  }
+
+  return entities.filter((entity) => {
+    if (options.ownership) {
+      const level = getOwnershipGrantLevel(entity);
+      if (!level) return false;
+      return evaluateEntityAccess(grants, roles, contextValues, entity, [level] as const);
+    }
+    return evaluateEntityAccess(grants, roles, contextValues, entity);
+  });
 }
 
 export async function checkPermissionAsync<T extends Entity>(
@@ -263,11 +333,7 @@ export async function checkPermissionAsync<T extends Entity>(
 ): ServerResultAsync<boolean> {
   if (!grants || grants.length === 0) return ok(false);
 
-  const roles = {
-    userRole: actor.userRole,
-    teamRole: actor.teamRole,
-    organizationRole: actor.organizationRole,
-  };
+  const roles = toRoleContext(actor);
   const contextValues = toContextValues(actor);
 
   if (options.ownership) {
@@ -279,8 +345,9 @@ export async function checkPermissionAsync<T extends Entity>(
   // Pass 1: Check for "all" access first (no entity fetch needed)
   if (hasAllAccess(grants, roles)) return ok(true);
 
-  // Pass 2: Only fetch entities if we need to check ownership
+  // Pass 2/3: Fetch entities for org or own checks
   const entities = await getEntities();
   if (entities.isErr()) return err(entities.error);
+  if (checkOrgAccess(grants, roles, contextValues, entities.value)) return ok(true);
   return ok(checkOwnAccess(grants, roles, contextValues, entities.value));
 }

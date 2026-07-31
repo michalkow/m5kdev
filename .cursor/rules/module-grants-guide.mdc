@@ -30,8 +30,8 @@ export const defaultAuthGrants = flattenNestedGrants({
       user:  { read: "own", write: "own", delete: "own" },
     },
     organization: {
-      owner:  { read: "all", write: "all", delete: "all" },
-      admin:  { read: "all", write: "all" },
+      owner:  { read: "org", write: "org", delete: "org" },
+      admin:  { read: "org", write: "org" },
       member: { read: "own" },
     },
   },
@@ -50,7 +50,11 @@ export const defaultAuthGrants = flattenNestedGrants({
 - **level** — scope: `"user"`, `"team"`, or `"organization"`.
 - **role** — role name at that level (e.g. `"admin"`, `"member"`, `"owner"`).
 - **action** — canonical action (`"read"`, `"write"`, `"delete"`, `"publish"`).
-- **Access** — `"all"` (any entity) or `"own"` (ownership check required).
+- **Access** — one of:
+  - `"all"` — any entity (no ownership/org check). Use for platform/user-level admins only.
+  - `"own"` — ownership check required (user→`memberId`/`userId`, team→`teamId`, organization→`organizationId`).
+  - `"org"` — same-organization only (`entity.organizationId === actor.organizationId`). Prefer this for org owner/admin instead of `"all"` to prevent cross-org IDOR.
+  - `"none"` — explicit deny for that role/action (clearer than omitting the action).
 - For org-scoped assets, `"own"` at user-level compares `entity.memberId` to `actor.memberId` when an organization member context is present. Personal (non-org) resources still compare `userId`.
 - `ownership: "member"` means member-owned (authorize via `memberId` in org context), not the literal members-table role name.
 
@@ -83,9 +87,9 @@ const authModule = new AuthModule(
         user:  { read: "own", write: "own" }, // no self-delete
       },
       organization: {
-        owner:  { read: "all", write: "all", delete: "all" },
-        admin:  { read: "all", write: "all" },
-        member: { read: "own" },
+        owner:  { read: "org", write: "org", delete: "org" },
+        admin:  { read: "org", write: "org" },
+        member: { read: "own", write: "none", delete: "none" },
       },
     },
   })
@@ -102,6 +106,7 @@ When adding a new module to `@m5kdev/backend`:
 2. Export a `default<Module>Grants` constant using `flattenNestedGrants`.
 3. Accept optional `Grant[]` in the module constructor, falling back to the default.
 4. Pass the grants to `BasePermissionService` via the service constructor.
+5. Use `"org"` (not `"all"`) for organization-level owner/admin grants.
 
 ## Recommended Pattern
 
@@ -131,3 +136,4 @@ Use these actions in grants and in service guard calls to avoid string drift.
 - Doing permission checks in tRPC/router instead of service.
 - Duplicating default grants in app code instead of relying on the backend defaults.
 - Overriding grants without understanding the full default set (always check `<module>.grants.ts` first).
+- Using organization-level `"all"` for multi-tenant resources (use `"org"` instead).

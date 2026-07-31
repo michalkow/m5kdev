@@ -15,12 +15,12 @@ export const defaultBillingGrants = flattenNestedGrants({
     },
     organization: {
       owner: {
-        read: "all",
-        write: "all",
+        read: "org",
+        write: "org",
       },
       admin: {
-        read: "all",
-        write: "all",
+        read: "org",
+        write: "org",
       },
       member: {
         read: "own",

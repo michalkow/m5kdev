@@ -414,6 +414,13 @@ type PermissionServiceProcedureHost<
     grants?: ResourceActionGrant[],
     options?: PermissionCheckOptions
   ): boolean;
+  filterPermission<T extends Entity>(
+    actor: AuthenticatedActor,
+    action: string,
+    entities: readonly T[],
+    grants?: ResourceActionGrant[],
+    options?: PermissionCheckOptions
+  ): T[];
   checkPermissionAsync<T extends Entity>(
     actor: AuthenticatedActor,
     action: string,
@@ -700,10 +707,23 @@ function createAccessStep<
 
       if ("entityStep" in config && typeof config.entityStep === "string") {
         const entities = typedArgs.state[config.entityStep] as TEntities;
+
+        if (Array.isArray(entities)) {
+          const filtered = host.filterPermission(
+            actor.value,
+            config.action,
+            entities as Entity[],
+            config.grants,
+            permissionOptions
+          );
+          typedArgs.state[config.entityStep] = filtered;
+          return ok(filtered);
+        }
+
         const hasPermission = host.checkPermission(
           actor.value,
           config.action,
-          entities as Entity | Entity[] | undefined,
+          entities as Entity | undefined,
           config.grants,
           permissionOptions
         );
@@ -720,26 +740,46 @@ function createAccessStep<
           args: ServiceProcedureArgs<TInput, TCtx, Repositories, Services, State>
         ) => ServiceProcedureResultLike<TEntities>;
 
-        let loadedEntities: TEntities | undefined;
-        const permission = await host.checkPermissionAsync(
+        // "all" short-circuit: skip entity loading when grants already allow everything
+        if (
+          host.checkPermission(
+            actor.value,
+            config.action,
+            undefined,
+            config.grants,
+            permissionOptions
+          )
+        ) {
+          return ok(undefined);
+        }
+
+        const entityResult = await normalizeProcedureResult(resolveEntities(typedArgs));
+        if (entityResult.isErr()) {
+          return entityResult;
+        }
+
+        const loadedEntities = entityResult.value;
+
+        if (Array.isArray(loadedEntities)) {
+          const filtered = host.filterPermission(
+            actor.value,
+            config.action,
+            loadedEntities as Entity[],
+            config.grants,
+            permissionOptions
+          );
+          return ok(filtered as TEntities);
+        }
+
+        const hasPermission = host.checkPermission(
           actor.value,
           config.action,
-          async () => {
-            const entityResult = await normalizeProcedureResult(resolveEntities(typedArgs));
-            if (entityResult.isOk()) {
-              loadedEntities = entityResult.value;
-            }
-            return entityResult;
-          },
+          loadedEntities as Entity | undefined,
           config.grants,
           permissionOptions
         );
 
-        if (permission.isErr()) {
-          return permission;
-        }
-
-        if (!permission.value) {
+        if (!hasPermission) {
           return host.error("FORBIDDEN");
         }
 
@@ -747,6 +787,18 @@ function createAccessStep<
       }
 
       const entities = config.entities;
+
+      if (Array.isArray(entities)) {
+        const filtered = host.filterPermission(
+          actor.value,
+          config.action,
+          entities,
+          config.grants,
+          permissionOptions
+        );
+        return ok(filtered as TEntities);
+      }
+
       const hasPermission = host.checkPermission(
         actor.value,
         config.action,

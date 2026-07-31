@@ -35,7 +35,7 @@ Service methods are defined using the procedure builder pattern. Each procedure 
 4. `.loadResource(name, loader)` -- Loads a value and stores it in `state`; returns `NOT_FOUND` if falsy.
 5. `.use(name, step)` -- Runs an arbitrary step and stores the result in `state`.
 6. `.addContextFilter(scopes?)` -- Applies context-based query filtering (requires auth).
-7. `.access(config)` -- Permission check (only on `BasePermissionService`).
+7. `.access(config)` -- Permission check (only on `BasePermissionService`). Arrays are soft-filtered to allowed rows (empty OK); single entities return `FORBIDDEN` when denied. Filtered arrays are written back to `entityStep` state.
 8. `.handle(handler)` -- Terminal method; runs the handler with `{ input, ctx, state, repository, service, logger }`.
 
 ### Input / Output Typing
@@ -102,19 +102,39 @@ create = this.procedure("create")
 update = this.procedure("update")
   .input(itemSchemas.input.update)
   .output(itemSchemas.output.single)
-  .requireAuth()
+  .requireAuth("organization")
   .loadResource("item", ({ input }) => this.repository.item.findById(input.id))
   .access({
     action: "write",
-    entities: ({ state }) => ({
-      userId: state.item.userId,
-      memberId: state.item.memberId,
-    }),
+    entityStep: "item",
   })
   .handle(async ({ input }) => {
     return this.repository.item.update(input);
   });
 ```
+
+Use grants with `"org"` (org admin/owner) or `"own"` (member) so `findById` cannot update cross-org rows. Do not use `"all"` for organization-scoped roles.
+
+### Org-scoped list with access soft-filter
+
+```typescript
+list = this.procedure("list")
+  .input(itemSchemas.input.list)
+  .output(itemSchemas.output.list)
+  .requireAuth("organization")
+  .addContextFilter(["organization"])
+  .loadResource("items", ({ input }) => this.repository.item.queryList(input))
+  .access({
+    action: "read",
+    entityStep: "items",
+  })
+  .handle(({ state }) => state.items);
+```
+
+- Default list scoping: `addContextFilter(["organization"])`.
+- When grants are member-own only, prefer `addContextFilter(["member", "organization"])` so the query is already narrowed.
+- `.access` on an **array** soft-filters to allowed rows (may be `[]`); it does not 403 the whole list.
+- Filtered results are written back to `state[entityStep]` (here `state.items`).
 
 ### With Context Filter (Query-Based Lists)
 
@@ -147,6 +167,7 @@ validateCode = this.procedure("validateCode")
 - Do not use undeclared action aliases (e.g., guard `"update"` when grants only define `"write"`).
 - If a module has no effective `accessGuard*` usage, prefer `BaseService` over `BasePermissionService`.
 - For org-scoped assets, stamp and authorize with `memberId` (`ctx.actor.memberId`). Keep `userId` for authentication and personal resources (billing, devices, OAuth). Prefer the column name `memberId` over aliases like `authorMemberId`.
+- Access modes: `"all"` (global), `"org"` (same organization), `"own"` (ownership), `"none"` (explicit deny). Prefer `"org"` for org owner/admin grants.
 
 ## Example Skeleton
 

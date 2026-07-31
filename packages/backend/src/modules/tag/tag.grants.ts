@@ -16,14 +16,14 @@ export const defaultTagGrants = flattenNestedGrants({
     },
     organization: {
       owner: {
-        read: "all",
-        write: "all",
-        delete: "all",
+        read: "org",
+        write: "org",
+        delete: "org",
       },
       admin: {
-        read: "all",
-        write: "all",
-        delete: "all",
+        read: "org",
+        write: "org",
+        delete: "org",
       },
       member: {
         read: "own",

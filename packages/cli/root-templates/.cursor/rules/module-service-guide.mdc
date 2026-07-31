@@ -46,19 +46,26 @@ access control, and the handler:
 
 ## Procedure Patterns
 
-### List — delegate to `queryList`, never hand-roll list logic
+### List — org context filter + optional access soft-filter
 
 ```typescript
 readonly list = this.procedure("list")
   .input(postSchemas.input.list)
   .output(postSchemas.output.list)
-  .requireAuth()
-  .handle(({ input }) => {
-    return this.repository.posts.queryList(input, {
+  .requireAuth("organization")
+  .addContextFilter(["organization"])
+  .loadResource("posts", ({ input }) =>
+    this.repository.posts.queryList(input, {
       globalSearchColumns: ["title", "excerpt", "content"],
-    });
-  });
+    })
+  )
+  .access({ action: "read", entityStep: "posts" })
+  .handle(({ state }) => state.posts);
 ```
+
+- Default list scoping: `addContextFilter(["organization"])`.
+- When grants are member-own only, prefer `addContextFilter(["member", "organization"])`.
+- `.access` on arrays soft-filters allowed rows (empty OK) and writes back to `state.posts`.
 
 ### Create with business logic
 
@@ -122,8 +129,9 @@ readonly softDelete = this.procedure("softDelete")
 ## Access Control Modes
 
 - **`entityStep`** — references a value stored by `.loadResource()`/`.use()`;
-  the entity's `userId`, `organizationId`, and `teamId` are read automatically.
-- **`entities`** — inline function returning `{ userId?, organizationId?, teamId? }`
+  the entity's `userId`, `memberId`, `organizationId`, and `teamId` are read automatically.
+  Arrays are soft-filtered; singles return `FORBIDDEN` when denied. Filtered arrays are written back to the step state.
+- **`entities`** — inline function returning `{ userId?, memberId?, organizationId?, teamId? }`
   when the entity is not loaded into state.
 
 ## Permissions and Grants
@@ -131,6 +139,8 @@ readonly softDelete = this.procedure("softDelete")
 - Keep action names aligned with grants (`read`, `write`, `delete`, `publish`).
 - Do not use undeclared aliases (e.g. guarding `"update"` when grants define `"write"`).
 - If a module never uses `.access()`, extend `BaseService` instead of `BasePermissionService`.
+- Access modes: `"all"` (global), `"org"` (same organization), `"own"` (ownership), `"none"` (explicit deny).
+- Prefer `"org"` for org owner/admin grants so `findById` updates cannot cross organizations.
 
 ## Best Practices
 
