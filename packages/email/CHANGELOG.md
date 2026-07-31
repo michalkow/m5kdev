@@ -1,5 +1,11 @@
 # @m5kdev/email
 
+## 0.32.2
+
+### Patch Changes
+
+- org access
+
 ## 0.32.1
 
 ### Patch Changes
