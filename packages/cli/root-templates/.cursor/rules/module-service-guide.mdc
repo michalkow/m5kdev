@@ -71,7 +71,7 @@ readonly list = this.procedure("list")
 
 ```typescript
 readonly create = this.procedure("create")
-  .requireAuth()
+  .requireAuth("organization")
   .input(postSchemas.input.create)
   .output(postSchemas.output.single)
   .access({ action: "write" })
@@ -82,8 +82,9 @@ readonly create = this.procedure("create")
     if (uniqueSlug.isErr()) return err(uniqueSlug.error);
 
     return this.repository.posts.create({
-      authorUserId: ctx.user.id,
-      organizationId: ctx.session.activeOrganizationId ?? null,
+      // Org-scoped assets: stamp memberId (+ organizationId). Personal resources: stamp userId.
+      memberId: ctx.actor.memberId,
+      organizationId: ctx.actor.organizationId,
       title: input.title.trim(),
       slug: uniqueSlug.value,
       content: input.content.trim(),
@@ -96,7 +97,7 @@ readonly create = this.procedure("create")
 
 ```typescript
 readonly update = this.procedure("update")
-  .requireAuth()
+  .requireAuth("organization")
   .input(postSchemas.input.update)
   .output(postSchemas.output.single)
   .loadResource("post", ({ input }) => this.repository.posts.findById(input.id))

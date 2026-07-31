@@ -51,6 +51,12 @@ import type { ResourceGrant } from "@m5kdev/backend/modules/base/base.grants";
 
 export const postsGrants: ResourceGrant[] = [
   {
+    action: "read",
+    level: "team",
+    role: "owner",
+    access: "own",
+  },
+  {
     action: "write",
     level: "team",
     role: "owner",
@@ -65,6 +71,12 @@ export const postsGrants: ResourceGrant[] = [
   {
     action: "delete",
     level: "team",
+    role: "owner",
+    access: "own",
+  },
+  {
+    action: "read",
+    level: "organization",
     role: "owner",
     access: "own",
   },
