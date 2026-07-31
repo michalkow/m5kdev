@@ -78,7 +78,21 @@ export function withLibsqlRetry(client: Client, options: LibsqlRetryOptions = {}
           method
         ](...args);
       } catch (error) {
-        if (attempt >= maxRetries || !isRetryableLibsqlError(error)) throw error;
+        const retryable = isRetryableLibsqlError(error);
+        if (attempt >= maxRetries || !retryable) {
+          if (retryable) {
+            logger?.error(
+              { err: error, method, attempts: attempt + 1 },
+              "libsql call failed after hrana reconnect retries"
+            );
+          } else if (error instanceof LibsqlError) {
+            logger?.warn(
+              { err: error, method, code: error.code },
+              "libsql call failed with non-retryable error"
+            );
+          }
+          throw error;
+        }
         logger?.warn(
           { err: error, method, attempt: attempt + 1 },
           "libsql call failed on a dead hrana stream; reconnecting and retrying"

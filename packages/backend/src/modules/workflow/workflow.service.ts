@@ -617,7 +617,24 @@ export class WorkflowService extends Base {
     // duck-typed: repositories return neverthrow Results, but stubs/overrides may not
     if (!result || typeof (result as { isErr?: unknown }).isErr !== "function") return;
     if (!(result as { isErr(): boolean }).isErr()) return;
-    this.logger.warn({ jobId, queueName, event }, `Failed to persist job ${event} event`);
+    const error = (result as { error: unknown }).error;
+    this.logger.warn(
+      {
+        jobId,
+        queueName,
+        event,
+        err: error,
+        ...(error instanceof Error
+          ? {}
+          : error && typeof error === "object"
+            ? {
+                code: (error as { code?: unknown }).code,
+                origin: (error as { origin?: unknown }).origin,
+              }
+            : {}),
+      },
+      `Failed to persist job ${event} event`
+    );
   }
 
   private attachLifecycleListeners(events: QueueEvents, queueName: string): void {

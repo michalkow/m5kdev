@@ -23,7 +23,7 @@ import type { TFunction } from "i18next";
 import { z } from "zod";
 import type { BackendAppMetadata } from "../../app";
 import type { AppI18n } from "../../i18n/app-i18n";
-import { captureServerError } from "../../utils/errors";
+import { captureServerError, ServerError } from "../../utils/errors";
 import { logger as rootLogger } from "../../utils/logger";
 import { posthogCapture } from "../../utils/posthog";
 import type { BillingService } from "../billing/billing.service";
@@ -279,9 +279,48 @@ export function createBetterAuth<
     return { ...user, locale };
   };
 
+  const userAuthLogger = options?.logger;
+
   return betterAuth({
     ...options,
     baseURL: apiUrl!,
+    // Forward better-auth logs into pino. getSession swallows root causes into
+    // opaque FAILED_TO_GET_SESSION; the real error is only passed to logger.error.
+    logger: {
+      disabled: userAuthLogger?.disabled,
+      level: userAuthLogger?.level ?? "warn",
+      disableColors: userAuthLogger?.disableColors ?? true,
+      log(level, message, ...args) {
+        userAuthLogger?.log?.(level, message, ...args);
+        const errArg = args.find((arg): arg is Error => arg instanceof Error);
+        const extra = args.filter((arg) => arg !== errArg);
+        const fields = {
+          betterAuthMessage: message,
+          ...(extra.length > 0 ? { args: extra } : {}),
+          ...(errArg ? { err: errArg } : {}),
+        };
+        if (level === "error") {
+          if (errArg) {
+            captureServerError(
+              ServerError.fromUnknown("INTERNAL_SERVER_ERROR", errArg, {
+                layer: "auth",
+                layerName: "BetterAuth",
+                context: { betterAuthMessage: message },
+              }),
+              { logger }
+            );
+          } else {
+            logger.error(fields, message);
+          }
+          return;
+        }
+        if (level === "warn") {
+          logger.warn(fields, message);
+          return;
+        }
+        logger.debug(fields, message);
+      },
+    },
     session: {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,
