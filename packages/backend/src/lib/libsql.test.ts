@@ -1,5 +1,9 @@
 import { type Client, LibsqlError, type Transaction } from "@libsql/client";
-import { isRetryableLibsqlError, withLibsqlRetry } from "./libsql";
+import {
+  getLibsqlErrorCode,
+  isRetryableLibsqlError,
+  withLibsqlRetry,
+} from "./libsql";
 
 function streamError(): LibsqlError {
   return new LibsqlError("stream not found", "HRANA_WEBSOCKET_ERROR");
@@ -48,8 +52,31 @@ describe("isRetryableLibsqlError", () => {
     ).toBe(true);
   });
 
-  it("ignores non-libsql errors", () => {
-    expect(isRetryableLibsqlError(new Error("stream not found"))).toBe(false);
+  it("matches plain Error Hrana stream-not-found messages from native bindings", () => {
+    const plain = new Error(
+      'Hrana(Api("status=404 Not Found, body={\\"error\\":\\"stream not found: 436821a5:cbf426\\"}"))'
+    );
+    expect(isRetryableLibsqlError(plain)).toBe(true);
+  });
+
+  it("matches duck-typed libsql errors when instanceof fails across package copies", () => {
+    const duckTyped = Object.assign(new Error("stream not found: dead:stream"), {
+      code: "SQLITE_ERROR",
+    });
+    expect(getLibsqlErrorCode(duckTyped)).toBe("SQLITE_ERROR");
+    expect(isRetryableLibsqlError(duckTyped)).toBe(true);
+  });
+
+  it("matches LibsqlError whose cause carries the Hrana stream message", () => {
+    const cause = new Error(
+      'Hrana(Api("status=404 Not Found, body={\\"error\\":\\"stream not found: abc:def\\"}"))'
+    );
+    const wrapped = new LibsqlError("query failed", "SERVER_ERROR", undefined, undefined, cause);
+    expect(isRetryableLibsqlError(wrapped)).toBe(true);
+  });
+
+  it("ignores unrelated plain errors", () => {
+    expect(isRetryableLibsqlError(new Error("UNIQUE constraint failed"))).toBe(false);
   });
 });
 
@@ -87,6 +114,42 @@ describe("withLibsqlRetry", () => {
     expect(inner.reconnect).toHaveBeenCalledTimes(1);
   });
 
+  it("reconnects and retries plain Error Hrana stream-not-found failures", async () => {
+    const plain = new Error(
+      'Hrana(Api("status=404 Not Found, body={\\"error\\":\\"stream not found: plain:err\\"}"))'
+    );
+    const logger = { warn: jest.fn(), error: jest.fn() };
+    const inner = makeClient({
+      execute: jest
+        .fn()
+        .mockRejectedValueOnce(plain)
+        .mockResolvedValueOnce({ rows: [{ ok: 1 }] }) as never,
+    });
+    const client = withLibsqlRetry(inner, { backoffMs: 1, logger: logger as never });
+
+    await expect(client.execute("select 1")).resolves.toEqual({ rows: [{ ok: 1 }] });
+    expect(inner.reconnect).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ method: "execute", attempt: 1 }),
+      "libsql call failed on a dead hrana stream; reconnecting and retrying"
+    );
+  });
+
+  it("logs non-retryable failures including plain Errors", async () => {
+    const failure = new Error("UNIQUE constraint failed");
+    const logger = { warn: jest.fn(), error: jest.fn() };
+    const inner = makeClient({ execute: jest.fn().mockRejectedValue(failure) as never });
+    const client = withLibsqlRetry(inner, { backoffMs: 1, logger: logger as never });
+
+    await expect(client.execute("insert ...")).rejects.toBe(failure);
+    expect(inner.execute).toHaveBeenCalledTimes(1);
+    expect(inner.reconnect).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ method: "execute", err: failure }),
+      "libsql call failed with non-retryable error"
+    );
+  });
+
   it("does not retry non-retryable errors", async () => {
     const failure = new LibsqlError("UNIQUE constraint failed", "SQLITE_CONSTRAINT");
     const inner = makeClient({ execute: jest.fn().mockRejectedValue(failure) as never });
@@ -120,6 +183,18 @@ describe("withLibsqlRetry", () => {
 
     expect(opened).toBe(tx);
     expect(inner.transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it("is idempotent when wrapping an already-wrapped client", async () => {
+    const inner = makeClient({
+      execute: jest.fn().mockResolvedValue({ rows: [{ ok: 1 }] }) as never,
+    });
+    const once = withLibsqlRetry(inner, { backoffMs: 1 });
+    const twice = withLibsqlRetry(once, { backoffMs: 1 });
+
+    expect(twice).toBe(once);
+    await expect(twice.execute("select 1")).resolves.toEqual({ rows: [{ ok: 1 }] });
+    expect(inner.execute).toHaveBeenCalledTimes(1);
   });
 
   it("delegates non-retried members to the inner client", () => {

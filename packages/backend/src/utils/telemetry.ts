@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { IncomingMessage } from "node:http";
 import { type Span, SpanStatusCode, type Tracer, trace } from "@opentelemetry/api";
 import type { Result } from "neverthrow";
-import type { ServerError } from "./errors";
+import { annotateSpanWithError, type ServerError } from "./errors";
 
 const TRACER_NAME = "@m5kdev/backend";
 const MAX_SPAN_VALUE_LENGTH = 4096;
@@ -164,25 +164,11 @@ function isServerResult<T>(value: unknown): value is Result<T, ServerError> {
 }
 
 function recordServerErrorOnSpan(span: Span, error: ServerError): void {
-  span.setStatus({
-    code: SpanStatusCode.ERROR,
-    message: error.message,
-  });
-  span.setAttribute("error.code", error.code);
-  span.setAttribute("error.layer", error.layer);
-  span.setAttribute("error.layerName", error.layerName);
-  span.recordException(error);
+  annotateSpanWithError(span, error);
 }
 
 function recordExceptionOnSpan(span: Span, error: unknown): void {
-  const message = error instanceof Error ? error.message : "Unknown error";
-  span.setStatus({
-    code: SpanStatusCode.ERROR,
-    message,
-  });
-  if (error instanceof Error) {
-    span.recordException(error);
-  }
+  annotateSpanWithError(span, error);
 }
 
 function recordSpanSuccess(span: Span, value: unknown): void {

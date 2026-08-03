@@ -182,28 +182,62 @@ export function setErrorReporter(reporter: ErrorReporter) {
   globalThis.m5ErrorReporter = reporter;
 }
 
-function recordErrorOnActiveSpan(err: ServerError | Error | unknown): void {
-  const span = trace.getActiveSpan();
-  if (!span) return;
+/**
+ * Flatten `error.cause` messages for span attributes / status text.
+ * Sentry walks the cause chain; SigNoz span status/events do not unless we attach them.
+ */
+export function formatErrorCauseChain(error: Error, maxDepth = 5): string | undefined {
+  const parts: string[] = [];
+  let current: unknown = error.cause;
+  for (let depth = 0; depth < maxDepth && current instanceof Error; depth++) {
+    parts.push(current.message);
+    current = current.cause;
+  }
+  return parts.length > 0 ? parts.join(" ← ") : undefined;
+}
 
+function rootErrorCause(error: Error, maxDepth = 5): Error {
+  let current = error;
+  for (let depth = 0; depth < maxDepth && current.cause instanceof Error; depth++) {
+    current = current.cause;
+  }
+  return current;
+}
+
+/** Annotate the active OTel span with ServerError fields + underlying cause (for SigNoz). */
+export function annotateSpanWithError(
+  span: NonNullable<ReturnType<typeof trace.getActiveSpan>>,
+  err: ServerError | Error | unknown
+): void {
   if (err instanceof ServerError) {
+    const causeChain = formatErrorCauseChain(err);
+    const statusMessage = causeChain ? `${err.message}: ${causeChain}` : err.message;
     span.setStatus({
       code: SpanStatusCode.ERROR,
-      message: err.message,
+      message: statusMessage,
     });
     span.setAttribute("error.code", err.code);
     span.setAttribute("error.layer", err.layer);
     span.setAttribute("error.layerName", err.layerName);
-    span.recordException(err);
+    if (causeChain) {
+      span.setAttribute("error.cause", causeChain);
+    }
+    // Record the deepest cause so exception.message matches what Sentry shows.
+    span.recordException(rootErrorCause(err));
     return;
   }
 
   if (err instanceof Error) {
+    const causeChain = formatErrorCauseChain(err);
+    const statusMessage = causeChain ? `${err.message}: ${causeChain}` : err.message;
     span.setStatus({
       code: SpanStatusCode.ERROR,
-      message: err.message,
+      message: statusMessage,
     });
-    span.recordException(err);
+    if (causeChain) {
+      span.setAttribute("error.cause", causeChain);
+    }
+    span.recordException(rootErrorCause(err));
     return;
   }
 
@@ -213,6 +247,12 @@ function recordErrorOnActiveSpan(err: ServerError | Error | unknown): void {
     message,
   });
   span.recordException(new Error(message));
+}
+
+function recordErrorOnActiveSpan(err: ServerError | Error | unknown): void {
+  const span = trace.getActiveSpan();
+  if (!span) return;
+  annotateSpanWithError(span, err);
 }
 
 export function reportError(

@@ -386,7 +386,8 @@ function createDbClient(
 ): { client: Client; owned: boolean; url?: string } {
   if ("client" in config && config.client) {
     return {
-      client: config.client,
+      // Always wrap — apps that inject a raw client previously skipped retry/logging.
+      client: withLibsqlRetry(config.client, { logger }),
       owned: false,
     };
   }

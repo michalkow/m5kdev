@@ -59,6 +59,34 @@ describe("reportError otel", () => {
     ).toBe("boom");
   });
 
+  it("records the underlying cause on the span for SigNoz parity with Sentry", async () => {
+    const cause = new Error(
+      'Hrana(Api("status=404 Not Found, body={\\"error\\":\\"stream not found: abc:def\\"}"))'
+    );
+    const error = new ServerError({
+      code: "INTERNAL_SERVER_ERROR",
+      layer: "repository",
+      layerName: "TaskRepository",
+      message: "Database query failed",
+      cause,
+    });
+
+    const tracer = trace.getTracer("errors.test");
+    await tracer.startActiveSpan("report-error", async (span) => {
+      reportError(error);
+      span.end();
+    });
+
+    const [finished] = exporter.getFinishedSpans();
+    expect(finished?.status.message).toBe(`Database query failed: ${cause.message}`);
+    expect(finished?.attributes["error.cause"]).toBe(cause.message);
+    expect(
+      finished?.events.find((event) => event.name === "exception")?.attributes?.[
+        "exception.message"
+      ]
+    ).toBe(cause.message);
+  });
+
   it("records plain Error exception on the active span", async () => {
     const error = new Error("plain boom");
 
