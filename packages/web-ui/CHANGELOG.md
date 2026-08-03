@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.32.4
+
+### Patch Changes
+
+- hrana
+- Updated dependencies
+  - @m5kdev/commons@0.32.4
+  - @m5kdev/frontend@0.32.4
+
 ## 0.32.3
 
 ### Patch Changes
