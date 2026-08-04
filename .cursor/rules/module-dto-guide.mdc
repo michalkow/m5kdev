@@ -1,11 +1,11 @@
 ---
-globs: packages/backend/src/modules/**/*.dto.ts
+globs: packages/backend/src/modules/**/*.dto.ts,apps/**/server/src/modules/**/*.dto.ts
 alwaysApply: false
 ---
 
 # Module DTO File Structure Guide
 
-This guide explains how to create Data Transfer Object (DTO) files for server modules. DTOs define the shape of data exchanged with the API using Zod schemas organized into grouped schema objects.
+This guide explains how to create Data Transfer Object (DTO) files for server modules. DTOs define the API surface as Zod schemas grouped into `{entity}Schemas` with `output` and `input` keys.
 
 ## File Location
 ```
@@ -14,193 +14,235 @@ src/modules/[module]/[module].dto.ts
 
 ## Core Philosophy
 
-- Generate the **main schema** from the database table using `createSelectSchema` from `drizzle-zod`.
-- Group all related schemas into a **plural schemas object** (`entitySchemas`) with `output` and `input` keys.
-- Derive variant schemas using Zod's `.pick()` and `.omit()` on the main schema to minimize boilerplate.
-- Extract reusable derived schemas outside the grouped object when they appear in multiple places.
+- **Primary method**: call `createZodSchemas(table)` from `@m5kdev/backend/modules/base/base.dto`, then **spread** its default `output` / `input` and **extend** only where the defaults are wrong or incomplete.
+- Do not hand-build full `output` / `input` objects from scratch when a Drizzle table exists.
+- Override or add keys on top of the spread; prefer `.omit()` / `.pick()` / `.extend()` on the generated schemas over rewriting fields.
+- Services, repositories, and tRPC import the grouped object (`postSchemas`) and use `postSchemas.input.x` / `postSchemas.output.y`.
 
-## File Structure Pattern
+## Primary Pattern: Spread + Extend
 
 ```typescript
-import { queryListOutput, querySchema } from "@m5kdev/commons/modules/schemas/query.schema";
-import { createSelectSchema } from "drizzle-zod";
+import {
+  createListOutputSchema,
+  createZodSchemas,
+} from "@m5kdev/backend/modules/base/base.dto";
+import {
+  productCreateInputSchema,
+  productUpdateInputSchema,
+} from "@my-app/shared/modules/products/products.schema";
 import { z } from "zod";
-import { products, categories } from "./products.db";
+import { products } from "./products.db";
 
-// 1. Base schemas (from database tables)
-// 2. Reusable derived schemas (optional, for deduplication)
-// 3. Grouped schemas objects (output + input)
-```
+const { selectSchema, output, input } = createZodSchemas(products);
 
-## Section 1: Base Schemas
-
-Generate the main schema directly from a Drizzle table using `createSelectSchema`:
-
-```typescript
-export const productSchema = createSelectSchema(products);
-export const categorySchema = createSelectSchema(categories);
-```
-
-### Key Points:
-- One `createSelectSchema` call per database table used in the module
-- The resulting schema contains all table columns as Zod types
-- Export the base schema so it can be referenced elsewhere if needed
-
-## Section 2: Reusable Derived Schemas (Optional)
-
-When a derived schema (e.g. a `.omit()` variant) is used in multiple places within the grouped object, declare it outside to avoid duplication:
-
-```typescript
-// Used in both `simple` output and as the element of `simpleList`
-const productSimpleSchema = productSchema.omit({
+const productSimpleSchema = selectSchema.omit({
   metadata: true,
   internalNotes: true,
 });
-```
 
-### When to Extract:
-- The same `.pick()` / `.omit()` would be duplicated inside the schemas object
-- The derived schema is reused as both a standalone output and inside an array or list variant
-
-## Section 3: Grouped Schemas Object
-
-Group all schemas for a logical entity into a single exported object named `{entity}Schemas` (plural). Each grouped object always has two top-level keys: `output` and `input`.
-
-```typescript
 export const productSchemas = {
   output: {
-    single: productSchema,
-    list: queryListOutput(productSchema),
+    ...output,
+    // Override defaults that should not expose full rows
+    single: productSimpleSchema,
+    found: productSimpleSchema.optional(),
+    list: createListOutputSchema(productSimpleSchema),
+    // Add named variants
     simple: productSimpleSchema,
-    simpleList: queryListOutput(productSimpleSchema),
   },
   input: {
-    list: querySchema,
-    create: z.object({
-      name: z.string().min(1),
-      price: z.number().positive(),
-      categoryId: z.string(),
-    }),
+    ...input,
+    // Always replace raw insert/update with client-safe schemas
+    create: productCreateInputSchema,
+    update: productUpdateInputSchema,
+    // Add action-specific inputs
+    publish: z.object({ id: z.string() }),
   },
 };
 ```
 
-### Output Key Conventions
+### Steps
 
-| Key | Purpose | How to Create |
-|---|---|---|
-| `single` | Full entity for single-item responses | Main schema or `.omit()` / `.pick()` variant |
-| `list` | Paginated list response `{ rows, total }` | `queryListOutput(schema)` |
-| `simple` | Lighter variant (fewer fields) | `.omit({ ... })` on main schema |
-| `simpleList` | Paginated list of lighter variant | `queryListOutput(simpleSchema)` |
-| Named variants | Role/context-specific shapes (`admin`, `child`, `public`) | `.omit()` / `.pick()` on main schema |
+1. `const { selectSchema, output, input } = createZodSchemas(table)` (or destructure only `output` / `input` when you do not need `selectSchema`).
+2. Export `{entity}Schemas` with `output: { ...output, ... }` and `input: { ...input, ... }`.
+3. Override keys that must differ from the table-derived defaults.
+4. Add extra keys for module-specific actions or lighter variants.
 
-- `single` is the canonical full-entity output. Always define it first.
-- `list` wraps a schema with `queryListOutput()` which produces `{ rows: T[], total: number }`.
-- For a plain array (non-paginated), use `z.array(schema)` at the call site or add an explicit key.
-- Named variants like `simple`, `admin`, `child` use `.omit()` or `.pick()` on the main schema to strip fields.
+### Minimal Spread (Defaults Are Enough for Output)
 
-### Input Key Conventions
-
-| Key | Purpose | How to Create |
-|---|---|---|
-| `list` | Common query/filter/sort/pagination options | `querySchema` (or `.extend()` for extra params) |
-| Named inputs | Operation-specific payloads (`create`, `update`, `read`) | `z.object({ ... })` |
-
-- `list` uses the shared `querySchema` from `@m5kdev/commons` which includes `page`, `limit`, `sort`, `order`, `filters`, and `q`.
-- Extend `querySchema` when a list endpoint needs additional parameters.
-
-## Integration with Other Layers
-
-### tRPC Layer
-
-Reference schemas through the grouped object for both `.input()` and `.output()`:
+When the full select schema is a safe API response, spread `output` unchanged and only fix inputs:
 
 ```typescript
-listProducts: procedure
-  .input(productSchemas.input.list)
-  .output(productSchemas.output.list)
-  .query(async ({ input, ctx }) => { ... }),
-
-getProduct: procedure
-  .output(productSchemas.output.single)
-  .query(async ({ input, ctx }) => { ... }),
-
-listSimpleProducts: procedure
-  .output(z.array(productSchemas.output.simple))
-  .query(async ({ ctx }) => { ... }),
-```
-
-### Service Layer
-
-Use `z.infer` on the grouped schemas for type annotations:
-
-```typescript
-async getById(id: string): ServerResultAsync<z.infer<typeof productSchemas.output.single>> {
-  // ...
-}
-```
-
-## Patterns and Examples
-
-### Minimal DTO (Single Entity, No List)
-
-```typescript
-import { createSelectSchema } from "drizzle-zod";
+import { createZodSchemas } from "@m5kdev/backend/modules/base/base.dto";
+import {
+  postCreateInputSchema,
+  postUpdateInputSchema,
+} from "@starter-app/shared/modules/posts/posts.schema";
 import { z } from "zod";
-import { tokens } from "./tokens.db";
+import { posts } from "./posts.db";
 
-export const tokenSchema = createSelectSchema(tokens);
-const tokenOutputSchema = tokenSchema.omit({ secret: true });
+const { output, input } = createZodSchemas(posts);
+
+export const postSchemas = {
+  output,
+  input: {
+    ...input,
+    create: postCreateInputSchema,
+    update: postUpdateInputSchema,
+    publish: z.object({ id: z.string() }),
+  },
+};
+```
+
+## What `createZodSchemas(table)` Provides
+
+Destructuring also exposes `selectSchema`, `insertSchema`, and `updateSchema` for deriving variants.
+
+### Default `output`
+
+| Key | Shape | Use |
+|---|---|---|
+| `single` | Full select schema | Canonical single-entity response |
+| `found` | `single.optional()` | Find-style queries that may return no row |
+| `list` | `{ rows, total }` via `createListOutputSchema` | Paginated list responses |
+| `uuid` | `{ id }` | Id acknowledgement |
+| `uuids` | `{ ids }` | Multi-id acknowledgement |
+
+### Default `input`
+
+| Key | Shape | Use |
+|---|---|---|
+| `read` | `{ id }` | Single-id read |
+| `readMany` | `{ ids }` | Multi-id read |
+| `list` | `querySchema` | Pagination, sort, `q`, `filters` |
+| `create` | Raw `createInsertSchema(table)` | **Override** — exposes server-managed columns |
+| `update` | Raw update schema + `{ id }` | **Override** — same reason |
+| `delete` | `{ id }` | Single delete |
+| `deleteMany` | `{ ids }` | Bulk delete |
+
+## Extending Defaults
+
+### Override `create` / `update` (required for table-backed modules)
+
+Raw insert/update schemas include server-managed columns (`id`, timestamps, `memberId`, etc.) that clients must not send. Always replace them:
+
+- Prefer shared schemas from `apps/*/shared/src/modules/<module>/<module>.schema.ts` when the webapp form uses the same contract.
+- Otherwise define a narrower `z.object({ ... })` or `.omit()` / `.pick()` on `insertSchema` / `updateSchema`.
+
+```typescript
+const { insertSchema, updateSchema, output, input } = createZodSchemas(items);
+
+export const itemSchemas = {
+  output,
+  input: {
+    ...input,
+    create: insertSchema.omit({
+      id: true,
+      createdAt: true,
+      updatedAt: true,
+      memberId: true,
+      organizationId: true,
+    }),
+    update: updateSchema
+      .omit({
+        createdAt: true,
+        updatedAt: true,
+        memberId: true,
+        organizationId: true,
+      })
+      .extend({ id: z.string() }),
+  },
+};
+```
+
+### Strip Sensitive or Heavy Fields From Output
+
+When `output.single` should not equal the full table row, override `single`, `found`, and `list` together so they stay consistent:
+
+```typescript
+const { selectSchema, output, input } = createZodSchemas(tokens);
+const tokenPublicSchema = selectSchema.omit({ secret: true });
 
 export const tokenSchemas = {
   output: {
-    single: tokenOutputSchema,
-  },
-};
-```
-
-### Entity With Multiple Output Variants
-
-```typescript
-import { queryListOutput, querySchema } from "@m5kdev/commons/modules/schemas/query.schema";
-import { createSelectSchema } from "drizzle-zod";
-import { z } from "zod";
-import { organizations } from "./auth.db";
-
-export const organizationSchema = createSelectSchema(organizations);
-
-export const organizationSchemas = {
-  output: {
-    single: organizationSchema,
-    list: queryListOutput(organizationSchema),
-    simple: organizationSchema.omit({
-      metadata: true,
-      preferences: true,
-      flags: true,
-    }),
-    child: organizationSchema.omit({
-      metadata: true,
-    }),
-    admin: organizationSchema.omit({
-      metadata: true,
-      preferences: true,
-      flags: true,
-    }),
+    ...output,
+    single: tokenPublicSchema,
+    found: tokenPublicSchema.optional(),
+    list: createListOutputSchema(tokenPublicSchema),
   },
   input: {
-    list: querySchema,
-    updateChild: z.object({
-      id: z.string(),
-      name: z.string().min(1),
-    }),
+    ...input,
+    create: tokenCreateInputSchema,
+    update: tokenUpdateInputSchema,
   },
 };
 ```
+
+### Add Named Output Variants
+
+Keep defaults via spread, then add `simple`, `admin`, `child`, etc.:
+
+```typescript
+output: {
+  ...output,
+  simple: selectSchema.omit({ metadata: true, preferences: true }),
+},
+```
+
+Rebuild `list` with `createListOutputSchema(variant)` when a list endpoint should return the lighter shape instead of the default `single`.
+
+### Extend `input.list`
+
+Only when the generic `querySchema` is insufficient:
+
+```typescript
+input: {
+  ...input,
+  list: input.list.extend({
+    status: z.enum(["draft", "published"]).optional(),
+  }),
+},
+```
+
+Prefer the shared `q` / `filters` contract from the repository layer when possible.
+
+### Add Action-Specific Inputs
+
+```typescript
+input: {
+  ...input,
+  create: sharedCreateSchema,
+  update: sharedUpdateSchema,
+  publish: z.object({ id: z.string() }),
+  archive: z.object({ id: z.string(), reason: z.string().optional() }),
+},
+```
+
+## Integration with Other Layers
+
+### Service / tRPC
+
+Reference schemas through the grouped object:
+
+```typescript
+list = this.procedure("list")
+  .input(productSchemas.input.list)
+  .output(productSchemas.output.list)
+  // ...
+
+getById = this.procedure("getById")
+  .input(productSchemas.input.read)
+  .output(productSchemas.output.found)
+  // ...
+```
+
+Prefer procedure `.input()` / `.output()` over manual `z.infer` return annotations when using the procedure builder.
+
+## Exceptions
 
 ### Custom Schema (No Database Table)
 
-When there is no backing table, define the schema manually:
+Hand-write `output` / `input` only when there is no backing table — do not call `createZodSchemas`:
 
 ```typescript
 import { z } from "zod";
@@ -225,34 +267,37 @@ export const invitationSchemas = {
 
 ### Multiple Entities in One DTO File
 
-A single module DTO file can define multiple logical groups:
+Call `createZodSchemas` once per table and export one `{entity}Schemas` object per entity:
 
 ```typescript
-export const organizationSchema = createSelectSchema(organizations);
-export const organizationSchemas = {
-  output: { ... },
-  input: { ... },
+const postsZod = createZodSchemas(posts);
+export const postSchemas = {
+  output: postsZod.output,
+  input: {
+    ...postsZod.input,
+    create: postCreateInputSchema,
+    update: postUpdateInputSchema,
+  },
 };
 
-export const waitlistSchema = createSelectSchema(waitlist);
-export const waitlistSchemas = {
-  output: { ... },
-};
-
-export const invitationSchemas = {
-  output: { ... },
-  input: { ... },
+const tagZod = createZodSchemas(tags);
+export const tagSchemas = {
+  output: tagZod.output,
+  input: {
+    ...tagZod.input,
+    create: tagCreateInputSchema,
+    update: tagUpdateInputSchema,
+  },
 };
 ```
 
-Each entity gets its own base schema (if table-backed) and its own grouped schemas object.
-
 ## Best Practices
 
-1. **Schema source**: Always generate from `createSelectSchema(table)` when a database table exists. Only hand-write schemas for virtual/composite entities.
-2. **Derive, don't duplicate**: Use `.omit()` / `.pick()` on the main schema rather than writing a new `z.object()` with the same fields.
-3. **Extract when reused**: If a derived schema appears more than once in the grouped object, declare it as a standalone `const` above.
-4. **Security**: Use `.omit()` to strip sensitive columns (tokens, secrets, internal flags) from output schemas.
-5. **Minimal list schemas**: Lighter output variants for list endpoints improve performance and reduce payload size.
-6. **Naming**: Base schema is `{entity}Schema` (singular). Grouped object is `{entity}Schemas` (plural). Named keys inside are short and descriptive (`single`, `list`, `simple`, `admin`).
-7. **Input reuse**: Prefer `querySchema` for list inputs. Extend it when extra filters or params are needed.
+1. **Start from `createZodSchemas`**: spread defaults; never rebuild the full CRUD schema map by hand for table-backed entities.
+2. **Override `create` / `update`**: always replace raw insert/update with client-safe (preferably shared) schemas.
+3. **Keep output keys consistent**: if you change `single`, update `found` and `list` to match unless a variant intentionally differs.
+4. **Derive, don't duplicate**: use `.omit()` / `.pick()` / `.extend()` on `selectSchema` / insert / update schemas.
+5. **Extract when reused**: if the same derived schema appears more than once, declare a `const` above the export.
+6. **Security**: strip secrets and internal columns from output overrides.
+7. **Naming**: grouped object is `{entity}Schemas` (plural). Keys stay short (`single`, `list`, `simple`, `publish`).
+8. **One export per entity**: avoid loose top-level schema exports when the grouped object is enough; destructure `selectSchema` locally for derivation.

@@ -7,13 +7,76 @@ alwaysApply: false
 
 ## Conventions
 
-- Extend `BaseService<Repositories, Services>` or `BasePermissionService<Repositories, Services>`.
+- Always extend `BasePermissionService<Repositories, Services>`.
 - Declare repository and service dependencies as explicit named maps in generics.
 - Instantiate service classes in `apps/*/server/src/service.ts` (composition root), not inside module files.
 - Keep orchestration/business logic in service; repositories handle persistence only.
 - Implement service methods as **procedures** using `this.procedure("name")` builder chains.
 - Propagate `ServerResultAsync` consistently and use `err(...)`/`ok(...)` composition.
 - Prefer helper methods for repeated workflows (prompt prep, query assembly, enrichment).
+- Define grants in `<module>.grants.ts` and wire them when composing the service.
+- **Strongly prefer repository built-ins** (`queryList`, `queryFind`, `findById`, `create`, `update`, `deleteById`, …) over custom repository methods.
+
+## Prefer Repository Built-ins
+
+Call `BaseTableRepository` helpers from the service. Do **not** invent repository wrappers for ordinary CRUD, lists, or lookups.
+
+- **Reads**: use `queryList` / `queryFind` with `filters` (and `addContextFilter` when org/member scoped). Usually no custom `list*` / `get*` / `findBy*` repository methods.
+- **Creates**: `create` is permissive — stamp defaults and actor fields in the service (`memberId`, `organizationId`, `status: "draft"`, …) and pass the full row payload. No custom `create*` repo method for defaults.
+- **Updates**: `update` accepts partial fields — only pass columns that should change. No custom `update*` repo method to omit fields or merge patches.
+- Add a custom repository method only for joins, CTEs, multi-table writes, transactions, or predicates that cannot be expressed with filters / `TableConditionBuilder`.
+
+```typescript
+// Preferred: built-in + filters / stamped defaults in the service
+listPublished = this.procedure("listPublished")
+  .input(itemSchemas.input.list)
+  .output(itemSchemas.output.list)
+  .requireAuth("organization")
+  .addContextFilter(["organization"])
+  .access({ action: "read" })
+  .handle(({ input }) =>
+    this.repository.item.queryList(
+      {
+        ...input,
+        filters: [
+          ...(input.filters ?? []),
+          {
+            columnId: "status",
+            type: "enum",
+            method: "equals",
+            value: "published",
+          },
+        ],
+      },
+      { globalSearchColumns: ["name", "description"] }
+    )
+  );
+
+create = this.procedure("create")
+  .input(itemSchemas.input.create)
+  .output(itemSchemas.output.single)
+  .requireAuth("organization")
+  .access({ action: "write" })
+  .handle(async ({ input, ctx }) => {
+    return this.repository.item.create({
+      ...input,
+      memberId: ctx.actor.memberId,
+      organizationId: ctx.session.activeOrganizationId,
+      status: "draft",
+    });
+  });
+
+update = this.procedure("update")
+  .input(itemSchemas.input.update)
+  .output(itemSchemas.output.single)
+  .requireAuth("organization")
+  .loadResource("item", ({ input }) => this.repository.item.findById(input.id))
+  .access({ action: "write", entityStep: "item" })
+  .handle(async ({ input }) => {
+    // Partial update — only fields present on input are written
+    return this.repository.item.update(input);
+  });
+```
 
 ## Avoid Trivial Service Delegation
 
@@ -31,11 +94,11 @@ Service methods are defined using the procedure builder pattern. Each procedure 
 
 1. `.input(schema)` -- Accepts a Zod schema; infers `TInput` so you don't need `this.procedure<Type>(...)`. No runtime validation by default; pass `true` as second arg to enable it.
 2. `.output(schema)` -- Accepts a Zod schema; constrains the handler return type so you don't need explicit return annotations. No runtime validation by default; pass `true` as second arg to enable it.
-3. `.requireAuth(scope?)` -- Enforces authentication. Scope can be `"user"` (default), `"organization"`, `"team"`, or `"admin"`.
+3. `.requireAuth(scope?)` -- Enforces authentication. Scope can be `"user"` (default), `"organization" (recommended)`, `"team"`, or `"admin"`.
 4. `.loadResource(name, loader)` -- Loads a value and stores it in `state`; returns `NOT_FOUND` if falsy.
 5. `.use(name, step)` -- Runs an arbitrary step and stores the result in `state`.
 6. `.addContextFilter(scopes?)` -- Applies context-based query filtering (requires auth).
-7. `.access(config)` -- Permission check (only on `BasePermissionService`). Arrays are soft-filtered to allowed rows (empty OK); single entities return `FORBIDDEN` when denied. Filtered arrays are written back to `entityStep` state.
+7. `.access(config)` -- Permission check via grants. Arrays are soft-filtered to allowed rows (empty OK); single entities return `FORBIDDEN` when denied. Filtered arrays are written back to `entityStep` state.
 8. `.handle(handler)` -- Terminal method; runs the handler with `{ input, ctx, state, repository, service, logger }`.
 
 ### Input / Output Typing
@@ -47,7 +110,8 @@ Prefer `.input(schema)` with Zod schemas defined in the module's `.dto.ts` file 
 create = this.procedure("create")
   .input(itemSchemas.input.create)
   .output(itemSchemas.output.single)
-  .requireAuth()
+  .requireAuth("organization")
+  .access({ action: "write" })
   .handle(async ({ input, ctx }) => {
     return this.repository.item.create({
       ...input,
@@ -58,7 +122,8 @@ create = this.procedure("create")
 
 // Acceptable for simple primitives with no matching schema
 getCount = this.procedure("getCount")
-  .requireAuth()
+  .requireAuth("organization")
+  .access({ action: "read" })
   .handle(async ({ ctx }): ServerResultAsync<number> => {
     return this.repository.item.countByUser(ctx.actor.userId);
   });
@@ -74,19 +139,20 @@ When no Zod schema exists (simple primitives, inline objects), you can still use
 list = this.procedure("list")
   .input(itemSchemas.input.list)
   .output(itemSchemas.output.list)
-  .requireAuth()
-  .handle(async ({ input, ctx }) => {
-    return this.repository.item.list({
-      ...input,
-      userId: ctx.actor.userId,
-      memberId: ctx.actor.memberId,
-    });
-  });
+  .requireAuth("organization")
+  .addContextFilter(["organization"])
+  .loadResource("items", ({ input }) => this.repository.item.queryList(input))
+  .access({
+    action: "read",
+    entityStep: "items",
+  })
+  .handle(({ state }) => state.items);
 
 create = this.procedure("create")
   .input(itemSchemas.input.create)
   .output(itemSchemas.output.single)
-  .requireAuth()
+  .requireAuth("organization")
+  .access({ action: "write" })
   .handle(async ({ input, ctx }) => {
     return this.repository.item.create({
       ...input,
@@ -96,7 +162,7 @@ create = this.procedure("create")
   });
 ```
 
-### With Resource Loading and Access Control
+### With Resource Loading and Access Control (recommended)
 
 ```typescript
 update = this.procedure("update")
@@ -143,6 +209,7 @@ list = this.procedure("list")
   .output(itemSchemas.output.list)
   .requireAuth("organization")
   .addContextFilter(["member", "organization"])
+  .access({ action: "read" })
   .handle(({ input }) => {
     return this.repository.item.queryList(input, {
       globalSearchColumns: ["name", "description"],
@@ -163,40 +230,40 @@ validateCode = this.procedure("validateCode")
 
 ## Permission and Grants
 
-- If extending `BasePermissionService`, keep all guarded action names aligned with grants (`read`, `write`, `delete`, `publish`, etc.).
+- Keep all guarded action names aligned with grants (`read`, `write`, `delete`, `publish`, etc.).
 - Do not use undeclared action aliases (e.g., guard `"update"` when grants only define `"write"`).
-- If a module has no effective `accessGuard*` usage, prefer `BaseService` over `BasePermissionService`.
+- Prefer `.access({ action, entityStep? })` over ad-hoc ownership checks in `.use`.
 - For org-scoped assets, stamp and authorize with `memberId` (`ctx.actor.memberId`). Keep `userId` for authentication and personal resources (billing, devices, OAuth). Prefer the column name `memberId` over aliases like `authorMemberId`.
 - Access modes: `"all"` (global), `"org"` (same organization), `"own"` (ownership), `"none"` (explicit deny). Prefer `"org"` for org owner/admin grants.
 
 ## Example Skeleton
 
 ```typescript
-import { err, ok } from "neverthrow";
-import { BaseService } from "@m5kdev/backend/modules/base/base.service";
+import { BasePermissionService } from "@m5kdev/backend/modules/base/base.service";
 import { itemSchemas } from "./item.dto";
 import type { ItemRepository } from "./item.repository";
 
-export class ItemService extends BaseService<
+export class ItemService extends BasePermissionService<
   { item: ItemRepository },
   Record<string, never>
 > {
   list = this.procedure("list")
     .input(itemSchemas.input.list)
     .output(itemSchemas.output.single.array())
-    .requireAuth()
-    .handle(async ({ input, ctx }) => {
-      return this.repository.item.list({
-        ...input,
-        userId: ctx.actor.userId,
-        memberId: ctx.actor.memberId,
-      });
-    });
+    .requireAuth("organization")
+    .addContextFilter(["organization"])
+    .loadResource("items", ({ input }) => this.repository.item.queryList(input))
+    .access({
+      action: "read",
+      entityStep: "items",
+    })
+    .handle(({ state }) => state.items);
 
   create = this.procedure("create")
     .input(itemSchemas.input.create)
     .output(itemSchemas.output.single)
-    .requireAuth()
+    .requireAuth("organization")
+    .access({ action: "write" })
     .handle(async ({ input, ctx }) => {
       return this.repository.item.create({
         ...input,
@@ -208,19 +275,11 @@ export class ItemService extends BaseService<
   update = this.procedure("update")
     .input(itemSchemas.input.update)
     .output(itemSchemas.output.single)
-    .requireAuth()
+    .requireAuth("organization")
     .loadResource("item", ({ input }) => this.repository.item.findById(input.id))
-    .use("owner", ({ ctx, state }) => {
-      if (
-        state.item.memberId &&
-        state.item.memberId !== ctx.actor.memberId
-      ) {
-        return this.error("FORBIDDEN");
-      }
-      if (!state.item.memberId && state.item.userId !== ctx.actor.userId) {
-        return this.error("FORBIDDEN");
-      }
-      return true;
+    .access({
+      action: "write",
+      entityStep: "item",
     })
     .handle(async ({ input }) => {
       return this.repository.item.update(input);
@@ -228,19 +287,11 @@ export class ItemService extends BaseService<
 
   delete = this.procedure("delete")
     .input(itemSchemas.input.delete)
-    .requireAuth()
+    .requireAuth("organization")
     .loadResource("item", ({ input }) => this.repository.item.findById(input.id))
-    .use("owner", ({ ctx, state }) => {
-      if (
-        state.item.memberId &&
-        state.item.memberId !== ctx.actor.memberId
-      ) {
-        return this.error("FORBIDDEN");
-      }
-      if (!state.item.memberId && state.item.userId !== ctx.actor.userId) {
-        return this.error("FORBIDDEN");
-      }
-      return true;
+    .access({
+      action: "delete",
+      entityStep: "item",
     })
     .handle(async ({ input }) => {
       return this.repository.item.deleteById(input.id);

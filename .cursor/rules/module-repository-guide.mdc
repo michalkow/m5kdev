@@ -1,5 +1,5 @@
 ---
-globs: packages/backend/src/modules/**/*.repository.ts
+globs: packages/backend/src/modules/**/*.repository.ts,apps/**/server/src/modules/**/*.repository.ts
 alwaysApply: false
 ---
 
@@ -32,10 +32,11 @@ Prefer `this.query()` for new repository methods. The builder provides compile-t
 - Use `throwableQuery` to wrap **individual Drizzle queries** (selects, inserts, updates, deletes, transactions). It converts thrown database errors into `ServerResultAsync`.
 - Do **not** wrap entire method bodies in `throwableAsync`. Keep `throwableQuery` scoped tightly around the database call so error-handling logic (branching on `isErr`, returning `this.error(...)`) stays outside the wrapper.
 - The `this.query()` builder already wraps the handler in `throwableAsync` internally, so query-builder methods only need `throwableQuery` around their Drizzle calls.
+- Built-in helpers (`queryFind`, `queryList`, `findById`, `create`, …) already use `throwableQuery` internally — do not wrap their return values again.
 
-## Prefer Built-in Base Methods
+## Prefer Built-in Base Methods (Strong Default)
 
-`BaseTableRepository` provides typed CRUD helpers. Prefer them over hand-written queries when they fit the use case, including inside custom methods:
+`BaseTableRepository` provides typed CRUD helpers. **Always use these before adding custom repository methods or raw Drizzle.** Services should call these helpers directly in most cases.
 
 - `queryList(query, options)` for filtered/sorted/paginated lists.
 - `queryFind(query, options)` for filtered/sorted single-row lookup (no pagination/count).
@@ -44,17 +45,16 @@ Prefer `this.query()` for new repository methods. The builder provides compile-t
 - `update(data)` / `updateMany(data)` for updates.
 - `softDeleteById(id)` / `deleteById(id)` for deletes.
 
-Override these only when custom joins, CTEs, or non-standard behavior is required.
+### Usually Do Not Add Custom List / Getter / Create / Update Methods
 
-## When to Use `async` Methods Instead of Query Builder
+- **Lists and getters**: `queryList` / `queryFind` already expose read APIs extended via `filters` (and optional `conditions`). Prefer calling them from the service with the needed filters. Do not add thin `listPublished`, `findBySlug`, `getMain`, etc. unless the same filter set is reused heavily *and* belongs in the repository boundary.
+- **Creates**: `create` is permissive — stamp defaults (`status`, `memberId`, …) in the **service** and pass them to `create`. Do not add a custom repository `create*` just to apply defaults.
+- **Updates**: `update` accepts partial payloads — omit fields you do not want to change. Do not add a custom repository `update*` just to restrict columns or merge patches.
+- Write raw `this.orm.select()...` or a custom method only for joins, CTEs, multi-table writes, transactions, or predicates that cannot be expressed with filters / `TableConditionBuilder`.
 
-Use regular `async` methods when:
+### If a Shared Lookup Belongs in the Repository
 
-- The method requires an optional `tx` parameter for transaction support.
-- The method orchestrates multiple sequential queries with branching logic between them.
-- The method wraps a `this.orm.transaction()` call.
-
-## Example: Query Builder Method
+Only then wrap built-ins with filters — never reimplement select/where/limit. Prefer the same filter call from the **service** when the lookup is used once:
 
 ```typescript
 import { BaseTableRepository } from "@m5kdev/backend/modules/base/base.repository";
@@ -68,22 +68,91 @@ export class ItemRepository extends BaseTableRepository<
   Record<string, never>,
   Schema["items"]
 > {
+  // Shared domain lookup used from multiple services/jobs — still no hand-written SQL
   findBySlug = this.query("findBySlug")
     .input(z.object({ slug: z.string() }))
-    .output(itemSchemas.output.single.nullable())
-    .handle(async ({ slug }) => {
-      const result = await this.throwableQuery(() =>
-        this.orm
-          .select()
-          .from(this.schema.items)
-          .where(eq(this.schema.items.slug, slug))
-          .limit(1)
-      );
-      if (result.isErr()) return err(result.error);
-      const [item] = result.value;
-      return item ?? null;
-    });
+    .output(itemSchemas.output.found)
+    .handle(({ slug }) =>
+      this.queryFind({
+        filters: [
+          { columnId: "slug", type: "string", method: "equals", value: slug },
+        ],
+      })
+    );
 }
+```
+
+Filter shape: `{ columnId, type, method, value }` (`type`: `string` | `number` | `date` | `boolean` | `enum` | `jsonArray`; common `method`s: `equals`, `contains`, `oneOf`, `is_null`, …). Soft-delete exclusion is applied automatically when the table has `deletedAt` (unless `showDeleted: true`).
+
+### Extend With `conditions` When Filters Alone Are Not Enough
+
+Pass a `TableConditionBuilder` via `options.conditions` for extra predicates (optional excludes, `ne`, `inArray`, JSON helpers, etc.) while still reusing sorting, soft-delete, and column picking from `queryFind` / `queryList`:
+
+```typescript
+import { ne } from "drizzle-orm";
+import { z } from "zod";
+import { itemSchemas } from "./items.dto";
+
+// Prefer calling queryFind with conditions from the service when one-off;
+// repository wrapper only if shared across callers.
+findBySlug = this.query("findBySlug")
+  .input(
+    z.object({
+      slug: z.string(),
+      excludeId: z.string().optional(),
+    })
+  )
+  .output(itemSchemas.output.found)
+  .handle(({ slug, excludeId }) => {
+    const conditions = this.getConditionBuilder(this.table);
+    if (excludeId) {
+      conditions.push(ne(this.table.id, excludeId));
+    }
+
+    return this.queryFind(
+      {
+        filters: [
+          { columnId: "slug", type: "string", method: "equals", value: slug },
+        ],
+      },
+      { conditions }
+    );
+  });
+```
+
+## When to Use `async` Methods Instead of Query Builder
+
+Use regular `async` methods when:
+
+- The method requires an optional `tx` parameter for transaction support.
+- The method orchestrates multiple sequential queries with branching logic between them.
+- The method wraps a `this.orm.transaction()` call.
+
+## Example: Raw Drizzle (Only When Built-ins Do Not Fit)
+
+```typescript
+findWithCategory = this.query("findWithCategory")
+  .input(z.object({ id: z.string() }))
+  .output(itemSchemas.output.withCategory.nullable())
+  .handle(async ({ id }) => {
+    const result = await this.throwableQuery(() =>
+      this.orm
+        .select({
+          item: this.schema.items,
+          categoryName: this.schema.categories.name,
+        })
+        .from(this.schema.items)
+        .innerJoin(
+          this.schema.categories,
+          eq(this.schema.items.categoryId, this.schema.categories.id)
+        )
+        .where(eq(this.schema.items.id, id))
+        .limit(1)
+    );
+    if (result.isErr()) return err(result.error);
+    const [row] = result.value;
+    return row ?? null;
+  });
 ```
 
 ## Example: Async Method (Transaction / Multi-Query)
