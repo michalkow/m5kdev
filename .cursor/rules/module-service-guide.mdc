@@ -33,23 +33,19 @@ listPublished = this.procedure("listPublished")
   .output(itemSchemas.output.list)
   .requireAuth("organization")
   .addContextFilter(["organization"])
+  .addFilters(() => [
+    {
+      columnId: "status",
+      type: "enum",
+      method: "equals",
+      value: "published",
+    },
+  ])
   .access({ action: "read" })
   .handle(({ input }) =>
-    this.repository.item.queryList(
-      {
-        ...input,
-        filters: [
-          ...(input.filters ?? []),
-          {
-            columnId: "status",
-            type: "enum",
-            method: "equals",
-            value: "published",
-          },
-        ],
-      },
-      { globalSearchColumns: ["name", "description"] }
-    )
+    this.repository.item.queryList(input, {
+      globalSearchColumns: ["name", "description"],
+    })
   );
 
 create = this.procedure("create")
@@ -98,8 +94,9 @@ Service methods are defined using the procedure builder pattern. Each procedure 
 4. `.loadResource(name, loader)` -- Loads a value and stores it in `state`; returns `NOT_FOUND` if falsy.
 5. `.use(name, step)` -- Runs an arbitrary step and stores the result in `state`.
 6. `.addContextFilter(scopes?)` -- Applies context-based query filtering (requires auth).
-7. `.access(config)` -- Permission check via grants. Arrays are soft-filtered to allowed rows (empty OK); single entities return `FORBIDDEN` when denied. Filtered arrays are written back to `entityStep` state.
-8. `.handle(handler)` -- Terminal method; runs the handler with `{ input, ctx, state, repository, service, logger }`.
+7. `.addFilters(resolve)` -- Appends query filters to the current input (`({ input, ctx, state, ... }) => QueryFilter | QueryFilter[]`).
+8. `.access(config)` -- Permission check via grants. Arrays are soft-filtered to allowed rows (empty OK); single entities return `FORBIDDEN` when denied. Filtered arrays are written back to `entityStep` state.
+9. `.handle(handler)` -- Terminal method; runs the handler with `{ input, ctx, state, repository, service, logger }`.
 
 ### Input / Output Typing
 

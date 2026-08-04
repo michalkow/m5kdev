@@ -1,4 +1,4 @@
-import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
+import type { QueryFilter, QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server";
 import { ok } from "neverthrow";
 import type { z } from "zod";
@@ -84,6 +84,16 @@ export type ServiceProcedureInputMapper<
 > = (
   args: ServiceProcedureArgs<TInput, TCtx, Repositories, Services, State>
 ) => ServiceProcedureResultLike<ServiceProcedureStoredValue<TNextInput>>;
+
+export type ServiceProcedureAddFiltersResolver<
+  TInput,
+  TCtx extends ServiceProcedureContext,
+  Repositories extends RepositoryMap,
+  Services extends ServiceMap,
+  State extends ServiceProcedureState,
+> = (
+  args: ServiceProcedureArgs<TInput, TCtx, Repositories, Services, State>
+) => ServiceProcedureResultLike<QueryFilter | readonly QueryFilter[]>;
 
 export type ServiceProcedureHandler<
   TInput,
@@ -227,6 +237,16 @@ export interface ServiceProcedureBuilder<
     State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> },
     TExpectedOutput
   >;
+  addFilters(
+    resolve: ServiceProcedureAddFiltersResolver<TInput, TCtx, Repositories, Services, State>
+  ): ServiceProcedureBuilder<
+    ServiceProcedureContextFilteredInput<TInput>,
+    TCtx,
+    Repositories,
+    Services,
+    State & { addFilters: ServiceProcedureContextFilteredInput<TInput> },
+    TExpectedOutput
+  >;
   requireAuth<Scope extends ActorScope = "user">(
     scope?: Scope
   ): ServiceProcedureBuilder<
@@ -328,6 +348,16 @@ export interface PermissionServiceProcedureBuilder<
     Repositories,
     Services,
     State & { contextFilter: ServiceProcedureContextFilteredInput<TInput> },
+    TExpectedOutput
+  >;
+  addFilters(
+    resolve: ServiceProcedureAddFiltersResolver<TInput, TCtx, Repositories, Services, State>
+  ): PermissionServiceProcedureBuilder<
+    ServiceProcedureContextFilteredInput<TInput>,
+    TCtx,
+    Repositories,
+    Services,
+    State & { addFilters: ServiceProcedureContextFilteredInput<TInput> },
     TExpectedOutput
   >;
   requireAuth<Scope extends ActorScope = "user">(
@@ -668,6 +698,38 @@ function createContextFilterStep<Repositories extends RepositoryMap, Services ex
   };
 }
 
+function createAddFiltersStep<
+  TInput,
+  TCtx extends ServiceProcedureContext,
+  Repositories extends RepositoryMap,
+  Services extends ServiceMap,
+  State extends ServiceProcedureState,
+>(
+  resolve: ServiceProcedureAddFiltersResolver<TInput, TCtx, Repositories, Services, State>
+): ProcedureRuntimeStep<Repositories, Services> {
+  return {
+    stage: "input",
+    stepName: "addFilters",
+    run: async (args) => {
+      const typedArgs = args as ServiceProcedureArgs<TInput, TCtx, Repositories, Services, State>;
+      const normalized = await normalizeProcedureResult(resolve(typedArgs));
+      if (normalized.isErr()) {
+        return normalized;
+      }
+
+      const appended = Array.isArray(normalized.value)
+        ? [...normalized.value]
+        : [normalized.value as QueryFilter];
+      const input = typedArgs.input as QueryInput;
+
+      return ok({
+        ...input,
+        filters: [...(input.filters ?? []), ...appended],
+      });
+    },
+  };
+}
+
 function createInputValidationStep<Repositories extends RepositoryMap, Services extends ServiceMap>(
   host: BaseServiceProcedureHost<Repositories, Services>,
   schema: z.ZodType
@@ -992,6 +1054,24 @@ export function createServiceProcedureBuilder<
     });
   }
 
+  function addFilters(
+    resolve: ServiceProcedureAddFiltersResolver<TInput, TCtx, Repositories, Services, State>
+  ) {
+    assertUniqueStepName(config.steps, "addFilters");
+
+    return createServiceProcedureBuilder<
+      ServiceProcedureContextFilteredInput<TInput>,
+      TCtx,
+      Repositories,
+      Services,
+      State & { addFilters: ServiceProcedureContextFilteredInput<TInput> },
+      TExpectedOutput
+    >(host, {
+      ...config,
+      steps: [...config.steps, createAddFiltersStep(resolve)],
+    });
+  }
+
   const builder: ServiceProcedureBuilder<
     TInput,
     TCtx,
@@ -1064,6 +1144,7 @@ export function createServiceProcedureBuilder<
       });
     },
     addContextFilter,
+    addFilters,
     requireAuth<Scope extends ActorScope = "user">(scope?: Scope) {
       assertUniqueStepName(config.steps, "auth");
       return createServiceProcedureBuilder<
@@ -1117,6 +1198,24 @@ export function createPermissionServiceProcedureBuilder<
     >(host, {
       ...config,
       steps: [...steps, createContextFilterStep(host, include)],
+    });
+  }
+
+  function addFilters(
+    resolve: ServiceProcedureAddFiltersResolver<TInput, TCtx, Repositories, Services, State>
+  ) {
+    assertUniqueStepName(config.steps, "addFilters");
+
+    return createPermissionServiceProcedureBuilder<
+      ServiceProcedureContextFilteredInput<TInput>,
+      TCtx,
+      Repositories,
+      Services,
+      State & { addFilters: ServiceProcedureContextFilteredInput<TInput> },
+      TExpectedOutput
+    >(host, {
+      ...config,
+      steps: [...config.steps, createAddFiltersStep(resolve)],
     });
   }
 
@@ -1255,6 +1354,7 @@ export function createPermissionServiceProcedureBuilder<
       });
     },
     addContextFilter,
+    addFilters,
     requireAuth<Scope extends ActorScope = "user">(scope?: Scope) {
       assertUniqueStepName(config.steps, "auth");
       return createPermissionServiceProcedureBuilder<

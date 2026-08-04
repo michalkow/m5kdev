@@ -242,6 +242,124 @@ describe("BaseService procedure builder", () => {
     }
   });
 
+  it("addFilters appends filters and preserves other query fields", async () => {
+    type QueryWithSearch = QueryInput & { search?: string };
+
+    class QueryService extends BaseService<Record<string, never>, Record<string, never>> {
+      readonly run = this.procedure<QueryWithSearch>("run")
+        .addFilters(() => [
+          {
+            columnId: "status",
+            type: "enum",
+            method: "equals",
+            value: "published",
+          },
+        ])
+        .handle(({ input, state }) =>
+          ok({
+            input,
+            stateMatches: state.addFilters === input,
+          })
+        );
+    }
+
+    const service = new QueryService();
+    const result = await service.run(
+      {
+        search: "hello",
+        q: "term",
+        page: 2,
+        filters: [
+          {
+            columnId: "name",
+            type: "string",
+            method: "contains",
+            value: "widget",
+          },
+        ],
+      },
+      {}
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.stateMatches).toBe(true);
+      expect(result.value.input.search).toBe("hello");
+      expect(result.value.input.q).toBe("term");
+      expect(result.value.input.page).toBe(2);
+      expect(result.value.input.filters).toEqual([
+        {
+          columnId: "name",
+          type: "string",
+          method: "contains",
+          value: "widget",
+        },
+        {
+          columnId: "status",
+          type: "enum",
+          method: "equals",
+          value: "published",
+        },
+      ]);
+    }
+  });
+
+  it("addFilters accepts a single filter return value", async () => {
+    class QueryService extends BaseService<Record<string, never>, Record<string, never>> {
+      readonly run = this.procedure<QueryInput>("run")
+        .addFilters(() => ({
+          columnId: "status",
+          type: "enum",
+          method: "equals",
+          value: "draft",
+        }))
+        .handle(({ input }) => ok(input));
+    }
+
+    const service = new QueryService();
+    const result = await service.run({}, {});
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.filters).toEqual([
+        {
+          columnId: "status",
+          type: "enum",
+          method: "equals",
+          value: "draft",
+        },
+      ]);
+    }
+  });
+
+  it("addFilters propagates ServerResult errors from the resolver", async () => {
+    class QueryService extends BaseService<Record<string, never>, Record<string, never>> {
+      readonly run = this.procedure<QueryInput>("run")
+        .addFilters(() => this.error("BAD_REQUEST", "invalid filter"))
+        .handle(({ input }) => ok(input));
+    }
+
+    const service = new QueryService();
+    const result = await service.run({}, {});
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("BAD_REQUEST");
+      expect(result.error.message).toBe("invalid filter");
+    }
+  });
+
+  it("addFilters throws when called twice on the same procedure", () => {
+    class QueryService extends BaseService<Record<string, never>, Record<string, never>> {
+      readonly run = this.procedure<QueryInput>("run")
+        .addFilters(() => [])
+        .addFilters(() => [])
+        .handle(({ input }) => ok(input));
+    }
+
+    expect(() => new QueryService()).toThrow("Duplicate service procedure step name: addFilters");
+  });
+
   it("mapInput updates the input seen by later steps and the handler", async () => {
     type QueryWithSearch = QueryInput & { search?: string };
 
