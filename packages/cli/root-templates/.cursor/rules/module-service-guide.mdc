@@ -7,8 +7,7 @@ alwaysApply: false
 
 Conventions for service classes in app modules. Services consume the module
 DTO object (`postSchemas`) — they do not import hand-written request/response
-types. Input and output schemas are attached to each procedure and validated
-at runtime.
+types. Input and output schemas are attached to each procedure.
 
 ## File Location
 
@@ -18,11 +17,72 @@ apps/<app>/server/src/modules/<module>/<module>.service.ts
 
 ## Conventions
 
-- Extend `BaseService<Repositories, Services>` or `BasePermissionService<Repositories, Services, Context>` from `@m5kdev/backend/modules/base/base.service`.
+- Always extend `BasePermissionService<Repositories, Services>`.
 - Declare repository and service dependencies as explicit named maps in generics.
-- Keep orchestration and business logic in services; repositories handle persistence only.
-- Implement service methods as `readonly` procedures using the `this.procedure("name")` builder.
-- Propagate `ServerResultAsync` consistently with `err(...)`/`ok(...)` composition.
+- Instantiate service classes in `apps/*/server/src/service.ts` (composition root), not inside module files.
+- Keep orchestration/business logic in service; repositories handle persistence only.
+- Implement service methods as `readonly` procedures using `this.procedure("name")` builder chains.
+- Propagate `ServerResultAsync` consistently and use `err(...)`/`ok(...)` composition.
+- Prefer helper methods for repeated workflows (prompt prep, query assembly, enrichment).
+- Define grants in `<module>.grants.ts` and wire them when composing the service.
+- **Strongly prefer repository built-ins** (`queryList`, `queryFind`, `findById`, `create`, `update`, `deleteById`, …) over custom repository methods.
+
+## Prefer Repository Built-ins
+
+Call `BaseTableRepository` helpers from the service. Do **not** invent repository wrappers for ordinary CRUD, lists, or lookups.
+
+- **Reads**: use `queryList` / `queryFind` with `filters` (and `addContextFilter` when org/member scoped). Usually no custom `list*` / `get*` / `findBy*` repository methods.
+- **Creates**: `create` is permissive — stamp defaults and actor fields in the service (`memberId`, `organizationId`, `status: "draft"`, …) and pass the full row payload. No custom `create*` repo method for defaults.
+- **Updates**: `update` accepts partial fields — only pass columns that should change. No custom `update*` repo method to omit fields or merge patches.
+- Add a custom repository method only for joins, CTEs, multi-table writes, transactions, or predicates that cannot be expressed with filters / `TableConditionBuilder`.
+
+```typescript
+// Preferred: built-in + filters / stamped defaults in the service
+readonly listPublished = this.procedure("listPublished")
+  .input(postSchemas.input.list)
+  .output(postSchemas.output.list)
+  .requireAuth("organization")
+  .addContextFilter(["organization"])
+  .addFilters(() => [
+    {
+      columnId: "status",
+      type: "enum",
+      method: "equals",
+      value: "published",
+    },
+  ])
+  .access({ action: "read" })
+  .handle(({ input }) =>
+    this.repository.posts.queryList(input, {
+      globalSearchColumns: ["title", "excerpt", "content"],
+    })
+  );
+
+readonly create = this.procedure("create")
+  .input(postSchemas.input.create)
+  .output(postSchemas.output.single)
+  .requireAuth("organization")
+  .access({ action: "write" })
+  .handle(async ({ input, ctx }) => {
+    return this.repository.posts.create({
+      ...input,
+      memberId: ctx.actor.memberId,
+      organizationId: ctx.session.activeOrganizationId,
+      status: "draft",
+    });
+  });
+
+readonly update = this.procedure("update")
+  .input(postSchemas.input.update)
+  .output(postSchemas.output.single)
+  .requireAuth("organization")
+  .loadResource("post", ({ input }) => this.repository.posts.findById(input.id))
+  .access({ action: "write", entityStep: "post" })
+  .handle(async ({ input }) => {
+    // Partial update — only fields present on input are written
+    return this.repository.posts.update(input);
+  });
+```
 
 ## Avoid Trivial Service Delegation
 
@@ -37,16 +97,49 @@ apps/<app>/server/src/modules/<module>/<module>.service.ts
 Each procedure declares its schemas from the DTO, then auth, resource loading,
 access control, and the handler:
 
-1. `.input(schema)` / `.output(schema)` — DTO schemas; both are validated at runtime.
-2. `.requireAuth(scope?)` — `"user"` (default), `"organization"`, `"team"`, `"admin"`.
-3. `.loadResource(name, loader)` — loads a value into `state`; returns `NOT_FOUND` when falsy.
-4. `.use(name, step)` — arbitrary step storing its result in `state`.
-5. `.access(config)` — permission check (`BasePermissionService` only); action must match a grant.
-6. `.handle(handler)` — terminal; receives `{ input, ctx, state }`.
+1. `.input(schema)` -- Accepts a Zod schema; infers `TInput` so you don't need `this.procedure<Type>(...)`. No runtime validation by default; pass `true` as second arg to enable it.
+2. `.output(schema)` -- Accepts a Zod schema; constrains the handler return type so you don't need explicit return annotations. No runtime validation by default; pass `true` as second arg to enable it.
+3. `.requireAuth(scope?)` -- Enforces authentication. Scope can be `"user"` (default), `"organization" (recommended)`, `"team"`, or `"admin"`.
+4. `.loadResource(name, loader)` -- Loads a value and stores it in `state`; returns `NOT_FOUND` if falsy.
+5. `.use(name, step)` -- Runs an arbitrary step and stores the result in `state`.
+6. `.addContextFilter(scopes?)` -- Applies context-based query filtering (requires auth).
+7. `.addFilters(resolve)` -- Appends query filters to the current input (`({ input, ctx, state, ... }) => QueryFilter | QueryFilter[]`).
+8. `.access(config)` -- Permission check via grants. Arrays are soft-filtered to allowed rows (empty OK); single entities return `FORBIDDEN` when denied. Filtered arrays are written back to `entityStep` state.
+9. `.handle(handler)` -- Terminal method; runs the handler with `{ input, ctx, state, repository, service, logger }`.
+
+### Input / Output Typing
+
+Prefer `.input(schema)` with Zod schemas from the module's `.dto.ts`:
+
+```typescript
+// Preferred: schema-driven
+readonly create = this.procedure("create")
+  .input(postSchemas.input.create)
+  .output(postSchemas.output.single)
+  .requireAuth("organization")
+  .access({ action: "write" })
+  .handle(async ({ input, ctx }) => {
+    return this.repository.posts.create({
+      ...input,
+      userId: ctx.actor.userId,
+      memberId: ctx.actor.memberId,
+    });
+  });
+
+// Acceptable for simple primitives with no matching schema
+readonly getCount = this.procedure("getCount")
+  .requireAuth("organization")
+  .access({ action: "read" })
+  .handle(async ({ ctx }): ServerResultAsync<number> => {
+    return this.repository.posts.countByUser(ctx.actor.userId);
+  });
+```
+
+When no Zod schema exists (simple primitives, inline objects), you can still use the generic: `this.procedure<string>("name")`.
 
 ## Procedure Patterns
 
-### List — org context filter + optional access soft-filter
+### Simple CRUD
 
 ```typescript
 readonly list = this.procedure("list")
@@ -54,18 +147,81 @@ readonly list = this.procedure("list")
   .output(postSchemas.output.list)
   .requireAuth("organization")
   .addContextFilter(["organization"])
-  .loadResource("posts", ({ input }) =>
-    this.repository.posts.queryList(input, {
-      globalSearchColumns: ["title", "excerpt", "content"],
-    })
-  )
-  .access({ action: "read", entityStep: "posts" })
+  .loadResource("posts", ({ input }) => this.repository.posts.queryList(input))
+  .access({
+    action: "read",
+    entityStep: "posts",
+  })
+  .handle(({ state }) => state.posts);
+
+readonly create = this.procedure("create")
+  .input(postSchemas.input.create)
+  .output(postSchemas.output.single)
+  .requireAuth("organization")
+  .access({ action: "write" })
+  .handle(async ({ input, ctx }) => {
+    return this.repository.posts.create({
+      ...input,
+      userId: ctx.actor.userId,
+      memberId: ctx.actor.memberId,
+    });
+  });
+```
+
+### With Resource Loading and Access Control (recommended)
+
+```typescript
+readonly update = this.procedure("update")
+  .input(postSchemas.input.update)
+  .output(postSchemas.output.single)
+  .requireAuth("organization")
+  .loadResource("post", ({ input }) => this.repository.posts.findById(input.id))
+  .access({
+    action: "write",
+    entityStep: "post",
+  })
+  .handle(async ({ input }) => {
+    return this.repository.posts.update(input);
+  });
+```
+
+Use grants with `"org"` (org admin/owner) or `"own"` (member) so `findById` cannot update cross-org rows. Do not use `"all"` for organization-scoped roles.
+
+### Org-scoped list with access soft-filter
+
+```typescript
+readonly list = this.procedure("list")
+  .input(postSchemas.input.list)
+  .output(postSchemas.output.list)
+  .requireAuth("organization")
+  .addContextFilter(["organization"])
+  .loadResource("posts", ({ input }) => this.repository.posts.queryList(input))
+  .access({
+    action: "read",
+    entityStep: "posts",
+  })
   .handle(({ state }) => state.posts);
 ```
 
 - Default list scoping: `addContextFilter(["organization"])`.
-- When grants are member-own only, prefer `addContextFilter(["member", "organization"])`.
-- `.access` on arrays soft-filters allowed rows (empty OK) and writes back to `state.posts`.
+- When grants are member-own only, prefer `addContextFilter(["member", "organization"])` so the query is already narrowed.
+- `.access` on an **array** soft-filters to allowed rows (may be `[]`); it does not 403 the whole list.
+- Filtered results are written back to `state[entityStep]` (here `state.posts`).
+
+### With Context Filter (Query-Based Lists)
+
+```typescript
+readonly list = this.procedure("list")
+  .output(postSchemas.output.list)
+  .requireAuth("organization")
+  .addContextFilter(["member", "organization"])
+  .access({ action: "read" })
+  .handle(({ input }) => {
+    return this.repository.posts.queryList(input, {
+      globalSearchColumns: ["title", "excerpt", "content"],
+    });
+  });
+```
 
 ### Create with business logic
 
@@ -93,39 +249,43 @@ readonly create = this.procedure("create")
   });
 ```
 
-### Update with resource loading and access control
-
-```typescript
-readonly update = this.procedure("update")
-  .requireAuth("organization")
-  .input(postSchemas.input.update)
-  .output(postSchemas.output.single)
-  .loadResource("post", ({ input }) => this.repository.posts.findById(input.id))
-  .access({ action: "write", entityStep: "post" })
-  .handle(async ({ input, state }) => {
-    return this.repository.posts.update({
-      id: input.id,
-      title: input.title ? input.title.trim() : state.post.title,
-      content: (input.content?.trim() ?? state.post.content).trim(),
-    });
-  });
-```
-
 ### Soft delete
 
 ```typescript
 readonly softDelete = this.procedure("softDelete")
   .input(postSchemas.input.delete)
   .output(postSchemas.output.uuid)
-  .requireAuth()
+  .requireAuth("organization")
   .loadResource("post", ({ input }) => this.repository.posts.findById(input.id))
   .access({ action: "delete", entityStep: "post" })
   .handle(async ({ input }) => {
-    const updated = await this.repository.posts.update({ id: input.id, deletedAt: new Date() });
+    const updated = await this.repository.posts.update({
+      id: input.id,
+      deletedAt: new Date(),
+    });
     if (updated.isErr()) return err(updated.error);
     return ok({ id: updated.value.id });
   });
 ```
+
+### Public (No Auth)
+
+```typescript
+readonly validateCode = this.procedure("validateCode")
+  .input(postSchemas.input.validate)
+  .output(postSchemas.output.status)
+  .handle(async ({ input }) => {
+    return this.repository.posts.validateCode(input);
+  });
+```
+
+## Permission and Grants
+
+- Keep all guarded action names aligned with grants (`read`, `write`, `delete`, `publish`, etc.).
+- Do not use undeclared action aliases (e.g., guard `"update"` when grants only define `"write"`).
+- Prefer `.access({ action, entityStep? })` over ad-hoc ownership checks in `.use`.
+- For org-scoped assets, stamp and authorize with `memberId` (`ctx.actor.memberId`). Keep `userId` for authentication and personal resources (billing, devices, OAuth). Prefer the column name `memberId` over aliases like `authorMemberId`.
+- Access modes: `"all"` (global), `"org"` (same organization), `"own"` (ownership), `"none"` (explicit deny). Prefer `"org"` for org owner/admin grants.
 
 ## Access Control Modes
 
@@ -135,13 +295,68 @@ readonly softDelete = this.procedure("softDelete")
 - **`entities`** — inline function returning `{ userId?, memberId?, organizationId?, teamId? }`
   when the entity is not loaded into state.
 
-## Permissions and Grants
+## Example Skeleton
 
-- Keep action names aligned with grants (`read`, `write`, `delete`, `publish`).
-- Do not use undeclared aliases (e.g. guarding `"update"` when grants define `"write"`).
-- If a module never uses `.access()`, extend `BaseService` instead of `BasePermissionService`.
-- Access modes: `"all"` (global), `"org"` (same organization), `"own"` (ownership), `"none"` (explicit deny).
-- Prefer `"org"` for org owner/admin grants so `findById` updates cannot cross organizations.
+```typescript
+import { BasePermissionService } from "@m5kdev/backend/modules/base/base.service";
+import { postSchemas } from "./posts.dto";
+import type { PostsRepository } from "./posts.repository";
+
+export class PostsService extends BasePermissionService<
+  { posts: PostsRepository },
+  Record<string, never>
+> {
+  readonly list = this.procedure("list")
+    .input(postSchemas.input.list)
+    .output(postSchemas.output.list)
+    .requireAuth("organization")
+    .addContextFilter(["organization"])
+    .loadResource("posts", ({ input }) => this.repository.posts.queryList(input))
+    .access({
+      action: "read",
+      entityStep: "posts",
+    })
+    .handle(({ state }) => state.posts);
+
+  readonly create = this.procedure("create")
+    .input(postSchemas.input.create)
+    .output(postSchemas.output.single)
+    .requireAuth("organization")
+    .access({ action: "write" })
+    .handle(async ({ input, ctx }) => {
+      return this.repository.posts.create({
+        ...input,
+        userId: ctx.actor.userId,
+        memberId: ctx.actor.memberId,
+      });
+    });
+
+  readonly update = this.procedure("update")
+    .input(postSchemas.input.update)
+    .output(postSchemas.output.single)
+    .requireAuth("organization")
+    .loadResource("post", ({ input }) => this.repository.posts.findById(input.id))
+    .access({
+      action: "write",
+      entityStep: "post",
+    })
+    .handle(async ({ input }) => {
+      return this.repository.posts.update(input);
+    });
+
+  readonly delete = this.procedure("delete")
+    .input(postSchemas.input.delete)
+    .requireAuth("organization")
+    .loadResource("post", ({ input }) => this.repository.posts.findById(input.id))
+    .access({
+      action: "delete",
+      entityStep: "post",
+    })
+    .handle(async ({ input }) => {
+      return this.repository.posts.deleteById(input.id);
+    });
+}
+```
 
 ## Best Practices
 

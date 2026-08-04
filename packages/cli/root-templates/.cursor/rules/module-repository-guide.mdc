@@ -36,52 +36,116 @@ type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;
 ```
 
-## Built-in Base Methods — write nothing you get for free
+## Prefer Built-in Base Methods (Strong Default)
 
-`BaseTableRepository` provides typed CRUD. Prefer these over hand-written queries:
+`BaseTableRepository` provides typed CRUD helpers. **Always use these before
+adding custom repository methods or raw Drizzle.** Services should call these
+helpers directly in most cases.
 
-- `queryList(query, options)` — the generic list contract (`page`, `limit`,
-  `sort`, `order`, `q`, `filters`) translated to Drizzle. Pass
-  `globalSearchColumns` to enable `q`, `conditions` for extra scoping, and
-  `showDeleted` to include soft-deleted rows (excluded by default when the
-  table has `deletedAt`). Do NOT hand-write list/filter/count queries.
+- `queryList(query, options)` — filtered/sorted/paginated lists (`page`,
+  `limit`, `sort`, `order`, `q`, `filters`). Pass `globalSearchColumns` for
+  `q`, `conditions` for extra scoping, `showDeleted` to include soft-deleted
+  rows (excluded by default when the table has `deletedAt`).
+- `queryFind(query, options)` — filtered/sorted single-row lookup (no
+  pagination/count). Same filter/`conditions` contract as `queryList`.
 - `findById(id)` / `findManyById(ids)` — primary-key lookups.
 - `create(data)` / `createMany(data)` — inserts.
 - `update(data)` / `updateMany(data)` — updates.
 - `softDeleteById(id)` / `deleteById(id)` — deletes.
 
 ```typescript
-// a full filtered/searched/paginated list — no custom SQL
+// Preferred from the service — no custom repository list method
 this.repository.posts.queryList(input, {
   globalSearchColumns: ["title", "excerpt", "content"],
 });
 ```
 
+### Usually Do Not Add Custom List / Getter / Create / Update Methods
+
+- **Lists and getters**: `queryList` / `queryFind` already expose read APIs
+  via `filters` (and optional `conditions`). Prefer calling them from the
+  service with the needed filters (or `.addFilters` on the procedure). Do not
+  add thin `listPublished`, `findBySlug`, `getMain`, etc. unless the same
+  filter set is reused heavily *and* belongs in the repository boundary.
+- **Creates**: `create` is permissive — stamp defaults (`status`, `memberId`,
+  …) in the **service** and pass them to `create`. Do not add a custom
+  repository `create*` just to apply defaults.
+- **Updates**: `update` accepts partial payloads — omit fields you do not
+  want to change. Do not add a custom repository `update*` just to restrict
+  columns or merge patches.
+- Write raw `this.orm.select()...` or a custom method only for joins, CTEs,
+  multi-table writes, transactions, or predicates that cannot be expressed
+  with filters / `TableConditionBuilder`.
+
+Filter shape: `{ columnId, type, method, value }` (`type`: `string` |
+`number` | `date` | `boolean` | `enum` | `jsonArray`; common `method`s:
+`equals`, `contains`, `oneOf`, `is_null`, …). Soft-delete exclusion is
+applied automatically when the table has `deletedAt` (unless
+`showDeleted: true`).
+
 ## Custom queries: the `this.query()` builder
 
-Single-purpose queries are declared with the builder, using DTO schemas for
-outputs. **Outputs are validated at runtime** — a find-style query that can
-return no row must use `output.found` (the optional row schema), or
-validation will fail on the legitimate "not found" case.
+Use the builder only when a shared lookup truly belongs in the repository.
+Wire DTO schemas for inputs/outputs. **Outputs are validated at runtime** —
+a find-style query that can return no row must use `output.found` (the
+optional row schema), or validation will fail on the legitimate "not found"
+case.
+
+Wrap `queryFind` / `queryList` with filters — never reimplement
+select/where/limit:
 
 ```typescript
 import { z } from "zod";
 import { postSchemas } from "./posts.dto";
 
+// Shared domain lookup used from multiple services/jobs — still no hand-written SQL
 findBySlug = this.query("findBySlug")
-  .input(z.object({ slug: z.string(), excludeId: z.string().optional() }))
+  .input(z.object({ slug: z.string() }))
   .output(postSchemas.output.found) // NOT output.single — may return undefined
-  .handle(async ({ slug, excludeId }) => {
-    const whereClause = excludeId
-      ? and(eq(this.table.slug, slug), ne(this.table.id, excludeId), isNull(this.table.deletedAt))
-      : and(eq(this.table.slug, slug), isNull(this.table.deletedAt));
+  .handle(({ slug }) =>
+    this.queryFind({
+      filters: [
+        { columnId: "slug", type: "string", method: "equals", value: slug },
+      ],
+    })
+  );
+```
 
-    const result = await this.throwableQuery(() =>
-      this.orm.select().from(this.table).where(whereClause).limit(1)
+### Extend With `conditions` When Filters Alone Are Not Enough
+
+Pass a `TableConditionBuilder` via `options.conditions` for extra predicates
+(optional excludes, `ne`, `inArray`, …) while still reusing soft-delete and
+column picking from `queryFind` / `queryList`:
+
+```typescript
+import { ne } from "drizzle-orm";
+import { z } from "zod";
+import { postSchemas } from "./posts.dto";
+
+// Prefer calling queryFind with conditions from the service when one-off;
+// repository wrapper only if shared across callers.
+findBySlug = this.query("findBySlug")
+  .input(
+    z.object({
+      slug: z.string(),
+      excludeId: z.string().optional(),
+    })
+  )
+  .output(postSchemas.output.found)
+  .handle(({ slug, excludeId }) => {
+    const conditions = this.getConditionBuilder(this.table);
+    if (excludeId) {
+      conditions.push(ne(this.table.id, excludeId));
+    }
+
+    return this.queryFind(
+      {
+        filters: [
+          { columnId: "slug", type: "string", method: "equals", value: slug },
+        ],
+      },
+      { conditions }
     );
-    if (result.isErr()) return err(result.error);
-    const [row] = result.value;
-    return ok(row);
   });
 ```
 
@@ -91,8 +155,13 @@ multiple queries with branching between them.
 
 ## Error Handling
 
-- Use `throwableQuery` tightly around each Drizzle call — it converts thrown
-  database errors into `ServerResultAsync`. Do not wrap whole method bodies.
+- Use `throwableQuery` tightly around each **raw** Drizzle call — it converts
+  thrown database errors into `ServerResultAsync`. Do not wrap whole method
+  bodies.
+- Built-in helpers (`queryFind`, `queryList`, `findById`, `create`, …)
+  already use `throwableQuery` internally — do not wrap their return values
+  again.
 - Chain results with `isErr()` checks and `err(result.error)`.
-- Filter soft-deleted rows with `isNull(this.table.deletedAt)` in custom
-  queries (`queryList` does this automatically).
+- Soft-deleted rows are excluded automatically by `queryList` / `queryFind`
+  when the table has `deletedAt` (unless `showDeleted: true`). Only add
+  `isNull(this.table.deletedAt)` in raw custom queries.
