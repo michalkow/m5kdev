@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.32.5
+
+### Patch Changes
+
+- addFilters
+- Updated dependencies
+  - @m5kdev/commons@0.32.5
+  - @m5kdev/frontend@0.32.5
+
 ## 0.32.4
 
 ### Patch Changes

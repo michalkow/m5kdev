@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.32.5
+
+### Patch Changes
+
+- addFilters
+- Updated dependencies
+  - @m5kdev/commons@0.32.5
+  - @m5kdev/config@0.32.5
+
 ## 0.32.4
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.32.5
+
+### Patch Changes
+
+- addFilters
+
 ## 0.32.4
 
 ### Patch Changes
