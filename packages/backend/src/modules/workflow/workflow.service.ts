@@ -60,11 +60,18 @@ function wrapJobHandler(
   return async (payload) => {
     let input = payload;
     if (config.validateInput && config.inputSchema) {
-      const parsed = config.inputSchema.safeParse(payload);
+      const payloadData =
+        payload !== null && typeof payload === "object" && "data" in payload
+          ? (payload as { data: unknown }).data
+          : undefined;
+      const parsed = config.inputSchema.safeParse(payloadData);
       if (!parsed.success) {
         throw new Error(parsed.error.message);
       }
-      input = parsed.data;
+      input = {
+        ...(payload as Record<string, unknown>),
+        data: parsed.data,
+      };
     }
 
     const result = await fn(input);

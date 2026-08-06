@@ -8,7 +8,13 @@ import { serializeSpanValue, withSpan } from "../../utils/telemetry";
 import type { Base } from "./base.abstract";
 import { type Actor, type ActorScope, type AuthenticatedActor, validateActor } from "./base.actor";
 import type { ServerResult, ServerResultAsync } from "./base.dto";
-import type { Entity, PermissionCheckOptions, ResourceActionGrant } from "./base.grants";
+import {
+  type Entity,
+  type EntityListResult,
+  isEntityListResult,
+  type PermissionCheckOptions,
+  type ResourceActionGrant,
+} from "./base.grants";
 
 type ServiceLogger = ReturnType<typeof logger.child>;
 type RepositoryMap = Record<string, Base>;
@@ -106,13 +112,19 @@ export type ServiceProcedureHandler<
   args: ServiceProcedureArgs<TInput, TCtx, Repositories, Services, State>
 ) => ServiceProcedureResultLike<TOutput>;
 
+export type ServiceProcedureAccessEntities =
+  | Entity
+  | Entity[]
+  | EntityListResult
+  | undefined;
+
 export type ServiceProcedureEntityResolver<
   TInput,
   TCtx extends ServiceProcedureContext,
   Repositories extends RepositoryMap,
   Services extends ServiceMap,
   State extends ServiceProcedureState,
-  TEntities extends Entity | Entity[] | undefined,
+  TEntities extends ServiceProcedureAccessEntities,
 > =
   | TEntities
   | ((
@@ -127,7 +139,7 @@ type ServiceProcedureAccessBaseConfig = {
 
 export type ServiceProcedureEntityStepName<State extends ServiceProcedureState> = Extract<
   {
-    [Key in keyof State]: State[Key] extends Entity | Entity[] | undefined ? Key : never;
+    [Key in keyof State]: State[Key] extends ServiceProcedureAccessEntities ? Key : never;
   }[keyof State],
   string
 >;
@@ -138,7 +150,7 @@ export type ServiceProcedureAccessEntitiesConfig<
   Repositories extends RepositoryMap,
   Services extends ServiceMap,
   State extends ServiceProcedureState,
-  TEntities extends Entity | Entity[] | undefined = undefined,
+  TEntities extends ServiceProcedureAccessEntities = undefined,
 > = ServiceProcedureAccessBaseConfig & {
   entities?: ServiceProcedureEntityResolver<TInput, TCtx, Repositories, Services, State, TEntities>;
   entityStep?: never;
@@ -158,7 +170,7 @@ export type ServiceProcedureAccessConfig<
   Repositories extends RepositoryMap,
   Services extends ServiceMap,
   State extends ServiceProcedureState,
-  TEntities extends Entity | Entity[] | undefined = undefined,
+  TEntities extends ServiceProcedureAccessEntities = undefined,
 > =
   | ServiceProcedureAccessEntitiesConfig<TInput, TCtx, Repositories, Services, State, TEntities>
   | ServiceProcedureAccessStateConfig<State, ServiceProcedureEntityStepName<State>>;
@@ -380,7 +392,7 @@ export interface PermissionServiceProcedureBuilder<
     State,
     TExpectedOutput
   >;
-  access<TEntities extends Entity | Entity[] | undefined>(
+  access<TEntities extends ServiceProcedureAccessEntities>(
     config: ServiceProcedureAccessEntitiesConfig<
       TInput,
       TCtx,
@@ -451,6 +463,13 @@ type PermissionServiceProcedureHost<
     grants?: ResourceActionGrant[],
     options?: PermissionCheckOptions
   ): T[];
+  filterPermission<T extends Entity>(
+    actor: AuthenticatedActor,
+    action: string,
+    entities: EntityListResult<T>,
+    grants?: ResourceActionGrant[],
+    options?: PermissionCheckOptions
+  ): EntityListResult<T>;
   checkPermissionAsync<T extends Entity>(
     actor: AuthenticatedActor,
     action: string,
@@ -753,7 +772,7 @@ function createAccessStep<
   Repositories extends RepositoryMap,
   Services extends ServiceMap,
   State extends ServiceProcedureState,
-  TEntities extends Entity | Entity[] | undefined,
+  TEntities extends ServiceProcedureAccessEntities,
 >(
   host: PermissionServiceProcedureHost<Repositories, Services>,
   config: ServiceProcedureAccessConfig<TInput, TCtx, Repositories, Services, State, TEntities>
@@ -775,6 +794,18 @@ function createAccessStep<
             actor.value,
             config.action,
             entities as Entity[],
+            config.grants,
+            permissionOptions
+          );
+          typedArgs.state[config.entityStep] = filtered;
+          return ok(filtered);
+        }
+
+        if (isEntityListResult(entities)) {
+          const filtered = host.filterPermission(
+            actor.value,
+            config.action,
+            entities,
             config.grants,
             permissionOptions
           );
@@ -833,6 +864,17 @@ function createAccessStep<
           return ok(filtered as TEntities);
         }
 
+        if (isEntityListResult(loadedEntities)) {
+          const filtered = host.filterPermission(
+            actor.value,
+            config.action,
+            loadedEntities,
+            config.grants,
+            permissionOptions
+          );
+          return ok(filtered as TEntities);
+        }
+
         const hasPermission = host.checkPermission(
           actor.value,
           config.action,
@@ -851,6 +893,17 @@ function createAccessStep<
       const entities = config.entities;
 
       if (Array.isArray(entities)) {
+        const filtered = host.filterPermission(
+          actor.value,
+          config.action,
+          entities,
+          config.grants,
+          permissionOptions
+        );
+        return ok(filtered as TEntities);
+      }
+
+      if (isEntityListResult(entities)) {
         const filtered = host.filterPermission(
           actor.value,
           config.action,
@@ -1229,7 +1282,7 @@ export function createPermissionServiceProcedureBuilder<
     State,
     TExpectedOutput
   >;
-  function access<TEntities extends Entity | Entity[] | undefined>(
+  function access<TEntities extends ServiceProcedureAccessEntities>(
     accessConfig: ServiceProcedureAccessEntitiesConfig<
       TInput,
       TCtx,
@@ -1264,7 +1317,7 @@ export function createPermissionServiceProcedureBuilder<
           Repositories,
           Services,
           State,
-          Entity | Entity[] | undefined
+          ServiceProcedureAccessEntities
         >
       | ServiceProcedureAccessStateConfig<State, ServiceProcedureEntityStepName<State>>
   ) {

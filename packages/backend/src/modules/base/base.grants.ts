@@ -294,6 +294,20 @@ export function checkPermissionSync<T extends Entity>(
   return checkOwnAccess(grants, roles, contextValues, entities);
 }
 
+/** Paginated list query result shape from `queryList`. */
+export interface EntityListResult<T extends Entity = Entity> {
+  rows: readonly T[];
+  total: number;
+}
+
+export function isEntityListResult(value: unknown): value is EntityListResult {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const candidate = value as { rows?: unknown; total?: unknown };
+  return Array.isArray(candidate.rows) && typeof candidate.total === "number";
+}
+
 /**
  * Soft-filter entities to those the actor may access.
  * Empty input returns []. Unlike checkPermissionSync on arrays (all-must-pass),
@@ -323,6 +337,24 @@ export function filterEntitiesByPermission<T extends Entity>(
     }
     return evaluateEntityAccess(grants, roles, contextValues, entity);
   });
+}
+
+/**
+ * Soft-filter a `{ rows, total }` list query result.
+ * Filters `rows` and reduces `total` by the number of rows removed from this page.
+ */
+export function filterListResultByPermission<T extends Entity>(
+  actor: ServiceActor,
+  grants: ResourceActionGrant[],
+  result: EntityListResult<T>,
+  options: PermissionCheckOptions = {}
+): EntityListResult<T> {
+  const rows = filterEntitiesByPermission(actor, grants, result.rows, options);
+  const removed = result.rows.length - rows.length;
+  return {
+    rows,
+    total: Math.max(0, result.total - removed),
+  };
 }
 
 export async function checkPermissionAsync<T extends Entity>(

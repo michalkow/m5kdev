@@ -1061,6 +1061,73 @@ describe("BasePermissionService procedure builder", () => {
     }
   });
 
+  it("soft-filters entityStep list query results and writes filtered results back to state", async () => {
+    const grants: ResourceGrant[] = [
+      {
+        action: "read",
+        level: "user",
+        role: "member",
+        access: "own",
+      },
+    ];
+
+    class PermissionService extends BasePermissionService<
+      Record<string, never>,
+      Record<string, never>
+    > {
+      constructor() {
+        super({} as Record<string, never>, {} as Record<string, never>, grants);
+      }
+
+      readonly run = this.procedure("run")
+        .use("records", () =>
+          ok({
+            rows: [
+              {
+                id: "a",
+                userId: "user-1",
+                memberId: "member-1",
+                organizationId: "org-1",
+              },
+              {
+                id: "b",
+                userId: "other-user",
+                memberId: "other-member",
+                organizationId: "org-1",
+              },
+            ],
+            total: 5,
+          })
+        )
+        .access({
+          action: "read",
+          entityStep: "records",
+        })
+        .handle(({ state }) =>
+          ok({
+            accessIds: (state.access as { rows: { id: string }[] }).rows.map((row) => row.id),
+            stateIds: state.records.rows.map((row) => row.id),
+            total: state.records.total,
+          })
+        );
+    }
+
+    const service = new PermissionService();
+    const result = await service.run(undefined, {
+      actor: createOrganizationActor({
+        userRole: "member",
+        organizationRole: "member",
+      }),
+    } as never);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.accessIds).toEqual(["a"]);
+      expect(result.value.stateIds).toEqual(["a"]);
+      expect(result.value.total).toBe(4);
+    }
+  });
+
   it("blocks cross-org single entities when grants use 'org' access", async () => {
     const grants: ResourceGrant[] = [
       {

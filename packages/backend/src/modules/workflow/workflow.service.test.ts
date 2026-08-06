@@ -264,7 +264,7 @@ describe("WorkflowService", () => {
       expect(def._config.validateOutput).toBe(false);
     });
 
-    it(".input(schema, true) rejects invalid payload before the user handler", async () => {
+    it(".input(schema, true) rejects invalid payload.data before the user handler", async () => {
       const { service } = createService();
       const userHandler = jest.fn().mockResolvedValue(undefined);
       const def = service
@@ -272,11 +272,11 @@ describe("WorkflowService", () => {
         .input(z.object({ id: z.string() }), true)
         .handle(userHandler);
 
-      await expect(def._handler?.({ id: 123 } as never)).rejects.toThrow();
+      await expect(def._handler?.({ data: { id: 123 } } as never)).rejects.toThrow();
       expect(userHandler).not.toHaveBeenCalled();
 
-      await def._handler?.({ id: "abc" });
-      expect(userHandler).toHaveBeenCalledWith({ id: "abc" });
+      await def._handler?.({ data: { id: "abc" } });
+      expect(userHandler).toHaveBeenCalledWith({ data: { id: "abc" } });
     });
 
     it(".output(schema, true) rejects invalid Ok values from the handler", async () => {

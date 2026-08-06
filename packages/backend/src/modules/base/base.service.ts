@@ -7,7 +7,9 @@ import {
   checkPermissionAsync,
   checkPermissionSync,
   type Entity,
+  type EntityListResult,
   filterEntitiesByPermission,
+  filterListResultByPermission,
   type PermissionCheckOptions,
   type ResourceActionGrant,
   type ResourceGrant,
@@ -238,9 +240,26 @@ export class BasePermissionService<
     entities: readonly T[],
     grants?: ResourceActionGrant[],
     options?: PermissionCheckOptions
-  ): T[] {
+  ): T[];
+  filterPermission<T extends Entity>(
+    actor: AuthenticatedActor,
+    action: string,
+    entities: EntityListResult<T>,
+    grants?: ResourceActionGrant[],
+    options?: PermissionCheckOptions
+  ): EntityListResult<T>;
+  filterPermission<T extends Entity>(
+    actor: AuthenticatedActor,
+    action: string,
+    entities: readonly T[] | EntityListResult<T>,
+    grants?: ResourceActionGrant[],
+    options?: PermissionCheckOptions
+  ): T[] | EntityListResult<T> {
     const actionGrants = grants ?? this.grants.filter((grant) => grant.action === action);
-    return filterEntitiesByPermission(actor, actionGrants, entities, options);
+    if (Array.isArray(entities)) {
+      return filterEntitiesByPermission(actor, actionGrants, entities, options);
+    }
+    return filterListResultByPermission(actor, actionGrants, entities, options);
   }
 
   async checkPermissionAsync<T extends Entity>(

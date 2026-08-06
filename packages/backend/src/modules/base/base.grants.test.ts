@@ -6,7 +6,9 @@ import {
   checkPermissionSync,
   type Entity,
   filterEntitiesByPermission,
+  filterListResultByPermission,
   flattenNestedGrants,
+  isEntityListResult,
   type NestedGrants,
   type ResourceActionGrant,
 } from "./base.grants";
@@ -1236,5 +1238,55 @@ describe("filterEntitiesByPermission", () => {
     const entities = [createMockEntity({ userId: "user-123" })];
 
     expect(filterEntitiesByPermission(ctx, grants, entities)).toEqual([]);
+  });
+});
+
+describe("isEntityListResult", () => {
+  it("detects { rows, total } list query results", () => {
+    expect(isEntityListResult({ rows: [], total: 0 })).toBe(true);
+    expect(isEntityListResult({ rows: [createMockEntity()], total: 1 })).toBe(true);
+  });
+
+  it("rejects arrays, entities, and incomplete objects", () => {
+    expect(isEntityListResult([])).toBe(false);
+    expect(isEntityListResult(createMockEntity())).toBe(false);
+    expect(isEntityListResult({ rows: [] })).toBe(false);
+    expect(isEntityListResult({ total: 0 })).toBe(false);
+    expect(isEntityListResult(null)).toBe(false);
+  });
+});
+
+describe("filterListResultByPermission", () => {
+  it("filters rows and reduces total by removed page rows", () => {
+    const ctx = createMockContext({ id: "user-123", role: "member" });
+    const grants: ResourceActionGrant[] = [{ level: "user", role: "member", access: "own" }];
+    const owned = createMockEntity({ userId: "user-123" });
+    const other = createMockEntity({ userId: "other-user" });
+
+    expect(
+      filterListResultByPermission(ctx, grants, {
+        rows: [owned, other],
+        total: 10,
+      })
+    ).toEqual({
+      rows: [owned],
+      total: 9,
+    });
+  });
+
+  it("returns empty rows and zero total floor when nothing is allowed", () => {
+    const ctx = createMockContext({ id: "user-123", role: "member" });
+    const grants: ResourceActionGrant[] = [{ level: "user", role: "member", access: "own" }];
+    const other = createMockEntity({ userId: "other-user" });
+
+    expect(
+      filterListResultByPermission(ctx, grants, {
+        rows: [other],
+        total: 1,
+      })
+    ).toEqual({
+      rows: [],
+      total: 0,
+    });
   });
 });
