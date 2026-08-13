@@ -1,3 +1,4 @@
+import type { QueryMatch } from "@m5kdev/commons/modules/schemas/queryMatch";
 import type { QueryFilter, QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server";
 import { ok } from "neverthrow";
@@ -100,6 +101,16 @@ export type ServiceProcedureAddFiltersResolver<
 > = (
   args: ServiceProcedureArgs<TInput, TCtx, Repositories, Services, State>
 ) => ServiceProcedureResultLike<QueryFilter | readonly QueryFilter[]>;
+
+export type ServiceProcedureAddMatchResolver<
+  TInput,
+  TCtx extends ServiceProcedureContext,
+  Repositories extends RepositoryMap,
+  Services extends ServiceMap,
+  State extends ServiceProcedureState,
+> = (
+  args: ServiceProcedureArgs<TInput, TCtx, Repositories, Services, State> & { match: QueryMatch }
+) => ServiceProcedureResultLike<QueryMatch>;
 
 export type ServiceProcedureHandler<
   TInput,
@@ -259,6 +270,16 @@ export interface ServiceProcedureBuilder<
     State & { addFilters: ServiceProcedureContextFilteredInput<TInput> },
     TExpectedOutput
   >;
+  addMatch(
+    resolve: ServiceProcedureAddMatchResolver<TInput, TCtx, Repositories, Services, State>
+  ): ServiceProcedureBuilder<
+    TInput,
+    TCtx,
+    Repositories,
+    Services,
+    State & { addMatch: TInput },
+    TExpectedOutput
+  >;
   requireAuth<Scope extends ActorScope = "user">(
     scope?: Scope
   ): ServiceProcedureBuilder<
@@ -370,6 +391,16 @@ export interface PermissionServiceProcedureBuilder<
     Repositories,
     Services,
     State & { addFilters: ServiceProcedureContextFilteredInput<TInput> },
+    TExpectedOutput
+  >;
+  addMatch(
+    resolve: ServiceProcedureAddMatchResolver<TInput, TCtx, Repositories, Services, State>
+  ): PermissionServiceProcedureBuilder<
+    TInput,
+    TCtx,
+    Repositories,
+    Services,
+    State & { addMatch: TInput },
     TExpectedOutput
   >;
   requireAuth<Scope extends ActorScope = "user">(
@@ -713,6 +744,35 @@ function createContextFilterStep<Repositories extends RepositoryMap, Services ex
       const actor = requireProcedureActor(host, ctx, requiredScope);
       if (actor.isErr()) return actor;
       return ok(host.addContextFilter(actor.value, contextInclude, input as QueryInput));
+    },
+  };
+}
+
+function createAddMatchStep<
+  TInput,
+  TCtx extends ServiceProcedureContext,
+  Repositories extends RepositoryMap,
+  Services extends ServiceMap,
+  State extends ServiceProcedureState,
+>(
+  resolve: ServiceProcedureAddMatchResolver<TInput, TCtx, Repositories, Services, State>
+): ProcedureRuntimeStep<Repositories, Services> {
+  return {
+    stage: "input",
+    stepName: "addMatch",
+    run: async (args) => {
+      const typedArgs = args as ServiceProcedureArgs<TInput, TCtx, Repositories, Services, State>;
+      const input = typedArgs.input as TInput & { match?: QueryMatch };
+      const match = input.match ?? {};
+      const normalized = await normalizeProcedureResult(resolve({ ...typedArgs, match }));
+      if (normalized.isErr()) {
+        return normalized;
+      }
+
+      return ok({
+        ...input,
+        match: normalized.value,
+      });
     },
   };
 }
@@ -1125,6 +1185,24 @@ export function createServiceProcedureBuilder<
     });
   }
 
+  function addMatch(
+    resolve: ServiceProcedureAddMatchResolver<TInput, TCtx, Repositories, Services, State>
+  ) {
+    assertUniqueStepName(config.steps, "addMatch");
+
+    return createServiceProcedureBuilder<
+      TInput,
+      TCtx,
+      Repositories,
+      Services,
+      State & { addMatch: TInput },
+      TExpectedOutput
+    >(host, {
+      ...config,
+      steps: [...config.steps, createAddMatchStep(resolve)],
+    });
+  }
+
   const builder: ServiceProcedureBuilder<
     TInput,
     TCtx,
@@ -1198,6 +1276,7 @@ export function createServiceProcedureBuilder<
     },
     addContextFilter,
     addFilters,
+    addMatch,
     requireAuth<Scope extends ActorScope = "user">(scope?: Scope) {
       assertUniqueStepName(config.steps, "auth");
       return createServiceProcedureBuilder<
@@ -1269,6 +1348,24 @@ export function createPermissionServiceProcedureBuilder<
     >(host, {
       ...config,
       steps: [...config.steps, createAddFiltersStep(resolve)],
+    });
+  }
+
+  function addMatch(
+    resolve: ServiceProcedureAddMatchResolver<TInput, TCtx, Repositories, Services, State>
+  ) {
+    assertUniqueStepName(config.steps, "addMatch");
+
+    return createPermissionServiceProcedureBuilder<
+      TInput,
+      TCtx,
+      Repositories,
+      Services,
+      State & { addMatch: TInput },
+      TExpectedOutput
+    >(host, {
+      ...config,
+      steps: [...config.steps, createAddMatchStep(resolve)],
     });
   }
 
@@ -1408,6 +1505,7 @@ export function createPermissionServiceProcedureBuilder<
     },
     addContextFilter,
     addFilters,
+    addMatch,
     requireAuth<Scope extends ActorScope = "user">(scope?: Scope) {
       assertUniqueStepName(config.steps, "auth");
       return createPermissionServiceProcedureBuilder<

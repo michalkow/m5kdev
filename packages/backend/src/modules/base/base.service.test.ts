@@ -1,3 +1,4 @@
+import type { MatchQueryInput } from "@m5kdev/commons/modules/schemas/queryMatch";
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import { err, ok } from "neverthrow";
 import { ServerError } from "../../utils/errors";
@@ -358,6 +359,123 @@ describe("BaseService procedure builder", () => {
     }
 
     expect(() => new QueryService()).toThrow("Duplicate service procedure step name: addFilters");
+  });
+
+  it("addMatch replaces input.match with the resolver return value", async () => {
+    type MatchQueryWithSearch = MatchQueryInput & { search?: string; filters?: QueryInput["filters"] };
+
+    class QueryService extends BaseService<Record<string, never>, Record<string, never>> {
+      readonly run = this.procedure<MatchQueryWithSearch>("run")
+        .addMatch(({ match }) => ({
+          ...match,
+          memberId: "member-1",
+        }))
+        .handle(({ input, state }) =>
+          ok({
+            input,
+            stateMatches: state.addMatch === input,
+          })
+        );
+    }
+
+    const service = new QueryService();
+    const result = await service.run(
+      {
+        search: "hello",
+        q: "term",
+        page: 2,
+        filters: [
+          {
+            columnId: "name",
+            type: "string",
+            method: "contains",
+            value: "widget",
+          },
+        ],
+        match: { status: "published" },
+      },
+      {}
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.stateMatches).toBe(true);
+      expect(result.value.input.search).toBe("hello");
+      expect(result.value.input.q).toBe("term");
+      expect(result.value.input.page).toBe(2);
+      expect(result.value.input.filters).toEqual([
+        {
+          columnId: "name",
+          type: "string",
+          method: "contains",
+          value: "widget",
+        },
+      ]);
+      expect(result.value.input.match).toEqual({
+        status: "published",
+        memberId: "member-1",
+      });
+    }
+  });
+
+  it("addMatch defaults a missing client match to an empty object", async () => {
+    class QueryService extends BaseService<Record<string, never>, Record<string, never>> {
+      readonly run = this.procedure<MatchQueryInput>("run")
+        .addMatch(({ match }) => ({ ...match, memberId: "member-1" }))
+        .handle(({ input }) => ok(input));
+    }
+
+    const service = new QueryService();
+    const result = await service.run({}, {});
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.match).toEqual({ memberId: "member-1" });
+    }
+  });
+
+  it("addMatch does not merge beyond the resolver return value", async () => {
+    class QueryService extends BaseService<Record<string, never>, Record<string, never>> {
+      readonly run = this.procedure<MatchQueryInput>("run")
+        .addMatch(() => ({ memberId: "member-1" }))
+        .handle(({ input }) => ok(input));
+    }
+
+    const service = new QueryService();
+    const result = await service.run({ match: { status: "published" } }, {});
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.match).toEqual({ memberId: "member-1" });
+    }
+  });
+
+  it("addMatch propagates ServerResult errors from the resolver", async () => {
+    class QueryService extends BaseService<Record<string, never>, Record<string, never>> {
+      readonly run = this.procedure<MatchQueryInput>("run")
+        .addMatch(() => this.error("BAD_REQUEST", "invalid match"))
+        .handle(({ input }) => ok(input));
+    }
+
+    const service = new QueryService();
+    const result = await service.run({}, {});
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("BAD_REQUEST");
+      expect(result.error.message).toBe("invalid match");
+    }
+  });
+
+  it("addMatch throws when called twice on the same procedure", () => {
+    class QueryService extends BaseService<Record<string, never>, Record<string, never>> {
+      readonly run = this.procedure<MatchQueryInput>("run")
+        .addMatch(() => ({}))
+        .addMatch(() => ({}))
+        .handle(({ input }) => ok(input));
+    }
+
+    expect(() => new QueryService()).toThrow("Duplicate service procedure step name: addMatch");
   });
 
   it("mapInput updates the input seen by later steps and the handler", async () => {

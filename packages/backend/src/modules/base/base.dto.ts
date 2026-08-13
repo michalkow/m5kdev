@@ -1,3 +1,4 @@
+import { matchQuerySchema } from "@m5kdev/commons/modules/schemas/queryMatch";
 import { querySchema } from "@m5kdev/commons/modules/schemas/query.schema";
 import { getTableColumns, type InferSelectModel, type Table } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-zod";
@@ -233,6 +234,7 @@ export function createZodSchemas<T extends Table>(table: T) {
       read: uuidOutput,
       readMany: uuidManyOutput,
       list: querySchema,
+      matchList: matchQuerySchema,
       create: insertSchema,
       update: updateSchema.extend({ id: z.string() }),
       delete: uuidOutput,

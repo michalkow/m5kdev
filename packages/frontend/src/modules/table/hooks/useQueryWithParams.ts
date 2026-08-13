@@ -1,4 +1,5 @@
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
+import { queryFiltersToMatch } from "@m5kdev/commons/modules/schemas/queryMatch";
 import { type UseQueryOptions, type UseQueryResult, useQuery } from "@tanstack/react-query";
 import type { GroupingState } from "@tanstack/react-table";
 import { useEffect, useMemo, useRef } from "react";
@@ -65,6 +66,7 @@ export const useQueryWithParams = <TInput, TData>({
       sort,
       order: order ?? undefined,
       filters: mergedFilters,
+      match: queryFiltersToMatch(mergedFilters),
       ...(qPayload !== undefined ? { q: qPayload } : {}),
     };
   }, [queryParams, page, limit, sort, order, filters, isGrouped, additionalFilters, q]);

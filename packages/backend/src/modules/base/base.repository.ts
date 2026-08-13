@@ -1,3 +1,4 @@
+import type { MatchQueryInput } from "@m5kdev/commons/modules/schemas/queryMatch";
 import type {
   QueryFilter,
   QueryFilters,
@@ -23,6 +24,7 @@ import { ServerError } from "../../utils/errors";
 import { applyPagination } from "../utils/applyPagination";
 import { applySorting } from "../utils/applySorting";
 import { getConditionsFromFilters } from "../utils/getConditionsFromFilters";
+import { getConditionsFromMatch } from "../utils/getConditionsFromMatch";
 import { pushGlobalSearch } from "../utils/getGlobalSearchCondition";
 import { Base } from "./base.abstract";
 import {
@@ -34,6 +36,7 @@ import {
 import { createRepositoryQueryBuilder, type RepositoryQueryBuilder } from "./base.query";
 
 export type QueryFindInput = Omit<QueryInput, "page" | "limit">;
+export type MatchQueryFindInput = Omit<MatchQueryInput, "page" | "limit">;
 
 /** Payload for update/updateMany: id key required (string), other table fields optional. */
 export type TableUpdatePayload<
@@ -73,6 +76,10 @@ export class TableConditionBuilder<
 
   applyFilters({ filters }: { filters?: QueryFilters } = {}) {
     if (filters && filters.length > 0) getConditionsFromFilters(this, filters, this.table);
+  }
+
+  applyMatch({ match }: Pick<MatchQueryInput, "match"> = {}) {
+    return getConditionsFromMatch(this, match, this.table);
   }
 
   applyGlobalSearch(q: string | undefined, columns: readonly SQLiteColumn[]) {
@@ -360,6 +367,185 @@ export class BaseTableRepository<
     const db = tx ?? this.orm;
     const conditions = options?.conditions ?? this.getConditionBuilder(this.table);
     conditions.applyFilters(query);
+
+    if (options?.globalSearchColumns?.length) {
+      const columns: SQLiteColumn[] = [];
+      for (const columnId of options.globalSearchColumns) {
+        const column = this.table[columnId as keyof TTable] as SQLiteColumn | undefined;
+        if (!column) {
+          return this.error(
+            "BAD_REQUEST",
+            `Column ${columnId} not found in table ${this.table.name}`
+          );
+        }
+        columns.push(column);
+      }
+      conditions.applyGlobalSearch(query?.q, columns);
+    }
+
+    if (this.table.deletedAt && !options?.showDeleted) {
+      conditions.push(isNull(this.table.deletedAt));
+    }
+
+    const selectForRow =
+      options?.columns !== undefined
+        ? pickTableColumns(this.table, options.columns)
+        : options?.select;
+
+    const whereClause = conditions.join();
+    const rowQuery = applyPagination(
+      this.withSorting(
+        (selectForRow ? db.select(selectForRow) : db.select())
+          .from(this.table as any)
+          .where(whereClause),
+        query ?? {}
+      ),
+      1
+    );
+
+    const queryResult = await this.throwableQuery(() => rowQuery);
+    if (queryResult.isErr()) return err(queryResult.error);
+
+    if (options?.columns !== undefined) {
+      return ok((queryResult.value as Pick<InferSelectModel<TTable>, K>[])[0]);
+    }
+
+    return ok((queryResult.value as Row[])[0]);
+  }
+
+  async matchList<K extends keyof InferSelectModel<TTable> & string>(
+    query: MatchQueryInput | undefined,
+    options: {
+      conditions?: TableConditionBuilder<TTable>;
+      columns: readonly K[];
+      globalSearchColumns?: string[];
+      showDeleted?: boolean;
+    },
+    tx?: O
+  ): ServerResultAsync<{ rows: Pick<InferSelectModel<TTable>, K>[]; total: number }>;
+  async matchList(
+    query?: MatchQueryInput,
+    options?: {
+      conditions?: TableConditionBuilder<TTable>;
+      select?: SelectedFields<SQLiteColumn, TTable>;
+      globalSearchColumns?: string[];
+      showDeleted?: boolean;
+    },
+    tx?: O
+  ): ServerResultAsync<{ rows: InferSelectModel<TTable>[]; total: number }>;
+  async matchList<K extends keyof InferSelectModel<TTable> & string>(
+    query?: MatchQueryInput,
+    options?: {
+      conditions?: TableConditionBuilder<TTable>;
+      select?: SelectedFields<SQLiteColumn, TTable>;
+      columns?: readonly K[];
+      globalSearchColumns?: string[];
+      showDeleted?: boolean;
+    },
+    tx?: O
+  ): ServerResultAsync<{
+    rows: InferSelectModel<TTable>[] | Pick<InferSelectModel<TTable>, K>[];
+    total: number;
+  }> {
+    type Row = InferSelectModel<TTable>;
+
+    const db = tx ?? this.orm;
+    const conditions = options?.conditions ?? this.getConditionBuilder(this.table);
+    const applied = conditions.applyMatch(query);
+    if (applied.isErr()) return this.error("BAD_REQUEST", applied.error);
+
+    if (options?.globalSearchColumns?.length) {
+      const columns: SQLiteColumn[] = [];
+      for (const columnId of options.globalSearchColumns) {
+        const column = this.table[columnId as keyof TTable] as SQLiteColumn | undefined;
+        if (!column) {
+          return this.error(
+            "BAD_REQUEST",
+            `Column ${columnId} not found in table ${this.table.name}`
+          );
+        }
+        columns.push(column);
+      }
+      conditions.applyGlobalSearch(query?.q, columns);
+    }
+
+    if (this.table.deletedAt && !options?.showDeleted) {
+      conditions.push(isNull(this.table.deletedAt));
+    }
+
+    const selectForRows =
+      options?.columns !== undefined
+        ? pickTableColumns(this.table, options.columns)
+        : options?.select;
+
+    const whereClause = conditions.join();
+    const rowsQuery = this.withSortingAndPagination(
+      (selectForRows ? db.select(selectForRows) : db.select())
+        .from(this.table as any)
+        .where(whereClause),
+      query || {}
+    );
+    const countQuery = db
+      .select({ count: count() })
+      .from(this.table as any)
+      .where(whereClause);
+
+    const queryResult = await this.throwableQuery(async () => {
+      const [rows, [totalResult]] = await Promise.all([rowsQuery, countQuery]);
+      return { rows, totalResult };
+    });
+    if (queryResult.isErr()) return err(queryResult.error);
+
+    if (options?.columns !== undefined) {
+      return ok({
+        rows: queryResult.value.rows as Pick<InferSelectModel<TTable>, K>[],
+        total: queryResult.value.totalResult?.count ?? 0,
+      });
+    }
+
+    return ok({
+      rows: queryResult.value.rows as Row[],
+      total: queryResult.value.totalResult?.count ?? 0,
+    });
+  }
+
+  async matchFind<K extends keyof InferSelectModel<TTable> & string>(
+    query: MatchQueryFindInput | undefined,
+    options: {
+      conditions?: TableConditionBuilder<TTable>;
+      columns: readonly K[];
+      globalSearchColumns?: string[];
+      showDeleted?: boolean;
+    },
+    tx?: O
+  ): ServerResultAsync<Pick<InferSelectModel<TTable>, K> | undefined>;
+  async matchFind(
+    query?: MatchQueryFindInput,
+    options?: {
+      conditions?: TableConditionBuilder<TTable>;
+      select?: SelectedFields<SQLiteColumn, TTable>;
+      globalSearchColumns?: string[];
+      showDeleted?: boolean;
+    },
+    tx?: O
+  ): ServerResultAsync<InferSelectModel<TTable> | undefined>;
+  async matchFind<K extends keyof InferSelectModel<TTable> & string>(
+    query?: MatchQueryFindInput,
+    options?: {
+      conditions?: TableConditionBuilder<TTable>;
+      select?: SelectedFields<SQLiteColumn, TTable>;
+      columns?: readonly K[];
+      globalSearchColumns?: string[];
+      showDeleted?: boolean;
+    },
+    tx?: O
+  ): ServerResultAsync<InferSelectModel<TTable> | Pick<InferSelectModel<TTable>, K> | undefined> {
+    type Row = InferSelectModel<TTable>;
+
+    const db = tx ?? this.orm;
+    const conditions = options?.conditions ?? this.getConditionBuilder(this.table);
+    const applied = conditions.applyMatch(query);
+    if (applied.isErr()) return this.error("BAD_REQUEST", applied.error);
 
     if (options?.globalSearchColumns?.length) {
       const columns: SQLiteColumn[] = [];

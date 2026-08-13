@@ -99,15 +99,19 @@ Business rules and orchestration. Owns Grants and Procedures.
 _Avoid_: Controller, Use case, Manager
 
 **List query**:
-The shared list request: `page`, `limit`, `sort`, `order`, `filters`, `q`. On the Shared contract, `filters` is a list of QueryFilters.
-_Avoid_: Search params (that is nuqs URL state)
+The QueryFilter list request: `page`, `limit`, `sort`, `order`, `filters`, `q`. Served by `queryList` / `queryFind` / `.addFilters`.
+_Avoid_: Search params (that is nuqs URL state), Match query
+
+**Match query**:
+The QueryMatch list request: `page`, `limit`, `sort`, `order`, `match`, `q`. Served by `matchList` / `matchFind` / `.addMatch`.
+_Avoid_: List query, Filter query
 
 **QueryFilter**:
-A UI clause on a List query: `columnId`, `type`, `method`, and `value`.
+A UI clause on a List query: `columnId`, `type`, `method`, and `value`. Table UI and URL state stay in this dialect.
 _Avoid_: QueryMatch; Filter as the name of the List query
 
 **QueryMatch**:
-An object of List query predicates keyed by column, with comparison operators and `$and`/`$or`/`$not` groups. Written in Services and Repositories; not part of the Shared contract. QueryFilters convert into a QueryMatch when mixed with one; a QueryMatch does not convert back.
+An object of Match query predicates keyed by column. Values are a match, an operator map (SQL `$eq`/`$gt`/`$like`/… and table UI `$contains`/`$after`/`$intersect`/…), or `$and`/`$or`/`$not` groups. Table hooks may derive one from QueryFilters; a QueryMatch does not convert back.
 _Avoid_: Filter document, Mongo filter, Filter object, QueryFilter
 
 **Starter**:
