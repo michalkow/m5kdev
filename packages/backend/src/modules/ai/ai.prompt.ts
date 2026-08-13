@@ -1,5 +1,12 @@
 import mustache from "mustache";
+import { type ZodTypeAny, z } from "zod";
+
 import { logger } from "../../utils/logger";
+import type {
+  AIServiceExtractObjectParams,
+  AIServiceGenerateObjectParams,
+  AIServiceGenerateTextParams,
+} from "./ai.service";
 
 export type PromptSettings = {
   name?: string;
@@ -37,4 +44,39 @@ export class Prompt<C extends Record<string, string>> {
     logger.debug(`[PROMPT]: ${result.trim()}`);
     return result.trim();
   }
+}
+
+type GeneratePromptKind = "text" | "object" | "extracted";
+
+type GeneratePromptParamsFor<K extends GeneratePromptKind, S extends ZodTypeAny = ZodTypeAny> = [
+  K,
+] extends ["text"]
+  ? AIServiceGenerateTextParams
+  : [K] extends ["object"]
+    ? AIServiceGenerateObjectParams<S>
+    : AIServiceExtractObjectParams<S>;
+
+export function createGeneratePromptParams<K extends "text", T>(
+  processor: (context: T) => GeneratePromptParamsFor<K>
+): (context: T, override?: Partial<GeneratePromptParamsFor<K>>) => GeneratePromptParamsFor<K>;
+export function createGeneratePromptParams<
+  K extends "object" | "extracted",
+  T,
+  S extends ZodTypeAny,
+>(
+  processor: (context: T) => GeneratePromptParamsFor<K, S>
+): (context: T, override?: Partial<GeneratePromptParamsFor<K, S>>) => GeneratePromptParamsFor<K, S>;
+export function createGeneratePromptParams<K extends GeneratePromptKind, T, S extends ZodTypeAny>(
+  processor: (context: T) => GeneratePromptParamsFor<K, S>
+): (
+  context: T,
+  override?: Partial<GeneratePromptParamsFor<K, S>>
+) => GeneratePromptParamsFor<K, S> {
+  return (context, override) => {
+    const params = processor(context);
+    return {
+      ...params,
+      ...override,
+    };
+  };
 }
