@@ -152,3 +152,14 @@ Do not introduce alternate core libraries for these concerns without explicit re
 - Do not use inline styles for routine styling when Tailwind utilities can express it.
 - Do not introduce direct DOM manipulation for state that belongs in React/router/nuqs.
 - Do not duplicate providers, auth guards, or routing logic inside feature components.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in Linear, one project per repo, via the Cursor Linear plugin. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context: one root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
