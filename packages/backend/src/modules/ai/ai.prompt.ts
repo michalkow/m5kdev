@@ -1,5 +1,5 @@
 import mustache from "mustache";
-import { type ZodTypeAny, z } from "zod";
+import type { ZodTypeAny } from "zod";
 
 import { logger } from "../../utils/logger";
 import type {
@@ -48,11 +48,12 @@ export class Prompt<C extends Record<string, string>> {
 
 type GeneratePromptKind = "text" | "object" | "extracted";
 
-type GeneratePromptParamsFor<K extends GeneratePromptKind, S extends ZodTypeAny = ZodTypeAny> = [
-  K,
-] extends ["text"]
+export type GeneratePromptParamsFor<
+  K extends GeneratePromptKind,
+  S extends ZodTypeAny = ZodTypeAny,
+> = K extends "text"
   ? AIServiceGenerateTextParams
-  : [K] extends ["object"]
+  : K extends "object"
     ? AIServiceGenerateObjectParams<S>
     : AIServiceExtractObjectParams<S>;
 

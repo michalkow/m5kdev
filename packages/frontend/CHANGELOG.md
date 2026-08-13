@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.32.8
+
+### Patch Changes
+
+- createGeneratePromptParams
+- Updated dependencies
+  - @m5kdev/commons@0.32.8
+
 ## 0.32.6
 
 ### Patch Changes

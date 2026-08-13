@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.32.7
+
+### Patch Changes
+
+- createGeneratePromptParams
+
 ## 0.32.6
 
 ### Patch Changes
