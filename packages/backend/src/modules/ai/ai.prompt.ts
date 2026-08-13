@@ -3,7 +3,7 @@ import type { ZodTypeAny } from "zod";
 
 import { logger } from "../../utils/logger";
 import type {
-  AIServiceExtractObjectParams,
+  AIServiceGenerateExtractedObjectParams,
   AIServiceGenerateObjectParams,
   AIServiceGenerateTextParams,
 } from "./ai.service";
@@ -55,7 +55,7 @@ export type GeneratePromptParamsFor<
   ? AIServiceGenerateTextParams
   : K extends "object"
     ? AIServiceGenerateObjectParams<S>
-    : AIServiceExtractObjectParams<S>;
+    : AIServiceGenerateExtractedObjectParams<S>;
 
 export function createGeneratePromptParams<K extends "text", T>(
   processor: (context: T) => GeneratePromptParamsFor<K>

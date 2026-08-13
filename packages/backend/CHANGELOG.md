@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.32.9
+
+### Patch Changes
+
+- extracted
+- Updated dependencies
+  - @m5kdev/commons@0.32.9
+  - @m5kdev/config@0.32.9
+
 ## 0.32.8
 
 ### Patch Changes

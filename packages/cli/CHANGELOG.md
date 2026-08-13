@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.32.8
+
+### Patch Changes
+
+- extracted
+
 ## 0.32.7
 
 ### Patch Changes

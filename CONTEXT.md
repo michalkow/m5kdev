@@ -107,7 +107,7 @@ A UI clause on a List query: `columnId`, `type`, `method`, and `value`.
 _Avoid_: QueryMatch; Filter as the name of the List query
 
 **QueryMatch**:
-An object of List query predicates keyed by column, with comparison operators and `$and`/`$or` groups. Written in Services and Repositories; not part of the Shared contract. Distinct from QueryFilter; not a round-trip of it.
+An object of List query predicates keyed by column, with comparison operators and `$and`/`$or`/`$not` groups. Written in Services and Repositories; not part of the Shared contract. QueryFilters convert into a QueryMatch when mixed with one; a QueryMatch does not convert back.
 _Avoid_: Filter document, Mongo filter, Filter object, QueryFilter
 
 **Starter**:
