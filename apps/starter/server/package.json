@@ -25,7 +25,6 @@
     "@m5kdev/commons": "workspace:*",
     "@trpc/server": "catalog:",
     "better-auth": "catalog:",
-    "cors": "catalog:",
     "dotenv": "catalog:",
     "drizzle-orm": "catalog:",
     "drizzle-zod": "catalog:",
@@ -39,7 +38,6 @@
   },
   "devDependencies": {
     "@m5kdev/config": "workspace:*",
-    "@types/cors": "catalog:",
     "@types/express": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",

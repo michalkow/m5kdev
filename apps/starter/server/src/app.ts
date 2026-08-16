@@ -1,10 +1,10 @@
 import { createBackendApp } from "@m5kdev/backend/app";
+import { shutdownTelemetry } from "@m5kdev/backend/lib/otel";
 import { createBetterAuth } from "@m5kdev/backend/modules/auth/auth.lib";
 import { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
 import { EmailModule } from "@m5kdev/backend/modules/email/email.module";
 import { EmailPreviewModule } from "@m5kdev/backend/modules/email/email.preview.module";
 import { WorkflowModule } from "@m5kdev/backend/modules/workflow/workflow.module";
-import { USER_LOCALE_HEADER } from "@m5kdev/commons/modules/auth/auth.constants";
 import { templates } from "@starter-app/email";
 import { emailResources } from "@starter-app/email/resources";
 import {
@@ -13,15 +13,12 @@ import {
   APP_ROLES_CONFIG,
 } from "@starter-app/shared/modules/app/app.constants";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
-import cors from "cors";
-import express from "express";
 import { PostsModule } from "./modules/posts/posts.module";
 // m5k:test-harness:start
 import { TestHarnessModule } from "./modules/test-harness/test-harness.module";
 // m5k:test-harness:end
 import * as schema from "./schema";
 
-const app = express();
 const appUrl = process.env.VITE_APP_URL ?? "http://localhost:5173";
 const serverUrl = process.env.VITE_SERVER_URL ?? "http://localhost:8080";
 const databaseUrl = process.env.DATABASE_URL ?? "file:./local.db";
@@ -44,28 +41,11 @@ const connection =
         url: databaseUrl,
       };
 
-app.use(express.json());
-app.use(
-  cors({
-    origin: [appUrl],
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "Waitlist-Invitation-Code",
-      "Organization-Invitation-Code",
-      "Admin-Create-Verified-User",
-      USER_LOCALE_HEADER,
-    ],
-  })
-);
-
 export const builtBackendApp = createBackendApp(
   {
     db: connection,
-    express: app,
     schema,
+    onShutdown: shutdownTelemetry,
     app: {
       name: APP_NAME,
       urls: {

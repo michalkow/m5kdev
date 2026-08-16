@@ -21,6 +21,7 @@ The backend now has two new top-level primitives:
 - Better Auth runtime creation
 - workflow discovery and registration
 - tRPC creation and mount
+- Express JSON, CORS, HTTP listen, and signal shutdown
 - startup and shutdown lifecycle
 
 `defineBackendModule(...)` lets each module contribute:
@@ -45,7 +46,7 @@ The backend now has two new top-level primitives:
 | `trpc.ts` builds the root router | Modules return router fragments; the kernel merges them |
 | `workflow.ts` wires workflow service and registry manually | The kernel discovers `WorkflowService` and registers services automatically |
 | `lib/auth.ts` creates Better Auth directly | The app provides `auth.factory(...)` and the kernel builds auth after DB/services exist |
-| `index.ts` bootstraps middleware, tRPC, auth, and shutdown separately | `builtBackendApp.start()` and `builtBackendApp.shutdown()` own runtime lifecycle |
+| `index.ts` bootstraps middleware, tRPC, auth, and shutdown separately | `builtBackendApp.start()` listens and owns signal shutdown; `onShutdown` is extra app work (telemetry) |
 
 ## Migration Checklist
 
@@ -55,7 +56,7 @@ The backend now has two new top-level primitives:
 4. Move table relations to module dependency tables instead of direct imports from other modules.
 5. Export `appRouter` and `AppRouter` from the built backend app.
 6. Keep thin compatibility re-exports for `trpc.ts`, `workflow.ts`, and `lib/auth.ts` if the rest of the app still imports them.
-7. Update server bootstrap to call `builtBackendApp.start()` and `builtBackendApp.shutdown()`.
+7. Update server bootstrap to call `builtBackendApp.start()` (it listens). Pass `onShutdown` for telemetry. Do not apply json/CORS on a passed Express app.
 8. If the app uses `drizzle-kit`, add a generated static schema entrypoint sourced from the module graph.
 
 ## 1. Create The App Root
@@ -70,17 +71,14 @@ import { EmailModule } from "@m5kdev/backend/modules/email/email.module";
 import { NotificationModule } from "@m5kdev/backend/modules/notification/notification.module";
 import { WorkflowModule } from "@m5kdev/backend/modules/workflow/workflow.module";
 import { templates } from "@my-app/email";
-import express from "express";
 import { postsModule } from "./modules/posts/posts.module";
 
-const app = express();
 const appUrl = process.env.VITE_APP_URL ?? "http://localhost:5173";
 const serverUrl = process.env.VITE_SERVER_URL ?? "http://localhost:8080";
 const resendApiKey = process.env.RESEND_API_KEY;
 
 export const backendApp = createBackendApp({
   db: { url: process.env.DATABASE_URL! },
-  express: app,
   app: {
     name: "My App",
     urls: {
@@ -358,13 +356,14 @@ import { builtBackendApp } from "./app";
 
 async function start() {
   await builtBackendApp.start();
-  builtBackendApp.express.app.listen(8080);
 }
 
 async function shutdown() {
   await builtBackendApp.shutdown();
 }
 ```
+
+`start()` listens on `PORT` (fallback 8080) unless `start({ listen: false })`. SIGINT/SIGTERM are registered when listening. Put telemetry on `onShutdown`.
 
 If you still expose app-local workflow handles, re-export them from `builtBackendApp`:
 
@@ -377,12 +376,12 @@ export const workflowRegistry = builtBackendApp.workflow!.registry;
 
 ## 8. Use Module Hooks For Raw Express Integration
 
-The backend kernel does not replace raw Express. It composes around it.
+The Kernel owns JSON, CORS, listen, and signal shutdown. Extra HTTP belongs on a module `express(...)` hook. You may still pass an Express instance that has **not** already applied json/CORS (Helmet, logging).
 
-You can still:
+You can:
 
-- pass an existing Express app into `createBackendApp(...)`
-- register your own middleware before or after module registration
+- pass an existing Express app into `createBackendApp(...)` without json/CORS
+- map Kernel defaults with `cors` / `json`
 - mount custom endpoints in a module `express(...)` hook
 
 Example:

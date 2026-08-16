@@ -98,16 +98,9 @@ createBackendApp({
 
 ### CORS
 
-```ts
-import { USER_LOCALE_HEADER } from "@m5kdev/commons/modules/auth/auth.constants";
-
-allowedHeaders: [
-  "Content-Type",
-  "Authorization",
-  USER_LOCALE_HEADER,
-  // ...
-],
-```
+Kernel CORS already allows `User-Locale`. If the app still owns `cors()` in
+`app.ts`, add `USER_LOCALE_HEADER` to `allowedHeaders`, or
+[migrate the HTTP shell](/guides/v0.33.0-kernel-express-http-shell-migration).
 
 ### Better Auth factory
 
@@ -300,7 +293,7 @@ Register hook-specific keys in the same `i18n.resources` map in `app.ts`.
 2. Migrate DB schema (`users.locale`, `organizations.locale`).
 3. Add `AUTH_LOCALE_CONFIG` in app shared code.
 4. Set `app.locales` in `createBackendApp` config.
-5. Add `User-Locale` to CORS `allowedHeaders`.
+5. Confirm Kernel CORS (or app-owned CORS) allows `User-Locale`.
 6. Register `i18n.resources` in `createBackendApp` (email + any server-only strings).
 7. Change template `subject` / `previewText` to translation keys; update React components to use `props.t`.
 8. Pass `onLocaleChange` to `AuthUserRouter` when the app needs custom i18n sync beyond the default.
@@ -321,5 +314,6 @@ Register hook-specific keys in the same `i18n.resources` map in `app.ts`.
 ## Related docs
 
 - [Auth module](/modules/auth)
+- [Kernel Express HTTP shell](/guides/v0.33.0-kernel-express-http-shell-migration)
 - [Admin create verified user migration](/guides/admin-create-verified-user-migration)
 - [Custom app roles migration](/guides/custom-app-roles-migration)

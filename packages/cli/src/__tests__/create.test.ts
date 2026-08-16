@@ -84,6 +84,18 @@ describe("scaffoldProject", () => {
     expect(providers).toContain("AppTrpcQueryProvider");
     expect(appTs).toContain("createBackendApp(");
     expect(appTs).not.toContain(".build()");
+    expect(appTs).not.toContain("cors(");
+    expect(appTs).not.toContain("express.json");
+    expect(appTs).toContain("onShutdown");
+
+    const indexTs = await fs.readFile(
+      path.join(result.targetDirectory, "apps/server/src/index.ts"),
+      "utf8"
+    );
+    expect(indexTs).toContain('import "./instrumentation"');
+    expect(indexTs).toContain("builtBackendApp.start()");
+    expect(indexTs).not.toContain("SIGINT");
+    expect(indexTs).not.toContain(".listen(");
 
     const emailPackage = await fs.readFile(
       path.join(result.targetDirectory, "apps/email/package.json"),

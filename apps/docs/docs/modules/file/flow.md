@@ -14,7 +14,6 @@ Register auth before file because `FileModule` depends on auth.
 ```ts
 export const backendApp = createBackendApp({
   db: { url: process.env.DATABASE_URL! },
-  express: app,
 })
   .use(new AuthModule())
   .use(new FileModule());

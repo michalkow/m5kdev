@@ -15,16 +15,13 @@ path is `/upload`.
 import { createBackendApp } from "@m5kdev/backend/app";
 import { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
 import { FileModule } from "@m5kdev/backend/modules/file/file.module";
-import express from "express";
 
-const expressApp = express();
-
-export const backendApp = createBackendApp({
-  db: { url: process.env.DATABASE_URL! },
-  express: expressApp,
-})
-  .use(new AuthModule())
-  .use(new FileModule());
+export const builtBackendApp = createBackendApp(
+  {
+    db: { url: process.env.DATABASE_URL! },
+  },
+  [new AuthModule(), new FileModule()]
+);
 ```
 
 Use `new FileModule("/assets")` to mount the routes under a different prefix.

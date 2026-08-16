@@ -1,4 +1,9 @@
+import type { Server } from "node:http";
 import { type Client, createClient, type Config as LibSQLClientConfig } from "@libsql/client";
+import {
+  ADMIN_CREATE_VERIFIED_USER_HEADER,
+  USER_LOCALE_HEADER,
+} from "@m5kdev/commons/modules/auth/auth.constants";
 import type { AuthLocaleConfig } from "@m5kdev/commons/modules/auth/auth.locale";
 import {
   type AuthRolesConfig,
@@ -9,6 +14,8 @@ import { transformer } from "@m5kdev/commons/utils/trpc";
 import type { AnyRouter, TRPCCreateRouterOptions } from "@trpc/server";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import { toNodeHandler } from "better-auth/node";
+import type { OptionsJson } from "body-parser";
+import cors, { type CorsOptions } from "cors";
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
 import type { SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
 import express, { type Express } from "express";
@@ -314,6 +321,9 @@ export type BackendAppConfig = {
     mountPath?: string;
   };
   schema?: AppDbSchema;
+  cors?: (defaults: CorsOptions) => CorsOptions;
+  json?: (defaults: OptionsJson) => OptionsJson;
+  onShutdown?: () => void | Promise<void>;
 };
 
 export function defineBackendModule<const T extends BackendModuleDefinition>(
@@ -531,6 +541,43 @@ function createDependencyMap(
   return deps;
 }
 
+function parseListenPort(value: string | undefined): number {
+  if (value === undefined || value === "") {
+    return 8080;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? 8080 : parsed;
+}
+
+function applyHttpShell({
+  expressApp,
+  config,
+  appConfig,
+}: {
+  expressApp: Express;
+  config: BackendAppConfig;
+  appConfig: ResolvedBackendAppMetadata;
+}): void {
+  const jsonDefaults: OptionsJson = {};
+  const jsonOptions = config.json ? config.json(jsonDefaults) : jsonDefaults;
+  expressApp.use(express.json(jsonOptions));
+  const corsDefaults: CorsOptions = {
+    origin: appConfig.urls.web ? [appConfig.urls.web] : false,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Waitlist-Invitation-Code",
+      "Organization-Invitation-Code",
+      ADMIN_CREATE_VERIFIED_USER_HEADER,
+      USER_LOCALE_HEADER,
+    ],
+  };
+  const corsOptions = config.cors ? config.cors(corsDefaults) : corsDefaults;
+  expressApp.use(cors(corsOptions));
+}
+
 export function createBackendApp<const Modules extends readonly BackendAppModule[] = []>(
   config: BackendAppConfig,
   registeredModules = [] as unknown as Modules
@@ -545,6 +592,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
 
   const orderedModules = resolveModuleOrder(registeredModules);
   const expressApp = config.express ?? express();
+  applyHttpShell({ expressApp, config, appConfig });
   const dbClientState = createDbClient(config.db, logger);
   const redisState = createRedisClient(config.redis);
   const resendState = createResendClient(config.resend);
@@ -836,6 +884,61 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     .reverse()
     .filter((module) => module.shutdown)
     .map((module) => () => module.shutdown?.(lifecycleContext));
+  let httpServer: Server | undefined;
+  let shuttingDown = false;
+
+  const onSignal = (): void => {
+    void shutdownKernel({ exitProcess: true });
+  };
+
+  async function closeHttpServer(): Promise<void> {
+    if (!httpServer) {
+      return;
+    }
+    const server = httpServer;
+    httpServer = undefined;
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+  }
+
+  async function shutdownKernel(options: { exitProcess: boolean }): Promise<void> {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+    try {
+      process.removeListener("SIGINT", onSignal);
+      process.removeListener("SIGTERM", onSignal);
+      await closeHttpServer();
+      for (const hook of shutdownHooks) {
+        await hook();
+      }
+      if (workflowRuntime) {
+        await workflowRuntime.registry.stop();
+        await workflowRuntime.service.close();
+      }
+      if (redisState.owned && redisState.redis) {
+        redisState.redis.disconnect();
+      }
+      if (dbClientState.owned) {
+        await dbClientState.client.close?.();
+      }
+      if (config.onShutdown) {
+        await config.onShutdown();
+      }
+    } finally {
+      if (options.exitProcess) {
+        process.exit(0);
+      }
+    }
+  }
 
   return {
     modules: Object.fromEntries(moduleStates.entries()) as {
@@ -866,28 +969,39 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       createContext,
       transformer,
     },
-    async start() {
+    async start(options?: { listen?: boolean }): Promise<void> {
+      const shouldListen = options?.listen !== false;
+      if (shouldListen && httpServer) {
+        throw new Error("already listening");
+      }
       if (workflowRuntime) {
         await workflowRuntime.registry.start();
       }
       for (const hook of startupHooks) {
         await hook();
       }
+      if (!shouldListen) {
+        return;
+      }
+      const port = parseListenPort(process.env.PORT);
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const server = expressApp.listen(port, "0.0.0.0", () => {
+            resolve();
+          });
+          server.once("error", reject);
+          httpServer = server;
+        });
+      } catch (error) {
+        httpServer = undefined;
+        process.exit(1);
+        throw error;
+      }
+      process.once("SIGINT", onSignal);
+      process.once("SIGTERM", onSignal);
     },
-    async shutdown() {
-      for (const hook of shutdownHooks) {
-        await hook();
-      }
-      if (workflowRuntime) {
-        await workflowRuntime.registry.stop();
-        await workflowRuntime.service.close();
-      }
-      if (redisState.owned && redisState.redis) {
-        redisState.redis.disconnect();
-      }
-      if (dbClientState.owned) {
-        await dbClientState.client.close?.();
-      }
+    async shutdown(): Promise<void> {
+      await shutdownKernel({ exitProcess: false });
     },
   };
 }

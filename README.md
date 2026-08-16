@@ -70,7 +70,7 @@ This repository is intended to be **cloned and used as a monorepo**. Add it as a
 
 `@m5kdev/backend` now ships a first-class backend composition root for Express apps:
 
-- `createBackendApp(...)` owns backend wiring for DB, Drizzle, Redis, Better Auth, workflows, tRPC, startup, and shutdown.
+- `createBackendApp(...)` owns backend wiring for DB, Drizzle, Redis, Better Auth, workflows, tRPC, Express JSON/CORS, HTTP listen, startup, and shutdown.
 - `defineBackendModule(...)` is the backend module contract for tables, repositories, services, router fragments, Express hooks, and workflow hooks.
 - App-specific backend types still live in the app. Export `AppRouter` from the built backend app and consume that from your client.
 
@@ -78,25 +78,22 @@ Minimal shape:
 
 ```ts
 import { createBackendApp, type InferBackendAppRouter } from "@m5kdev/backend/app";
-import express from "express";
 import { postsModule } from "./modules/posts/posts.module";
 
-const app = express();
+export const builtBackendApp = createBackendApp(
+  {
+    db: { url: process.env.DATABASE_URL! },
+  },
+  [postsModule]
+);
 
-export const backendApp = createBackendApp({
-  db: { url: process.env.DATABASE_URL! },
-  express: app,
-})
-  .use(postsModule);
-
-export const builtBackendApp = backendApp.build();
 export const appRouter = builtBackendApp.trpc.router;
-export type AppRouter = InferBackendAppRouter<typeof backendApp>;
+export type AppRouter = typeof builtBackendApp.trpc.router;
 ```
 
-First-party modules such as `auth`, `workflow`, `notification`, and `email` register the same way with `.use(...)`.
+First-party modules such as `auth`, `workflow`, `notification`, and `email` register the same way.
 
-The framework still works with a user-owned Express app. Pass `express` into `createBackendApp(...)`, keep mounting your own middleware, and let backend modules contribute tRPC namespaces and route hooks.
+The Kernel creates Express and applies JSON and CORS. Pass `express` only when you need extra middleware on an instance that has **not** already applied json/CORS. Extra routes belong on a Backend Module `express` hook. See [Kernel Express HTTP shell](apps/docs/docs/guides/v0.33.0-kernel-express-http-shell-migration.md).
 
 Shared app metadata such as public URLs and email transport should be treated as backend app-level infrastructure rather than module-local configuration.
 

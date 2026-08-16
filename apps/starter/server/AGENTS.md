@@ -40,7 +40,7 @@ apps/server/src/modules/<module>/
 ## Workflow, Redis, and push notifications
 
 - `WorkflowModule` and `NotificationModule` are registered in `app.ts`. Start **Redis** locally (`REDIS_URL`) before `pnpm dev` on the server, or background jobs will not run.
-- `index.ts` calls `builtBackendApp.start()` before listening and `builtBackendApp.shutdown()` on exit.
+- `index.ts` calls `builtBackendApp.start()`, which listens and handles SIGINT/SIGTERM. Extra shutdown work (telemetry) is `onShutdown` on `createBackendApp`.
 - After changing Drizzle tables, run `pnpm --filter ./apps/server sync` — do not hand-edit SQL migrations in this repo.
 
 Push-related server env vars are documented in `apps/shared/.env.example`.

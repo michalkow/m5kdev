@@ -75,12 +75,12 @@ _Avoid_: Grant, Access, permission
 ### Composition
 
 **Kernel**:
-`createBackendApp` — the composition root that wires libSQL/Drizzle, Redis, Better Auth, modules, tRPC, Express, startup, and shutdown.
-_Avoid_: Framework (the stack is composable, not closed), App (that is the product)
+`createBackendApp` — the composition root that wires libSQL/Drizzle, Redis, Better Auth, modules, tRPC, Express, startup, and shutdown ([ADR-0003](docs/adr/0003-kernel-owns-express-http-shell.md)). It owns the Express instance, JSON and CORS defaults (origin from the app web URL; library allowed headers), HTTP listen (PORT, all interfaces), and SIGINT/SIGTERM when it is listening. Signal shutdown closes HTTP, then Kernel shutdown, then app `onShutdown`, then process exit. JSON and CORS defaults may be mapped; a map that omits a default drops it. Callers may pass an Express instance that has not already applied json/CORS; the Kernel still applies that shell. Extra HTTP belongs on a Backend Module `express` hook. Extra shutdown work (telemetry) registers on the Kernel, not a starter signal handler.
+_Avoid_: Framework (the stack is composable, not closed), App (that is the product), app-owned CORS as the default path
 
 **Backend Module**:
-A `BaseModule` subclass (or `defineBackendModule` object) that contributes tables, repositories, services, tRPC fragments, Express hooks, and workflows. Registered in `apps/*/server/src/app.ts`.
-_Avoid_: Package, Plugin, Feature (when you mean the server module)
+A `BaseModule` subclass (or `defineBackendModule` object) that contributes tables, repositories, services, tRPC fragments, Express hooks, and workflows. Registered in `apps/*/server/src/app.ts`. Extra HTTP belongs on the module `express` hook, not ad hoc starter middleware.
+_Avoid_: Package, Plugin, Feature (when you mean the server module), Model
 
 **Shared contract**:
 Zod schemas and constants in `apps/*/shared` or `@m5kdev/commons` that server and clients both import.

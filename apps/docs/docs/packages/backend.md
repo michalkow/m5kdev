@@ -26,6 +26,9 @@ Start with these module pages:
 - [Notification](/modules/notification)
 - [Base](/modules/base)
 
+List endpoints: [List query and Match query](/guides/list-query-and-match-query).
+HTTP shell: [Kernel Express HTTP shell](/guides/v0.33.0-kernel-express-http-shell-migration).
+
 ## Package rule
 
 Keep persistence logic in repositories, business logic in services, and transport
@@ -33,7 +36,8 @@ wiring in routers or tRPC files.
 
 ## Telemetry
 
-OpenTelemetry tracing and correlated Pino logging are opt-in via app server
-bootstrap and `OTEL_*` environment variables. See
-[Telemetry migration](/guides/telemetry-migration) for wiring `instrumentation.ts`,
-shutdown handling, and OTLP export to SigNoz or other backends.
+OpenTelemetry tracing and correlated Pino logging are opt-in via
+`import "./instrumentation"` first in the server entry and `OTEL_*` environment
+variables. Pass `onShutdown: shutdownTelemetry` to `createBackendApp`. See
+[Telemetry migration](/guides/telemetry-migration) and
+[Kernel Express HTTP shell](/guides/v0.33.0-kernel-express-http-shell-migration).

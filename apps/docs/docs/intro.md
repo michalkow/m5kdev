@@ -68,6 +68,13 @@ usage, and the
 [member ownership migration](/guides/v0.32.0-memberid-ownership-migration) when
 upgrading an existing app.
 
+List endpoints use **List query** (QueryFilters) or **Match query**
+(QueryMatch). Table UI stays QueryFilters.
+[List query and Match query](/guides/list-query-and-match-query).
+
+The Kernel owns Express JSON, CORS, listen, and signal shutdown.
+[Kernel Express HTTP shell](/guides/v0.33.0-kernel-express-http-shell-migration).
+
 ## Read by module
 
 Use the module docs when you are adding a feature to an app. A module page

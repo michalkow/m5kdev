@@ -20,15 +20,18 @@ behavior explicit to admin-panel flows.
 | `@m5kdev/commons` | Added `ADMIN_CREATE_VERIFIED_USER_HEADER` and `ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE` in `modules/auth/auth.constants`. |
 | `@m5kdev/backend` | `createBetterAuth` reads the header from the request context and sets `emailVerified: true` during user creation when the admin session check passes. |
 | `@m5kdev/web-ui` | `AuthAdminUserManagement` sends the header on `authClient.admin.createUser`. |
-| App server bootstrap | CORS must allow the custom header through browser preflight. |
+| App server bootstrap | Kernel CORS already allows `Admin-Create-Verified-User`. Apps that still own CORS must allow the header or [migrate the HTTP shell](/guides/v0.33.0-kernel-express-http-shell-migration). |
 
-New apps scaffolded from the minimal CLI template already include the CORS
-entry. Existing apps must add it manually.
+New apps scaffolded from the minimal CLI template get this header from Kernel
+CORS. Existing apps that still configure `cors()` in `app.ts` must add it
+manually, or drop app-owned CORS and use the Kernel shell.
 
 ## Required change for existing apps
 
-Update `apps/<app>/server/src/app.ts` (or wherever Express CORS is configured)
-and add `Admin-Create-Verified-User` to `allowedHeaders`:
+If the Kernel owns CORS (no `cors()` in `app.ts`), skip this section.
+
+If the app still configures Express CORS, add `Admin-Create-Verified-User` to
+`allowedHeaders`:
 
 ```ts
 import cors from "cors";
@@ -98,7 +101,8 @@ when the session user is not an admin.
 
 1. Upgrade `@m5kdev/backend`, `@m5kdev/commons`, and `@m5kdev/web-ui` to a
    release that includes this behavior.
-2. Add `Admin-Create-Verified-User` to server CORS `allowedHeaders`.
+2. Allow `Admin-Create-Verified-User` on CORS if the app still owns CORS (Kernel
+   defaults already include it).
 3. Redeploy the API (and web app if you ship admin UI changes separately).
 4. Verify in the admin panel:
    - Create a test user.
@@ -117,5 +121,5 @@ when the session user is not an admin.
 ## Related docs
 
 - [Auth module](/modules/auth)
-- [Backend package](/packages/backend)
+- [Kernel Express HTTP shell](/guides/v0.33.0-kernel-express-http-shell-migration)
 - [Commons package](/packages/commons)
