@@ -19,20 +19,29 @@ Web Push (VAPID), APNs, and FCM, with device registration and per-send logging.
 ```ts
 import { NotificationModule } from "@m5kdev/backend/modules/notification/notification.module";
 
-backendApp.use(new NotificationModule({ namespace: "notification" }));
+backendApp.use(
+  new NotificationModule({
+    namespace: "notification",
+    config: {
+      deliveryTimeout: 60_000,     // BullMQ job timeout; default 60s
+      notificationQueue: "default", // must exist on WorkflowModule
+    },
+  })
+);
 ```
 
 Depends on `auth` and `workflow` — delivery runs as a queued job
-(`deliverNotificationJob`), so the workflow module must be registered.
+(`deliverNotificationJob`), so the workflow module must be registered. The job
+id is the send `batchId` (dedupes retries of the same batch).
 
 ## Delivery flow
 
 1. The client registers a device (`registerDevice`) with its push subscription
    or token; devices are stored per user in `notification_devices`.
-2. App code calls `enqueueSendToUser({ userId, ... })`, which fans out a
-   delivery job per device via the workflow queue.
-3. Providers send through Web Push, APNs, or FCM; results are recorded in
-   `notification_send_logs`.
+2. App code calls `enqueueSendToUser({ userId, ... })`, which writes one send
+   log per enabled device and enqueues a single delivery job keyed by `batchId`.
+3. The job (`deliverBatch`) sends through Web Push, APNs, or FCM and records
+   results on those logs.
 4. Permanent token failures (`webPushErrorShouldDisableDevice`,
    `providerForPermanentTokenFailure`) disable dead devices automatically.
 
