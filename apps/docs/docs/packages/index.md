@@ -14,5 +14,5 @@ Package docs explain ownership and imports. Detailed usage belongs in
 | [Web UI](./web-ui) | Shared HeroUI/Tailwind component library. |
 | [Commons](./commons) | Shared schemas, constants, and utilities. |
 | [Email](./email) | React Email templates and email build tooling. |
-| [CLI](./cli) | Project creation and scaffolding CLI. |
+| [CLI](./cli) | `create-m5kdev`: scaffold, diagnose (`doctor`), and update managed apps. |
 | [Config](./config) | Shared workspace configuration package. |

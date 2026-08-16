@@ -23,6 +23,7 @@ Start with these module pages:
 - [Auth](/modules/auth)
 - [Billing](/modules/billing)
 - [Workflow](/modules/workflow)
+- [AI](/modules/ai)
 - [Notification](/modules/notification)
 - [Base](/modules/base)
 
