@@ -68,6 +68,17 @@ usage, and the
 [member ownership migration](/guides/v0.32.0-memberid-ownership-migration) when
 upgrading an existing app.
 
+## Create an app
+
+Scaffold a product from the `minimal-app` template with an exact CLI release:
+
+```sh
+pnpm dlx create-m5kdev@<version> my-app --platform web --yes
+```
+
+Do not add `create-m5kdev` as an app dependency. After enrollment, `doctor` and
+`update` keep the managed template current. See the [CLI package](/packages/cli).
+
 ## Read by module
 
 Use the module docs when you are adding a feature to an app. A module page
@@ -85,6 +96,8 @@ code should live.
   module logic.
 - [Web UI package](/packages/web-ui) owns reusable HeroUI/Tailwind components.
 - [Commons package](/packages/commons) owns shared constants, schemas, and types.
+- [CLI package](/packages/cli) owns `create-m5kdev` scaffolding, diagnostics, and
+  managed updates.
 
 ## Local commands
 

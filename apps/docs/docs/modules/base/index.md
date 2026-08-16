@@ -25,7 +25,9 @@ and override lifecycle methods the kernel calls in order:
 - `trpc({ services, deps })` — return namespaced tRPC router fragments
   (via `createBackendRouterMap`).
 - `express({ services, infra })` — mount Express routes.
-- `workflows({ services })` — register queue jobs and cron schedules.
+- `workflows({ services, workflow })` — optional extra job wiring. The kernel
+  also scans every service object for job/cron definitions (see
+  [Workflow](/modules/workflow)).
 
 Modules declare `dependsOn` / `optionalDependsOn` by module id; the kernel
 resolves order and passes resolved dependencies through `deps`.
@@ -50,16 +52,29 @@ org-scoped `"own"` ownership — see
   `accessGuardAsync`.
 
 Grants are declared per module in `<module>.grants.ts` with
-`flattenNestedGrants({ module: { scope: { role: { action: "own" | "all" } } } })`.
+`flattenNestedGrants({ resource: { level: { role: { action: Access } } } })`.
 Canonical actions are `read`, `write`, `delete`, and `publish`; guard action
 names must match grant action names exactly.
 
-In organization context, user-level `"own"` compares `Entity.memberId` to the
-actor’s `memberId` when present (with legacy `userId` dual-read for
-rows that still lack `memberId`). Stamp and authorize org assets with
-`memberId`; keep `userId` for personal resources. `addContextFilter` accepts
-`"member"` for member-owned lists; `["user", "organization"]` filters by
-`userId` and `organizationId` without remapping to `memberId`.
+Access modes:
+
+| Access | Meaning |
+| --- | --- |
+| `all` | Any entity. Use for platform/user-level admins only. |
+| `org` | Same Organization (`entity.organizationId === actor.organizationId`). Prefer this for org owner/admin. |
+| `own` | Ownership. In org context, user-level `"own"` compares `Entity.memberId` to the actor’s `memberId` when present (legacy `userId` dual-read if `memberId` is missing). |
+| `none` | Explicit deny. |
+
+Stamp and authorize org assets with `memberId`; keep `userId` for personal
+resources. `addContextFilter` accepts `"member"` for member-owned lists;
+`["user", "organization"]` filters by `userId` and `organizationId` without
+remapping to `memberId`.
+
+`.access` on an **array** or `{ rows, total }` list result **soft-filters** to
+allowed rows (empty is OK) and writes the filtered value back to
+`state[entityStep]`. A single entity returns `FORBIDDEN` when denied.
+`total` is reduced by the number of rows removed from **this page**, not
+recomputed from the full table.
 
 ### Service procedures
 
@@ -67,10 +82,31 @@ Request-bound methods are declared with the procedure builder instead of plain
 async functions:
 
 ```ts
-getPreferences = this.procedure("getPreferences")
-  .access({ scope: "user", action: "read" })
-  .handler(async ({ ctx }) => { /* ... */ });
+list = this.procedure("list")
+  .input(itemSchemas.input.list)
+  .output(itemSchemas.output.list)
+  .requireAuth("organization")
+  .addContextFilter(["organization"])
+  .addFilters(() => ({
+    columnId: "status",
+    type: "enum",
+    method: "equals",
+    value: "active",
+  }))
+  .loadResource("items", ({ input }) => this.repository.item.queryList(input))
+  .access({ action: "read", entityStep: "items" })
+  .handle(({ state }) => state.items);
 ```
+
+Typical builder order: `.input` / `.output` → `.requireAuth` →
+`.addContextFilter` / `.addFilters` → `.loadResource` / `.use` → `.access` →
+`.handle`. Runtime Zod validation is off unless you pass `true` as the second
+argument to `.input` / `.output`.
+
+`.addFilters(resolve)` appends one `QueryFilter` or an array onto
+`input.filters` (other query fields are preserved). Call it once per procedure.
+Use it for extra clauses that depend on actor or loaded state; use
+`.addContextFilter` for tenancy.
 
 Procedures bundle input mapping, access checks, and entity loading so tRPC
 handlers stay thin. See `MIGRATING_TO_SERVICE_PROCEDURES.md` in the backend
