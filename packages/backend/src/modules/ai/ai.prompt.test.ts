@@ -1,7 +1,7 @@
 import type { ZodTypeAny } from "zod";
 import type { GeneratePromptParamsFor } from "./ai.prompt";
 import type {
-  AIServiceExtractObjectParams,
+  AIServiceGenerateExtractedObjectParams,
   AIServiceGenerateObjectParams,
 } from "./ai.service";
 
@@ -15,14 +15,14 @@ describe("GeneratePromptParamsFor", () => {
     type UnionParams = GeneratePromptParamsFor<"object" | "extracted", Schema>;
     type Expected =
       | AIServiceGenerateObjectParams<Schema>
-      | AIServiceExtractObjectParams<Schema>;
+      | AIServiceGenerateExtractedObjectParams<Schema>;
 
     const retainsBothShapes: Equals<UnionParams, Expected> = true;
     const objectParams = { schema: {} as Schema } as AIServiceGenerateObjectParams<Schema>;
     const extractedParams = {
       schema: {} as Schema,
-      text: "source",
-    } as AIServiceExtractObjectParams<Schema>;
+      prompt: "source",
+    } as AIServiceGenerateExtractedObjectParams<Schema>;
     const retained: UnionParams[] = [objectParams, extractedParams];
 
     expect(retainsBothShapes).toBe(true);

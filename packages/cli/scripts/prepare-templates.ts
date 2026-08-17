@@ -5,7 +5,7 @@
  * tokenizes it back into the CLI's template format at build time, so the
  * template can never drift from working code:
  *   - concrete strings -> {{PACKAGE_SCOPE}} / {{APP_NAME}} / {{APP_SLUG}}
- *   - "@m5kdev/x": "workspace:*" -> "catalog:" (generated repos pin published versions)
+ *   - "@m5kdev/x": "workspace:*" -> "catalog:m5kdev" (generated repos pin published versions)
  *   - text files gain a .tpl suffix; binaries are copied verbatim
  *   - committed root templates (repo-root files, .cursor rules, .env templates)
  *     are layered in from root-templates/
@@ -15,6 +15,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
+  MANAGED_CATALOG_SPECIFIER,
   assertCatalogKeys,
   buildConsumerCatalog,
   readCatalog,
@@ -117,7 +118,8 @@ function tokenize(content: string): string {
     .replaceAll("@starter-app", "{{PACKAGE_SCOPE}}")
     .replaceAll("M5 Starter", "{{APP_NAME}}")
     .replaceAll("starter-app", "{{APP_SLUG}}")
-    .replace(/"(@m5kdev\/[a-z-]+)": "workspace:\*"/g, '"$1": "catalog:"');
+    .replace(/"(@m5kdev\/[a-z-]+)": "workspace:\*"/g, `"$1": "${MANAGED_CATALOG_SPECIFIER}"`)
+    .replaceAll('"catalog:"', `"${MANAGED_CATALOG_SPECIFIER}"`);
 }
 
 function tokenizePath(relPath: string): string {

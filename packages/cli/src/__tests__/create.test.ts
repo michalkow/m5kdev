@@ -107,8 +107,11 @@ describe("scaffoldProject", () => {
     );
 
     expect(emailPackage).not.toMatch(/"@m5kdev\/[^"]+": "workspace:\*"/);
-    expect(emailPackage).toContain('"@m5kdev/email": "catalog:"');
+    expect(emailPackage).toContain('"@m5kdev/email": "catalog:m5kdev"');
+    expect(emailPackage).not.toContain('"@m5kdev/email": "catalog:"');
+    expect(workspaceYaml).toMatch(/^catalogs:\n(?:  .*\n)*  m5kdev:/m);
     expect(workspaceYaml).toContain('"@m5kdev/email":');
+    expect(workspaceYaml).toContain("drizzle-orm:");
 
     const managedStateSource = await fs.readFile(
       path.join(result.targetDirectory, ".m5kdev.json"),

@@ -8,7 +8,7 @@ export const tagSchema = z.object({
   createdAt: z.date(),
   updatedAt: z.date().nullish(),
   deletedAt: z.date().nullish(),
-  userId: z.string(),
+  userId: z.string().nullish(),
   name: z.string(),
   color: z.string().nullish(),
   type: z.string().nullish(),

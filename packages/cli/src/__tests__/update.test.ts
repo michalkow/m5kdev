@@ -34,7 +34,7 @@ async function makeTemplate(
   await fs.writeFile(path.join(root, "template.manifest.json"), JSON.stringify(manifest));
   await fs.writeFile(
     path.join(root, "pnpm-workspace.yaml.tpl"),
-    ["packages:", "  - apps/**", "catalog:", `  dependency: ${options.catalogVersion}`, ""].join(
+    ["packages:", "  - apps/**", "catalog: {}", "catalogs:", "  m5kdev:", `    dependency: ${options.catalogVersion}`, ""].join(
       "\n"
     )
   );
@@ -43,7 +43,7 @@ async function makeTemplate(
     JSON.stringify(
       {
         name: "{{APP_SLUG}}",
-        dependencies: { dependency: "catalog:" },
+        dependencies: { dependency: "catalog:m5kdev" },
       },
       null,
       2

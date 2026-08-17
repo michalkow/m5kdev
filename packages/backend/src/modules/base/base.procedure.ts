@@ -37,9 +37,20 @@ export type ServiceProcedureContextFilteredInput<TInput> = Extract<NonNullable<T
 type ServiceProcedureAuthContext<
   Scope extends ActorScope,
   TCtx extends ServiceProcedureContext = ServiceProcedureContext,
-> = {
-  [K in keyof TCtx]-?: NonNullable<TCtx[K]>;
-} & { actor: Actor[Scope] };
+> = Omit<
+  {
+    [K in keyof TCtx as undefined extends TCtx[K] ? never : K]-?: NonNullable<TCtx[K]>;
+  } & {
+    [K in keyof TCtx as undefined extends TCtx[K] ? K : never]?: TCtx[K];
+  },
+  "actor"
+> & { actor: Actor[Scope] };
+/** Keep a narrower actor (organization/team/admin) when `.access()` implies user auth. */
+type ServiceProcedureAccessContext<TCtx extends ServiceProcedureContext> = TCtx extends {
+  actor: Actor["user"];
+}
+  ? TCtx
+  : ServiceProcedureAuthContext<"user", TCtx>;
 type ServiceProcedureRequiredScopeFromFilter<
   TInclude extends readonly ServiceProcedureContextFilterScope[] | undefined,
 > = TInclude extends readonly ServiceProcedureContextFilterScope[]
@@ -417,7 +428,7 @@ export interface PermissionServiceProcedureBuilder<
     config: ServiceProcedureAccessEntitiesConfig<TInput, TCtx, Repositories, Services, State>
   ): PermissionServiceProcedureBuilder<
     TInput,
-    ServiceProcedureAuthContext<"user", TCtx>,
+    ServiceProcedureAccessContext<TCtx>,
     Repositories,
     Services,
     State,
@@ -434,7 +445,7 @@ export interface PermissionServiceProcedureBuilder<
     >
   ): PermissionServiceProcedureBuilder<
     TInput,
-    ServiceProcedureAuthContext<"user", TCtx>,
+    ServiceProcedureAccessContext<TCtx>,
     Repositories,
     Services,
     State & { access: TEntities },
@@ -444,7 +455,7 @@ export interface PermissionServiceProcedureBuilder<
     config: ServiceProcedureAccessStateConfig<State, StepName>
   ): PermissionServiceProcedureBuilder<
     TInput,
-    ServiceProcedureAuthContext<"user", TCtx>,
+    ServiceProcedureAccessContext<TCtx>,
     Repositories,
     Services,
     State & { access: State[StepName] },
@@ -853,11 +864,11 @@ function createAccessStep<
           const filtered = host.filterPermission(
             actor.value,
             config.action,
-            entities as Entity[],
+            entities,
             config.grants,
             permissionOptions
           );
-          typedArgs.state[config.entityStep] = filtered;
+          (typedArgs.state as Record<string, unknown>)[config.entityStep] = filtered;
           return ok(filtered);
         }
 
@@ -869,7 +880,7 @@ function createAccessStep<
             config.grants,
             permissionOptions
           );
-          typedArgs.state[config.entityStep] = filtered;
+          (typedArgs.state as Record<string, unknown>)[config.entityStep] = filtered;
           return ok(filtered);
         }
 
@@ -1373,7 +1384,7 @@ export function createPermissionServiceProcedureBuilder<
     accessConfig: ServiceProcedureAccessEntitiesConfig<TInput, TCtx, Repositories, Services, State>
   ): PermissionServiceProcedureBuilder<
     TInput,
-    ServiceProcedureAuthContext<"user", TCtx>,
+    ServiceProcedureAccessContext<TCtx>,
     Repositories,
     Services,
     State,
@@ -1390,7 +1401,7 @@ export function createPermissionServiceProcedureBuilder<
     >
   ): PermissionServiceProcedureBuilder<
     TInput,
-    ServiceProcedureAuthContext<"user", TCtx>,
+    ServiceProcedureAccessContext<TCtx>,
     Repositories,
     Services,
     State & { access: TEntities },
@@ -1400,7 +1411,7 @@ export function createPermissionServiceProcedureBuilder<
     accessConfig: ServiceProcedureAccessStateConfig<State, StepName>
   ): PermissionServiceProcedureBuilder<
     TInput,
-    ServiceProcedureAuthContext<"user", TCtx>,
+    ServiceProcedureAccessContext<TCtx>,
     Repositories,
     Services,
     State & { access: State[StepName] },
@@ -1421,7 +1432,7 @@ export function createPermissionServiceProcedureBuilder<
     assertUniqueStepName(config.steps, "access");
     return createPermissionServiceProcedureBuilder<
       TInput,
-      ServiceProcedureAuthContext<"user", TCtx>,
+      ServiceProcedureAccessContext<TCtx>,
       Repositories,
       Services,
       State,

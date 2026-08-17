@@ -3,7 +3,7 @@ export interface RankedModel {
   inputCost: number;
   outputCost: number;
   quality: Record<Category, number>;
-  responseTimeSeconds: number;
+  responseTimeSeconds?: number;
 }
 
 export type Category =

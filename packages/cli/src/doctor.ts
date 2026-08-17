@@ -3,7 +3,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import semver from "semver";
-import { collectConsumerDependencyNames, readCatalog, walkPackageJsonFiles } from "./catalog";
+import {
+  MANAGED_CATALOG_SPECIFIER,
+  collectCatalogProtocolDependencies,
+  readCatalog,
+  readDefaultCatalog,
+  walkPackageJsonFiles,
+} from "./catalog";
 import { ChangeSet, findRepositorySymlink } from "./changes";
 import { TEMPLATE_NAME } from "./constants";
 import { createDiagnosticReport, type Diagnostic, type DiagnosticReport } from "./diagnostics";
@@ -128,7 +134,9 @@ export async function diagnoseManagedRepo(options: DoctorOptions): Promise<Diagn
   const workspaceSymlink = await findRepositorySymlink(options.repoRoot, workspaceRelativePath);
   if (!workspaceSymlink && (await exists(workspacePath))) {
     try {
-      const actualCatalog = readCatalog(await fs.readFile(workspacePath, "utf8"));
+      const workspaceSource = await fs.readFile(workspacePath, "utf8");
+      const actualCatalog = readCatalog(workspaceSource);
+      const defaultCatalog = readDefaultCatalog(workspaceSource);
       for (const [name, expected] of Object.entries(state.catalog)) {
         if (!semver.validRange(expected)) {
           diagnostics.push({
@@ -160,12 +168,19 @@ export async function diagnoseManagedRepo(options: DoctorOptions): Promise<Diagn
       const appsDirectory = path.join(options.repoRoot, "apps");
       const packageFiles = [path.join(options.repoRoot, "package.json")];
       if (await exists(appsDirectory)) packageFiles.push(...walkPackageJsonFiles(appsDirectory));
-      for (const dependency of collectConsumerDependencyNames(packageFiles)) {
-        if (!(dependency in actualCatalog)) {
+      for (const { name, specifier } of collectCatalogProtocolDependencies(packageFiles)) {
+        const catalog =
+          specifier === MANAGED_CATALOG_SPECIFIER
+            ? actualCatalog
+            : specifier === "catalog:"
+              ? defaultCatalog
+              : undefined;
+        if (catalog === undefined) continue;
+        if (!(name in catalog)) {
           diagnostics.push({
             code: "CATALOG_REFERENCE_MISSING",
             severity: "error",
-            message: `${dependency} uses catalog: but has no catalog entry.`,
+            message: `${name} uses ${specifier} but has no matching catalog entry.`,
             path: "pnpm-workspace.yaml",
           });
         }

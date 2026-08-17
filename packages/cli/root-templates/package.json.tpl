@@ -10,9 +10,9 @@
     "check-types": "turbo run check-types"
   },
   "devDependencies": {
-    "@biomejs/biome": "catalog:",
-    "turbo": "catalog:",
-    "typescript": "catalog:"
+    "@biomejs/biome": "catalog:m5kdev",
+    "turbo": "catalog:m5kdev",
+    "typescript": "catalog:m5kdev"
   },
   "packageManager": "pnpm@10.13.1",
   "engines": {

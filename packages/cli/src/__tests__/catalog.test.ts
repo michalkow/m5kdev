@@ -2,10 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { parse } from "yaml";
 import {
+  MANAGED_CATALOG_NAME,
   assertCatalogKeys,
   buildConsumerCatalog,
   collectConsumerDependencyNames,
   mergeManagedCatalog,
+  readCatalog,
+  renderConsumerWorkspace,
   walkPackageJsonFiles,
 } from "../catalog";
 
@@ -42,15 +45,34 @@ describe("consumer catalog", () => {
     }
   });
 
+  it("renders the consumer catalog into catalogs.m5kdev and keeps an empty default catalog", () => {
+    const rendered = renderConsumerWorkspace(
+      ["packages:", "  - apps/**", "catalog: {}", "catalogs:", "  m5kdev: {}", ""].join("\n"),
+      { "drizzle-orm": "0.45.2", zod: "4.2.1" }
+    );
+    const workspace = parse(rendered) as {
+      catalog: Record<string, string>;
+      catalogs: { m5kdev: Record<string, string> };
+    };
+    expect(workspace.catalog).toEqual({});
+    expect(workspace.catalogs[MANAGED_CATALOG_NAME]).toEqual({
+      "drizzle-orm": "0.45.2",
+      zod: "4.2.1",
+    });
+    expect(readCatalog(rendered)).toEqual({ "drizzle-orm": "0.45.2", zod: "4.2.1" });
+  });
+
   it("merges managed values while preserving app-owned entries", () => {
     const source = [
       "packages:",
       "  - apps/**",
       "catalog:",
-      "  managed: 1.0.0",
-      "  customized: 9.9.9",
-      "  removed-custom: 8.8.8",
       "  app-owned: 2.0.0",
+      "catalogs:",
+      "  m5kdev:",
+      "    managed: 1.0.0",
+      "    customized: 9.9.9",
+      "    removed-custom: 8.8.8",
       "",
     ].join("\n");
     const merged = mergeManagedCatalog({
@@ -58,15 +80,42 @@ describe("consumer catalog", () => {
       base: { managed: "1.0.0", customized: "1.0.0", "removed-custom": "1.0.0", obsolete: "1.0.0" },
       target: { managed: "1.1.0", customized: "1.1.0", added: "3.0.0" },
     });
-    const catalog = (parse(merged.source) as { catalog: Record<string, string> }).catalog;
-    expect(catalog.managed).toBe("1.1.0");
-    expect(catalog.added).toBe("3.0.0");
-    expect(catalog["app-owned"]).toBe("2.0.0");
-    expect(catalog).not.toHaveProperty("obsolete");
+    const workspace = parse(merged.source) as {
+      catalog: Record<string, string>;
+      catalogs: { m5kdev: Record<string, string> };
+    };
+    expect(workspace.catalog["app-owned"]).toBe("2.0.0");
+    expect(workspace.catalog).not.toHaveProperty("managed");
+    expect(workspace.catalogs[MANAGED_CATALOG_NAME].managed).toBe("1.1.0");
+    expect(workspace.catalogs[MANAGED_CATALOG_NAME].added).toBe("3.0.0");
+    expect(workspace.catalogs[MANAGED_CATALOG_NAME]).not.toHaveProperty("obsolete");
     expect(merged.conflicts.map((conflict) => conflict.name)).toEqual([
       "customized",
       "removed-custom",
     ]);
+  });
+
+  it("moves legacy default-catalog managed keys into catalogs.m5kdev", () => {
+    const source = [
+      "packages:",
+      "  - apps/**",
+      "catalog:",
+      "  managed: 1.0.0",
+      "  app-owned: 2.0.0",
+      "",
+    ].join("\n");
+    const merged = mergeManagedCatalog({
+      source,
+      base: { managed: "1.0.0" },
+      target: { managed: "1.1.0" },
+    });
+    const workspace = parse(merged.source) as {
+      catalog: Record<string, string>;
+      catalogs: { m5kdev: Record<string, string> };
+    };
+    expect(workspace.catalog["app-owned"]).toBe("2.0.0");
+    expect(workspace.catalog).not.toHaveProperty("managed");
+    expect(workspace.catalogs[MANAGED_CATALOG_NAME].managed).toBe("1.1.0");
   });
 
   it("rejects missing and obsolete generated entries", () => {

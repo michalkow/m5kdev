@@ -39,7 +39,7 @@ async function makeTemplate(
   await fs.mkdir(root, { recursive: true });
   await fs.writeFile(path.join(root, "template.manifest.json"), `${JSON.stringify(manifest)}\n`);
   const allFiles = {
-    "pnpm-workspace.yaml": "packages:\n  - apps/**\ncatalog: {}\n",
+    "pnpm-workspace.yaml": "packages:\n  - apps/**\ncatalog: {}\ncatalogs:\n  m5kdev: {}\n",
     ...files,
   };
   for (const [relativePath, content] of Object.entries(allFiles)) {

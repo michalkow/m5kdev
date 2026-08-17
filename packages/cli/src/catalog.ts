@@ -9,7 +9,15 @@ const DEPENDENCY_FIELDS = [
   "optionalDependencies",
 ] as const;
 
+export const MANAGED_CATALOG_NAME = "m5kdev";
+export const MANAGED_CATALOG_SPECIFIER = `catalog:${MANAGED_CATALOG_NAME}`;
+
 export type ConsumerCatalog = Record<string, string>;
+
+interface WorkspaceCatalogFile {
+  catalog?: Record<string, string | number>;
+  catalogs?: Record<string, Record<string, string | number> | undefined>;
+}
 
 export function walkPackageJsonFiles(directory: string, out: string[] = []): string[] {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -26,6 +34,12 @@ export function walkPackageJsonFiles(directory: string, out: string[] = []): str
 
 function readJson(filePath: string): Record<string, unknown> {
   return JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>;
+}
+
+function asCatalog(value: Record<string, string | number> | undefined): ConsumerCatalog {
+  return Object.fromEntries(
+    Object.entries(value ?? {}).map(([name, version]) => [name, String(version)])
+  );
 }
 
 export function collectConsumerDependencyNamesFromManifests(
@@ -52,6 +66,33 @@ export function collectConsumerDependencyNamesFromManifests(
 
 export function collectConsumerDependencyNames(packageFiles: readonly string[]): string[] {
   return collectConsumerDependencyNamesFromManifests(packageFiles.map(readJson));
+}
+
+export interface CatalogProtocolDependency {
+  name: string;
+  specifier: string;
+}
+
+export function collectCatalogProtocolDependenciesFromManifests(
+  manifests: readonly Record<string, unknown>[]
+): CatalogProtocolDependency[] {
+  const dependencies: CatalogProtocolDependency[] = [];
+  for (const manifest of manifests) {
+    for (const field of DEPENDENCY_FIELDS) {
+      for (const [name, specifier] of Object.entries(
+        (manifest[field] as Record<string, string> | undefined) ?? {}
+      )) {
+        if (specifier.startsWith("catalog:")) dependencies.push({ name, specifier });
+      }
+    }
+  }
+  return dependencies;
+}
+
+export function collectCatalogProtocolDependencies(
+  packageFiles: readonly string[]
+): CatalogProtocolDependency[] {
+  return collectCatalogProtocolDependenciesFromManifests(packageFiles.map(readJson));
 }
 
 export function buildConsumerCatalog(options: {
@@ -104,19 +145,34 @@ export function buildConsumerCatalog(options: {
   return catalog;
 }
 
-export function renderConsumerWorkspace(source: string, catalog: ConsumerCatalog): string {
-  const workspace = parse(source) as Record<string, unknown>;
-  workspace.catalog = Object.fromEntries(
+export function sortedCatalog(catalog: ConsumerCatalog): ConsumerCatalog {
+  return Object.fromEntries(
     Object.entries(catalog).sort(([left], [right]) => left.localeCompare(right))
   );
+}
+
+export function renderConsumerWorkspace(source: string, catalog: ConsumerCatalog): string {
+  const workspace = parse(source) as Record<string, unknown>;
+  const catalogs =
+    workspace.catalogs && typeof workspace.catalogs === "object"
+      ? { ...(workspace.catalogs as Record<string, unknown>) }
+      : {};
+  catalogs[MANAGED_CATALOG_NAME] = sortedCatalog(catalog);
+  workspace.catalogs = catalogs;
+  if (workspace.catalog === undefined) workspace.catalog = {};
   return stringify(workspace, { lineWidth: 0 });
 }
 
+export function readDefaultCatalog(source: string): ConsumerCatalog {
+  const workspace = parse(source) as WorkspaceCatalogFile;
+  return asCatalog(workspace.catalog);
+}
+
 export function readCatalog(source: string): ConsumerCatalog {
-  const workspace = parse(source) as { catalog?: Record<string, string | number> };
-  return Object.fromEntries(
-    Object.entries(workspace.catalog ?? {}).map(([name, version]) => [name, String(version)])
-  );
+  const workspace = parse(source) as WorkspaceCatalogFile;
+  const named = workspace.catalogs?.[MANAGED_CATALOG_NAME];
+  if (named !== undefined) return asCatalog(named);
+  return asCatalog(workspace.catalog);
 }
 
 export function assertCatalogKeys(
@@ -149,27 +205,45 @@ export function mergeManagedCatalog(options: {
   target: ConsumerCatalog;
 }): { source: string; changed: boolean; conflicts: CatalogMergeConflict[] } {
   const document = parseDocument(options.source);
-  const local = readCatalog(options.source);
+  const workspace = parse(options.source) as WorkspaceCatalogFile;
+  const namedPresent = workspace.catalogs?.[MANAGED_CATALOG_NAME] !== undefined;
+  const named = asCatalog(workspace.catalogs?.[MANAGED_CATALOG_NAME]);
+  const fallback = asCatalog(workspace.catalog);
   const conflicts: CatalogMergeConflict[] = [];
   const names = new Set([...Object.keys(options.base), ...Object.keys(options.target)]);
+  const managedPath = ["catalogs", MANAGED_CATALOG_NAME] as const;
+
+  if (document.getIn([...managedPath]) === undefined) {
+    if (document.get("catalogs") === undefined) {
+      document.set("catalogs", document.createNode({ [MANAGED_CATALOG_NAME]: {} }));
+    } else {
+      document.setIn([...managedPath], document.createNode({}));
+    }
+  }
 
   for (const name of [...names].sort((left, right) => left.localeCompare(right))) {
     const base = options.base[name];
-    const current = local[name];
+    const current = (namedPresent ? named[name] : undefined) ?? fallback[name];
     const target = options.target[name];
 
     if (base === undefined) {
-      if (current === undefined) document.setIn(["catalog", name], target);
-      else if (current !== target) conflicts.push({ name, local: current, target });
+      if (current === undefined) {
+        document.setIn([...managedPath, name], target);
+        document.deleteIn(["catalog", name]);
+      } else if (current !== target) conflicts.push({ name, local: current, target });
       continue;
     }
     if (target === undefined) {
-      if (current === base) document.deleteIn(["catalog", name]);
-      else if (current !== undefined) conflicts.push({ name, base, local: current });
+      if (current === base) {
+        document.deleteIn([...managedPath, name]);
+        document.deleteIn(["catalog", name]);
+      } else if (current !== undefined) conflicts.push({ name, base, local: current });
       continue;
     }
-    if (current === base) document.setIn(["catalog", name], target);
-    else if (current !== target && target !== base) {
+    if (current === base) {
+      document.setIn([...managedPath, name], target);
+      document.deleteIn(["catalog", name]);
+    } else if (current !== target && target !== base) {
       conflicts.push({ name, base, local: current, target });
     }
   }

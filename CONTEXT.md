@@ -119,7 +119,7 @@ _Avoid_: Filter document, Mongo filter, Filter object, QueryFilter
 _Avoid_: Example, Template (CLI templates live in `packages/cli`)
 
 **Managed catalog**:
-The pnpm catalog keys a scaffolded app shares with a framework release ([ADR-0004](docs/adr/0004-catalog-lockstep-and-boundary-peers.md)). Those pins move with the release; extra app-owned keys stay. The version promise is lockstep, not a newer compatible minor of drizzle or React than the Kernel.
+The named pnpm catalog `catalogs.m5kdev` a scaffolded app shares with a framework release ([ADR-0004](docs/adr/0004-catalog-lockstep-and-boundary-peers.md)). Those pins move with the release. App-owned pins live in the default `catalog:`. The version promise is lockstep, not a newer compatible minor of drizzle or React than the Kernel.
 _Avoid_: lockfile-only pins; Consumer catalog (that is the derived pin set)
 
 **Consumer catalog**:

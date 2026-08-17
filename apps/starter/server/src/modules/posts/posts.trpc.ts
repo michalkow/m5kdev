@@ -3,7 +3,7 @@ import { postSchemas } from "./posts.dto";
 import type { PostsService } from "./posts.service";
 
 export function createPostsTRPC(
-  { router, privateProcedure: procedure }: TRPCMethods,
+  { router, organizationProcedure: procedure }: TRPCMethods,
   postsService: PostsService
 ) {
   return router({

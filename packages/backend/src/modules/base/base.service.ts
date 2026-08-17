@@ -10,6 +10,7 @@ import {
   type EntityListResult,
   filterEntitiesByPermission,
   filterListResultByPermission,
+  isEntityListResult,
   type PermissionCheckOptions,
   type ResourceActionGrant,
   type ResourceGrant,
@@ -256,10 +257,10 @@ export class BasePermissionService<
     options?: PermissionCheckOptions
   ): T[] | EntityListResult<T> {
     const actionGrants = grants ?? this.grants.filter((grant) => grant.action === action);
-    if (Array.isArray(entities)) {
-      return filterEntitiesByPermission(actor, actionGrants, entities, options);
+    if (isEntityListResult(entities)) {
+      return filterListResultByPermission(actor, actionGrants, entities, options);
     }
-    return filterListResultByPermission(actor, actionGrants, entities, options);
+    return filterEntitiesByPermission(actor, actionGrants, entities, options);
   }
 
   async checkPermissionAsync<T extends Entity>(
