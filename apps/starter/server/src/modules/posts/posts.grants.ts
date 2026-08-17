@@ -12,14 +12,12 @@ export const postsGrants = flattenNestedGrants({
     },
     organization: {
       owner: {
-        read: "own",
-        write: "own",
-        delete: "own",
-        publish: "own",
+        read: "org",
+        write: "org",
+        delete: "org",
+        publish: "org",
       },
-    },
-    team: {
-      owner: {
+      member: {
         read: "own",
         write: "own",
         delete: "own",

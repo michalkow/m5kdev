@@ -986,7 +986,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       const port = parseListenPort(process.env.PORT);
       try {
         await new Promise<void>((resolve, reject) => {
-          const server = expressApp.listen(port, "0.0.0.0", () => {
+          const server = expressApp.listen(port, () => {
             resolve();
           });
           server.once("error", reject);

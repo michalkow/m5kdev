@@ -85,7 +85,18 @@ All fallible service and repository methods return `ServerResult<T>` /
 
 ## Query helpers
 
-`base.query.ts` plus the [utils module](/modules/utils) implement the shared
-list contract from `@m5kdev/commons` (`querySchema`): pagination, sorting,
-filters, and global search that the [table module](/modules/table) consumes on
-the frontend.
+`BaseTableRepository` serves two parallel list stacks from
+`@m5kdev/commons`:
+
+- **List query** — `queryList` / `queryFind` / `.addFilters`, input
+  `createZodSchemas(table).input.list` (`querySchema`).
+- **Match query** — `matchList` / `matchFind` / `.addMatch`, input
+  `createZodSchemas(table).input.matchList` (`matchQuerySchema`).
+
+`.addContextFilter` writes QueryFilters and belongs on List query only. Scope
+Match query with `.addMatch` (a map: return the next QueryMatch; no auto-merge).
+
+Pagination, sorting, `q`, and soft-delete are shared. Operator semantics and
+opt-in steps:
+[List query and Match query](/guides/list-query-and-match-query),
+[Match query migration](/guides/v0.33.0-match-query-migration).

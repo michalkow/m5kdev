@@ -28,7 +28,7 @@ apps/server/src/modules/<module>/
 - Repositories own persistence and query construction.
 - Services own business rules, orchestration, and context-aware defaults.
 - tRPC files own transport only and must delegate to services.
-- Register modules in `apps/server/src/app.ts`; use `db.ts` and `lib/auth.ts` only for scripts that need direct DB or auth access.
+- Register modules in `apps/server/src/app.ts`; use `db.ts` only for scripts that need direct DB.
 
 ## Avoid Trivial Service Delegation
 

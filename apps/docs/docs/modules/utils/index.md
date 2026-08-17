@@ -4,16 +4,16 @@ sidebar_position: 23
 
 # Utils module
 
-The backend utils module turns the shared query contract
-([schemas module](/modules/schemas)) into Drizzle query fragments. Repositories
-use these helpers so every list endpoint paginates, sorts, filters, and searches
-the same way.
+The backend utils module turns the shared query contracts
+([schemas module](/modules/schemas)) into Drizzle fragments. Prefer
+`queryList` / `matchList` on `BaseTableRepository` over assembling these by
+hand.
 
 ## Package map
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/backend` | Query helpers: `applyPagination`, `applySorting`, `getConditionsFromFilters`, `getGlobalSearchCondition`, `escapeLikeUserInput`. |
+| `@m5kdev/backend` | Query helpers: `applyPagination`, `applySorting`, `getConditionsFromFilters`, `getConditionsFromMatch`, `getGlobalSearchCondition`, `escapeLikeUserInput`. |
 
 ## Helpers
 
@@ -21,18 +21,13 @@ the same way.
 | --- | --- |
 | `applyPagination(query, limit?, page?)` | Apply `LIMIT`/`OFFSET` to a Drizzle query |
 | `applySorting(query, table, sort?, order?)` | Apply `ORDER BY` from `sort`/`order` params against table columns |
-| `getConditionsFromFilters(table, filters)` | Convert `QueryFilter[]` into Drizzle `where` conditions per filter type and method |
+| `getConditionsFromFilters(conditions, filters, table)` | List query: QueryFilter[] → `where` (unknown columns skipped) |
+| `getConditionsFromMatch(conditions, match, table)` | Match query: QueryMatch → `where` (`Result`; unknown column / `$op` errors) |
 | `getGlobalSearchCondition(...)` | Build the `q` substring-search condition across searchable columns |
 | `escapeLikeUserInput(value)` | Escape `%`/`_` in user input before `LIKE` queries |
 
-## Typical repository usage
+List query vs Match query operator rules:
+[List query and Match query](/guides/list-query-and-match-query).
 
-```ts
-const conditions = getConditionsFromFilters(this.table, query.filters ?? []);
-let stmt = this.orm.select().from(this.table).where(and(...conditions));
-stmt = applySorting(stmt, this.table, query.sort, query.order);
-stmt = applyPagination(stmt, query.limit, query.page);
-```
-
-Keep these calls in repositories — services pass `QueryInput` through untouched
-(optionally narrowing it with helpers like `BaseService.addUserFilter`).
+Keep these calls in repositories. Services pass `QueryInput` or
+`MatchQueryInput` through and narrow with `.addFilters` or `.addMatch`.

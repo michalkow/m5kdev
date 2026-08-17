@@ -4,21 +4,23 @@ sidebar_position: 4
 
 # Table module
 
-The table module standardizes list querying end to end: one shared query
-contract (pagination, sorting, filters, global search), frontend query-state
-hooks, and web table UI driven by URL state.
+The table module standardizes list querying end to end: shared pagination and
+search, frontend query-state hooks, and web table UI driven by URL state.
+URL and widgets stay **QueryFilters** (List query). Hooks also emit a
+**QueryMatch** so a Procedure can opt into Match query. See
+[List query and Match query](/guides/list-query-and-match-query).
 
 ## Package map
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/commons` | `querySchema` / `filterSchema` contracts and filter method types. |
+| `@m5kdev/commons` | List query (`querySchema` / QueryFilter) and Match query (`matchQuerySchema` / QueryMatch, `queryFiltersToMatch`). |
 | `@m5kdev/frontend` | Platform-neutral query state: `useQueryWithParams`, `useTableQueryParams`, query param serializers. |
 | `@m5kdev/web-ui` | `NuqsTable` and table controls: filtering, pagination, group-by, column order/visibility, date-range filters. |
 
 ## Shared query contract
 
-Every list endpoint accepts `QueryInput` from
+List Procedures accept `QueryInput` from
 `@m5kdev/commons/modules/schemas/query.schema`:
 
 ```ts
@@ -37,10 +39,15 @@ Every list endpoint accepts `QueryInput` from
 }
 ```
 
-and returns `{ rows, total }` (`queryListOutput`). On the backend, the
-[utils module](/modules/utils) helpers (`applyPagination`, `applySorting`,
-`getConditionsFromFilters`, `getGlobalSearchCondition`) translate this contract
-into Drizzle queries.
+They return `{ rows, total }` (`queryListOutput`). Match query Procedures
+accept `MatchQueryInput` (`page`, `limit`, `sort`, `order`, `match`, `q`)
+instead of `filters`.
+
+On the backend, [utils](/modules/utils) and `queryList` / `matchList` translate
+the chosen stack into Drizzle. `useQueryWithParams` sends both `filters` and
+`match` (converted from the merged QueryFilters, including `additionalFilters`).
+List Zod strips `match`; Match Zod strips `filters`. Do not put QueryMatch in
+the URL.
 
 `filter.types.ts` maps each column data type to its available filter methods and
 the UI control that edits them (text, number, date, range, select, multiselect).
@@ -70,5 +77,7 @@ between URL state and the shared contract by `filterTransformers`.
 
 ## Migration
 
-See [Frontend and Web UI split migration](/guides/frontend-web-ui-split) for the
-current import map and migration checklist.
+- [Frontend and Web UI split](/guides/frontend-web-ui-split) — import map after
+  the `nuqs` split.
+- [Match query](/guides/v0.33.0-match-query-migration) — opt a list Procedure
+  from `queryList` to `matchList`.

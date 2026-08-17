@@ -16,7 +16,7 @@ shared schemas, backend services, frontend hooks, and reusable UI.
 | [App shell](/modules/app) | frontend, web-ui | App config, typed tRPC + query providers, shell and sidebar UI |
 | [Billing](/modules/billing) | commons, backend, frontend, web-ui | Stripe plans, checkout/portal, webhook-driven subscription sync, plan UI |
 | [File](/modules/file) | commons, backend, frontend | Browser uploads, presigned S3 URLs, upload inventory, download resolution |
-| [Table](/modules/table) | commons, frontend, web-ui | Shared list query contract, URL query state, table UI |
+| [Table](/modules/table) | commons, frontend, web-ui | List query / Match query contracts, URL query state, table UI |
 
 ## Services
 
@@ -39,8 +39,8 @@ shared schemas, backend services, frontend hooks, and reusable UI.
 
 | Module | Packages | What it does |
 | --- | --- | --- |
-| [Schemas](/modules/schemas) | commons | Shared list query contract (`querySchema`, filters) |
-| [Utils](/modules/utils) | backend | Drizzle query helpers for pagination, sorting, filtering, search |
+| [Schemas](/modules/schemas) | commons | List query (`querySchema`) and Match query (`matchQuerySchema`) |
+| [Utils](/modules/utils) | backend | Drizzle helpers for pagination, sorting, QueryFilters, QueryMatch, search |
 | [Docx](/modules/docx) | backend | Word-to-Markdown conversion |
 | [PDF](/modules/pdf) | backend | PDF text extraction |
 | [Video](/modules/video) | backend | ffmpeg trimming and audio extraction |

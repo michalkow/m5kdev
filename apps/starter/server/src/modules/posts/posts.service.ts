@@ -14,7 +14,8 @@ export class PostsService extends BasePermissionService<
   readonly list = this.procedure("list")
     .input(postSchemas.input.list)
     .output(postSchemas.output.list)
-    .requireAuth()
+    .requireAuth("organization")
+    .addContextFilter(["organization"])
     .handle(async ({ input }) => {
       return withSpan(
         {
@@ -31,7 +32,7 @@ export class PostsService extends BasePermissionService<
     });
 
   readonly create = this.procedure("create")
-    .requireAuth()
+    .requireAuth("organization")
     .input(postSchemas.input.create)
     .output(postSchemas.output.single)
     .access({
@@ -59,7 +60,7 @@ export class PostsService extends BasePermissionService<
     });
 
   readonly update = this.procedure("update")
-    .requireAuth()
+    .requireAuth("organization")
     .input(postSchemas.input.update)
     .output(postSchemas.output.single)
     .loadResource("post", ({ input }) => this.repository.posts.findById(input.id))
@@ -81,7 +82,7 @@ export class PostsService extends BasePermissionService<
   readonly publish = this.procedure("publish")
     .input(postSchemas.input.publish)
     .output(postSchemas.output.single)
-    .requireAuth()
+    .requireAuth("organization")
     .loadResource("post", ({ input }) => this.repository.posts.findById(input.id))
     .access({
       action: "publish",
@@ -98,7 +99,7 @@ export class PostsService extends BasePermissionService<
   readonly softDelete = this.procedure("softDelete")
     .input(postSchemas.input.delete)
     .output(postSchemas.output.uuid)
-    .requireAuth()
+    .requireAuth("organization")
     .loadResource("post", ({ input }) => this.repository.posts.findById(input.id))
     .access({
       action: "delete",

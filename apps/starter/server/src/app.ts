@@ -12,7 +12,6 @@ import {
   APP_NAME,
   APP_ROLES_CONFIG,
 } from "@starter-app/shared/modules/app/app.constants";
-import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import { PostsModule } from "./modules/posts/posts.module";
 // m5k:test-harness:start
 import { TestHarnessModule } from "./modules/test-harness/test-harness.module";
@@ -112,10 +111,3 @@ export const builtBackendApp = createBackendApp(
     // m5k:test-harness:end
   ] as const
 );
-
-export type AppRouter = typeof builtBackendApp.trpc.router;
-export type RouterInputs = inferRouterInputs<AppRouter>;
-export type RouterOutputs = inferRouterOutputs<AppRouter>;
-
-export type Orm = typeof builtBackendApp.db.orm;
-export type Schema = typeof builtBackendApp.db.schema;

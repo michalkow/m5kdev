@@ -53,7 +53,7 @@ describe("createBackendApp listen", () => {
   it("rejects start and exits when the listen port is already bound", async () => {
     const blocker = net.createServer();
     const port = await new Promise<number>((resolve, reject) => {
-      blocker.listen(0, "0.0.0.0", () => {
+      blocker.listen(0, () => {
         resolve((blocker.address() as AddressInfo).port);
       });
       blocker.on("error", reject);
@@ -202,6 +202,25 @@ describe("createBackendApp listen", () => {
       const response = await fetch(`http://127.0.0.1:${port}/ping`);
       expect(response.ok).toBe(true);
       expect(await response.json()).toEqual({ ok: true });
+    } finally {
+      await built.shutdown();
+    }
+  });
+
+  it("accepts IPv4 loopback and IPv6 localhost after listen", async () => {
+    const port = await getFreePort();
+    process.env.PORT = String(port);
+    const built = createBackendApp({ db: { client } });
+    built.express.app.get("/ping", (_req, res) => {
+      res.json({ ok: true });
+    });
+
+    await built.start();
+    try {
+      const ipv4 = await fetch(`http://127.0.0.1:${port}/ping`);
+      expect(ipv4.ok).toBe(true);
+      const ipv6 = await fetch(`http://[::1]:${port}/ping`);
+      expect(ipv6.ok).toBe(true);
     } finally {
       await built.shutdown();
     }

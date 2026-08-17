@@ -22,7 +22,9 @@ Start with these module pages:
 - [Auth](/modules/auth)
 - [Billing](/modules/billing)
 - [Table](/modules/table)
-- [App shell](/modules/app)
+- [Base](/modules/base)
+
+List endpoints: [List query and Match query](/guides/list-query-and-match-query).
 
 ## Package rule
 

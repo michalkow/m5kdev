@@ -6,32 +6,40 @@ sidebar_position: 20
 
 The schemas module holds cross-cutting schema primitives in `@m5kdev/commons`
 that are not owned by any single feature module. Today that is the shared list
-query contract.
+contracts: **List query** (QueryFilters) and **Match query** (QueryMatch).
 
 ## Package map
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/commons` | `query.schema.ts`: `querySchema`, `filterSchema`, `filtersSchema`, `queryListOutput`. |
+| `@m5kdev/commons` | `query.schema.ts`: `querySchema`, `filterSchema`, `filtersSchema`, `queryListOutput`. `queryMatch.ts`: `matchQuerySchema`, `QueryMatch`, `queryFiltersToMatch`. |
 
-## Query contract
+## Two contracts
 
-`querySchema` defines the input every list endpoint accepts — `page`, `limit`,
-`sort`, `order`, `filters`, and `q` (global substring search) — and
-`queryListOutput(rowSchema)` defines the `{ rows, total }` response envelope.
+Pagination, sort, and `q` are shared. Predicates are not:
 
-`filterSchema` describes a single column filter: `columnId`, a data `type`
-(`string`, `number`, `date`, `boolean`, `enum`, `jsonArray`), a `method`
-(`contains`, `equals`, `between`, `oneOf`, `is_null`, …), and the `value`
-(plus `valueTo` / `endColumnId` for ranges).
+| Contract | Input schema | Predicate field |
+| --- | --- | --- |
+| List query | `querySchema` / `QueryInput` | `filters`: QueryFilter[] |
+| Match query | `matchQuerySchema` / `MatchQueryInput` | `match`: QueryMatch |
+
+`queryListOutput(rowSchema)` is the `{ rows, total }` envelope for both.
+
+A QueryFilter is a UI clause: `columnId`, `type`, `method`, `value` (plus
+`valueTo` / `endColumnId` for ranges). A QueryMatch is a column-keyed object
+with `$eq` / `$gt` / `$contains` / `$and` / `$or` / `$not`. The converter
+`queryFiltersToMatch` is a rename only.
+
+Full operator tables, Procedure wiring, and hook behaviour:
+[List query and Match query](/guides/list-query-and-match-query).
 
 ## Consumers
 
-- Backend: repository helpers in the [utils module](/modules/utils) translate
-  `QueryInput` into Drizzle conditions; permissioned list procedures accept it
-  directly (e.g. `recurrence.list`, `workflow.list`, `tag.list`).
-- Frontend: the [table module](/modules/table) serializes the same contract to
-  and from URL state.
+- Backend: [utils](/modules/utils) and `BaseTableRepository` (`queryList` vs
+  `matchList`). DTOs expose both via `createZodSchemas(table).input.list` and
+  `.input.matchList`.
+- Frontend: the [table module](/modules/table) keeps URL state as QueryFilters
+  and also emits a QueryMatch from the converter.
 
 Feature-specific schemas live with their module in
 `commons/src/modules/<module>/` — this module is only for primitives shared by

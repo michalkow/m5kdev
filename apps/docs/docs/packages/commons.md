@@ -21,6 +21,7 @@ Start with these module pages:
 - [Auth](/modules/auth)
 - [Billing](/modules/billing)
 - [Table](/modules/table)
+- [Schemas](/modules/schemas)
 - [Workflow](/modules/workflow)
 
 ## Package rule
