@@ -118,6 +118,18 @@ _Avoid_: Filter document, Mongo filter, Filter object, QueryFilter
 `apps/starter` — the reference product: `server`, `webapp`, `expo`, `email`, `e2e`, `shared`.
 _Avoid_: Example, Template (CLI templates live in `packages/cli`)
 
+**Managed catalog**:
+The pnpm catalog keys a scaffolded app shares with a framework release ([ADR-0004](docs/adr/0004-catalog-lockstep-and-boundary-peers.md)). Those pins move with the release; extra app-owned keys stay. The version promise is lockstep, not a newer compatible minor of drizzle or React than the Kernel.
+_Avoid_: lockfile-only pins; Consumer catalog (that is the derived pin set)
+
+**Consumer catalog**:
+The catalog derived from Starter for scaffolded apps.
+_Avoid_: Managed catalog (that is the app’s enrolled pin set); the stack workspace catalog (it may pin more than consumers get)
+
+**Boundary library**:
+A third-party whose types cross the app / `@m5kdev/*` package boundary. Closed set: `drizzle-orm`, `drizzle-zod`, `zod`, `neverthrow`, `@trpc/server`, `@trpc/client`, `react`, `react-dom`, `better-auth`, `express`, `@heroui/react`, `nuqs`. Published packages declare them as peers so the app and Kernel share one physical copy.
+_Avoid_: nested Kernel deps (pino, BullMQ, AWS, OTEL exporters); treating OpenTelemetry as an app-facing peer
+
 ### Product surfaces
 
 **Workflow**:

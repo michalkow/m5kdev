@@ -6,6 +6,7 @@ import {
   buildConsumerCatalog,
   collectConsumerDependencyNames,
   mergeManagedCatalog,
+  walkPackageJsonFiles,
 } from "../catalog";
 
 const REPO_ROOT = path.resolve(__dirname, "../../../..");
@@ -72,5 +73,125 @@ describe("consumer catalog", () => {
     expect(() => assertCatalogKeys({ used: "1.0.0", stale: "1.0.0" }, ["used", "missing"])).toThrow(
       "missing: missing; obsolete: stale"
     );
+  });
+});
+
+const DEPENDENCY_FIELDS = [
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies",
+] as const;
+
+function readJson(filePath: string): Record<string, unknown> {
+  return JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>;
+}
+
+function catalogSpecifierNames(files: readonly string[]): Set<string> {
+  const names = new Set<string>();
+  for (const file of files) {
+    const manifest = readJson(file);
+    for (const field of DEPENDENCY_FIELDS) {
+      for (const [name, specifier] of Object.entries(
+        (manifest[field] as Record<string, string> | undefined) ?? {}
+      )) {
+        if (specifier.startsWith("catalog:")) names.add(name);
+      }
+    }
+  }
+  return names;
+}
+
+describe("monorepo catalog hygiene", () => {
+  it("has a catalog: reference for every catalog key", () => {
+    const catalog = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8")) as {
+      catalog?: Record<string, string | number>;
+    };
+    const keys = Object.keys(catalog.catalog ?? {});
+    const referenced = catalogSpecifierNames([
+      path.join(REPO_ROOT, "package.json"),
+      ...walkPackageJsonFiles(path.join(REPO_ROOT, "apps")),
+      ...walkPackageJsonFiles(path.join(REPO_ROOT, "packages")),
+    ]);
+    expect(keys.filter((name) => !referenced.has(name))).toEqual([]);
+  });
+
+  it("does not exact-pin catalogued third-parties in Starter or root templates", () => {
+    const catalog = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8")) as {
+      catalog?: Record<string, string | number>;
+    };
+    const catalogued = new Set(Object.keys(catalog.catalog ?? {}));
+    const files = [
+      ...walkPackageJsonFiles(path.join(REPO_ROOT, "apps/starter")),
+      path.join(REPO_ROOT, "packages/cli/root-templates/package.json.tpl"),
+    ];
+    const pinned: string[] = [];
+    for (const file of files) {
+      const manifest = readJson(file);
+      for (const field of DEPENDENCY_FIELDS) {
+        for (const [name, specifier] of Object.entries(
+          (manifest[field] as Record<string, string> | undefined) ?? {}
+        )) {
+          if (!catalogued.has(name)) continue;
+          if (specifier.startsWith("catalog:")) continue;
+          if (name.startsWith("@m5kdev/") && specifier.startsWith("workspace:")) continue;
+          pinned.push(`${path.relative(REPO_ROOT, file)}:${name}=${specifier}`);
+        }
+      }
+    }
+    expect(pinned).toEqual([]);
+  });
+});
+
+const BOUNDARY_PEERS: Record<string, readonly string[]> = {
+  "@m5kdev/backend": [
+    "@trpc/server",
+    "better-auth",
+    "drizzle-orm",
+    "drizzle-zod",
+    "express",
+    "neverthrow",
+    "react",
+    "react-dom",
+    "zod",
+  ],
+  "@m5kdev/commons": ["zod"],
+  "@m5kdev/frontend": [
+    "@trpc/client",
+    "@trpc/server",
+    "better-auth",
+    "react",
+    "react-dom",
+    "zod",
+  ],
+  "@m5kdev/web-ui": ["@heroui/react", "nuqs", "react", "react-dom", "zod"],
+};
+
+describe("boundary library peers", () => {
+  it("declares boundary libraries as peers, not nested dependencies", () => {
+    const nested: string[] = [];
+    const missingPeers: string[] = [];
+    for (const [packageName, libraries] of Object.entries(BOUNDARY_PEERS)) {
+      const dir = packageName.slice("@m5kdev/".length);
+      const manifest = readJson(path.join(REPO_ROOT, "packages", dir, "package.json"));
+      const dependencies = (manifest.dependencies as Record<string, string> | undefined) ?? {};
+      const peers = (manifest.peerDependencies as Record<string, string> | undefined) ?? {};
+      for (const library of libraries) {
+        if (library in dependencies) nested.push(`${packageName}:${library}`);
+        if (!(library in peers)) missingPeers.push(`${packageName}:${library}`);
+      }
+    }
+    expect({ nested, missingPeers }).toEqual({ nested: [], missingPeers: [] });
+  });
+});
+
+describe("OpenTelemetry catalog pin", () => {
+  it("includes Starter server @opentelemetry/api in the consumer catalog", () => {
+    const catalog = buildConsumerCatalog({
+      repoRoot: REPO_ROOT,
+      starterDirectory: path.join(REPO_ROOT, "apps/starter"),
+      rootTemplatesDirectory: path.join(REPO_ROOT, "packages/cli/root-templates"),
+    });
+    expect(catalog).toHaveProperty("@opentelemetry/api", "1.9.0");
   });
 });

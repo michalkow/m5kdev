@@ -23,6 +23,7 @@
     "@libsql/client": "catalog:",
     "@m5kdev/backend": "workspace:*",
     "@m5kdev/commons": "workspace:*",
+    "@opentelemetry/api": "catalog:",
     "@trpc/server": "catalog:",
     "better-auth": "catalog:",
     "dotenv": "catalog:",

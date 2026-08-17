@@ -28,6 +28,7 @@ Start with these module pages:
 
 List endpoints: [List query and Match query](/guides/list-query-and-match-query).
 HTTP shell: [Kernel Express HTTP shell](/guides/v0.33.0-kernel-express-http-shell-migration).
+Catalog pins and boundary peers: [Catalog lockstep](/guides/v0.33.0-catalog-lockstep-migration).
 
 ## Package rule
 

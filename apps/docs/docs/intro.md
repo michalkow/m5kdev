@@ -75,6 +75,10 @@ List endpoints use **List query** (QueryFilters) or **Match query**
 The Kernel owns Express JSON, CORS, listen, and signal shutdown.
 [Kernel Express HTTP shell](/guides/v0.33.0-kernel-express-http-shell-migration).
 
+Scaffolded apps stay on the framework catalog pins; boundary libraries are
+peers so TypeScript sees one physical copy.
+[Catalog lockstep](/guides/v0.33.0-catalog-lockstep-migration).
+
 ## Read by module
 
 Use the module docs when you are adding a feature to an app. A module page

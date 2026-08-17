@@ -25,19 +25,19 @@
     "@react-types/shared": "catalog:",
     "@m5kdev/commons": "workspace:*",
     "@tanstack/react-query": "catalog:",
-    "@trpc/client": "catalog:",
     "@trpc/tanstack-react-query": "catalog:",
-    "better-auth": "catalog:",
     "luxon": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:",
-    "i18next": "catalog:",
-    "zod": "catalog:"
+    "i18next": "catalog:"
   },
   "peerDependencies": {
+    "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
+    "better-auth": "catalog:",
     "i18next": "catalog:",
-    "react-i18next": "catalog:"
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-i18next": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@m5kdev/config": "workspace:*",
@@ -51,7 +51,12 @@
     "react-i18next": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "@trpc/client": "catalog:",
+    "better-auth": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "zod": "catalog:"
   },
   "exports": {
     ".": {
