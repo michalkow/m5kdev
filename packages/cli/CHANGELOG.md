@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.33.0
+
+### Minor Changes
+
+- catalog
+
 ## 0.32.8
 
 ### Patch Changes

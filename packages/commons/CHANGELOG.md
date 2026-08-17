@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.33.0
+
+### Minor Changes
+
+- catalog
+
 ## 0.32.9
 
 ### Patch Changes
