@@ -12,3 +12,5 @@ Callers may pass an Express instance; the Kernel still applies json/CORS onto it
 - **Kernel does not listen** — rejected: listen/signals/close order is the same class of stale starter convention as CORS headers.
 - **Default `listen: false` / auto-skip in `NODE_ENV=test`** — rejected: product entry should be `start()`; tests opt out. Hidden env control flow is worse than a documented footgun.
 - **Kernel owns OTEL** — rejected: instrumentation must load before other imports and must stay optional.
+
+Baked SPA static serving is Kernel HTTP shell when `spa.root` is set; see [ADR-0006](0006-kernel-owns-baked-spa.md).

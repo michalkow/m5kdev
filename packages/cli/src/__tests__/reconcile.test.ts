@@ -397,4 +397,115 @@ describe("three-way template reconciliation", () => {
       reason: "Managed path contains symbolic link nested.",
     });
   });
+
+  it("renders Dockerfile, dockerignore, and fly.toml as text templates", async () => {
+    const root = path.join(tempRoot, "docker-tpl");
+    await makeTemplate(root, {
+      Dockerfile: "FROM node:24-slim\nRUN pnpm --filter={{PACKAGE_SCOPE}}/server build\n",
+      ".dockerignore": "# {{APP_SLUG}}\nnode_modules\n",
+      "apps/shared/fly.toml": 'app = "{{APP_SLUG}}-app"\n',
+    });
+    const files = await collectTemplateFiles(root, context);
+    const byPath = Object.fromEntries(
+      files.map((file) => [file.relativePath, file.content.toString("utf8")])
+    );
+    expect(byPath.Dockerfile).toContain("@fixture/server");
+    expect(byPath.Dockerfile).not.toContain("{{PACKAGE_SCOPE}}");
+    expect(byPath[".dockerignore"]).toContain("# fixture");
+    expect(byPath["apps/shared/fly.toml"]).toBe('app = "fixture-app"\n');
+  });
+
+  it("ignores fly.toml and .env.production on update", async () => {
+    const rules = [
+      { pattern: "**/.env.production", policy: "ignore" as const },
+      { pattern: "**/fly.toml", policy: "ignore" as const },
+    ];
+    const fixture = await baselineRepo(
+      tempRoot,
+      {
+        "apps/shared/fly.toml": 'app = "fixture-app"\nprimary_region = "iad"\n',
+        "apps/shared/.env.production": "SECRET=base\n",
+        "apps/shared/.env.production.example": "SECRET=\n",
+      },
+      { rules }
+    );
+    await fs.writeFile(
+      path.join(fixture.repoRoot, "apps/shared/fly.toml"),
+      'app = "custom-app"\nprimary_region = "fra"\n'
+    );
+    await fs.writeFile(
+      path.join(fixture.repoRoot, "apps/shared/.env.production"),
+      "SECRET=local\n"
+    );
+    const targetRoot = path.join(tempRoot, "target");
+    await makeTemplate(
+      targetRoot,
+      {
+        "apps/shared/fly.toml": 'app = "fixture-app"\nprimary_region = "ord"\n',
+        "apps/shared/.env.production": "SECRET=target\n",
+        "apps/shared/.env.production.example": "SECRET=updated\n",
+      },
+      { rules }
+    );
+
+    const result = await reconcileTemplates({
+      repoRoot: fixture.repoRoot,
+      state: fixture.state,
+      targetTemplateRoot: targetRoot,
+      targetVersion: "0.32.0",
+      baseProvider: provider(fixture.baseRoot),
+    });
+    expect(result.changes.conflicts).toEqual([]);
+    expect(result.changes.changes.has("apps/shared/fly.toml")).toBe(false);
+    expect(result.changes.changes.has("apps/shared/.env.production")).toBe(false);
+    expect(result.changes.changes.get("apps/shared/.env.production.example")?.kind).toBe("modify");
+  });
+
+  it("strips hash-comment feature marker blocks for disabled features", async () => {
+    const root = path.join(tempRoot, "marker-tpl");
+    await makeTemplate(root, {
+      Dockerfile: [
+        "FROM node:24-slim",
+        "# m5k:webapp:start",
+        "RUN pnpm --filter=webapp build",
+        "# m5k:webapp:end",
+        "CMD node index.js",
+        "",
+      ].join("\n"),
+    });
+    const files = await collectTemplateFiles(root, context, {
+      enabledFeatures: new Set(),
+    });
+    const docker = files
+      .find((file) => file.relativePath === "Dockerfile")
+      ?.content.toString("utf8");
+    expect(docker).toContain("FROM node:24-slim");
+    expect(docker).toContain("CMD node index.js");
+    expect(docker).not.toContain("webapp build");
+    expect(docker).not.toContain("m5k:webapp");
+  });
+
+  it("strips hash-comment feature marker blocks with CRLF line endings", async () => {
+    const root = path.join(tempRoot, "marker-crlf-tpl");
+    await makeTemplate(root, {
+      Dockerfile: [
+        "FROM node:24-slim",
+        "# m5k:webapp:start",
+        "RUN pnpm --filter=webapp build",
+        "# m5k:webapp:end",
+        "CMD node index.js",
+        "",
+      ].join("\r\n"),
+    });
+    const files = await collectTemplateFiles(root, context, {
+      enabledFeatures: new Set(),
+    });
+    const docker = files
+      .find((file) => file.relativePath === "Dockerfile")
+      ?.content.toString("utf8");
+    expect(docker).toContain("FROM node:24-slim");
+    expect(docker).not.toContain("webapp build");
+    expect(docker).not.toContain("m5k:webapp");
+    expect(docker).not.toContain("\r");
+  });
 });

@@ -161,6 +161,193 @@ describe("scaffoldProject", () => {
     }
   );
 
+  it("requires Node >=24 and ships product Deploy home files", async () => {
+    const result = await scaffoldProject({
+      targetDirectory: "deploy-desk",
+      appName: "Deploy Desk",
+      appDescription: "Deploy home fixture.",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    const rootPackage = JSON.parse(
+      await fs.readFile(path.join(result.targetDirectory, "package.json"), "utf8")
+    ) as { engines?: { node?: string }; packageManager?: string; scripts?: Record<string, string> };
+    expect(rootPackage.engines?.node).toBe(">=24");
+    expect(rootPackage.packageManager).toBe("pnpm@10.13.1");
+    expect(rootPackage.scripts?.["app:deploy"]).toContain("apps/shared/fly.toml");
+    expect(rootPackage.scripts?.["app:deploy"]).toContain("apps/shared/Dockerfile");
+    expect(rootPackage.scripts?.["app:secrets"]).toContain("apps/shared/.env.production");
+
+    const dockerignore = await fs.readFile(
+      path.join(result.targetDirectory, ".dockerignore"),
+      "utf8"
+    );
+    expect(dockerignore).toContain("node_modules");
+    expect(dockerignore).toContain(".env");
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "apps/shared/.dockerignore"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+
+    const dockerfile = await fs.readFile(
+      path.join(result.targetDirectory, "apps/shared/Dockerfile"),
+      "utf8"
+    );
+    expect(dockerfile).toContain("FROM node:24-slim");
+    expect(dockerfile).not.toContain("24.11.0");
+    expect(dockerfile).toContain("pnpm@10.13.1");
+    expect(dockerfile).toContain("pnpm install --frozen-lockfile --prod=false");
+    expect(dockerfile).toContain("required=false");
+    expect(dockerfile).toContain("pnpm --filter=@deploy-desk/server build");
+    expect(dockerfile).toContain("pnpm --filter=@deploy-desk/webapp build");
+    expect(dockerfile).toContain(
+      "pnpm --filter=@deploy-desk/server deploy --prod --legacy /deploy"
+    );
+    expect(dockerfile).toContain("/deploy/client");
+    expect(dockerfile).toContain('CMD ["node", "index.js"]');
+    expect(dockerfile).not.toContain("m5k:webapp");
+    expect(dockerfile).not.toContain("{{");
+
+    const flyToml = await fs.readFile(
+      path.join(result.targetDirectory, "apps/shared/fly.toml"),
+      "utf8"
+    );
+    expect(flyToml).toContain('app = "deploy-desk-app"');
+    expect(flyToml).toContain('primary_region = "iad"');
+    expect(flyToml).toContain('source = "libsql_data"');
+    expect(flyToml).toContain('destination = "/app/data"');
+    expect(flyToml).toContain('memory = "1gb"');
+    expect(flyToml).toContain("internal_port = 8080");
+    expect(flyToml).toContain("force_https = true");
+    expect(flyToml).toContain("min_machines_running = 1");
+    expect(flyToml).not.toContain("{{");
+
+    const envExample = await fs.readFile(
+      path.join(result.targetDirectory, "apps/shared/.env.production.example"),
+      "utf8"
+    );
+    expect(envExample).toContain("DATABASE_URL=file:/app/data/local.db");
+    expect(envExample).toContain("REDIS_URL");
+    expect(envExample).not.toContain("{{");
+
+    const deployWrapper = await fs.readFile(
+      path.join(result.targetDirectory, "apps/shared/scripts/fly-deploy.mjs"),
+      "utf8"
+    );
+    expect(deployWrapper).toContain("--build-secret");
+    expect(deployWrapper).toMatch(/Copy the \.env\.production\.example/);
+
+    const secretsWrapper = await fs.readFile(
+      path.join(result.targetDirectory, "apps/shared/scripts/fly-secrets.mjs"),
+      "utf8"
+    );
+    expect(secretsWrapper).toContain("secrets");
+    expect(secretsWrapper).toContain("import");
+
+    const gitignore = await fs.readFile(path.join(result.targetDirectory, ".gitignore"), "utf8");
+    expect(gitignore).toMatch(/\.env\.production/);
+
+    const appTs = await fs.readFile(
+      path.join(result.targetDirectory, "apps/server/src/app.ts"),
+      "utf8"
+    );
+    expect(appTs).toContain('spa: { root: "./client" }');
+  });
+
+  it("always ships Landing and strips webapp image stages for expo-only create", async () => {
+    const web = await scaffoldProject({
+      targetDirectory: "landing-web",
+      appName: "Landing Web",
+      appDescription: "Landing fixture.",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+    const expo = await scaffoldProject({
+      targetDirectory: "landing-expo",
+      appName: "Landing Expo",
+      appDescription: "Expo-only landing fixture.",
+      platform: "expo",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    for (const result of [web, expo]) {
+      const landingPackage = await fs.readFile(
+        path.join(result.targetDirectory, "apps/landing/package.json"),
+        "utf8"
+      );
+      expect(landingPackage).toContain(`"name": "${result.context.packageScope}/landing"`);
+      await expect(
+        fs.stat(path.join(result.targetDirectory, "apps/landing/.dockerignore"))
+      ).rejects.toMatchObject({ code: "ENOENT" });
+
+      const landingFly = await fs.readFile(
+        path.join(result.targetDirectory, "apps/landing/fly.toml"),
+        "utf8"
+      );
+      expect(landingFly).toContain(`app = "${result.context.appSlug}-landing"`);
+      expect(landingFly).toContain('primary_region = "iad"');
+      expect(landingFly).toContain('memory = "1gb"');
+      expect(landingFly).not.toContain("[[mounts]]");
+      expect(landingFly).not.toContain("{{");
+
+      const landingDocker = await fs.readFile(
+        path.join(result.targetDirectory, "apps/landing/Dockerfile"),
+        "utf8"
+      );
+      expect(landingDocker).toContain("FROM node:24-slim");
+      expect(landingDocker).not.toContain("24.11.0");
+      expect(landingDocker).toContain(`pnpm --filter=${result.context.packageScope}/landing build`);
+      expect(landingDocker).toContain("required=false");
+      expect(landingDocker).not.toContain("{{");
+
+      const rootPackage = JSON.parse(
+        await fs.readFile(path.join(result.targetDirectory, "package.json"), "utf8")
+      ) as { engines?: { node?: string }; scripts?: Record<string, string> };
+      expect(rootPackage.engines?.node).toBe(">=24");
+      expect(rootPackage.scripts?.["landing:deploy"]).toContain(
+        "apps/landing/scripts/fly-deploy.mjs"
+      );
+      expect(rootPackage.scripts?.["landing:secrets"]).toContain("apps/landing/.env.production");
+
+      await expect(
+        fs.stat(path.join(result.targetDirectory, "apps/landing/.env.production.example"))
+      ).resolves.toBeTruthy();
+      await expect(
+        fs.stat(path.join(result.targetDirectory, "apps/landing/scripts/fly-deploy.mjs"))
+      ).resolves.toBeTruthy();
+
+      const landingPage = await fs.readFile(
+        path.join(result.targetDirectory, "apps/landing/src/LandingPage.tsx"),
+        "utf8"
+      );
+      expect(landingPage).toContain("VITE_APP_URL");
+      expect(landingPage).toContain('from "@heroui/react"');
+    }
+
+    const expoDocker = await fs.readFile(
+      path.join(expo.targetDirectory, "apps/shared/Dockerfile"),
+      "utf8"
+    );
+    expect(expoDocker).toContain("pnpm --filter=@landing-expo/server build");
+    expect(expoDocker).not.toContain("webapp build");
+    expect(expoDocker).not.toContain("/deploy/client");
+    await expect(fs.stat(path.join(expo.targetDirectory, "apps/webapp"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    const expoAppTs = await fs.readFile(
+      path.join(expo.targetDirectory, "apps/server/src/app.ts"),
+      "utf8"
+    );
+    expect(expoAppTs).toContain('spa: { root: "./client" }');
+  });
+
   it("refuses to overwrite a non-empty directory without force", async () => {
     await fs.mkdir(path.join(tempRoot, "occupied"), { recursive: true });
     await fs.writeFile(path.join(tempRoot, "occupied", "README.md"), "taken", "utf8");

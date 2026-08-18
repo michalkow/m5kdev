@@ -1,4 +1,6 @@
+import fs from "node:fs";
 import type { Server } from "node:http";
+import path from "node:path";
 import { type Client, createClient, type Config as LibSQLClientConfig } from "@libsql/client";
 import {
   ADMIN_CREATE_VERIFIED_USER_HEADER,
@@ -325,6 +327,9 @@ export type BackendAppConfig = {
   cors?: (defaults: CorsOptions) => CorsOptions;
   json?: (defaults: OptionsJson) => OptionsJson;
   onShutdown?: () => void | Promise<void>;
+  spa?: {
+    root: string;
+  };
 };
 
 export function defineBackendModule<const T extends BackendModuleDefinition>(
@@ -579,6 +584,25 @@ function applyHttpShell({
   expressApp.use(cors(corsOptions));
 }
 
+function applyBakedSpa(options: { expressApp: Express; spa: BackendAppConfig["spa"] }): void {
+  const { expressApp, spa } = options;
+  if (!spa?.root) {
+    return;
+  }
+  const root = path.resolve(spa.root);
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+    return;
+  }
+  expressApp.use(express.static(root));
+  expressApp.get("*", (_req, res, next) => {
+    res.sendFile(path.join(root, "index.html"), (error) => {
+      if (error) {
+        next(error);
+      }
+    });
+  });
+}
+
 export function createBackendApp<const Modules extends readonly BackendAppModule[] = []>(
   config: BackendAppConfig,
   registeredModules = [] as unknown as Modules
@@ -825,6 +849,8 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       roleAuthMiddleware,
     } as any);
   }
+
+  applyBakedSpa({ expressApp, spa: config.spa });
 
   if (workflowRuntime) {
     for (const module of orderedModules) {

@@ -8,9 +8,10 @@
 
 ## Repository Structure
 
-- `apps/shared` holds shared Zod schemas and constants.
+- `apps/shared` holds shared Zod schemas, constants, and the product Deploy home.
 - `apps/server` holds the backend composition root, modules, auth wiring, and database scripts.
 - `apps/webapp` holds the React app shell, routes, providers, and the `posts` feature.
+- `apps/landing` holds the public one-page site and its Fly adapter.
 - `apps/email` holds the email templates used by auth flows and local email delivery.
 
 ## Backend Conventions

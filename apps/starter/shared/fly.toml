@@ -1,0 +1,24 @@
+app = "starter-app-app"
+primary_region = "iad"
+
+[build]
+
+[env]
+  PORT = "8080"
+
+[[mounts]]
+  source = "libsql_data"
+  destination = "/app/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1

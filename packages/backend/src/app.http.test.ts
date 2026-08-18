@@ -1,8 +1,11 @@
+import fs from "node:fs/promises";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import os from "node:os";
+import path from "node:path";
 import { type Client, createClient } from "@libsql/client";
 import express, { type Express } from "express";
-import { createBackendApp } from "./app";
+import { createBackendApp, defineBackendModule } from "./app";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {
@@ -227,6 +230,112 @@ describe("createBackendApp HTTP shell", () => {
         body: JSON.stringify({ hello: "kernel" }),
       });
       expect(response.status).toBe(413);
+    });
+  });
+
+  describe("baked SPA", () => {
+    let spaRoot: string;
+
+    beforeEach(async () => {
+      spaRoot = await fs.mkdtemp(path.join(os.tmpdir(), "m5kdev-spa-"));
+      await fs.writeFile(path.join(spaRoot, "index.html"), "<!doctype html><title>baked</title>");
+    });
+
+    afterEach(async () => {
+      await fs.rm(spaRoot, { recursive: true, force: true });
+    });
+
+    it("serves index.html for GET / when spa.root exists", async () => {
+      const built = createBackendApp({
+        db: { client },
+        spa: { root: spaRoot },
+      });
+
+      await withServer(built.express.app, async (baseUrl) => {
+        const response = await fetch(`${baseUrl}/`);
+        expect(response.status).toBe(200);
+        expect(await response.text()).toContain("<title>baked</title>");
+      });
+    });
+
+    it("serves index.html for a client-side route", async () => {
+      const built = createBackendApp({
+        db: { client },
+        spa: { root: spaRoot },
+      });
+
+      await withServer(built.express.app, async (baseUrl) => {
+        const response = await fetch(`${baseUrl}/posts/abc`);
+        expect(response.status).toBe(200);
+        expect(await response.text()).toContain("<title>baked</title>");
+      });
+    });
+
+    it("does not 500 when spa.root is missing and still serves API routes", async () => {
+      const built = createBackendApp(
+        {
+          db: { client },
+          spa: { root: path.join(spaRoot, "does-not-exist") },
+        },
+        [
+          defineBackendModule({
+            id: "probe",
+            express({ infra }) {
+              infra.express.get("/trpc/health", (_req, res) => {
+                res.json({ ok: true });
+              });
+            },
+          }),
+        ]
+      );
+
+      await withServer(built.express.app, async (baseUrl) => {
+        const missing = await fetch(`${baseUrl}/`);
+        expect(missing.status).toBe(404);
+        const api = await fetch(`${baseUrl}/trpc/health`);
+        expect(api.status).toBe(200);
+        expect(await api.json()).toEqual({ ok: true });
+      });
+    });
+
+    it("does not replace tRPC or auth routes with the SPA fallback", async () => {
+      const built = createBackendApp(
+        {
+          db: { client },
+          spa: { root: spaRoot },
+        },
+        [
+          defineBackendModule({
+            id: "probe",
+            express({ infra }) {
+              infra.express.get("/trpc/health", (_req, res) => {
+                res.json({ ok: true });
+              });
+              infra.express.post("/api/auth/session", (_req, res) => {
+                res.json({ session: true });
+              });
+            },
+          }),
+        ]
+      );
+
+      await withServer(built.express.app, async (baseUrl) => {
+        const trpc = await fetch(`${baseUrl}/trpc/health`);
+        expect(await trpc.json()).toEqual({ ok: true });
+        const auth = await fetch(`${baseUrl}/api/auth/session`, { method: "POST" });
+        expect(await auth.json()).toEqual({ session: true });
+      });
+    });
+
+    it("does not mount static files when spa is omitted", async () => {
+      const built = createBackendApp({
+        db: { client },
+      });
+
+      await withServer(built.express.app, async (baseUrl) => {
+        const response = await fetch(`${baseUrl}/`);
+        expect(response.status).toBe(404);
+      });
     });
   });
 });

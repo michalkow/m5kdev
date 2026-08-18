@@ -37,7 +37,7 @@ describe("consumer catalog", () => {
     expect(catalog["drizzle-kit"]).toBe("0.31.10");
     expect(catalog["drizzle-orm"]).toBe("0.45.2");
 
-    const variantManifests = ["shared", "server", "email", "webapp", "expo", "e2e"]
+    const variantManifests = ["shared", "server", "email", "webapp", "expo", "e2e", "landing"]
       .map((name) => path.join(REPO_ROOT, "apps/starter", name, "package.json"))
       .filter((file) => fs.existsSync(file));
     for (const dependency of collectConsumerDependencyNames(variantManifests)) {

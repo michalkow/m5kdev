@@ -75,11 +75,11 @@ _Avoid_: Grant, Access, permission
 ### Composition
 
 **Kernel**:
-`createBackendApp` — the composition root that wires libSQL/Drizzle, Redis, Better Auth, modules, tRPC, Express, startup, and shutdown ([ADR-0003](docs/adr/0003-kernel-owns-express-http-shell.md)). It owns the Express instance, JSON and CORS defaults (origin from the app web URL; library allowed headers), HTTP listen (PORT, all interfaces), and SIGINT/SIGTERM when it is listening. Signal shutdown closes HTTP, then Kernel shutdown, then app `onShutdown`, then process exit. JSON and CORS defaults may be mapped; a map that omits a default drops it. Callers may pass an Express instance that has not already applied json/CORS; the Kernel still applies that shell. Extra HTTP belongs on a Backend Module `express` hook. Extra shutdown work (telemetry) registers on the Kernel, not a starter signal handler. One-shot Database commands are Kernel-owned and must not boot that HTTP shell, Redis, or queues ([ADR-0005](docs/adr/0005-kernel-owns-database-commands.md)).
-_Avoid_: Framework (the stack is composable, not closed), App (that is the product), app-owned CORS as the default path; booting createBackendApp to reset or seed
+`createBackendApp` — the composition root that wires libSQL/Drizzle, Redis, Better Auth, modules, tRPC, Express, startup, and shutdown ([ADR-0003](docs/adr/0003-kernel-owns-express-http-shell.md)). It owns the Express instance, JSON and CORS defaults (origin from the app web URL; library allowed headers), HTTP listen (PORT, all interfaces), and SIGINT/SIGTERM when it is listening. Signal shutdown closes HTTP, then Kernel shutdown, then app `onShutdown`, then process exit. JSON and CORS defaults may be mapped; a map that omits a default drops it. Callers may pass an Express instance that has not already applied json/CORS; the Kernel still applies that shell. Opt-in baked SPA serving (`spa.root`, skip if missing) is also Kernel HTTP shell ([ADR-0006](docs/adr/0006-kernel-owns-baked-spa.md)). Other extra HTTP belongs on a Backend Module `express` hook. Extra shutdown work (telemetry) registers on the Kernel, not a starter signal handler. One-shot Database commands are Kernel-owned and must not boot that HTTP shell, Redis, or queues ([ADR-0005](docs/adr/0005-kernel-owns-database-commands.md)).
+_Avoid_: Framework (the stack is composable, not closed), App (that is the product), app-owned CORS as the default path; booting createBackendApp to reset or seed; ad-hoc `express.static` in starter `app.ts`
 
 **Backend Module**:
-A `BaseModule` subclass (or `defineBackendModule` object) that contributes tables, repositories, services, tRPC fragments, Express hooks, and workflows. Registered in `apps/*/server/src/app.ts`. Extra HTTP belongs on the module `express` hook, not ad hoc starter middleware.
+A `BaseModule` subclass (or `defineBackendModule` object) that contributes tables, repositories, services, tRPC fragments, Express hooks, and workflows. Registered in `apps/*/server/src/app.ts`. Extra HTTP belongs on the module `express` hook, not ad hoc starter middleware. Baked SPA serving is Kernel shell, not a module hook ([ADR-0006](docs/adr/0006-kernel-owns-baked-spa.md)).
 _Avoid_: Package, Plugin, Feature (when you mean the server module), Model
 
 **App schema**:
@@ -96,7 +96,11 @@ _Avoid_: m5kdev.ts (that is not the CLI); an app-side command switchboard; compo
 
 **Shared contract**:
 Zod schemas and constants in `apps/*/shared` or `@m5kdev/commons` that server and clients both import.
-_Avoid_: DTO (server select/output helpers), types package, API spec
+_Avoid_: DTO (server select/output helpers), types package, API spec; calling this package the Fly app
+
+**Deploy home**:
+Where the product image’s Docker and Fly files live: `apps/shared` (Dockerfile, fly.toml, production env example). The image runs server plus a baked webapp. Repo-root `.dockerignore` is the build-context ignore file. Root `app:deploy` / `app:secrets` are the Fly CLI entrypoints.
+_Avoid_: Shared contract (that is Zod/constants); treating `apps/shared` as a runnable Node service; a top-level `deploy/` folder; dockerignore copies beside the Dockerfile
 
 **Procedure**:
 A request-bound Service method built with `this.procedure("name")`: input, auth, resource load, Grant check, then handler.
@@ -127,7 +131,7 @@ An object of Match query predicates keyed by column. Values are a match, an oper
 _Avoid_: Filter document, Mongo filter, Filter object, QueryFilter
 
 **Starter**:
-`apps/starter` — the reference product: `server`, `webapp`, `expo`, `email`, `e2e`, `shared`.
+`apps/starter` — the reference product: `server`, `webapp`, `landing`, `expo`, `email`, `e2e`, `shared`.
 _Avoid_: Example, Template (CLI templates live in `packages/cli`)
 
 **Managed catalog**:
@@ -143,6 +147,10 @@ A third-party whose types cross the app / `@m5kdev/*` package boundary. Closed s
 _Avoid_: nested Kernel deps (pino, BullMQ, AWS, OTEL exporters); treating OpenTelemetry as an app-facing peer
 
 ### Product surfaces
+
+**Landing**:
+The public marketing site package (`apps/landing`). A separate Fly app from the product image; Starter ships one page (name, pitch, CTA) on React Router + HeroUI v3 + Tailwind v4.
+_Avoid_: Webapp (the authenticated SPA baked into the product image)
 
 **Workflow**:
 A BullMQ job (and optional cron) with a persisted run row. Status: `queued` | `running` | `completed` | `failed`. Payload is serializable ids and typed input, not a request.

@@ -35,7 +35,7 @@ That choice is what lets the framework go further than wiring:
 
 | Concern | Choice |
 | --- | --- |
-| Language / runtime | TypeScript, Node.js >= 22 |
+| Language / runtime | TypeScript, Node.js >= 24 |
 | Monorepo | pnpm workspaces + Turborepo |
 | HTTP server | Express |
 | API | tRPC (typed end to end via `AppRouter`) |

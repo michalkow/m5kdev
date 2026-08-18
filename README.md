@@ -19,7 +19,7 @@ The workspace includes `apps/**` so you can add deployable applications (e.g. `a
 
 ## Getting started
 
-**Requirements:** Node.js >= 22, [pnpm](https://pnpm.io/installation).
+**Requirements:** Node.js >= 24, [pnpm](https://pnpm.io/installation).
 
 ```sh
 pnpm install

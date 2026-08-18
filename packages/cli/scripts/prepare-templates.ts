@@ -42,8 +42,18 @@ const TEXT_EXTENSIONS = new Set([
   ".yaml",
   ".yml",
   ".txt",
+  ".toml",
 ]);
-const TEXT_BASENAMES = new Set([".gitignore", ".env", ".env.example", ".npmrc"]);
+const TEXT_BASENAMES = new Set([
+  ".gitignore",
+  ".env",
+  ".env.example",
+  ".env.production",
+  ".env.production.example",
+  ".npmrc",
+  ".dockerignore",
+  "Dockerfile",
+]);
 
 /** Paths (relative to the starter root) never emitted into templates. */
 const EXCLUDED = [
@@ -82,12 +92,16 @@ const FEATURE_MANIFEST = {
     "apps/shared/package.json",
     "apps/server/package.json",
     "apps/email/package.json",
+    "apps/landing/package.json",
   ],
   sync: {
     defaultPolicy: "merge",
     rules: [
       { pattern: ".env", policy: "ignore" },
       { pattern: "**/.env", policy: "ignore" },
+      { pattern: ".env.production", policy: "ignore" },
+      { pattern: "**/.env.production", policy: "ignore" },
+      { pattern: "**/fly.toml", policy: "ignore" },
       { pattern: "**/drizzle/*.sql", policy: "ignore" },
       { pattern: "**/drizzle/meta/**", policy: "ignore" },
       { pattern: "apps/server/db.ts", policy: "ensure" },
@@ -101,7 +115,7 @@ const FEATURE_MANIFEST = {
 function isExcluded(relPath: string): boolean {
   const parts = relPath.split(path.sep);
   return EXCLUDED.some((ex) => {
-    if (ex.includes("/")) return relPath === ex || relPath.startsWith(`${ex}`);
+    if (ex.includes("/")) return relPath === ex || relPath.startsWith(`${ex}/`);
     return parts.some((p) => p === ex || (ex === "local.db" && p.startsWith("local.db")));
   });
 }

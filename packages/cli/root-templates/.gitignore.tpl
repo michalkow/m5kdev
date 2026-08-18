@@ -7,3 +7,4 @@ coverage
 *.db-*
 apps/server/.emails
 apps/shared/.env
+**/.env.production

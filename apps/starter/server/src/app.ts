@@ -57,6 +57,7 @@ export const builtBackendApp = createBackendApp(
     i18n: {
       resources: emailResources,
     },
+    spa: { root: "./client" },
     redis: {
       url: redisUrl,
       options: { maxRetriesPerRequest: null },

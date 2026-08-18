@@ -22,11 +22,21 @@ const TEXT_EXTENSIONS = new Set([
   ".yml",
   ".txt",
   ".mdc",
+  ".toml",
 ]);
-const TEXT_BASENAMES = new Set([".gitignore", ".env", ".env.example", ".npmrc"]);
+const TEXT_BASENAMES = new Set([
+  ".gitignore",
+  ".env",
+  ".env.example",
+  ".env.production",
+  ".env.production.example",
+  ".npmrc",
+  ".dockerignore",
+  "Dockerfile",
+]);
 
 /** Feature marker blocks: lines between `// m5k:<feature>:start` and `// m5k:<feature>:end`. */
-const MARKER_PATTERN = /^[ \t]*\/\/ m5k:([a-z-]+):(start|end)[ \t]*$/;
+const MARKER_PATTERN = /^[ \t]*(?:\/\/|#)[ \t]*m5k:([a-z-]+):(start|end)[ \t]*$/;
 
 export interface CopyTemplateOptions {
   /** Repo-root-relative path prefixes to skip entirely (disabled features). */
@@ -95,13 +105,10 @@ export async function collectTemplateFiles(
       continue;
     }
 
-    const content = await fs.readFile(sourcePath, "utf8");
+    const content = (await fs.readFile(sourcePath, "utf8")).replace(/\r\n?/g, "\n");
     files.push({
       content: Buffer.from(
-        applyFeatureMarkers(renderTemplate(content, context), enabledFeatures).replace(
-          /\r\n?/g,
-          "\n"
-        ),
+        applyFeatureMarkers(renderTemplate(content, context), enabledFeatures),
         "utf8"
       ),
       kind: "text",

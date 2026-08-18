@@ -1,0 +1,24 @@
+/* biome-ignore-all lint/suspicious/noUnknownAtRules: Tailwind v4 */
+
+@import "tailwindcss";
+@import "@heroui/styles";
+@import "tw-animate-css";
+
+@theme {
+  --font-display: "Fraunces", "Times New Roman", serif;
+  --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
+  --color-ink: oklch(0.22 0.03 250);
+  --color-paper: oklch(0.97 0.01 85);
+  --color-rule: oklch(0.84 0.02 85);
+  --accent: oklch(0.6204 0.195 253.83);
+}
+
+html {
+  font-family: var(--font-sans);
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+body {
+  margin: 0;
+}
