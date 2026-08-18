@@ -65,6 +65,9 @@
         "useButtonType": "warn",
         "noSvgWithoutTitle": "warn",
         "useAltText": "warn"
+      },
+      "nursery": {
+        "useReactCompiler": "error"
       }
     }
   },
