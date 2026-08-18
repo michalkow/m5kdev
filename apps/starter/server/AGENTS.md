@@ -28,7 +28,7 @@ apps/server/src/modules/<module>/
 - Repositories own persistence and query construction.
 - Services own business rules, orchestration, and context-aware defaults.
 - tRPC files own transport only and must delegate to services.
-- Register modules in `apps/server/src/app.ts`; use `db.ts` only for scripts that need direct DB.
+- Register modules in `apps/server/src/app.ts`. Database commands live in server `db.ts` (`pnpm drizzle:reset`, `drizzle:sync`, `drizzle:seed`) and call Kernel `runDb` — they must not import `app.ts`.
 
 ## Avoid Trivial Service Delegation
 
@@ -41,6 +41,6 @@ apps/server/src/modules/<module>/
 
 - `WorkflowModule` and `NotificationModule` are registered in `app.ts`. Start **Redis** locally (`REDIS_URL`) before `pnpm dev` on the server, or background jobs will not run.
 - `index.ts` calls `builtBackendApp.start()`, which listens and handles SIGINT/SIGTERM. Extra shutdown work (telemetry) is `onShutdown` on `createBackendApp`.
-- After changing Drizzle tables, run `pnpm --filter ./apps/server sync` — do not hand-edit SQL migrations in this repo.
+- After changing Drizzle tables, run `pnpm --filter ./apps/server drizzle:generate` then `drizzle:migrate` — do not hand-edit SQL migrations in this repo.
 
 Push-related server env vars are documented in `apps/shared/.env.example`.

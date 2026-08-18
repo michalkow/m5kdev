@@ -235,6 +235,93 @@ describe("three-way template reconciliation", () => {
     expect(result.changes.changes.has("apps/webapp/page.txt")).toBe(false);
   });
 
+  it("adds ensured Database config and deletes unmodified drizzle ops files", async () => {
+    const rules = [
+      { pattern: "apps/server/db.ts", policy: "ensure" as const },
+      { pattern: "apps/server/db.e2e.ts", policy: "ensure" as const },
+      { pattern: "apps/server/drizzle.config.ts", policy: "ensure" as const },
+    ];
+    const features = { "test-harness": { paths: ["apps/server/db.e2e.ts"] } };
+    const fixture = await baselineRepo(
+      tempRoot,
+      {
+        "apps/server/drizzle/reset.ts": "old reset\n",
+        "apps/server/drizzle/sync.ts": "old sync\n",
+        "apps/server/drizzle.config.ts": "old kit\n",
+      },
+      { rules, features, enabledFeatures: ["test-harness"] }
+    );
+    const targetRoot = path.join(tempRoot, "target");
+    await makeTemplate(
+      targetRoot,
+      {
+        "apps/server/db.ts": "runDb config\n",
+        "apps/server/db.e2e.ts": "e2e seed\n",
+        "apps/server/drizzle.config.ts": "helper kit\n",
+      },
+      { rules, features }
+    );
+
+    const result = await reconcileTemplates({
+      repoRoot: fixture.repoRoot,
+      state: fixture.state,
+      targetTemplateRoot: targetRoot,
+      targetVersion: "0.34.0",
+      baseProvider: provider(fixture.baseRoot),
+    });
+
+    expect(result.changes.conflicts).toEqual([]);
+    expect(result.changes.changes.get("apps/server/db.ts")?.kind).toBe("add");
+    expect(result.changes.changes.get("apps/server/db.e2e.ts")?.kind).toBe("add");
+    expect(result.changes.changes.get("apps/server/drizzle.config.ts")?.kind).toBe("modify");
+    expect(result.changes.changes.get("apps/server/drizzle/reset.ts")?.kind).toBe("delete");
+    expect(result.changes.changes.get("apps/server/drizzle/sync.ts")?.kind).toBe("delete");
+  });
+
+  it("conflicts when a customized drizzle ops file is removed from the template", async () => {
+    const fixture = await baselineRepo(tempRoot, {
+      "apps/server/drizzle/reset.ts": "old reset\n",
+    });
+    await fs.writeFile(
+      path.join(fixture.repoRoot, "apps/server/drizzle/reset.ts"),
+      "custom reset\n"
+    );
+    const targetRoot = path.join(tempRoot, "target");
+    await makeTemplate(targetRoot, { "apps/server/db.ts": "runDb config\n" });
+
+    const result = await reconcileTemplates({
+      repoRoot: fixture.repoRoot,
+      state: fixture.state,
+      targetTemplateRoot: targetRoot,
+      targetVersion: "0.34.0",
+      baseProvider: provider(fixture.baseRoot),
+    });
+
+    expect(result.changes.conflicts).toContainEqual({
+      path: "apps/server/drizzle/reset.ts",
+      reason: "The template removed a locally customized path.",
+    });
+  });
+
+  it("omits e2e Database config when the test-harness feature is disabled", async () => {
+    const features = { "test-harness": { paths: ["apps/server/db.e2e.ts"] } };
+    const fixture = await baselineRepo(
+      tempRoot,
+      {
+        "apps/server/db.ts": "runDb config\n",
+        "apps/server/db.e2e.ts": "e2e seed\n",
+      },
+      { features, enabledFeatures: [] }
+    );
+
+    expect(await fs.readFile(path.join(fixture.repoRoot, "apps/server/db.ts"), "utf8")).toBe(
+      "runDb config\n"
+    );
+    await expect(
+      fs.access(path.join(fixture.repoRoot, "apps/server/db.e2e.ts"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("reports unavailable and corrupt historical artifacts without writes", async () => {
     const fixture = await baselineRepo(tempRoot, { "merge.txt": "base\n" });
     await fs.writeFile(path.join(fixture.repoRoot, "merge.txt"), "local\n");

@@ -1,15 +1,27 @@
+import { type RunDbSeedContext, runDb } from "@m5kdev/backend/db";
 import { hashPassword } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
-import { isRemote, orm, schema } from "./db";
-import { ensureDevServerStopped } from "./guard";
+import * as schema from "./src/schema";
 
 const DEMO_EMAIL = "admin@starter-app.local";
 const DEMO_PASSWORD = "password1234";
 const ORGANIZATION_ID = "starter-app-org";
 const TEAM_ID = "starter-app-team";
 
-async function ensureDemoUser() {
+void runDb({
+  schema,
+  seed: async ({ orm }) => {
+    const user = await ensureDemoUser(orm);
+    const { organizationId, teamId } = await ensureOrganization({ orm, userId: user.id });
+    await seedPosts({ orm, userId: user.id, organizationId, teamId });
+    console.info(`Seed completed. Demo login: ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
+  },
+});
+
+type SeedOrm = RunDbSeedContext<typeof schema>["orm"];
+
+async function ensureDemoUser(orm: SeedOrm): Promise<typeof schema.users.$inferSelect> {
   const [existingUser] = await orm
     .select()
     .from(schema.users)
@@ -51,7 +63,11 @@ async function ensureDemoUser() {
   return user;
 }
 
-async function ensureOrganization(userId: string) {
+async function ensureOrganization(input: {
+  orm: SeedOrm;
+  userId: string;
+}): Promise<{ organizationId: string; teamId: string }> {
+  const { orm, userId } = input;
   const [existingOrganization] = await orm
     .select()
     .from(schema.organizations)
@@ -119,7 +135,13 @@ async function ensureOrganization(userId: string) {
   return { organizationId: ORGANIZATION_ID, teamId: TEAM_ID };
 }
 
-async function seedPosts(userId: string, organizationId: string | null, teamId: string | null) {
+async function seedPosts(input: {
+  orm: SeedOrm;
+  userId: string;
+  organizationId: string | null;
+  teamId: string;
+}): Promise<void> {
+  const { orm, userId, organizationId, teamId } = input;
   const existingPosts = await orm.select().from(schema.posts).limit(1);
   if (existingPosts.length > 0) {
     return;
@@ -166,18 +188,3 @@ async function seedPosts(userId: string, organizationId: string | null, teamId: 
     },
   ]);
 }
-
-async function seed() {
-  await ensureDevServerStopped();
-  if (isRemote) {
-    await orm.$client.sync();
-  }
-  const user = await ensureDemoUser();
-  const { organizationId, teamId } = await ensureOrganization(user.id);
-
-  await seedPosts(user.id, organizationId, teamId);
-
-  console.info(`Seed completed. Demo login: ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
-}
-
-void seed();

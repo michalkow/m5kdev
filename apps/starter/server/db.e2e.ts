@@ -1,17 +1,38 @@
 /**
  * E2E fixture seed — used only by the e2e package's prepare scripts, never by
  * generated apps (the CLI excludes this file). The user-facing demo seed lives
- * in ./seed.ts.
+ * in ./db.ts.
  */
+import { type RunDbSeedContext, runDb } from "@m5kdev/backend/db";
 import { hashPassword } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
-import { orm, schema } from "./db";
-import { ensureDevServerStopped } from "./guard";
+import * as schema from "./src/schema";
 
 const profile = process.env.AUTH_E2E_PROFILE ?? "standard";
 const ADMIN_EMAIL = `admin.${profile}@auth-e2e.local`;
 const ADMIN_PASSWORD = "password1234";
+
+type SeedOrm = RunDbSeedContext<typeof schema>["orm"];
+
+void runDb({
+  schema,
+  seed: async ({ orm }) => {
+    const admin = await ensureUser({
+      orm,
+      id: `auth-e2e-admin-${profile}`,
+      name: "Auth E2E Admin",
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD,
+      role: "admin",
+    });
+    const { organizationId } = await ensureOrganization({ orm, userId: admin.id });
+    await seedPosts({ orm, userId: admin.id, organizationId });
+    await seedExpiredWaitlistCode(orm);
+    await seedProvisionedClaimUser(orm);
+    console.info(`Seeded ${profile}. Admin login: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`);
+  },
+});
 
 function slugify(value: string): string {
   return value
@@ -21,27 +42,24 @@ function slugify(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-async function ensureUser({
-  id,
-  name,
-  email,
-  password,
-  role = "user",
-  emailVerified = true,
-}: {
+async function ensureUser(input: {
+  orm: SeedOrm;
   id: string;
   name: string;
   email: string;
   password?: string;
   role?: string;
   emailVerified?: boolean;
-}) {
+}): Promise<typeof schema.users.$inferSelect> {
+  const { orm, id, name, email, password, role = "user", emailVerified = true } = input;
   const [existingUser] = await orm
     .select()
     .from(schema.users)
     .where(eq(schema.users.email, email))
     .limit(1);
-  if (existingUser) return existingUser;
+  if (existingUser) {
+    return existingUser;
+  }
 
   const [user] = await orm
     .insert(schema.users)
@@ -56,7 +74,9 @@ async function ensureUser({
     })
     .returning();
 
-  if (!user) throw new Error(`Failed to seed user ${email}`);
+  if (!user) {
+    throw new Error(`Failed to seed user ${email}`);
+  }
 
   if (password) {
     await orm.insert(schema.accounts).values({
@@ -73,7 +93,11 @@ async function ensureUser({
   return user;
 }
 
-async function ensureOrganization(userId: string) {
+async function ensureOrganization(input: {
+  orm: SeedOrm;
+  userId: string;
+}): Promise<{ organizationId: string; teamId: string }> {
+  const { orm, userId } = input;
   const organizationId = `auth-e2e-enterprise-${profile}`;
   const teamId = `auth-e2e-team-${profile}`;
 
@@ -144,9 +168,16 @@ async function ensureOrganization(userId: string) {
   return { organizationId, teamId };
 }
 
-async function seedPosts(userId: string, organizationId: string) {
+async function seedPosts(input: {
+  orm: SeedOrm;
+  userId: string;
+  organizationId: string;
+}): Promise<void> {
+  const { orm, userId, organizationId } = input;
   const existingPosts = await orm.select().from(schema.posts).limit(1);
-  if (existingPosts.length > 0) return;
+  if (existingPosts.length > 0) {
+    return;
+  }
 
   const posts = [
     {
@@ -175,13 +206,15 @@ async function seedPosts(userId: string, organizationId: string) {
   );
 }
 
-async function seedExpiredWaitlistCode() {
+async function seedExpiredWaitlistCode(orm: SeedOrm): Promise<void> {
   const [existing] = await orm
     .select()
     .from(schema.waitlist)
     .where(eq(schema.waitlist.code, "expired-waitlist-code"))
     .limit(1);
-  if (existing) return;
+  if (existing) {
+    return;
+  }
 
   await orm.insert(schema.waitlist).values({
     id: uuidv4(),
@@ -196,8 +229,9 @@ async function seedExpiredWaitlistCode() {
   });
 }
 
-async function seedProvisionedClaimUser() {
+async function seedProvisionedClaimUser(orm: SeedOrm): Promise<typeof schema.users.$inferSelect> {
   const user = await ensureUser({
+    orm,
     id: `auth-e2e-claim-user-${profile}`,
     name: "Provisioned Claim User",
     email: `claim.${profile}@provisioned.auth-e2e.local`,
@@ -210,7 +244,9 @@ async function seedProvisionedClaimUser() {
     .from(schema.waitlist)
     .where(eq(schema.waitlist.claimUserId, user.id))
     .limit(1);
-  if (existingClaim) return user;
+  if (existingClaim) {
+    return user;
+  }
 
   await orm.insert(schema.waitlist).values({
     id: `auth-e2e-claim-${profile}`,
@@ -225,22 +261,3 @@ async function seedProvisionedClaimUser() {
 
   return user;
 }
-
-async function seed() {
-  await ensureDevServerStopped();
-  const admin = await ensureUser({
-    id: `auth-e2e-admin-${profile}`,
-    name: "Auth E2E Admin",
-    email: ADMIN_EMAIL,
-    password: ADMIN_PASSWORD,
-    role: "admin",
-  });
-  const { organizationId } = await ensureOrganization(admin.id);
-  await seedPosts(admin.id, organizationId);
-  await seedExpiredWaitlistCode();
-  await seedProvisionedClaimUser();
-
-  console.info(`Seeded ${profile}. Admin login: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`);
-}
-
-void seed();

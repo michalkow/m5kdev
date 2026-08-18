@@ -79,9 +79,9 @@ export function serverWebServer(profile: E2EProfile, { expo = false } = {}) {
   const env = serverEnv(profile, expo);
   return {
     command: [
-      `${SERVER_FILTER} tsx drizzle/reset.ts`,
+      `${SERVER_FILTER} tsx db.ts reset`,
       `${SERVER_FILTER} drizzle-kit migrate`,
-      `${SERVER_FILTER} tsx drizzle/seed.e2e.ts`,
+      `${SERVER_FILTER} tsx db.e2e.ts seed`,
       `${SERVER_FILTER} tsx src/index.ts`,
     ].join(" && "),
     url: `${env.VITE_SERVER_URL}/__emails`,

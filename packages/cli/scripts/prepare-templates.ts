@@ -67,11 +67,7 @@ const FEATURE_MANIFEST = {
   schemaVersion: 1,
   features: {
     "test-harness": {
-      paths: [
-        "apps/e2e/",
-        "apps/server/src/modules/test-harness/",
-        "apps/server/drizzle/seed.e2e.ts",
-      ],
+      paths: ["apps/e2e/", "apps/server/src/modules/test-harness/", "apps/server/db.e2e.ts"],
     },
     webapp: {
       paths: ["apps/webapp/"],
@@ -94,6 +90,9 @@ const FEATURE_MANIFEST = {
       { pattern: "**/.env", policy: "ignore" },
       { pattern: "**/drizzle/*.sql", policy: "ignore" },
       { pattern: "**/drizzle/meta/**", policy: "ignore" },
+      { pattern: "apps/server/db.ts", policy: "ensure" },
+      { pattern: "apps/server/db.e2e.ts", policy: "ensure" },
+      { pattern: "apps/server/drizzle.config.ts", policy: "ensure" },
     ],
     renames: [],
   },

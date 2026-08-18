@@ -23,7 +23,8 @@ described below. Existing apps follow the migration steps in this guide.
 | --- | --- |
 | `@m5kdev/backend` | `withLibsqlRetry` / `isRetryableLibsqlError` in `lib/libsql.ts`. The app kernel wraps the libsql client it creates so top-level calls (`execute`, `batch`, `migrate`, `executeMultiple`, `sync`, and the `transaction()` open) reconnect and retry on dead hrana streams. Caller-provided clients are used as-is. |
 | `@m5kdev/backend` | `AIModule` accepts `vectorStore` as either a preconfigured `LibSQLVector` or a config object resolved via `createAiVectorStore` (`modules/ai/ai.vector.ts`). Remote URLs are always direct connections; a local file is a dev-only fallback. Module shutdown closes stores it created. |
-| App server | Drizzle scripts (`seed`, `sync`, `reset`, `seed.e2e`) refuse to run against a local database file while the dev server is listening (`drizzle/guard.ts`). `reset` also removes embedded-replica sync metadata sidecars. |
+| `@m5kdev/backend` | Database commands (`runDb`) own the local-file guard, sidecar reset, replica sync, and script client retry wrapping. See [Kernel Database commands](./v0.34.0-kernel-database-commands-migration.md). |
+| App server | Prefer Kernel `runDb` via Database config (`db.ts`) instead of copying `drizzle/guard.ts` / `reset.ts` / `sync.ts`. |
 
 ## Database migration
 
@@ -45,9 +46,9 @@ most exposed call sites because they hold a stream open for their duration.
 **Embedded replicas must have exactly one owner per file.** The replica sync
 process injects WAL frames into the local file; a second client syncing (or
 deleting) the same file produces salt/checksum mismatches — surfacing as WAL
-conflicts and, in the worst case, a corrupted replica. This is why the drizzle
-scripts now guard against a running dev server, and why the vector store must
-never share the app database file.
+conflicts and, in the worst case, a corrupted replica. This is why Kernel
+Database commands guard against a running dev server, and why the vector store
+must never share the app database file.
 
 ## Required server changes
 
@@ -93,91 +94,16 @@ logs.
 the `transaction()` open is retried — replaying half a transaction is not safe.
 Keep transaction bodies short and DB-only.
 
-### 2. Add `drizzle/guard.ts`
+### 2. Use Kernel Database commands for reset, sync, and seed
 
-Create `apps/<app>/server/drizzle/guard.ts`:
-
-```ts
-import net from "node:net";
-
-const CONNECT_TIMEOUT_MS = 500;
-
-function isPortInUse(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = net.connect({ port, host: "127.0.0.1" });
-    const done = (result: boolean) => {
-      socket.destroy();
-      resolve(result);
-    };
-    socket.setTimeout(CONNECT_TIMEOUT_MS);
-    socket.once("connect", () => done(true));
-    socket.once("timeout", () => done(false));
-    socket.once("error", () => done(false));
-  });
-}
-
-/**
- * The dev server holds its own libsql connection on the local database file —
- * an embedded replica when Turso is configured. A second process syncing or
- * deleting that file corrupts the WAL, so db scripts must not run while the
- * server is up. Best-effort check: only the conventional PORT is probed.
- */
-export async function ensureDevServerStopped(): Promise<void> {
-  if (process.env.SKIP_DB_GUARD === "true") return;
-  const databaseUrl = process.env.DATABASE_URL ?? "file:./local.db";
-  if (!databaseUrl.startsWith("file:")) return;
-  const port = Number.parseInt(process.env.PORT ?? "8080", 10);
-  if (Number.isNaN(port) || !(await isPortInUse(port))) return;
-  console.error(
-    `[drizzle] A server is listening on port ${port} and holds ${databaseUrl}. ` +
-      "Stop the dev server first, or set SKIP_DB_GUARD=true to override."
-  );
-  process.exit(1);
-}
-```
+Do **not** copy `drizzle/guard.ts`, `reset.ts`, or `sync.ts`. Call `runDb` from
+server `db.ts` so the Kernel owns the local-file guard, sidecar wipe, replica
+sync, and retry-wrapped script client. Follow
+[Kernel Database commands](./v0.34.0-kernel-database-commands-migration.md).
 
 The guard is a no-op for remote-only `DATABASE_URL`s and can be bypassed with
 `SKIP_DB_GUARD=true`. It only probes the conventional `PORT` — a server started
 on a custom port slips through, so treat it as a safety net, not a lock.
-
-### 3. Wire the guard into every db script
-
-Call it as the first statement of each script's main function — `seed.ts`,
-`sync.ts`, `reset.ts`, and `seed.e2e.ts` if present:
-
-```ts
-import { ensureDevServerStopped } from "./guard";
-
-async function seed() {
-  await ensureDevServerStopped();
-  // ...
-}
-```
-
-### 4. Clean replica sync metadata in `reset.ts`
-
-The embedded replica keeps sync state in sidecar files next to the database.
-Deleting the database but keeping stale sync metadata causes WAL/sync conflicts
-on the next boot. Extend the reset script:
-
-```ts
-// Sidecars include the embedded-replica sync metadata (-info, -client_wal_index);
-// leaving those behind next to a recreated file causes WAL/sync conflicts.
-const DB_SIDECAR_SUFFIXES = ["-shm", "-wal", "-journal", "-info", "-client_wal_index"];
-
-async function reset() {
-  await ensureDevServerStopped();
-  const dbPath = sqlitePathFromDatabaseUrl(process.env.DATABASE_URL ?? "");
-  if (dbPath) {
-    await removeIfExists(dbPath);
-    for (const suffix of DB_SIDECAR_SUFFIXES) {
-      await removeIfExists(`${dbPath}${suffix}`);
-    }
-    await fs.mkdir(path.dirname(dbPath), { recursive: true });
-  }
-  // ...
-}
-```
 
 ## AI module: vector store configuration (if using `AIModule`)
 
@@ -226,23 +152,21 @@ preconfigured `LibSQLVector` instance is still accepted, but then its lifecycle
 | --- | --- |
 | Still seeing "stream not found" / `Hrana(Api("status=404..."))` errors | Client passed as a preconfigured instance without `withLibsqlRetry`; failure inside an interactive transaction (not retried by design); or an older `@m5kdev/backend` that only retried `SERVER_ERROR`/`HRANA_*` codes — embedded replicas surface the same failure as `SQLITE_*` with a Rust `Hrana(Api(...))` message and need a backend version that matches those too. |
 | Repeated retry warnings in logs | The remote endpoint is flapping or unreachable — retries mask single restarts, not sustained outages. |
-| `[drizzle] A server is listening on port ...` | Working as intended: stop the dev server before running seed/sync/reset, or use `SKIP_DB_GUARD=true` if you are certain the listener is not holding the database file. |
-| WAL conflicts on boot after a reset | Reset script does not delete the sync metadata sidecars (`-info`, `-client_wal_index`); apply step 4. |
+| `A server is listening on port ...` | Working as intended: stop the dev server before running seed/sync/reset, or use `SKIP_DB_GUARD=true` if you are certain the listener is not holding the database file. |
+| WAL conflicts on boot after a reset | Reset did not delete sync metadata sidecars (`-info`, `-client_wal_index`); use Kernel `runDb` reset instead of a copied ops script. |
 | WAL conflicts during development | A second process opened the local replica file: db scripts on a custom port, drizzle-kit studio against the local file, or a vector store sharing `DATABASE_URL`. |
 | `AI vector store ... requires a remote url in production` | Set the remote vector URL in the production environment, or drop the vector store config. |
 
 ## Migration checklist
 
-1. Upgrade `@m5kdev/backend` to a version that includes `lib/libsql.ts`.
+1. Upgrade `@m5kdev/backend` to a version that includes `lib/libsql.ts` and `runDb`.
 2. If you pass a preconfigured db client, wrap it with `withLibsqlRetry`.
-3. Add `apps/<app>/server/drizzle/guard.ts`.
-4. Call `ensureDevServerStopped()` first in `seed.ts`, `sync.ts`, `reset.ts`, and `seed.e2e.ts`.
-5. Extend `reset.ts` to delete all database sidecar files.
-6. If using `AIModule` with vectors: switch `vectorStore` to the config form, set the remote URL in production, and verify the local fallback file differs from the app database URL (`config.db.url` / `DATABASE_URL`).
-7. Restart the dev server and run a db script while it is up — confirm the script aborts with the guard warning.
+3. Switch Database commands to Kernel `runDb` via server `db.ts` (see [Kernel Database commands](./v0.34.0-kernel-database-commands-migration.md)). Delete copied `drizzle/guard.ts` / `reset.ts` / `sync.ts` if unmodified.
+4. If using `AIModule` with vectors: switch `vectorStore` to the config form, set the remote URL in production, and verify the local fallback file differs from the app database URL (`config.db.url` / `DATABASE_URL`).
+5. Restart the dev server and run `drizzle:reset` while it is up — confirm the command aborts with the guard warning.
 
 ## Related docs
 
-- [Backend package](/packages/backend)
+- [Kernel Database commands](/guides/v0.34.0-kernel-database-commands-migration)
 - [Telemetry migration](/guides/telemetry-migration)
 - [Getting started](/guides/getting-started)

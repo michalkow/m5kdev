@@ -367,6 +367,16 @@
         "default": "./dist/src/i18n/*.cjs"
       }
     },
+    "./db": {
+      "import": {
+        "types": "./dist/src/db.d.mts",
+        "default": "./dist/src/db.mjs"
+      },
+      "require": {
+        "types": "./dist/src/db.d.cts",
+        "default": "./dist/src/db.cjs"
+      }
+    },
     "./app": {
       "import": {
         "types": "./dist/src/app.d.mts",
