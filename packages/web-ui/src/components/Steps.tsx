@@ -1,8 +1,8 @@
 import { Check } from "lucide-react";
 import type React from "react";
+import { cn } from "../lib/utils";
 import { Badge } from "./ui/badge";
 import { Separator } from "./ui/separator";
-import { cn } from "../lib/utils";
 
 export interface Step {
   id: string;

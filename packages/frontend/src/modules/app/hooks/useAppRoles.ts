@@ -1,8 +1,8 @@
 import {
-  normalizeAuthRolesConfig,
   type AuthRoleScope,
   type NormalizedAuthRoleScopeConfig,
   type NormalizedAuthRolesConfig,
+  normalizeAuthRolesConfig,
 } from "@m5kdev/commons/modules/auth/auth.roles";
 import { useMemo } from "react";
 import { useAppConfig } from "./useAppConfig";

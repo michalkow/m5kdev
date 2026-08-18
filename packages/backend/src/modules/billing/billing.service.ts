@@ -168,7 +168,7 @@ export class BillingService extends BasePermissionService<
     if (!allowedEvents.includes(event.type)) return ok(false);
 
     // All the events I track have a customerId
-    const { customer: customerId } = event?.data?.object as {
+    const { customer: customerId } = event.data.object as {
       customer: string; // Sadly TypeScript does not know this
     };
 

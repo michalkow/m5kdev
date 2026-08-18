@@ -1,9 +1,9 @@
-import { queryFiltersToMatch } from "@m5kdev/commons/modules/schemas/queryMatch";
-import type { QueryFilter } from "@m5kdev/commons/modules/schemas/query.schema";
 import { createClient } from "@libsql/client";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import type { QueryFilter } from "@m5kdev/commons/modules/schemas/query.schema";
+import { queryFiltersToMatch } from "@m5kdev/commons/modules/schemas/queryMatch";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { drizzle } from "drizzle-orm/libsql";
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { BaseTableRepository } from "./base.repository";
 
 const matchItems = sqliteTable("match_items", {
@@ -266,7 +266,9 @@ describe("BaseTableRepository matchList / matchFind", () => {
   it("errors on unknown column, unknown operator, and malformed payload", async () => {
     const unknownColumn = await repo.matchList({ match: { missing: "x" } });
     const unknownOp = await repo.matchList({ match: { age: { $regex: "18" } } as never });
-    const unknownBoolean = await repo.matchList({ match: { $nor: [{ status: "draft" }] } as never });
+    const unknownBoolean = await repo.matchList({
+      match: { $nor: [{ status: "draft" }] } as never,
+    });
     const malformed = await repo.matchList({ match: { age: { $in: 18 } } as never });
 
     expect(unknownColumn.isErr()).toBe(true);
@@ -299,10 +301,7 @@ describe("BaseTableRepository matchList / matchFind", () => {
       page: 1,
       limit: 1,
     });
-    const searched = await repo.matchList(
-      { q: "Widget" },
-      { globalSearchColumns: ["name"] }
-    );
+    const searched = await repo.matchList({ q: "Widget" }, { globalSearchColumns: ["name"] });
 
     expect(paged.isOk()).toBe(true);
     expect(searched.isOk()).toBe(true);
@@ -331,10 +330,7 @@ describe("BaseTableRepository matchList / matchFind", () => {
 
   it("includes soft-deleted rows only when showDeleted is set", async () => {
     const hidden = await repo.matchList({ match: { status: "published" } });
-    const shown = await repo.matchList(
-      { match: { status: "published" } },
-      { showDeleted: true }
-    );
+    const shown = await repo.matchList({ match: { status: "published" } }, { showDeleted: true });
     expect(hidden.isOk()).toBe(true);
     expect(shown.isOk()).toBe(true);
     if (hidden.isOk() && shown.isOk()) {

@@ -2,10 +2,10 @@ import { Alert, Button, FieldError, Form, Input, Label, TextField, toast } from 
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
-import { createUserLocaleHeaders } from "../utils/authLocale";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
+import { createUserLocaleHeaders } from "../utils/authLocale";
 
 function getEmailProviderUrl(email: string): string | null {
   const domain = email.split("@")[1]?.toLowerCase();

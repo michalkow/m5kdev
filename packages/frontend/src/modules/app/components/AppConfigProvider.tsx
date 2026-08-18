@@ -1,6 +1,6 @@
-import { createContext, type ReactNode } from "react";
 import type { AuthLocaleConfig } from "@m5kdev/commons/modules/auth/auth.locale";
 import type { AuthRolesConfig } from "@m5kdev/commons/modules/auth/auth.roles";
+import { createContext, type ReactNode } from "react";
 
 type AppConfig = {
   appUrl: string;

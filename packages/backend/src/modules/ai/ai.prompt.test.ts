@@ -5,9 +5,8 @@ import type {
   AIServiceGenerateObjectParams,
 } from "./ai.service";
 
-type Equals<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
-  ? true
-  : false;
+type Equals<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 
 describe("GeneratePromptParamsFor", () => {
   it("distributes over object | extracted and retains both parameter shapes", () => {

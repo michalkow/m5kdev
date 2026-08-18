@@ -129,9 +129,7 @@ export function AvatarUpload({ currentAvatarUrl, onUploadComplete, className }: 
             </ProgressBar>
           </div>
         )}
-        {status === "error" && error ? (
-          <p className="mt-2 text-sm text-red-500">{error}</p>
-        ) : null}
+        {status === "error" && error ? <p className="mt-2 text-sm text-red-500">{error}</p> : null}
       </div>
 
       {displayUrl && showCropDialog ? (

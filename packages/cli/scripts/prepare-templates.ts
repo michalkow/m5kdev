@@ -15,9 +15,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
-  MANAGED_CATALOG_SPECIFIER,
   assertCatalogKeys,
   buildConsumerCatalog,
+  MANAGED_CATALOG_SPECIFIER,
   readCatalog,
   renderConsumerWorkspace,
 } from "../src/catalog";

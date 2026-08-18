@@ -1,6 +1,6 @@
 import { ChevronDown, RotateCcw } from "lucide-react";
 import * as React from "react";
-
+import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -12,7 +12,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { cn } from "../lib/utils";
 
 interface MultiSelectOption {
   label: string;
@@ -229,5 +228,5 @@ const MultiSelectDropdown = React.forwardRef<
 
 MultiSelectDropdown.displayName = "MultiSelectDropdown";
 
+export type { MultiSelectDropdownProps, MultiSelectOption };
 export { MultiSelectDropdown };
-export type { MultiSelectOption, MultiSelectDropdownProps };

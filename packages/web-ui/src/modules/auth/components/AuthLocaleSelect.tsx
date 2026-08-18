@@ -11,12 +11,7 @@ export interface AuthLocaleSelectProps {
   description?: string;
 }
 
-export function AuthLocaleSelect({
-  value,
-  onChange,
-  label,
-  description,
-}: AuthLocaleSelectProps) {
+export function AuthLocaleSelect({ value, onChange, label, description }: AuthLocaleSelectProps) {
   const { t } = useTranslation("web-ui");
   const { locales } = useAppConfig();
 

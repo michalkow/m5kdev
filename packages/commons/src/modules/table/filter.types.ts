@@ -36,4 +36,3 @@ export type FilterMethod = {
 export type FilterMethods = {
   [key in ColumnDataType]: FilterMethod[];
 };
-

@@ -24,9 +24,12 @@ export type BaseModuleDeps =
 /** True when `Deps` has no keys (e.g. `never` or `{}` for modules with no declared deps). */
 type IsDepsEmpty<Deps extends BaseModuleDeps> = [keyof Deps] extends [never] ? true : false;
 
-export type ModuleTypedDeps<Deps extends BaseModuleDeps> = IsDepsEmpty<Deps> extends true
-  ? BackendModuleDependencyMap
-  : { [K in keyof Deps & string]: BackendModuleDependencyMap[string] } & BackendModuleDependencyMap;
+export type ModuleTypedDeps<Deps extends BaseModuleDeps> =
+  IsDepsEmpty<Deps> extends true
+    ? BackendModuleDependencyMap
+    : {
+        [K in keyof Deps & string]: BackendModuleDependencyMap[string];
+      } & BackendModuleDependencyMap;
 
 export type ModuleRepositoriesContext<
   Deps extends BaseModuleDeps = Record<string, never>,

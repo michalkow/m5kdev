@@ -4,16 +4,12 @@
     "rootDir": ".",
     "outDir": "dist",
     "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo",
-    "types": [
-      "vite/client"
-    ],
+    "types": ["vite/client"],
     "emitDeclarationOnly": false,
     "allowImportingTsExtensions": false,
-    "noEmit": false,
+    "noEmit": false
   },
-  "include": [
-    "src"
-  ],
+  "include": ["src"],
   "exclude": [
     "out-tsc",
     "dist",

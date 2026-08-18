@@ -2,12 +2,7 @@ import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { InMemorySpanExporter } from "@opentelemetry/sdk-trace-base";
 import type { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { registerTestTracerProvider, shutdownTestTracerProvider } from "../test/stubs/otel";
-import {
-  type ErrorReporter,
-  reportError,
-  ServerError,
-  setErrorReporter,
-} from "./errors";
+import { type ErrorReporter, reportError, ServerError, setErrorReporter } from "./errors";
 
 describe("reportError otel", () => {
   let exporter: InMemorySpanExporter;
@@ -53,9 +48,7 @@ describe("reportError otel", () => {
     expect(finished.attributes["error.layerName"]).toBe("ExampleService");
     expect(finished.events.some((event) => event.name === "exception")).toBe(true);
     expect(
-      finished.events.find((event) => event.name === "exception")?.attributes?.[
-        "exception.message"
-      ]
+      finished.events.find((event) => event.name === "exception")?.attributes?.["exception.message"]
     ).toBe("boom");
   });
 
@@ -102,9 +95,7 @@ describe("reportError otel", () => {
     expect(finished.status.code).toBe(SpanStatusCode.ERROR);
     expect(finished.status.message).toBe("plain boom");
     expect(
-      finished.events.find((event) => event.name === "exception")?.attributes?.[
-        "exception.message"
-      ]
+      finished.events.find((event) => event.name === "exception")?.attributes?.["exception.message"]
     ).toBe("plain boom");
   });
 

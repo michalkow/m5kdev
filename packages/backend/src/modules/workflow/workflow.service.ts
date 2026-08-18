@@ -50,8 +50,7 @@ function wrapJobHandler(
   fn: (payload: unknown) => Promise<unknown>
 ): (payload: unknown) => Promise<unknown> {
   const needsWrap = Boolean(
-    (config.validateInput && config.inputSchema) ||
-      (config.validateOutput && config.outputSchema)
+    (config.validateInput && config.inputSchema) || (config.validateOutput && config.outputSchema)
   );
   if (!needsWrap) {
     return fn;
@@ -189,7 +188,9 @@ export class WorkflowService extends Base {
     config: WorkflowJobConfig<Payload, true> & { awaitable: true }
   ): WorkflowJobDefinition<Payload, void, true>;
 
-  job<Payload>(config: WorkflowJobConfig<Payload, false>): WorkflowJobDefinition<Payload, void, false>;
+  job<Payload>(
+    config: WorkflowJobConfig<Payload, false>
+  ): WorkflowJobDefinition<Payload, void, false>;
 
   job<Payload, Awaitable extends boolean>(
     config: WorkflowJobConfig<Payload, Awaitable>
@@ -242,10 +243,9 @@ export class WorkflowService extends Base {
         this.triggerManyJobs(resolved, payloads, overrides),
       // biome-ignore lint/suspicious/noExplicitAny: conditional handle type requires untyped implementation
       handle(fn: any) {
-        this._handler = wrapJobHandler(
-          resolved,
-          fn as (payload: unknown) => Promise<unknown>
-        ) as (payload: Payload) => Promise<unknown>;
+        this._handler = wrapJobHandler(resolved, fn as (payload: unknown) => Promise<unknown>) as (
+          payload: Payload
+        ) => Promise<unknown>;
         return this;
       },
     };

@@ -1,5 +1,5 @@
-import type { QueryMatch } from "@m5kdev/commons/modules/schemas/queryMatch";
 import type { QueryFilter, QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
+import type { QueryMatch } from "@m5kdev/commons/modules/schemas/queryMatch";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server";
 import { ok } from "neverthrow";
 import type { z } from "zod";
@@ -134,11 +134,7 @@ export type ServiceProcedureHandler<
   args: ServiceProcedureArgs<TInput, TCtx, Repositories, Services, State>
 ) => ServiceProcedureResultLike<TOutput>;
 
-export type ServiceProcedureAccessEntities =
-  | Entity
-  | Entity[]
-  | EntityListResult
-  | undefined;
+export type ServiceProcedureAccessEntities = Entity | Entity[] | EntityListResult | undefined;
 
 export type ServiceProcedureEntityResolver<
   TInput,

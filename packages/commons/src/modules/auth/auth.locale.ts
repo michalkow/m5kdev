@@ -42,10 +42,7 @@ function buildCompareKeyFromCanonical(canonical: string): string {
   return normalizeLocaleTag(canonical)?.compareKey ?? canonical.toLowerCase();
 }
 
-export function toCanonicalLocale(
-  tag: string,
-  allowedLocales: readonly string[]
-): string | null {
+export function toCanonicalLocale(tag: string, allowedLocales: readonly string[]): string | null {
   const normalized = normalizeLocaleTag(tag);
   if (!normalized) return null;
 

@@ -1,7 +1,7 @@
-import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
-import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { USER_LOCALE_HEADER } from "@m5kdev/commons/modules/auth/auth.constants";
 import { resolveAppLocale } from "@m5kdev/commons/modules/auth/auth.locale";
+import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
+import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { APP_LOCALE_CONFIG } from "@starter-app/shared/modules/app/app.constants";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { Button } from "heroui-native";

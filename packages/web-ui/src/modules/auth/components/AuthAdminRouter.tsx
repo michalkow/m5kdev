@@ -1,7 +1,10 @@
 import { Route } from "react-router";
 import { AuthAdminLayout } from "./AuthAdminLayout";
 import { AuthAdminOrganizationManagement } from "./AuthAdminOrganizationManagement";
-import { AuthAdminUserManagement, type AuthAdminUserManagementProps } from "./AuthAdminUserManagement";
+import {
+  AuthAdminUserManagement,
+  type AuthAdminUserManagementProps,
+} from "./AuthAdminUserManagement";
 import { AuthAdminWaitlist } from "./AuthAdminWaitlist";
 
 export function AuthAdminRouter({

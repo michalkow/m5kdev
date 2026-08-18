@@ -15,9 +15,9 @@ import {
 } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
-import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useAppRoles } from "@m5kdev/frontend/modules/app/hooks/useAppRoles";
+import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useRoleLabel } from "@m5kdev/frontend/modules/app/hooks/useRoleLabel";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
@@ -111,9 +111,7 @@ export function AuthAdminOrganizationManagement() {
   const [userSearch, setUserSearch] = useState("");
   const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<Key | null>(null);
-  const [newMemberRole, setNewMemberRole] = useState<Key>(
-    organizationRoles.defaultRole
-  );
+  const [newMemberRole, setNewMemberRole] = useState<Key>(organizationRoles.defaultRole);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedParentSearch(parentSearch), 300);
@@ -811,7 +809,9 @@ export function AuthAdminOrganizationManagement() {
                                   }}
                                 >
                                   <Select.Trigger className="min-h-9">
-                                    <Select.Value>{getRoleLabelForMember(member.role)}</Select.Value>
+                                    <Select.Value>
+                                      {getRoleLabelForMember(member.role)}
+                                    </Select.Value>
                                     <Select.Indicator />
                                   </Select.Trigger>
                                   <Select.Popover>

@@ -66,11 +66,7 @@ export interface QueryMatch {
   readonly $and?: readonly QueryMatch[];
   readonly $or?: readonly QueryMatch[];
   readonly $not?: QueryMatch;
-  readonly [field: string]:
-    | QueryMatchFieldValue
-    | readonly QueryMatch[]
-    | QueryMatch
-    | undefined;
+  readonly [field: string]: QueryMatchFieldValue | readonly QueryMatch[] | QueryMatch | undefined;
 }
 
 export const queryMatchSchema: z.ZodType<QueryMatch> = z.lazy(() =>

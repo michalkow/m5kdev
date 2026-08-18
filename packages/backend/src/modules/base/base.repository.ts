@@ -1,9 +1,9 @@
-import type { MatchQueryInput } from "@m5kdev/commons/modules/schemas/queryMatch";
 import type {
   QueryFilter,
   QueryFilters,
   QueryInput,
 } from "@m5kdev/commons/modules/schemas/query.schema";
+import type { MatchQueryInput } from "@m5kdev/commons/modules/schemas/queryMatch";
 import {
   and,
   count,

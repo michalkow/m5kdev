@@ -48,7 +48,10 @@ function AuthAdminRouterStory({
                       />
                     }
                   />
-                  <Route path="/admin/organizations" element={<AuthAdminOrganizationManagement />} />
+                  <Route
+                    path="/admin/organizations"
+                    element={<AuthAdminOrganizationManagement />}
+                  />
                   {enableWaitlist ? (
                     <Route path="/admin/waitlist" element={<AuthAdminWaitlist />} />
                   ) : null}

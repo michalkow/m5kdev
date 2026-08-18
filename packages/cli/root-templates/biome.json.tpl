@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.2.0/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.9/schema.json",
   "vcs": {
     "enabled": false,
     "clientKind": "git",
@@ -10,7 +10,8 @@
     "includes": [
       "**",
       "!**/node_modules",
-      "!**/dist",
+      "!!**/dist",
+      "!!**/storybook-static",
       "!**/.react-router",
       "!**/.m5kdev.json",
       "!**/drizzle/meta"
@@ -26,8 +27,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "nursery": {},
-      "recommended": true,
+      "preset": "recommended",
       "correctness": {
         "noUnusedVariables": "warn",
         "useExhaustiveDependencies": "warn",
@@ -70,6 +70,11 @@
       "quoteStyle": "double",
       "trailingCommas": "es5",
       "semicolons": "always"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
     }
   },
   "assist": {

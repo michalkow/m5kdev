@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { syncI18nLocale } from "../../app/utils/locale";
 import { AppConfigContext } from "../../app/components/AppConfigProvider";
+import { syncI18nLocale } from "../../app/utils/locale";
 import { type AuthSession, authProviderContext } from "../auth.context";
 import { type AuthClient, configureAuthClient } from "../auth.lib";
 

@@ -72,29 +72,30 @@ export type BackendAppModule = {
   shutdown?(ctx: any): Promise<void> | void;
 };
 
-type ExtractModuleRouters<M> = M extends BaseModule<any, any, any, any, infer Routers>
-  ? Routers
-  : M extends BackendModuleDefinition<any, any, any, any, infer Routers>
+type ExtractModuleRouters<M> =
+  M extends BaseModule<any, any, any, any, infer Routers>
     ? Routers
-    : {};
+    : M extends BackendModuleDefinition<any, any, any, any, infer Routers>
+      ? Routers
+      : {};
 
-type BuiltModuleRouters<Modules extends readonly BackendAppModule[]> = Simplify<
-  UnionToIntersection<ExtractModuleRouters<Modules[number]>>
-> extends infer TRouters
-  ? TRouters extends TRPCCreateRouterOptions
-    ? TRouters
-    : never
-  : never;
+type BuiltModuleRouters<Modules extends readonly BackendAppModule[]> =
+  Simplify<UnionToIntersection<ExtractModuleRouters<Modules[number]>>> extends infer TRouters
+    ? TRouters extends TRPCCreateRouterOptions
+      ? TRouters
+      : never
+    : never;
 
-type DefinedBackendModule<T extends BackendModuleDefinition> = T extends BackendModuleDefinition<
-  infer Id,
-  infer Tables,
-  infer Repositories,
-  infer Services,
-  infer TRouters
->
-  ? BackendModuleDefinition<Id, Tables, Repositories, Services, TRouters>
-  : never;
+type DefinedBackendModule<T extends BackendModuleDefinition> =
+  T extends BackendModuleDefinition<
+    infer Id,
+    infer Tables,
+    infer Repositories,
+    infer Services,
+    infer TRouters
+  >
+    ? BackendModuleDefinition<Id, Tables, Repositories, Services, TRouters>
+    : never;
 
 type BuiltModuleRuntime = {
   id: string;

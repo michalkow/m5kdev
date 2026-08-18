@@ -98,7 +98,11 @@ export interface WorkflowJobDefinition<
   input<TSchema extends z.ZodType>(
     schema: TSchema,
     validate?: boolean
-  ): WorkflowJobDefinition<Omit<Payload, "data"> & { data: z.infer<TSchema> }, TExpectedOutput, Awaitable>;
+  ): WorkflowJobDefinition<
+    Omit<Payload, "data"> & { data: z.infer<TSchema> },
+    TExpectedOutput,
+    Awaitable
+  >;
   output<TSchema extends z.ZodType>(
     schema: TSchema,
     validate?: boolean

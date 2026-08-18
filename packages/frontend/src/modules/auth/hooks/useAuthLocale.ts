@@ -1,7 +1,7 @@
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppTRPC } from "../../app/hooks/useAppTrpc";
 import { syncI18nLocale } from "../../app/utils/locale";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export function useAuthLocale() {
   const trpc = useAppTRPC<BackendTRPCRouter>();

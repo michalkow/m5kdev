@@ -6,6 +6,7 @@ function firstSelectedKey(selection: Selection): string | undefined {
   const first = (selection as Set<unknown>).values().next().value;
   return first == null ? undefined : String(first);
 }
+
 import { CalendarDate, getLocalTimeZone, today } from "@internationalized/date";
 import type { QueryFilter, QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { ColumnDataType, FilterMethod } from "@m5kdev/commons/modules/table/filter.types";

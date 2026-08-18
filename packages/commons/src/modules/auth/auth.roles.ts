@@ -94,11 +94,7 @@ export function normalizeRoleScopeConfig(
     defaults.managerRoles
   );
 
-  const assignableRoles = pickSubset(
-    scope.assignableRoles ?? roles,
-    roles,
-    roles
-  );
+  const assignableRoles = pickSubset(scope.assignableRoles ?? roles, roles, roles);
 
   return {
     roles,

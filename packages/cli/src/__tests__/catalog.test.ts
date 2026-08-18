@@ -2,10 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { parse } from "yaml";
 import {
-  MANAGED_CATALOG_NAME,
   assertCatalogKeys,
   buildConsumerCatalog,
   collectConsumerDependencyNames,
+  MANAGED_CATALOG_NAME,
   mergeManagedCatalog,
   readCatalog,
   renderConsumerWorkspace,
@@ -205,14 +205,7 @@ const BOUNDARY_PEERS: Record<string, readonly string[]> = {
     "zod",
   ],
   "@m5kdev/commons": ["zod"],
-  "@m5kdev/frontend": [
-    "@trpc/client",
-    "@trpc/server",
-    "better-auth",
-    "react",
-    "react-dom",
-    "zod",
-  ],
+  "@m5kdev/frontend": ["@trpc/client", "@trpc/server", "better-auth", "react", "react-dom", "zod"],
   "@m5kdev/web-ui": ["@heroui/react", "nuqs", "react", "react-dom", "zod"],
 };
 

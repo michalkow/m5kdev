@@ -4,9 +4,7 @@ import { persistPublicLocale, resolvePublicLocale } from "../utils/authLocale";
 
 export function useAuthPublicLocale(onLocaleChange?: (locale: string) => void | Promise<void>) {
   const { locales } = useAppConfig();
-  const [locale, setLocaleState] = useState(() =>
-    locales ? resolvePublicLocale(locales) : null
-  );
+  const [locale, setLocaleState] = useState(() => (locales ? resolvePublicLocale(locales) : null));
 
   useEffect(() => {
     if (!locales) return;

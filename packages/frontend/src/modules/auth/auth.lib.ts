@@ -1,7 +1,7 @@
 import { createM5KAuthClient, type M5KAuthClient } from "./auth.client";
 
-export { createM5KAuthClient };
 export type { M5KAuthClient as AuthClient } from "./auth.client";
+export { createM5KAuthClient };
 
 export let authClient: M5KAuthClient = createM5KAuthClient();
 

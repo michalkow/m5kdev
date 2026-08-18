@@ -14,9 +14,33 @@ const SIGNOZ_OTLP_ENDPOINT =
   process.env.OTEL_EXPORTER_OTLP_ENDPOINT ??
   "https://signoz-ingester-production-9090.up.railway.app";
 
-const PORTS: Record<E2EProfile, { web: number; server: number; expoWeb: number; expoServer: number; redisDb: number; expoRedisDb: number }> = {
-  standard: { web: 15173, server: 18180, expoWeb: 15183, expoServer: 18182, redisDb: 1, expoRedisDb: 3 },
-  waitlist: { web: 15174, server: 18181, expoWeb: 15184, expoServer: 18183, redisDb: 2, expoRedisDb: 4 },
+const PORTS: Record<
+  E2EProfile,
+  {
+    web: number;
+    server: number;
+    expoWeb: number;
+    expoServer: number;
+    redisDb: number;
+    expoRedisDb: number;
+  }
+> = {
+  standard: {
+    web: 15173,
+    server: 18180,
+    expoWeb: 15183,
+    expoServer: 18182,
+    redisDb: 1,
+    expoRedisDb: 3,
+  },
+  waitlist: {
+    web: 15174,
+    server: 18181,
+    expoWeb: 15184,
+    expoServer: 18183,
+    redisDb: 2,
+    expoRedisDb: 4,
+  },
 };
 
 function serverEnv(profile: E2EProfile, expo: boolean): Record<string, string> {

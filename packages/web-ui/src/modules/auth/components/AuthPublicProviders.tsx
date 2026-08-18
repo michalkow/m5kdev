@@ -1,11 +1,11 @@
 import { Button, toast } from "@heroui/react";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
-import { resolvePublicLocale } from "../utils/authLocale";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useTranslation } from "react-i18next";
 import { GoogleIcon } from "../../../icons/GoogleIcon";
 import { LinkedInIcon } from "../../../icons/LinkedInIcon";
 import { MicrosoftIcon } from "../../../icons/MicrosoftIcon";
+import { resolvePublicLocale } from "../utils/authLocale";
 import { AuthPublicLastUsedBadge } from "./AuthPublicLastUsedBadge";
 
 export function AuthPublicProviders({

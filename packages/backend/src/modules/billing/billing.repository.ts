@@ -252,24 +252,24 @@ export class BillingRepository extends BaseTableRepository<
     const [stripeSubscription] = stripeSubscriptionsResult.value.data;
     if (!stripeSubscription) return this.error("NOT_FOUND", "Subscription not found");
 
-    const plan = this.getPlanByPriceId(stripeSubscription.items.data[0]?.price.id!);
+    const [subscriptionItem] = stripeSubscription.items.data;
+    if (!subscriptionItem) return this.error("NOT_FOUND", "Subscription item not found");
+
+    const plan = this.getPlanByPriceId(subscriptionItem.price.id);
     if (!plan)
-      return this.error(
-        "NOT_FOUND",
-        `Plan not found for price ID: ${stripeSubscription.items.data[0]?.price.id}`
-      );
+      return this.error("NOT_FOUND", `Plan not found for price ID: ${subscriptionItem.price.id}`);
 
     const values = {
       stripeCustomerId: customerId,
       referenceId: userId,
       plan: plan.name,
       status: stripeSubscription.status,
-      seats: stripeSubscription.items.data[0]?.quantity || 1,
-      periodEnd: new Date(stripeSubscription.items.data[0]?.current_period_end! * 1000),
-      periodStart: new Date(stripeSubscription.items.data[0]?.current_period_start! * 1000),
-      priceId: stripeSubscription.items.data[0]?.price.id!,
-      interval: stripeSubscription.items.data[0]?.price.recurring?.interval,
-      unitAmount: stripeSubscription.items.data[0]?.price.unit_amount,
+      seats: subscriptionItem.quantity || 1,
+      periodEnd: new Date(subscriptionItem.current_period_end * 1000),
+      periodStart: new Date(subscriptionItem.current_period_start * 1000),
+      priceId: subscriptionItem.price.id,
+      interval: subscriptionItem.price.recurring?.interval,
+      unitAmount: subscriptionItem.price.unit_amount,
       discounts: stripeSubscription.discounts.map((discount) =>
         typeof discount === "string" ? discount : discount.id
       ),

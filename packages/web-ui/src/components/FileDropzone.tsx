@@ -1,9 +1,9 @@
 import { File, Upload, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
+import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
-import { cn } from "../lib/utils";
 
 interface FileDropzoneProps {
   onUploadComplete?: (filePath: string) => void;

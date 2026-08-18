@@ -1,8 +1,8 @@
 import { AppConfigProvider } from "@m5kdev/frontend/modules/app/components/AppConfigProvider";
 import { AuthProvider } from "@m5kdev/frontend/modules/auth/components/AuthProvider";
+import { APP_NAME } from "@starter-app/shared/modules/app/app.constants";
 import { Stack } from "expo-router";
 import { HeroUINativeProvider } from "heroui-native";
-import { APP_NAME } from "@starter-app/shared/modules/app/app.constants";
 import type { JSX } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { LoadingScreen } from "../components/LoadingScreen";

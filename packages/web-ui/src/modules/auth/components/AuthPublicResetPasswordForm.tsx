@@ -10,11 +10,11 @@ import {
 } from "@heroui/react";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
-import { createUserLocaleHeaders } from "../utils/authLocale";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
+import { createUserLocaleHeaders } from "../utils/authLocale";
 
 export function AuthPublicResetPasswordForm() {
   const { t } = useTranslation();

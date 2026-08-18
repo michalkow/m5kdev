@@ -5,17 +5,12 @@
     "outDir": "dist",
     "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo",
     "declarationMap": false,
-    "types": [
-      "vite/client"
-    ],
+    "types": ["vite/client"],
     "emitDeclarationOnly": false,
     "noEmit": false,
-    "allowImportingTsExtensions": false,
+    "allowImportingTsExtensions": false
   },
-  "include": [
-    "src",
-    ".storybook"
-  ],
+  "include": ["src", ".storybook"],
   "exclude": [
     "out-tsc",
     "dist",

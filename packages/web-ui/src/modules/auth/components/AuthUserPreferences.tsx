@@ -5,13 +5,13 @@ import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { z } from "zod";
 import { AuthUserProfileEditor } from "./AuthUserProfileEditor";
+import { AuthUtilityLocalePicker } from "./AuthUtilityLocalePicker";
 import {
   AuthUtilityPreferencesEditor,
   type ControlsFor,
   type PreferenceEditorLabels,
 } from "./AuthUtilityPreferencesEditor";
 import { AuthUtilityThemePicker } from "./AuthUtilityThemePicker";
-import { AuthUtilityLocalePicker } from "./AuthUtilityLocalePicker";
 
 export interface AuthUserPreferencesProps<S extends z.ZodObject<z.ZodRawShape>> {
   schema: S;

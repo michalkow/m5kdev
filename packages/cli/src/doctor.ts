@@ -4,8 +4,8 @@ import path from "node:path";
 import { promisify } from "node:util";
 import semver from "semver";
 import {
-  MANAGED_CATALOG_SPECIFIER,
   collectCatalogProtocolDependencies,
+  MANAGED_CATALOG_SPECIFIER,
   readCatalog,
   readDefaultCatalog,
   walkPackageJsonFiles,

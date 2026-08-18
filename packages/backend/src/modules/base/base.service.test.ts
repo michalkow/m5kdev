@@ -1,5 +1,5 @@
-import type { MatchQueryInput } from "@m5kdev/commons/modules/schemas/queryMatch";
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
+import type { MatchQueryInput } from "@m5kdev/commons/modules/schemas/queryMatch";
 import { err, ok } from "neverthrow";
 import { ServerError } from "../../utils/errors";
 import type { ServiceActorClaims, ServiceOrganizationActor, ServiceTeamActor } from "./base.actor";
@@ -362,7 +362,10 @@ describe("BaseService procedure builder", () => {
   });
 
   it("addMatch replaces input.match with the resolver return value", async () => {
-    type MatchQueryWithSearch = MatchQueryInput & { search?: string; filters?: QueryInput["filters"] };
+    type MatchQueryWithSearch = MatchQueryInput & {
+      search?: string;
+      filters?: QueryInput["filters"];
+    };
 
     class QueryService extends BaseService<Record<string, never>, Record<string, never>> {
       readonly run = this.procedure<MatchQueryWithSearch>("run")
@@ -485,20 +488,25 @@ describe("BaseService procedure builder", () => {
       readonly run = this.procedure<QueryWithSearch>("run")
         .requireAuth()
         .mapInput("scopedQuery", ({ input, ctx }) =>
-          this.addContextFilter(ctx.actor, { member: true, organization: true, team: true }, input, {
-            memberId: {
-              columnId: "memberId",
-              method: "equals",
-            },
-            organizationId: {
-              columnId: "organizationId",
-              method: "equals",
-            },
-            teamId: {
-              columnId: "teamId",
-              method: "equals",
-            },
-          })
+          this.addContextFilter(
+            ctx.actor,
+            { member: true, organization: true, team: true },
+            input,
+            {
+              memberId: {
+                columnId: "memberId",
+                method: "equals",
+              },
+              organizationId: {
+                columnId: "organizationId",
+                method: "equals",
+              },
+              teamId: {
+                columnId: "teamId",
+                method: "equals",
+              },
+            }
+          )
         )
         .use("filterCount", ({ input }) => input.filters?.length ?? 0)
         .handle(({ input, state }) =>

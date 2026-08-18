@@ -24,11 +24,7 @@ export class TagRepository extends BaseTableRepository<
   Schema["tags"]
 > {
   async link(
-    {
-      userId,
-      memberId,
-      ...data
-    }: TagLinkSchema & { userId: string; memberId?: string | null },
+    { userId, memberId, ...data }: TagLinkSchema & { userId: string; memberId?: string | null },
     tx?: Orm
   ): Promise<TaggingSelectOutputResult> {
     const db = tx ?? this.orm;
@@ -114,11 +110,7 @@ export class TagRepository extends BaseTableRepository<
   }
 
   async unlink(
-    {
-      userId,
-      memberId,
-      ...data
-    }: TagLinkSchema & { userId: string; memberId?: string | null },
+    { userId, memberId, ...data }: TagLinkSchema & { userId: string; memberId?: string | null },
     tx?: Orm
   ): Promise<TagSelectOutputResult> {
     const db = tx ?? this.orm;

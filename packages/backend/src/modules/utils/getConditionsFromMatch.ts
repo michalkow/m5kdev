@@ -1,4 +1,8 @@
-import type { QueryMatch, QueryMatchFieldValue, QueryMatchOperators } from "@m5kdev/commons/modules/schemas/queryMatch";
+import type {
+  QueryMatch,
+  QueryMatchFieldValue,
+  QueryMatchOperators,
+} from "@m5kdev/commons/modules/schemas/queryMatch";
 import {
   and,
   between,
@@ -15,8 +19,8 @@ import {
   not,
   notInArray,
   or,
-  sql,
   type SQL,
+  sql,
 } from "drizzle-orm";
 import type { SQLiteColumn, SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
 import { DateTime } from "luxon";
@@ -113,7 +117,12 @@ function compareValue(column: SQLiteColumn, value: unknown): unknown {
 }
 
 function isOperatorMap(value: unknown): value is QueryMatchOperators {
-  if (value === null || typeof value !== "object" || Array.isArray(value) || value instanceof Date) {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    value instanceof Date
+  ) {
     return false;
   }
   const keys = Object.keys(value);
@@ -121,7 +130,9 @@ function isOperatorMap(value: unknown): value is QueryMatchOperators {
 }
 
 function isQueryMatch(value: unknown): value is QueryMatch {
-  return value !== null && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date);
+  return (
+    value !== null && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)
+  );
 }
 
 function joinAnd(parts: SQL[]): SQL | undefined {
@@ -149,9 +160,7 @@ function jsonOneOfOr(column: SQLiteColumn, values: readonly string[]): SQL | und
 function emptyCondition(column: SQLiteColumn, isEmpty: boolean): SQL | undefined {
   const kind = columnKind(column);
   if (kind === "string") {
-    return isEmpty
-      ? or(isNull(column), eq(column, ""))
-      : and(isNotNull(column), ne(column, ""));
+    return isEmpty ? or(isNull(column), eq(column, "")) : and(isNotNull(column), ne(column, ""));
   }
   if (kind === "json") {
     return isEmpty
@@ -211,11 +220,21 @@ function applyOperator(
     case "$in":
       if (!Array.isArray(value)) return err("$in requires an array");
       if (value.length === 0) return ok(neverMatch());
-      return ok(inArray(column, value.map((item) => compareValue(column, item))));
+      return ok(
+        inArray(
+          column,
+          value.map((item) => compareValue(column, item))
+        )
+      );
     case "$nin":
       if (!Array.isArray(value)) return err("$nin requires an array");
       if (value.length === 0) return ok(undefined);
-      return ok(notInArray(column, value.map((item) => compareValue(column, item))));
+      return ok(
+        notInArray(
+          column,
+          value.map((item) => compareValue(column, item))
+        )
+      );
     case "$exists":
       if (typeof value !== "boolean") return err("$exists requires a boolean");
       return ok(value ? isNotNull(column) : isNull(column));

@@ -4,6 +4,7 @@ import { Calendar as BigCalendar, type CalendarProps, dayjsLocalizer } from "rea
 import * as dragAndDropModule from "react-big-calendar/lib/addons/dragAndDrop";
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
 import "./Calendar.css";
+
 // FIXME: react-big calendar as peer dependency
 type DragAndDropHoc = (Cal: typeof BigCalendar) => React.ComponentType<CalendarProps>;
 

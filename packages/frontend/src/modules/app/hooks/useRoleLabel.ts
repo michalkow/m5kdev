@@ -1,6 +1,6 @@
 import {
-  getAppRoleTranslationKey,
   type AuthRoleScope,
+  getAppRoleTranslationKey,
 } from "@m5kdev/commons/modules/auth/auth.roles";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";

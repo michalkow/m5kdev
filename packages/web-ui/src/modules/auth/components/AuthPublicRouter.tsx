@@ -15,12 +15,7 @@ interface AuthRouterProps {
   onLocaleChange?: (locale: string) => void | Promise<void>;
 }
 
-export function AuthPublicRouter({
-  header,
-  providers,
-  waitlist,
-  onLocaleChange,
-}: AuthRouterProps) {
+export function AuthPublicRouter({ header, providers, waitlist, onLocaleChange }: AuthRouterProps) {
   return (
     <Route element={<AuthPublicLayout header={header} onLocaleChange={onLocaleChange} />}>
       <Route path="/login" element={<AuthPublicLoginRoute providers={providers} />} />

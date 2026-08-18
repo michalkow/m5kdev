@@ -13,10 +13,7 @@ describe("createAiVectorStore", () => {
 
   it("rejects a local vector file that matches context.databaseUrl", () => {
     expect(() =>
-      createAiVectorStore(
-        { localUrl: "file:./local.db" },
-        { env, databaseUrl: "file:./local.db" }
-      )
+      createAiVectorStore({ localUrl: "file:./local.db" }, { env, databaseUrl: "file:./local.db" })
     ).toThrow(/must not share the app database file/);
   });
 

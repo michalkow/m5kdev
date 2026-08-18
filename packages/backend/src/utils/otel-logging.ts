@@ -49,10 +49,7 @@ function formatPrimitiveLogBody(mergeObject: Record<string, unknown>): string | 
   return parts.length > 0 ? parts.join(" ") : undefined;
 }
 
-export function formatLogBody(
-  mergeObject: Record<string, unknown>,
-  message?: string
-): string {
+export function formatLogBody(mergeObject: Record<string, unknown>, message?: string): string {
   if (message) return message;
 
   for (const key of BODY_HINT_KEYS) {
@@ -60,8 +57,7 @@ export function formatLogBody(
     if (typeof value === "string" && value.length > 0) return value;
   }
 
-  const errorMessage =
-    readErrorMessage(mergeObject.err) ?? readErrorMessage(mergeObject.error);
+  const errorMessage = readErrorMessage(mergeObject.err) ?? readErrorMessage(mergeObject.error);
   if (errorMessage) return errorMessage;
 
   const primitiveBody = formatPrimitiveLogBody(mergeObject);
@@ -118,9 +114,10 @@ export function emitOtelLogRecord(
   });
 }
 
-export function parsePinoLogArgs(
-  args: unknown[]
-): { mergeObject: Record<string, unknown>; message?: string } {
+export function parsePinoLogArgs(args: unknown[]): {
+  mergeObject: Record<string, unknown>;
+  message?: string;
+} {
   if (args.length === 0) return { mergeObject: {} };
   if (typeof args[0] === "string") return { mergeObject: {}, message: args[0] };
   const mergeObject =

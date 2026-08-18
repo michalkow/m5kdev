@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import tailwindcss from "@tailwindcss/vite";
 import type { StorybookConfig } from "@storybook/react-vite";
+import tailwindcss from "@tailwindcss/vite";
 import { mergeConfig } from "vite";
 
 const storybookDir = path.dirname(fileURLToPath(import.meta.url));
@@ -23,7 +23,7 @@ const config: StorybookConfig = {
           "@m5kdev/web-ui/utils": path.join(packageRoot, "src/lib/utils.ts"),
           "@m5kdev/web-ui/modules/table/filterTransformers": path.join(
             packageRoot,
-            "src/modules/table/filterTransformers.ts",
+            "src/modules/table/filterTransformers.ts"
           ),
         },
       },

@@ -88,10 +88,7 @@ describe("attachTrpcPathToRequest", () => {
     attachTrpcPathToRequest(req, "auth.getPreferences");
     attachTrpcPathToRequest(req, "auth.getPreferences");
     attachTrpcPathToRequest(req, "billing.listInvoices");
-    expect(getTrpcPathsFromRequest(req)).toEqual([
-      "auth.getPreferences",
-      "billing.listInvoices",
-    ]);
+    expect(getTrpcPathsFromRequest(req)).toEqual(["auth.getPreferences", "billing.listInvoices"]);
   });
 
   it("no-ops without a request or path", () => {

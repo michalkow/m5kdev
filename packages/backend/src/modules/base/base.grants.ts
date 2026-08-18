@@ -115,10 +115,7 @@ function ownsEntityAtUserLevel(ctx: ContextValues, entity: Entity): boolean {
  * With no entities, org-context callers previously selected the memberId field
  * then denied via `checkOwnership` — that deny is preserved here.
  */
-function checkUserLevelOwnership(
-  ctx: ContextValues,
-  entities?: Entity | Entity[]
-): boolean {
+function checkUserLevelOwnership(ctx: ContextValues, entities?: Entity | Entity[]): boolean {
   if (!entities) return false;
   const entityList = Array.isArray(entities) ? entities : [entities];
   return entityList.every((entity) => ownsEntityAtUserLevel(ctx, entity));

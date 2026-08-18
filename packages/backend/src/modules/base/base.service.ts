@@ -96,7 +96,9 @@ export class BaseService<
   ): QueryInput;
   addContextFilter<TQuery extends QueryInput>(
     actor: AuthenticatedActor,
-    include: { user?: boolean; member?: boolean; organization?: boolean; team?: boolean } | undefined,
+    include:
+      | { user?: boolean; member?: boolean; organization?: boolean; team?: boolean }
+      | undefined,
     query: TQuery,
     map?: Record<string, { columnId: string; method: QueryFilter["method"] }>
   ): TQuery;

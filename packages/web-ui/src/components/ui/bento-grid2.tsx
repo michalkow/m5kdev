@@ -1,8 +1,7 @@
 import { IconArrowRight } from "@tabler/icons-react";
 import type { ReactNode } from "react";
-
-import { Button } from "./button";
 import { cn } from "../../lib/utils";
+import { Button } from "./button";
 
 const BentoGrid = ({ children, className }: { children: ReactNode; className?: string }) => {
   return (
