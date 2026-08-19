@@ -275,7 +275,7 @@ export class WorkflowService extends Base {
 
   /**
    * Every BullMQ `Queue` owned by this service, sorted by name for stable ordering.
-   * Use with Bull Board by wrapping each in `BullMQAdapter` from `@bull-board/api/bullMQ`.
+   * Use with Bull Board by wrapping each in `BullMQAdapter` from `@bull-board/api/bullMQAdapter`.
    */
   getBullMqQueues(): Queue[] {
     return [...this.queues.entries()]

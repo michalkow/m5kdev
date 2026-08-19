@@ -1,7 +1,11 @@
+import { createBullBoard } from "@bull-board/api";
+import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
+import { ExpressAdapter } from "@bull-board/express";
 import { createBackendRouterMap } from "../../app";
 import type { AuthModule } from "../auth/auth.module";
 import {
   BaseModule,
+  type ModuleExpressContext,
   type ModuleRepositoriesContext,
   type ModuleServicesContext,
   type ModuleTRPCContext,
@@ -17,6 +21,11 @@ export type WorkflowModuleConfig<Namespace extends string = string> = Omit<
   "connection"
 > & {
   namespace?: Namespace;
+  /**
+   * Express mount path for Bull Board. Defaults to `/admin/queues`.
+   * Pass `null` to skip mounting the board.
+   */
+  boardPath?: string | null;
 };
 
 type WorkflowModuleDeps = { auth: AuthModule };
@@ -64,9 +73,11 @@ export class WorkflowModule<const Namespace extends string = "workflow"> extends
       throw new Error(`Workflow module "${this.id}" requires Redis in createBackendApp(...)`);
     }
 
+    const { namespace: _namespace, boardPath: _boardPath, ...serviceConfig } = this.config;
+
     return {
       workflow: new WorkflowService(repositories.workflow, {
-        ...this.config,
+        ...serviceConfig,
         connection: infra.redis.duplicate(),
       }),
     };
@@ -75,5 +86,24 @@ export class WorkflowModule<const Namespace extends string = "workflow"> extends
   override trpc({ trpc, services }: ModuleTRPCContext<WorkflowModuleDeps, WorkflowModuleServices>) {
     const namespace = (this.config.namespace ?? "workflow") as Namespace;
     return createBackendRouterMap(namespace, createWorkflowTRPC(trpc, services.workflow));
+  }
+
+  override express({
+    infra,
+    services,
+    roleAuthMiddleware,
+  }: ModuleExpressContext<WorkflowModuleDeps, WorkflowModuleServices>) {
+    if (!roleAuthMiddleware || this.config.boardPath === null) return;
+
+    const boardPath = this.config.boardPath ?? "/admin/queues";
+    const serverAdapter = new ExpressAdapter();
+    serverAdapter.setBasePath(boardPath);
+
+    createBullBoard({
+      queues: services.workflow.getBullMqQueues().map((queue) => new BullMQAdapter(queue)),
+      serverAdapter,
+    });
+
+    infra.express.use(boardPath, roleAuthMiddleware("admin"), serverAdapter.getRouter());
   }
 }

@@ -34,6 +34,21 @@ backendApp.use(
 The Redis connection comes from the kernel (`createBackendApp({ redis })`);
 the module depends on `auth`.
 
+## Bull Board
+
+When auth is available, `WorkflowModule` mounts [Bull Board](https://github.com/felixmosh/bull-board)
+at `/admin/queues` by default, guarded by `roleAuthMiddleware("admin")` (admin-role
+session cookie). Pass `boardPath` to change the mount path, or `boardPath: null`
+to skip mounting:
+
+```ts
+new WorkflowModule({
+  queues: { default: {} },
+  defaultQueue: "default",
+  boardPath: null, // disable Bull Board
+})
+```
+
 ## Defining jobs
 
 Modules and apps register jobs against the workflow service in their
