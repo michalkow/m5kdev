@@ -98,7 +98,7 @@ export const builtBackendApp = createBackendApp(
       queues: {
         fast: { concurrency: 5 },
       },
-      defaultQueue: "fast",
+      defaultQueue: "starter-app-main",
       defaults: {
         timeout: 60_000,
         jobOptions: { removeOnComplete: { age: 3600 } },
