@@ -1,3 +1,4 @@
+import { Toast } from "@heroui/react";
 import { AppConfigProvider } from "@m5kdev/frontend/modules/app/components/AppConfigProvider";
 import { AppTrpcQueryProvider } from "@m5kdev/frontend/modules/app/components/AppTrpcQueryProvider";
 import { AuthProvider } from "@m5kdev/frontend/modules/auth/components/AuthProvider";
@@ -34,6 +35,7 @@ export function App() {
                   <Router />
                 </DialogProvider>
                 <Toaster richColors closeButton />
+                <Toast.Provider placement="bottom end" />
               </AppTrpcQueryProvider>
             </AuthProvider>
           </ThemeProvider>

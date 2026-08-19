@@ -13,7 +13,7 @@ export function AuthPublicLayout({ header, onLocaleChange }: AuthPublicLayoutPro
   const showLocaleSwitcher = Boolean(locales && locales.locales.length > 1 && locale);
 
   return (
-    <div className="relative flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
+    <div className="relative flex min-h-svh flex-col items-center bg-background justify-center gap-6 p-6 md:p-10">
       {showLocaleSwitcher && locale ? (
         <div className="absolute top-4 right-4 md:top-6 md:right-6">
           <AuthPublicLocaleSwitcher value={locale} onChange={setLocale} />

@@ -51,8 +51,8 @@ export function AuthPublicLoginForm({ providers }: { providers?: string[] }) {
       <div className="grid gap-6">
         <AuthPublicProviders providers={providers} lastMethod={lastMethod} returnTo={returnTo} />
 
-        <div className="grid gap-6">
-          <div className="grid gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-6">
+          <div className="col-span-2 grid gap-2">
             <TextField
               isRequired
               name="login-email"
@@ -68,7 +68,7 @@ export function AuthPublicLoginForm({ providers }: { providers?: string[] }) {
             </TextField>
           </div>
 
-          <div className="grid gap-2">
+          <div className="col-span-2 grid gap-2">
             <TextField
               isRequired
               name="login-password"
@@ -78,20 +78,23 @@ export function AuthPublicLoginForm({ providers }: { providers?: string[] }) {
             >
               <div className="flex w-full items-center">
                 <Label>{t("web-ui:auth.login.password")}</Label>
-                <Link
-                  to="/forgot-password"
-                  className="ml-auto text-sm underline-offset-4 hover:underline"
-                >
+                <span className="invisible ml-auto text-sm" aria-hidden="true">
                   {t("web-ui:auth.login.forgotPassword")}
-                </Link>
+                </span>
               </div>
               <Input placeholder={t("web-ui:auth.login.password")} />
               <FieldError />
             </TextField>
           </div>
-          <Button type="submit" className="w-full" variant="primary">
+          <Button type="submit" className="col-span-2 w-full" variant="primary">
             {t("web-ui:auth.login.button")}
           </Button>
+          <Link
+            to="/forgot-password"
+            className="relative z-10 col-start-2 row-start-2 self-start text-sm underline-offset-4 hover:underline"
+          >
+            {t("web-ui:auth.login.forgotPassword")}
+          </Link>
         </div>
 
         <div className="text-center text-sm">
