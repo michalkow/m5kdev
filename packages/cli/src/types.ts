@@ -6,6 +6,8 @@ export interface PromptValues {
   appDescription?: string;
   platform?: AppPlatform;
   testHarness?: boolean;
+  /** Optional Backend Module feature ids (billing, workflows, …). `--yes` defaults to none. */
+  modules?: string[];
 }
 
 export interface CreateCommandOptions extends PromptValues {
@@ -23,9 +25,18 @@ export interface TemplateContext {
   betterAuthSecret: string;
 }
 
+export type TemplateFeatureKind = "platform" | "harness" | "module";
+
+export interface TemplateFeatureConfig {
+  paths: readonly string[];
+  kind?: TemplateFeatureKind;
+  experimental?: boolean;
+  label?: string;
+}
+
 export interface TemplateFeatureManifest {
   schemaVersion: number;
-  features: Record<string, { paths: readonly string[] }>;
+  features: Record<string, TemplateFeatureConfig>;
   requiredPaths: readonly string[];
   sync: {
     defaultPolicy: TemplateFilePolicy;

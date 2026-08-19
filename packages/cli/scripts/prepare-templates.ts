@@ -77,13 +77,40 @@ const FEATURE_MANIFEST = {
   schemaVersion: 1,
   features: {
     "test-harness": {
+      kind: "harness",
       paths: ["apps/e2e/", "apps/server/src/modules/test-harness/", "apps/server/db.e2e.ts"],
     },
     webapp: {
+      kind: "platform",
       paths: ["apps/webapp/"],
     },
     expo: {
+      kind: "platform",
       paths: ["apps/expo/"],
+    },
+    billing: { kind: "module", label: "Billing", paths: [] },
+    files: { kind: "module", label: "Files", paths: [] },
+    workflows: { kind: "module", label: "Workflows", paths: [] },
+    ai: { kind: "module", label: "AI", paths: [] },
+    notifications: {
+      kind: "module",
+      label: "Notifications",
+      experimental: true,
+      paths: [],
+    },
+    tags: { kind: "module", label: "Tags", experimental: true, paths: [] },
+    access: { kind: "module", label: "Access", experimental: true, paths: [] },
+    clay: { kind: "module", label: "Clay", experimental: true, paths: [] },
+    social: { kind: "module", label: "Social", experimental: true, paths: [] },
+    connect: { kind: "module", label: "Connect", experimental: true, paths: [] },
+    crypto: { kind: "module", label: "Crypto", experimental: true, paths: [] },
+    recurrence: { kind: "module", label: "Recurrence", experimental: true, paths: [] },
+    webhook: { kind: "module", label: "Webhook", experimental: true, paths: [] },
+    documents: {
+      kind: "module",
+      label: "PDF, DOCX, and video",
+      experimental: true,
+      paths: [],
     },
   },
   requiredPaths: [

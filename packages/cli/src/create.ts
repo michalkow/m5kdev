@@ -41,10 +41,11 @@ export async function scaffoldProject(
     betterAuthSecret: createBetterAuthSecret(),
   };
 
-  const enabledFeatures = getEnabledFeatures(
-    options.platform ?? "web",
-    Boolean(options.testHarness)
-  );
+  const enabledFeatures = getEnabledFeatures({
+    platform: options.platform ?? "web",
+    testHarness: Boolean(options.testHarness),
+    modules: options.modules ?? [],
+  });
   const manifest = loadTemplateManifest(templateDirectory);
   const excludePrefixes = getExcludedFeaturePaths(manifest, enabledFeatures);
 

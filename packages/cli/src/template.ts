@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { TemplateFeatureManifest, TemplateFilePolicy } from "./types";
+import type { TemplateFeatureKind, TemplateFeatureManifest, TemplateFilePolicy } from "./types";
 
 export function loadTemplateManifest(templateDirectory: string): TemplateFeatureManifest {
   const manifestPath = path.join(templateDirectory, "template.manifest.json");
@@ -36,14 +36,42 @@ export function getTemplateFilePolicy(
   return manifest.sync.defaultPolicy;
 }
 
-export function getEnabledFeatures(
-  platform: "web" | "expo" | "both",
-  testHarness: boolean
-): Set<string> {
+export interface BackendModuleChoice {
+  id: string;
+  label: string;
+  experimental: boolean;
+}
+
+export function getFeatureKind(options: {
+  id: string;
+  config: TemplateFeatureManifest["features"][string];
+}): TemplateFeatureKind {
+  if (options.config.kind) return options.config.kind;
+  if (options.id === "webapp" || options.id === "expo") return "platform";
+  if (options.id === "test-harness") return "harness";
+  return "module";
+}
+
+export function listBackendModuleChoices(manifest: TemplateFeatureManifest): BackendModuleChoice[] {
+  return Object.entries(manifest.features)
+    .filter(([id, config]) => getFeatureKind({ id, config }) === "module")
+    .map(([id, config]) => ({
+      id,
+      label: config.label ?? id,
+      experimental: Boolean(config.experimental),
+    }));
+}
+
+export function getEnabledFeatures(options: {
+  platform: "web" | "expo" | "both";
+  testHarness: boolean;
+  modules?: readonly string[];
+}): Set<string> {
   const enabled = new Set<string>();
-  if (platform !== "expo") enabled.add("webapp");
-  if (platform !== "web") enabled.add("expo");
-  if (testHarness) enabled.add("test-harness");
+  if (options.platform !== "expo") enabled.add("webapp");
+  if (options.platform !== "web") enabled.add("expo");
+  if (options.testHarness) enabled.add("test-harness");
+  for (const id of options.modules ?? []) enabled.add(id);
   return enabled;
 }
 

@@ -127,6 +127,72 @@ describe("scaffoldProject", () => {
     expect(managedStateSource).not.toContain("BETTER_AUTH_SECRET");
   });
 
+  it("defaults --yes to web always-on modules without optional Backend Modules", async () => {
+    const result = await scaffoldProject({
+      targetDirectory: "always-on-desk",
+      appName: "Always On Desk",
+      appDescription: "Always-on composition fixture.",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    const appTs = await fs.readFile(
+      path.join(result.targetDirectory, "apps/server/src/app.ts"),
+      "utf8"
+    );
+    expect(appTs).toContain("AuthModule");
+    expect(appTs).toContain("EmailModule");
+    expect(appTs).toContain("PostsModule");
+    expect(appTs).not.toContain("WorkflowModule");
+    expect(appTs).not.toContain("redis:");
+    expect(appTs).not.toContain("m5k:");
+
+    const schema = await fs.readFile(
+      path.join(result.targetDirectory, "apps/server/src/schema.ts"),
+      "utf8"
+    );
+    expect(schema).not.toContain('from "@m5kdev/backend/modules/workflow/workflow.db"');
+    expect(schema).not.toContain("m5k:");
+
+    const source = await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8");
+    const state = JSON.parse(source) as { template: { features: string[] } };
+    expect(state.template.features).toEqual(["webapp"]);
+  });
+
+  it("keeps Workflows when that Backend Module is selected", async () => {
+    const result = await scaffoldProject({
+      targetDirectory: "workflow-desk",
+      appName: "Workflow Desk",
+      appDescription: "Workflows module fixture.",
+      yes: true,
+      modules: ["workflows"],
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    const appTs = await fs.readFile(
+      path.join(result.targetDirectory, "apps/server/src/app.ts"),
+      "utf8"
+    );
+    expect(appTs).toContain("WorkflowModule");
+    expect(appTs).toContain("redis:");
+    expect(appTs).not.toContain("m5k:");
+
+    const schema = await fs.readFile(
+      path.join(result.targetDirectory, "apps/server/src/schema.ts"),
+      "utf8"
+    );
+    expect(schema).toContain("workflows");
+    expect(schema).not.toContain("m5k:");
+
+    const source = await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8");
+    const state = JSON.parse(source) as { template: { features: string[] } };
+    expect(state.template.features).toEqual(["webapp", "workflows"]);
+  });
+
   it.each([
     ["expo", false, ["expo"]],
     ["both", false, ["expo", "webapp"]],
@@ -346,6 +412,10 @@ describe("scaffoldProject", () => {
       "utf8"
     );
     expect(expoAppTs).toContain('spa: { root: "./client" }');
+    expect(expoAppTs).toContain("AuthModule");
+    expect(expoAppTs).toContain("PostsModule");
+    expect(expoAppTs).not.toContain("WorkflowModule");
+    expect(expoAppTs).not.toContain("m5k:");
   });
 
   it("refuses to overwrite a non-empty directory without force", async () => {

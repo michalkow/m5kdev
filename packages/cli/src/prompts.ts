@@ -1,7 +1,10 @@
 import { stdin as input, stdout as output } from "node:process";
 import readline from "node:readline/promises";
 import { DEFAULT_APP_NAME, getDefaultDescription } from "./constants";
+import { getTemplateRoot } from "./paths";
 import { slugifyAppName, toDisplayName } from "./strings";
+import type { BackendModuleChoice } from "./template";
+import { listBackendModuleChoices, loadTemplateManifest } from "./template";
 import type { AppPlatform, CreateCommandOptions } from "./types";
 
 function requireInteractive(yes: boolean): void {
@@ -30,6 +33,35 @@ function parsePlatform(value: string): AppPlatform | undefined {
     return normalized;
   }
   return undefined;
+}
+
+export function formatBackendModulesPrompt(choices: readonly BackendModuleChoice[]): string {
+  const catalog = choices
+    .map((choice) => (choice.experimental ? `${choice.id} (experimental)` : choice.id))
+    .join(", ");
+  return `Backend modules — comma-separated ids, or none [${catalog}]`;
+}
+
+export function parseBackendModulesAnswer(options: {
+  answer: string;
+  choices: readonly BackendModuleChoice[];
+}): string[] {
+  const trimmed = options.answer.trim().toLowerCase();
+  if (!trimmed || trimmed === "none" || trimmed === "n") return [];
+  const allowed = new Map(options.choices.map((choice) => [choice.id, choice.id]));
+  const selected: string[] = [];
+  for (const raw of trimmed.split(",")) {
+    const id = raw.trim();
+    if (!id) continue;
+    const resolved = allowed.get(id);
+    if (!resolved) {
+      throw new Error(
+        `Unknown Backend Module "${id}". Use comma-separated ids from the prompt, or none.`
+      );
+    }
+    if (!selected.includes(resolved)) selected.push(resolved);
+  }
+  return selected;
 }
 
 export async function resolveCreateCommandOptions(
@@ -87,6 +119,17 @@ export async function resolveCreateCommandOptions(
     } else {
       const answer = await promptValue("Include the e2e test harness? y/N", "n");
       resolved.testHarness = /^y(es)?$/i.test(answer.trim());
+    }
+  }
+
+  if (resolved.modules === undefined) {
+    requireInteractive(resolved.yes);
+    if (resolved.yes) {
+      resolved.modules = [];
+    } else {
+      const choices = listBackendModuleChoices(loadTemplateManifest(getTemplateRoot()));
+      const answer = await promptValue(formatBackendModulesPrompt(choices), "none");
+      resolved.modules = parseBackendModulesAnswer({ answer, choices });
     }
   }
 

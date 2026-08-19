@@ -16,5 +16,7 @@ export {
   notificationDevices,
   notificationSendLogs,
 } from "@m5kdev/backend/modules/notification/notification.db";
+// m5k:workflows:start
 export { workflows } from "@m5kdev/backend/modules/workflow/workflow.db";
+// m5k:workflows:end
 export { posts } from "./modules/posts/posts.db";

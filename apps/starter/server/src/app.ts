@@ -4,7 +4,9 @@ import { createBetterAuth } from "@m5kdev/backend/modules/auth/auth.lib";
 import { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
 import { EmailModule } from "@m5kdev/backend/modules/email/email.module";
 import { EmailPreviewModule } from "@m5kdev/backend/modules/email/email.preview.module";
+// m5k:workflows:start
 import { WorkflowModule } from "@m5kdev/backend/modules/workflow/workflow.module";
+// m5k:workflows:end
 import { templates } from "@starter-app/email";
 import { emailResources } from "@starter-app/email/resources";
 import {
@@ -23,7 +25,9 @@ const serverUrl = process.env.VITE_SERVER_URL ?? "http://localhost:8080";
 const databaseUrl = process.env.DATABASE_URL ?? "file:./local.db";
 const syncUrl = process.env.TURSO_DATABASE_URL;
 const authToken = process.env.TURSO_AUTH_TOKEN;
+// m5k:workflows:start
 const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
+// m5k:workflows:end
 const resendApiKey = process.env.RESEND_API_KEY;
 const enableWaitlist = process.env.VITE_ENABLE_WAITLIST === "true";
 
@@ -58,10 +62,12 @@ export const builtBackendApp = createBackendApp(
       resources: emailResources,
     },
     spa: { root: "./client" },
+    // m5k:workflows:start
     redis: {
       url: redisUrl,
       options: { maxRetriesPerRequest: null },
     },
+    // m5k:workflows:end
     resend: resendApiKey ? { apiKey: resendApiKey } : undefined,
     email: {
       mode: resendApiKey ? "send" : "store",
@@ -94,6 +100,7 @@ export const builtBackendApp = createBackendApp(
   [
     new EmailModule(templates as never),
     new AuthModule(),
+    // m5k:workflows:start
     new WorkflowModule({
       queues: {
         fast: { concurrency: 5 },
@@ -105,6 +112,7 @@ export const builtBackendApp = createBackendApp(
       },
       reconcile: { enabled: true },
     }),
+    // m5k:workflows:end
     new PostsModule(),
     new EmailPreviewModule({ allowDelete: process.env.NODE_ENV !== "production" }),
     // m5k:test-harness:start
