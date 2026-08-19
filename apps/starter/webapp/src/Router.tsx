@@ -10,6 +10,9 @@ import { useTranslation } from "react-i18next";
 import { Route, Routes } from "react-router";
 import { z } from "zod";
 import { PostsRoute } from "@/modules/posts/PostsRoute";
+// m5k:workflows:start
+import { WorkflowsRoute } from "@/modules/workflows/WorkflowsRoute";
+// m5k:workflows:end
 import { Layout } from "./Layout";
 
 const preferenceSchema = z.object({
@@ -73,6 +76,11 @@ export function Router() {
         }
       >
         <Route index element={<PostsRoute />} />
+        {[
+          // m5k:workflows:start
+          <Route key="workflows" path="workflows" element={<WorkflowsRoute />} />,
+          // m5k:workflows:end
+        ]}
 
         {AuthUserRouter({
           schema: preferenceSchema,

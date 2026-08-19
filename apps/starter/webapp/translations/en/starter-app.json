@@ -13,6 +13,7 @@
     },
     "navigation": {
       "posts": "Posts",
+      "workflows": "Workflows",
       "organization": "Organization",
       "account": "Account",
       "members": "Members",
@@ -124,6 +125,33 @@
       "published": "Post published.",
       "deleted": "Post archived.",
       "validation": "Title and content are required."
+    }
+  },
+  "workflows": {
+    "hero": {
+      "eyebrow": "Workflows",
+      "title": "Run a job and watch it finish.",
+      "body": "Trigger a demo ping on the fast queue. The run list is live against the workflow table — queued, running, then completed.",
+      "run": "Run demo job",
+      "syncing": "Refreshing",
+      "synced": "Live against the job queue"
+    },
+    "empty": {
+      "title": "No runs yet",
+      "body": "Trigger a demo job to see status appear here."
+    },
+    "columns": {
+      "id": "Job id",
+      "updated": "Updated"
+    },
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed"
+    },
+    "toast": {
+      "triggered": "Demo job queued."
     }
   },
   "auth": {

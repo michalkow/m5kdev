@@ -1,3 +1,4 @@
+// biome-ignore-all assist/source/organizeImports: WorkflowIcon stays in a feature-gated import
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { AppShell } from "@m5kdev/web-ui/modules/app/components/AppShell";
@@ -8,6 +9,9 @@ import { AuthOrganizationSelect } from "@m5kdev/web-ui/modules/auth/components/A
 import { AuthUtilityImpersonationBanner } from "@m5kdev/web-ui/modules/auth/components/AuthUtilityImpersonationBanner";
 import { APP_NAME } from "@starter-app/shared/modules/app/app.constants";
 import { FileIcon, UsersIcon } from "lucide-react";
+// m5k:workflows:start
+import { WorkflowIcon } from "lucide-react";
+// m5k:workflows:end
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
@@ -42,6 +46,13 @@ export function Layout() {
                   icon: <FileIcon />,
                   link: "/",
                 },
+                // m5k:workflows:start
+                {
+                  label: t("layout.navigation.workflows"),
+                  icon: <WorkflowIcon />,
+                  link: "/workflows",
+                },
+                // m5k:workflows:end
                 {
                   label: t("layout.navigation.members"),
                   icon: <UsersIcon />,

@@ -146,6 +146,7 @@ describe("scaffoldProject", () => {
     expect(appTs).toContain("EmailModule");
     expect(appTs).toContain("PostsModule");
     expect(appTs).not.toContain("WorkflowModule");
+    expect(appTs).not.toContain("DemoWorkflowModule");
     expect(appTs).not.toContain("redis:");
     expect(appTs).not.toContain("m5k:");
 
@@ -155,6 +156,27 @@ describe("scaffoldProject", () => {
     );
     expect(schema).not.toContain('from "@m5kdev/backend/modules/workflow/workflow.db"');
     expect(schema).not.toContain("m5k:");
+
+    const router = await fs.readFile(
+      path.join(result.targetDirectory, "apps/webapp/src/Router.tsx"),
+      "utf8"
+    );
+    expect(router).not.toContain("WorkflowsRoute");
+    expect(router).not.toContain('path="workflows"');
+
+    await expect(
+      fs.stat(
+        path.join(result.targetDirectory, "apps/webapp/src/modules/workflows/WorkflowsRoute.tsx")
+      )
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      fs.stat(
+        path.join(
+          result.targetDirectory,
+          "apps/server/src/modules/demo-workflow/demo-workflow.module.ts"
+        )
+      )
+    ).rejects.toMatchObject({ code: "ENOENT" });
 
     const source = await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8");
     const state = JSON.parse(source) as { template: { features: string[] } };
@@ -178,6 +200,8 @@ describe("scaffoldProject", () => {
       "utf8"
     );
     expect(appTs).toContain("WorkflowModule");
+    expect(appTs).toContain("DemoWorkflowModule");
+    expect(appTs).toContain('defaultQueue: "fast"');
     expect(appTs).toContain("redis:");
     expect(appTs).not.toContain("m5k:");
 
@@ -188,9 +212,75 @@ describe("scaffoldProject", () => {
     expect(schema).toContain("workflows");
     expect(schema).not.toContain("m5k:");
 
+    const router = await fs.readFile(
+      path.join(result.targetDirectory, "apps/webapp/src/Router.tsx"),
+      "utf8"
+    );
+    expect(router).toContain("WorkflowsRoute");
+    expect(router).toContain('path="workflows"');
+
+    await expect(
+      fs.stat(
+        path.join(result.targetDirectory, "apps/webapp/src/modules/workflows/WorkflowsRoute.tsx")
+      )
+    ).resolves.toBeTruthy();
+    await expect(
+      fs.stat(
+        path.join(
+          result.targetDirectory,
+          "apps/server/src/modules/demo-workflow/demo-workflow.module.ts"
+        )
+      )
+    ).resolves.toBeTruthy();
+
     const source = await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8");
     const state = JSON.parse(source) as { template: { features: string[] } };
     expect(state.template.features).toEqual(["webapp", "workflows"]);
+  });
+
+  it("keeps the Workflow Playwright spec only when Workflows and the test harness are both on", async () => {
+    const withBoth = await scaffoldProject({
+      targetDirectory: "workflow-harness-desk",
+      appName: "Workflow Harness Desk",
+      appDescription: "Workflows plus test harness fixture.",
+      yes: true,
+      testHarness: true,
+      modules: ["workflows"],
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    await expect(
+      fs.stat(path.join(withBoth.targetDirectory, "apps/e2e/tests/workflow.spec.ts"))
+    ).resolves.toBeTruthy();
+    const withBothConfig = await fs.readFile(
+      path.join(withBoth.targetDirectory, "apps/e2e/playwright.config.ts"),
+      "utf8"
+    );
+    expect(withBothConfig).toContain("workflow.spec.ts");
+    expect(withBothConfig).not.toContain("m5k:");
+
+    const harnessOnly = await scaffoldProject({
+      targetDirectory: "harness-no-workflow-desk",
+      appName: "Harness No Workflow Desk",
+      appDescription: "Test harness without Workflows fixture.",
+      yes: true,
+      testHarness: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    await expect(
+      fs.stat(path.join(harnessOnly.targetDirectory, "apps/e2e/tests/workflow.spec.ts"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    const harnessOnlyConfig = await fs.readFile(
+      path.join(harnessOnly.targetDirectory, "apps/e2e/playwright.config.ts"),
+      "utf8"
+    );
+    expect(harnessOnlyConfig).not.toContain("workflow.spec.ts");
+    expect(harnessOnlyConfig).not.toContain("m5k:");
   });
 
   it.each([

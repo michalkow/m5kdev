@@ -90,7 +90,15 @@ const FEATURE_MANIFEST = {
     },
     billing: { kind: "module", label: "Billing", paths: [] },
     files: { kind: "module", label: "Files", paths: [] },
-    workflows: { kind: "module", label: "Workflows", paths: [] },
+    workflows: {
+      kind: "module",
+      label: "Workflows",
+      paths: [
+        "apps/webapp/src/modules/workflows/",
+        "apps/server/src/modules/demo-workflow/",
+        "apps/e2e/tests/workflow.spec.ts",
+      ],
+    },
     ai: { kind: "module", label: "AI", paths: [] },
     notifications: {
       kind: "module",

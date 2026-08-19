@@ -14,6 +14,9 @@ import {
   APP_NAME,
   APP_ROLES_CONFIG,
 } from "@starter-app/shared/modules/app/app.constants";
+// m5k:workflows:start
+import { DemoWorkflowModule } from "./modules/demo-workflow/demo-workflow.module";
+// m5k:workflows:end
 import { PostsModule } from "./modules/posts/posts.module";
 // m5k:test-harness:start
 import { TestHarnessModule } from "./modules/test-harness/test-harness.module";
@@ -105,13 +108,14 @@ export const builtBackendApp = createBackendApp(
       queues: {
         fast: { concurrency: 5 },
       },
-      defaultQueue: "starter-app-main",
+      defaultQueue: "fast",
       defaults: {
         timeout: 60_000,
         jobOptions: { removeOnComplete: { age: 3600 } },
       },
       reconcile: { enabled: true },
     }),
+    new DemoWorkflowModule(),
     // m5k:workflows:end
     new PostsModule(),
     new EmailPreviewModule({ allowDelete: process.env.NODE_ENV !== "production" }),

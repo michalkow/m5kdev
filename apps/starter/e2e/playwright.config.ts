@@ -21,7 +21,13 @@ export default defineConfig({
     {
       name: "standard",
       // exact filenames — a broad regex would also match the expo-*.spec files
-      testMatch: ["standard.spec.ts", "email.spec.ts"],
+      testMatch: [
+        "standard.spec.ts",
+        "email.spec.ts",
+        // m5k:workflows:start
+        "workflow.spec.ts",
+        // m5k:workflows:end
+      ],
       use: {
         ...devices["Desktop Chrome"],
         baseURL: BASE_URLS.standard,
