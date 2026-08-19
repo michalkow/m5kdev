@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileTypes } from "@m5kdev/commons/modules/file/file.constants";
 import bodyParser from "body-parser";
@@ -6,7 +7,7 @@ import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
 import { captureServerError, ServerError } from "../../utils/errors";
 import type { AuthMiddleware, AuthRequest } from "../auth/auth.middleware";
-import { createActorFromContext } from "../base/base.actor";
+import { type AuthenticatedActor, createActorFromContext } from "../base/base.actor";
 import type { FileService } from "./file.service";
 
 /** Terminal capture for raw throws inside upload routes (no tRPC boundary here). */
@@ -31,7 +32,9 @@ function getFileExtension(file: Express.Multer.File): string | undefined {
 function createMulter(): multer.Multer {
   const storage = multer.diskStorage({
     destination: (_req, _file, cb) => {
-      cb(null, path.join(__dirname, "..", "uploads"));
+      const destination = path.join(__dirname, "..", "uploads");
+      fs.mkdirSync(destination, { recursive: true });
+      cb(null, destination);
     },
     filename: (_req, file, cb) => {
       cb(null, `${uuidv4()}.${getFileExtension(file)}`);
@@ -70,17 +73,55 @@ export function createUploadRouter({
   const upload = createMulter();
   const router: Router = express.Router();
 
-  router.post("/file/:type", upload.single("file"), (req: Request, res: Response) => {
-    const { file } = req;
-    if (!file) {
-      return res.status(400).json({ error: "No file uploaded" });
+  router.post(
+    "/file/:type",
+    authMiddleware,
+    upload.single("file"),
+    async (req: AuthRequest, res: Response) => {
+      const { file } = req;
+      if (!file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+      const user = req.user;
+      const session = req.session;
+      if (!user || !session) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      let actor: AuthenticatedActor;
+      try {
+        actor = session.activeOrganizationId
+          ? createActorFromContext({ user, session }, "organization")
+          : createActorFromContext({ user, session }, "user");
+      } catch (err: unknown) {
+        captureRouteError(err, { route: "POST /file/:type" });
+        const message = err instanceof Error ? err.message : "Forbidden";
+        return res.status(403).json({ error: message });
+      }
+      const result = await fileService.recordLocalUpload(actor, {
+        originalName: file.originalname,
+        contentType: file.mimetype,
+        sizeBytes: file.size,
+        filename: file.filename,
+      });
+      if (result.isErr()) {
+        const status =
+          result.error.code === "FORBIDDEN"
+            ? 403
+            : result.error.code === "UNAUTHORIZED"
+              ? 401
+              : 500;
+        return res.status(status).json({ error: result.error.message });
+      }
+
+      return res.json({
+        url: `${process.env.VITE_SERVER_URL}/upload/file/${file.filename}`,
+        mimetype: file.mimetype,
+        size: file.size,
+        fileId: result.value.fileId,
+      });
     }
-    return res.json({
-      url: `${process.env.VITE_SERVER_URL}/upload/file/${file.filename}`,
-      mimetype: file.mimetype,
-      size: file.size,
-    });
-  });
+  );
 
   router.get("/file/:filename", (req: Request, res: Response) => {
     const filename = req.params.filename;

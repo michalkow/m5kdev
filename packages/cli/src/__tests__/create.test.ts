@@ -183,6 +183,76 @@ describe("scaffoldProject", () => {
     expect(state.template.features).toEqual(["webapp"]);
   });
 
+  it("omits Files unless that Backend Module is selected", async () => {
+    const off = await scaffoldProject({
+      targetDirectory: "files-off-desk",
+      appName: "Files Off Desk",
+      appDescription: "Files module omitted fixture.",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    const offApp = await fs.readFile(path.join(off.targetDirectory, "apps/server/src/app.ts"), "utf8");
+    expect(offApp).not.toContain("FileModule");
+    expect(offApp).not.toContain("m5k:");
+
+    const offSchema = await fs.readFile(
+      path.join(off.targetDirectory, "apps/server/src/schema.ts"),
+      "utf8"
+    );
+    expect(offSchema).not.toContain('from "@m5kdev/backend/modules/file/file.db"');
+
+    const offRouter = await fs.readFile(
+      path.join(off.targetDirectory, "apps/webapp/src/Router.tsx"),
+      "utf8"
+    );
+    expect(offRouter).not.toContain("FilesRoute");
+    expect(offRouter).not.toContain('path="files"');
+
+    await expect(
+      fs.stat(path.join(off.targetDirectory, "apps/webapp/src/modules/files/FilesRoute.tsx"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+
+    const on = await scaffoldProject({
+      targetDirectory: "files-on-desk",
+      appName: "Files On Desk",
+      appDescription: "Files module fixture.",
+      yes: true,
+      modules: ["files"],
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    const onApp = await fs.readFile(path.join(on.targetDirectory, "apps/server/src/app.ts"), "utf8");
+    expect(onApp).toContain("FileModule");
+    expect(onApp).not.toContain("m5k:");
+
+    const onSchema = await fs.readFile(
+      path.join(on.targetDirectory, "apps/server/src/schema.ts"),
+      "utf8"
+    );
+    expect(onSchema).toContain("files");
+    expect(onSchema).not.toContain("m5k:");
+
+    const onRouter = await fs.readFile(
+      path.join(on.targetDirectory, "apps/webapp/src/Router.tsx"),
+      "utf8"
+    );
+    expect(onRouter).toContain("FilesRoute");
+    expect(onRouter).toContain('path="files"');
+
+    await expect(
+      fs.stat(path.join(on.targetDirectory, "apps/webapp/src/modules/files/FilesRoute.tsx"))
+    ).resolves.toBeTruthy();
+
+    const source = await fs.readFile(path.join(on.targetDirectory, ".m5kdev.json"), "utf8");
+    const state = JSON.parse(source) as { template: { features: string[] } };
+    expect(state.template.features).toEqual(["files", "webapp"]);
+  });
+
   it("keeps Workflows when that Backend Module is selected", async () => {
     const result = await scaffoldProject({
       targetDirectory: "workflow-desk",
@@ -280,6 +350,51 @@ describe("scaffoldProject", () => {
       "utf8"
     );
     expect(harnessOnlyConfig).not.toContain("workflow.spec.ts");
+    expect(harnessOnlyConfig).not.toContain("m5k:");
+  });
+
+  it("keeps the Files Playwright spec only when Files and the test harness are both on", async () => {
+    const withBoth = await scaffoldProject({
+      targetDirectory: "files-harness-desk",
+      appName: "Files Harness Desk",
+      appDescription: "Files plus test harness fixture.",
+      yes: true,
+      testHarness: true,
+      modules: ["files"],
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    await expect(
+      fs.stat(path.join(withBoth.targetDirectory, "apps/e2e/tests/files.spec.ts"))
+    ).resolves.toBeTruthy();
+    const withBothConfig = await fs.readFile(
+      path.join(withBoth.targetDirectory, "apps/e2e/playwright.config.ts"),
+      "utf8"
+    );
+    expect(withBothConfig).toContain("files.spec.ts");
+    expect(withBothConfig).not.toContain("m5k:");
+
+    const harnessOnly = await scaffoldProject({
+      targetDirectory: "harness-no-files-desk",
+      appName: "Harness No Files Desk",
+      appDescription: "Test harness without Files fixture.",
+      yes: true,
+      testHarness: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    await expect(
+      fs.stat(path.join(harnessOnly.targetDirectory, "apps/e2e/tests/files.spec.ts"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    const harnessOnlyConfig = await fs.readFile(
+      path.join(harnessOnly.targetDirectory, "apps/e2e/playwright.config.ts"),
+      "utf8"
+    );
+    expect(harnessOnlyConfig).not.toContain("files.spec.ts");
     expect(harnessOnlyConfig).not.toContain("m5k:");
   });
 

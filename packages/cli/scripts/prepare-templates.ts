@@ -89,7 +89,11 @@ const FEATURE_MANIFEST = {
       paths: ["apps/expo/"],
     },
     billing: { kind: "module", label: "Billing", paths: [] },
-    files: { kind: "module", label: "Files", paths: [] },
+    files: {
+      kind: "module",
+      label: "Files",
+      paths: ["apps/webapp/src/modules/files/", "apps/e2e/tests/files.spec.ts"],
+    },
     workflows: {
       kind: "module",
       label: "Workflows",

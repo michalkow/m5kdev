@@ -10,7 +10,7 @@ import type { InferSelectModel } from "drizzle-orm";
 import { and, eq, isNull } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
-import type { ServerResultAsync } from "../base/base.dto";
+import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import { BaseExternaRepository, BaseTableRepository } from "../base/base.repository";
 import { type FileUploadStatus, files } from "./file.db";
 
@@ -144,16 +144,16 @@ export class FileRepository extends BaseTableRepository<
 }
 
 export class FileS3Repository extends BaseExternaRepository {
-  private readonly s3: S3Client;
-  constructor() {
-    super();
+  private s3: S3Client | undefined;
 
+  private getClient(): ServerResult<S3Client> {
+    if (this.s3) return ok(this.s3);
     if (
       !process.env.AWS_REGION ||
       !process.env.AWS_ACCESS_KEY_ID ||
       !process.env.AWS_SECRET_ACCESS_KEY
     ) {
-      throw new Error("Missing AWS environment variables");
+      return this.error("INTERNAL_SERVER_ERROR", "Missing AWS environment variables");
     }
 
     this.s3 = new S3Client({
@@ -165,6 +165,7 @@ export class FileS3Repository extends BaseExternaRepository {
       ...(process.env.AWS_S3_ENDPOINT ? { endpoint: process.env.AWS_S3_ENDPOINT } : {}),
       forcePathStyle: !!process.env.AWS_S3_ENDPOINT, // Path style is often required for non-AWS S3 providers
     });
+    return ok(this.s3);
   }
 
   getBucket(): string | undefined {
@@ -176,46 +177,54 @@ export class FileS3Repository extends BaseExternaRepository {
     filetype: string,
     expiresIn = 60 * 5
   ): ServerResultAsync<string> {
+    const client = this.getClient();
+    if (client.isErr()) return err(client.error);
     const command = new PutObjectCommand({
       Bucket: process.env.AWS_S3_BUCKET,
       Key: key,
       ContentType: filetype,
     });
     const urlResult = await this.throwablePromise(() =>
-      getSignedUrl(this.s3, command, { expiresIn })
+      getSignedUrl(client.value, command, { expiresIn })
     );
     if (urlResult.isErr()) return urlResult;
     return ok(urlResult.value);
   }
 
   async getS3DownloadUrl(key: string, expiresIn = 60 * 5): ServerResultAsync<string> {
+    const client = this.getClient();
+    if (client.isErr()) return err(client.error);
     const command = new GetObjectCommand({
       Bucket: process.env.AWS_S3_BUCKET,
       Key: key,
     });
     const urlResult = await this.throwablePromise(() =>
-      getSignedUrl(this.s3, command, { expiresIn })
+      getSignedUrl(client.value, command, { expiresIn })
     );
     if (urlResult.isErr()) return urlResult;
     return ok(urlResult.value);
   }
 
   async getS3Object(key: string): ServerResultAsync<GetObjectCommandOutput> {
+    const client = this.getClient();
+    if (client.isErr()) return err(client.error);
     const command = new GetObjectCommand({
       Bucket: process.env.AWS_S3_BUCKET,
       Key: key,
     });
-    const dataResult = await this.throwablePromise(() => this.s3.send(command));
+    const dataResult = await this.throwablePromise(() => client.value.send(command));
     if (dataResult.isErr()) return dataResult;
     return ok(dataResult.value);
   }
 
   async deleteS3Object(key: string): ServerResultAsync<void> {
+    const client = this.getClient();
+    if (client.isErr()) return err(client.error);
     const command = new DeleteObjectCommand({
       Bucket: process.env.AWS_S3_BUCKET,
       Key: key,
     });
-    const result = await this.throwablePromise(() => this.s3.send(command));
+    const result = await this.throwablePromise(() => client.value.send(command));
     if (result.isErr()) return err(result.error);
     return ok(undefined);
   }

@@ -1,3 +1,4 @@
+// biome-ignore-all assist/source/organizeImports: feature-gated route imports stay in marker blocks
 import { syncI18nLocale } from "@m5kdev/frontend/modules/app/utils/locale";
 import { AuthAdminRouter } from "@m5kdev/web-ui/modules/auth/components/AuthAdminRouter";
 import { AuthOrganizationAcceptInvitationRoute } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationAcceptInvitationRoute";
@@ -10,6 +11,9 @@ import { useTranslation } from "react-i18next";
 import { Route, Routes } from "react-router";
 import { z } from "zod";
 import { PostsRoute } from "@/modules/posts/PostsRoute";
+// m5k:files:start
+import { FilesRoute } from "@/modules/files/FilesRoute";
+// m5k:files:end
 // m5k:workflows:start
 import { WorkflowsRoute } from "@/modules/workflows/WorkflowsRoute";
 // m5k:workflows:end
@@ -77,6 +81,9 @@ export function Router() {
       >
         <Route index element={<PostsRoute />} />
         {[
+          // m5k:files:start
+          <Route key="files" path="files" element={<FilesRoute />} />,
+          // m5k:files:end
           // m5k:workflows:start
           <Route key="workflows" path="workflows" element={<WorkflowsRoute />} />,
           // m5k:workflows:end

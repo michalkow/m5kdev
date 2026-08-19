@@ -60,6 +60,7 @@ const createUploadPromise = <T>(
     };
 
     xhr.open("POST", `${serverUrl}/upload/file/${type}`);
+    xhr.withCredentials = true;
     const formData = new FormData();
     resolveUploadBlob(file)
       .then(({ blob, name }) => {

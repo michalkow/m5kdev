@@ -24,6 +24,9 @@ export default defineConfig({
       testMatch: [
         "standard.spec.ts",
         "email.spec.ts",
+        // m5k:files:start
+        "files.spec.ts",
+        // m5k:files:end
         // m5k:workflows:start
         "workflow.spec.ts",
         // m5k:workflows:end

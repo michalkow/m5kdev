@@ -1,3 +1,4 @@
+import { createBackendRouterMap } from "../../app";
 import type { AuthModule } from "../auth/auth.module";
 import type { Grant } from "../base/base.grants";
 import {
@@ -5,12 +6,14 @@ import {
   type ModuleExpressContext,
   type ModuleRepositoriesContext,
   type ModuleServicesContext,
+  type ModuleTRPCContext,
 } from "../base/base.module";
 import type * as fileTables from "./file.db";
 import { defaultFileGrants } from "./file.grants";
 import { FileRepository, FileS3Repository } from "./file.repository";
 import { createUploadRouter } from "./file.router";
 import { FileService } from "./file.service";
+import { createFileTRPC } from "./file.trpc";
 
 type FileModuleDeps = { auth: AuthModule };
 type FileModuleTables = typeof fileTables;
@@ -21,7 +24,9 @@ type FileModuleRepositories = {
 type FileModuleServices = {
   file: FileService;
 };
-type FileModuleRouters = never;
+type FileModuleRouters = {
+  file: ReturnType<typeof createFileTRPC>;
+};
 
 export class FileModule extends BaseModule<
   FileModuleDeps,
@@ -65,6 +70,10 @@ export class FileModule extends BaseModule<
         this.grants
       ),
     };
+  }
+
+  override trpc({ trpc, services }: ModuleTRPCContext<FileModuleDeps, FileModuleServices>) {
+    return createBackendRouterMap("file", createFileTRPC(trpc, services.file));
   }
 
   override express({

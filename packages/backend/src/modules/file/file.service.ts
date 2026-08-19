@@ -10,11 +10,15 @@ import { v4 as uuidv4 } from "uuid";
 import type { AuthenticatedActor } from "../base/base.actor";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import { BasePermissionService } from "../base/base.service";
+import { LOCAL_FILE_BUCKET } from "./file.constants";
+import { fileSchemas } from "./file.dto";
 import type { FileRepository, FileS3Repository } from "./file.repository";
 import type {
   FinalizeS3UploadInput,
   InitiateS3UploadInput,
   InitiateS3UploadResult,
+  RecordLocalUploadInput,
+  RecordLocalUploadResult,
 } from "./file.types";
 import { buildS3ObjectKey, extractOriginalExtension } from "./file.utils";
 
@@ -28,6 +32,21 @@ export class FileService extends BasePermissionService<
   { fileS3: FileS3Repository } & Partial<{ file: FileRepository }>,
   Record<string, never>
 > {
+  readonly list = this.procedure("list")
+    .input(fileSchemas.input.list)
+    .output(fileSchemas.output.list)
+    .requireAuth("organization")
+    .addContextFilter(["organization"])
+    .handle(async ({ input, ctx }) => {
+      const fileRepo = this.repository.file;
+      if (!fileRepo) {
+        return this.error("INTERNAL_SERVER_ERROR", "File inventory is not configured");
+      }
+      const listed = await fileRepo.queryList(input);
+      if (listed.isErr()) return listed;
+      return ok(this.filterPermission(ctx.actor, "read", listed.value));
+    });
+
   isS3Path(pathValue: string): boolean {
     return pathValue.startsWith("s3::");
   }
@@ -83,6 +102,45 @@ export class FileService extends BasePermissionService<
     const soft = await fileRepo.softDeleteUploadById(row.id);
     if (soft.isErr()) return err(soft.error);
     return ok(undefined);
+  }
+
+  async recordLocalUpload(
+    actor: AuthenticatedActor,
+    input: RecordLocalUploadInput
+  ): ServerResultAsync<RecordLocalUploadResult> {
+    const fileRepo = this.repository.file;
+    if (!fileRepo) {
+      return ok({ originalName: input.originalName });
+    }
+
+    const writeGuard = this.accessGuard(actor, "write", {
+      userId: actor.userId,
+      memberId: actor.memberId ?? null,
+      organizationId: actor.organizationId ?? null,
+      teamId: actor.teamId ?? null,
+    });
+    if (writeGuard.isErr()) return err(writeGuard.error);
+
+    const createdResult = await fileRepo.create({
+      bucket: LOCAL_FILE_BUCKET,
+      key: input.filename,
+      originalName: input.originalName,
+      originalExtension: extractOriginalExtension(input.originalName),
+      contentType: input.contentType,
+      sizeBytes: input.sizeBytes,
+      status: "UPLOADED",
+      userId: actor.userId,
+      memberId: actor.memberId ?? null,
+      organizationId: actor.organizationId ?? null,
+      teamId: actor.teamId ?? null,
+      uploadedAt: new Date(),
+    });
+    if (createdResult.isErr()) return err(createdResult.error);
+
+    return ok({
+      fileId: createdResult.value.id,
+      originalName: createdResult.value.originalName,
+    });
   }
 
   async initiateS3Upload(

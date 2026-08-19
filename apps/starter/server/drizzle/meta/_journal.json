@@ -22,6 +22,13 @@
       "when": 1786951360347,
       "tag": "0002_concerned_proudstar",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1787145865079,
+      "tag": "0003_silly_the_liberteens",
+      "breakpoints": true
     }
   ]
 }

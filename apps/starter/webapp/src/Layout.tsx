@@ -1,4 +1,4 @@
-// biome-ignore-all assist/source/organizeImports: WorkflowIcon stays in a feature-gated import
+// biome-ignore-all assist/source/organizeImports: feature-gated lucide icons stay in marker blocks
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { AppShell } from "@m5kdev/web-ui/modules/app/components/AppShell";
@@ -9,6 +9,9 @@ import { AuthOrganizationSelect } from "@m5kdev/web-ui/modules/auth/components/A
 import { AuthUtilityImpersonationBanner } from "@m5kdev/web-ui/modules/auth/components/AuthUtilityImpersonationBanner";
 import { APP_NAME } from "@starter-app/shared/modules/app/app.constants";
 import { FileIcon, UsersIcon } from "lucide-react";
+// m5k:files:start
+import { ImageIcon } from "lucide-react";
+// m5k:files:end
 // m5k:workflows:start
 import { WorkflowIcon } from "lucide-react";
 // m5k:workflows:end
@@ -46,6 +49,13 @@ export function Layout() {
                   icon: <FileIcon />,
                   link: "/",
                 },
+                // m5k:files:start
+                {
+                  label: t("layout.navigation.files"),
+                  icon: <ImageIcon />,
+                  link: "/files",
+                },
+                // m5k:files:end
                 // m5k:workflows:start
                 {
                   label: t("layout.navigation.workflows"),

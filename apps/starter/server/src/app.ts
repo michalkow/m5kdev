@@ -4,6 +4,9 @@ import { createBetterAuth } from "@m5kdev/backend/modules/auth/auth.lib";
 import { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
 import { EmailModule } from "@m5kdev/backend/modules/email/email.module";
 import { EmailPreviewModule } from "@m5kdev/backend/modules/email/email.preview.module";
+// m5k:files:start
+import { FileModule } from "@m5kdev/backend/modules/file/file.module";
+// m5k:files:end
 // m5k:workflows:start
 import { WorkflowModule } from "@m5kdev/backend/modules/workflow/workflow.module";
 // m5k:workflows:end
@@ -103,6 +106,9 @@ export const builtBackendApp = createBackendApp(
   [
     new EmailModule(templates as never),
     new AuthModule(),
+    // m5k:files:start
+    new FileModule(),
+    // m5k:files:end
     // m5k:workflows:start
     new WorkflowModule({
       queues: {

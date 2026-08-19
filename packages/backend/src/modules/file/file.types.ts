@@ -1,3 +1,15 @@
+export interface RecordLocalUploadInput {
+  readonly originalName: string;
+  readonly contentType: string;
+  readonly sizeBytes: number;
+  readonly filename: string;
+}
+
+export interface RecordLocalUploadResult {
+  readonly fileId?: string;
+  readonly originalName: string;
+}
+
 export interface InitiateS3UploadInput {
   readonly userId: string;
   readonly memberId?: string;

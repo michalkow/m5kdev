@@ -13,6 +13,7 @@
     },
     "navigation": {
       "posts": "Posts",
+      "files": "Files",
       "workflows": "Workflows",
       "organization": "Organization",
       "account": "Account",
@@ -152,6 +153,27 @@
     },
     "toast": {
       "triggered": "Demo job queued."
+    }
+  },
+  "files": {
+    "hero": {
+      "eyebrow": "Files",
+      "title": "Upload an image and see it inventoried.",
+      "body": "Local uploads land on disk and in the files table. Organization-scoped rows stamp the active member.",
+      "upload": "Upload image",
+      "syncing": "Refreshing",
+      "synced": "Live against the files table"
+    },
+    "empty": {
+      "title": "No files yet",
+      "body": "Upload an image to see it listed here."
+    },
+    "row": {
+      "organization": "Organization"
+    },
+    "toast": {
+      "uploaded": "File uploaded.",
+      "failed": "Upload failed."
     }
   },
   "auth": {
