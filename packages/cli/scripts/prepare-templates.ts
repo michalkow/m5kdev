@@ -116,12 +116,6 @@ const FEATURE_MANIFEST = {
     connect: { kind: "module", label: "Connect", experimental: true, paths: [] },
     recurrence: { kind: "module", label: "Recurrence", experimental: true, paths: [] },
     webhook: { kind: "module", label: "Webhook", experimental: true, paths: [] },
-    documents: {
-      kind: "module",
-      label: "PDF, DOCX, and video",
-      experimental: true,
-      paths: [],
-    },
   },
   requiredPaths: [
     "package.json",

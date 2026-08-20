@@ -1,4 +1,4 @@
-import { BaseModule, type TableMap } from "../base/base.module";
+import { BaseModule, type TableMap } from "@m5kdev/backend/base/base.module";
 import { PdfService } from "./pdf.service";
 
 type PdfModuleDeps = never;

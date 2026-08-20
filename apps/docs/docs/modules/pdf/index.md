@@ -11,12 +11,15 @@ imports) can work with document content.
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/backend` | `PdfModule` and `PdfService`. |
+| `@m5kdev/module-pdf` | `PdfModule` and `PdfService`. |
 
 ## Usage
 
 ```ts
-backendApp.use(new PdfModule());
+import { createBackendApp } from "@m5kdev/backend/app";
+import { PdfModule } from "@m5kdev/module-pdf";
+
+createBackendApp(config, [new PdfModule()]);
 
 const text = await this.service.pdf.convertToText(url);
 ```

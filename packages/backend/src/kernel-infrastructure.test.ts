@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createClient } from "@libsql/client";
+import { PdfModule } from "../../module-pdf/src/pdf.module";
 import { createBackendApp } from "./app";
 import { BaseModule, type TableMap } from "./base/base.module";
 import { BaseModule as BaseModuleCompat } from "./modules/base/base.module";
@@ -26,7 +27,9 @@ class CoreFixtureModule extends BaseModule<never, TableMap, {}, {}, never> {
 }
 
 describe("Kernel infrastructure package surface", () => {
-  const pkg = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf8")) as PackageExports;
+  const pkg = JSON.parse(
+    readFileSync(join(__dirname, "../package.json"), "utf8")
+  ) as PackageExports;
 
   it("exports Base from ./base/* and keeps ./modules/base/*", () => {
     expect(pkg.exports["./base/*"]).toBeDefined();
@@ -37,9 +40,17 @@ describe("Kernel infrastructure package surface", () => {
     expect(pkg.exports["./modules/utils/*"]).toBeUndefined();
   });
 
-  it("does not export AccessModule or CryptoModule", () => {
+  it("does not export AccessModule, CryptoModule, or PdfModule", () => {
     expect(pkg.exports["./modules/access/*"]).toBeUndefined();
     expect(pkg.exports["./modules/crypto/*"]).toBeUndefined();
+    expect(pkg.exports["./modules/pdf/*"]).toBeUndefined();
+  });
+
+  it("does not depend on pdf-parse", () => {
+    const manifest = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf8")) as {
+      dependencies?: Record<string, string>;
+    };
+    expect(manifest.dependencies?.["pdf-parse"]).toBeUndefined();
   });
 
   it("loads BaseModule from Kernel infrastructure and the compatibility re-export", () => {
@@ -53,6 +64,13 @@ describe("Kernel infrastructure package surface", () => {
     expect(module.id).not.toBe("utils");
     const built = createBackendApp({ db: { client } }, [module] as const);
     expect(Object.keys(built.modules)).toEqual(["core-fixture"]);
+    void client.close?.();
+  });
+
+  it("boots createBackendApp when PdfModule from the Optional package is registered", () => {
+    const client = createClient({ url: ":memory:" });
+    const built = createBackendApp({ db: { client } }, [new PdfModule()] as const);
+    expect(Object.keys(built.modules)).toEqual(["pdf"]);
     void client.close?.();
   });
 });

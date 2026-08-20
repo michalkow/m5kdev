@@ -40,7 +40,7 @@ shared schemas, backend services, frontend hooks, and reusable UI.
 | [Schemas](/modules/schemas) | commons | List query (`querySchema`) and Match query (`matchQuerySchema`) |
 | [Utils](/modules/utils) | backend | Drizzle helpers for pagination, sorting, QueryFilters, QueryMatch, search |
 | [Docx](/modules/docx) | backend | Word-to-Markdown conversion |
-| [PDF](/modules/pdf) | backend | PDF text extraction |
+| [PDF](/modules/pdf) | `@m5kdev/module-pdf` | PDF text extraction |
 | [Video](/modules/video) | backend | ffmpeg trimming and audio extraction |
 | [Operations](/modules/operations) | frontend | Reserved for long-running operation hooks (empty today) |
 | [Uploads](/modules/uploads) | backend | Runtime upload working directory (not a code module) |

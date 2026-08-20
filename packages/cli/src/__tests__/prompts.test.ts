@@ -43,5 +43,8 @@ describe("Backend Module create prompt", () => {
     expect(() => parseBackendModulesAnswer({ answer: "crypto", choices: CHOICES })).toThrow(
       'Unknown Backend Module "crypto"'
     );
+    expect(() => parseBackendModulesAnswer({ answer: "documents", choices: CHOICES })).toThrow(
+      'Unknown Backend Module "documents"'
+    );
   });
 });

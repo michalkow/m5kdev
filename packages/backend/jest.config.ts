@@ -12,6 +12,7 @@ const config: Config = {
     "^#modules/(.*)$": "<rootDir>/src/modules/$1",
     "^#lib/(.*)$": "<rootDir>/src/lib/$1",
     "^#utils(.*)$": "<rootDir>/src/utils$1",
+    "^@m5kdev/backend/(.*)$": "<rootDir>/src/$1",
   },
   verbose: true,
 };

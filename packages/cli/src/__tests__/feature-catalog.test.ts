@@ -7,9 +7,10 @@ describe("CLI Backend Module feature catalog", () => {
     "utf8"
   );
 
-  it("does not offer access or crypto", () => {
+  it("does not offer access, crypto, or documents", () => {
     expect(prepareTemplates).not.toMatch(/^\s+access:/m);
     expect(prepareTemplates).not.toMatch(/^\s+crypto:/m);
+    expect(prepareTemplates).not.toMatch(/^\s+documents:/m);
   });
 
   it("still offers Core optional-registration flags", () => {

@@ -69,7 +69,6 @@
     "multer": "catalog:",
     "mustache": "catalog:",
     "openid-client": "catalog:",
-    "pdf-parse": "catalog:",
     "pino": "catalog:",
     "pino-pretty": "catalog:",
     "posthog-node": "catalog:",
@@ -293,16 +292,6 @@
       "require": {
         "types": "./dist/src/modules/notification/*.d.cts",
         "default": "./dist/src/modules/notification/*.cjs"
-      }
-    },
-    "./modules/pdf/*": {
-      "import": {
-        "types": "./dist/src/modules/pdf/*.d.mts",
-        "default": "./dist/src/modules/pdf/*.mjs"
-      },
-      "require": {
-        "types": "./dist/src/modules/pdf/*.d.cts",
-        "default": "./dist/src/modules/pdf/*.cjs"
       }
     },
     "./modules/docx/*": {

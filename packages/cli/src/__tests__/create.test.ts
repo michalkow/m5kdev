@@ -159,6 +159,13 @@ describe("scaffoldProject", () => {
     expect(schema).not.toContain('from "@m5kdev/backend/modules/notification/notification.db"');
     expect(schema).not.toContain("m5k:");
 
+    const serverPackage = await fs.readFile(
+      path.join(result.targetDirectory, "apps/server/package.json"),
+      "utf8"
+    );
+    expect(serverPackage).not.toContain("@m5kdev/module-");
+    expect(appTs).not.toContain("PdfModule");
+
     const serverAgents = await fs.readFile(
       path.join(result.targetDirectory, "apps/server/AGENTS.md"),
       "utf8"

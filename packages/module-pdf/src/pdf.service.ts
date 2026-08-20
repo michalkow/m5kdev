@@ -1,7 +1,7 @@
+import type { ServerResultAsync } from "@m5kdev/backend/base/base.dto";
+import { BaseService } from "@m5kdev/backend/base/base.service";
 import { err, ok } from "neverthrow";
 import { PDFParse } from "pdf-parse";
-import type { ServerResultAsync } from "../base/base.dto";
-import { BaseService } from "../base/base.service";
 
 export class PdfService extends BaseService<never, never> {
   async convertToText(url: string): ServerResultAsync<string> {

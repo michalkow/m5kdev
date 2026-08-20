@@ -95,6 +95,27 @@ export function collectCatalogProtocolDependencies(
   return collectCatalogProtocolDependenciesFromManifests(packageFiles.map(readJson));
 }
 
+/** Optional `@m5kdev/module-*` pins stay in the Managed catalog even when Starter does not depend on them. */
+export function collectOptionalBackendModulePins(repoRoot: string): ConsumerCatalog {
+  const packagesDir = path.join(repoRoot, "packages");
+  const pins: ConsumerCatalog = {};
+  if (!fs.existsSync(packagesDir)) return pins;
+
+  for (const entry of fs.readdirSync(packagesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith("module-")) continue;
+    const manifestPath = path.join(packagesDir, entry.name, "package.json");
+    if (!fs.existsSync(manifestPath)) continue;
+    const manifest = readJson(manifestPath);
+    const name = manifest.name;
+    const version = manifest.version;
+    if (typeof name !== "string" || typeof version !== "string") continue;
+    if (!name.startsWith("@m5kdev/module-")) continue;
+    pins[name] = version;
+  }
+
+  return pins;
+}
+
 export function buildConsumerCatalog(options: {
   repoRoot: string;
   starterDirectory: string;
@@ -138,11 +159,13 @@ export function buildConsumerCatalog(options: {
     catalog[name] = String(version);
   }
 
+  Object.assign(catalog, collectOptionalBackendModulePins(options.repoRoot));
+
   if (missing.length > 0) {
     throw new Error(`Missing consumer catalog versions for: ${missing.join(", ")}`);
   }
 
-  return catalog;
+  return sortedCatalog(catalog);
 }
 
 export function sortedCatalog(catalog: ConsumerCatalog): ConsumerCatalog {

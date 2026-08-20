@@ -32,6 +32,10 @@ describe("consumer catalog", () => {
       JSON.parse(fs.readFileSync(path.join(REPO_ROOT, "packages/frontend/package.json"), "utf8"))
         .version
     );
+    expect(catalog["@m5kdev/module-pdf"]).toBe(
+      JSON.parse(fs.readFileSync(path.join(REPO_ROOT, "packages/module-pdf/package.json"), "utf8"))
+        .version
+    );
     expect(catalog["@libsql/client"]).toBe("0.17.4");
     expect(catalog["@types/react"]).toBe("19.2.17");
     expect(catalog["drizzle-kit"]).toBe("0.31.10");
@@ -207,6 +211,7 @@ const BOUNDARY_PEERS: Record<string, readonly string[]> = {
   "@m5kdev/commons": ["zod"],
   "@m5kdev/frontend": ["@trpc/client", "@trpc/server", "better-auth", "react", "react-dom", "zod"],
   "@m5kdev/web-ui": ["@heroui/react", "nuqs", "react", "react-dom", "zod"],
+  "@m5kdev/module-pdf": ["neverthrow"],
 };
 
 describe("boundary library peers", () => {
