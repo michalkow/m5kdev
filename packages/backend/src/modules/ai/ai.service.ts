@@ -1,6 +1,7 @@
 import { OPENAI_TEXT_EMBEDDING_3_SMALL } from "@m5kdev/commons/modules/ai/ai.constants";
 import { arrayToPseudoXML } from "@m5kdev/commons/modules/ai/ai.utils";
 import { safeParseJson } from "@m5kdev/commons/utils/json";
+import { handleChatStream } from "@mastra/ai-sdk";
 import type { Mastra } from "@mastra/core";
 import type { AgentExecutionOptions } from "@mastra/core/agent";
 import { RequestContext } from "@mastra/core/request-context";
@@ -25,7 +26,7 @@ import type Replicate from "replicate";
 import type { ZodString, ZodType, z } from "zod";
 import { withSpan } from "../../utils/telemetry";
 import type { RequiredServiceActor } from "../base/base.actor";
-import type { ServerResultAsync } from "../base/base.dto";
+import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
 import type { Prompt } from "./ai.prompt";
 import { extractObjectPrompt, repairJsonPrompt, repairZodPrompt } from "./ai.prompts";
@@ -145,6 +146,29 @@ function readAgentMemory(agent: unknown): unknown | Promise<unknown> | undefined
   const getMemory = Reflect.get(agent, "getMemory");
   if (typeof getMemory !== "function") return undefined;
   return getMemory.call(agent);
+}
+
+interface StreamFinishUsage {
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+  };
+  providerMetadata?: {
+    openrouter?: {
+      traceId?: string;
+      usage?: {
+        cost?: number;
+      };
+    };
+  };
+}
+
+function isStreamFinishUsage(value: unknown): value is StreamFinishUsage {
+  if (typeof value !== "object" || value === null) return false;
+  if (!("usage" in value)) return false;
+  const usage = Reflect.get(value, "usage");
+  return typeof usage === "object" && usage !== null;
 }
 
 function positiveInteger(value: number | undefined, fallback: number): number {
@@ -312,18 +336,71 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     agentId: string;
     threadId: string;
   }): ServerResultAsync<{ messages: UIMessage[]; memory: boolean }> {
+    const resolved = this.resolveRegisteredAgent({
+      agentId: params.agentId,
+      threadId: params.threadId,
+      userId: params.actor.userId,
+    });
+    if (resolved.isErr()) return err(resolved.error);
+
+    const memory = await readAgentMemory(resolved.value);
+    return ok({ messages: [], memory: Boolean(memory) });
+  }
+
+  async streamChat(params: {
+    actor: RequiredServiceActor<"user">;
+    agentId: string;
+    messages: UIMessage[];
+  }): ServerResultAsync<ReadableStream> {
+    const mastra = this.mastra;
+    if (!mastra) {
+      return this.error("SERVICE_UNAVAILABLE", "Mastra is not available");
+    }
+
+    const resolved = this.resolveRegisteredAgent({
+      agentId: params.agentId,
+      userId: params.actor.userId,
+    });
+    if (resolved.isErr()) return err(resolved.error);
+
+    return this.throwablePromise(() =>
+      handleChatStream({
+        mastra,
+        agentId: params.agentId,
+        version: "v7",
+        params: { messages: params.messages },
+        defaultOptions: {
+          onFinish: (result: unknown) => {
+            if (!isStreamFinishUsage(result)) return;
+            void this.trackUsage({
+              ctx: { actor: params.actor },
+              feature: params.agentId,
+              model: "mastra",
+              result,
+            });
+          },
+        },
+      })
+    );
+  }
+
+  private resolveRegisteredAgent(params: {
+    agentId: string;
+    threadId?: string;
+    userId: string;
+  }): ServerResult<unknown> {
     if (!this.mastra) {
       return this.error("SERVICE_UNAVAILABLE", "Mastra is not available");
     }
 
     const mastra = this.mastra;
-    const resolved = this.throwable(() => {
+    return this.throwable(() => {
       if (!(params.agentId in mastra.listAgents())) {
         return this.error("NOT_FOUND", "Agent not found", {
           context: {
             agentId: params.agentId,
             threadId: params.threadId,
-            userId: params.actor.userId,
+            userId: params.userId,
           },
         });
       }
@@ -334,15 +411,11 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
           context: {
             agentId: params.agentId,
             threadId: params.threadId,
-            userId: params.actor.userId,
+            userId: params.userId,
           },
         });
       }
     });
-    if (resolved.isErr()) return err(resolved.error);
-
-    const memory = await readAgentMemory(resolved.value);
-    return ok({ messages: [], memory: Boolean(memory) });
   }
 
   async trackUsage(params: {

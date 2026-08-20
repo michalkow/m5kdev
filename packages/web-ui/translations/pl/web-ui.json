@@ -265,5 +265,13 @@
   "locale.label": "Język",
   "locale.updated": "Język zaktualizowany",
   "locale.updateError": "Nie udało się zaktualizować języka",
-  "ai.conversation.empty": "Brak wiadomości"
+  "ai.conversation.empty": "Brak wiadomości",
+  "ai.conversation.prompt": "Wiadomość",
+  "ai.conversation.send": "Wyślij",
+  "ai.conversation.stop": "Zatrzymaj",
+  "ai.conversation.error": "Asystent nie dokończył tej tury.",
+  "ai.conversation.streaming": "Myślę…",
+  "ai.conversation.jumpToBottom": "Przejdź do najnowszej",
+  "ai.conversation.assistant": "Asystent",
+  "ai.conversation.user": "Ty"
 }

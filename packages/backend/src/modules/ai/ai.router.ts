@@ -1,4 +1,5 @@
 import type { Mastra } from "@mastra/core";
+import { pipeUIMessageStreamToResponse, type UIMessage } from "ai";
 import express, { type Response, type Router } from "express";
 import { captureServerError, ServerError } from "../../utils/errors";
 import type { AuthMiddleware, AuthRequest } from "../auth/auth.middleware";
@@ -23,7 +24,7 @@ function resultStatus(result: ServerResult<unknown>): number {
 
 export interface CreateAiConversationRouterOptions {
   readonly authMiddleware: AuthMiddleware;
-  readonly aiService: Pick<AIService<Mastra>, "recallThreadMessages">;
+  readonly aiService: Pick<AIService<Mastra>, "recallThreadMessages" | "streamChat">;
 }
 
 export function createAiConversationRouter({
@@ -67,5 +68,50 @@ export function createAiConversationRouter({
     }
   );
 
+  router.post("/chat/:agentId", authMiddleware, async (req: AuthRequest, res: Response) => {
+    const user = req.user;
+    const session = req.session;
+    if (!user || !session) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const agentId = req.params.agentId;
+    if (!agentId) {
+      return res.status(400).json({ message: "Missing agentId" });
+    }
+
+    const messages = readUiMessages(req.body);
+    if (!messages) {
+      return res.status(400).json({ message: "Missing messages" });
+    }
+
+    try {
+      const actor = createActorFromContext({ user, session }, "user");
+      const result = await aiService.streamChat({
+        actor,
+        agentId,
+        messages,
+      });
+      if (result.isErr()) {
+        return res.status(resultStatus(result)).json({ message: result.error.message });
+      }
+      pipeUIMessageStreamToResponse({
+        response: res,
+        stream: result.value,
+      });
+      return;
+    } catch (err: unknown) {
+      captureRouteError(err, { route: "POST /chat/:agentId" });
+      const message = err instanceof Error ? err.message : "Internal Server Error";
+      return res.status(500).json({ message });
+    }
+  });
+
   return router;
+}
+
+function readUiMessages(body: unknown): UIMessage[] | undefined {
+  if (typeof body !== "object" || body === null) return undefined;
+  if (!("messages" in body) || !Array.isArray(body.messages)) return undefined;
+  return body.messages;
 }

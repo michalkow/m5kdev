@@ -57,6 +57,26 @@ Depends on `auth` (usage rows are attributed to users).
 
 All fallible calls return `ServerResultAsync`.
 
+## Conversation UI
+
+`AiConversation` is a layout-agnostic compound in `@m5kdev/web-ui`: pass
+`agentId` and `threadId`, then compose `.Messages` and `.Prompt` (or omit
+`.Prompt` for a read-only transcript). Default children are Messages + Prompt.
+
+The frontend hook `useAiChat` hydrates the Thread, then POSTs through Vercel AI
+SDK `useChat`. Two mounts with the same `agentId` + `threadId` share one Chat
+instance; unmounting does not evict it.
+
+HTTP (mounted by `AIModule.express` at `/ai`, authenticated):
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET | `/ai/chat/:agentId/threads/:threadId` | Hydrate. Without Memory: `{ messages: [], memory: false }`. 401 unauthenticated, 404 unknown Agent. |
+| POST | `/ai/chat/:agentId` | Session-only send. `handleChatStream` (`version: 'v7'`) + `pipeUIMessageStreamToResponse`. The client sends the full in-memory history. Stream finish records `ai_usage` with `feature` = `agentId`. 401 / 404 as above. |
+
+Do not use Mastra's own HTTP server or `chats.conversation` for this UI
+(see ADR-0007). Memory recall and last-message-only POST are a later ticket.
+
 ## Model constants
 
 Import model ids from `@m5kdev/commons/modules/ai/ai.constants` instead of

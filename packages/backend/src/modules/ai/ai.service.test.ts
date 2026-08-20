@@ -6,6 +6,10 @@ import { AIService, type AIServiceOptions } from "./ai.service";
 
 const mockGenerateText = jest.fn();
 
+jest.mock("@mastra/ai-sdk", () => ({
+  handleChatStream: jest.fn(),
+}));
+
 jest.mock("@mastra/core/request-context", () => ({
   RequestContext: class {
     set = jest.fn();
