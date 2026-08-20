@@ -147,6 +147,7 @@ describe("scaffoldProject", () => {
     expect(appTs).toContain("PostsModule");
     expect(appTs).not.toContain("WorkflowModule");
     expect(appTs).not.toContain("DemoWorkflowModule");
+    expect(appTs).not.toContain("NotificationModule");
     expect(appTs).not.toContain("redis:");
     expect(appTs).not.toContain("m5k:");
 
@@ -155,7 +156,14 @@ describe("scaffoldProject", () => {
       "utf8"
     );
     expect(schema).not.toContain('from "@m5kdev/backend/modules/workflow/workflow.db"');
+    expect(schema).not.toContain('from "@m5kdev/backend/modules/notification/notification.db"');
     expect(schema).not.toContain("m5k:");
+
+    const serverAgents = await fs.readFile(
+      path.join(result.targetDirectory, "apps/server/AGENTS.md"),
+      "utf8"
+    );
+    expect(serverAgents).not.toContain("NotificationModule");
 
     const router = await fs.readFile(
       path.join(result.targetDirectory, "apps/webapp/src/Router.tsx"),
@@ -280,7 +288,9 @@ describe("scaffoldProject", () => {
       "utf8"
     );
     expect(schema).toContain("workflows");
+    expect(schema).not.toContain('from "@m5kdev/backend/modules/notification/notification.db"');
     expect(schema).not.toContain("m5k:");
+    expect(appTs).not.toContain("NotificationModule");
 
     const router = await fs.readFile(
       path.join(result.targetDirectory, "apps/webapp/src/Router.tsx"),
@@ -306,6 +316,46 @@ describe("scaffoldProject", () => {
     const source = await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8");
     const state = JSON.parse(source) as { template: { features: string[] } };
     expect(state.template.features).toEqual(["webapp", "workflows"]);
+  });
+
+  it("keeps Notifications when that Backend Module is selected", async () => {
+    const result = await scaffoldProject({
+      targetDirectory: "notification-desk",
+      appName: "Notification Desk",
+      appDescription: "Notifications module fixture.",
+      yes: true,
+      modules: ["workflows", "notifications"],
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    const appTs = await fs.readFile(
+      path.join(result.targetDirectory, "apps/server/src/app.ts"),
+      "utf8"
+    );
+    expect(appTs).toContain("NotificationModule");
+    expect(appTs).toContain("WorkflowModule");
+    expect(appTs).not.toContain("m5k:");
+
+    const schema = await fs.readFile(
+      path.join(result.targetDirectory, "apps/server/src/schema.ts"),
+      "utf8"
+    );
+    expect(schema).toContain('from "@m5kdev/backend/modules/notification/notification.db"');
+    expect(schema).toContain("notificationDevices");
+    expect(schema).toContain("notificationSendLogs");
+    expect(schema).not.toContain("m5k:");
+
+    const serverAgents = await fs.readFile(
+      path.join(result.targetDirectory, "apps/server/AGENTS.md"),
+      "utf8"
+    );
+    expect(serverAgents).toContain("NotificationModule");
+
+    const source = await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8");
+    const state = JSON.parse(source) as { template: { features: string[] } };
+    expect(state.template.features).toEqual(["notifications", "webapp", "workflows"]);
   });
 
   it("keeps the Workflow Playwright spec only when Workflows and the test harness are both on", async () => {

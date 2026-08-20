@@ -7,6 +7,9 @@ import { EmailPreviewModule } from "@m5kdev/backend/modules/email/email.preview.
 // m5k:files:start
 import { FileModule } from "@m5kdev/backend/modules/file/file.module";
 // m5k:files:end
+// m5k:notifications:start
+import { NotificationModule } from "@m5kdev/backend/modules/notification/notification.module";
+// m5k:notifications:end
 // m5k:workflows:start
 import { WorkflowModule } from "@m5kdev/backend/modules/workflow/workflow.module";
 // m5k:workflows:end
@@ -123,6 +126,9 @@ export const builtBackendApp = createBackendApp(
     }),
     new DemoWorkflowModule(),
     // m5k:workflows:end
+    // m5k:notifications:start
+    new NotificationModule(),
+    // m5k:notifications:end
     new PostsModule(),
     new EmailPreviewModule({ allowDelete: process.env.NODE_ENV !== "production" }),
     // m5k:test-harness:start

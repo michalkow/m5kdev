@@ -12,13 +12,15 @@ export {
   verifications,
   waitlist,
 } from "@m5kdev/backend/modules/auth/auth.db";
+// m5k:files:start
+export { files } from "@m5kdev/backend/modules/file/file.db";
+// m5k:files:end
+// m5k:notifications:start
 export {
   notificationDevices,
   notificationSendLogs,
 } from "@m5kdev/backend/modules/notification/notification.db";
-// m5k:files:start
-export { files } from "@m5kdev/backend/modules/file/file.db";
-// m5k:files:end
+// m5k:notifications:end
 // m5k:workflows:start
 export { workflows } from "@m5kdev/backend/modules/workflow/workflow.db";
 // m5k:workflows:end

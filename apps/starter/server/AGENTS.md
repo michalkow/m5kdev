@@ -37,10 +37,14 @@ apps/server/src/modules/<module>/
 - Renaming a dependency method, repackaging arguments, constructing a prompt, or forwarding actor/context data alone does not justify a wrapper.
 - If removing the method and calling the dependency directly would lose no behavior or boundary, do not add it.
 
-## Workflow, Redis, and push notifications
+## Runtime notes
 
-- `WorkflowModule` and `NotificationModule` are registered in `app.ts`. Start **Redis** locally (`REDIS_URL`) before `pnpm dev` on the server, or background jobs will not run.
+// m5k:workflows:start
+- `WorkflowModule` is registered in `app.ts`. Start **Redis** locally (`REDIS_URL`) before `pnpm dev` on the server, or background jobs will not run.
+// m5k:workflows:end
 - `index.ts` calls `builtBackendApp.start()`, which listens and handles SIGINT/SIGTERM. Extra shutdown work (telemetry) is `onShutdown` on `createBackendApp`.
 - After changing Drizzle tables, run `pnpm --filter ./apps/server drizzle:generate` then `drizzle:migrate` — do not hand-edit SQL migrations in this repo.
 
-Push-related server env vars are documented in `apps/shared/.env.example`.
+// m5k:notifications:start
+- `NotificationModule` is registered in `app.ts` when this feature is selected. Push-related server env vars are documented in `apps/shared/.env.example`.
+// m5k:notifications:end
