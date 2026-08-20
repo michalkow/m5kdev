@@ -139,14 +139,14 @@
         "default": "./dist/src/modules/ai/*.cjs"
       }
     },
-    "./modules/utils/*": {
+    "./base/*": {
       "import": {
-        "types": "./dist/src/modules/utils/*.d.mts",
-        "default": "./dist/src/modules/utils/*.mjs"
+        "types": "./dist/src/base/*.d.mts",
+        "default": "./dist/src/base/*.mjs"
       },
       "require": {
-        "types": "./dist/src/modules/utils/*.d.cts",
-        "default": "./dist/src/modules/utils/*.cjs"
+        "types": "./dist/src/base/*.d.cts",
+        "default": "./dist/src/base/*.cjs"
       }
     },
     "./modules/base/*": {

@@ -1,7 +1,7 @@
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { MatchQueryInput } from "@m5kdev/commons/modules/schemas/queryMatch";
 import { err, ok } from "neverthrow";
-import { ServerError } from "../../utils/errors";
+import { ServerError } from "../utils/errors";
 import type { ServiceActorClaims, ServiceOrganizationActor, ServiceTeamActor } from "./base.actor";
 import { createServiceActor } from "./base.actor";
 import type { ResourceGrant } from "./base.grants";

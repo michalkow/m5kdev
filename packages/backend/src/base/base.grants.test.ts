@@ -1,5 +1,5 @@
 import { err, ok } from "neverthrow";
-import { ServerError } from "../../utils/errors";
+import { ServerError } from "../utils/errors";
 import { createServiceActor } from "./base.actor";
 import {
   checkPermissionAsync,

@@ -25,7 +25,7 @@ import {
 import type { SQLiteColumn, SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
 import { DateTime } from "luxon";
 import { err, ok, type Result } from "neverthrow";
-import type { ConditionBuilder } from "../base/base.repository";
+import type { ConditionBuilder } from "./base.repository";
 import { escapeLikeUserInput } from "./getGlobalSearchCondition";
 
 type ColumnKind = "string" | "number" | "date" | "boolean" | "json";

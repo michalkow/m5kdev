@@ -1,7 +1,1 @@
-export type ServerErrorLayer =
-  | "unknown"
-  | "repository"
-  | "service"
-  | "controller"
-  | "auth"
-  | "workflow";
+export * from "../../base/base.types";
