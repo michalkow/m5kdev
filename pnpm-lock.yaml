@@ -297,15 +297,6 @@ catalogs:
     better-auth:
       specifier: 1.4.18
       version: 1.4.18
-    bip32:
-      specifier: 4.0.0
-      version: 4.0.0
-    bip39:
-      specifier: 3.1.0
-      version: 3.1.0
-    bitcoinjs-lib:
-      specifier: 7.0.0
-      version: 7.0.0
     body-parser:
       specifier: 1.20.3
       version: 1.20.3
@@ -504,9 +495,6 @@ catalogs:
     tailwindcss-animate:
       specifier: 1.0.7
       version: 1.0.7
-    tiny-secp256k1:
-      specifier: 2.2.3
-      version: 2.2.3
     trpc-to-openapi:
       specifier: 2.3.0
       version: 2.3.0
@@ -1188,15 +1176,6 @@ importers:
       ai:
         specifier: 'catalog:'
         version: 7.0.28(zod@4.2.1)
-      bip32:
-        specifier: 'catalog:'
-        version: 4.0.0
-      bip39:
-        specifier: 'catalog:'
-        version: 3.1.0
-      bitcoinjs-lib:
-        specifier: 'catalog:'
-        version: 7.0.0(typescript@6.0.3)
       body-parser:
         specifier: 'catalog:'
         version: 1.20.3
@@ -1269,9 +1248,6 @@ importers:
       stripe:
         specifier: 'catalog:'
         version: 20.1.0(@types/node@20.19.11)
-      tiny-secp256k1:
-        specifier: 'catalog:'
-        version: 2.2.3
       trpc-to-openapi:
         specifier: 'catalog:'
         version: 2.3.0(@trpc/server@11.4.3(typescript@6.0.3))(zod-openapi@4.2.4(zod@4.2.1))(zod@4.2.1)

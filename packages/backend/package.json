@@ -54,9 +54,6 @@
     "@types/multer": "catalog:",
     "ai": "catalog:",
     "@parse/node-apn": "catalog:",
-    "bip32": "catalog:",
-    "bip39": "catalog:",
-    "bitcoinjs-lib": "catalog:",
     "body-parser": "catalog:",
     "bullmq": "catalog:",
     "bullmq-otel": "catalog:",
@@ -81,7 +78,6 @@
     "resend": "catalog:",
     "rrule": "catalog:",
     "stripe": "catalog:",
-    "tiny-secp256k1": "catalog:",
     "trpc-to-openapi": "catalog:",
     "turndown": "catalog:",
     "uuid": "catalog:",
@@ -169,16 +165,6 @@
         "default": "./dist/src/modules/billing/*.cjs"
       }
     },
-    "./modules/crypto/*": {
-      "import": {
-        "types": "./dist/src/modules/crypto/*.d.mts",
-        "default": "./dist/src/modules/crypto/*.mjs"
-      },
-      "require": {
-        "types": "./dist/src/modules/crypto/*.d.cts",
-        "default": "./dist/src/modules/crypto/*.cjs"
-      }
-    },
     "./modules/auth/*": {
       "import": {
         "types": "./dist/src/modules/auth/*.d.mts",
@@ -257,16 +243,6 @@
       "require": {
         "types": "./dist/src/modules/posthog/*.d.cts",
         "default": "./dist/src/modules/posthog/*.cjs"
-      }
-    },
-    "./modules/access/*": {
-      "import": {
-        "types": "./dist/src/modules/access/*.d.mts",
-        "default": "./dist/src/modules/access/*.mjs"
-      },
-      "require": {
-        "types": "./dist/src/modules/access/*.d.cts",
-        "default": "./dist/src/modules/access/*.cjs"
       }
     },
     "./modules/social/*": {

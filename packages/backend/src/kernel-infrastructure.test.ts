@@ -37,6 +37,11 @@ describe("Kernel infrastructure package surface", () => {
     expect(pkg.exports["./modules/utils/*"]).toBeUndefined();
   });
 
+  it("does not export AccessModule or CryptoModule", () => {
+    expect(pkg.exports["./modules/access/*"]).toBeUndefined();
+    expect(pkg.exports["./modules/crypto/*"]).toBeUndefined();
+  });
+
   it("loads BaseModule from Kernel infrastructure and the compatibility re-export", () => {
     expect(BaseModule).toBe(BaseModuleCompat);
   });

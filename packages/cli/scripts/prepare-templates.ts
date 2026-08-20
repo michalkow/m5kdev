@@ -111,11 +111,9 @@ const FEATURE_MANIFEST = {
       paths: [],
     },
     tags: { kind: "module", label: "Tags", experimental: true, paths: [] },
-    access: { kind: "module", label: "Access", experimental: true, paths: [] },
     clay: { kind: "module", label: "Clay", experimental: true, paths: [] },
     social: { kind: "module", label: "Social", experimental: true, paths: [] },
     connect: { kind: "module", label: "Connect", experimental: true, paths: [] },
-    crypto: { kind: "module", label: "Crypto", experimental: true, paths: [] },
     recurrence: { kind: "module", label: "Recurrence", experimental: true, paths: [] },
     webhook: { kind: "module", label: "Webhook", experimental: true, paths: [] },
     documents: {

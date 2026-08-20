@@ -32,8 +32,6 @@ shared schemas, backend services, frontend hooks, and reusable UI.
 | [Social](/modules/social) | backend | Posting to social networks through linked accounts |
 | [Webhook](/modules/webhook) | backend | One-shot inbound webhook callbacks with awaitable payloads |
 | [Clay](/modules/clay) | backend | Clay table integration built on the webhook module |
-| [Access](/modules/access) | backend | Statement-based permission checks on Better Auth access control |
-| [Crypto](/modules/crypto) | backend | Bitcoin address derivation and payment tracking |
 
 ## Utilities
 

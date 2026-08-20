@@ -61,16 +61,6 @@
         "default": "./dist/src/modules/schemas/*.cjs"
       }
     },
-    "./modules/crypto/*": {
-      "import": {
-        "types": "./dist/src/modules/crypto/*.d.mts",
-        "default": "./dist/src/modules/crypto/*.mjs"
-      },
-      "require": {
-        "types": "./dist/src/modules/crypto/*.d.cts",
-        "default": "./dist/src/modules/crypto/*.cjs"
-      }
-    },
     "./modules/recurrence/*": {
       "import": {
         "types": "./dist/src/modules/recurrence/*.d.mts",

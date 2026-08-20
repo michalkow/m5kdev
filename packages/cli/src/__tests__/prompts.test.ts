@@ -6,7 +6,6 @@ const CHOICES: readonly BackendModuleChoice[] = [
   { id: "files", label: "Files", experimental: false },
   { id: "workflows", label: "Workflows", experimental: false },
   { id: "ai", label: "AI", experimental: false },
-  { id: "access", label: "Access", experimental: true },
   { id: "notifications", label: "Notifications", experimental: true },
 ];
 
@@ -16,8 +15,8 @@ describe("Backend Module create prompt", () => {
     expect(prompt).toContain("Backend modules");
     expect(prompt).toContain("billing");
     expect(prompt).toContain("workflows");
-    expect(prompt).toContain("access (experimental)");
     expect(prompt).toContain("notifications (experimental)");
+    expect(prompt).not.toContain("access");
     expect(prompt).not.toContain("billing (experimental)");
   });
 
@@ -37,6 +36,12 @@ describe("Backend Module create prompt", () => {
   it("rejects unknown module ids", () => {
     expect(() => parseBackendModulesAnswer({ answer: "nosuch", choices: CHOICES })).toThrow(
       'Unknown Backend Module "nosuch"'
+    );
+    expect(() => parseBackendModulesAnswer({ answer: "access", choices: CHOICES })).toThrow(
+      'Unknown Backend Module "access"'
+    );
+    expect(() => parseBackendModulesAnswer({ answer: "crypto", choices: CHOICES })).toThrow(
+      'Unknown Backend Module "crypto"'
     );
   });
 });
