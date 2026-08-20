@@ -230,16 +230,6 @@
         "default": "./dist/src/modules/posthog/*.cjs"
       }
     },
-    "./modules/clay/*": {
-      "import": {
-        "types": "./dist/src/modules/clay/*.d.mts",
-        "default": "./dist/src/modules/clay/*.mjs"
-      },
-      "require": {
-        "types": "./dist/src/modules/clay/*.d.cts",
-        "default": "./dist/src/modules/clay/*.cjs"
-      }
-    },
     "./modules/webhook/*": {
       "import": {
         "types": "./dist/src/modules/webhook/*.d.mts",

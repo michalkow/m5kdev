@@ -12,16 +12,18 @@ webhook module.
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/backend` | `ClayModule`: typed table config, repository, `ClayService`. |
+| `@m5kdev/module-clay` | `ClayModule`: typed table config, repository, `ClayService`. |
 
 ## Registration
 
 Declare your Clay tables once, keyed by name:
 
 ```ts
-import { ClayModule } from "@m5kdev/backend/modules/clay/clay.module";
+import { createBackendApp } from "@m5kdev/backend/app";
+import { WebhookModule } from "@m5kdev/backend/modules/webhook/webhook.module";
+import { ClayModule } from "@m5kdev/module-clay";
 
-backendApp.use(
+createBackendApp(config, [
   new ClayModule({
     tables: {
       enrichment: {
@@ -30,12 +32,14 @@ backendApp.use(
         timeoutInSeconds: 120,      // optional
       },
     },
-  })
-);
+  }),
+  new WebhookModule(),
+]);
 ```
 
 Table keys are typed (`ClayModule<"enrichment">`), so `sendToTable` only accepts
-configured tables. Depends on the [webhook module](/modules/webhook).
+configured tables. `ClayModule` `dependsOn` Inbound callback in the Kernel
+(`id` remains `webhook`).
 
 ## Service API
 

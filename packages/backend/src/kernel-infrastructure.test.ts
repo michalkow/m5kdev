@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createClient } from "@libsql/client";
+import { ClayModule } from "../../module-clay/src/clay.module";
 import { DocxModule } from "../../module-docx/src/docx.module";
 import { PdfModule } from "../../module-pdf/src/pdf.module";
 import { SocialModule } from "../../module-social/src/social.module";
@@ -12,6 +13,8 @@ import * as connectTables from "./modules/connect/connect.db";
 import { ConnectModule } from "./modules/connect/connect.module";
 import * as fileTables from "./modules/file/file.db";
 import { FileModule } from "./modules/file/file.module";
+import * as webhookTables from "./modules/webhook/webhook.db";
+import { WebhookModule } from "./modules/webhook/webhook.module";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {
@@ -53,13 +56,14 @@ describe("Kernel infrastructure package surface", () => {
     expect(pkg.exports["./modules/utils/*"]).toBeUndefined();
   });
 
-  it("does not export AccessModule, CryptoModule, PdfModule, DocxModule, VideoModule, or SocialModule", () => {
+  it("does not export AccessModule, CryptoModule, PdfModule, DocxModule, VideoModule, SocialModule, or ClayModule", () => {
     expect(pkg.exports["./modules/access/*"]).toBeUndefined();
     expect(pkg.exports["./modules/crypto/*"]).toBeUndefined();
     expect(pkg.exports["./modules/pdf/*"]).toBeUndefined();
     expect(pkg.exports["./modules/docx/*"]).toBeUndefined();
     expect(pkg.exports["./modules/video/*"]).toBeUndefined();
     expect(pkg.exports["./modules/social/*"]).toBeUndefined();
+    expect(pkg.exports["./modules/clay/*"]).toBeUndefined();
   });
 
   it("does not depend on pdf-parse, mammoth, turndown, or ffmpeg-ffprobe-static", () => {
@@ -147,6 +151,37 @@ describe("Kernel infrastructure package surface", () => {
         new AuthFixtureModule(),
       ] as const)
     ).toThrow('Backend module "social" is missing required dependency "connect"');
+    void client.close?.();
+  });
+
+  it("keeps Inbound callback module id as webhook", () => {
+    expect(new WebhookModule().id).toBe("webhook");
+  });
+
+  it("boots createBackendApp when ClayModule from the Optional package is registered with Inbound callback", () => {
+    const client = createClient({ url: ":memory:" });
+    const built = createBackendApp(
+      { db: { client }, schema: { ...webhookTables } },
+      [
+        new ClayModule({
+          tables: { enrichment: { webhookUrl: "https://example.test/clay" } },
+        }),
+        new WebhookModule(),
+      ] as const
+    );
+    expect(Object.keys(built.modules).sort()).toEqual(["clay", "webhook"]);
+    void client.close?.();
+  });
+
+  it("throws when ClayModule is missing Inbound callback", () => {
+    const client = createClient({ url: ":memory:" });
+    expect(() =>
+      createBackendApp({ db: { client } }, [
+        new ClayModule({
+          tables: { enrichment: { webhookUrl: "https://example.test/clay" } },
+        }),
+      ] as const)
+    ).toThrow('Backend module "clay" is missing required dependency "webhook"');
     void client.close?.();
   });
 });

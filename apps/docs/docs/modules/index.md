@@ -31,7 +31,7 @@ shared schemas, backend services, frontend hooks, and reusable UI.
 | [Connect](/modules/connect) | backend | OAuth account linking for third-party APIs (Google, LinkedIn) |
 | [Social](/modules/social) | `@m5kdev/module-social` | Posting to social networks through linked accounts |
 | [Webhook](/modules/webhook) | backend | One-shot inbound webhook callbacks with awaitable payloads |
-| [Clay](/modules/clay) | backend | Clay table integration built on the webhook module |
+| [Clay](/modules/clay) | `@m5kdev/module-clay` | Clay table integration built on the webhook module |
 
 ## Utilities
 

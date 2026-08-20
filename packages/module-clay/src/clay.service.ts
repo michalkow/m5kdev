@@ -1,17 +1,17 @@
+import type { ServerResultAsync } from "@m5kdev/backend/base/base.dto";
+import { BaseService } from "@m5kdev/backend/base/base.service";
+import type { WebhookService } from "@m5kdev/backend/modules/webhook/webhook.service";
 import type { z } from "zod";
-import type { ServerResultAsync } from "../base/base.dto";
-import { BaseService } from "../base/base.service";
-import type { WebhookService } from "../webhook/webhook.service";
 import type { ClayRepository } from "./clay.repository";
 
-type ClayTable = {
+interface ClayTable {
   name?: string;
   tableId?: string;
   viewId?: string;
   webhookUrl: string;
   schema?: z.ZodAny;
   timeoutInSeconds?: number;
-};
+}
 
 export class ClayService<K extends string> extends BaseService<
   { clay: ClayRepository },

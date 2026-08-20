@@ -1,0 +1,79 @@
+{
+  "name": "@m5kdev/module-clay",
+  "version": "0.33.0",
+  "description": "Optional Backend Module for Clay table webhooks and enrichment callbacks.",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michalkow/m5kdev.git"
+  },
+  "homepage": "https://github.com/michalkow/m5kdev#readme",
+  "bugs": "https://github.com/michalkow/m5kdev/issues",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "version:patch": "npm version patch",
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write",
+    "build": "tsdown",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@m5kdev/backend": "workspace:*"
+  },
+  "peerDependencies": {
+    "neverthrow": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@m5kdev/config": "workspace:*",
+    "neverthrow": "catalog:",
+    "tsdown": "catalog:",
+    "tslib": "catalog:",
+    "typescript": "catalog:",
+    "zod": "catalog:"
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/src/clay.module.d.mts",
+        "default": "./dist/src/clay.module.mjs"
+      },
+      "require": {
+        "types": "./dist/src/clay.module.d.cts",
+        "default": "./dist/src/clay.module.cjs"
+      }
+    },
+    "./clay.module": {
+      "import": {
+        "types": "./dist/src/clay.module.d.mts",
+        "default": "./dist/src/clay.module.mjs"
+      },
+      "require": {
+        "types": "./dist/src/clay.module.d.cts",
+        "default": "./dist/src/clay.module.cjs"
+      }
+    },
+    "./clay.service": {
+      "import": {
+        "types": "./dist/src/clay.service.d.mts",
+        "default": "./dist/src/clay.service.mjs"
+      },
+      "require": {
+        "types": "./dist/src/clay.service.d.cts",
+        "default": "./dist/src/clay.service.cjs"
+      }
+    },
+    "./clay.repository": {
+      "import": {
+        "types": "./dist/src/clay.repository.d.mts",
+        "default": "./dist/src/clay.repository.mjs"
+      },
+      "require": {
+        "types": "./dist/src/clay.repository.d.cts",
+        "default": "./dist/src/clay.repository.cjs"
+      }
+    }
+  }
+}

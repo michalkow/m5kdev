@@ -1,10 +1,14 @@
+import {
+  BaseModule,
+  type ModuleServicesContext,
+  type TableMap,
+} from "@m5kdev/backend/base/base.module";
+import type { WebhookModule } from "@m5kdev/backend/modules/webhook/webhook.module";
 import type { z } from "zod";
-import { BaseModule, type ModuleServicesContext, type TableMap } from "../base/base.module";
-import type { WebhookModule } from "../webhook/webhook.module";
 import { ClayRepository } from "./clay.repository";
 import { ClayService } from "./clay.service";
 
-export type ClayTablesConfig<K extends string> = {
+export interface ClayTablesConfig<K extends string> {
   tables: Record<
     K,
     {
@@ -16,7 +20,7 @@ export type ClayTablesConfig<K extends string> = {
       timeoutInSeconds?: number;
     }
   >;
-};
+}
 
 type ClayModuleDeps = { webhook: WebhookModule };
 type ClayModuleTables = TableMap;

@@ -1,8 +1,6 @@
+import type { ServerResultAsync } from "@m5kdev/backend/base/base.dto";
+import { BaseExternaRepository } from "@m5kdev/backend/base/base.repository";
 import { err, ok } from "neverthrow";
-import type { ServerResultAsync } from "../base/base.dto";
-import { BaseExternaRepository } from "../base/base.repository";
-
-const { CLAY_WEBHOOK_AUTH_TOKEN } = process.env;
 
 export class ClayRepository extends BaseExternaRepository {
   async sendToWebhook(
@@ -18,7 +16,9 @@ export class ClayRepository extends BaseExternaRepository {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(CLAY_WEBHOOK_AUTH_TOKEN ? { "x-clay-webhook-auth": CLAY_WEBHOOK_AUTH_TOKEN } : {}),
+          ...(process.env.CLAY_WEBHOOK_AUTH_TOKEN
+            ? { "x-clay-webhook-auth": process.env.CLAY_WEBHOOK_AUTH_TOKEN }
+            : {}),
         },
         body: bodyResult.value,
       })
