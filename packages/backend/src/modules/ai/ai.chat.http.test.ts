@@ -307,4 +307,123 @@ describe("Conversation send HTTP", () => {
       })
     );
   });
+
+  it("does not attach Memory when the Agent has none", async () => {
+    mockedHandleChatStream().mockResolvedValue(new ReadableStream());
+    mockedPipe().mockImplementation(
+      ({ response }: { response: { end: (body: string) => void } }) => {
+        response.end("data: streamed\n\n");
+      }
+    );
+
+    const app = mountApp({
+      authMiddleware: acceptAuth(),
+      mastra: createMastra({
+        writer: { getMemory: () => undefined },
+      }),
+    });
+
+    await withServer(app, async (baseUrl) => {
+      await postChat(baseUrl, "writer", {
+        messages: [userMessage],
+        threadId: "thread-1",
+      });
+    });
+
+    const options = mockedHandleChatStream().mock.calls[0]?.[0] as {
+      params: { messages: unknown; memory?: unknown };
+    };
+    expect(options.params.messages).toEqual([userMessage]);
+    expect(options.params.memory).toBeUndefined();
+  });
+});
+
+describe("Conversation Memory HTTP", () => {
+  beforeEach(() => {
+    mockedHandleChatStream().mockReset();
+    mockedPipe().mockReset();
+  });
+
+  it("recalls Thread messages for an Agent with Memory", async () => {
+    const recall = jest.fn().mockResolvedValue({
+      messages: [
+        {
+          id: "m1",
+          role: "user",
+          createdAt: new Date("2026-01-01"),
+          content: { format: 2, parts: [{ type: "text", text: "Hi from memory" }] },
+        },
+      ],
+    });
+
+    const app = mountApp({
+      authMiddleware: acceptAuth(),
+      mastra: createMastra({
+        writer: { getMemory: () => ({ recall }) },
+      }),
+    });
+
+    await withServer(app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/ai/chat/writer/threads/thread-1`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        memory: true,
+        messages: [
+          {
+            id: "m1",
+            role: "user",
+            parts: [{ type: "text", text: "Hi from memory" }],
+          },
+        ],
+      });
+    });
+
+    expect(recall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: "thread-1",
+        resourceId: "user-1",
+      })
+    );
+  });
+
+  it("sends only the last user message and stamps memory.resource from the Actor", async () => {
+    mockedHandleChatStream().mockResolvedValue(new ReadableStream());
+    mockedPipe().mockImplementation(
+      ({ response }: { response: { end: (body: string) => void } }) => {
+        response.end("data: streamed\n\n");
+      }
+    );
+
+    const earlier = {
+      id: "msg-0",
+      role: "assistant",
+      parts: [{ type: "text", text: "Before" }],
+    };
+    const app = mountApp({
+      authMiddleware: acceptAuth(),
+      mastra: createMastra({
+        writer: { getMemory: () => ({ recall: jest.fn() }) },
+      }),
+    });
+
+    await withServer(app, async (baseUrl) => {
+      const response = await postChat(baseUrl, "writer", {
+        messages: [earlier, userMessage],
+        memory: { thread: "thread-1", resource: "client-forged" },
+      });
+      expect(response.status).toBe(200);
+    });
+
+    expect(mockedHandleChatStream()).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          messages: [userMessage],
+          memory: {
+            thread: "thread-1",
+            resource: "user-1",
+          },
+        }),
+      })
+    );
+  });
 });

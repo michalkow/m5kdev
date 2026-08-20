@@ -17,9 +17,26 @@ export interface GetOrCreateAiChatParams {
 
 const chats = new Map<string, Chat<UIMessage>>();
 const hydrated = new Set<string>();
+const conversationMemory = new Map<string, boolean>();
 
 function chatKey(agentId: string, threadId: string): string {
   return `${agentId}:${threadId}`;
+}
+
+export function setConversationHasMemory(params: {
+  readonly agentId: string;
+  readonly threadId: string;
+  readonly memory: boolean;
+}): void {
+  conversationMemory.set(chatKey(params.agentId, params.threadId), params.memory);
+}
+
+function lastUserMessage(messages: UIMessage[]): UIMessage[] {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === "user") return [message];
+  }
+  return [];
 }
 
 export function getOrCreateAiChat({
@@ -41,12 +58,24 @@ export function getOrCreateAiChat({
       }: {
         messages: UIMessage[];
         body?: unknown;
-      }) => ({
-        body: {
-          ...(typeof body === "object" && body !== null ? body : {}),
-          messages,
-        },
-      }),
+      }) => {
+        const base = typeof body === "object" && body !== null ? body : {};
+        if (conversationMemory.get(key)) {
+          return {
+            body: {
+              ...base,
+              messages: lastUserMessage(messages),
+              memory: { thread: threadId },
+            },
+          };
+        }
+        return {
+          body: {
+            ...base,
+            messages,
+          },
+        };
+      },
     }),
   });
   chats.set(key, created);
@@ -67,6 +96,7 @@ export function useAiChat({ agentId, threadId }: UseAiChatParams): ReturnType<ty
     hydrated.add(key);
     void hydrateConversation({ serverUrl, agentId, threadId }).then((body) => {
       chat.messages = body.messages;
+      setConversationHasMemory({ agentId, threadId, memory: body.memory });
     });
   }, [agentId, chat, key, serverUrl, threadId]);
 

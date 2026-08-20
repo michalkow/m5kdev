@@ -91,6 +91,7 @@ export function createAiConversationRouter({
         actor,
         agentId,
         messages,
+        threadId: readThreadId(req.body),
       });
       if (result.isErr()) {
         return res.status(resultStatus(result)).json({ message: result.error.message });
@@ -114,4 +115,16 @@ function readUiMessages(body: unknown): UIMessage[] | undefined {
   if (typeof body !== "object" || body === null) return undefined;
   if (!("messages" in body) || !Array.isArray(body.messages)) return undefined;
   return body.messages;
+}
+
+function readThreadId(body: unknown): string | undefined {
+  if (typeof body !== "object" || body === null) return undefined;
+  if ("threadId" in body && typeof body.threadId === "string" && body.threadId.length > 0) {
+    return body.threadId;
+  }
+  if (!("memory" in body) || typeof body.memory !== "object" || body.memory === null) {
+    return undefined;
+  }
+  if (!("thread" in body.memory) || typeof body.memory.thread !== "string") return undefined;
+  return body.memory.thread.length > 0 ? body.memory.thread : undefined;
 }

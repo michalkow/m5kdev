@@ -71,11 +71,12 @@ HTTP (mounted by `AIModule.express` at `/ai`, authenticated):
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| GET | `/ai/chat/:agentId/threads/:threadId` | Hydrate. Without Memory: `{ messages: [], memory: false }`. 401 unauthenticated, 404 unknown Agent. |
-| POST | `/ai/chat/:agentId` | Session-only send. `handleChatStream` (`version: 'v7'`) + `pipeUIMessageStreamToResponse`. The client sends the full in-memory history. Stream finish records `ai_usage` with `feature` = `agentId`. 401 / 404 as above. |
+| GET | `/ai/chat/:agentId/threads/:threadId` | Hydrate. Without Memory: `{ messages: [], memory: false }`. With Memory: recalled Thread messages adapted to `UIMessage`, `memory: true`, scoped to the Actor UserId. 401 unauthenticated, 404 unknown Agent. |
+| POST | `/ai/chat/:agentId` | `handleChatStream` (`version: 'v7'`) + `pipeUIMessageStreamToResponse`. Without Memory the client sends the full in-memory history. With Memory the client sends only the last user message plus `memory.thread`; the server stamps `memory.resource` from the Actor UserId and ignores a client-supplied resource. Stream finish records `ai_usage` with `feature` = `agentId`. 401 / 404 as above. |
 
 Do not use Mastra's own HTTP server or `chats.conversation` for this UI
-(see ADR-0007). Memory recall and last-message-only POST are a later ticket.
+(see ADR-0007). Memory is optional on the app’s Mastra Agent — the Kernel does
+not own a Memory store.
 
 ## Model constants
 

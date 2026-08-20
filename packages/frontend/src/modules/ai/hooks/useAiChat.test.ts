@@ -1,4 +1,4 @@
-import { getOrCreateAiChat } from "./useAiChat";
+import { getOrCreateAiChat, setConversationHasMemory } from "./useAiChat";
 
 interface TransportInit {
   readonly api: string;
@@ -91,6 +91,36 @@ describe("getOrCreateAiChat", () => {
     expect(prepared?.body).toEqual({
       threadId: "thread-history",
       messages: history,
+    });
+  });
+
+  it("sends only the last user message and memory.thread when Memory is on", () => {
+    setConversationHasMemory({
+      agentId: "writer",
+      threadId: "thread-memory",
+      memory: true,
+    });
+    const chat = asMockChat(
+      getOrCreateAiChat({
+        serverUrl: "http://server.test",
+        agentId: "writer",
+        threadId: "thread-memory",
+      })
+    );
+    const history = [
+      { id: "1", role: "user" as const, parts: [{ type: "text" as const, text: "Hi" }] },
+      { id: "2", role: "assistant" as const, parts: [{ type: "text" as const, text: "Hello" }] },
+      { id: "3", role: "user" as const, parts: [{ type: "text" as const, text: "More" }] },
+    ];
+    const prepared = chat.init.transport.init.prepareSendMessagesRequest?.({
+      messages: history,
+      body: { threadId: "thread-memory" },
+    });
+
+    expect(prepared?.body).toEqual({
+      threadId: "thread-memory",
+      messages: [history[2]],
+      memory: { thread: "thread-memory" },
     });
   });
 });

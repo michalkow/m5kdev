@@ -148,6 +148,66 @@ function readAgentMemory(agent: unknown): unknown | Promise<unknown> | undefined
   return getMemory.call(agent);
 }
 
+async function recallMemoryMessages(params: {
+  memory: unknown;
+  threadId: string;
+  resourceId: string;
+}): Promise<unknown[]> {
+  if (typeof params.memory !== "object" || params.memory === null) return [];
+  const recall = Reflect.get(params.memory, "recall");
+  if (typeof recall !== "function") return [];
+  const result: unknown = await recall.call(params.memory, {
+    threadId: params.threadId,
+    resourceId: params.resourceId,
+  });
+  if (typeof result !== "object" || result === null) return [];
+  if (!("messages" in result) || !Array.isArray(result.messages)) return [];
+  return result.messages;
+}
+
+function textPartFromUnknown(part: unknown): { type: "text"; text: string } | undefined {
+  if (typeof part !== "object" || part === null) return undefined;
+  if (!("type" in part) || part.type !== "text") return undefined;
+  if (!("text" in part) || typeof part.text !== "string") return undefined;
+  return { type: "text", text: part.text };
+}
+
+function toUiMessages(recalled: readonly unknown[]): UIMessage[] {
+  const messages: UIMessage[] = [];
+  for (const item of recalled) {
+    if (typeof item !== "object" || item === null) continue;
+    const id = "id" in item && typeof item.id === "string" ? item.id : undefined;
+    const role =
+      "role" in item && (item.role === "user" || item.role === "assistant") ? item.role : undefined;
+    if (!id || !role) continue;
+    const parts: UIMessage["parts"] = [];
+    const content = "content" in item ? item.content : undefined;
+    if (typeof content === "string") {
+      parts.push({ type: "text", text: content });
+    } else if (
+      typeof content === "object" &&
+      content !== null &&
+      "parts" in content &&
+      Array.isArray(content.parts)
+    ) {
+      for (const part of content.parts) {
+        const textPart = textPartFromUnknown(part);
+        if (textPart) parts.push(textPart);
+      }
+    }
+    messages.push({ id, role, parts });
+  }
+  return messages;
+}
+
+function lastUserMessages(messages: UIMessage[]): UIMessage[] {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === "user") return [message];
+  }
+  return [];
+}
+
 interface StreamFinishUsage {
   usage?: {
     inputTokens?: number;
@@ -344,13 +404,26 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     if (resolved.isErr()) return err(resolved.error);
 
     const memory = await readAgentMemory(resolved.value);
-    return ok({ messages: [], memory: Boolean(memory) });
+    if (!memory) {
+      return ok({ messages: [], memory: false });
+    }
+
+    const recalled = await this.throwablePromise(() =>
+      recallMemoryMessages({
+        memory,
+        threadId: params.threadId,
+        resourceId: params.actor.userId,
+      })
+    );
+    if (recalled.isErr()) return err(recalled.error);
+    return ok({ messages: toUiMessages(recalled.value), memory: true });
   }
 
   async streamChat(params: {
     actor: RequiredServiceActor<"user">;
     agentId: string;
     messages: UIMessage[];
+    threadId?: string;
   }): ServerResultAsync<ReadableStream> {
     const mastra = this.mastra;
     if (!mastra) {
@@ -359,16 +432,28 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
 
     const resolved = this.resolveRegisteredAgent({
       agentId: params.agentId,
+      threadId: params.threadId,
       userId: params.actor.userId,
     });
     if (resolved.isErr()) return err(resolved.error);
+
+    const memory = await readAgentMemory(resolved.value);
+    const streamParams = memory
+      ? {
+          messages: lastUserMessages(params.messages),
+          memory: {
+            thread: params.threadId ?? "",
+            resource: params.actor.userId,
+          },
+        }
+      : { messages: params.messages };
 
     return this.throwablePromise(() =>
       handleChatStream({
         mastra,
         agentId: params.agentId,
         version: "v7",
-        params: { messages: params.messages },
+        params: streamParams,
         defaultOptions: {
           onFinish: (result: unknown) => {
             if (!isStreamFinishUsage(result)) return;
