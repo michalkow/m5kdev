@@ -1,17 +1,19 @@
 import { spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync } from "node:fs";
 import path from "node:path";
-//
+import type { ServerResultAsync } from "@m5kdev/backend/base/base.dto";
+import { BaseService } from "@m5kdev/backend/base/base.service";
 import ffbin from "ffmpeg-ffprobe-static";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
-import type { ServerResultAsync } from "../base/base.dto";
-import { BaseService } from "../base/base.service";
 
 const uploadsDir = path.join(__dirname, "..", "uploads");
-if (!existsSync(uploadsDir)) {
-  mkdirSync(uploadsDir, { recursive: true });
-}
+
+const ensureUploadsDir = (): void => {
+  if (!existsSync(uploadsDir)) {
+    mkdirSync(uploadsDir, { recursive: true });
+  }
+};
 
 const resolveFfmpegPath = (): string => {
   const envPath = process.env.FFMPEG_PATH;
@@ -61,6 +63,7 @@ export class VideoService extends BaseService<never, never> {
       return this.error("BAD_REQUEST", "Invalid start/end times");
     }
     const duration = end - start;
+    ensureUploadsDir();
     const output = path.join(uploadsDir, `${uuidv4()}.mp4`);
     if (!existsSync(output)) {
       closeSync(openSync(output, "w"));
@@ -90,6 +93,7 @@ export class VideoService extends BaseService<never, never> {
   }
 
   async webmToWav(input: string, hz = 48000): ServerResultAsync<string> {
+    ensureUploadsDir();
     const output = path.join(uploadsDir, `${uuidv4()}.wav`);
     if (!existsSync(output)) {
       closeSync(openSync(output, "w"));
@@ -117,6 +121,7 @@ export class VideoService extends BaseService<never, never> {
   }
 
   async extractAudioMp3(input: string, kbps = 192, streamIndex = 0): ServerResultAsync<string> {
+    ensureUploadsDir();
     const output = path.join(uploadsDir, `${uuidv4()}.mp3`);
     if (!existsSync(output)) {
       closeSync(openSync(output, "w"));

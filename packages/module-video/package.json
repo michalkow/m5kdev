@@ -1,0 +1,69 @@
+{
+  "name": "@m5kdev/module-video",
+  "version": "0.33.0",
+  "description": "Optional Backend Module for ffmpeg trimming and audio extraction.",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michalkow/m5kdev.git"
+  },
+  "homepage": "https://github.com/michalkow/m5kdev#readme",
+  "bugs": "https://github.com/michalkow/m5kdev/issues",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "version:patch": "npm version patch",
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write",
+    "build": "tsdown",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@m5kdev/backend": "workspace:*",
+    "ffmpeg-ffprobe-static": "catalog:",
+    "uuid": "catalog:"
+  },
+  "peerDependencies": {
+    "neverthrow": "catalog:"
+  },
+  "devDependencies": {
+    "@m5kdev/config": "workspace:*",
+    "neverthrow": "catalog:",
+    "tsdown": "catalog:",
+    "tslib": "catalog:",
+    "typescript": "catalog:"
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/src/video.module.d.mts",
+        "default": "./dist/src/video.module.mjs"
+      },
+      "require": {
+        "types": "./dist/src/video.module.d.cts",
+        "default": "./dist/src/video.module.cjs"
+      }
+    },
+    "./video.module": {
+      "import": {
+        "types": "./dist/src/video.module.d.mts",
+        "default": "./dist/src/video.module.mjs"
+      },
+      "require": {
+        "types": "./dist/src/video.module.d.cts",
+        "default": "./dist/src/video.module.cjs"
+      }
+    },
+    "./video.service": {
+      "import": {
+        "types": "./dist/src/video.service.d.mts",
+        "default": "./dist/src/video.service.mjs"
+      },
+      "require": {
+        "types": "./dist/src/video.service.d.cts",
+        "default": "./dist/src/video.service.cjs"
+      }
+    }
+  }
+}

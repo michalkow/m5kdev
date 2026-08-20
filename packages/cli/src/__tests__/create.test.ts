@@ -166,6 +166,7 @@ describe("scaffoldProject", () => {
     expect(serverPackage).not.toContain("@m5kdev/module-");
     expect(appTs).not.toContain("PdfModule");
     expect(appTs).not.toContain("DocxModule");
+    expect(appTs).not.toContain("VideoModule");
 
     const serverAgents = await fs.readFile(
       path.join(result.targetDirectory, "apps/server/AGENTS.md"),
@@ -210,7 +211,10 @@ describe("scaffoldProject", () => {
       skipGit: true,
     });
 
-    const offApp = await fs.readFile(path.join(off.targetDirectory, "apps/server/src/app.ts"), "utf8");
+    const offApp = await fs.readFile(
+      path.join(off.targetDirectory, "apps/server/src/app.ts"),
+      "utf8"
+    );
     expect(offApp).not.toContain("FileModule");
     expect(offApp).not.toContain("m5k:");
 
@@ -242,7 +246,10 @@ describe("scaffoldProject", () => {
       skipGit: true,
     });
 
-    const onApp = await fs.readFile(path.join(on.targetDirectory, "apps/server/src/app.ts"), "utf8");
+    const onApp = await fs.readFile(
+      path.join(on.targetDirectory, "apps/server/src/app.ts"),
+      "utf8"
+    );
     expect(onApp).toContain("FileModule");
     expect(onApp).not.toContain("m5k:");
 

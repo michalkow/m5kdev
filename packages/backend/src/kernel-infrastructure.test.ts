@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { createClient } from "@libsql/client";
 import { DocxModule } from "../../module-docx/src/docx.module";
 import { PdfModule } from "../../module-pdf/src/pdf.module";
+import { VideoModule } from "../../module-video/src/video.module";
 import { createBackendApp } from "./app";
 import { BaseModule, type TableMap } from "./base/base.module";
 import { BaseModule as BaseModuleCompat } from "./modules/base/base.module";
@@ -41,14 +42,15 @@ describe("Kernel infrastructure package surface", () => {
     expect(pkg.exports["./modules/utils/*"]).toBeUndefined();
   });
 
-  it("does not export AccessModule, CryptoModule, PdfModule, or DocxModule", () => {
+  it("does not export AccessModule, CryptoModule, PdfModule, DocxModule, or VideoModule", () => {
     expect(pkg.exports["./modules/access/*"]).toBeUndefined();
     expect(pkg.exports["./modules/crypto/*"]).toBeUndefined();
     expect(pkg.exports["./modules/pdf/*"]).toBeUndefined();
     expect(pkg.exports["./modules/docx/*"]).toBeUndefined();
+    expect(pkg.exports["./modules/video/*"]).toBeUndefined();
   });
 
-  it("does not depend on pdf-parse, mammoth, or turndown", () => {
+  it("does not depend on pdf-parse, mammoth, turndown, or ffmpeg-ffprobe-static", () => {
     const manifest = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf8")) as {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
@@ -57,6 +59,7 @@ describe("Kernel infrastructure package surface", () => {
     expect(manifest.dependencies?.mammoth).toBeUndefined();
     expect(manifest.dependencies?.turndown).toBeUndefined();
     expect(manifest.devDependencies?.["@types/turndown"]).toBeUndefined();
+    expect(manifest.dependencies?.["ffmpeg-ffprobe-static"]).toBeUndefined();
   });
 
   it("loads BaseModule from Kernel infrastructure and the compatibility re-export", () => {
@@ -84,6 +87,13 @@ describe("Kernel infrastructure package surface", () => {
     const client = createClient({ url: ":memory:" });
     const built = createBackendApp({ db: { client } }, [new DocxModule()] as const);
     expect(Object.keys(built.modules)).toEqual(["docx"]);
+    void client.close?.();
+  });
+
+  it("boots createBackendApp when VideoModule from the Optional package is registered", () => {
+    const client = createClient({ url: ":memory:" });
+    const built = createBackendApp({ db: { client } }, [new VideoModule()] as const);
+    expect(Object.keys(built.modules)).toEqual(["video"]);
     void client.close?.();
   });
 });

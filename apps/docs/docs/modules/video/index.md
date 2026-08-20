@@ -12,16 +12,19 @@ transcription.
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/backend` | `VideoModule` and `VideoService` (ffmpeg-based). |
+| `@m5kdev/module-video` | `VideoModule` and `VideoService` (ffmpeg-based). |
 
 ## Usage
 
 ```ts
-backendApp.use(new VideoModule());
+import { createBackendApp } from "@m5kdev/backend/app";
+import { VideoModule } from "@m5kdev/module-video";
+
+createBackendApp(config, [new VideoModule()]);
 ```
 
-Files are processed in the backend `uploads/` working directory (created on
-startup). Set `FFMPEG_PATH` if ffmpeg is not on the system path.
+Files are processed in an `uploads/` working directory. Set `FFMPEG_PATH` if
+ffmpeg is not on the system path.
 
 ## Service API
 
