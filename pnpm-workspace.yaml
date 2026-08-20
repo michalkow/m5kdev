@@ -3,6 +3,7 @@ packages:
   - packages/*
 
 catalog:
+  "@ai-sdk/react": 4.0.31
   "@aws-sdk/client-s3": 3.891.0
   "@aws-sdk/client-sts": 3.891.0
   "@aws-sdk/s3-request-presigner": 3.891.0
@@ -24,6 +25,7 @@ catalog:
   "@internationalized/date": 3.12.2
   "@jest/globals": 30.2.0
   "@libsql/client": 0.17.4
+  "@mastra/ai-sdk": 1.9.0
   "@mastra/core": 1.51.0
   "@mastra/libsql": 1.16.0
   "@mastra/rag": 2.4.1
@@ -154,6 +156,7 @@ catalog:
   react-email: 5.0.5
   react-hook-form: 7.61.1
   react-i18next: 15.6.1
+  react-markdown: 10.1.0
   react-native-web: ^0.21.2
   react-router: 7.10.1
   replicate: 1.0.1

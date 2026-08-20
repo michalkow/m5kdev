@@ -6,12 +6,14 @@ import { createBackendRouterMap } from "../../app";
 import type { AuthModule } from "../auth/auth.module";
 import {
   BaseModule,
+  type ModuleExpressContext,
   type ModuleRepositoriesContext,
   type ModuleServicesContext,
   type ModuleTRPCContext,
 } from "../base/base.module";
 import type * as aiTables from "./ai.db";
 import { AiUsageRepository, AiVectorRepository } from "./ai.repository";
+import { createAiConversationRouter } from "./ai.router";
 import { AIService, type AIServiceOptions } from "./ai.service";
 import { createAITRPC } from "./ai.trpc";
 import { type AiVectorStoreConfig, createAiVectorStore } from "./ai.vector";
@@ -121,5 +123,20 @@ export class AIModule<
   }: ModuleTRPCContext<AIModuleDeps, AIModuleServices<MastraInstance>>) {
     const namespace = (this.config.namespace ?? "ai") as Namespace;
     return createBackendRouterMap(namespace, createAITRPC(trpc, services.ai));
+  }
+
+  override express({
+    infra,
+    services,
+    authMiddleware,
+  }: ModuleExpressContext<AIModuleDeps, AIModuleServices<MastraInstance>>) {
+    if (!authMiddleware) return;
+    infra.express.use(
+      "/ai",
+      createAiConversationRouter({
+        authMiddleware,
+        aiService: services.ai,
+      })
+    );
   }
 }

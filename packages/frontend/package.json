@@ -16,6 +16,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
     "check-types": "tsc --noEmit",
+    "test": "jest -c jest.config.ts",
     "build": "tsdown"
   },
   "dependencies": {
@@ -24,6 +25,8 @@
     "@react-types/calendar": "catalog:",
     "@react-types/shared": "catalog:",
     "@m5kdev/commons": "workspace:*",
+    "@ai-sdk/react": "catalog:",
+    "ai": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@trpc/tanstack-react-query": "catalog:",
     "luxon": "catalog:",
@@ -40,15 +43,19 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@jest/globals": "catalog:",
     "@m5kdev/config": "workspace:*",
     "@m5kdev/backend": "workspace:*",
     "@tanstack/react-table": "catalog:",
+    "@types/jest": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@types/luxon": "catalog:",
     "@trpc/server": "catalog:",
     "globals": "catalog:",
     "react-i18next": "catalog:",
+    "jest": "catalog:",
+    "ts-jest": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
@@ -167,6 +174,16 @@
       "require": {
         "types": "./dist/src/modules/file/hooks/*.d.ts",
         "default": "./dist/src/modules/file/hooks/*.js"
+      }
+    },
+    "./modules/ai/hooks/*": {
+      "import": {
+        "types": "./dist/src/modules/ai/hooks/*.d.mts",
+        "default": "./dist/src/modules/ai/hooks/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/ai/hooks/*.d.ts",
+        "default": "./dist/src/modules/ai/hooks/*.js"
       }
     },
     "./modules/table/hooks/*": {

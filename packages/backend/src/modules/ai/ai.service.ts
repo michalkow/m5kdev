@@ -17,6 +17,7 @@ import {
   NoImageGeneratedError,
   NoObjectGeneratedError,
   Output,
+  type UIMessage,
 } from "ai";
 import { jsonrepair } from "jsonrepair";
 import { err, ok } from "neverthrow";
@@ -137,6 +138,14 @@ type ModelFailureState = {
 const DEFAULT_MODEL_FAILURE_THRESHOLD = 2;
 const DEFAULT_MODEL_FAILURE_INITIAL_SKIP_RUNS = 5;
 const DEFAULT_MODEL_FAILURE_MAX_SKIP_RUNS = 40;
+
+function readAgentMemory(agent: unknown): unknown | Promise<unknown> | undefined {
+  if (typeof agent !== "object" || agent === null) return undefined;
+  if (!("getMemory" in agent)) return undefined;
+  const getMemory = Reflect.get(agent, "getMemory");
+  if (typeof getMemory !== "function") return undefined;
+  return getMemory.call(agent);
+}
 
 function positiveInteger(value: number | undefined, fallback: number): number {
   return value === undefined || !Number.isFinite(value) ? fallback : Math.max(1, Math.floor(value));
@@ -296,6 +305,44 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     if (!this.repository.aiUsage)
       return this.error("INTERNAL_SERVER_ERROR", "AI usage repository is not available");
     return this.repository.aiUsage.getUsage(userId);
+  }
+
+  async recallThreadMessages(params: {
+    actor: RequiredServiceActor<"user">;
+    agentId: string;
+    threadId: string;
+  }): ServerResultAsync<{ messages: UIMessage[]; memory: boolean }> {
+    if (!this.mastra) {
+      return this.error("SERVICE_UNAVAILABLE", "Mastra is not available");
+    }
+
+    const mastra = this.mastra;
+    const resolved = this.throwable(() => {
+      if (!(params.agentId in mastra.listAgents())) {
+        return this.error("NOT_FOUND", "Agent not found", {
+          context: {
+            agentId: params.agentId,
+            threadId: params.threadId,
+            userId: params.actor.userId,
+          },
+        });
+      }
+      try {
+        return ok(mastra.getAgent(params.agentId));
+      } catch {
+        return this.error("NOT_FOUND", "Agent not found", {
+          context: {
+            agentId: params.agentId,
+            threadId: params.threadId,
+            userId: params.actor.userId,
+          },
+        });
+      }
+    });
+    if (resolved.isErr()) return err(resolved.error);
+
+    const memory = await readAgentMemory(resolved.value);
+    return ok({ messages: [], memory: Boolean(memory) });
   }
 
   async trackUsage(params: {

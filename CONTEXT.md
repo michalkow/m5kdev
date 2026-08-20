@@ -191,3 +191,15 @@ _Avoid_: Plan, Customer (Stripe customer linkage stays on the User)
 **Tag**:
 A polymorphic label attached to any resource type via taggings.
 _Avoid_: Label, Category (unless the product truly means a separate taxonomy)
+
+**Conversation**:
+Ordered UI transcript of AI turns. A turn is a Vercel AI SDK `UIMessage`. When persisted, it is the UI projection of a Thread.
+_Avoid_: Chat (collides with the unused `chats` table, Chatwoot, and model category `"chat"`); Thread (that is the Mastra store)
+
+**Thread**:
+A Mastra Memory thread. `resource` is UserId (personal); `thread` is the Conversation id. Threads are unbound in Memory (not keyed by Agent). See [ADR-0007](docs/adr/0007-mastra-thread-over-chats.md).
+_Avoid_: using Thread for the UI surface; the `chats` table; MemberId as the ownership key
+
+**Agent**:
+A named Mastra agent the app registers. A Conversation selects which Agent answers; Agent is not the Thread key.
+_Avoid_: Assistant, Bot, Model

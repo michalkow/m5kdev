@@ -16,6 +16,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
     "check-types": "tsc --noEmit",
+    "test": "jest -c jest.config.ts",
     "build": "tsdown && cp -r translations dist/ && cp src/components/Calendar.css dist/src/components/",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
@@ -70,6 +71,7 @@
     "react-easy-crop": "catalog:",
     "react-hook-form": "catalog:",
     "react-i18next": "catalog:",
+    "react-markdown": "catalog:",
     "react-router": "catalog:",
     "sonner": "catalog:",
     "tailwind-merge": "catalog:",
@@ -85,6 +87,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@jest/globals": "catalog:",
     "@m5kdev/backend": "workspace:*",
     "@m5kdev/config": "workspace:*",
     "@storybook/addon-docs": "catalog:",
@@ -92,6 +95,7 @@
     "@storybook/react-vite": "catalog:",
     "@tailwindcss/vite": "catalog:",
     "@trpc/server": "catalog:",
+    "@types/jest": "catalog:",
     "@types/luxon": "catalog:",
     "@types/react": "catalog:",
     "@types/react-big-calendar": "catalog:",
@@ -99,8 +103,10 @@
     "@tsdown/css": "catalog:",
     "globals": "catalog:",
     "i18next": "catalog:",
+    "jest": "catalog:",
     "storybook": "catalog:",
     "tailwindcss": "catalog:",
+    "ts-jest": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
@@ -199,6 +205,16 @@
       "require": {
         "types": "./dist/src/modules/app/components/*.d.ts",
         "default": "./dist/src/modules/app/components/*.js"
+      }
+    },
+    "./modules/ai/components/*": {
+      "import": {
+        "types": "./dist/src/modules/ai/components/*.d.mts",
+        "default": "./dist/src/modules/ai/components/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/ai/components/*.d.ts",
+        "default": "./dist/src/modules/ai/components/*.js"
       }
     },
     "./modules/charts/components/*": {

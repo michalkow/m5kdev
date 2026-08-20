@@ -264,5 +264,6 @@
   "locale.description": "Wybierz preferowany język.",
   "locale.label": "Język",
   "locale.updated": "Język zaktualizowany",
-  "locale.updateError": "Nie udało się zaktualizować języka"
+  "locale.updateError": "Nie udało się zaktualizować języka",
+  "ai.conversation.empty": "Brak wiadomości"
 }

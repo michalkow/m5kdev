@@ -1,148 +1,71 @@
-// import { openai } from "@ai-sdk/openai";
-// import { open}
-// import { withTracing } from "@posthog/ai";
-// import {
-//   appendClientMessage,
-//   appendResponseMessages,
-//   type Message,
-//   streamText,
-//   type Tool,
-// } from "ai";
-// import bodyParser from "body-parser";
-// import { and, eq } from "drizzle-orm";
-// import express, { type Response, type Router } from "express";
-// import { v4 as uuidv4 } from "uuid";
-// import type { AuthRequest, createAuthMiddleware } from "../auth/auth.middleware";
-// import { type Orm, schema } from "../db";
-// import { logger } from "../logger";
-// import { posthogClient } from "../posthog";
+import type { Mastra } from "@mastra/core";
+import express, { type Response, type Router } from "express";
+import { captureServerError, ServerError } from "../../utils/errors";
+import type { AuthMiddleware, AuthRequest } from "../auth/auth.middleware";
+import { createActorFromContext } from "../base/base.actor";
+import type { ServerResult } from "../base/base.dto";
+import type { AIService } from "./ai.service";
 
-// export type Tooling = Record<
-//   string,
-//   {
-//     getMesseges: (chatId: string) => Promise<Message[]>;
-//     getTools: (chatId: string) => Promise<
-//       Record<
-//         string,
-//         {
-//           tool: Tool;
-//           handler?: (
-//             chatId: string,
-//             args: unknown,
-//             user: NonNullable<AuthRequest["user"]>
-//           ) => Promise<void>;
-//         }
-//       >
-//     >;
-//   }
-// >;
+function captureRouteError(err: unknown, context: Record<string, unknown>): void {
+  captureServerError(
+    ServerError.fromUnknown("INTERNAL_SERVER_ERROR", err, {
+      layer: "controller",
+      layerName: "AiConversationRouter",
+      context,
+    })
+  );
+}
 
-// export function tracedOpenAiModel(
-//   model: Parameters<typeof openai>[0],
-//   clientOptions: Parameters<typeof withTracing>[2]
-// ) {
-//   return withTracing(openai(model), posthogClient, clientOptions);
-// }
+function resultStatus(result: ServerResult<unknown>): number {
+  if (result.isOk()) return 200;
+  return result.error.getHTTPStatusCode();
+}
 
-// async function getRouteSettings(id: string, name: string, settings: Tooling) {
-//   const entity = settings[name as keyof typeof settings];
-//   if (!entity) return { tools: {}, entityMesseges: [], entityTools: {} };
+export interface CreateAiConversationRouterOptions {
+  readonly authMiddleware: AuthMiddleware;
+  readonly aiService: Pick<AIService<Mastra>, "recallThreadMessages">;
+}
 
-//   const entityTools = await entity.getTools(id);
-//   const entityMesseges = await entity.getMesseges(id);
+export function createAiConversationRouter({
+  authMiddleware,
+  aiService,
+}: CreateAiConversationRouterOptions): Router {
+  const router: Router = express.Router();
 
-//   const tools = Object.entries(entityTools).reduce<
-//     Record<string, (typeof entityTools)[keyof typeof entityTools]["tool"]>
-//   >((acc, [key, value]) => {
-//     acc[key] = value.tool as (typeof entityTools)[keyof typeof entityTools]["tool"];
-//     return acc;
-//   }, {});
+  router.get(
+    "/chat/:agentId/threads/:threadId",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+      const user = req.user;
+      const session = req.session;
+      if (!user || !session) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
 
-//   return { tools, entityMesseges, entityTools };
-// }
+      const agentId = req.params.agentId;
+      const threadId = req.params.threadId;
+      if (!agentId || !threadId) {
+        return res.status(400).json({ message: "Missing agentId or threadId" });
+      }
 
-// export function createAiRouter(
-//   orm: Orm,
-//   authMiddleware: ReturnType<typeof createAuthMiddleware>,
-//   settings: Tooling
-// ) {
-//   const aiRouter: Router = express.Router();
+      try {
+        const actor = createActorFromContext({ user, session }, "user");
+        const result = await aiService.recallThreadMessages({
+          actor,
+          agentId,
+          threadId,
+        });
+        if (result.isErr()) {
+          return res.status(resultStatus(result)).json({ message: result.error.message });
+        }
+        return res.json(result.value);
+      } catch (err: unknown) {
+        captureRouteError(err, { route: "GET /chat/:agentId/threads/:threadId" });
+        const message = err instanceof Error ? err.message : "Internal Server Error";
+        return res.status(500).json({ message });
+      }
+    }
+  );
 
-//   aiRouter.use(bodyParser.json());
-
-//   aiRouter.post("/completion/:name", authMiddleware, async (req: AuthRequest, res: Response) => {
-//     try {
-//       const { id, message } = req.body as {
-//         id: string;
-//         message: Message;
-//       };
-//       logger.info(req.body, "body");
-//       const { name } = req.params;
-//       const user = req.user!;
-//       logger.info(message, "Received message:");
-
-//       const { tools, entityMesseges, entityTools } = await getRouteSettings(id, name, settings);
-
-//       const [chat] = await orm
-//         .select()
-//         .from(schema.chats)
-//         .where(and(eq(schema.chats.id, id), eq(schema.chats.userId, user.id)));
-//       if (!chat) throw new Error("Chat not found");
-
-//       const messages = appendClientMessage({
-//         messages: (chat.conversation || []) as Message[],
-//         message,
-//       });
-
-//       // Process any tool invocations in the message
-//       const toolInvocation = message?.parts?.find((p) => p.type === "tool-invocation");
-
-//       if (toolInvocation) {
-//         logger.info(toolInvocation, "Processing tool invocation:");
-//         const tool =
-//           entityTools[toolInvocation.toolInvocation.toolName as keyof typeof entityTools];
-//         if (tool?.handler) {
-//           const result = await tool.handler(id, toolInvocation.toolInvocation.args, user);
-//           logger.info({ result }, "Tool handler result:");
-//         }
-//       }
-
-//       logger.info([...entityMesseges, ...messages], "Processed messages");
-
-//       const result = streamText({
-//         model: tracedOpenAiModel("gpt-4o", {
-//           posthogDistinctId: user.id,
-//           posthogProperties: { conversation_id: id, paid: true },
-//           posthogPrivacyMode: false,
-//         }),
-//         experimental_generateMessageId: uuidv4,
-//         messages: [...entityMesseges, ...messages],
-//         async onFinish({ response }) {
-//           logger.info(response, "Final response:");
-//           try {
-//             await orm
-//               .update(schema.chats)
-//               .set({
-//                 conversation: appendResponseMessages({
-//                   messages,
-//                   responseMessages: response.messages,
-//                 }),
-//               })
-//               .where(eq(schema.chats.id, id));
-//           } catch (error) {
-//             logger.error("Error in onFinish handler:", error);
-//           }
-//         },
-//         tools,
-//       });
-
-//       result.consumeStream();
-//       result.pipeDataStreamToResponse(res);
-//     } catch (error) {
-//       logger.error(error, "Error in ai handler");
-//       res.status(500).send({ error: "Internal Server Error" });
-//     }
-//   });
-
-//   return aiRouter;
-// }
+  return router;
+}
