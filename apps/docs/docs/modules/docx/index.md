@@ -11,14 +11,16 @@ The docx module converts Word documents to Markdown so downstream features
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/backend` | `DocxModule` and `DocxService`. |
+| `@m5kdev/module-docx` | `DocxModule` and `DocxService`. |
 
 ## Usage
 
 ```ts
-backendApp.use(new DocxModule());
+import { createBackendApp } from "@m5kdev/backend/app";
+import { DocxModule } from "@m5kdev/module-docx";
 
-// later, in a service with docx injected:
+createBackendApp(config, [new DocxModule()]);
+
 const markdown = await this.service.docx.convertToMarkdown(buffer);
 ```
 

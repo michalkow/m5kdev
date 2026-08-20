@@ -165,6 +165,7 @@ describe("scaffoldProject", () => {
     );
     expect(serverPackage).not.toContain("@m5kdev/module-");
     expect(appTs).not.toContain("PdfModule");
+    expect(appTs).not.toContain("DocxModule");
 
     const serverAgents = await fs.readFile(
       path.join(result.targetDirectory, "apps/server/AGENTS.md"),

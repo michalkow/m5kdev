@@ -1,0 +1,70 @@
+{
+  "name": "@m5kdev/module-docx",
+  "version": "0.33.0",
+  "description": "Optional Backend Module for Word-to-Markdown conversion.",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michalkow/m5kdev.git"
+  },
+  "homepage": "https://github.com/michalkow/m5kdev#readme",
+  "bugs": "https://github.com/michalkow/m5kdev/issues",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "version:patch": "npm version patch",
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write",
+    "build": "tsdown",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@m5kdev/backend": "workspace:*",
+    "mammoth": "catalog:",
+    "turndown": "catalog:"
+  },
+  "peerDependencies": {
+    "neverthrow": "catalog:"
+  },
+  "devDependencies": {
+    "@m5kdev/config": "workspace:*",
+    "@types/turndown": "catalog:",
+    "neverthrow": "catalog:",
+    "tsdown": "catalog:",
+    "tslib": "catalog:",
+    "typescript": "catalog:"
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/src/docx.module.d.mts",
+        "default": "./dist/src/docx.module.mjs"
+      },
+      "require": {
+        "types": "./dist/src/docx.module.d.cts",
+        "default": "./dist/src/docx.module.cjs"
+      }
+    },
+    "./docx.module": {
+      "import": {
+        "types": "./dist/src/docx.module.d.mts",
+        "default": "./dist/src/docx.module.mjs"
+      },
+      "require": {
+        "types": "./dist/src/docx.module.d.cts",
+        "default": "./dist/src/docx.module.cjs"
+      }
+    },
+    "./docx.service": {
+      "import": {
+        "types": "./dist/src/docx.service.d.mts",
+        "default": "./dist/src/docx.service.mjs"
+      },
+      "require": {
+        "types": "./dist/src/docx.service.d.cts",
+        "default": "./dist/src/docx.service.cjs"
+      }
+    }
+  }
+}

@@ -1,8 +1,8 @@
+import type { ServerResultAsync } from "@m5kdev/backend/base/base.dto";
+import { BaseService } from "@m5kdev/backend/base/base.service";
 import mammoth from "mammoth";
 import { err, ok } from "neverthrow";
 import TurndownService from "turndown";
-import type { ServerResultAsync } from "../base/base.dto";
-import { BaseService } from "../base/base.service";
 
 export class DocxService extends BaseService<never, never> {
   async convertToMarkdown(buffer: Buffer): ServerResultAsync<string> {

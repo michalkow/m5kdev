@@ -65,7 +65,6 @@
     "ioredis": "catalog:",
     "jsonrepair": "catalog:",
     "luxon": "catalog:",
-    "mammoth": "catalog:",
     "multer": "catalog:",
     "mustache": "catalog:",
     "openid-client": "catalog:",
@@ -78,7 +77,6 @@
     "rrule": "catalog:",
     "stripe": "catalog:",
     "trpc-to-openapi": "catalog:",
-    "turndown": "catalog:",
     "uuid": "catalog:",
     "web-push": "catalog:"
   },
@@ -104,7 +102,6 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@types/turndown": "catalog:",
     "drizzle-kit": "catalog:",
     "jest": "catalog:",
     "ts-jest": "catalog:",
@@ -292,16 +289,6 @@
       "require": {
         "types": "./dist/src/modules/notification/*.d.cts",
         "default": "./dist/src/modules/notification/*.cjs"
-      }
-    },
-    "./modules/docx/*": {
-      "import": {
-        "types": "./dist/src/modules/docx/*.d.mts",
-        "default": "./dist/src/modules/docx/*.mjs"
-      },
-      "require": {
-        "types": "./dist/src/modules/docx/*.d.cts",
-        "default": "./dist/src/modules/docx/*.cjs"
       }
     },
     "./lib/*": {
