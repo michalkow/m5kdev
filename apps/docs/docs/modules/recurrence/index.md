@@ -18,9 +18,10 @@ a shared contract.
 ## Registration
 
 ```ts
+import { createBackendApp } from "@m5kdev/backend/app";
 import { RecurrenceModule } from "@m5kdev/backend/modules/recurrence/recurrence.module";
 
-backendApp.use(new RecurrenceModule({ namespace: "recurrence" }));
+createBackendApp(config, [new RecurrenceModule({ namespace: "recurrence" })]);
 ```
 
 Options: `namespace` (tRPC namespace, default `recurrence`) and `grants`

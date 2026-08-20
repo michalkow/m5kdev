@@ -17,9 +17,10 @@ The tag module provides generic, polymorphic tagging: named tags plus a
 ## Registration
 
 ```ts
+import { createBackendApp } from "@m5kdev/backend/app";
 import { TagModule } from "@m5kdev/backend/modules/tag/tag.module";
 
-backendApp.use(new TagModule({ namespace: "tag" }));
+createBackendApp(config, [new TagModule({ namespace: "tag" })]);
 ```
 
 Options: `namespace` (default `tag`) and `grants` (default `defaultTagGrants`).

@@ -2,10 +2,11 @@
 sidebar_position: 4
 ---
 
-# Table module
+# Table
 
-The table module standardizes list querying end to end: shared pagination and
-search, frontend query-state hooks, and web table UI driven by URL state.
+Table is a Shared-contract / UI surface, not a Backend Module. It standardizes
+list querying end to end: shared pagination and search, frontend query-state
+hooks, and web table UI driven by URL state.
 URL and widgets stay **QueryFilters** (List query). Hooks also emit a
 **QueryMatch** so a Procedure can opt into Match query. See
 [List query and Match query](/guides/list-query-and-match-query).

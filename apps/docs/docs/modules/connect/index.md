@@ -2,19 +2,21 @@
 sidebar_position: 14
 ---
 
-# Connect module
+# Connection module
 
-The connect module handles backend OAuth-style provider connections for third-party APIs (account linking). It is separate from Better Auth login OAuth (`/api/auth/*`).
+Connection is a Core Module for linking third-party API accounts (Google, LinkedIn).
+The module id and table stay `connect`. This is not Better Auth login OAuth
+(`/api/auth/*` and the `accounts` table) — login stays on [Auth](/modules/auth).
 
 ## Package map
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/backend` | Connect DB tables, DTOs, OAuth helpers, provider adapters, repository, service, routes, and tRPC procedures. |
+| `@m5kdev/backend` | Connection DB tables, DTOs, OAuth helpers, provider adapters, repository, service, routes, and tRPC procedures. |
 
 ## How it works
 
-1. Register `ConnectModule` in your app kernel with one or more provider factories.
+1. Register `ConnectModule` with `createBackendApp` and one or more provider factories.
 2. A logged-in user starts linking via `GET /connect/:provider/start?redirect=<app-url>`.
 3. After provider consent, the callback upserts tokens and profile metadata into the `connect` table.
 4. Use `connect.list` (tRPC) to show linked accounts; tokens are omitted from API responses.
@@ -22,17 +24,15 @@ The connect module handles backend OAuth-style provider connections for third-pa
 
 ## Module registration
 
-```typescript
+```ts
+import { createBackendApp } from "@m5kdev/backend/app";
 import { ConnectModule } from "@m5kdev/backend/modules/connect/connect.module";
 import { createGoogleProvider } from "@m5kdev/backend/modules/connect/connect.google";
 import { createLinkedInProvider } from "@m5kdev/backend/modules/connect/connect.linkedin";
 
-const connectModule = new ConnectModule([
-  createLinkedInProvider(),
-  createGoogleProvider(),
+createBackendApp(config, [
+  new ConnectModule([createLinkedInProvider(), createGoogleProvider()]),
 ]);
-
-// kernel.use(connectModule)
 ```
 
 ## Google Drive (read-only)

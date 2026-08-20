@@ -4,9 +4,12 @@ sidebar_position: 17
 
 # Email module
 
-The email module renders React Email templates and sends them through Resend,
-with locale-aware subjects, a local store mode for development, and a browser
-preview module.
+`EmailModule` is a Core Module. It renders React Email templates and sends them
+through Resend, with locale-aware subjects, a local store mode for development,
+and a browser preview module.
+
+`@m5kdev/email` is shared React Email chrome (layout, buttons, brand types) — not
+the Email module package. Product templates live in the app email package.
 
 ## Package map
 
@@ -19,9 +22,10 @@ preview module.
 ## Registration
 
 ```ts
+import { createBackendApp } from "@m5kdev/backend/app";
 import { EmailModule } from "@m5kdev/backend/modules/email/email.module";
 
-backendApp.use(new EmailModule(templates));
+createBackendApp(config, [new EmailModule(templates)]);
 ```
 
 The Resend client, sender address, and mode come from the kernel
@@ -45,7 +49,12 @@ output directory instead of (or in addition to) sending, and exposes
 `EmailPreviewModule` mounts a dev-only Express UI for stored emails:
 
 ```ts
-backendApp.use(new EmailPreviewModule({ mountPath: "/__emails", allowDelete: true }));
+import { createBackendApp } from "@m5kdev/backend/app";
+import { EmailPreviewModule } from "@m5kdev/backend/modules/email/email.preview.module";
+
+createBackendApp(config, [
+  new EmailPreviewModule({ mountPath: "/__emails", allowDelete: true }),
+]);
 ```
 
 ## App template pattern

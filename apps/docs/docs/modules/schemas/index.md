@@ -2,11 +2,12 @@
 sidebar_position: 20
 ---
 
-# Schemas module
+# Schemas
 
-The schemas module holds cross-cutting schema primitives in `@m5kdev/commons`
-that are not owned by any single feature module. Today that is the shared list
-contracts: **List query** (QueryFilters) and **Match query** (QueryMatch).
+Schemas is a Shared-contract surface, not a Backend Module. It holds
+cross-cutting schema primitives in `@m5kdev/commons` that are not owned by any
+single feature module. Today that is the shared list contracts: **List query**
+(QueryFilters) and **Match query** (QueryMatch).
 
 ## Package map
 
@@ -35,11 +36,11 @@ Full operator tables, Procedure wiring, and hook behaviour:
 
 ## Consumers
 
-- Backend: [utils](/modules/utils) and `BaseTableRepository` (`queryList` vs
-  `matchList`). DTOs expose both via `createZodSchemas(table).input.list` and
-  `.input.matchList`.
-- Frontend: the [table module](/modules/table) keeps URL state as QueryFilters
-  and also emits a QueryMatch from the converter.
+- Backend: Kernel infrastructure [query helpers](/modules/utils) and
+  `BaseTableRepository` (`queryList` vs `matchList`). DTOs expose both via
+  `createZodSchemas(table).input.list` and `.input.matchList`.
+- Frontend: the [table](/modules/table) Shared-contract / UI surface keeps URL
+  state as QueryFilters and also emits a QueryMatch from the converter.
 
 Feature-specific schemas live with their module in
 `commons/src/modules/<module>/` — this module is only for primitives shared by

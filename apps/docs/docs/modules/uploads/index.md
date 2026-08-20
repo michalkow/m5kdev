@@ -4,8 +4,9 @@ sidebar_position: 22
 
 # Uploads directory
 
-`packages/backend/src/modules/uploads/` is not a code module — it is the local
-working directory where backend services write files at runtime.
+Uploads is a runtime working directory, not a Backend Module.
+`packages/backend/src/modules/uploads/` is where backend services write files at
+runtime.
 
 ## Who writes here
 

@@ -2,18 +2,18 @@
 sidebar_position: 23
 ---
 
-# Utils module
+# Query helpers
 
-The backend utils module turns the shared query contracts
-([schemas module](/modules/schemas)) into Drizzle fragments. Prefer
-`queryList` / `matchList` on `BaseTableRepository` over assembling these by
-hand.
+These Drizzle helpers are Kernel infrastructure, not a Utils Backend Module.
+They turn the shared query contracts ([schemas](/modules/schemas)) into
+`where` / `orderBy` fragments. Prefer `queryList` / `matchList` on
+`BaseTableRepository` over assembling them by hand.
 
 ## Package map
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/backend` | Query helpers: `applyPagination`, `applySorting`, `getConditionsFromFilters`, `getConditionsFromMatch`, `getGlobalSearchCondition`, `escapeLikeUserInput`. |
+| `@m5kdev/backend` | Query helpers on Kernel infrastructure: `applyPagination`, `applySorting`, `getConditionsFromFilters`, `getConditionsFromMatch`, `getGlobalSearchCondition`, `escapeLikeUserInput`. |
 
 ## Helpers
 

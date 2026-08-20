@@ -2,11 +2,11 @@
 sidebar_position: 18
 ---
 
-# Operations module
+# Operations
 
-The operations module is a reserved area in `@m5kdev/frontend` for hooks and
-utilities around long-running operations (progress, polling, optimistic
-updates).
+Operations is a reserved Shared-contract / UI area in `@m5kdev/frontend`, not a
+Backend Module. It is for hooks around long-running operations (progress,
+polling, optimistic updates). There is no Kernel operations export.
 
 ## Package map
 

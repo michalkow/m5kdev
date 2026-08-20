@@ -5,8 +5,8 @@ sidebar_position: 21
 # Social module
 
 The social module posts content to social networks on behalf of connected
-accounts, using provider adapters and OAuth tokens from the
-[connect module](/modules/connect).
+accounts, using provider adapters and OAuth tokens from
+[Connection](/modules/connect) (`id` `connect`).
 
 ## Package map
 
@@ -18,18 +18,25 @@ accounts, using provider adapters and OAuth tokens from the
 
 ```ts
 import { createBackendApp } from "@m5kdev/backend/app";
+import { ConnectModule } from "@m5kdev/backend/modules/connect/connect.module";
+import { FileModule } from "@m5kdev/backend/modules/file/file.module";
+import { createLinkedInProvider } from "@m5kdev/backend/modules/connect/connect.linkedin";
 import { SocialModule } from "@m5kdev/module-social";
 import { createLinkedInSocialProvider } from "@m5kdev/module-social/social.linkedin";
 
-createBackendApp(config, [new SocialModule([createLinkedInSocialProvider()])]);
+createBackendApp(config, [
+  new SocialModule([createLinkedInSocialProvider()]),
+  new ConnectModule([createLinkedInProvider()]),
+  new FileModule(),
+]);
 ```
 
 `SocialModule` `dependsOn` Connection (`id` `connect`) and File in the Kernel.
 
 ## How it works
 
-1. The user links their account through the [connect module](/modules/connect)
-   (e.g. LinkedIn OAuth).
+1. The user links their account through [Connection](/modules/connect)
+   (e.g. LinkedIn OAuth). This is not Better Auth login OAuth.
 2. App code calls `SocialService.postToProvider(...)` with the provider id and
    post content; the service resolves the connection, refreshes tokens when
    needed, and publishes through the provider adapter.

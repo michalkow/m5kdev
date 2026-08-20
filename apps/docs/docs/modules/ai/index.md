@@ -18,9 +18,10 @@ per-user usage tracking.
 ## Registration
 
 ```ts
+import { createBackendApp } from "@m5kdev/backend/app";
 import { AIModule } from "@m5kdev/backend/modules/ai/ai.module";
 
-backendApp.use(
+createBackendApp(config, [
   new AIModule({
     libs: { mastra, openrouter, replicate }, // all optional
     options: {
@@ -32,8 +33,8 @@ backendApp.use(
     },
     vectorStore, // LibSQLVector, enables embedding storage
     enableIdeogram: true, // requires IDEOGRAM_API_KEY
-  })
-);
+  }),
+]);
 ```
 
 Depends on `auth` (usage rows are attributed to users).

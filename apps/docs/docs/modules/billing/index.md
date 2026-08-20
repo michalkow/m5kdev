@@ -44,11 +44,12 @@ const plans: StripePlan[] = [
 
 ```ts
 import Stripe from "stripe";
+import { createBackendApp } from "@m5kdev/backend/app";
 import { BillingModule } from "@m5kdev/backend/modules/billing/billing.module";
 
-backendApp.use(
-  new BillingModule({ stripe: new Stripe(process.env.STRIPE_SECRET_KEY!) }, { plans, trial })
-);
+createBackendApp(config, [
+  new BillingModule({ stripe: new Stripe(process.env.STRIPE_SECRET_KEY!) }, { plans, trial }),
+]);
 ```
 
 Grants default to `defaultBillingGrants` (user: own; admin/org owner: all).
@@ -72,7 +73,7 @@ Grants default to `defaultBillingGrants` (user: own; admin/org owner: all).
 | `GET /checkout/:priceId` | Redirect to a Stripe Checkout session |
 | `GET /portal` | Redirect to the Stripe billing portal |
 | `GET /success` | Post-checkout landing that triggers a sync |
-| `POST /webhook` | Stripe webhook (raw body, verified with `STRIPE_WEBHOOK_SECRET`) |
+| `POST /webhook` | Stripe Subscription webhook (raw body, verified with `STRIPE_WEBHOOK_SECRET`). This is Billing, not [Inbound callback](/modules/webhook). |
 
 ### tRPC procedures
 

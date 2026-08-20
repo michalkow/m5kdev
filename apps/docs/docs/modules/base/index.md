@@ -2,18 +2,21 @@
 sidebar_position: 11
 ---
 
-# Base module
+# Kernel infrastructure (Base)
 
-The base module is the framework core that every other module builds on: the
-module contract, repository/service base classes, actors, grants, service
-procedures, and the result/error pattern.
+Base is Kernel infrastructure, not a Backend Module. Do not pass it to
+`createBackendApp`. Every Backend Module builds on this contract: repositories,
+services, actors, Grants, procedures, and the result/error pattern.
+
+Prefer `@m5kdev/backend/base/*`. The Kernel still re-exports the same types from
+`@m5kdev/backend/modules/base/*`.
 
 ## Package map
 
 | Package | What it owns |
 | --- | --- |
 | `@m5kdev/commons` | Base constants and schemas shared across modules. |
-| `@m5kdev/backend` | `BaseModule`, base repositories, `BaseService` / `BasePermissionService`, actors, grants, service procedures, query helpers. |
+| `@m5kdev/backend` | `BaseModule`, base repositories, `BaseService` / `BasePermissionService`, actors, grants, service procedures, list/match query helpers. |
 
 ## BaseModule
 

@@ -5,8 +5,8 @@ sidebar_position: 13
 # Clay module
 
 The clay module integrates with [Clay](https://clay.com) tables: it sends rows to
-Clay webhook endpoints and waits for enrichment results to come back via the
-webhook module.
+Clay webhook endpoints and waits for enrichment results to come back via
+[Inbound callback](/modules/webhook) (`id` remains `webhook`).
 
 ## Package map
 

@@ -5,7 +5,12 @@ sidebar_position: 2
 # Writing module docs
 
 Module pages should describe a complete capability across the packages that
-participate in it.
+participate in it. Group Backend Module docs as Kernel infrastructure, Core
+Module, or Optional Backend Module. Table, App shell, and Schemas stay
+Shared-contract / UI surfaces. Do not use Core / Services / Utilities.
+
+Register Backend Modules with `createBackendApp(config, [modules])`. Do not
+document `backendApp.use`. Optional packages import from `@m5kdev/module-<name>`.
 
 ## Page shape
 

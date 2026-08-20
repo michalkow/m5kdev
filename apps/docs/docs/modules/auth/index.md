@@ -34,10 +34,11 @@ that membership — see
 ### Registration
 
 ```ts
+import { createBackendApp } from "@m5kdev/backend/app";
 import { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
 
 // depends on EmailModule; BillingModule is an optional dependency
-backendApp.use(new AuthModule(customGrants, serviceHooks));
+createBackendApp(config, [new AuthModule(customGrants, serviceHooks)]);
 ```
 
 Grants default to `defaultAuthGrants` (admin: all; user: own; org owner/admin:

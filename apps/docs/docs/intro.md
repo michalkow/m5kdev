@@ -81,9 +81,10 @@ peers so TypeScript sees one physical copy.
 
 ## Read by module
 
-Use the module docs when you are adding a feature to an app. A module page
-explains the shared contract, backend wiring, frontend hooks, and UI pieces that
-belong together. Start with the [module index](/modules).
+Use the module docs when you are adding a feature to an app. Start with the
+[module index](/modules). Docs group **Kernel infrastructure**, **Core Modules**,
+and **Optional Backend Modules**; Table, App shell, and Schemas stay
+Shared-contract / UI surfaces.
 
 ## Read by package
 

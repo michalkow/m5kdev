@@ -2,11 +2,14 @@
 sidebar_position: 25
 ---
 
-# Webhook module
+# Inbound callback module
 
-The webhook module gives backend services a way to receive one-shot inbound
-webhook callbacks: it mints a callback URL, waits for the external system to hit
-it, and resolves with the delivered payload.
+Inbound callback is a Core Module for one-shot inbound callbacks: it mints a
+callback URL, waits for an external system to hit it, and resolves with the
+delivered payload. The module id and table stay `webhook`.
+
+This is not Stripe Subscription sync. Stripe Billing hooks stay on
+[Billing](/modules/billing) (`POST /webhook` with `STRIPE_WEBHOOK_SECRET`).
 
 ## Package map
 
@@ -17,9 +20,10 @@ it, and resolves with the delivered payload.
 ## Registration
 
 ```ts
+import { createBackendApp } from "@m5kdev/backend/app";
 import { WebhookModule } from "@m5kdev/backend/modules/webhook/webhook.module";
 
-backendApp.use(new WebhookModule("/webhook")); // mount path, default "/webhook"
+createBackendApp(config, [new WebhookModule("/webhook")]); // mount path, default "/webhook"
 ```
 
 ## How it works

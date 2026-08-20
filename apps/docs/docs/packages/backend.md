@@ -4,9 +4,11 @@ sidebar_position: 2
 
 # Backend package
 
-`@m5kdev/backend` is the composable Express backend stack. It owns backend module
-contracts, repositories, services, tRPC fragments, Express hooks, and app-kernel
-composition.
+`@m5kdev/backend` is the composable Express Kernel. It owns Kernel
+infrastructure, Core Modules, repositories, services, tRPC fragments, Express
+hooks, and `createBackendApp` composition. Optional Backend Modules
+(`@m5kdev/module-*`) depend on this package and are registered in the same
+modules array.
 
 ## Use it for
 
@@ -17,14 +19,8 @@ composition.
 
 ## Module docs
 
-Start with these module pages:
-
-- [File](/modules/file)
-- [Auth](/modules/auth)
-- [Billing](/modules/billing)
-- [Workflow](/modules/workflow)
-- [Notification](/modules/notification)
-- [Base](/modules/base)
+Start with the [module index](/modules): Kernel infrastructure, Core Modules,
+Optional Backend Modules, and Shared-contract / UI surfaces.
 
 List endpoints: [List query and Match query](/guides/list-query-and-match-query).
 HTTP shell: [Kernel Express HTTP shell](/guides/v0.33.0-kernel-express-http-shell-migration).

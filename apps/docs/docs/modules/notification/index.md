@@ -17,9 +17,10 @@ Web Push (VAPID), APNs, and FCM, with device registration and per-send logging.
 ## Registration
 
 ```ts
+import { createBackendApp } from "@m5kdev/backend/app";
 import { NotificationModule } from "@m5kdev/backend/modules/notification/notification.module";
 
-backendApp.use(new NotificationModule({ namespace: "notification" }));
+createBackendApp(config, [new NotificationModule({ namespace: "notification" })]);
 ```
 
 Depends on `auth` and `workflow` — delivery runs as a queued job

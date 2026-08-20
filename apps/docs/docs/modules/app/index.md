@@ -2,11 +2,11 @@
 sidebar_position: 5
 ---
 
-# App shell module
+# App shell
 
-The app shell module is the frontend composition root: app-wide configuration,
-the typed tRPC client + TanStack Query provider, role helpers, and the reusable
-shell/sidebar UI.
+App shell is a Shared-contract / UI surface, not a Backend Module. It is the
+frontend composition root: app-wide configuration, the typed tRPC client +
+TanStack Query provider, role helpers, and the reusable shell/sidebar UI.
 
 ## Package map
 

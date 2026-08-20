@@ -17,9 +17,10 @@ job runs persisted to the `workflows` table for status tracking and inspection.
 ## Registration
 
 ```ts
+import { createBackendApp } from "@m5kdev/backend/app";
 import { WorkflowModule } from "@m5kdev/backend/modules/workflow/workflow.module";
 
-backendApp.use(
+createBackendApp(config, [
   new WorkflowModule({
     queues: {
       default: { /* WorkflowQueueConfig */ },
@@ -27,8 +28,8 @@ backendApp.use(
     },
     defaultQueue: "default",
     defaults: { timeout: 60_000 },
-  })
-);
+  }),
+]);
 ```
 
 The Redis connection comes from the kernel (`createBackendApp({ redis })`);
