@@ -167,6 +167,7 @@ describe("scaffoldProject", () => {
     expect(appTs).not.toContain("PdfModule");
     expect(appTs).not.toContain("DocxModule");
     expect(appTs).not.toContain("VideoModule");
+    expect(appTs).not.toContain("SocialModule");
 
     const serverAgents = await fs.readFile(
       path.join(result.targetDirectory, "apps/server/AGENTS.md"),

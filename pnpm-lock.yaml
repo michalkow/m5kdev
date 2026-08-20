@@ -1579,6 +1579,31 @@ importers:
         specifier: 'catalog:'
         version: 6.0.3
 
+  packages/module-social:
+    dependencies:
+      '@m5kdev/backend':
+        specifier: workspace:*
+        version: link:../backend
+    devDependencies:
+      '@m5kdev/config':
+        specifier: workspace:*
+        version: link:../config
+      neverthrow:
+        specifier: 'catalog:'
+        version: 8.2.0
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.21.7(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@tsdown/css@0.21.7)(oxc-resolver@11.24.2)(synckit@0.11.13)(typescript@6.0.3)
+      tslib:
+        specifier: 'catalog:'
+        version: 2.8.1
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      zod:
+        specifier: 'catalog:'
+        version: 4.2.1
+
   packages/module-video:
     dependencies:
       '@m5kdev/backend':
@@ -1599,7 +1624,7 @@ importers:
         version: 8.2.0
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.7(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@tsdown/css@0.21.7)(oxc-resolver@11.24.2)(synckit@0.11.13)(typescript@6.0.3)
+        version: 0.21.7(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@tsdown/css@0.21.7)(oxc-resolver@11.24.2)(synckit@0.11.13)(typescript@6.0.3)
       tslib:
         specifier: 'catalog:'
         version: 2.8.1

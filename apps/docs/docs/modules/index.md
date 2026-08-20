@@ -29,7 +29,7 @@ shared schemas, backend services, frontend hooks, and reusable UI.
 | [Recurrence](/modules/recurrence) | commons, backend | Recurring schedules and rules with permissioned CRUD |
 | [Tag](/modules/tag) | commons, backend | Polymorphic tags and taggings for any resource type |
 | [Connect](/modules/connect) | backend | OAuth account linking for third-party APIs (Google, LinkedIn) |
-| [Social](/modules/social) | backend | Posting to social networks through linked accounts |
+| [Social](/modules/social) | `@m5kdev/module-social` | Posting to social networks through linked accounts |
 | [Webhook](/modules/webhook) | backend | One-shot inbound webhook callbacks with awaitable payloads |
 | [Clay](/modules/clay) | backend | Clay table integration built on the webhook module |
 

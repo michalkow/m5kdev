@@ -1,4 +1,4 @@
-import { escapeLinkedInText } from "./social.linkedin";
+import { escapeLinkedInText } from "../../module-social/src/social.linkedin";
 
 describe("escapeLinkedInText", () => {
   describe("special character escaping", () => {

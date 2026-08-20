@@ -3,10 +3,15 @@ import { join } from "node:path";
 import { createClient } from "@libsql/client";
 import { DocxModule } from "../../module-docx/src/docx.module";
 import { PdfModule } from "../../module-pdf/src/pdf.module";
+import { SocialModule } from "../../module-social/src/social.module";
 import { VideoModule } from "../../module-video/src/video.module";
 import { createBackendApp } from "./app";
 import { BaseModule, type TableMap } from "./base/base.module";
 import { BaseModule as BaseModuleCompat } from "./modules/base/base.module";
+import * as connectTables from "./modules/connect/connect.db";
+import { ConnectModule } from "./modules/connect/connect.module";
+import * as fileTables from "./modules/file/file.db";
+import { FileModule } from "./modules/file/file.module";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {
@@ -20,12 +25,18 @@ jest.mock("better-auth/node", () => ({
   fromNodeHeaders: (headers: unknown) => headers,
 }));
 
+jest.mock("openid-client", () => ({}));
+
 interface PackageExports {
   readonly exports: Record<string, unknown>;
 }
 
 class CoreFixtureModule extends BaseModule<never, TableMap, {}, {}, never> {
   readonly id = "core-fixture";
+}
+
+class AuthFixtureModule extends BaseModule<never, TableMap, {}, {}, never> {
+  readonly id = "auth";
 }
 
 describe("Kernel infrastructure package surface", () => {
@@ -42,12 +53,13 @@ describe("Kernel infrastructure package surface", () => {
     expect(pkg.exports["./modules/utils/*"]).toBeUndefined();
   });
 
-  it("does not export AccessModule, CryptoModule, PdfModule, DocxModule, or VideoModule", () => {
+  it("does not export AccessModule, CryptoModule, PdfModule, DocxModule, VideoModule, or SocialModule", () => {
     expect(pkg.exports["./modules/access/*"]).toBeUndefined();
     expect(pkg.exports["./modules/crypto/*"]).toBeUndefined();
     expect(pkg.exports["./modules/pdf/*"]).toBeUndefined();
     expect(pkg.exports["./modules/docx/*"]).toBeUndefined();
     expect(pkg.exports["./modules/video/*"]).toBeUndefined();
+    expect(pkg.exports["./modules/social/*"]).toBeUndefined();
   });
 
   it("does not depend on pdf-parse, mammoth, turndown, or ffmpeg-ffprobe-static", () => {
@@ -94,6 +106,47 @@ describe("Kernel infrastructure package surface", () => {
     const client = createClient({ url: ":memory:" });
     const built = createBackendApp({ db: { client } }, [new VideoModule()] as const);
     expect(Object.keys(built.modules)).toEqual(["video"]);
+    void client.close?.();
+  });
+
+  it("keeps Connection module id as connect", () => {
+    expect(new ConnectModule([]).id).toBe("connect");
+  });
+
+  it("boots createBackendApp when SocialModule from the Optional package is registered with Connection and File", () => {
+    const client = createClient({ url: ":memory:" });
+    const built = createBackendApp(
+      { db: { client }, schema: { ...connectTables, ...fileTables } },
+      [
+        new SocialModule([]),
+        new ConnectModule([]),
+        new FileModule(),
+        new AuthFixtureModule(),
+      ] as const
+    );
+    expect(Object.keys(built.modules).sort()).toEqual(["auth", "connect", "file", "social"]);
+    void client.close?.();
+  });
+
+  it("throws when SocialModule is missing Connection or File", () => {
+    const client = createClient({ url: ":memory:" });
+    const schema = { ...connectTables, ...fileTables };
+    expect(() => createBackendApp({ db: { client } }, [new SocialModule([])] as const)).toThrow(
+      'Backend module "social" is missing required dependency "connect"'
+    );
+    expect(() =>
+      createBackendApp({ db: { client }, schema }, [
+        new SocialModule([]),
+        new ConnectModule([]),
+      ] as const)
+    ).toThrow('Backend module "social" is missing required dependency "file"');
+    expect(() =>
+      createBackendApp({ db: { client }, schema }, [
+        new SocialModule([]),
+        new FileModule(),
+        new AuthFixtureModule(),
+      ] as const)
+    ).toThrow('Backend module "social" is missing required dependency "connect"');
     void client.close?.();
   });
 });

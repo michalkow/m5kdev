@@ -45,6 +45,11 @@ describe("consumer catalog", () => {
         fs.readFileSync(path.join(REPO_ROOT, "packages/module-video/package.json"), "utf8")
       ).version
     );
+    expect(catalog["@m5kdev/module-social"]).toBe(
+      JSON.parse(
+        fs.readFileSync(path.join(REPO_ROOT, "packages/module-social/package.json"), "utf8")
+      ).version
+    );
     expect(catalog["@libsql/client"]).toBe("0.17.4");
     expect(catalog["@types/react"]).toBe("19.2.17");
     expect(catalog["drizzle-kit"]).toBe("0.31.10");
@@ -223,6 +228,7 @@ const BOUNDARY_PEERS: Record<string, readonly string[]> = {
   "@m5kdev/module-pdf": ["neverthrow"],
   "@m5kdev/module-docx": ["neverthrow"],
   "@m5kdev/module-video": ["neverthrow"],
+  "@m5kdev/module-social": ["neverthrow", "zod"],
 };
 
 describe("boundary library peers", () => {

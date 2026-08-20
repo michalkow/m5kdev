@@ -112,7 +112,6 @@ const FEATURE_MANIFEST = {
     },
     tags: { kind: "module", label: "Tags", experimental: true, paths: [] },
     clay: { kind: "module", label: "Clay", experimental: true, paths: [] },
-    social: { kind: "module", label: "Social", experimental: true, paths: [] },
     connect: { kind: "module", label: "Connect", experimental: true, paths: [] },
     recurrence: { kind: "module", label: "Recurrence", experimental: true, paths: [] },
     webhook: { kind: "module", label: "Webhook", experimental: true, paths: [] },

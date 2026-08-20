@@ -12,16 +12,19 @@ accounts, using provider adapters and OAuth tokens from the
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/backend` | `SocialModule`: provider adapters (LinkedIn), DTOs, types, `SocialService`. |
+| `@m5kdev/module-social` | `SocialModule`: provider adapters (LinkedIn), DTOs, types, `SocialService`. |
 
 ## Registration
 
 ```ts
-import { SocialModule } from "@m5kdev/backend/modules/social/social.module";
-import { createLinkedInSocialProvider } from "@m5kdev/backend/modules/social/social.linkedin";
+import { createBackendApp } from "@m5kdev/backend/app";
+import { SocialModule } from "@m5kdev/module-social";
+import { createLinkedInSocialProvider } from "@m5kdev/module-social/social.linkedin";
 
-backendApp.use(new SocialModule([createLinkedInSocialProvider()]));
+createBackendApp(config, [new SocialModule([createLinkedInSocialProvider()])]);
 ```
+
+`SocialModule` `dependsOn` Connection (`id` `connect`) and File in the Kernel.
 
 ## How it works
 

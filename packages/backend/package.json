@@ -230,16 +230,6 @@
         "default": "./dist/src/modules/posthog/*.cjs"
       }
     },
-    "./modules/social/*": {
-      "import": {
-        "types": "./dist/src/modules/social/*.d.mts",
-        "default": "./dist/src/modules/social/*.mjs"
-      },
-      "require": {
-        "types": "./dist/src/modules/social/*.d.cts",
-        "default": "./dist/src/modules/social/*.cjs"
-      }
-    },
     "./modules/clay/*": {
       "import": {
         "types": "./dist/src/modules/clay/*.d.mts",

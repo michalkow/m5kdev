@@ -1,6 +1,10 @@
-import { BaseModule, type ModuleServicesContext, type TableMap } from "../base/base.module";
-import type { ConnectModule } from "../connect/connect.module";
-import type { FileModule } from "../file/file.module";
+import {
+  BaseModule,
+  type ModuleServicesContext,
+  type TableMap,
+} from "@m5kdev/backend/base/base.module";
+import type { ConnectModule } from "@m5kdev/backend/modules/connect/connect.module";
+import type { FileModule } from "@m5kdev/backend/modules/file/file.module";
 import { SocialService } from "./social.service";
 import type { SocialProvider } from "./social.types";
 

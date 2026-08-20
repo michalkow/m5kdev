@@ -1,10 +1,13 @@
+import type { RequiredServiceActor } from "@m5kdev/backend/base/base.actor";
+import type { ServerResultAsync } from "@m5kdev/backend/base/base.dto";
+import { BaseService } from "@m5kdev/backend/base/base.service";
+import type {
+  ConnectRepository,
+  ConnectRow,
+} from "@m5kdev/backend/modules/connect/connect.repository";
+import type { ConnectService } from "@m5kdev/backend/modules/connect/connect.service";
+import type { FileService } from "@m5kdev/backend/modules/file/file.service";
 import { err, ok } from "neverthrow";
-import type { RequiredServiceActor } from "../base/base.actor";
-import type { ServerResultAsync } from "../base/base.dto";
-import { BaseService } from "../base/base.service";
-import type { ConnectRepository, ConnectRow } from "../connect/connect.repository";
-import type { ConnectService } from "../connect/connect.service";
-import type { FileService } from "../file/file.service";
 import type { SocialPostInput } from "./social.dto";
 import type { SocialPostPayload, SocialPostResult, SocialProvider } from "./social.types";
 

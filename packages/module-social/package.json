@@ -1,0 +1,99 @@
+{
+  "name": "@m5kdev/module-social",
+  "version": "0.33.0",
+  "description": "Optional Backend Module for posting to social networks through linked Connection accounts.",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michalkow/m5kdev.git"
+  },
+  "homepage": "https://github.com/michalkow/m5kdev#readme",
+  "bugs": "https://github.com/michalkow/m5kdev/issues",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "version:patch": "npm version patch",
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write",
+    "build": "tsdown",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@m5kdev/backend": "workspace:*"
+  },
+  "peerDependencies": {
+    "neverthrow": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@m5kdev/config": "workspace:*",
+    "neverthrow": "catalog:",
+    "tsdown": "catalog:",
+    "tslib": "catalog:",
+    "typescript": "catalog:",
+    "zod": "catalog:"
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/src/social.module.d.mts",
+        "default": "./dist/src/social.module.mjs"
+      },
+      "require": {
+        "types": "./dist/src/social.module.d.cts",
+        "default": "./dist/src/social.module.cjs"
+      }
+    },
+    "./social.module": {
+      "import": {
+        "types": "./dist/src/social.module.d.mts",
+        "default": "./dist/src/social.module.mjs"
+      },
+      "require": {
+        "types": "./dist/src/social.module.d.cts",
+        "default": "./dist/src/social.module.cjs"
+      }
+    },
+    "./social.service": {
+      "import": {
+        "types": "./dist/src/social.service.d.mts",
+        "default": "./dist/src/social.service.mjs"
+      },
+      "require": {
+        "types": "./dist/src/social.service.d.cts",
+        "default": "./dist/src/social.service.cjs"
+      }
+    },
+    "./social.linkedin": {
+      "import": {
+        "types": "./dist/src/social.linkedin.d.mts",
+        "default": "./dist/src/social.linkedin.mjs"
+      },
+      "require": {
+        "types": "./dist/src/social.linkedin.d.cts",
+        "default": "./dist/src/social.linkedin.cjs"
+      }
+    },
+    "./social.dto": {
+      "import": {
+        "types": "./dist/src/social.dto.d.mts",
+        "default": "./dist/src/social.dto.mjs"
+      },
+      "require": {
+        "types": "./dist/src/social.dto.d.cts",
+        "default": "./dist/src/social.dto.cjs"
+      }
+    },
+    "./social.types": {
+      "import": {
+        "types": "./dist/src/social.types.d.mts",
+        "default": "./dist/src/social.types.mjs"
+      },
+      "require": {
+        "types": "./dist/src/social.types.d.cts",
+        "default": "./dist/src/social.types.cjs"
+      }
+    }
+  }
+}
