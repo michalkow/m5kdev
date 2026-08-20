@@ -12,11 +12,12 @@ uploads.
 Register auth before file because `FileModule` depends on auth.
 
 ```ts
-export const backendApp = createBackendApp({
-  db: { url: process.env.DATABASE_URL! },
-})
-  .use(new AuthModule())
-  .use(new FileModule());
+export const builtBackendApp = createBackendApp(
+  {
+    db: { url: process.env.DATABASE_URL! },
+  },
+  [new AuthModule(), new FileModule()] as const
+);
 ```
 
 ## 2. Initiate the upload

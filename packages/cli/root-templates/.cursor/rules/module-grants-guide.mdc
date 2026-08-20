@@ -22,10 +22,10 @@ apps/<app>/server/src/modules/<module>/<module>.grants.ts
 
 ## Grant Structure
 
-App modules use flat `ResourceGrant[]` arrays imported from `@m5kdev/backend/modules/base/base.grants`:
+App modules use flat `ResourceGrant[]` arrays imported from `@m5kdev/backend/base/base.grants`:
 
 ```typescript
-import type { ResourceGrant } from "@m5kdev/backend/modules/base/base.grants";
+import type { ResourceGrant } from "@m5kdev/backend/base/base.grants";
 ```
 
 Each `ResourceGrant` has four fields:
@@ -47,7 +47,7 @@ Each `ResourceGrant` has four fields:
 ## Example
 
 ```typescript
-import type { ResourceGrant } from "@m5kdev/backend/modules/base/base.grants";
+import type { ResourceGrant } from "@m5kdev/backend/base/base.grants";
 
 export const postsGrants: ResourceGrant[] = [
   {

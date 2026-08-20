@@ -5,6 +5,8 @@ alwaysApply: false
 
 # File Module Usage Guide
 
+File is a Core Module. Apps that use inventory typically register `FileModule` in `createBackendApp`. This guide covers the File services, S3, and upload router.
+
 This guide explains how to use the file module across commons, backend, and frontend.
 
 ## Overview

@@ -7,10 +7,13 @@ alwaysApply: false
 This monorepo is organized into:
 
 - `packages/`: shared libraries and feature modules (e.g., `packages/backend`, `packages/commons`, `packages/web-ui`, `packages/frontend`).
+- `packages/module-*`: Optional Backend Module packages (`@m5kdev/module-clay`, `module-docx`, `module-pdf`, `module-social`, `module-video`). Not part of the Kernel distribution.
 
 ## Modular structure
 
 Across apps and packages, feature areas live under `src/modules/<feature>/`. Each module follows consistent file conventions to keep responsibilities separated.
+
+Kernel infrastructure (`BaseModule`, Grants, query helpers) lives in `packages/backend/src/base/`, not as a registered Backend Module. Core Modules stay under `packages/backend/src/modules/<id>/`.
 
 ### Module file types (brief)
 

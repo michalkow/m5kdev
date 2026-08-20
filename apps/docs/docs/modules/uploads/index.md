@@ -10,9 +10,9 @@ runtime.
 
 ## Who writes here
 
-- The [file module](/modules/file) local upload route stores browser uploads
+- The [file Core Module](/modules/file) local upload route stores browser uploads
   here before they are served or pushed to S3.
-- The [video module](/modules/video) writes ffmpeg outputs (trims, WAV/MP3
+- The [video Optional Backend Module](/modules/video) writes ffmpeg outputs (trims, WAV/MP3
   conversions) here.
 
 ## Operational notes

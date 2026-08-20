@@ -105,7 +105,7 @@ entries in module grant maps (for example `auth.grants.ts`, `file.grants.ts`).
 Example: adding organization role `editor`:
 
 ```ts
-import { flattenNestedGrants } from "@m5kdev/backend/modules/base/base.grants";
+import { flattenNestedGrants } from "@m5kdev/backend/base/base.grants";
 
 new AuthModule(
   flattenNestedGrants({

@@ -9,7 +9,7 @@ Package docs explain ownership and imports. Detailed usage belongs in
 
 | Package | Role |
 | --- | --- |
-| [Backend](./backend) | Composable Express backend stack and app kernel. |
+| [Backend](./backend) | Kernel infrastructure, Core Modules, and `createBackendApp`. Optional Backend Modules are `@m5kdev/module-*`. |
 | [Frontend](./frontend) | Shared React hooks and frontend logic. |
 | [Web UI](./web-ui) | Shared HeroUI/Tailwind component library. |
 | [Commons](./commons) | Shared schemas, constants, and utilities. |

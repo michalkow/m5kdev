@@ -44,7 +44,7 @@ They return `{ rows, total }` (`queryListOutput`). Match query Procedures
 accept `MatchQueryInput` (`page`, `limit`, `sort`, `order`, `match`, `q`)
 instead of `filters`.
 
-On the backend, [utils](/modules/utils) and `queryList` / `matchList` translate
+On the backend, [query helpers](/modules/utils) and `queryList` / `matchList` translate
 the chosen stack into Drizzle. `useQueryWithParams` sends both `filters` and
 `match` (converted from the merged QueryFilters, including `additionalFilters`).
 List Zod strips `match`; Match Zod strips `filters`. Do not put QueryMatch in

@@ -1,5 +1,5 @@
 ---
-globs: packages/backend/src/modules/**/*.trpc.ts
+globs: packages/backend/src/modules/**/*.trpc.ts,packages/module-*/src/**/*.trpc.ts,apps/**/server/src/modules/**/*.trpc.ts
 alwaysApply: false
 ---
 

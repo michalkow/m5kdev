@@ -123,7 +123,7 @@ read/attribution. Active member lists and role lookups exclude `deletedAt IS NOT
 - Prefer stamping `ctx.actor.memberId` rather than looking up the
   member id ad hoc in each handler.
 
-See the [base module](/modules/base) for actors and grants, and the
+See [Kernel infrastructure (Base)](/modules/base) for actors and grants, and the
 [auth module](/modules/auth) for membership APIs.
 
 ## Related guides

@@ -1,5 +1,5 @@
 ---
-globs: packages/backend/src/modules/**/*.dto.ts,apps/**/server/src/modules/**/*.dto.ts
+globs: packages/backend/src/modules/**/*.dto.ts,packages/module-*/src/**/*.dto.ts,apps/**/server/src/modules/**/*.dto.ts
 alwaysApply: false
 ---
 
@@ -14,7 +14,7 @@ src/modules/[module]/[module].dto.ts
 
 ## Core Philosophy
 
-- **Primary method**: call `createZodSchemas(table)` from `@m5kdev/backend/modules/base/base.dto`, then **spread** its default `output` / `input` and **extend** only where the defaults are wrong or incomplete.
+- **Primary method**: call `createZodSchemas(table)` from `@m5kdev/backend/base/base.dto`, then **spread** its default `output` / `input` and **extend** only where the defaults are wrong or incomplete.
 - Do not hand-build full `output` / `input` objects from scratch when a Drizzle table exists.
 - Override or add keys on top of the spread; prefer `.omit()` / `.pick()` / `.extend()` on the generated schemas over rewriting fields.
 - Services, repositories, and tRPC import the grouped object (`postSchemas`) and use `postSchemas.input.x` / `postSchemas.output.y`.
@@ -25,7 +25,7 @@ src/modules/[module]/[module].dto.ts
 import {
   createListOutputSchema,
   createZodSchemas,
-} from "@m5kdev/backend/modules/base/base.dto";
+} from "@m5kdev/backend/base/base.dto";
 import {
   productCreateInputSchema,
   productUpdateInputSchema,
@@ -73,7 +73,7 @@ export const productSchemas = {
 When the full select schema is a safe API response, spread `output` unchanged and only fix inputs:
 
 ```typescript
-import { createZodSchemas } from "@m5kdev/backend/modules/base/base.dto";
+import { createZodSchemas } from "@m5kdev/backend/base/base.dto";
 import {
   postCreateInputSchema,
   postUpdateInputSchema,

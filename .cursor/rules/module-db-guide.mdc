@@ -1,5 +1,5 @@
 ---
-globs: packages/backend/src/modules/**/*.db.ts
+globs: packages/backend/src/modules/**/*.db.ts,packages/module-*/src/**/*.db.ts,apps/**/server/src/modules/**/*.db.ts
 alwaysApply: false
 ---
 

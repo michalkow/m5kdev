@@ -1,5 +1,5 @@
 ---
-globs: packages/backend/src/modules/**/*.service.ts,apps/**/server/src/modules/**/*.service.ts
+globs: packages/backend/src/modules/**/*.service.ts,packages/module-*/src/**/*.service.ts,apps/**/server/src/modules/**/*.service.ts
 alwaysApply: false
 ---
 
@@ -174,7 +174,7 @@ validateCode = this.procedure("validateCode")
 
 ```typescript
 import { err, ok } from "neverthrow";
-import { BaseService } from "@m5kdev/backend/modules/base/base.service";
+import { BaseService } from "@m5kdev/backend/base/base.service";
 import { itemSchemas } from "./item.dto";
 import type { ItemRepository } from "./item.repository";
 

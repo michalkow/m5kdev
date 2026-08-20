@@ -67,7 +67,7 @@ The local database is a LibSQL file; local auth emails are written to `apps/serv
 
 ### Backend: kernel + modules
 
-The backend kernel orchestrates modules. Each app module is a `BaseModule` subclass registered in `apps/server/src/app.ts` via `createBackendApp(config, [modules])` — the kernel wires its repositories, services, and tRPC routers.
+The backend kernel orchestrates modules. Each app module is a `BaseModule` subclass registered in `apps/server/src/app.ts` via `createBackendApp(config, [modules])` — the kernel wires its repositories, services, and tRPC routers. Import Kernel infrastructure from `@m5kdev/backend/base/*`. Clay, Docx, Pdf, Social, and Video are Optional Backend Module packages (`@m5kdev/module-<name>`); they are not scaffolded.
 
 A module lives in `apps/server/src/modules/<name>/` and follows a strict file anatomy where **the Drizzle table is the source of truth** and types flow one way:
 

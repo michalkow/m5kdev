@@ -6,7 +6,8 @@ Monorepo with shared backend, frontend, and UI packages. Built with [pnpm](https
 
 ### Packages
 
-- **`packages/backend`** (`@m5kdev/backend`) – Composable Express backend stack and app kernel for Drizzle ORM, Better Auth, tRPC, workflows, and feature modules.
+- **`packages/backend`** (`@m5kdev/backend`) – Kernel: infrastructure, Core Modules, Drizzle, Better Auth, tRPC, and `createBackendApp`.
+- **`packages/module-*`** (`@m5kdev/module-clay`, `module-docx`, `module-pdf`, `module-social`, `module-video`) – Optional Backend Modules. Not part of the Kernel; apps that need them add a Managed-catalog pin.
 - **`packages/frontend`** (`@m5kdev/frontend`) – Shared React hooks, utilities, and frontend logic (tRPC, auth, billing, table).
 - **`packages/web-ui`** (`@m5kdev/web-ui`) – Shared UI component library (HeroUI, Radix, Tailwind).
 - **`packages/commons`** (`@m5kdev/commons`) – Shared types, schemas, and utilities used by backend and frontend.

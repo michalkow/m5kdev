@@ -2,7 +2,9 @@
 
 This guide is for apps built on `m5kdev` that still wire the backend manually across `db.ts`, `repository.ts`, `service.ts`, `trpc.ts`, `workflow.ts`, `lib/auth.ts`, and the server bootstrap.
 
-The new backend kernel moves that composition into one app root while keeping the backend class-based and keeping raw Express available.
+The backend kernel moves that composition into one app root while keeping the backend class-based and keeping raw Express available. Register modules with `createBackendApp(config, [modules])` — there is no `backendApp.use`.
+
+Clay, Docx, Pdf, Social, and Video later left the Kernel as Optional Backend Module packages. See [Core Modules and Optional Backend Module packages in 0.34.0](apps/docs/docs/guides/v0.34.0-core-optional-backend-modules-migration.md).
 
 ## What Changed
 
@@ -51,7 +53,7 @@ The backend now has two new top-level primitives:
 ## Migration Checklist
 
 1. Create `apps/<app>/server/src/app.ts` and move backend composition there.
-2. Replace manual repository/service/router wiring with `createBackendApp(...).use(...)`.
+2. Replace manual repository/service/router wiring with `createBackendApp(config, [modules])`. Do not use `backendApp.use`.
 3. Convert app modules to `defineBackendModule(...)`.
 4. Move table relations to module dependency tables instead of direct imports from other modules.
 5. Export `appRouter` and `AppRouter` from the built backend app.
@@ -64,7 +66,7 @@ The backend now has two new top-level primitives:
 The app root becomes the single place where backend infrastructure is configured and modules are registered.
 
 ```ts
-import { createBackendApp, type InferBackendAppRouter } from "@m5kdev/backend/app";
+import { createBackendApp } from "@m5kdev/backend/app";
 import { createBetterAuth } from "@m5kdev/backend/modules/auth/auth.lib";
 import { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
 import { EmailModule } from "@m5kdev/backend/modules/email/email.module";
@@ -77,53 +79,54 @@ const appUrl = process.env.VITE_APP_URL ?? "http://localhost:5173";
 const serverUrl = process.env.VITE_SERVER_URL ?? "http://localhost:8080";
 const resendApiKey = process.env.RESEND_API_KEY;
 
-export const backendApp = createBackendApp({
-  db: { url: process.env.DATABASE_URL! },
-  app: {
-    name: "My App",
-    urls: {
-      web: appUrl,
-      api: serverUrl,
+export const builtBackendApp = createBackendApp(
+  {
+    db: { url: process.env.DATABASE_URL! },
+    app: {
+      name: "My App",
+      urls: {
+        web: appUrl,
+        api: serverUrl,
+      },
+    },
+    redis: {
+      url: process.env.REDIS_URL!,
+      options: { maxRetriesPerRequest: null },
+    },
+    resend: resendApiKey ? { apiKey: resendApiKey } : undefined,
+    email: {
+      mode: resendApiKey ? "send" : "store",
+      from: "no-reply@example.com",
+      systemNotificationEmail: "ops@example.com",
+      outputDirectory: ".emails",
+    },
+    auth: {
+      factory({ db, services, appConfig }) {
+        return createBetterAuth({
+          orm: db.orm as never,
+          schema: db.schema as never,
+          services: {
+            email: services.email.email,
+          },
+          app: appConfig,
+        });
+      },
     },
   },
-  redis: {
-    url: process.env.REDIS_URL!,
-    options: { maxRetriesPerRequest: null },
-  },
-  resend: resendApiKey ? { apiKey: resendApiKey } : undefined,
-  email: {
-    mode: resendApiKey ? "send" : "store",
-    from: "no-reply@example.com",
-    systemNotificationEmail: "ops@example.com",
-    outputDirectory: ".emails",
-  },
-  auth: {
-    factory({ db, services, appConfig }) {
-      return createBetterAuth({
-        orm: db.orm as never,
-        schema: db.schema as never,
-        services: {
-          email: services.email.email,
-        },
-        app: appConfig,
-      });
-    },
-  },
-})
-  .use(new EmailModule(templates as never))
-  .use(new AuthModule())
-  .use(
+  [
+    new EmailModule(templates as never),
+    new AuthModule(),
     new WorkflowModule({
       queues: { fast: { concurrency: 5 } },
       defaultQueue: "fast",
-    })
-  )
-  .use(new NotificationModule())
-  .use(postsModule);
+    }),
+    new NotificationModule(),
+    postsModule,
+  ] as const
+);
 
-export const builtBackendApp = backendApp.build();
 export const appRouter = builtBackendApp.trpc.router;
-export type AppRouter = InferBackendAppRouter<typeof backendApp>;
+export type AppRouter = typeof builtBackendApp.trpc.router;
 ```
 
 Notes:
@@ -238,10 +241,11 @@ export const notificationModule = defineBackendModule({
 
 Important rules:
 
-- `app.use(...)` registration order does not control service wiring.
-- `build()` resolves required and optional dependencies by module graph.
+- Array order in `createBackendApp(config, [modules])` does not control service wiring.
+- The kernel resolves required and optional dependencies by module graph (`dependsOn` / `optionalDependsOn`).
 - Missing dependencies and dependency cycles fail at build time.
-- Express hooks still run in `app.use(...)` registration order, so route precedence stays predictable.
+- Express hooks run in resolved module order, so route precedence stays predictable.
+- Do not use `backendApp.use`.
 
 ## 4. Move DB Relations To Dependency Tables
 
@@ -250,37 +254,27 @@ Do not import auth tables directly into unrelated modules just to define foreign
 Use dependency tables from `db({ deps })` instead.
 
 ```ts
-import { sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { createDbColumns } from "@m5kdev/backend/modules/base/base.db";
+import { members, organizations, teams, users } from "@m5kdev/backend/modules/auth/auth.db";
+import { sqliteTable as table, text } from "drizzle-orm/sqlite-core";
+import { v4 as uuidv4 } from "uuid";
 
-export function createPostsTables(references: {
-  users: { id: any };
-  organizations: { id: any };
-  teams: { id: any };
-}) {
-  const posts = sqliteTable("posts", {
-    ...createDbColumns(references),
-    title: text("title").notNull(),
-  });
-
-  return { posts };
-}
+export const posts = table("posts", {
+  id: text("id").primaryKey().$default(uuidv4),
+  authorUserId: text("author_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  memberId: text("member_id").references(() => members.id, {
+    onDelete: "set null",
+  }),
+  organizationId: text("organization_id").references(() => organizations.id, {
+    onDelete: "set null",
+  }),
+  teamId: text("team_id").references(() => teams.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+});
 ```
 
-And then:
-
-```ts
-db: ({ deps }) => {
-  const authTables = deps.auth.tables as any;
-  return {
-    tables: createPostsTables({
-      users: authTables.users,
-      organizations: authTables.organizations,
-      teams: authTables.teams,
-    }),
-  };
-}
-```
+App modules typically import Auth tables directly. Kernel Core Modules declare `dbDependsOn` / `dependsOn` and receive tables through `db({ deps })` instead.
 
 This matters because runtime schema assembly is now module-driven. The app kernel merges tables from all registered modules and then creates one Drizzle ORM from the merged schema.
 

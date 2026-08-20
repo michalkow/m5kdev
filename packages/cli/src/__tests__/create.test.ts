@@ -559,7 +559,7 @@ describe("scaffoldProject", () => {
     expect(flyToml).toContain('memory = "1gb"');
     expect(flyToml).toContain("internal_port = 8080");
     expect(flyToml).toContain("force_https = true");
-    expect(flyToml).toContain("min_machines_running = 1");
+    expect(flyToml).toContain("min_machines_running = 0");
     expect(flyToml).not.toContain("{{");
 
     const envExample = await fs.readFile(

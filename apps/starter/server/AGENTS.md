@@ -28,7 +28,8 @@ apps/server/src/modules/<module>/
 - Repositories own persistence and query construction.
 - Services own business rules, orchestration, and context-aware defaults.
 - tRPC files own transport only and must delegate to services.
-- Register modules in `apps/server/src/app.ts`. Database commands live in server `db.ts` (`pnpm drizzle:reset`, `drizzle:sync`, `drizzle:seed`) and call Kernel `runDb` — they must not import `app.ts`.
+- Register Core Modules and app modules in `apps/server/src/app.ts` via `createBackendApp(config, [modules])`. Do not use `backendApp.use`. Optional Backend Modules (`@m5kdev/module-*`) are not scaffolded; add them only when the product needs Clay, Docx, Pdf, Social, or Video.
+- Database commands live in server `db.ts` (`pnpm drizzle:reset`, `drizzle:sync`, `drizzle:seed`) and call Kernel `runDb` — they must not import `app.ts`.
 
 ## Avoid Trivial Service Delegation
 

@@ -25,6 +25,7 @@ Optional Backend Modules, and Shared-contract / UI surfaces.
 List endpoints: [List query and Match query](/guides/list-query-and-match-query).
 HTTP shell: [Kernel Express HTTP shell](/guides/v0.33.0-kernel-express-http-shell-migration).
 Database commands: [Kernel Database commands](/guides/v0.34.0-kernel-database-commands-migration).
+Core vs Optional Backend Modules: [0.34.0 packaging split](/guides/v0.34.0-core-optional-backend-modules-migration).
 Catalog pins and boundary peers: [Catalog lockstep](/guides/v0.33.0-catalog-lockstep-migration).
 
 ## Package rule

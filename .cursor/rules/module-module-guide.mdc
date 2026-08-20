@@ -1,5 +1,5 @@
 ---
-globs: packages/backend/src/modules/**/*.module.ts
+globs: packages/backend/src/modules/**/*.module.ts,packages/module-*/src/**/*.module.ts
 alwaysApply: false
 ---
 
@@ -7,9 +7,16 @@ alwaysApply: false
 
 A `*.module.ts` file is the composition unit for a backend module. It wires repositories, services, tRPC routers, Express routes, workflows, auth, and lifecycle hooks into a single class that the app kernel orchestrates.
 
+## Placement
+
+- **Core Modules** live in `packages/backend/src/modules/<id>/` and import Base via `../base/` (compatibility re-export) or `@m5kdev/backend/base/*`.
+- **Optional Backend Modules** live in `packages/module-<name>/` (`@m5kdev/module-<name>`). Import Base from `@m5kdev/backend/base/*`. Do not add Clay, Docx, Pdf, Social, or Video back into the Kernel.
+- Register every Backend Module with `createBackendApp(config, [modules])`. Do not use `backendApp.use`. Do not pass Base to `createBackendApp`.
+- Connection id stays `connect`. Inbound callback id stays `webhook`.
+
 ## Conventions
 
-- Extend `BaseModule<Deps, Tables, Repositories, Services, Routers>` from `../base/base.module`.
+- Extend `BaseModule<Deps, Tables, Repositories, Services, Routers>` from Kernel infrastructure (`../base/base.module` in Core Modules, `@m5kdev/backend/base/base.module` in Optional packages and apps).
 - Declare local type aliases for each generic slot (`*ModuleDeps`, `*ModuleTables`, `*ModuleRepositories`, `*ModuleServices`, `*ModuleRouters`).
 - Set `readonly id` to match the module directory name (e.g. `readonly id = "auth"`).
 - Declare `dependsOn` / `optionalDependsOn` as `readonly` tuples with `as const`.
@@ -114,25 +121,27 @@ export class ItemModule extends BaseModule<
 }
 ```
 
-### Services-Only Module (no DB, no deps)
+### Services-Only Optional package (no DB, no deps)
+
+Clay, Docx, Pdf, Social, and Video are Optional Backend Modules. Copy Pdf's package shape; import from `@m5kdev/module-<name>`, not the Kernel.
 
 ```typescript
-import { BaseModule, type TableMap } from "../base/base.module";
-import { DocxService } from "./docx.service";
+import { BaseModule, type TableMap } from "@m5kdev/backend/base/base.module";
+import { PdfService } from "./pdf.service";
 
-type DocxModuleDeps = never;
-type DocxModuleTables = TableMap;
-type DocxModuleRepositories = {};
-type DocxModuleServices = { docx: DocxService };
-type DocxModuleRouters = never;
+type PdfModuleDeps = never;
+type PdfModuleTables = TableMap;
+type PdfModuleRepositories = {};
+type PdfModuleServices = { pdf: PdfService };
+type PdfModuleRouters = never;
 
-export class DocxModule extends BaseModule<
-  DocxModuleDeps, DocxModuleTables, DocxModuleRepositories, DocxModuleServices, DocxModuleRouters
+export class PdfModule extends BaseModule<
+  PdfModuleDeps, PdfModuleTables, PdfModuleRepositories, PdfModuleServices, PdfModuleRouters
 > {
-  readonly id = "docx";
+  readonly id = "pdf";
 
   override services() {
-    return { docx: new DocxService() };
+    return { pdf: new PdfService() };
   }
 }
 ```

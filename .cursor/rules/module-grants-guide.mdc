@@ -1,5 +1,5 @@
 ---
-globs: packages/backend/src/modules/**/*.grants.ts
+globs: packages/backend/src/modules/**/*.grants.ts,packages/module-*/src/**/*.grants.ts,apps/**/server/src/modules/**/*.grants.ts
 alwaysApply: false
 ---
 
@@ -21,7 +21,7 @@ Backend modules ship default grants via `<module>.grants.ts`. These provide sens
 ### Auth Module (`defaultAuthGrants`)
 
 ```typescript
-import { flattenNestedGrants } from "@m5kdev/backend/modules/base/base.grants";
+import { flattenNestedGrants } from "@m5kdev/backend/base/base.grants";
 
 export const defaultAuthGrants = flattenNestedGrants({
   auth: {

@@ -58,7 +58,7 @@ _Avoid_: Level (that is Grants), Role, Access
 
 **Grant**:
 A flattened permission tuple: resource, level (`user` | `team` | `organization`), role, Action, Access. Declared in `<module>.grants.ts`.
-_Avoid_: Permission, Policy, ACL, CASL statement (Access module is a different check)
+_Avoid_: Permission, Policy, ACL, CASL statement, AccessModule (removed; Access is Grant width only)
 
 **Action**:
 Canonical Grant verbs: `read`, `write`, `delete`, `publish`.
@@ -79,8 +79,28 @@ _Avoid_: Grant, Access, permission
 _Avoid_: Framework (the stack is composable, not closed), App (that is the product), app-owned CORS as the default path; booting createBackendApp to reset or seed; ad-hoc `express.static` in starter `app.ts`
 
 **Backend Module**:
-A `BaseModule` subclass (or `defineBackendModule` object) that contributes tables, repositories, services, tRPC fragments, Express hooks, and workflows. Registered in `apps/*/server/src/app.ts`. Extra HTTP belongs on the module `express` hook, not ad hoc starter middleware. Baked SPA serving is Kernel shell, not a module hook ([ADR-0006](docs/adr/0006-kernel-owns-baked-spa.md)).
-_Avoid_: Package, Plugin, Feature (when you mean the server module), Model
+A `BaseModule` subclass (or `defineBackendModule` object) that contributes tables, repositories, services, tRPC fragments, Express hooks, and workflows. Registered in `apps/*/server/src/app.ts` via `createBackendApp(config, [modules])`. Extra HTTP belongs on the module `express` hook, not ad hoc starter middleware. Baked SPA serving is Kernel shell, not a module hook ([ADR-0006](docs/adr/0006-kernel-owns-baked-spa.md)).
+_Avoid_: Package, Plugin, Feature (when you mean the server module), Model; `backendApp.use`
+
+**Kernel infrastructure**:
+`BaseModule`, `BaseService` / `BasePermissionService`, Grants, Procedures, Actors, repositories, and list/match query helpers. Not a Backend Module — do not pass Base to `createBackendApp`. Canonical import `@m5kdev/backend/base/*` (`./modules/base/*` still re-exports).
+_Avoid_: Utils Backend Module; calling Base "the module" as if it were Auth
+
+**Core Module**:
+A Backend Module that ships in the Kernel package. Apps may omit it from `createBackendApp`. Core set: AI, Auth, Billing, Connection, Email (`EmailModule`), File, Notification, Recurrence, Tag, Inbound callback, Workflow. `@m5kdev/email` is React Email chrome, not EmailModule.
+_Avoid_: Optional Backend Module; putting Core Auth/Billing/File into `module-*` packages
+
+**Optional Backend Module**:
+A Backend Module published as `@m5kdev/module-<name>`: Clay, Docx, Pdf, Social, Video. `create-m5kdev` never adds these packages. When an app depends on one, the pin belongs in `catalogs.m5kdev`. Shared contracts/UI for those slices, if added, live in the Optional package — not commons/frontend/web-ui.
+_Avoid_: calling Clay "the module" as if Auth were not one; importing them from `@m5kdev/backend/modules/...`
+
+**Connection**:
+Linked third-party API accounts. Module id and table stay `connect`. Not Better Auth login OAuth or the `accounts` table.
+_Avoid_: Connect as the product noun; treating a Connection row as a login account
+
+**Inbound callback**:
+One-shot inbound callbacks with awaitable payloads. Module id and table stay `webhook`. Not Stripe Billing `POST /webhook`.
+_Avoid_: Webhook (when you mean this primitive vs Stripe Subscription sync)
 
 **App schema**:
 The table map the app composes from Backend Module tables plus its own tables. One composition root, passed to the Kernel at boot, to drizzle-kit, and to Database commands.

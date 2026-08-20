@@ -15,13 +15,14 @@ apps/<app>/server/src/modules/<module>/<module>.module.ts
 
 ## Conventions
 
-- Extend `BaseModule<Deps, Tables, Repositories, Services, Routers>` from `@m5kdev/backend/modules/base/base.module`.
+- Extend `BaseModule<Deps, Tables, Repositories, Services, Routers>` from `@m5kdev/backend/base/base.module`.
 - Declare local type aliases for each generic slot (`*ModuleDeps`, `*ModuleTables`, `*ModuleRepositories`, `*ModuleServices`, `*ModuleRouters`).
 - Set `readonly id` to match the module directory name (e.g. `readonly id = "posts"`).
 - Declare `dbDependsOn` or `dependsOn` as a `readonly` tuple with `as const`. App modules that reference auth tables typically use `dbDependsOn: ["auth"]`.
 - Override only the hooks the module actually needs; omit the rest.
 - Keep hook bodies as pure wiring — no business logic.
 - Use `createBackendRouterMap(namespace, router)` from `@m5kdev/backend/app` in the `trpc()` hook.
+- Register the module with `createBackendApp(config, [modules])`. Do not use `backendApp.use`.
 - Export a singleton instance at the bottom of the file.
 
 ## Generic Parameters
@@ -60,7 +61,7 @@ import {
   type ModuleRepositoriesContext,
   type ModuleServicesContext,
   type ModuleTRPCContext,
-} from "@m5kdev/backend/modules/base/base.module";
+} from "@m5kdev/backend/base/base.module";
 import type * as postsTables from "./posts.db";
 import { postsGrants } from "./posts.grants";
 import { PostsRepository } from "./posts.repository";

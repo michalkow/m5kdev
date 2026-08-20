@@ -17,6 +17,10 @@ They define the default backend and frontend stack conventions for this monorepo
 - Treat `@m5kdev/backend` as a composable backend stack, not a closed framework.
 - Keep modules extensible and class-based.
 - Keep composition explicit in app roots (`repository.ts`, `service.ts`, `trpc.ts`, server bootstrap).
+- **Kernel infrastructure** (`BaseModule`, Grants, Procedures, Actors, list/match helpers) lives in `packages/backend/src/base/` and is imported as `@m5kdev/backend/base/*`. `@m5kdev/backend/modules/base/*` is a compatibility re-export. Do not register Base with `createBackendApp`.
+- **Core Modules** ship in the Kernel (`packages/backend/src/modules/<id>/`). Apps may omit them from the `createBackendApp` modules array. Module ids `connect` and `webhook` stay those strings; domain nouns are Connection and Inbound callback.
+- **Optional Backend Modules** (Clay, Docx, Pdf, Social, Video) live in `packages/module-<name>/` as `@m5kdev/module-<name>`. Do not add them to the Kernel or to `create-m5kdev` prompts. Apps that need one add a Managed-catalog pin and register the class in `createBackendApp`.
+- Do not import Clay/Docx/Pdf/Social/Video from `@m5kdev/backend/modules/...`. Do not reintroduce `AccessModule` or `CryptoModule`. Do not use `backendApp.use`.
 
 ## Module Structure
 

@@ -298,7 +298,7 @@ readonly validateCode = this.procedure("validateCode")
 ## Example Skeleton
 
 ```typescript
-import { BasePermissionService } from "@m5kdev/backend/modules/base/base.service";
+import { BasePermissionService } from "@m5kdev/backend/base/base.service";
 import { postSchemas } from "./posts.dto";
 import type { PostsRepository } from "./posts.repository";
 

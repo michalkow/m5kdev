@@ -13,7 +13,7 @@ database schema first. Services, repositories, and tRPC files import the DTO
 ## The pattern
 
 ```ts
-import { createZodSchemas } from "@m5kdev/backend/modules/base/base.dto";
+import { createZodSchemas } from "@m5kdev/backend/base/base.dto";
 import {
   postCreateInputSchema,
   postUpdateInputSchema,

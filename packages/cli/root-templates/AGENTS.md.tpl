@@ -18,6 +18,8 @@
 
 - Keep repository, service, and transport layers separate inside each module.
 - Register modules in `apps/server/src/app.ts` via `createBackendApp(config, [modules])`.
+- Import Kernel infrastructure (`BaseModule`, Grants, DTOs) from `@m5kdev/backend/base/*`. The `modules/base` path still re-exports.
+- Clay, Docx, Pdf, Social, and Video are Optional Backend Module packages (`@m5kdev/module-<name>`). They are not scaffolded; add them only when the product needs them.
 - Use `BaseModule` subclasses for app modules; the kernel wires repositories, services, and tRPC.
 - Keep tRPC files focused on input/output wiring and delegate logic to services.
 - Do not add service methods that merely call another service. Call the owning service directly unless the method adds a business rule, authorization, validation, orchestration, a transaction boundary, or meaningful domain translation.
