@@ -273,5 +273,10 @@
   "ai.conversation.streaming": "Thinking…",
   "ai.conversation.jumpToBottom": "Jump to latest",
   "ai.conversation.assistant": "Assistant",
-  "ai.conversation.user": "You"
+  "ai.conversation.user": "You",
+  "ai.conversation.tool.args": "Arguments",
+  "ai.conversation.tool.result": "Result",
+  "ai.conversation.tool.status.running": "Running",
+  "ai.conversation.tool.status.complete": "Complete",
+  "ai.conversation.tool.status.error": "Error"
 }

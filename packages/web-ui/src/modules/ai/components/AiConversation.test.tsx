@@ -32,6 +32,14 @@ jest.mock(
       TextField: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
       Input: (props: { placeholder?: string }) => <input {...props} />,
       Label: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+      Disclosure: Object.assign(({ children }: { children?: ReactNode }) => <div>{children}</div>, {
+        Heading: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+        Trigger: ({ children }: { children?: ReactNode }) => (
+          <button type="button">{children}</button>
+        ),
+        Indicator: () => <span />,
+        Content: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+      }),
     };
   },
   { virtual: true }
@@ -68,6 +76,28 @@ const assistantMessage = {
   id: "a1",
   role: "assistant" as const,
   parts: [{ type: "text" as const, text: "A **markdown** reply" }],
+};
+
+const assistantWithTools = {
+  id: "a2",
+  role: "assistant" as const,
+  parts: [
+    { type: "text" as const, text: "I'll look that up." },
+    {
+      type: "tool-search",
+      toolCallId: "call-search",
+      state: "output-available",
+      input: { q: "docs" },
+      output: { hits: 2 },
+    },
+    {
+      type: "tool-secret",
+      toolCallId: "call-secret",
+      state: "output-available",
+      input: { x: 1 },
+      output: { y: 2 },
+    },
+  ],
 };
 
 describe("AiConversation", () => {
@@ -180,5 +210,68 @@ describe("AiConversation", () => {
     );
     expect(markup).toContain("ai.conversation.stop");
     expect(markup).not.toContain("ai.conversation.send");
+  });
+
+  it("shows tool parts by default", () => {
+    mockedUseAiChat.mockReturnValue({
+      messages: [userMessage, assistantWithTools],
+      status: "ready",
+      error: undefined,
+      sendMessage: jest.fn(),
+      stop: jest.fn(),
+    });
+
+    const markup = renderToStaticMarkup(
+      <AiConversation threadId="thread-1" agentId="writer">
+        <AiConversation.Messages />
+      </AiConversation>
+    );
+
+    expect(markup).toContain('data-tool-name="search"');
+    expect(markup).toContain('data-tool-name="secret"');
+    expect(markup).toContain("ai.conversation.tool.args");
+    expect(markup).toContain("ai.conversation.tool.result");
+    expect(markup).toContain("ai.conversation.tool.status.complete");
+    expect(markup).toContain("&quot;q&quot;:&quot;docs&quot;");
+    expect(markup).toContain("&quot;hits&quot;:2");
+  });
+
+  it("hides all tool parts when showToolCalls is false", () => {
+    mockedUseAiChat.mockReturnValue({
+      messages: [userMessage, assistantWithTools],
+      status: "ready",
+      error: undefined,
+      sendMessage: jest.fn(),
+      stop: jest.fn(),
+    });
+
+    const markup = renderToStaticMarkup(
+      <AiConversation threadId="thread-1" agentId="writer" showToolCalls={false}>
+        <AiConversation.Messages />
+      </AiConversation>
+    );
+
+    expect(markup).toContain("look that up.");
+    expect(markup).not.toContain('data-tool-name="search"');
+    expect(markup).not.toContain('data-tool-name="secret"');
+  });
+
+  it("allowlists tool names when showToolCalls is a string array", () => {
+    mockedUseAiChat.mockReturnValue({
+      messages: [userMessage, assistantWithTools],
+      status: "ready",
+      error: undefined,
+      sendMessage: jest.fn(),
+      stop: jest.fn(),
+    });
+
+    const markup = renderToStaticMarkup(
+      <AiConversation threadId="thread-1" agentId="writer" showToolCalls={["search"]}>
+        <AiConversation.Messages />
+      </AiConversation>
+    );
+
+    expect(markup).toContain('data-tool-name="search"');
+    expect(markup).not.toContain('data-tool-name="secret"');
   });
 });

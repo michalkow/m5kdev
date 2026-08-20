@@ -1,9 +1,12 @@
 import type { useAiChat } from "@m5kdev/frontend/modules/ai/hooks/useAiChat";
 import { createContext, useContext } from "react";
 
+export type ShowToolCalls = boolean | readonly string[];
+
 export type AiConversationContextValue = ReturnType<typeof useAiChat> & {
   readonly threadId: string;
   readonly agentId: string;
+  readonly showToolCalls: ShowToolCalls;
 };
 
 const AiConversationContext = createContext<AiConversationContextValue | null>(null);

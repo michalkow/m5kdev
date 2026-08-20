@@ -1,22 +1,34 @@
-import { Avatar, Button, EmptyState, Input, Label, TextField } from "@heroui/react";
+import { Avatar, Button, Disclosure, EmptyState, Input, Label, TextField } from "@heroui/react";
 import { useAiChat } from "@m5kdev/frontend/modules/ai/hooks/useAiChat";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { Sparkles } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Markdown from "react-markdown";
-import { AiConversationProvider, useAiConversation } from "./aiConversation.context";
+import {
+  AiConversationProvider,
+  type ShowToolCalls,
+  useAiConversation,
+} from "./aiConversation.context";
+
+export type { ShowToolCalls };
 
 export interface AiConversationProps {
   readonly threadId: string;
   readonly agentId: string;
   readonly children?: ReactNode;
+  readonly showToolCalls?: ShowToolCalls;
 }
 
-function AiConversationRoot({ threadId, agentId, children }: AiConversationProps) {
+function AiConversationRoot({
+  threadId,
+  agentId,
+  children,
+  showToolCalls = true,
+}: AiConversationProps) {
   const chat = useAiChat({ agentId, threadId });
   return (
-    <AiConversationProvider value={{ ...chat, threadId, agentId }}>
+    <AiConversationProvider value={{ ...chat, threadId, agentId, showToolCalls }}>
       <div className="flex h-full min-h-0 w-full flex-col">
         {children ?? (
           <>
@@ -40,8 +52,85 @@ function isBusyStatus(status: string): boolean {
   return status === "submitted" || status === "streaming";
 }
 
+interface ConversationPart {
+  readonly type: string;
+  readonly text?: string;
+  readonly toolName?: string;
+  readonly toolCallId?: string;
+  readonly state?: string;
+  readonly input?: unknown;
+  readonly output?: unknown;
+  readonly errorText?: string;
+}
+
+function toolNameFromPart(part: ConversationPart): string | undefined {
+  if (part.type === "dynamic-tool" && typeof part.toolName === "string") {
+    return part.toolName;
+  }
+  if (part.type.startsWith("tool-")) {
+    return part.type.slice("tool-".length);
+  }
+  return undefined;
+}
+
+function shouldShowTool(name: string, showToolCalls: ShowToolCalls): boolean {
+  if (showToolCalls === false) return false;
+  if (showToolCalls === true) return true;
+  return showToolCalls.includes(name);
+}
+
+function toolStatusKey(state: string | undefined): string {
+  if (state === "output-available") return "ai.conversation.tool.status.complete";
+  if (state === "output-error") return "ai.conversation.tool.status.error";
+  return "ai.conversation.tool.status.running";
+}
+
+function jsonPreview(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "";
+  }
+}
+
+function ConversationToolPart({ part, name }: { part: ConversationPart; name: string }) {
+  const { t } = useTranslation("web-ui");
+  return (
+    <Disclosure defaultExpanded className="not-prose my-2 rounded-md border text-sm">
+      <Disclosure.Heading>
+        <Disclosure.Trigger>
+          <span data-tool-name={name}>{name}</span>
+          <span>{t(toolStatusKey(part.state))}</span>
+          <Disclosure.Indicator />
+        </Disclosure.Trigger>
+      </Disclosure.Heading>
+      <Disclosure.Content>
+        <div>
+          <p>{t("ai.conversation.tool.args")}</p>
+          <pre>{jsonPreview(part.input)}</pre>
+        </div>
+        <div>
+          <p>{t("ai.conversation.tool.result")}</p>
+          <pre>{part.errorText ?? jsonPreview(part.output)}</pre>
+        </div>
+      </Disclosure.Content>
+    </Disclosure>
+  );
+}
+
+function assistantParts(parts: ReadonlyArray<ConversationPart>, showToolCalls: ShowToolCalls) {
+  return parts.map((part) => {
+    if (part.type === "text" && typeof part.text === "string") {
+      return <Markdown key={`text:${part.text}`}>{part.text}</Markdown>;
+    }
+    const name = toolNameFromPart(part);
+    if (!name || !shouldShowTool(name, showToolCalls)) return null;
+    return <ConversationToolPart key={part.toolCallId ?? `tool:${name}`} part={part} name={name} />;
+  });
+}
+
 function AiConversationMessages() {
-  const { messages, status, error } = useAiConversation();
+  const { messages, status, error, showToolCalls } = useAiConversation();
   const { t } = useTranslation("web-ui");
   const { data: session } = useSession();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -105,7 +194,7 @@ function AiConversationMessages() {
                 </Avatar.Fallback>
               </Avatar>
               <div className="prose prose-sm max-w-[80%] text-sm">
-                <Markdown>{text}</Markdown>
+                {assistantParts(message.parts, showToolCalls)}
               </div>
             </div>
           );
