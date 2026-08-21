@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/module-docx",
-  "version": "0.33.0",
+  "version": "0.34.0",
   "description": "Optional Backend Module for Word-to-Markdown conversion.",
   "license": "GPL-3.0-only",
   "repository": {

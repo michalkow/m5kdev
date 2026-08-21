@@ -1,5 +1,16 @@
 # create-m5kdev
 
+## 0.34.0
+
+### Minor Changes
+
+- a580cf3: create-m5kdev prompts for optional Backend Modules (experimental choices labeled) and `--yes` scaffolds web + always-on only. Workflows is the first carved module flag; later tickets hang the rest on the same feature-flag model.
+- 12aabfd: Kernel serves an optional baked SPA via `spa.root`. Starter ships Docker/Fly Deploy home and Landing; Node engines are `>=24`. `create-m5kdev update` ignores `fly.toml` and `.env.production`.
+- d574021: Kernel owns Database commands (`runDb`, `defineDrizzleKitConfig`) so apps no longer copy reset/sync/seed/guard scripts. Starter Database config is server `db.ts`; `m5kdev update` ensures it and drops unmodified old drizzle ops files.
+- base
+- 9697356: Starter dogfoods File upload and inventory on web. create-m5kdev keeps the Files UI only when the files module is selected, and FileModule boots without AWS.
+- 2bc9be7: Starter dogfoods Workflow runs in the webapp. create-m5kdev keeps the demo job module and run-status UI only when the workflows module is selected.
+
 ## 0.33.0
 
 ### Minor Changes

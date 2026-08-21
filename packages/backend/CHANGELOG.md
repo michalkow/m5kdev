@@ -1,5 +1,21 @@
 # @m5kdev/backend
 
+## 0.34.0
+
+### Minor Changes
+
+- a56425f: Billing emails a Trial cancel warning from Stripe `customer.subscription.trial_will_end` when Stripe would cancel, and requires EmailModule.
+- 12aabfd: Kernel serves an optional baked SPA via `spa.root`. Starter ships Docker/Fly Deploy home and Landing; Node engines are `>=24`. `create-m5kdev update` ignores `fly.toml` and `.env.production`.
+- d574021: Kernel owns Database commands (`runDb`, `defineDrizzleKitConfig`) so apps no longer copy reset/sync/seed/guard scripts. Starter Database config is server `db.ts`; `m5kdev update` ensures it and drops unmodified old drizzle ops files.
+- base
+- 9697356: Starter dogfoods File upload and inventory on web. create-m5kdev keeps the Files UI only when the files module is selected, and FileModule boots without AWS.
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.34.0
+  - @m5kdev/config@0.34.0
+
 ## 0.33.0
 
 ### Minor Changes

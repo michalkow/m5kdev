@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/module-clay",
-  "version": "0.33.0",
+  "version": "0.34.0",
   "description": "Optional Backend Module for Clay table webhooks and enrichment callbacks.",
   "license": "GPL-3.0-only",
   "repository": {

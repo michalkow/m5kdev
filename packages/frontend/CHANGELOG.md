@@ -1,5 +1,17 @@
 # @m5kdev/frontend
 
+## 0.34.0
+
+### Minor Changes
+
+- base
+
+### Patch Changes
+
+- 9697356: Starter dogfoods File upload and inventory on web. create-m5kdev keeps the Files UI only when the files module is selected, and FileModule boots without AWS.
+- Updated dependencies
+  - @m5kdev/commons@0.34.0
+
 ## 0.33.0
 
 ### Minor Changes
