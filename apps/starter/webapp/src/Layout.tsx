@@ -9,6 +9,9 @@ import { AuthOrganizationSelect } from "@m5kdev/web-ui/modules/auth/components/A
 import { AuthUtilityImpersonationBanner } from "@m5kdev/web-ui/modules/auth/components/AuthUtilityImpersonationBanner";
 import { APP_NAME } from "@starter-app/shared/modules/app/app.constants";
 import { FileIcon, UsersIcon } from "lucide-react";
+// m5k:ai:start
+import { SparklesIcon } from "lucide-react";
+// m5k:ai:end
 // m5k:files:start
 import { ImageIcon } from "lucide-react";
 // m5k:files:end
@@ -49,6 +52,13 @@ export function Layout() {
                   icon: <FileIcon />,
                   link: "/",
                 },
+                // m5k:ai:start
+                {
+                  label: t("layout.navigation.conversation"),
+                  icon: <SparklesIcon />,
+                  link: "/conversation",
+                },
+                // m5k:ai:end
                 // m5k:files:start
                 {
                   label: t("layout.navigation.files"),

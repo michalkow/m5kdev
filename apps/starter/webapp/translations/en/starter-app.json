@@ -13,6 +13,7 @@
     },
     "navigation": {
       "posts": "Posts",
+      "conversation": "Conversation",
       "files": "Files",
       "workflows": "Workflows",
       "organization": "Organization",
@@ -153,6 +154,13 @@
     },
     "toast": {
       "triggered": "Demo job queued."
+    }
+  },
+  "conversation": {
+    "hero": {
+      "eyebrow": "Conversation",
+      "title": "Chat with a Mastra agent.",
+      "body": "Session-only transcript for this signed-in user. Set OPENROUTER_API_KEY to get a reply. Memory is optional on the Agent — this example does not persist threads."
     }
   },
   "files": {

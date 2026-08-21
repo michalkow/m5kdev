@@ -29,6 +29,9 @@ apps/server/src/modules/<module>/
 - Services own business rules, orchestration, and context-aware defaults.
 - tRPC files own transport only and must delegate to services.
 - Register Core Modules and app modules in `apps/server/src/app.ts` via `createBackendApp(config, [modules])`. Do not use `backendApp.use`. Optional Backend Modules (`@m5kdev/module-*`) are not scaffolded; add them only when the product needs Clay, Docx, Pdf, Social, or Video.
+// m5k:ai:start
+- `AIModule` is registered in `app.ts` with an app-owned Mastra Agent (`assistant`). Conversation HTTP lives on `/ai`. Set `OPENROUTER_API_KEY` for live replies. Do not add a Starter service wrapper around `AIService` chat.
+// m5k:ai:end
 - Database commands live in server `db.ts` (`pnpm drizzle:reset`, `drizzle:sync`, `drizzle:seed`) and call Kernel `runDb` — they must not import `app.ts`.
 
 ## Avoid Trivial Service Delegation

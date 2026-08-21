@@ -12,6 +12,11 @@ DATABASE_URL=file:./local.db
 TURSO_DATABASE_URL=
 TURSO_AUTH_TOKEN=
 
+# m5k:ai:start
+# Optional OpenRouter (AI Conversation). Required to get an assistant reply.
+OPENROUTER_API_KEY=
+# m5k:ai:end
+
 # Local email delivery falls back to file output when unset
 RESEND_API_KEY=
 

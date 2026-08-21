@@ -148,6 +148,7 @@ describe("scaffoldProject", () => {
     expect(appTs).not.toContain("WorkflowModule");
     expect(appTs).not.toContain("DemoWorkflowModule");
     expect(appTs).not.toContain("NotificationModule");
+    expect(appTs).not.toContain("AIModule");
     expect(appTs).not.toContain("redis:");
     expect(appTs).not.toContain("m5k:");
 
@@ -157,6 +158,7 @@ describe("scaffoldProject", () => {
     );
     expect(schema).not.toContain('from "@m5kdev/backend/modules/workflow/workflow.db"');
     expect(schema).not.toContain('from "@m5kdev/backend/modules/notification/notification.db"');
+    expect(schema).not.toContain('from "@m5kdev/backend/modules/ai/ai.db"');
     expect(schema).not.toContain("m5k:");
 
     const serverPackage = await fs.readFile(
@@ -182,10 +184,20 @@ describe("scaffoldProject", () => {
     );
     expect(router).not.toContain("WorkflowsRoute");
     expect(router).not.toContain('path="workflows"');
+    expect(router).not.toContain("ConversationRoute");
+    expect(router).not.toContain('path="conversation"');
 
     await expect(
       fs.stat(
         path.join(result.targetDirectory, "apps/webapp/src/modules/workflows/WorkflowsRoute.tsx")
+      )
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      fs.stat(
+        path.join(
+          result.targetDirectory,
+          "apps/webapp/src/modules/conversation/ConversationRoute.tsx"
+        )
       )
     ).rejects.toMatchObject({ code: "ENOENT" });
     await expect(
@@ -276,6 +288,117 @@ describe("scaffoldProject", () => {
     const source = await fs.readFile(path.join(on.targetDirectory, ".m5kdev.json"), "utf8");
     const state = JSON.parse(source) as { template: { features: string[] } };
     expect(state.template.features).toEqual(["files", "webapp"]);
+  });
+
+  it("omits AI unless that Backend Module is selected", async () => {
+    const off = await scaffoldProject({
+      targetDirectory: "ai-off-desk",
+      appName: "AI Off Desk",
+      appDescription: "AI module omitted fixture.",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    const offApp = await fs.readFile(
+      path.join(off.targetDirectory, "apps/server/src/app.ts"),
+      "utf8"
+    );
+    expect(offApp).not.toContain("AIModule");
+    expect(offApp).not.toContain("conversation.mastra");
+    expect(offApp).not.toContain("m5k:");
+
+    const offSchema = await fs.readFile(
+      path.join(off.targetDirectory, "apps/server/src/schema.ts"),
+      "utf8"
+    );
+    expect(offSchema).not.toContain('from "@m5kdev/backend/modules/ai/ai.db"');
+    expect(offSchema).not.toContain("aiUsage");
+
+    const offRouter = await fs.readFile(
+      path.join(off.targetDirectory, "apps/webapp/src/Router.tsx"),
+      "utf8"
+    );
+    expect(offRouter).not.toContain("ConversationRoute");
+    expect(offRouter).not.toContain('path="conversation"');
+
+    await expect(
+      fs.stat(
+        path.join(off.targetDirectory, "apps/webapp/src/modules/conversation/ConversationRoute.tsx")
+      )
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      fs.stat(
+        path.join(
+          off.targetDirectory,
+          "apps/server/src/modules/conversation/conversation.mastra.ts"
+        )
+      )
+    ).rejects.toMatchObject({ code: "ENOENT" });
+
+    const offEnv = await fs.readFile(
+      path.join(off.targetDirectory, "apps/shared/.env.example"),
+      "utf8"
+    );
+    expect(offEnv).not.toContain("OPENROUTER_API_KEY");
+    expect(offEnv).not.toContain("m5k:");
+
+    const on = await scaffoldProject({
+      targetDirectory: "ai-on-desk",
+      appName: "AI On Desk",
+      appDescription: "AI module fixture.",
+      yes: true,
+      modules: ["ai"],
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    const onApp = await fs.readFile(
+      path.join(on.targetDirectory, "apps/server/src/app.ts"),
+      "utf8"
+    );
+    expect(onApp).toContain("AIModule");
+    expect(onApp).toContain("conversation.mastra");
+    expect(onApp).not.toContain("m5k:");
+
+    const onSchema = await fs.readFile(
+      path.join(on.targetDirectory, "apps/server/src/schema.ts"),
+      "utf8"
+    );
+    expect(onSchema).toContain("aiUsage");
+    expect(onSchema).toContain("chats");
+    expect(onSchema).not.toContain("m5k:");
+
+    const onRouter = await fs.readFile(
+      path.join(on.targetDirectory, "apps/webapp/src/Router.tsx"),
+      "utf8"
+    );
+    expect(onRouter).toContain("ConversationRoute");
+    expect(onRouter).toContain('path="conversation"');
+
+    await expect(
+      fs.stat(
+        path.join(on.targetDirectory, "apps/webapp/src/modules/conversation/ConversationRoute.tsx")
+      )
+    ).resolves.toBeTruthy();
+    await expect(
+      fs.stat(
+        path.join(on.targetDirectory, "apps/server/src/modules/conversation/conversation.mastra.ts")
+      )
+    ).resolves.toBeTruthy();
+
+    const onEnv = await fs.readFile(
+      path.join(on.targetDirectory, "apps/shared/.env.example"),
+      "utf8"
+    );
+    expect(onEnv).toContain("OPENROUTER_API_KEY=");
+    expect(onEnv).not.toContain("m5k:");
+
+    const source = await fs.readFile(path.join(on.targetDirectory, ".m5kdev.json"), "utf8");
+    const state = JSON.parse(source) as { template: { features: string[] } };
+    expect(state.template.features).toEqual(["ai", "webapp"]);
   });
 
   it("keeps Workflows when that Backend Module is selected", async () => {
@@ -462,6 +585,51 @@ describe("scaffoldProject", () => {
       "utf8"
     );
     expect(harnessOnlyConfig).not.toContain("files.spec.ts");
+    expect(harnessOnlyConfig).not.toContain("m5k:");
+  });
+
+  it("keeps the Conversation Playwright spec only when AI and the test harness are both on", async () => {
+    const withBoth = await scaffoldProject({
+      targetDirectory: "ai-harness-desk",
+      appName: "AI Harness Desk",
+      appDescription: "AI plus test harness fixture.",
+      yes: true,
+      testHarness: true,
+      modules: ["ai"],
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    await expect(
+      fs.stat(path.join(withBoth.targetDirectory, "apps/e2e/tests/conversation.spec.ts"))
+    ).resolves.toBeTruthy();
+    const withBothConfig = await fs.readFile(
+      path.join(withBoth.targetDirectory, "apps/e2e/playwright.config.ts"),
+      "utf8"
+    );
+    expect(withBothConfig).toContain("conversation.spec.ts");
+    expect(withBothConfig).not.toContain("m5k:");
+
+    const harnessOnly = await scaffoldProject({
+      targetDirectory: "harness-no-ai-desk",
+      appName: "Harness No AI Desk",
+      appDescription: "Test harness without AI fixture.",
+      yes: true,
+      testHarness: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    await expect(
+      fs.stat(path.join(harnessOnly.targetDirectory, "apps/e2e/tests/conversation.spec.ts"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    const harnessOnlyConfig = await fs.readFile(
+      path.join(harnessOnly.targetDirectory, "apps/e2e/playwright.config.ts"),
+      "utf8"
+    );
+    expect(harnessOnlyConfig).not.toContain("conversation.spec.ts");
     expect(harnessOnlyConfig).not.toContain("m5k:");
   });
 
@@ -687,6 +855,7 @@ describe("scaffoldProject", () => {
     expect(expoAppTs).toContain("AuthModule");
     expect(expoAppTs).toContain("PostsModule");
     expect(expoAppTs).not.toContain("WorkflowModule");
+    expect(expoAppTs).not.toContain("AIModule");
     expect(expoAppTs).not.toContain("m5k:");
   });
 

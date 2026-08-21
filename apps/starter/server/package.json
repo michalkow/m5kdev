@@ -23,6 +23,8 @@
     "@libsql/client": "catalog:",
     "@m5kdev/backend": "workspace:*",
     "@m5kdev/commons": "workspace:*",
+    "@mastra/core": "catalog:",
+    "@openrouter/ai-sdk-provider": "catalog:",
     "@opentelemetry/api": "catalog:",
     "@trpc/server": "catalog:",
     "better-auth": "catalog:",

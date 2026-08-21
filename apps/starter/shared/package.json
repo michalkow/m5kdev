@@ -19,6 +19,7 @@
   },
   "exports": {
     "./modules/app/*": "./src/modules/app/*.ts",
+    "./modules/conversation/*": "./src/modules/conversation/*.ts",
     "./modules/posts/*": "./src/modules/posts/*.ts"
   }
 }

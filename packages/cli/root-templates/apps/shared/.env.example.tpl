@@ -30,6 +30,11 @@ VAPID_SUBJECT=mailto:you@example.com
 # Optional: FCM (Android) — service account JSON path
 # FIREBASE_SERVICE_ACCOUNT_PATH=
 
+# Optional OpenRouter (AI Conversation). Required to get an assistant reply.
+# m5k:ai:start
+OPENROUTER_API_KEY=
+# m5k:ai:end
+
 # Optional email and analytics providers
 RESEND_API_KEY=
 VITE_PUBLIC_POSTHOG_KEY=demo

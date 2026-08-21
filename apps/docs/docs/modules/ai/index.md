@@ -84,7 +84,25 @@ Import model ids from `@m5kdev/commons/modules/ai/ai.constants` instead of
 hardcoding strings — constants are organized into over- and under-$1/M-token
 tiers so cost decisions are explicit at the call site.
 
+## Starter and create-m5kdev
+
+Starter dogsfoods Conversation behind the `ai` create flag (`// m5k:ai`
+markers), the same opt-in as Files and Workflows. `--yes` does not enable it.
+
+When the flag is on:
+
+- `AIModule` is registered with an app-owned Mastra Agent (`assistant`) and
+  OpenRouter. The Agent has no Memory — the webapp Conversation is session-only.
+- Schema exports `chats` and `ai_usage`. After adding those tables, generate
+  and apply a Drizzle migration; do not hand-edit SQL.
+- The webapp mounts `/conversation` with `AiConversation`.
+- Set `OPENROUTER_API_KEY` for a live reply. Hydrate still works without it.
+
+When the flag is off, `AIModule` is not registered and the Conversation route
+is omitted. Expo create does not add Conversation UI.
+
 ## Environment
 
 `IDEOGRAM_API_KEY` when `enableIdeogram` is set; OpenRouter/Replicate clients
-are constructed in app code with their own keys.
+are constructed in app code with their own keys. Starter Conversation uses
+`OPENROUTER_API_KEY`.

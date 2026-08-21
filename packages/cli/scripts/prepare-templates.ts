@@ -103,7 +103,16 @@ const FEATURE_MANIFEST = {
         "apps/e2e/tests/workflow.spec.ts",
       ],
     },
-    ai: { kind: "module", label: "AI", paths: [] },
+    ai: {
+      kind: "module",
+      label: "AI",
+      paths: [
+        "apps/webapp/src/modules/conversation/",
+        "apps/server/src/modules/conversation/",
+        "apps/shared/src/modules/conversation/",
+        "apps/e2e/tests/conversation.spec.ts",
+      ],
+    },
     notifications: {
       kind: "module",
       label: "Notifications",

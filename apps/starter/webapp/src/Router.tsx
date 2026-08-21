@@ -11,6 +11,9 @@ import { useTranslation } from "react-i18next";
 import { Route, Routes } from "react-router";
 import { z } from "zod";
 import { PostsRoute } from "@/modules/posts/PostsRoute";
+// m5k:ai:start
+import { ConversationRoute } from "@/modules/conversation/ConversationRoute";
+// m5k:ai:end
 // m5k:files:start
 import { FilesRoute } from "@/modules/files/FilesRoute";
 // m5k:files:end
@@ -81,6 +84,9 @@ export function Router() {
       >
         <Route index element={<PostsRoute />} />
         {[
+          // m5k:ai:start
+          <Route key="conversation" path="conversation" element={<ConversationRoute />} />,
+          // m5k:ai:end
           // m5k:files:start
           <Route key="files" path="files" element={<FilesRoute />} />,
           // m5k:files:end

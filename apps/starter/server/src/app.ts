@@ -1,5 +1,8 @@
 import { createBackendApp } from "@m5kdev/backend/app";
 import { shutdownTelemetry } from "@m5kdev/backend/lib/otel";
+// m5k:ai:start
+import { AIModule } from "@m5kdev/backend/modules/ai/ai.module";
+// m5k:ai:end
 import { createBetterAuth } from "@m5kdev/backend/modules/auth/auth.lib";
 import { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
 import { EmailModule } from "@m5kdev/backend/modules/email/email.module";
@@ -20,6 +23,9 @@ import {
   APP_NAME,
   APP_ROLES_CONFIG,
 } from "@starter-app/shared/modules/app/app.constants";
+// m5k:ai:start
+import { mastra, openrouter } from "./modules/conversation/conversation.mastra";
+// m5k:ai:end
 // m5k:workflows:start
 import { DemoWorkflowModule } from "./modules/demo-workflow/demo-workflow.module";
 // m5k:workflows:end
@@ -109,6 +115,11 @@ export const builtBackendApp = createBackendApp(
   [
     new EmailModule(templates as never),
     new AuthModule(),
+    // m5k:ai:start
+    new AIModule({
+      libs: { mastra, openrouter },
+    }),
+    // m5k:ai:end
     // m5k:files:start
     new FileModule(),
     // m5k:files:end
