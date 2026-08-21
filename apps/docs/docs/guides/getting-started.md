@@ -4,6 +4,19 @@ sidebar_position: 1
 
 # Getting started
 
+Scaffold an app with the CLI, then read by [module](/modules) or
+[package](/packages).
+
+```sh
+pnpm dlx create-m5kdev@0.34.0
+```
+
+`--yes` scaffolds web with always-on modules only. Interactive create prompts
+for Backend Modules (`files`, `workflows`, `ai`, …). Full command list:
+[CLI package](/packages/cli). Existing apps: [0.34.0 upgrades](/#upgrade-0-34-0).
+
+## Docs site
+
 The docs site is a private workspace app at `apps/docs`. It uses Docusaurus with
 the docs plugin mounted at `/`, so documentation is the first screen.
 

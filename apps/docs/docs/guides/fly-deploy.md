@@ -74,6 +74,8 @@ To adopt Fly on an app that never had these files, copy them once from a fresh
 scaffold or from this release’s Starter, then edit `app =` and secrets locally.
 Update will not invent a `fly.toml` into a customized tree as a merge.
 
+Existing apps on 0.33: [Docker, Fly.io, and Node 24 in 0.34.0](/guides/v0.34.0-fly-deploy-migration).
+
 ## Same-origin URLs
 
 Production `VITE_APP_URL` and `VITE_SERVER_URL` are operator env (often the

@@ -81,7 +81,13 @@ Register templates with `EmailModule` and translation keys for `subject` /
 `previewText`. Subjects and bodies follow the recipient's locale — see
 [User and organization locale migration](/guides/user-org-locale-migration).
 
+`trialEnding` is optional on `EmailTemplates`. Billing uses it for the Trial
+cancel warning; omit it to skip send. See the
+[Billing module](/modules/billing) and
+[Billing trial-ending email in 0.34.0](/guides/v0.34.0-billing-trial-ending-email-migration).
+
 ## Related docs
 
 - [User and organization locale migration](/guides/user-org-locale-migration)
 - [`@m5kdev/email` package](/packages/email)
+- [Billing trial-ending email](/guides/v0.34.0-billing-trial-ending-email-migration)

@@ -79,6 +79,18 @@ Scaffolded apps stay on the framework catalog pins; boundary libraries are
 peers so TypeScript sees one physical copy.
 [Catalog lockstep](/guides/v0.33.0-catalog-lockstep-migration).
 
+## Upgrading to 0.34.0 {#upgrade-0-34-0}
+
+Existing apps should work through these guides (skip any that already apply):
+
+- [Kernel Database commands](/guides/v0.34.0-kernel-database-commands-migration)
+- [Core vs Optional Backend Modules](/guides/v0.34.0-core-optional-backend-modules-migration)
+- [Docker, Fly.io, and Node 24](/guides/v0.34.0-fly-deploy-migration)
+- [App-owned Mastra agents and Conversation](/guides/v0.34.0-mastra-app-owned-agents-migration)
+- [Billing trial-ending email](/guides/v0.34.0-billing-trial-ending-email-migration)
+
+New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
+
 ## Read by module
 
 Use the module docs when you are adding a feature to an app. Start with the
@@ -97,6 +109,7 @@ code should live.
   module logic.
 - [Web UI package](/packages/web-ui) owns reusable HeroUI/Tailwind components.
 - [Commons package](/packages/commons) owns shared constants, schemas, and types.
+- [CLI package](/packages/cli) scaffolds apps and runs `init` / `doctor` / `update`.
 
 ## Local commands
 

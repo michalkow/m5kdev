@@ -4,9 +4,13 @@ sidebar_position: 6
 
 # AI module
 
-The AI module is the LLM orchestration layer: Mastra agents, OpenRouter models,
-embeddings and vector storage, Replicate and Ideogram image generation, plus
-per-user usage tracking.
+The AI module is the LLM orchestration layer: app-owned Mastra agents,
+OpenRouter models, embeddings and vector storage, Replicate and Ideogram image
+generation, plus per-user usage tracking.
+
+The Kernel does **not** export `createAgent` or `createMastra`. Construct
+`Agent` and `Mastra` in app code and pass the instance in. Upgrade steps:
+[App-owned Mastra agents and Conversation](/guides/v0.34.0-mastra-app-owned-agents-migration).
 
 ## Package map
 
@@ -17,9 +21,30 @@ per-user usage tracking.
 
 ## Registration
 
+Apps own the Mastra instance. Starter keeps that construction in
+`conversation.mastra.ts`:
+
 ```ts
+import { Mastra } from "@mastra/core";
+import { Agent } from "@mastra/core/agent";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createBackendApp } from "@m5kdev/backend/app";
 import { AIModule } from "@m5kdev/backend/modules/ai/ai.module";
+
+const openrouter = createOpenRouter({
+  apiKey: process.env.OPENROUTER_API_KEY ?? "",
+});
+
+const assistant = new Agent({
+  id: "assistant",
+  name: "Assistant",
+  instructions: "You are a helpful assistant.",
+  model: openrouter.chat("google/gemini-2.5-flash", { usage: { include: true } }),
+});
+
+const mastra = new Mastra({
+  agents: { assistant },
+});
 
 createBackendApp(config, [
   new AIModule({
@@ -37,7 +62,8 @@ createBackendApp(config, [
 ]);
 ```
 
-Depends on `auth` (usage rows are attributed to users).
+Depends on `auth` (usage rows are attributed to users). `libs.mastra` is
+optional — OpenRouter `generateText` / `generateObject` work without agents.
 
 ## Service API
 
@@ -62,6 +88,8 @@ All fallible calls return `ServerResultAsync`.
 `AiConversation` is a layout-agnostic compound in `@m5kdev/web-ui`: pass
 `agentId` and `threadId`, then compose `.Messages` and `.Prompt` (or omit
 `.Prompt` for a read-only transcript). Default children are Messages + Prompt.
+`showToolCalls` defaults to `true` (`false` hides tools; a string array
+allowlists names).
 
 The frontend hook `useAiChat` hydrates the Thread, then POSTs through Vercel AI
 SDK `useChat`. Two mounts with the same `agentId` + `threadId` share one Chat
@@ -93,6 +121,7 @@ When the flag is on:
 
 - `AIModule` is registered with an app-owned Mastra Agent (`assistant`) and
   OpenRouter. The Agent has no Memory — the webapp Conversation is session-only.
+  Do not import `createAgent` / `createMastra`; they were removed in 0.34.0.
 - Schema exports `chats` and `ai_usage`. After adding those tables, generate
   and apply a Drizzle migration; do not hand-edit SQL.
 - The webapp mounts `/conversation` with `AiConversation`.
@@ -105,4 +134,10 @@ is omitted. Expo create does not add Conversation UI.
 
 `IDEOGRAM_API_KEY` when `enableIdeogram` is set; OpenRouter/Replicate clients
 are constructed in app code with their own keys. Starter Conversation uses
-`OPENROUTER_API_KEY`.
+`OPENROUTER_API_KEY`. The Kernel no longer reads `MASTRA_MAIN_DATABASE_URL` /
+`MASTRA_VECTOR_DATABASE_URL` — pass storage on your `Mastra` instance if needed.
+
+## Related docs
+
+- [App-owned Mastra agents and Conversation](/guides/v0.34.0-mastra-app-owned-agents-migration)
+- [CLI package](/packages/cli)
