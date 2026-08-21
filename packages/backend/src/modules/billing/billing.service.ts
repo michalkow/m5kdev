@@ -6,7 +6,10 @@ import type { Context } from "../../utils/trpc";
 import type { User } from "../auth/auth.lib";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import { BasePermissionService } from "../base/base.service";
+import type { EmailService } from "../email/email.service";
 import type { BillingRepository } from "./billing.repository";
+
+const TRIAL_ENDING_TEMPLATE_KEY = "trialEnding";
 
 const allowedEvents: Stripe.Event.Type[] = [
   "checkout.session.completed",
@@ -31,8 +34,10 @@ const allowedEvents: Stripe.Event.Type[] = [
 
 export class BillingService extends BasePermissionService<
   { billing: BillingRepository },
-  Record<string, never>
+  { email: EmailService }
 > {
+  private readonly processedTrialWillEndEventIds = new Set<string>();
+
   async createUserCustomer({
     user,
   }: {
@@ -182,6 +187,92 @@ export class BillingService extends BasePermissionService<
 
     const result = await this.syncStripeData(customerId, event.type);
     if (result.isErr()) return err(result.error);
+
+    if (event.type === "customer.subscription.trial_will_end") {
+      const trialEnding = await this.sendTrialEndingWarning({
+        customerId,
+        eventId: event.id,
+        subscription: event.data.object as Stripe.Subscription,
+      });
+      if (trialEnding.isErr()) return err(trialEnding.error);
+    }
+
     return ok(true);
+  }
+
+  private defaultPaymentMethodId(
+    value: string | Stripe.PaymentMethod | null | undefined
+  ): string | undefined {
+    if (!value) return undefined;
+    if (typeof value === "string") return value;
+    if ("deleted" in value && value.deleted) return undefined;
+    return value.id;
+  }
+
+  private async sendTrialEndingWarning({
+    customerId,
+    eventId,
+    subscription,
+  }: {
+    customerId: string;
+    eventId: string;
+    subscription: Stripe.Subscription;
+  }): ServerResultAsync<void> {
+    if (this.processedTrialWillEndEventIds.has(eventId)) return ok();
+
+    const template = this.service.email.templates[TRIAL_ENDING_TEMPLATE_KEY];
+    if (!template) {
+      this.logger.info(
+        { templateKey: TRIAL_ENDING_TEMPLATE_KEY, customerId },
+        "Skipping trial-ending email because the template is unregistered"
+      );
+      return ok();
+    }
+
+    if (subscription.trial_settings?.end_behavior?.missing_payment_method !== "cancel") {
+      return ok();
+    }
+
+    if (this.defaultPaymentMethodId(subscription.default_payment_method)) {
+      return ok();
+    }
+
+    const customer = await this.repository.billing.getStripeCustomer(customerId);
+    if (customer.isErr()) return err(customer.error);
+    if (
+      !customer.value.deleted &&
+      this.defaultPaymentMethodId(customer.value.invoice_settings?.default_payment_method)
+    ) {
+      return ok();
+    }
+
+    const user = await this.repository.billing.getUserByCustomerId(customerId);
+    if (user.isErr()) return err(user.error);
+    if (!user.value) return this.error("NOT_FOUND", "User not found");
+    if (!user.value.email) {
+      this.logger.info(
+        { userId: user.value.id, customerId },
+        "Skipping trial-ending email because the User has no email"
+      );
+      return ok();
+    }
+
+    const portal = await this.repository.billing.createBillingPortalSession(customerId);
+    if (portal.isErr()) return err(portal.error);
+
+    const trialEnd =
+      subscription.trial_end != null
+        ? new Date(subscription.trial_end * 1000).toISOString().slice(0, 10)
+        : undefined;
+
+    const sent = await this.service.email.sendBrandTemplate(
+      user.value.email,
+      TRIAL_ENDING_TEMPLATE_KEY,
+      { url: portal.value.url, trialEnd },
+      { locale: user.value.locale ?? undefined }
+    );
+    if (sent.isErr()) return err(sent.error);
+    this.processedTrialWillEndEventIds.add(eventId);
+    return ok();
   }
 }

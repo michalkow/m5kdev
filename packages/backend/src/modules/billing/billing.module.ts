@@ -8,13 +8,14 @@ import {
   type ModuleServicesContext,
   type ModuleTRPCContext,
 } from "../base/base.module";
+import type { EmailModule } from "../email/email.module";
 import type * as billingTables from "./billing.db";
 import { defaultBillingGrants } from "./billing.grants";
 import { BillingRepository } from "./billing.repository";
 import { BillingService } from "./billing.service";
 import { createBillingTRPC } from "./billing.trpc";
 
-type BillingModuleDeps = never;
+type BillingModuleDeps = { email: EmailModule };
 type BillingModuleTables = typeof billingTables;
 type BillingRepositories = {
   billing: BillingRepository;
@@ -34,6 +35,7 @@ export class BillingModule extends BaseModule<
   BillingRouters
 > {
   readonly id = "billing";
+  override readonly dependsOn = ["email"] as const;
   private readonly grants: Grant[];
 
   constructor(
@@ -59,9 +61,14 @@ export class BillingModule extends BaseModule<
 
   override services({
     repositories,
+    deps,
   }: ModuleServicesContext<BillingModuleDeps, BillingRepositories>) {
     return {
-      billing: new BillingService({ billing: repositories.billing }, {}, this.grants),
+      billing: new BillingService(
+        { billing: repositories.billing },
+        { email: deps.email.services.email },
+        this.grants
+      ),
     };
   }
 

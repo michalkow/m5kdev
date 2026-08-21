@@ -2,6 +2,7 @@ import type { FunctionComponent } from "react";
 import AccountDeletionEmail from "./emails/accountDeletionEmail";
 import OrganizationInviteEmail from "./emails/organizationInviteEmail";
 import PasswordResetEmail from "./emails/passwordResetEmail";
+import TrialEndingEmail from "./emails/trialEndingEmail";
 import VerificationEmail from "./emails/verificationEmail";
 import {
   SystemWaitlistNotificationEmail,
@@ -40,6 +41,12 @@ export const templates = {
     subject: "verification.subject",
     previewText: "verification.previewText",
     react: asTemplate(VerificationEmail),
+  },
+  trialEnding: {
+    id: "trial-ending",
+    subject: "trialEnding.subject",
+    previewText: "trialEnding.previewText",
+    react: asTemplate(TrialEndingEmail),
   },
   organizationInvite: {
     id: "organization-invite",

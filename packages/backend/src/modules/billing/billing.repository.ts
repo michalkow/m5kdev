@@ -232,6 +232,12 @@ export class BillingRepository extends BaseTableRepository<
     );
   }
 
+  getStripeCustomer(
+    customerId: string
+  ): ServerResultAsync<Stripe.Customer | Stripe.DeletedCustomer> {
+    return this.throwablePromise(() => this.stripe.customers.retrieve(customerId));
+  }
+
   async syncStripeData({
     customerId,
     userId,

@@ -17,6 +17,13 @@ export const emailResources = {
         body: "Use this link to choose a new password for your account.",
         action: "Reset password",
       },
+      trialEnding: {
+        subject: "Your trial ends soon",
+        previewText: "Add a payment method to keep your subscription",
+        title: "Your trial is ending",
+        body: "Your trial ends on {{trialEnd}}. Without a payment method, your subscription will be canceled.",
+        action: "Add a payment method",
+      },
       accountDeletion: {
         subject: "Delete your account",
         previewText: "Confirm your account deletion",

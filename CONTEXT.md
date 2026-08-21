@@ -188,6 +188,10 @@ _Avoid_: Product, Tier, Subscription (that is the synced row)
 Local row re-synced from Stripe; Stripe is the source of truth. Personal: keyed by UserId, not MemberId.
 _Avoid_: Plan, Customer (Stripe customer linkage stays on the User)
 
+**Trial**:
+The unpaid `trialing` period of a Subscription. Length comes from the Plan's `freeTrial.days`. Stripe owns start and end; the local row stores trialStart / trialEnd.
+_Avoid_: Plan, beta, Customer
+
 **Tag**:
 A polymorphic label attached to any resource type via taggings.
 _Avoid_: Label, Category (unless the product truly means a separate taxonomy)

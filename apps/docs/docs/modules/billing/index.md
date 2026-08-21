@@ -46,8 +46,10 @@ const plans: StripePlan[] = [
 import Stripe from "stripe";
 import { createBackendApp } from "@m5kdev/backend/app";
 import { BillingModule } from "@m5kdev/backend/modules/billing/billing.module";
+import { EmailModule } from "@m5kdev/backend/modules/email/email.module";
 
 createBackendApp(config, [
+  new EmailModule(templates),
   new BillingModule({ stripe: new Stripe(process.env.STRIPE_SECRET_KEY!) }, { plans, trial }),
 ]);
 ```

@@ -44,7 +44,8 @@ export type EmailTemplates = {
   waitlistInvite: EmailTemplate;
   waitlistUserInvite: EmailTemplate;
   organizationInvite: EmailTemplate;
-  [key: string]: EmailTemplate;
+  trialEnding?: EmailTemplate;
+  [key: string]: EmailTemplate | undefined;
 };
 
 type EmailServiceProps = {
