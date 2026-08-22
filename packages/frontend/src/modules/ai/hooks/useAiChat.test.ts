@@ -1,4 +1,8 @@
-import { getOrCreateAiChat, setConversationHasMemory } from "./useAiChat";
+import {
+  clearAiConversationCaches,
+  getOrCreateAiChat,
+  setConversationHasMemory,
+} from "./useAiChat";
 
 interface TransportInit {
   readonly api: string;
@@ -38,14 +42,20 @@ function asMockChat(chat: unknown): MockChat {
 }
 
 describe("getOrCreateAiChat", () => {
-  it("reuses one Chat for the same agentId and threadId after another mount", () => {
+  beforeEach(() => {
+    clearAiConversationCaches();
+  });
+
+  it("reuses one Chat for the same userId, agentId and threadId after another mount", () => {
     const first = getOrCreateAiChat({
       serverUrl: "http://server.test",
+      userId: "user-1",
       agentId: "writer",
       threadId: "thread-shared",
     });
     const second = getOrCreateAiChat({
       serverUrl: "http://server.test",
+      userId: "user-1",
       agentId: "writer",
       threadId: "thread-shared",
     });
@@ -53,15 +63,34 @@ describe("getOrCreateAiChat", () => {
     expect(second).toBe(first);
   });
 
+  it("does not reuse a Chat across different userIds for the same agent and thread", () => {
+    const first = getOrCreateAiChat({
+      serverUrl: "http://server.test",
+      userId: "user-1",
+      agentId: "writer",
+      threadId: "thread-shared",
+    });
+    const second = getOrCreateAiChat({
+      serverUrl: "http://server.test",
+      userId: "user-2",
+      agentId: "writer",
+      threadId: "thread-shared",
+    });
+
+    expect(second).not.toBe(first);
+  });
+
   it("does not evict the Chat when the last mount goes away", () => {
     const created = getOrCreateAiChat({
       serverUrl: "http://server.test",
+      userId: "user-1",
       agentId: "writer",
       threadId: "thread-persist",
     });
 
     const afterUnmount = getOrCreateAiChat({
       serverUrl: "http://server.test",
+      userId: "user-1",
       agentId: "writer",
       threadId: "thread-persist",
     });
@@ -69,10 +98,29 @@ describe("getOrCreateAiChat", () => {
     expect(afterUnmount).toBe(created);
   });
 
+  it("clears cached Chats so a later user cannot reopen the prior session instance", () => {
+    const before = getOrCreateAiChat({
+      serverUrl: "http://server.test",
+      userId: "user-1",
+      agentId: "writer",
+      threadId: "thread-clear",
+    });
+    clearAiConversationCaches();
+    const after = getOrCreateAiChat({
+      serverUrl: "http://server.test",
+      userId: "user-1",
+      agentId: "writer",
+      threadId: "thread-clear",
+    });
+
+    expect(after).not.toBe(before);
+  });
+
   it("sends the full in-memory history on POST", () => {
     const chat = asMockChat(
       getOrCreateAiChat({
         serverUrl: "http://server.test",
+        userId: "user-1",
         agentId: "writer",
         threadId: "thread-history",
       })
@@ -96,6 +144,7 @@ describe("getOrCreateAiChat", () => {
 
   it("sends only the last user message and memory.thread when Memory is on", () => {
     setConversationHasMemory({
+      userId: "user-1",
       agentId: "writer",
       threadId: "thread-memory",
       memory: true,
@@ -103,6 +152,7 @@ describe("getOrCreateAiChat", () => {
     const chat = asMockChat(
       getOrCreateAiChat({
         serverUrl: "http://server.test",
+        userId: "user-1",
         agentId: "writer",
         threadId: "thread-memory",
       })

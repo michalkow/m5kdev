@@ -165,6 +165,30 @@ async function recallMemoryMessages(params: {
   return result.messages;
 }
 
+function isThreadOwnershipError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("resourceid does not match") ||
+    message.includes("is for resource with id") ||
+    message.includes("does not belong to the active resource")
+  );
+}
+
+async function readMemoryThreadResourceId(params: {
+  memory: unknown;
+  threadId: string;
+}): Promise<string | null | undefined> {
+  if (typeof params.memory !== "object" || params.memory === null) return undefined;
+  const getThreadById = Reflect.get(params.memory, "getThreadById");
+  if (typeof getThreadById !== "function") return undefined;
+  const thread: unknown = await getThreadById.call(params.memory, { threadId: params.threadId });
+  if (thread === null) return null;
+  if (typeof thread !== "object") return undefined;
+  if (!("resourceId" in thread) || typeof thread.resourceId !== "string") return undefined;
+  return thread.resourceId;
+}
+
 function textPartFromUnknown(part: unknown): { type: "text"; text: string } | undefined {
   if (typeof part !== "object" || part === null) return undefined;
   if (!("type" in part) || part.type !== "text") return undefined;
@@ -408,6 +432,20 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
       return ok({ messages: [], memory: false });
     }
 
+    const ownerResourceId = await this.throwablePromise(() =>
+      readMemoryThreadResourceId({
+        memory,
+        threadId: params.threadId,
+      })
+    );
+    if (ownerResourceId.isErr()) return err(ownerResourceId.error);
+    if (
+      typeof ownerResourceId.value === "string" &&
+      ownerResourceId.value !== params.actor.userId
+    ) {
+      return this.error("FORBIDDEN", "Thread not found");
+    }
+
     const recalled = await this.throwablePromise(() =>
       recallMemoryMessages({
         memory,
@@ -415,7 +453,12 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         resourceId: params.actor.userId,
       })
     );
-    if (recalled.isErr()) return err(recalled.error);
+    if (recalled.isErr()) {
+      if (isThreadOwnershipError(recalled.error)) {
+        return this.error("FORBIDDEN", "Thread not found");
+      }
+      return err(recalled.error);
+    }
     return ok({ messages: toUiMessages(recalled.value), memory: true });
   }
 
@@ -438,17 +481,37 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     if (resolved.isErr()) return err(resolved.error);
 
     const memory = await readAgentMemory(resolved.value);
+    if (memory) {
+      if (!params.threadId) {
+        return this.error("BAD_REQUEST", "threadId is required when the Agent has Memory");
+      }
+
+      const ownerResourceId = await this.throwablePromise(() =>
+        readMemoryThreadResourceId({
+          memory,
+          threadId: params.threadId as string,
+        })
+      );
+      if (ownerResourceId.isErr()) return err(ownerResourceId.error);
+      if (
+        typeof ownerResourceId.value === "string" &&
+        ownerResourceId.value !== params.actor.userId
+      ) {
+        return this.error("FORBIDDEN", "Thread not found");
+      }
+    }
+
     const streamParams = memory
       ? {
           messages: lastUserMessages(params.messages),
           memory: {
-            thread: params.threadId ?? "",
+            thread: params.threadId as string,
             resource: params.actor.userId,
           },
         }
       : { messages: params.messages };
 
-    return this.throwablePromise(() =>
+    const streamed = await this.throwablePromise(() =>
       handleChatStream({
         mastra,
         agentId: params.agentId,
@@ -467,6 +530,10 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
         },
       })
     );
+    if (streamed.isErr() && isThreadOwnershipError(streamed.error)) {
+      return this.error("FORBIDDEN", "Thread not found");
+    }
+    return streamed;
   }
 
   private resolveRegisteredAgent(params: {
