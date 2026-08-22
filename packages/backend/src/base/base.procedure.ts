@@ -852,32 +852,80 @@ function createAccessStep<
       const actor = requireProcedureActor(host, typedArgs.ctx, "user");
       if (actor.isErr()) return actor;
       const permissionOptions: PermissionCheckOptions = config.ownership ? { ownership: true } : {};
+      // Soft-filter is only safe for read paths. Mutating actions must hard-deny
+      // when any loaded entity fails, otherwise unauthorized rows are silently
+      // dropped and writes proceed on the remainder (data loss / partial apply).
+      const softFilter = config.action === "read";
+
+      const guardCollection = (
+        entities: readonly Entity[]
+      ): ServerResult<readonly Entity[]> => {
+        if (softFilter) {
+          return ok(
+            host.filterPermission(
+              actor.value,
+              config.action,
+              entities,
+              config.grants,
+              permissionOptions
+            )
+          );
+        }
+
+        const hasPermission = host.checkPermission(
+          actor.value,
+          config.action,
+          entities.length === 0 ? undefined : [...entities],
+          config.grants,
+          permissionOptions
+        );
+        if (!hasPermission) {
+          return host.error("FORBIDDEN");
+        }
+        return ok(entities);
+      };
+
+      const guardListResult = (result: EntityListResult): ServerResult<EntityListResult> => {
+        if (softFilter) {
+          return ok(
+            host.filterPermission(
+              actor.value,
+              config.action,
+              result,
+              config.grants,
+              permissionOptions
+            )
+          );
+        }
+
+        const hasPermission = host.checkPermission(
+          actor.value,
+          config.action,
+          result.rows.length === 0 ? undefined : [...result.rows],
+          config.grants,
+          permissionOptions
+        );
+        if (!hasPermission) {
+          return host.error("FORBIDDEN");
+        }
+        return ok(result);
+      };
 
       if ("entityStep" in config && typeof config.entityStep === "string") {
         const entities = typedArgs.state[config.entityStep] as TEntities;
 
         if (Array.isArray(entities)) {
-          const filtered = host.filterPermission(
-            actor.value,
-            config.action,
-            entities,
-            config.grants,
-            permissionOptions
-          );
-          (typedArgs.state as Record<string, unknown>)[config.entityStep] = filtered;
-          return ok(filtered);
+          const filtered = guardCollection(entities);
+          if (filtered.isErr()) return filtered;
+          (typedArgs.state as Record<string, unknown>)[config.entityStep] = filtered.value;
+          return ok(filtered.value);
         }
 
         if (isEntityListResult(entities)) {
-          const filtered = host.filterPermission(
-            actor.value,
-            config.action,
-            entities,
-            config.grants,
-            permissionOptions
-          );
-          (typedArgs.state as Record<string, unknown>)[config.entityStep] = filtered;
-          return ok(filtered);
+          const filtered = guardListResult(entities);
+          if (filtered.isErr()) return filtered;
+          (typedArgs.state as Record<string, unknown>)[config.entityStep] = filtered.value;
+          return ok(filtered.value);
         }
 
         const hasPermission = host.checkPermission(
@@ -921,25 +969,15 @@ function createAccessStep<
         const loadedEntities = entityResult.value;
 
         if (Array.isArray(loadedEntities)) {
-          const filtered = host.filterPermission(
-            actor.value,
-            config.action,
-            loadedEntities as Entity[],
-            config.grants,
-            permissionOptions
-          );
-          return ok(filtered as TEntities);
+          const filtered = guardCollection(loadedEntities as Entity[]);
+          if (filtered.isErr()) return filtered;
+          return ok(filtered.value as TEntities);
         }
 
         if (isEntityListResult(loadedEntities)) {
-          const filtered = host.filterPermission(
-            actor.value,
-            config.action,
-            loadedEntities,
-            config.grants,
-            permissionOptions
-          );
-          return ok(filtered as TEntities);
+          const filtered = guardListResult(loadedEntities);
+          if (filtered.isErr()) return filtered;
+          return ok(filtered.value as TEntities);
         }
 
         const hasPermission = host.checkPermission(
@@ -960,25 +998,15 @@ function createAccessStep<
       const entities = config.entities;
 
       if (Array.isArray(entities)) {
-        const filtered = host.filterPermission(
-          actor.value,
-          config.action,
-          entities,
-          config.grants,
-          permissionOptions
-        );
-        return ok(filtered as TEntities);
+        const filtered = guardCollection(entities);
+        if (filtered.isErr()) return filtered;
+        return ok(filtered.value as TEntities);
       }
 
       if (isEntityListResult(entities)) {
-        const filtered = host.filterPermission(
-          actor.value,
-          config.action,
-          entities,
-          config.grants,
-          permissionOptions
-        );
-        return ok(filtered as TEntities);
+        const filtered = guardListResult(entities);
+        if (filtered.isErr()) return filtered;
+        return ok(filtered.value as TEntities);
       }
 
       const hasPermission = host.checkPermission(

@@ -61,9 +61,13 @@ function checkOwnership(
 ): boolean {
   if (!contextValue) return false;
   if (!entities) return false;
-  return Array.isArray(entities)
-    ? entities.every((e) => e[entityField] === contextValue)
-    : entities[entityField] === contextValue;
+  if (Array.isArray(entities)) {
+    // Empty batches must deny — `[].every(...)` is vacuously true and would
+    // otherwise grant org/own access with no entities under inspection.
+    if (entities.length === 0) return false;
+    return entities.every((e) => e[entityField] === contextValue);
+  }
+  return entities[entityField] === contextValue;
 }
 
 type GrantLevel = "user" | "team" | "organization";
@@ -111,13 +115,14 @@ function ownsEntityAtUserLevel(ctx: ContextValues, entity: Entity): boolean {
 /**
  * User-level "own" check across a batch. Each entity is evaluated independently
  * so mixed memberId / legacy userId rows can all pass when owned by the actor.
- * Empty arrays still pass (same as `Array.every`); missing entities still deny.
+ * Empty arrays deny (do not rely on vacuous `Array.every`). Missing entities deny.
  * With no entities, org-context callers previously selected the memberId field
  * then denied via `checkOwnership` — that deny is preserved here.
  */
 function checkUserLevelOwnership(ctx: ContextValues, entities?: Entity | Entity[]): boolean {
   if (!entities) return false;
   const entityList = Array.isArray(entities) ? entities : [entities];
+  if (entityList.length === 0) return false;
   return entityList.every((entity) => ownsEntityAtUserLevel(ctx, entity));
 }
 
@@ -193,6 +198,19 @@ function checkOwnAccess(
       if (grant.role !== getRoleForLevel(level, roles)) continue;
 
       if (level === "user") {
+        if (checkUserLevelOwnership(contextValues, entities)) return true;
+        continue;
+      }
+
+      // Organization-level "own" means member-owned resources in this org —
+      // not org-wide access. `"org"` is the org-wide mode. Without the
+      // member/user ownership check, member `"own"` grants were equivalent
+      // to `"org"` and elevated every org member to org-wide R/W/D.
+      if (level === "organization") {
+        if (!contextValues.organizationId) continue;
+        if (!checkOwnership("organizationId", contextValues.organizationId, entities)) {
+          continue;
+        }
         if (checkUserLevelOwnership(contextValues, entities)) return true;
         continue;
       }

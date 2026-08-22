@@ -1038,7 +1038,7 @@ describe("BasePermissionService procedure builder", () => {
         action: "read",
         level: "organization",
         role: "owner",
-        access: "own",
+        access: "org",
       },
     ];
 

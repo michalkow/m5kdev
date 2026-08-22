@@ -16,17 +16,21 @@ export class PostsService extends BasePermissionService<
     .output(postSchemas.output.list)
     .requireAuth("organization")
     .addContextFilter(["organization"])
-    .handle(async ({ input }) => {
+    .handle(async ({ input, ctx }) => {
       return withSpan(
         {
           name: "posts.list.query",
           attributes: { input: serializeSpanValue(input) },
         },
-        (span) => {
+        async (span) => {
           span.addEvent("span started");
-          return this.repository.posts.queryList(input, {
+          const listed = await this.repository.posts.queryList(input, {
             globalSearchColumns: ["title", "excerpt", "content"],
           });
+          if (listed.isErr()) return listed;
+          // Soft-filter so organization members with `"own"` only see their posts;
+          // owners/admins with `"org"` keep the full org page.
+          return ok(this.filterPermission(ctx.actor, "read", listed.value));
         }
       );
     });
@@ -37,6 +41,14 @@ export class PostsService extends BasePermissionService<
     .output(postSchemas.output.single)
     .access({
       action: "write",
+      // Create has no persisted row yet — authorize against the actor's own
+      // org/member identity. Without entities, `"org"`/`"own"` grants always deny.
+      entities: ({ ctx }) => ({
+        userId: ctx.actor.userId,
+        memberId: ctx.actor.memberId,
+        organizationId: ctx.actor.organizationId,
+        teamId: ctx.actor.teamId,
+      }),
     })
     .handle(async ({ input, ctx }) => {
       const uniqueSlug = await this.repository.posts.resolveUniqueSlug({

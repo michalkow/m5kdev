@@ -317,30 +317,81 @@ describe("checkPermissionSync", () => {
       expect(checkPermissionSync(ctx, grants)).toBe(true);
     });
 
-    it("grants access with 'own' access when organizationId matches", () => {
+    it("grants access with 'own' access when organizationId and member ownership match", () => {
       const ctx = createMockContext(
         {},
-        { activeOrganizationId: "org-1", activeOrganizationRole: "member" }
+        {
+          activeOrganizationId: "org-1",
+          activeOrganizationRole: "member",
+          activeOrganizationMemberId: "member-1",
+        }
       );
       const grants: ResourceActionGrant[] = [
         { level: "organization", role: "member", access: "own" },
       ];
-      const entity = createMockEntity({ organizationId: "org-1" });
+      const entity = createMockEntity({
+        organizationId: "org-1",
+        memberId: "member-1",
+      });
 
       expect(checkPermissionSync(ctx, grants, entity)).toBe(true);
+    });
+
+    it("denies organization-level 'own' when organizationId matches but member does not own", () => {
+      const ctx = createMockContext(
+        {},
+        {
+          activeOrganizationId: "org-1",
+          activeOrganizationRole: "member",
+          activeOrganizationMemberId: "member-1",
+        }
+      );
+      const grants: ResourceActionGrant[] = [
+        { level: "organization", role: "member", access: "own" },
+      ];
+      // Same org, different member — must not elevate to org-wide access
+      const entity = createMockEntity({
+        organizationId: "org-1",
+        memberId: "member-other",
+      });
+
+      expect(checkPermissionSync(ctx, grants, entity)).toBe(false);
     });
 
     it("denies access with 'own' access when organizationId does not match", () => {
       const ctx = createMockContext(
         {},
-        { activeOrganizationId: "org-1", activeOrganizationRole: "member" }
+        {
+          activeOrganizationId: "org-1",
+          activeOrganizationRole: "member",
+          activeOrganizationMemberId: "member-1",
+        }
       );
       const grants: ResourceActionGrant[] = [
         { level: "organization", role: "member", access: "own" },
       ];
-      const entity = createMockEntity({ organizationId: "org-2" });
+      const entity = createMockEntity({
+        organizationId: "org-2",
+        memberId: "member-1",
+      });
 
       expect(checkPermissionSync(ctx, grants, entity)).toBe(false);
+    });
+
+    it("denies org/own access checks against an empty entity array", () => {
+      const ctx = createMockContext(
+        {},
+        { activeOrganizationId: "org-1", activeOrganizationRole: "owner" }
+      );
+      const orgGrants: ResourceActionGrant[] = [
+        { level: "organization", role: "owner", access: "org" },
+      ];
+      const ownGrants: ResourceActionGrant[] = [
+        { level: "organization", role: "owner", access: "own" },
+      ];
+
+      expect(checkPermissionSync(ctx, orgGrants, [])).toBe(false);
+      expect(checkPermissionSync(ctx, ownGrants, [])).toBe(false);
     });
 
     it("grants access with 'org' access when organizationId matches", () => {
@@ -877,7 +928,7 @@ describe("checkPermissionSync", () => {
       expect(checkPermissionSync(ctx, grants, entity)).toBe(true);
     });
 
-    it("user with 'own' grants - organization level matches when user and team do not", () => {
+    it("user with 'own' grants - organization level requires member ownership, not just same org", () => {
       const ctx = createMockContext(
         { id: "user-123", role: "member" },
         {
@@ -885,6 +936,7 @@ describe("checkPermissionSync", () => {
           activeTeamRole: "member",
           activeOrganizationId: "org-1",
           activeOrganizationRole: "member",
+          activeOrganizationMemberId: "member-123",
         }
       );
 
@@ -894,15 +946,23 @@ describe("checkPermissionSync", () => {
         { level: "organization", role: "member", access: "own" },
       ];
 
-      // Entity belongs to a different user and team, but same organization
-      const entity = createMockEntity({
+      // Same org alone must not pass organization-level "own"
+      const otherMemberEntity = createMockEntity({
         userId: "other-user",
+        memberId: "member-other",
         teamId: "team-2",
         organizationId: "org-1",
       });
+      expect(checkPermissionSync(ctx, grants, otherMemberEntity)).toBe(false);
 
-      // User-level fails, team-level fails, organization-level passes
-      expect(checkPermissionSync(ctx, grants, entity)).toBe(true);
+      // Matching member ownership within the org does pass
+      const ownedEntity = createMockEntity({
+        userId: "other-user",
+        memberId: "member-123",
+        teamId: "team-2",
+        organizationId: "org-1",
+      });
+      expect(checkPermissionSync(ctx, grants, ownedEntity)).toBe(true);
     });
 
     it("complex scenario: admin user bypasses ownership checks", () => {

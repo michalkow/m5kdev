@@ -104,7 +104,7 @@ access control, and the handler:
 5. `.use(name, step)` -- Runs an arbitrary step and stores the result in `state`.
 6. `.addContextFilter(scopes?)` -- Applies context-based query filtering (requires auth).
 7. `.addFilters(resolve)` -- Appends query filters to the current input (`({ input, ctx, state, ... }) => QueryFilter | QueryFilter[]`).
-8. `.access(config)` -- Permission check via grants. Arrays are soft-filtered to allowed rows (empty OK); single entities return `FORBIDDEN` when denied. Filtered arrays are written back to `entityStep` state.
+8. `.access(config)` -- Permission check via grants. For `action: "read"`, arrays / `{ rows, total }` are soft-filtered to allowed rows (empty OK). Mutating actions hard-deny (`FORBIDDEN`) if any entity fails. Single entities always return `FORBIDDEN` when denied. Filtered read results are written back to `entityStep` state.
 9. `.handle(handler)` -- Terminal method; runs the handler with `{ input, ctx, state, repository, service, logger }`.
 
 ### Input / Output Typing
@@ -205,7 +205,7 @@ readonly list = this.procedure("list")
 
 - Default list scoping: `addContextFilter(["organization"])`.
 - When grants are member-own only, prefer `addContextFilter(["member", "organization"])` so the query is already narrowed.
-- `.access` on an **array** soft-filters to allowed rows (may be `[]`); it does not 403 the whole list.
+- `.access` on an **array** / list result soft-filters to allowed rows for `action: "read"` (may be `[]`); mutating actions return `FORBIDDEN` if any row fails.
 - Filtered results are written back to `state[entityStep]` (here `state.posts`).
 
 ### With Context Filter (Query-Based Lists)
@@ -285,13 +285,13 @@ readonly validateCode = this.procedure("validateCode")
 - Do not use undeclared action aliases (e.g., guard `"update"` when grants only define `"write"`).
 - Prefer `.access({ action, entityStep? })` over ad-hoc ownership checks in `.use`.
 - For org-scoped assets, stamp and authorize with `memberId` (`ctx.actor.memberId`). Keep `userId` for authentication and personal resources (billing, devices, OAuth). Prefer the column name `memberId` over aliases like `authorMemberId`.
-- Access modes: `"all"` (global), `"org"` (same organization), `"own"` (ownership), `"none"` (explicit deny). Prefer `"org"` for org owner/admin grants.
+- Access modes: `"all"` (global), `"org"` (same organization), `"own"` (member/user ownership; at organization grant level also requires same org), `"none"` (explicit deny). Prefer `"org"` for org owner/admin grants. Do not treat organization-level `"own"` as org-wide.
 
 ## Access Control Modes
 
 - **`entityStep`** — references a value stored by `.loadResource()`/`.use()`;
   the entity's `userId`, `memberId`, `organizationId`, and `teamId` are read automatically.
-  Arrays are soft-filtered; singles return `FORBIDDEN` when denied. Filtered arrays are written back to the step state.
+  For `action: "read"`, arrays / list results are soft-filtered; mutating actions return `FORBIDDEN` when any entity is denied. Singles always return `FORBIDDEN` when denied. Filtered read results are written back to the step state.
 - **`entities`** — inline function returning `{ userId?, memberId?, organizationId?, teamId? }`
   when the entity is not loaded into state.
 
