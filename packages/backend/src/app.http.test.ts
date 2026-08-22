@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { type Client, createClient } from "@libsql/client";
+import bodyParser from "body-parser";
 import express, { type Express } from "express";
 import { createBackendApp, defineBackendModule } from "./app";
 
@@ -123,7 +124,6 @@ describe("createBackendApp HTTP shell", () => {
   });
 
   it("skips express.json for POST .../webhook so raw body parsers can verify signatures", async () => {
-    const bodyParser = await import("body-parser");
     const built = createBackendApp({
       db: { client },
       app: { urls: { web: WEB_ORIGIN } },

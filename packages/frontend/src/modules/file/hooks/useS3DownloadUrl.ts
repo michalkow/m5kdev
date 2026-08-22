@@ -6,7 +6,9 @@ export async function fetchS3DownloadUrl(filePath: string, serverUrl?: string) {
     throw new Error("fetchS3DownloadUrl requires a serverUrl. In React, use useS3DownloadUrl.");
   }
 
-  const res = await fetch(`${serverUrl}/upload/files/${filePath}`);
+  const res = await fetch(`${serverUrl}/upload/files/${filePath}`, {
+    credentials: "include",
+  });
   if (!res.ok) throw new Error("Failed to get download URL");
   return (await res.json()).url as string;
 }

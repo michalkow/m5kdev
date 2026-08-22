@@ -142,7 +142,7 @@ The `.access()` step supports two entity resolution modes:
 
 Behavior:
 
-- **Array entities** — soft-filtered to allowed rows (may be `[]`); filtered result is written back to `entityStep` state. Does not 403 the whole list.
+- **Array / list entities** — for `action: "read"`, soft-filtered to allowed rows (may be `[]`) and written back to `entityStep` state. Mutating actions return `FORBIDDEN` if any row fails.
 - **Single entity** — `FORBIDDEN` when denied (e.g. cross-org update with `"org"` grants).
 
 Prefer organization-level `"org"` (not `"all"`) for multi-tenant owner/admin roles so `findById` mutations cannot cross orgs.

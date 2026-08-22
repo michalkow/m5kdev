@@ -19,7 +19,7 @@ export type ResolvedUploadBlob = {
   size: number;
 };
 
-async function getPresignedUrl(
+export async function getPresignedUrl(
   filename: string,
   filetype: string,
   serverUrl: string
@@ -27,6 +27,7 @@ async function getPresignedUrl(
   const res = await fetch(`${serverUrl}/upload/s3-presigned-url`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ filename, filetype }),
   });
   if (!res.ok) throw new Error("Failed to get presigned URL");

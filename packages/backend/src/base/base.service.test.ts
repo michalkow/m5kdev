@@ -1254,6 +1254,62 @@ describe("BasePermissionService procedure builder", () => {
     }
   });
 
+  it("hard-denies mutating entityStep arrays when any row is unauthorized", async () => {
+    const grants: ResourceGrant[] = [
+      {
+        action: "write",
+        level: "user",
+        role: "member",
+        access: "own",
+      },
+    ];
+
+    class PermissionService extends BasePermissionService<
+      Record<string, never>,
+      Record<string, never>
+    > {
+      constructor() {
+        super({} as Record<string, never>, {} as Record<string, never>, grants);
+      }
+
+      readonly run = this.procedure("run")
+        .use("records", () =>
+          ok([
+            {
+              id: "a",
+              userId: "user-1",
+              memberId: "member-1",
+              organizationId: "org-1",
+            },
+            {
+              id: "b",
+              userId: "other-user",
+              memberId: "other-member",
+              organizationId: "org-1",
+            },
+          ])
+        )
+        .access({
+          action: "write",
+          entityStep: "records",
+        })
+        .handle(() => ok("updated"));
+    }
+
+    const service = new PermissionService();
+    const result = await service.run(undefined, {
+      actor: createOrganizationActor({
+        userRole: "member",
+        organizationRole: "member",
+      }),
+    } as never);
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("FORBIDDEN");
+    }
+  });
+
   it("blocks cross-org single entities when grants use 'org' access", async () => {
     const grants: ResourceGrant[] = [
       {
