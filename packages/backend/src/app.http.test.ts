@@ -122,6 +122,39 @@ describe("createBackendApp HTTP shell", () => {
     });
   });
 
+  it("skips express.json for POST .../webhook so raw body parsers can verify signatures", async () => {
+    const bodyParser = await import("body-parser");
+    const built = createBackendApp({
+      db: { client },
+      app: { urls: { web: WEB_ORIGIN } },
+    });
+    built.express.app.post(
+      "/stripe/webhook",
+      bodyParser.raw({ type: "application/json" }),
+      (req, res) => {
+        res.json({
+          isBuffer: Buffer.isBuffer(req.body),
+          text: Buffer.isBuffer(req.body)
+            ? req.body.toString("utf8")
+            : typeof req.body === "object"
+              ? JSON.stringify(req.body)
+              : String(req.body),
+        });
+      }
+    );
+
+    await withServer(built.express.app, async (baseUrl) => {
+      const payload = JSON.stringify({ type: "customer.subscription.updated" });
+      const response = await fetch(`${baseUrl}/stripe/webhook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: WEB_ORIGIN },
+        body: payload,
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ isBuffer: true, text: payload });
+    });
+  });
+
   it("lets a CORS map add an extra origin", async () => {
     const extraOrigin = "http://preview.example";
     const built = createBackendApp({

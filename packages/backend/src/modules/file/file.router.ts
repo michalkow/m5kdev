@@ -29,15 +29,26 @@ function getFileExtension(file: Express.Multer.File): string | undefined {
   return file.originalname.split(".").pop();
 }
 
+/** Local upload filenames are uuid + optional safe extension — reject traversal. */
+const SAFE_LOCAL_FILENAME =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\.[A-Za-z0-9_-]+)?$/i;
+
+function localUploadsRoot(): string {
+  return path.join(__dirname, "..", "uploads");
+}
+
 function createMulter(): multer.Multer {
   const storage = multer.diskStorage({
     destination: (_req, _file, cb) => {
-      const destination = path.join(__dirname, "..", "uploads");
+      const destination = localUploadsRoot();
       fs.mkdirSync(destination, { recursive: true });
       cb(null, destination);
     },
     filename: (_req, file, cb) => {
-      cb(null, `${uuidv4()}.${getFileExtension(file)}`);
+      const extension = getFileExtension(file);
+      const safeExt =
+        extension && /^[A-Za-z0-9_-]+$/.test(extension) ? `.${extension.toLowerCase()}` : "";
+      cb(null, `${uuidv4()}${safeExt}`);
     },
   });
 
@@ -125,13 +136,17 @@ export function createUploadRouter({
 
   router.get("/file/:filename", (req: Request, res: Response) => {
     const filename = req.params.filename;
-    if (!filename) {
-      return res.status(400).json({ error: "Missing filename" });
+    if (!filename || !SAFE_LOCAL_FILENAME.test(filename)) {
+      return res.status(400).json({ error: "Invalid filename" });
     }
-    return res.sendFile(path.join(__dirname, "..", "uploads", filename));
+    return res.sendFile(filename, { root: localUploadsRoot() }, (error) => {
+      if (error && !res.headersSent) {
+        res.status(404).json({ error: "File not found" });
+      }
+    });
   });
 
-  router.get("/files/:path", async (req: Request, res: Response) => {
+  router.get("/files/:path(*)", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const key = req.params.path;
       if (!key) {
@@ -161,14 +176,25 @@ export function createUploadRouter({
         return res.status(401).json({ message: "Unauthorized" });
       }
       const userId = user.id;
-      const { organizationId, teamId, contentType, originalName, sizeBytes, pathHint, metadata } =
-        req.body ?? {};
+      const { contentType, originalName, sizeBytes, pathHint, metadata } = req.body ?? {};
+      // Never trust client-supplied organizationId/teamId — stamp from session only.
+      const organizationId = session.activeOrganizationId ?? undefined;
+      const teamId = session.activeTeamId ?? undefined;
 
       if (!contentType || !originalName) {
         return res.status(400).json({ error: "Missing contentType or originalName" });
       }
 
-      const actor = createActorFromContext({ user, session }, "user");
+      let actor: AuthenticatedActor;
+      try {
+        actor = organizationId
+          ? createActorFromContext({ user, session }, "organization")
+          : createActorFromContext({ user, session }, "user");
+      } catch (err: unknown) {
+        captureRouteError(err, { route: "POST /s3/initiate" });
+        const message = err instanceof Error ? err.message : "Forbidden";
+        return res.status(403).json({ error: message });
+      }
       const result = await fileService.initiateS3Upload(actor, {
         userId,
         memberId: session.activeOrganizationMemberId ?? undefined,
@@ -236,26 +262,34 @@ export function createUploadRouter({
     return res.json({ success: true });
   });
 
-  router.post("/s3-presigned-url", bodyParser.json(), async (req: Request, res: Response) => {
-    const { filename, filetype } = req.body;
+  router.post(
+    "/s3-presigned-url",
+    authMiddleware,
+    bodyParser.json(),
+    async (req: AuthRequest, res: Response) => {
+      const { filename, filetype } = req.body ?? {};
 
-    if (!filename || !filetype) {
-      return res.status(400).json({ error: "Missing filename or filetype" });
-    }
-    try {
-      const url = await fileService.getS3UploadUrl(filename, filetype);
-      if (url.isErr()) {
-        return res.status(500).json({ error: url.error.message });
+      if (!filename || !filetype) {
+        return res.status(400).json({ error: "Missing filename or filetype" });
       }
-      return res.json({ url: url.value });
-    } catch (err: unknown) {
-      captureRouteError(err, { route: "POST /s3-presigned-url" });
-      const message = err instanceof Error ? err.message : "Failed to generate presigned URL";
-      return res.status(500).json({ error: message });
+      if (typeof filename !== "string" || filename.includes("..") || filename.startsWith("/")) {
+        return res.status(400).json({ error: "Invalid filename" });
+      }
+      try {
+        const url = await fileService.getS3UploadUrl(filename, filetype);
+        if (url.isErr()) {
+          return res.status(500).json({ error: url.error.message });
+        }
+        return res.json({ url: url.value });
+      } catch (err: unknown) {
+        captureRouteError(err, { route: "POST /s3-presigned-url" });
+        const message = err instanceof Error ? err.message : "Failed to generate presigned URL";
+        return res.status(500).json({ error: message });
+      }
     }
-  });
+  );
 
-  router.delete("/files/:path(*)", async (req: Request, res: Response) => {
+  router.delete("/files/:path(*)", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const key = req.params.path;
       if (!key) {

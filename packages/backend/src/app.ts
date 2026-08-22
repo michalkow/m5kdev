@@ -555,6 +555,15 @@ function parseListenPort(value: string | undefined): number {
   return Number.isNaN(parsed) ? 8080 : parsed;
 }
 
+/**
+ * Stripe (and similar) webhooks need the raw body for signature verification.
+ * Global express.json() must not consume those routes first — body-parser marks
+ * the request read, so a later bodyParser.raw() never sees a Buffer.
+ */
+function isRawBodyWebhookPath(requestPath: string): boolean {
+  return /\/webhook\/?$/i.test(requestPath);
+}
+
 function applyHttpShell({
   expressApp,
   config,
@@ -566,7 +575,14 @@ function applyHttpShell({
 }): void {
   const jsonDefaults: OptionsJson = {};
   const jsonOptions = config.json ? config.json(jsonDefaults) : jsonDefaults;
-  expressApp.use(express.json(jsonOptions));
+  const jsonParser = express.json(jsonOptions);
+  expressApp.use((req, res, next) => {
+    if (req.method === "POST" && isRawBodyWebhookPath(req.path)) {
+      next();
+      return;
+    }
+    jsonParser(req, res, next);
+  });
   const corsDefaults: CorsOptions = {
     origin: appConfig.urls.web ? [appConfig.urls.web] : false,
     credentials: true,
