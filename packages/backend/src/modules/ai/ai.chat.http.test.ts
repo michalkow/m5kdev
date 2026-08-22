@@ -355,11 +355,15 @@ describe("Conversation Memory HTTP", () => {
         },
       ],
     });
+    const getThreadById = jest.fn().mockResolvedValue({
+      id: "thread-1",
+      resourceId: "user-1",
+    });
 
     const app = mountApp({
       authMiddleware: acceptAuth(),
       mastra: createMastra({
-        writer: { getMemory: () => ({ recall }) },
+        writer: { getMemory: () => ({ recall, getThreadById }) },
       }),
     });
 
@@ -386,6 +390,31 @@ describe("Conversation Memory HTTP", () => {
     );
   });
 
+  it("rejects hydrate of another user's Thread with 403 and no owner id leak", async () => {
+    const recall = jest.fn();
+    const getThreadById = jest.fn().mockResolvedValue({
+      id: "thread-victim",
+      resourceId: "user-victim",
+    });
+
+    const app = mountApp({
+      authMiddleware: acceptAuth(),
+      mastra: createMastra({
+        writer: { getMemory: () => ({ recall, getThreadById }) },
+      }),
+    });
+
+    await withServer(app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/ai/chat/writer/threads/thread-victim`);
+      expect(response.status).toBe(403);
+      const body = await response.json();
+      expect(body).toEqual({ message: "Thread not found" });
+      expect(JSON.stringify(body)).not.toContain("user-victim");
+    });
+
+    expect(recall).not.toHaveBeenCalled();
+  });
+
   it("sends only the last user message and stamps memory.resource from the Actor", async () => {
     mockedHandleChatStream().mockResolvedValue(new ReadableStream());
     mockedPipe().mockImplementation(
@@ -402,7 +431,12 @@ describe("Conversation Memory HTTP", () => {
     const app = mountApp({
       authMiddleware: acceptAuth(),
       mastra: createMastra({
-        writer: { getMemory: () => ({ recall: jest.fn() }) },
+        writer: {
+          getMemory: () => ({
+            recall: jest.fn(),
+            getThreadById: jest.fn().mockResolvedValue(null),
+          }),
+        },
       }),
     });
 
@@ -425,5 +459,63 @@ describe("Conversation Memory HTTP", () => {
         }),
       })
     );
+  });
+
+  it("rejects send without threadId when the Agent has Memory", async () => {
+    mockedHandleChatStream().mockResolvedValue(new ReadableStream());
+
+    const app = mountApp({
+      authMiddleware: acceptAuth(),
+      mastra: createMastra({
+        writer: {
+          getMemory: () => ({
+            recall: jest.fn(),
+            getThreadById: jest.fn().mockResolvedValue(null),
+          }),
+        },
+      }),
+    });
+
+    await withServer(app, async (baseUrl) => {
+      const response = await postChat(baseUrl, "writer", { messages: [userMessage] });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        message: "threadId is required when the Agent has Memory",
+      });
+    });
+
+    expect(mockedHandleChatStream()).not.toHaveBeenCalled();
+  });
+
+  it("rejects send to another user's Thread with 403", async () => {
+    mockedHandleChatStream().mockResolvedValue(new ReadableStream());
+
+    const app = mountApp({
+      authMiddleware: acceptAuth(),
+      mastra: createMastra({
+        writer: {
+          getMemory: () => ({
+            recall: jest.fn(),
+            getThreadById: jest.fn().mockResolvedValue({
+              id: "thread-victim",
+              resourceId: "user-victim",
+            }),
+          }),
+        },
+      }),
+    });
+
+    await withServer(app, async (baseUrl) => {
+      const response = await postChat(baseUrl, "writer", {
+        messages: [userMessage],
+        threadId: "thread-victim",
+      });
+      expect(response.status).toBe(403);
+      const body = await response.json();
+      expect(body).toEqual({ message: "Thread not found" });
+      expect(JSON.stringify(body)).not.toContain("user-victim");
+    });
+
+    expect(mockedHandleChatStream()).not.toHaveBeenCalled();
   });
 });

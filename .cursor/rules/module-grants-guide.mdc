@@ -52,7 +52,7 @@ export const defaultAuthGrants = flattenNestedGrants({
 - **action** — canonical action (`"read"`, `"write"`, `"delete"`, `"publish"`).
 - **Access** — one of:
   - `"all"` — any entity (no ownership/org check). Use for platform/user-level admins only.
-  - `"own"` — ownership check required (user→`memberId`/`userId`, team→`teamId`, organization→`organizationId`).
+  - `"own"` — ownership check required. At **user** level: `memberId` (in org context) or `userId`. At **team** level: `teamId`. At **organization** level: same-organization **and** member/user ownership (`memberId`/`userId`) — not org-wide. Use `"org"` for org-wide access.
   - `"org"` — same-organization only (`entity.organizationId === actor.organizationId`). Prefer this for org owner/admin instead of `"all"` to prevent cross-org IDOR.
   - `"none"` — explicit deny for that role/action (clearer than omitting the action).
 - For org-scoped assets, `"own"` at user-level compares `entity.memberId` to `actor.memberId` when an organization member context is present. Personal (non-org) resources still compare `userId`.

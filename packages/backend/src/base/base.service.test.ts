@@ -1038,7 +1038,7 @@ describe("BasePermissionService procedure builder", () => {
         action: "read",
         level: "organization",
         role: "owner",
-        access: "own",
+        access: "org",
       },
     ];
 
@@ -1251,6 +1251,62 @@ describe("BasePermissionService procedure builder", () => {
       expect(result.value.accessIds).toEqual(["a"]);
       expect(result.value.stateIds).toEqual(["a"]);
       expect(result.value.total).toBe(4);
+    }
+  });
+
+  it("hard-denies mutating entityStep arrays when any row is unauthorized", async () => {
+    const grants: ResourceGrant[] = [
+      {
+        action: "write",
+        level: "user",
+        role: "member",
+        access: "own",
+      },
+    ];
+
+    class PermissionService extends BasePermissionService<
+      Record<string, never>,
+      Record<string, never>
+    > {
+      constructor() {
+        super({} as Record<string, never>, {} as Record<string, never>, grants);
+      }
+
+      readonly run = this.procedure("run")
+        .use("records", () =>
+          ok([
+            {
+              id: "a",
+              userId: "user-1",
+              memberId: "member-1",
+              organizationId: "org-1",
+            },
+            {
+              id: "b",
+              userId: "other-user",
+              memberId: "other-member",
+              organizationId: "org-1",
+            },
+          ])
+        )
+        .access({
+          action: "write",
+          entityStep: "records",
+        })
+        .handle(() => ok("updated"));
+    }
+
+    const service = new PermissionService();
+    const result = await service.run(undefined, {
+      actor: createOrganizationActor({
+        userRole: "member",
+        organizationRole: "member",
+      }),
+    } as never);
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("FORBIDDEN");
     }
   });
 

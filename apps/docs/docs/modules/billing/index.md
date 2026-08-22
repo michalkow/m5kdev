@@ -83,12 +83,17 @@ requires Email, so most apps only need to keep that registration.
 
 ### HTTP routes
 
+Mounted by `BillingModule` at `/stripe` by default (override with `mountPath`):
+
 | Route | Purpose |
 | --- | --- |
-| `GET /checkout/:priceId` | Redirect to a Stripe Checkout session |
-| `GET /portal` | Redirect to the Stripe billing portal |
-| `GET /success` | Post-checkout landing that triggers a sync |
-| `POST /webhook` | Stripe Subscription webhook (raw body, verified with `STRIPE_WEBHOOK_SECRET`). This is Billing, not [Inbound callback](/modules/webhook). |
+| `GET /stripe/checkout/:priceId` | Redirect to a Stripe Checkout session |
+| `GET /stripe/portal` | Redirect to the Stripe billing portal |
+| `GET /stripe/success` | Post-checkout landing that triggers a sync |
+| `POST /stripe/webhook` | Stripe Subscription webhook (raw body, verified with `STRIPE_WEBHOOK_SECRET`). This is Billing, not [Inbound callback](/modules/webhook). |
+
+The Kernel skips global `express.json()` for `POST …/webhook` paths so signature
+verification receives a Buffer.
 
 ### tRPC procedures
 

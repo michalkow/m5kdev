@@ -4,6 +4,7 @@ import { createBackendRouterMap } from "../../app";
 import type { Grant } from "../base/base.grants";
 import {
   BaseModule,
+  type ModuleExpressContext,
   type ModuleRepositoriesContext,
   type ModuleServicesContext,
   type ModuleTRPCContext,
@@ -12,6 +13,7 @@ import type { EmailModule } from "../email/email.module";
 import type * as billingTables from "./billing.db";
 import { defaultBillingGrants } from "./billing.grants";
 import { BillingRepository } from "./billing.repository";
+import { createBillingRouter } from "./billing.router";
 import { BillingService } from "./billing.service";
 import { createBillingTRPC } from "./billing.trpc";
 
@@ -27,6 +29,16 @@ type BillingRouters = {
   billing: ReturnType<typeof createBillingTRPC>;
 };
 
+export type BillingModuleConfig = {
+  plans: StripePlan[];
+  trial?: StripePlan;
+  /**
+   * Express mount path for checkout/portal/webhook routes.
+   * Defaults to `/stripe` to match `@m5kdev/web-ui` billing links.
+   */
+  mountPath?: string;
+};
+
 export class BillingModule extends BaseModule<
   BillingModuleDeps,
   BillingModuleTables,
@@ -37,14 +49,16 @@ export class BillingModule extends BaseModule<
   readonly id = "billing";
   override readonly dependsOn = ["email"] as const;
   private readonly grants: Grant[];
+  private readonly mountPath: string;
 
   constructor(
     private readonly libs: { stripe: Stripe },
-    private readonly config: { plans: StripePlan[]; trial?: StripePlan },
+    private readonly config: BillingModuleConfig,
     grants?: Grant[]
   ) {
     super();
     this.grants = grants ?? defaultBillingGrants;
+    this.mountPath = config.mountPath ?? "/stripe";
   }
 
   override repositories({ db }: ModuleRepositoriesContext<BillingModuleDeps, BillingModuleTables>) {
@@ -74,5 +88,14 @@ export class BillingModule extends BaseModule<
 
   override trpc({ trpc, services }: ModuleTRPCContext<BillingModuleDeps, BillingServices>) {
     return createBackendRouterMap("billing", createBillingTRPC(trpc, services.billing));
+  }
+
+  override express({
+    infra,
+    services,
+    authMiddleware,
+  }: ModuleExpressContext<BillingModuleDeps, BillingServices>) {
+    if (!authMiddleware) return;
+    infra.express.use(this.mountPath, createBillingRouter(authMiddleware, services.billing));
   }
 }

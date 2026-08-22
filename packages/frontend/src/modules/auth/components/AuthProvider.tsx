@@ -1,4 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { clearAiConversationCaches } from "../../ai/hooks/useAiChat";
 import { AppConfigContext } from "../../app/components/AppConfigProvider";
 import { syncI18nLocale } from "../../app/utils/locale";
 import { type AuthSession, authProviderContext } from "../auth.context";
@@ -56,6 +57,7 @@ export function AuthProvider({
 
   const signOut = useCallback(() => {
     resolvedAuthClient.signOut().then(() => {
+      clearAiConversationCaches();
       setSession(null);
     });
   }, [resolvedAuthClient]);

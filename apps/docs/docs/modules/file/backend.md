@@ -47,12 +47,12 @@ With the default mount path, the module exposes:
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/upload/file/:type` | Local multipart upload. `:type` must exist in `fileTypes`. |
-| `GET` | `/upload/file/:filename` | Serve a file stored by the local upload route. |
-| `GET` | `/upload/files/:path` | Resolve an S3 key to a presigned download URL. |
-| `POST` | `/upload/s3-presigned-url` | Create a direct S3 upload URL for a supplied key and MIME type. |
-| `DELETE` | `/upload/files/:path(*)` | Delete an S3 object by key. |
-| `POST` | `/upload/s3/initiate` | Authenticated inventory-backed S3 upload initialization. |
+| `POST` | `/upload/file/:type` | Local multipart upload. `:type` must exist in `fileTypes`. Authenticated. |
+| `GET` | `/upload/file/:filename` | Serve a local upload. Filename must be the uuid name returned by upload (no path segments). |
+| `GET` | `/upload/files/:path(*)` | Resolve an S3 key to a presigned download URL. Authenticated. |
+| `POST` | `/upload/s3-presigned-url` | Create a direct S3 upload URL for a supplied key and MIME type. Authenticated. |
+| `DELETE` | `/upload/files/:path(*)` | Delete an S3 object by key. Authenticated. |
+| `POST` | `/upload/s3/initiate` | Authenticated inventory-backed S3 upload initialization. Org/team ids come from the session, not the body. |
 | `POST` | `/upload/s3/finalize` | Authenticated inventory-backed upload finalization. |
 | `DELETE` | `/upload/files/by-id/:fileId` | Authenticated owner-only inventory deletion. |
 

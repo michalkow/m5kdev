@@ -46,7 +46,20 @@ export class BillingService extends BasePermissionService<
     let stripeCustomer: Stripe.Customer | null = null;
     const existingCustomer = await this.repository.billing.getCustomerByEmail(user.email);
     if (existingCustomer.isErr()) return err(existingCustomer.error);
-    stripeCustomer = existingCustomer.value;
+
+    if (existingCustomer.value) {
+      // Never attach a Stripe customer that already belongs to a different User —
+      // getUserByCustomerId is limit-1 and stripeCustomerId is unique; sharing would
+      // send trial/billing emails and sync writes to the wrong account.
+      const linkedUser = await this.repository.billing.getUserByCustomerId(
+        existingCustomer.value.id
+      );
+      if (linkedUser.isErr()) return err(linkedUser.error);
+      if (!linkedUser.value || linkedUser.value.id === user.id) {
+        stripeCustomer = existingCustomer.value;
+      }
+    }
+
     if (!stripeCustomer) {
       const newCustomer = await this.repository.billing.createCustomer({
         email: user.email,

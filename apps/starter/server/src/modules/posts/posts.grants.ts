@@ -1,7 +1,7 @@
 import { flattenNestedGrants } from "@m5kdev/backend/modules/base/base.grants";
 
 export const postsGrants = flattenNestedGrants({
-  cash: {
+  posts: {
     user: {
       admin: {
         read: "all",

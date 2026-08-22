@@ -169,6 +169,21 @@ export class BillingRepository extends BaseTableRepository<
     return ok(subscriptionsResult.value[0] ?? null);
   }
 
+  async getSubscriptionByStripeId(
+    stripeSubscriptionId: string
+  ): ServerResultAsync<BillingSchema | null> {
+    const subscriptionResult = await this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(this.schema.subscriptions)
+        .where(eq(this.schema.subscriptions.stripeSubscriptionId, stripeSubscriptionId))
+        .orderBy(desc(this.schema.subscriptions.createdAt))
+        .limit(1)
+    );
+    if (subscriptionResult.isErr()) return err(subscriptionResult.error);
+    return ok(subscriptionResult.value[0] ?? null);
+  }
+
   async getActiveSubscription(referenceId: string): ServerResultAsync<BillingSchema | null> {
     const subscriptionResult = await this.throwableQuery(() =>
       this.orm
@@ -256,7 +271,10 @@ export class BillingRepository extends BaseTableRepository<
     if (stripeSubscriptionsResult.isErr()) return err(stripeSubscriptionsResult.error);
 
     const [stripeSubscription] = stripeSubscriptionsResult.value.data;
-    if (!stripeSubscription) return this.error("NOT_FOUND", "Subscription not found");
+    if (!stripeSubscription) {
+      // No subscription yet (e.g. payment_intent before sub exists) — not a hard failure.
+      return ok(false);
+    }
 
     const [subscriptionItem] = stripeSubscription.items.data;
     if (!subscriptionItem) return this.error("NOT_FOUND", "Subscription item not found");
@@ -293,11 +311,19 @@ export class BillingRepository extends BaseTableRepository<
         : {}),
     };
 
-    const existingSubscription = await this.getActiveSubscription(userId);
-    if (existingSubscription.isErr()) return err(existingSubscription.error);
+    // Upsert by Stripe subscription id so canceled rows stay updated instead of
+    // spawning duplicates when getActiveSubscription no longer matches.
+    const existingByStripeId = await this.getSubscriptionByStripeId(stripeSubscription.id);
+    if (existingByStripeId.isErr()) return err(existingByStripeId.error);
 
-    const existing = existingSubscription.value;
-    if (!existing) {
+    let existingRow = existingByStripeId.value;
+    if (!existingRow) {
+      const activeLookup = await this.getActiveSubscription(userId);
+      if (activeLookup.isErr()) return err(activeLookup.error);
+      existingRow = activeLookup.value;
+    }
+
+    if (!existingRow) {
       const insertResult = await this.throwableQuery(() =>
         this.orm.insert(this.schema.subscriptions).values(values)
       );
@@ -321,7 +347,7 @@ export class BillingRepository extends BaseTableRepository<
       this.orm
         .update(this.schema.subscriptions)
         .set({ ...values, updatedAt: new Date() })
-        .where(eq(this.schema.subscriptions.id, existing.id))
+        .where(eq(this.schema.subscriptions.id, existingRow.id))
     );
     if (updateResult.isErr()) return err(updateResult.error);
 
