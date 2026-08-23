@@ -30,6 +30,8 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
 ## Local upload route
 
 Use `useFileUpload` for a single multipart upload to `/upload/file/:type`.
+The field name is `file`. After a successful upload, refresh inventory with
+`file.list` (Starter Files does this).
 
 ```tsx
 import { useFileUpload } from "@m5kdev/frontend/modules/file/hooks/useUpload";
@@ -49,9 +51,10 @@ export function AvatarUploader() {
           url: string;
           mimetype: string;
           size: number;
+          fileId?: string;
         }>("image", file);
 
-        console.log(response.url);
+        console.log(response.url, response.fileId);
       }}
     />
   );
@@ -61,10 +64,13 @@ export function AvatarUploader() {
 Use `useMultipartUpload` when the UI needs a queue and overall progress across
 multiple files.
 
+`@m5kdev/web-ui` has no file module. Starter mounts `/files` (`FilesRoute`) when
+the `files` create flag is on: local `image` upload, then `trpc.file.list`.
+
 ## Direct S3 upload
 
 Use `useS3Upload` when the browser should upload directly to S3 through a
-presigned URL.
+presigned URL. That path needs AWS env on the server.
 
 ```tsx
 import { useS3Upload } from "@m5kdev/frontend/modules/file/hooks/useS3Upload";
@@ -92,8 +98,8 @@ export function DirectS3Uploader() {
 }
 ```
 
-The hook returns the object key. Store that key in your app data model if the file
-needs to be downloaded later.
+The hook returns the object key. Store that key in your app data model if the
+file needs to be downloaded later.
 
 ## Download URL
 
@@ -111,3 +117,9 @@ export function DownloadLink({ filePath }: { filePath: string }) {
   return <a href={download.data}>Download</a>;
 }
 ```
+
+## Constraints
+
+- Local `:type` must match a `fileTypes` key (`image`, `video`, `audio`).
+- `file.list` is organization-scoped; call it only with an active Organization.
+- Hydrate/list works without `AWS_*`. S3 hooks fail until those env vars are set.

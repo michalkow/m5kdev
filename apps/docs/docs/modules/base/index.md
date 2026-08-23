@@ -28,7 +28,11 @@ and override lifecycle methods the kernel calls in order:
 - `trpc({ services, deps })` — return namespaced tRPC router fragments
   (via `createBackendRouterMap`).
 - `express({ services, infra })` — mount Express routes.
-- `workflows({ services })` — register queue jobs and cron schedules.
+- `workflows({ services })` — optional extra job/cron registration. The Kernel
+  still calls this hook, but first-party jobs are **service fields** with
+  `.job(...).handle()` / `.cron(...).handle()`. After `services()`, the Kernel
+  runs `registry.registerService` on every service object. A job or cron
+  without `.handle()` throws. See [Workflow](/modules/workflow).
 
 Modules declare `dependsOn` / `optionalDependsOn` by module id; the kernel
 resolves order and passes resolved dependencies through `deps`.
@@ -67,17 +71,22 @@ rows that still lack `memberId`). Stamp and authorize org assets with
 ### Service procedures
 
 Request-bound methods are declared with the procedure builder instead of plain
-async functions:
+async functions. Typical chain: `.input` / `.output`, `.requireAuth(scope?)`,
+optional `.loadResource` / `.addContextFilter` / `.access({ action, entityStep })`,
+then `.handle(...)`.
 
 ```ts
-getPreferences = this.procedure("getPreferences")
-  .access({ scope: "user", action: "read" })
-  .handler(async ({ ctx }) => { /* ... */ });
+readonly getPreferences = this.procedure("getPreferences")
+  .requireAuth()
+  .handle(async ({ ctx }) => {
+    /* ... */
+  });
 ```
 
-Procedures bundle input mapping, access checks, and entity loading so tRPC
-handlers stay thin. See `MIGRATING_TO_SERVICE_PROCEDURES.md` in the backend
-package for the migration path.
+`.access()` still exists for grant checks on a loaded entity (or to
+soft-filter a list). Guard action names must match `<module>.grants.ts`.
+Procedures keep tRPC handlers thin. See `MIGRATING_TO_SERVICE_PROCEDURES.md`
+in the backend package for the migration path.
 
 ## Results and errors
 
