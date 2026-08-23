@@ -4,10 +4,29 @@ sidebar_position: 5
 
 # End-to-end file flow
 
-This is the preferred flow when an app needs durable file records and direct S3
-uploads.
+Starter Files uses **local upload + inventory**. Direct S3 is optional when
+you need object storage.
 
-## 1. Register backend modules
+## Local upload (Starter)
+
+1. Register `AuthModule` then `FileModule` (`create-m5kdev` `files` flag).
+2. From an authenticated Organization session, `useFileUpload().upload("image", file)`
+   posts to `POST /upload/file/image`.
+3. The router writes the blob under the server upload directory and
+   `recordLocalUpload` inserts a `files` row (`bucket` = `local`,
+   `status` = `UPLOADED`, **MemberId** set).
+4. The JSON body includes `url`, `mimetype`, `size`, and `fileId`.
+5. The UI refetches `file.list` (organization procedure). `"own"` grants
+   compare `memberId`.
+
+No AWS credentials are required for this path. Unknown MIME types fail before
+inventory is written.
+
+## Inventory-backed S3
+
+Use this when the app needs durable S3 objects plus a DB row.
+
+### 1. Register backend modules
 
 Register auth before file because `FileModule` depends on auth.
 
@@ -20,10 +39,10 @@ export const builtBackendApp = createBackendApp(
 );
 ```
 
-## 2. Initiate the upload
+### 2. Initiate the upload
 
 Call `POST /upload/s3/initiate` from an authenticated browser session with the
-file metadata.
+file metadata. This requires `AWS_S3_BUCKET` and the other AWS env vars.
 
 ```ts
 const initRes = await fetch(`${serverUrl}/upload/s3/initiate`, {
@@ -48,7 +67,7 @@ const init = (await initRes.json()) as {
 };
 ```
 
-## 3. Upload to S3
+### 3. Upload to S3
 
 Use the presigned URL returned by the backend.
 
@@ -62,7 +81,7 @@ const uploadRes = await fetch(init.url, {
 if (!uploadRes.ok) throw new Error("Failed to upload file");
 ```
 
-## 4. Finalize the upload
+### 4. Finalize the upload
 
 If `fileId` is present, mark the inventory row as uploaded.
 
@@ -82,7 +101,7 @@ if (init.fileId) {
 }
 ```
 
-## 5. Store the key
+### 5. Store the key
 
 Store `init.key` in the app's domain record. Use the key later with
 `useS3DownloadUrl` or `GET /upload/files/:path`.
@@ -91,7 +110,8 @@ Store `init.key` in the app's domain record. Use the key later with
 
 - If presigning fails after inventory creation, the backend marks the row as
   `FAILED`.
-- If upload succeeds but finalization fails, retry finalization before creating a
-  duplicate upload.
+- If upload succeeds but finalization fails, retry finalization before creating
+  a duplicate upload.
 - Use `DELETE /upload/files/by-id/:fileId` for authenticated inventory-backed
   deletion.
+- Missing AWS env does not prevent Kernel boot; it fails the S3 call.

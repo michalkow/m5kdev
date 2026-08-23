@@ -15,6 +15,14 @@ pnpm dlx create-m5kdev@0.34.0
 for Backend Modules (`files`, `workflows`, `ai`, …). Full command list:
 [CLI package](/packages/cli). Existing apps: [0.34.0 upgrades](/#upgrade-0-34-0).
 
+After scaffold:
+
+- Database reset/sync/seed: [Backend package](/packages/backend) (stop the
+  server for `file:` databases).
+- `workflows` or `notifications`: start Redis (`REDIS_URL`) before the server.
+  [Workflow](/modules/workflow).
+- `files`: local upload + `file.list` work without AWS. [File](/modules/file).
+
 ## Docs site
 
 The docs site is a private workspace app at `apps/docs`. It uses Docusaurus with

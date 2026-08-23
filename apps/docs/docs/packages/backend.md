@@ -31,6 +31,29 @@ Mastra helpers and Conversation: [0.34.0 agents](/guides/v0.34.0-mastra-app-owne
 Billing trial warning: [0.34.0 trial email](/guides/v0.34.0-billing-trial-ending-email-migration).
 Catalog pins and boundary peers: [Catalog lockstep](/guides/v0.33.0-catalog-lockstep-migration).
 
+## Database commands (daily)
+
+Kernel `runDb` (from `@m5kdev/backend/db`) is the one-shot runner for **reset**,
+**sync**, and **seed**. Starter Database config is server `db.ts`. Named
+scripts:
+
+```sh
+pnpm --filter ./apps/server drizzle:reset
+pnpm --filter ./apps/server drizzle:sync
+pnpm --filter ./apps/server drizzle:seed
+```
+
+drizzle-kit **generate / migrate / studio** stay on the app (`drizzle:generate`,
+`drizzle:migrate`, `drizzle:studio`). Those are not Database commands.
+
+Constraints:
+
+- Do **not** import `app.ts` (no HTTP, Redis, or queues).
+- For `file:` databases, stop the dev server first. The guard fails if
+  `PORT` (default 8080) is in use, unless `SKIP_DB_GUARD=true`.
+- `seed` requires a `seed` callback on Database config.
+- Upgrade steps: [Kernel Database commands](/guides/v0.34.0-kernel-database-commands-migration).
+
 ## Package rule
 
 Keep persistence logic in repositories, business logic in services, and transport

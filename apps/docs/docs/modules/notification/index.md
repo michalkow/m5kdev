@@ -7,6 +7,11 @@ sidebar_position: 8
 The notification module delivers push notifications to registered devices over
 Web Push (VAPID), APNs, and FCM, with device registration and per-send logging.
 
+`create-m5kdev` treats `notifications` as **experimental**: it registers
+`NotificationModule` and the notification tables, and does not add extra UI
+paths. `--yes` does not enable it. Delivery is a Workflow job, so also select
+`workflows` (and run Redis).
+
 ## Package map
 
 | Package | What it owns |
@@ -19,12 +24,18 @@ Web Push (VAPID), APNs, and FCM, with device registration and per-send logging.
 ```ts
 import { createBackendApp } from "@m5kdev/backend/app";
 import { NotificationModule } from "@m5kdev/backend/modules/notification/notification.module";
+import { WorkflowModule } from "@m5kdev/backend/modules/workflow/workflow.module";
 
-createBackendApp(config, [new NotificationModule({ namespace: "notification" })]);
+createBackendApp(config, [
+  new WorkflowModule({ queues: { default: {} }, defaultQueue: "default" }),
+  new NotificationModule({ namespace: "notification" }),
+]);
 ```
 
-Depends on `auth` and `workflow` — delivery runs as a queued job
-(`deliverNotificationJob`), so the workflow module must be registered.
+Depends on `auth` and `workflow`. The service field `deliverNotificationJob`
+is a `workflow.job({ name: "notification.deliver" }).handle(...)` definition;
+the Kernel discovers it via `registerService`. `enqueueSendToUser` fans out
+`deliverNotificationJob.trigger(...)` per device.
 
 ## Delivery flow
 
