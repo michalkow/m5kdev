@@ -27,7 +27,7 @@ The global Better Auth identity. Owns personal resources that are not org tenanc
 _Avoid_: Account, Customer, Client, Member
 
 **UserId**:
-The User id. Correct key for personal resources (billing, devices, OAuth, sessions) and optional audit dual-write. Not the org-scoped ownership key.
+The User id. Correct key for personal resources (devices, OAuth, sessions) and optional audit dual-write. Not the org-scoped ownership key. Billing is not a personal User resource.
 _Avoid_: MemberId (they are different principals)
 
 **Team**:
@@ -75,32 +75,36 @@ _Avoid_: Grant, Access, permission
 ### Composition
 
 **Kernel**:
-`createBackendApp` — the composition root that wires libSQL/Drizzle, Redis, Better Auth, modules, tRPC, Express, startup, and shutdown ([ADR-0003](docs/adr/0003-kernel-owns-express-http-shell.md)). It owns the Express instance, JSON and CORS defaults (origin from the app web URL; library allowed headers), HTTP listen (PORT, all interfaces), and SIGINT/SIGTERM when it is listening. Signal shutdown closes HTTP, then Kernel shutdown, then app `onShutdown`, then process exit. JSON and CORS defaults may be mapped; a map that omits a default drops it. Callers may pass an Express instance that has not already applied json/CORS; the Kernel still applies that shell. Opt-in baked SPA serving (`spa.root`, skip if missing) is also Kernel HTTP shell ([ADR-0006](docs/adr/0006-kernel-owns-baked-spa.md)). Other extra HTTP belongs on a Backend Module `express` hook. Extra shutdown work (telemetry) registers on the Kernel, not a starter signal handler. One-shot Database commands are Kernel-owned and must not boot that HTTP shell, Redis, or queues ([ADR-0005](docs/adr/0005-kernel-owns-database-commands.md)).
+`createBackendApp` — the composition root that wires libSQL/Drizzle, Redis, Better Auth, modules, tRPC, Express, startup, and shutdown ([ADR-0003](docs/adr/0003-kernel-owns-express-http-shell.md)). It owns the Express instance, JSON and CORS defaults (origin from the app web URL; library allowed headers), HTTP listen (PORT, all interfaces), and SIGINT/SIGTERM when it is listening. Signal shutdown closes HTTP, then Kernel shutdown, then app `onShutdown`, then process exit. JSON and CORS defaults may be mapped; a map that omits a default drops it. Callers may pass an Express instance that has not already applied json/CORS; the Kernel still applies that shell. Opt-in baked SPA serving (`spa.root`, skip if missing) is also Kernel HTTP shell ([ADR-0006](docs/adr/0006-kernel-owns-baked-spa.md)). Server events (SSE subscribe) are Kernel HTTP shell and Kernel infrastructure ([ADR-0010](docs/adr/0010-kernel-owns-server-events.md)). Other extra HTTP belongs on a Backend Module `express` hook. Extra shutdown work (telemetry) registers on the Kernel, not a starter signal handler. One-shot Database commands are Kernel-owned and must not boot that HTTP shell, Redis, or queues ([ADR-0005](docs/adr/0005-kernel-owns-database-commands.md)).
 _Avoid_: Framework (the stack is composable, not closed), App (that is the product), app-owned CORS as the default path; booting createBackendApp to reset or seed; ad-hoc `express.static` in starter `app.ts`
 
 **Backend Module**:
-A `BaseModule` subclass (or `defineBackendModule` object) that contributes tables, repositories, services, tRPC fragments, Express hooks, and workflows. Registered in `apps/*/server/src/app.ts` via `createBackendApp(config, [modules])`. Extra HTTP belongs on the module `express` hook, not ad hoc starter middleware. Baked SPA serving is Kernel shell, not a module hook ([ADR-0006](docs/adr/0006-kernel-owns-baked-spa.md)).
+A `BaseModule` subclass (or `defineBackendModule` object) that contributes tables, repositories, services, tRPC fragments, Express hooks, and workflows. Registered in `apps/*/server/src/app.ts` via `createBackendApp(config, [modules])`. Extra HTTP belongs on the module `express` hook, not ad hoc starter middleware. Baked SPA serving and Server events are Kernel shell, not a module hook ([ADR-0006](docs/adr/0006-kernel-owns-baked-spa.md), [ADR-0010](docs/adr/0010-kernel-owns-server-events.md)).
 _Avoid_: Package, Plugin, Feature (when you mean the server module), Model; `backendApp.use`
 
 **Kernel infrastructure**:
-`BaseModule`, `BaseService` / `BasePermissionService`, Grants, Procedures, Actors, repositories, and list/match query helpers. Not a Backend Module — do not pass Base to `createBackendApp`. Canonical import `@m5kdev/backend/base/*` (`./modules/base/*` still re-exports).
+`BaseModule`, `BaseService` / `BasePermissionService`, Grants, Procedures, Actors, repositories, list/match query helpers, and Server events. Not a Backend Module — do not pass Base to `createBackendApp`. Canonical import `@m5kdev/backend/base/*` (`./modules/base/*` still re-exports).
 _Avoid_: Utils Backend Module; calling Base "the module" as if it were Auth
+
+**Server event**:
+A Kernel-owned, one-way HTTP Server-Sent Event that a resource was created, updated, or deleted. It is addressed to a UserId. It names the resource, its id, that change, and organizationId or null (a tag, not the audience). An optional snapshot of the entity may ride along. Services emit to explicit UserIds; the authenticated User subscribes on one stream. The bus does not enforce Grants on snapshots. Not a Core Module. See [ADR-0010](docs/adr/0010-kernel-owns-server-events.md).
+_Avoid_: organization-addressed fan-out; WebSocket; Subscription (that is Billing); Notification (that may consume one); Action (that is Grant); Inbound callback; Backend Module
 
 **Core Module**:
 A Backend Module that ships in the Kernel package. Apps may omit it from `createBackendApp`. Core set: AI, Auth, Billing, Connection, Email (`EmailModule`), File, Notification, Recurrence, Tag, Inbound callback, Workflow. `@m5kdev/email` is React Email chrome, not EmailModule.
 _Avoid_: Optional Backend Module; putting Core Auth/Billing/File into `module-*` packages
 
 **Optional Backend Module**:
-A Backend Module published as `@m5kdev/module-<name>`: Clay, Docx, Pdf, Social, Video. `create-m5kdev` never adds these packages. When an app depends on one, the pin belongs in `catalogs.m5kdev`. Shared contracts/UI for those slices, if added, live in the Optional package — not commons/frontend/web-ui.
+A Backend Module published as `@m5kdev/module-<name>`: Clay, Docx, Pdf, Social, Video. `create-m5kdev` never adds these packages. When an app depends on one, the pin belongs in `catalogs.m5kdev`. At 1.0 they are experimental: lockstep Semver with the Kernel, quality not guaranteed. Shared contracts/UI for those slices, if added, live in the Optional package — not commons/frontend/web-ui.
 _Avoid_: calling Clay "the module" as if Auth were not one; importing them from `@m5kdev/backend/modules/...`
 
 **Connection**:
-Linked third-party API accounts. Module id and table stay `connect`. Not Better Auth login OAuth or the `accounts` table.
+Linked third-party API accounts. Personal; keyed by UserId, not MemberId. Module id and table stay `connect`. Not Better Auth login OAuth or the `accounts` table.
 _Avoid_: Connect as the product noun; treating a Connection row as a login account
 
 **Inbound callback**:
-One-shot inbound callbacks with awaitable payloads. Module id and table stay `webhook`. Not Stripe Billing `POST /webhook`.
-_Avoid_: Webhook (when you mean this primitive vs Stripe Subscription sync)
+One-shot inbound callbacks with awaitable payloads. Unattributed (not a User or Member resource). Module id and table stay `webhook`. Not Stripe Billing `POST /webhook`.
+_Avoid_: Webhook (when you mean this primitive vs Stripe Subscription sync); Connection
 
 **App schema**:
 The table map the app composes from Backend Module tables plus its own tables. One composition root, passed to the Kernel at boot, to drizzle-kit, and to Database commands.
@@ -173,8 +177,20 @@ The public marketing site package (`apps/landing`). A separate Fly app from the 
 _Avoid_: Webapp (the authenticated SPA baked into the product image)
 
 **Workflow**:
-A BullMQ job (and optional cron) with a persisted run row. Status: `queued` | `running` | `completed` | `failed`. Payload is serializable ids and typed input, not a request.
-_Avoid_: Job (the queue item is thinner than the persisted run), Queue, Task, Background process
+A persisted background run (optional cron). Status: `queued` | `running` | `completed` | `failed`. Payload is serializable ids and typed input, not a request. Org-scoped runs stamp MemberId.
+_Avoid_: Job, Queue, Task, Recurrence (that is the repeating-event store)
+
+**Recurrence**:
+A repeating calendar pattern stored as a row with RRULE-shaped rules. A log of repeating events (for example employee shifts). Not a Workflow; the models are unrelated.
+_Avoid_: Workflow, cron (that is Workflow), schedule
+
+**Device**:
+A User's push endpoint (web, iOS, Android). Personal; keyed by UserId, not MemberId.
+_Avoid_: Notification (that is the inbox item)
+
+**Notification**:
+A persisted in-app inbox item owned by a User. May also be pushed to that User's Devices. Not outbound email.
+_Avoid_: Device, Email, push (that is delivery)
 
 **File**:
 An S3 or local object, optionally inventoried as a `files` row. Upload status: `PENDING` | `UPLOADED` | `DELETED` | `FAILED`. Org-scoped Files stamp MemberId.
@@ -185,24 +201,24 @@ Stripe product/price configuration in app code (`StripePlan` / `StripePlansConfi
 _Avoid_: Product, Tier, Subscription (that is the synced row)
 
 **Subscription**:
-Local row re-synced from Stripe; Stripe is the source of truth. Personal: keyed by UserId, not MemberId.
-_Avoid_: Plan, Customer (Stripe customer linkage stays on the User)
+Local row re-synced from Stripe; Stripe is the source of truth. The billed party is the Organization, not a User. Stamp MemberId for attribution; do not key billing by UserId.
+_Avoid_: Plan, personal User subscription; Stripe customer linkage on the User
 
 **Trial**:
 The unpaid `trialing` period of a Subscription. Length comes from the Plan's `freeTrial.days`. Stripe owns start and end; the local row stores trialStart / trialEnd.
 _Avoid_: Plan, beta, Customer
 
 **Tag**:
-A polymorphic label attached to any resource type via taggings.
-_Avoid_: Label, Category (unless the product truly means a separate taxonomy)
+A polymorphic label attached to any resource type via taggings. Ownership is UserId (personal), MemberId (Member-owned), or organizationId (org-shared).
+_Avoid_: Label, Category (unless the product truly means a separate taxonomy); Team-scoped Tag as a fourth 1.0 resource
 
 **Conversation**:
-Ordered UI transcript of AI turns. A turn is a Vercel AI SDK `UIMessage`. When persisted, it is the UI projection of a Thread.
+Ordered UI transcript of AI turns. A turn is a Vercel AI SDK `UIMessage`. When persisted, it is the UI projection of a Thread. Ownership follows that Thread's resource.
 _Avoid_: Chat (collides with the unused `chats` table, Chatwoot, and model category `"chat"`); Thread (that is the Mastra store)
 
 **Thread**:
-A Mastra Memory thread. `resource` is UserId (personal); `thread` is the Conversation id. Threads are unbound in Memory (not keyed by Agent). See [ADR-0007](docs/adr/0007-mastra-thread-over-chats.md).
-_Avoid_: using Thread for the UI surface; the `chats` table; MemberId as the ownership key
+A Mastra Memory thread. `thread` is the Conversation id. `resource` is UserId (personal), MemberId (Member-owned), or organizationId (org-shared). Threads are unbound in Memory (not keyed by Agent). See [ADR-0007](docs/adr/0007-mastra-thread-over-chats.md).
+_Avoid_: using Thread for the UI surface; the `chats` table
 
 **Agent**:
 A named Mastra agent the app registers. A Conversation selects which Agent answers; Agent is not the Thread key.

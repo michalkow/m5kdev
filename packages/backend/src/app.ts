@@ -24,10 +24,16 @@ import express, { type Express } from "express";
 import IORedis, { type RedisOptions } from "ioredis";
 import type { Logger } from "pino";
 import { Resend } from "resend";
+import {
+  createServerEventBus,
+  SERVER_EVENT_SUBSCRIBE_PATH,
+  type ServerEventBus,
+} from "./base/server-event";
 import { type AppI18n, type BackendAppI18nResources, createAppI18n } from "./i18n/app-i18n";
 import { withLibsqlRetry } from "./lib/libsql";
 import type * as authTables from "./modules/auth/auth.db";
 import type { BetterAuth } from "./modules/auth/auth.lib";
+import type { AuthRequest } from "./modules/auth/auth.middleware";
 import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/auth.middleware";
 import type { BaseModule } from "./modules/base/base.module";
 import { WorkflowRegistry } from "./modules/workflow/workflow.registry";
@@ -192,6 +198,7 @@ export type BackendModuleRepositoriesContext<Tables extends TableMap = TableMap>
     express: Express;
     redis?: IORedis;
     resend?: Resend;
+    serverEvents: ServerEventBus;
   };
 };
 
@@ -209,6 +216,7 @@ export type BackendModuleServicesContext = {
     express: Express;
     redis?: IORedis;
     resend?: Resend;
+    serverEvents: ServerEventBus;
   };
 };
 
@@ -621,6 +629,13 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   const dbClientState = createDbClient(config.db, logger);
   const redisState = createRedisClient(config.redis);
   const resendState = createResendClient(config.resend);
+  const serverEvents = createServerEventBus({ redis: redisState.redis, logger });
+  const infra = {
+    express: expressApp,
+    redis: redisState.redis,
+    resend: resendState.resend,
+    serverEvents,
+  };
   const moduleStates = new Map<string, BuiltModuleRuntime>();
   const schema: AppDbSchema = config.schema ?? ({} as unknown as AppDbSchema);
 
@@ -656,11 +671,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         i18n: appI18n,
         deps,
         db,
-        infra: {
-          express: expressApp,
-          redis: redisState.redis,
-          resend: resendState.resend,
-        },
+        infra,
       } as any) ?? {};
     state.repositories = repositories;
     repositoryModules[module.id] = repositories;
@@ -680,11 +691,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         repositories: state.repositories,
         modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
         db,
-        infra: {
-          express: expressApp,
-          redis: redisState.redis,
-          resend: resendState.resend,
-        },
+        infra,
       } as any) ?? {};
     state.services = services;
     serviceModules[module.id] = services;
@@ -717,11 +724,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       services: moduleStates.get(module.id)!.services,
       modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
       db,
-      infra: {
-        express: expressApp,
-        redis: redisState.redis,
-        resend: resendState.resend,
-      },
+      infra,
       auth,
     } as any);
 
@@ -784,11 +787,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         services: state.services,
         modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
         db,
-        infra: {
-          express: expressApp,
-          redis: redisState.redis,
-          resend: resendState.resend,
-        },
+        infra,
         trpc: trpcMethods,
         auth,
       } as any) ?? {};
@@ -839,15 +838,22 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       services: state.services,
       modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
       db,
-      infra: {
-        express: expressApp,
-        redis: redisState.redis,
-        resend: resendState.resend,
-      },
+      infra,
       auth,
       authMiddleware,
       roleAuthMiddleware,
     } as any);
+  }
+
+  if (authMiddleware) {
+    expressApp.get(SERVER_EVENT_SUBSCRIBE_PATH, authMiddleware, (req, res) => {
+      const userId = (req as AuthRequest).user?.id;
+      if (!userId) {
+        res.status(401).json({ message: "Unauthorized" });
+        return;
+      }
+      serverEvents.attach(userId, res);
+    });
   }
 
   applyBakedSpa({ expressApp, spa: config.spa });
@@ -866,11 +872,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         services: state.services,
         modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
         db,
-        infra: {
-          express: expressApp,
-          redis: redisState.redis,
-          resend: resendState.resend,
-        },
+        infra,
         workflow: workflowRuntime,
       } as any);
     }
@@ -887,11 +889,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     services: {},
     modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
     db,
-    infra: {
-      express: expressApp,
-      redis: redisState.redis,
-      resend: resendState.resend,
-    },
+    infra,
     workflow: workflowRuntime,
     auth,
     authMiddleware,
@@ -951,6 +949,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         await workflowRuntime.registry.stop();
         await workflowRuntime.service.close();
       }
+      serverEvents.close();
       if (redisState.owned && redisState.redis) {
         redisState.redis.disconnect();
       }
@@ -980,6 +979,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     express: {
       app: expressApp,
     },
+    serverEvents,
     auth: auth
       ? {
           instance: auth,

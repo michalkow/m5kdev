@@ -13,4 +13,4 @@ Callers may pass an Express instance; the Kernel still applies json/CORS onto it
 - **Default `listen: false` / auto-skip in `NODE_ENV=test`** — rejected: product entry should be `start()`; tests opt out. Hidden env control flow is worse than a documented footgun.
 - **Kernel owns OTEL** — rejected: instrumentation must load before other imports and must stay optional.
 
-Baked SPA static serving is Kernel HTTP shell when `spa.root` is set; see [ADR-0006](0006-kernel-owns-baked-spa.md).
+Baked SPA static serving is Kernel HTTP shell when `spa.root` is set; see [ADR-0006](0006-kernel-owns-baked-spa.md). Server events (SSE subscribe) are Kernel HTTP shell and Kernel infrastructure, not a module hook; see [ADR-0010](0010-kernel-owns-server-events.md).
