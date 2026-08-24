@@ -852,7 +852,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         res.status(401).json({ message: "Unauthorized" });
         return;
       }
-      serverEvents.attach(userId, res);
+      serverEvents.attach({ userId, res });
     });
   }
 
@@ -941,6 +941,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     try {
       process.removeListener("SIGINT", onSignal);
       process.removeListener("SIGTERM", onSignal);
+      serverEvents.close();
       await closeHttpServer();
       for (const hook of shutdownHooks) {
         await hook();
@@ -949,7 +950,6 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         await workflowRuntime.registry.stop();
         await workflowRuntime.service.close();
       }
-      serverEvents.close();
       if (redisState.owned && redisState.redis) {
         redisState.redis.disconnect();
       }

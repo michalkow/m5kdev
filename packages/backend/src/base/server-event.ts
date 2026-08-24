@@ -1,12 +1,13 @@
 import {
   type ServerEventEnvelope,
+  SERVER_EVENT_SUBSCRIBE_PATH,
   serverEventEnvelopeSchema,
 } from "@m5kdev/commons/modules/base/server-event.schema";
 import type { Response } from "express";
 import type IORedis from "ioredis";
 import type { Logger } from "pino";
 
-export const SERVER_EVENT_SUBSCRIBE_PATH = "/events";
+export { SERVER_EVENT_SUBSCRIBE_PATH };
 
 const CHANNEL_PREFIX = "m5kdev:server-event:";
 const KEEPALIVE_MS = 15_000;
@@ -17,7 +18,7 @@ export interface ServerEventEmitInput extends ServerEventEnvelope {
 
 export interface ServerEventBus {
   emit(input: ServerEventEmitInput): void;
-  attach(userId: string, res: Response): void;
+  attach(input: { userId: string; res: Response }): void;
   close(): void;
 }
 
@@ -29,7 +30,11 @@ export function createServerEventBus(options: { redis?: IORedis; logger: Logger 
 
   const writeFrame = (res: Response, chunk: string): void => {
     if (res.writableEnded) return;
-    res.write(chunk);
+    try {
+      res.write(chunk);
+    } catch (err) {
+      options.logger.error({ err }, "Server event write failed");
+    }
   };
 
   const writeEnvelope = (res: Response, envelope: ServerEventEnvelope): void => {
@@ -37,9 +42,9 @@ export function createServerEventBus(options: { redis?: IORedis; logger: Logger 
   };
 
   const deliverLocal = (userId: string, envelope: ServerEventEnvelope): void => {
-    const sockets = connections.get(userId);
-    if (!sockets) return;
-    for (const res of sockets) {
+    const responses = connections.get(userId);
+    if (!responses) return;
+    for (const res of responses) {
       writeEnvelope(res, envelope);
     }
   };
@@ -75,10 +80,10 @@ export function createServerEventBus(options: { redis?: IORedis; logger: Logger 
       clearInterval(timer);
       keepalives.delete(res);
     }
-    const sockets = connections.get(userId);
-    if (!sockets) return;
-    sockets.delete(res);
-    if (sockets.size === 0) connections.delete(userId);
+    const responses = connections.get(userId);
+    if (!responses) return;
+    responses.delete(res);
+    if (responses.size === 0) connections.delete(userId);
   };
 
   return {
@@ -114,7 +119,7 @@ export function createServerEventBus(options: { redis?: IORedis; logger: Logger 
       }
     },
 
-    attach(userId, res) {
+    attach({ userId, res }) {
       if (closed) {
         res.status(503).end();
         return;
@@ -130,12 +135,12 @@ export function createServerEventBus(options: { redis?: IORedis; logger: Logger 
       }
       writeFrame(res, ": ok\n\n");
 
-      let sockets = connections.get(userId);
-      if (!sockets) {
-        sockets = new Set();
-        connections.set(userId, sockets);
+      let responses = connections.get(userId);
+      if (!responses) {
+        responses = new Set();
+        connections.set(userId, responses);
       }
-      sockets.add(res);
+      responses.add(res);
 
       const timer = setInterval(() => {
         writeFrame(res, ": keepalive\n\n");
@@ -152,11 +157,16 @@ export function createServerEventBus(options: { redis?: IORedis; logger: Logger 
 
     close() {
       closed = true;
-      for (const [userId, sockets] of connections) {
-        for (const res of sockets) {
+      for (const [userId, responses] of connections) {
+        for (const res of responses) {
           const timer = keepalives.get(res);
           if (timer) clearInterval(timer);
-          if (!res.writableEnded) res.end();
+          if (res.writableEnded) continue;
+          try {
+            res.end();
+          } catch (err) {
+            options.logger.error({ err, userId }, "Server event close failed");
+          }
         }
         connections.delete(userId);
       }

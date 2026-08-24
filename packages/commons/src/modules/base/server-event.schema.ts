@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const SERVER_EVENT_SUBSCRIBE_PATH = "/events";
+
 export const SERVER_EVENT_CHANGES = ["created", "updated", "deleted"] as const;
 
 export const serverEventEnvelopeSchema = z.object({
