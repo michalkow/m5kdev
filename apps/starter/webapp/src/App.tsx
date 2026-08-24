@@ -11,10 +11,29 @@ import {
   APP_NAME,
   APP_ROLES_CONFIG,
 } from "@starter-app/shared/modules/app/app.constants";
+import { POST_SERVER_EVENT_RESOURCE } from "@starter-app/shared/modules/posts/posts.constants";
 import { NuqsAdapter } from "nuqs/adapters/react-router/v7";
+import type { ReactNode } from "react";
 import { BrowserRouter } from "react-router";
 import { Toaster } from "sonner";
+import { createPostListServerEventHandler } from "./modules/posts/hooks/usePostServerEvents";
 import { Router } from "./Router";
+import { useTRPC } from "./utils/trpc";
+
+function StarterServerEventProvider({ children }: { children: ReactNode }) {
+  const trpc = useTRPC();
+  const onPostEvent = createPostListServerEventHandler(trpc);
+  return (
+    <ServerEventProvider
+      handlers={{ [POST_SERVER_EVENT_RESOURCE]: onPostEvent }}
+      onReconnect={(queryClient) => {
+        void queryClient.invalidateQueries(trpc.posts.list.queryFilter());
+      }}
+    >
+      {children}
+    </ServerEventProvider>
+  );
+}
 
 export function App() {
   return (
@@ -32,13 +51,13 @@ export function App() {
           <ThemeProvider defaultTheme="light" storageKey="m5kdev-theme">
             <AuthProvider loader={<AppLoader />}>
               <AppTrpcQueryProvider>
-                <ServerEventProvider>
+                <StarterServerEventProvider>
                   <DialogProvider>
                     <Router />
                   </DialogProvider>
                   <Toaster richColors closeButton />
                   <Toast.Provider placement="bottom end" />
-                </ServerEventProvider>
+                </StarterServerEventProvider>
               </AppTrpcQueryProvider>
             </AuthProvider>
           </ThemeProvider>

@@ -1,4 +1,5 @@
 import { createBackendRouterMap } from "@m5kdev/backend/app";
+import type { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
 import {
   BaseModule,
   type ModuleRepositoriesContext,
@@ -11,6 +12,7 @@ import { PostsRepository } from "./posts.repository";
 import { PostsService } from "./posts.service";
 import { createPostsTRPC } from "./posts.trpc";
 
+type PostsModuleDeps = { auth: AuthModule };
 type PostsModuleTables = typeof postsTables;
 type PostsModuleRepositories = {
   posts: PostsRepository;
@@ -23,16 +25,17 @@ type PostsModuleRouters = {
 };
 
 export class PostsModule extends BaseModule<
-  never,
+  PostsModuleDeps,
   PostsModuleTables,
   PostsModuleRepositories,
   PostsModuleServices,
   PostsModuleRouters
 > {
   readonly id = "posts";
+  override readonly dependsOn = ["auth"] as const;
   override readonly dbDependsOn = ["auth"] as const;
 
-  override repositories({ db }: ModuleRepositoriesContext<never, PostsModuleTables>) {
+  override repositories({ db }: ModuleRepositoriesContext<PostsModuleDeps, PostsModuleTables>) {
     return {
       posts: new PostsRepository({
         orm: db.orm,
@@ -42,13 +45,22 @@ export class PostsModule extends BaseModule<
     };
   }
 
-  override services({ repositories }: ModuleServicesContext<never, PostsModuleRepositories>) {
+  override services({
+    repositories,
+    deps,
+    infra,
+  }: ModuleServicesContext<PostsModuleDeps, PostsModuleRepositories>) {
     return {
-      posts: new PostsService({ posts: repositories.posts }, {}, postsGrants),
+      posts: new PostsService(
+        { posts: repositories.posts },
+        { auth: deps.auth.services.auth },
+        postsGrants,
+        infra.serverEvents
+      ),
     };
   }
 
-  override trpc({ trpc, services }: ModuleTRPCContext<never, PostsModuleServices>) {
+  override trpc({ trpc, services }: ModuleTRPCContext<PostsModuleDeps, PostsModuleServices>) {
     return createBackendRouterMap("posts", createPostsTRPC(trpc, services.posts));
   }
 }
