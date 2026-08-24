@@ -1,6 +1,7 @@
 import { Toast } from "@heroui/react";
 import { AppConfigProvider } from "@m5kdev/frontend/modules/app/components/AppConfigProvider";
 import { AppTrpcQueryProvider } from "@m5kdev/frontend/modules/app/components/AppTrpcQueryProvider";
+import { ServerEventProvider } from "@m5kdev/frontend/modules/app/components/ServerEventProvider";
 import { AuthProvider } from "@m5kdev/frontend/modules/auth/components/AuthProvider";
 import { DialogProvider } from "@m5kdev/web-ui/components/DialogProvider";
 import { ThemeProvider } from "@m5kdev/web-ui/components/theme-provider";
@@ -31,11 +32,13 @@ export function App() {
           <ThemeProvider defaultTheme="light" storageKey="m5kdev-theme">
             <AuthProvider loader={<AppLoader />}>
               <AppTrpcQueryProvider>
-                <DialogProvider>
-                  <Router />
-                </DialogProvider>
-                <Toaster richColors closeButton />
-                <Toast.Provider placement="bottom end" />
+                <ServerEventProvider>
+                  <DialogProvider>
+                    <Router />
+                  </DialogProvider>
+                  <Toaster richColors closeButton />
+                  <Toast.Provider placement="bottom end" />
+                </ServerEventProvider>
               </AppTrpcQueryProvider>
             </AuthProvider>
           </ThemeProvider>

@@ -1,9 +1,12 @@
 export * from "./modules/app/components/AppConfigProvider";
 export * from "./modules/app/components/AppTrpcQueryProvider";
+export * from "./modules/app/components/ServerEventProvider";
 export * from "./modules/app/hooks/useAppConfig";
 export * from "./modules/app/hooks/useAppRoles";
 export * from "./modules/app/hooks/useAppTrpc";
 export * from "./modules/app/hooks/useRoleLabel";
+export * from "./modules/app/hooks/useServerEventHandler";
+export type { ServerEventHandler } from "./modules/app/server-event";
 export * from "./modules/auth/auth.lib";
 export * from "./modules/auth/components/AuthProvider";
 export { useUpdateUser, useUpdateUserPreferences } from "./modules/auth/hooks/useAuth";
