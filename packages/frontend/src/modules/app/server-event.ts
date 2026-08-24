@@ -32,12 +32,12 @@ function subscribeUrl(serverUrl: string): string {
   return `${serverUrl.replace(/\/$/, "")}${SERVER_EVENT_SUBSCRIBE_PATH}`;
 }
 
-function shouldDeliverServerEvent(
-  organizationId: string | null,
-  activeOrganizationId: string | null | undefined
-): boolean {
-  if (organizationId === null) return true;
-  return organizationId === (activeOrganizationId ?? null);
+function shouldDeliverServerEvent(input: {
+  organizationId: string | null;
+  activeOrganizationId: string | null | undefined;
+}): boolean {
+  if (input.organizationId === null) return true;
+  return input.organizationId === (input.activeOrganizationId ?? null);
 }
 
 export function subscribeToServerEvents(input: SubscribeToServerEventsInput): {
@@ -51,14 +51,14 @@ export function subscribeToServerEvents(input: SubscribeToServerEventsInput): {
   const source = new EventSourceImpl(subscribeUrl(input.serverUrl), {
     withCredentials: true,
   });
-  let opened = false;
+  let streamWasOpen = false;
 
   source.onopen = () => {
-    opened = true;
+    streamWasOpen = true;
   };
   source.onerror = () => {
-    if (!opened) return;
-    opened = false;
+    if (!streamWasOpen) return;
+    streamWasOpen = false;
     input.onReconnect?.(input.queryClient);
   };
   source.onmessage = (event) => {
@@ -71,7 +71,12 @@ export function subscribeToServerEvents(input: SubscribeToServerEventsInput): {
     const parsed = serverEventEnvelopeSchema.safeParse(raw);
     if (!parsed.success) return;
     const envelope = parsed.data;
-    if (!shouldDeliverServerEvent(envelope.organizationId, input.getActiveOrganizationId())) {
+    if (
+      !shouldDeliverServerEvent({
+        organizationId: envelope.organizationId,
+        activeOrganizationId: input.getActiveOrganizationId(),
+      })
+    ) {
       return;
     }
     for (const handler of input.getHandlers(envelope.resource)) {

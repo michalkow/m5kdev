@@ -40,21 +40,15 @@ class FakeEventSource implements ServerEventSource {
   }
 }
 
-function createSession(activeOrganizationId: string | null): {
-  organizationId: string | null;
-} {
-  return { organizationId: activeOrganizationId };
-}
-
 describe("subscribeToServerEvents", () => {
   let queryClient: QueryClient;
-  let session: { organizationId: string | null };
+  let session: { activeOrganizationId: string | null };
   let handlers: Record<string, ServerEventHandler[]>;
 
   beforeEach(() => {
     FakeEventSource.instances = [];
     queryClient = new QueryClient();
-    session = createSession("org-a");
+    session = { activeOrganizationId: "org-a" };
     handlers = {};
   });
 
@@ -62,7 +56,7 @@ describe("subscribeToServerEvents", () => {
     return subscribeToServerEvents({
       serverUrl: "http://server.test",
       queryClient,
-      getActiveOrganizationId: () => session.organizationId,
+      getActiveOrganizationId: () => session.activeOrganizationId,
       getHandlers: (resource) => handlers[resource] ?? [],
       onReconnect,
       EventSourceImpl: FakeEventSource as unknown as ServerEventSourceConstructor,
@@ -131,7 +125,7 @@ describe("subscribeToServerEvents", () => {
       change: "updated",
       organizationId: null,
     });
-    session.organizationId = "org-b";
+    session.activeOrganizationId = "org-b";
     FakeEventSource.instances[0]?.emitData({
       resource: "file",
       id: "file-2",
@@ -140,6 +134,29 @@ describe("subscribeToServerEvents", () => {
     });
 
     expect(handler).toHaveBeenCalledTimes(2);
+    expect(FakeEventSource.instances).toHaveLength(1);
+  });
+
+  it("runs a handler registered after subscribe and drops it after unregister", () => {
+    subscribe();
+    const mounted = jest.fn();
+    handlers.post = [mounted];
+
+    FakeEventSource.instances[0]?.emitData({
+      resource: "post",
+      id: "post-1",
+      change: "updated",
+      organizationId: "org-a",
+    });
+    handlers.post = [];
+    FakeEventSource.instances[0]?.emitData({
+      resource: "post",
+      id: "post-2",
+      change: "updated",
+      organizationId: "org-a",
+    });
+
+    expect(mounted).toHaveBeenCalledTimes(1);
     expect(FakeEventSource.instances).toHaveLength(1);
   });
 

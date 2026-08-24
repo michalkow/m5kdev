@@ -1,6 +1,6 @@
 export * from "./modules/app/components/AppConfigProvider";
 export * from "./modules/app/components/AppTrpcQueryProvider";
-export * from "./modules/app/components/ServerEventProvider";
+export { ServerEventProvider } from "./modules/app/components/ServerEventProvider";
 export * from "./modules/app/hooks/useAppConfig";
 export * from "./modules/app/hooks/useAppRoles";
 export * from "./modules/app/hooks/useAppTrpc";
