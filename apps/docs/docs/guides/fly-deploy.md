@@ -11,6 +11,10 @@ repo root can run it. **Fly.io** is the adapter this starter ships (`fly.toml`,
 Generated apps need **Node.js >= 24**. Images use `node:24-slim` and pnpm from
 `packageManager` (`pnpm@10.13.1`).
 
+Root scripts call Kernel bins (`m5kdev-fly-deploy` / `m5kdev-fly-secrets` from
+`@m5kdev/backend`). The app only passes `--config`, `--dockerfile`, and `--env`
+paths. The `fly` CLI must be on PATH.
+
 ## What ships
 
 | App | Image | Fly name | Volume |
@@ -75,6 +79,7 @@ scaffold or from this release’s Starter, then edit `app =` and secrets locally
 Update will not invent a `fly.toml` into a customized tree as a merge.
 
 Existing apps on 0.33: [Docker, Fly.io, and Node 24 in 0.34.0](/guides/v0.34.0-fly-deploy-migration).
+Apps still shipping Starter `fly-*.mjs` copies: [Kernel Fly deploy commands in 0.35.0](/guides/v0.35.0-kernel-fly-commands-migration).
 
 ## Same-origin URLs
 

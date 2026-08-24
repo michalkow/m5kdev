@@ -119,8 +119,8 @@ Zod schemas and constants in `apps/*/shared` or `@m5kdev/commons` that server an
 _Avoid_: DTO (server select/output helpers), types package, API spec; calling this package the Fly app
 
 **Deploy home**:
-Where the product image’s Docker and Fly files live: `apps/shared` (Dockerfile, fly.toml, production env example). The image runs server plus a baked webapp. Repo-root `.dockerignore` is the build-context ignore file. Root `app:deploy` / `app:secrets` are the Fly CLI entrypoints.
-_Avoid_: Shared contract (that is Zod/constants); treating `apps/shared` as a runnable Node service; a top-level `deploy/` folder; dockerignore copies beside the Dockerfile
+Where the product image’s Docker and Fly files live: `apps/shared` (Dockerfile, fly.toml, production env example). The image runs server plus a baked webapp. Repo-root `.dockerignore` is the build-context ignore file. Root `app:deploy` / `app:secrets` call Kernel bins (`m5kdev-fly-deploy` / `m5kdev-fly-secrets`); the wrappers are not Starter copies ([ADR-0009](docs/adr/0009-kernel-owns-fly-commands.md)).
+_Avoid_: Shared contract (that is Zod/constants); treating `apps/shared` as a runnable Node service; a top-level `deploy/` folder; dockerignore copies beside the Dockerfile; app-owned `fly-deploy.mjs` duplicates
 
 **Procedure**:
 A request-bound Service method built with `this.procedure("name")`: input, auth, resource load, Grant check, then handler.

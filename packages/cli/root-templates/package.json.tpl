@@ -8,13 +8,14 @@
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "check-types": "turbo run check-types",
-    "app:deploy": "node apps/shared/scripts/fly-deploy.mjs --config apps/shared/fly.toml --dockerfile apps/shared/Dockerfile --env apps/shared/.env.production",
-    "app:secrets": "node apps/shared/scripts/fly-secrets.mjs --config apps/shared/fly.toml --env apps/shared/.env.production",
-    "landing:deploy": "node apps/landing/scripts/fly-deploy.mjs --config apps/landing/fly.toml --dockerfile apps/landing/Dockerfile --env apps/landing/.env.production",
-    "landing:secrets": "node apps/landing/scripts/fly-secrets.mjs --config apps/landing/fly.toml --env apps/landing/.env.production"
+    "app:deploy": "m5kdev-fly-deploy --config apps/shared/fly.toml --dockerfile apps/shared/Dockerfile --env apps/shared/.env.production",
+    "app:secrets": "m5kdev-fly-secrets --config apps/shared/fly.toml --env apps/shared/.env.production",
+    "landing:deploy": "m5kdev-fly-deploy --config apps/landing/fly.toml --dockerfile apps/landing/Dockerfile --env apps/landing/.env.production",
+    "landing:secrets": "m5kdev-fly-secrets --config apps/landing/fly.toml --env apps/landing/.env.production"
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:m5kdev",
+    "@m5kdev/backend": "catalog:m5kdev",
     "turbo": "catalog:m5kdev",
     "typescript": "catalog:m5kdev"
   },

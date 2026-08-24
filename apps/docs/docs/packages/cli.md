@@ -76,9 +76,11 @@ snapshot, file policies). Bootstrap:
 `update` **ignores** `**/fly.toml` and `**/.env.production`. Copy those once
 from a fresh scaffold if you want Fly. See
 [Docker, Fly.io, and Node 24](/guides/v0.34.0-fly-deploy-migration).
+Root deploy scripts call Kernel bins; see
+[Kernel Fly deploy commands](/guides/v0.35.0-kernel-fly-commands-migration).
 
-The production migration registry is empty for 0.34.0. Structural upgrades in
-this release are documented as Manual / Conditional steps in the guides below.
+The production migration registry is empty for 0.34.0 and 0.35.0. Structural
+upgrades are documented as Manual / Conditional steps in the guides below.
 
 ## 0.34.0 upgrades
 
@@ -90,6 +92,10 @@ Run these on existing apps, in this order when they apply:
 4. [Docker, Fly.io, and Node 24](/guides/v0.34.0-fly-deploy-migration)
 5. [App-owned Mastra agents and Conversation](/guides/v0.34.0-mastra-app-owned-agents-migration)
 6. [Billing trial-ending email](/guides/v0.34.0-billing-trial-ending-email-migration)
+
+## 0.35.0 upgrades
+
+1. [Kernel Fly deploy commands](/guides/v0.35.0-kernel-fly-commands-migration)
 
 Operational Fly runbook: [Deploy with Docker and Fly.io](/guides/fly-deploy).
 

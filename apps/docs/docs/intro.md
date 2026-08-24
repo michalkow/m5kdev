@@ -89,6 +89,10 @@ Existing apps should work through these guides (skip any that already apply):
 - [App-owned Mastra agents and Conversation](/guides/v0.34.0-mastra-app-owned-agents-migration)
 - [Billing trial-ending email](/guides/v0.34.0-billing-trial-ending-email-migration)
 
+## Upgrading to 0.35.0 {#upgrade-0-35-0}
+
+- [Kernel Fly deploy commands](/guides/v0.35.0-kernel-fly-commands-migration)
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module

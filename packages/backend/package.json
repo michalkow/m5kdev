@@ -12,6 +12,10 @@
   "files": [
     "dist"
   ],
+  "bin": {
+    "m5kdev-fly-deploy": "./dist/src/fly-deploy.mjs",
+    "m5kdev-fly-secrets": "./dist/src/fly-secrets.mjs"
+  },
   "scripts": {
     "version:patch": "npm version patch",
     "lint": "biome check .",
@@ -299,6 +303,16 @@
       "require": {
         "types": "./dist/src/db.d.cts",
         "default": "./dist/src/db.cjs"
+      }
+    },
+    "./fly": {
+      "import": {
+        "types": "./dist/src/fly.d.mts",
+        "default": "./dist/src/fly.mjs"
+      },
+      "require": {
+        "types": "./dist/src/fly.d.cts",
+        "default": "./dist/src/fly.cjs"
       }
     },
     "./app": {

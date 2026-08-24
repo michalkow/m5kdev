@@ -25,3 +25,7 @@ Package docs explain ownership and imports. Detailed usage belongs in
 - [App-owned Mastra agents and Conversation](/guides/v0.34.0-mastra-app-owned-agents-migration)
 - [Billing trial-ending email](/guides/v0.34.0-billing-trial-ending-email-migration)
 - [CLI package](./cli)
+
+## 0.35.0 upgrades
+
+- [Kernel Fly deploy commands](/guides/v0.35.0-kernel-fly-commands-migration)

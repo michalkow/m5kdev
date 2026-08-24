@@ -76,7 +76,8 @@ pnpm landing:deploy
 ```
 
 `app:deploy` / `landing:deploy` read that app’s `.env.production` and forward
-every key as `fly deploy --build-secret`. A missing env file errors with a
+every key as `fly deploy --build-secret` via Kernel bins
+(`m5kdev-fly-deploy` / `m5kdev-fly-secrets`). A missing env file errors with a
 copy-the-example message. Product data lives on the `libsql_data` volume at
 `/app/data` (`DATABASE_URL=file:/app/data/local.db`). Redis is a runtime secret,
 not an image layer.

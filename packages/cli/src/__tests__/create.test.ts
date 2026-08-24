@@ -680,11 +680,19 @@ describe("scaffoldProject", () => {
 
     const rootPackage = JSON.parse(
       await fs.readFile(path.join(result.targetDirectory, "package.json"), "utf8")
-    ) as { engines?: { node?: string }; packageManager?: string; scripts?: Record<string, string> };
+    ) as {
+      engines?: { node?: string };
+      packageManager?: string;
+      scripts?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
     expect(rootPackage.engines?.node).toBe(">=24");
     expect(rootPackage.packageManager).toBe("pnpm@10.13.1");
+    expect(rootPackage.devDependencies?.["@m5kdev/backend"]).toBe("catalog:m5kdev");
+    expect(rootPackage.scripts?.["app:deploy"]).toContain("m5kdev-fly-deploy");
     expect(rootPackage.scripts?.["app:deploy"]).toContain("apps/shared/fly.toml");
     expect(rootPackage.scripts?.["app:deploy"]).toContain("apps/shared/Dockerfile");
+    expect(rootPackage.scripts?.["app:secrets"]).toContain("m5kdev-fly-secrets");
     expect(rootPackage.scripts?.["app:secrets"]).toContain("apps/shared/.env.production");
 
     const dockerignore = await fs.readFile(
@@ -738,19 +746,12 @@ describe("scaffoldProject", () => {
     expect(envExample).toContain("REDIS_URL");
     expect(envExample).not.toContain("{{");
 
-    const deployWrapper = await fs.readFile(
-      path.join(result.targetDirectory, "apps/shared/scripts/fly-deploy.mjs"),
-      "utf8"
-    );
-    expect(deployWrapper).toContain("--build-secret");
-    expect(deployWrapper).toMatch(/Copy the \.env\.production\.example/);
-
-    const secretsWrapper = await fs.readFile(
-      path.join(result.targetDirectory, "apps/shared/scripts/fly-secrets.mjs"),
-      "utf8"
-    );
-    expect(secretsWrapper).toContain("secrets");
-    expect(secretsWrapper).toContain("import");
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "apps/shared/scripts/fly-deploy.mjs"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "apps/shared/scripts/fly-secrets.mjs"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
 
     const gitignore = await fs.readFile(path.join(result.targetDirectory, ".gitignore"), "utf8");
     expect(gitignore).toMatch(/\.env\.production/);
@@ -815,11 +816,16 @@ describe("scaffoldProject", () => {
 
       const rootPackage = JSON.parse(
         await fs.readFile(path.join(result.targetDirectory, "package.json"), "utf8")
-      ) as { engines?: { node?: string }; scripts?: Record<string, string> };
+      ) as {
+        engines?: { node?: string };
+        scripts?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      };
       expect(rootPackage.engines?.node).toBe(">=24");
-      expect(rootPackage.scripts?.["landing:deploy"]).toContain(
-        "apps/landing/scripts/fly-deploy.mjs"
-      );
+      expect(rootPackage.devDependencies?.["@m5kdev/backend"]).toBe("catalog:m5kdev");
+      expect(rootPackage.scripts?.["landing:deploy"]).toContain("m5kdev-fly-deploy");
+      expect(rootPackage.scripts?.["landing:deploy"]).toContain("apps/landing/fly.toml");
+      expect(rootPackage.scripts?.["landing:secrets"]).toContain("m5kdev-fly-secrets");
       expect(rootPackage.scripts?.["landing:secrets"]).toContain("apps/landing/.env.production");
 
       await expect(
@@ -827,7 +833,10 @@ describe("scaffoldProject", () => {
       ).resolves.toBeTruthy();
       await expect(
         fs.stat(path.join(result.targetDirectory, "apps/landing/scripts/fly-deploy.mjs"))
-      ).resolves.toBeTruthy();
+      ).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(
+        fs.stat(path.join(result.targetDirectory, "apps/landing/scripts/fly-secrets.mjs"))
+      ).rejects.toMatchObject({ code: "ENOENT" });
 
       const landingPage = await fs.readFile(
         path.join(result.targetDirectory, "apps/landing/src/LandingPage.tsx"),

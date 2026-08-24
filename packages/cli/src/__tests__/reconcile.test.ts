@@ -303,6 +303,60 @@ describe("three-way template reconciliation", () => {
     });
   });
 
+  it("deletes unmodified Fly wrapper scripts removed from the template", async () => {
+    const fixture = await baselineRepo(tempRoot, {
+      "apps/shared/scripts/fly-deploy.mjs": "old deploy\n",
+      "apps/shared/scripts/fly-secrets.mjs": "old secrets\n",
+      "apps/landing/scripts/fly-deploy.mjs": "old landing deploy\n",
+      "apps/landing/scripts/fly-secrets.mjs": "old landing secrets\n",
+    });
+    const targetRoot = path.join(tempRoot, "target");
+    await makeTemplate(targetRoot, {
+      "apps/shared/Dockerfile": "FROM node:24-slim\n",
+    });
+
+    const result = await reconcileTemplates({
+      repoRoot: fixture.repoRoot,
+      state: fixture.state,
+      targetTemplateRoot: targetRoot,
+      targetVersion: "0.35.0",
+      baseProvider: provider(fixture.baseRoot),
+    });
+
+    expect(result.changes.conflicts).toEqual([]);
+    expect(result.changes.changes.get("apps/shared/scripts/fly-deploy.mjs")?.kind).toBe("delete");
+    expect(result.changes.changes.get("apps/shared/scripts/fly-secrets.mjs")?.kind).toBe("delete");
+    expect(result.changes.changes.get("apps/landing/scripts/fly-deploy.mjs")?.kind).toBe("delete");
+    expect(result.changes.changes.get("apps/landing/scripts/fly-secrets.mjs")?.kind).toBe("delete");
+  });
+
+  it("conflicts when a customized Fly wrapper is removed from the template", async () => {
+    const fixture = await baselineRepo(tempRoot, {
+      "apps/shared/scripts/fly-deploy.mjs": "old deploy\n",
+    });
+    await fs.writeFile(
+      path.join(fixture.repoRoot, "apps/shared/scripts/fly-deploy.mjs"),
+      "custom deploy\n"
+    );
+    const targetRoot = path.join(tempRoot, "target");
+    await makeTemplate(targetRoot, {
+      "apps/shared/Dockerfile": "FROM node:24-slim\n",
+    });
+
+    const result = await reconcileTemplates({
+      repoRoot: fixture.repoRoot,
+      state: fixture.state,
+      targetTemplateRoot: targetRoot,
+      targetVersion: "0.35.0",
+      baseProvider: provider(fixture.baseRoot),
+    });
+
+    expect(result.changes.conflicts).toContainEqual({
+      path: "apps/shared/scripts/fly-deploy.mjs",
+      reason: "The template removed a locally customized path.",
+    });
+  });
+
   it("omits e2e Database config when the test-harness feature is disabled", async () => {
     const features = { "test-harness": { paths: ["apps/server/db.e2e.ts"] } };
     const fixture = await baselineRepo(
