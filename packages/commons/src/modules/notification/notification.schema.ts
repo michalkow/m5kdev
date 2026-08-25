@@ -124,3 +124,23 @@ export const notificationSendTestInputSchema = z.object({
 export const notificationSendTestOutputSchema = z.object({
   id: z.string(),
 });
+
+export const notificationKindPreferenceChannelSchema = z.object({
+  channel: notificationChannelSchema,
+  enabled: z.boolean(),
+});
+
+export const notificationKindPreferenceSchema = z.object({
+  kind: z.string(),
+  channels: z.array(notificationKindPreferenceChannelSchema),
+});
+
+export const notificationListPreferencesOutputSchema = z.array(notificationKindPreferenceSchema);
+
+export const notificationSetPreferenceInputSchema = z.object({
+  kind: z.string().min(1),
+  channel: notificationChannelSchema,
+  enabled: z.boolean(),
+});
+
+export const notificationSetPreferenceOutputSchema = notificationKindPreferenceSchema;

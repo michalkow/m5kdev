@@ -22,6 +22,7 @@ const NATIVE_TOKEN = "apns-token-1";
 const TEST_KINDS = [
   { id: "demo.ping", defaultChannels: ["in-app"] },
   { id: "demo.silent", defaultChannels: ["web-push"] },
+  { id: "demo.full", defaultChannels: ["in-app", "web-push"] },
 ] as const satisfies readonly NotificationKind[];
 
 function stubWorkflow(trigger: jest.Mock): WorkflowService {
@@ -102,6 +103,17 @@ async function createTables(client: Client): Promise<void> {
     );
   `);
   await client.execute(`
+    CREATE TABLE notification_preferences (
+      id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      channel TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE (user_id, kind, channel)
+    );
+  `);
+  await client.execute(`
     CREATE TABLE notification_send_logs (
       id TEXT PRIMARY KEY NOT NULL,
       batch_id TEXT NOT NULL,
@@ -146,6 +158,7 @@ function createHarness(client: Client): {
     schema: {
       notifications: notificationTables.notifications,
       notificationDevices: notificationTables.notificationDevices,
+      notificationPreferences: notificationTables.notificationPreferences,
       notificationSendLogs: notificationTables.notificationSendLogs,
     },
   });
@@ -154,6 +167,7 @@ function createHarness(client: Client): {
     schema: {
       notifications: notificationTables.notifications,
       notificationDevices: notificationTables.notificationDevices,
+      notificationPreferences: notificationTables.notificationPreferences,
       notificationSendLogs: notificationTables.notificationSendLogs,
     },
   });
@@ -471,6 +485,249 @@ describe("NotificationService inbox", () => {
     expect(logs.isOk()).toBe(true);
     if (logs.isOk()) {
       expect(logs.value).toHaveLength(0);
+    }
+  });
+});
+
+describe("NotificationService preferences", () => {
+  let client: Client;
+
+  beforeEach(async () => {
+    client = createClient({ url: ":memory:" });
+    await createTables(client);
+    await insertUser(client, OWNER_ID, "owner@example.com");
+    await insertUser(client, OTHER_ID, "other@example.com");
+  });
+
+  afterEach(async () => {
+    await client.close?.();
+  });
+
+  it("returns catalog kinds with default Channels on when prefs are missing", async () => {
+    const { service } = createHarness(client);
+    const prefs = await service.getMyPreferences(userContext(OWNER_ID));
+    expect(prefs.isOk()).toBe(true);
+    if (prefs.isOk()) {
+      expect(prefs.value).toEqual([
+        { kind: "demo.ping", channels: [{ channel: "in-app", enabled: true }] },
+        { kind: "demo.silent", channels: [{ channel: "web-push", enabled: true }] },
+        {
+          kind: "demo.full",
+          channels: [
+            { channel: "in-app", enabled: true },
+            { channel: "web-push", enabled: true },
+          ],
+        },
+      ]);
+    }
+  });
+
+  it("lets a User mute only their own offered Channels", async () => {
+    const { service } = createHarness(client);
+    const muted = await service.setMyPreference(userContext(OWNER_ID), {
+      kind: "demo.full",
+      channel: "web-push",
+      enabled: false,
+    });
+    expect(muted.isOk()).toBe(true);
+    if (muted.isOk()) {
+      expect(muted.value).toEqual({
+        kind: "demo.full",
+        channels: [
+          { channel: "in-app", enabled: true },
+          { channel: "web-push", enabled: false },
+        ],
+      });
+    }
+
+    const ownerPrefs = await service.getMyPreferences(userContext(OWNER_ID));
+    expect(ownerPrefs.isOk()).toBe(true);
+    if (ownerPrefs.isOk()) {
+      expect(ownerPrefs.value.find((row) => row.kind === "demo.full")?.channels).toEqual([
+        { channel: "in-app", enabled: true },
+        { channel: "web-push", enabled: false },
+      ]);
+    }
+
+    const otherPrefs = await service.getMyPreferences(userContext(OTHER_ID));
+    expect(otherPrefs.isOk()).toBe(true);
+    if (otherPrefs.isOk()) {
+      expect(otherPrefs.value.find((row) => row.kind === "demo.full")?.channels).toEqual([
+        { channel: "in-app", enabled: true },
+        { channel: "web-push", enabled: true },
+      ]);
+    }
+
+    const otherUnmute = await service.setMyPreference(userContext(OTHER_ID), {
+      kind: "demo.full",
+      channel: "web-push",
+      enabled: true,
+    });
+    expect(otherUnmute.isOk()).toBe(true);
+
+    const ownerAfter = await service.getMyPreferences(userContext(OWNER_ID));
+    expect(ownerAfter.isOk()).toBe(true);
+    if (ownerAfter.isOk()) {
+      expect(ownerAfter.value.find((row) => row.kind === "demo.full")?.channels).toEqual([
+        { channel: "in-app", enabled: true },
+        { channel: "web-push", enabled: false },
+      ]);
+    }
+
+    const notOffered = await service.setMyPreference(userContext(OWNER_ID), {
+      kind: "demo.silent",
+      channel: "in-app",
+      enabled: false,
+    });
+    expect(notOffered.isErr()).toBe(true);
+    if (notOffered.isErr()) {
+      expect(notOffered.error.code).toBe("BAD_REQUEST");
+    }
+  });
+
+  it("inserts a silent instance when in-app is muted and still lists earlier visible rows", async () => {
+    const { service } = createHarness(client);
+    for (const title of ["One", "Two", "Three"]) {
+      const sent = await service.send({
+        userId: OWNER_ID,
+        kind: "demo.ping",
+        title,
+        body: title,
+      });
+      expect(sent.isOk()).toBe(true);
+    }
+
+    const muted = await service.setMyPreference(userContext(OWNER_ID), {
+      kind: "demo.ping",
+      channel: "in-app",
+      enabled: false,
+    });
+    expect(muted.isOk()).toBe(true);
+
+    const afterMute = await service.listMyInbox(userContext(OWNER_ID));
+    expect(afterMute.isOk()).toBe(true);
+    if (afterMute.isOk()) {
+      expect(afterMute.value).toHaveLength(3);
+      expect(afterMute.value.map((row) => row.title).sort()).toEqual(["One", "Three", "Two"]);
+    }
+
+    const silent = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.ping",
+      title: "Four",
+      body: "Muted",
+    });
+    expect(silent.isOk()).toBe(true);
+    if (silent.isOk()) {
+      expect(silent.value.visibleInInbox).toBe(false);
+    }
+    expect(await countNotificationRows(client)).toBe(4);
+
+    const listed = await service.listMyInbox(userContext(OWNER_ID));
+    expect(listed.isOk()).toBe(true);
+    if (listed.isOk()) {
+      expect(listed.value).toHaveLength(3);
+      expect(listed.value.some((row) => row.title === "Four")).toBe(false);
+    }
+
+    const unmuted = await service.setMyPreference(userContext(OWNER_ID), {
+      kind: "demo.ping",
+      channel: "in-app",
+      enabled: true,
+    });
+    expect(unmuted.isOk()).toBe(true);
+
+    const afterUnmute = await service.listMyInbox(userContext(OWNER_ID));
+    expect(afterUnmute.isOk()).toBe(true);
+    if (afterUnmute.isOk()) {
+      expect(afterUnmute.value).toHaveLength(3);
+      expect(afterUnmute.value.some((row) => row.title === "Four")).toBe(false);
+    }
+  });
+
+  it("intersects send Channels with prefs and does not expose foreign prefs via sendTest", async () => {
+    const { service } = createHarness(client);
+    const muted = await service.setMyPreference(userContext(OTHER_ID), {
+      kind: "demo.full",
+      channel: "in-app",
+      enabled: false,
+    });
+    expect(muted.isOk()).toBe(true);
+
+    const webOnly = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.full",
+      title: "Skip inbox",
+      body: "Developer channels",
+      channels: ["web-push"],
+    });
+    expect(webOnly.isOk()).toBe(true);
+    if (webOnly.isOk()) {
+      expect(webOnly.value.visibleInInbox).toBe(false);
+    }
+
+    const ownerMutedWeb = await service.setMyPreference(userContext(OWNER_ID), {
+      kind: "demo.full",
+      channel: "web-push",
+      enabled: false,
+    });
+    expect(ownerMutedWeb.isOk()).toBe(true);
+
+    const webMutedStillVisible = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.full",
+      title: "Keep inbox",
+      body: "In-app still on",
+      channels: ["in-app", "web-push"],
+    });
+    expect(webMutedStillVisible.isOk()).toBe(true);
+    if (webMutedStillVisible.isOk()) {
+      expect(webMutedStillVisible.value.visibleInInbox).toBe(true);
+    }
+
+    const ownerMutedInApp = await service.setMyPreference(userContext(OWNER_ID), {
+      kind: "demo.full",
+      channel: "in-app",
+      enabled: false,
+    });
+    expect(ownerMutedInApp.isOk()).toBe(true);
+
+    const prefsWin = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.full",
+      title: "Silent",
+      body: "Requested in-app but muted",
+      channels: ["in-app", "web-push"],
+    });
+    expect(prefsWin.isOk()).toBe(true);
+    if (prefsWin.isOk()) {
+      expect(prefsWin.value.visibleInInbox).toBe(false);
+    }
+
+    const tested = await service.sendTestAsAdmin(userContext(OWNER_ID), {
+      userId: OTHER_ID,
+      kind: "demo.full",
+      title: "Admin",
+      body: "Test",
+    });
+    expect(tested.isOk()).toBe(true);
+    if (tested.isOk()) {
+      expect(tested.value).toEqual({ id: expect.any(String) });
+    }
+
+    const ownerPrefs = await service.getMyPreferences(userContext(OWNER_ID));
+    expect(ownerPrefs.isOk()).toBe(true);
+    if (ownerPrefs.isOk()) {
+      expect(ownerPrefs.value.find((row) => row.kind === "demo.full")?.channels).toEqual([
+        { channel: "in-app", enabled: false },
+        { channel: "web-push", enabled: false },
+      ]);
+    }
+
+    const otherInbox = await service.listMyInbox(userContext(OTHER_ID));
+    expect(otherInbox.isOk()).toBe(true);
+    if (otherInbox.isOk()) {
+      expect(otherInbox.value).toHaveLength(0);
     }
   });
 });

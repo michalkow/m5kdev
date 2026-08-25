@@ -1,4 +1,5 @@
 import type {
+  NotificationChannel,
   NotificationPlatform,
   NotificationProvider,
   NotificationSendStatus,
@@ -8,9 +9,19 @@ import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseRepository } from "../base/base.repository";
-import { notificationDevices, notificationSendLogs, notifications } from "./notification.db";
+import {
+  notificationDevices,
+  notificationPreferences,
+  notificationSendLogs,
+  notifications,
+} from "./notification.db";
 
-const schema = { notifications, notificationDevices, notificationSendLogs };
+const schema = {
+  notifications,
+  notificationDevices,
+  notificationPreferences,
+  notificationSendLogs,
+};
 type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;
 
@@ -119,6 +130,69 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
     if (rowResult.isErr()) return err(rowResult.error);
     const [row] = rowResult.value;
     return ok(row as NotificationInstanceRow | undefined);
+  }
+
+  async listMutedPreferencesByUserId(
+    userId: string
+  ): ServerResultAsync<{ kind: string; channel: NotificationChannel }[]> {
+    const rowsResult = await this.throwableQuery(() =>
+      this.orm
+        .select({
+          kind: this.schema.notificationPreferences.kind,
+          channel: this.schema.notificationPreferences.channel,
+        })
+        .from(this.schema.notificationPreferences)
+        .where(eq(this.schema.notificationPreferences.userId, userId))
+    );
+    if (rowsResult.isErr()) return err(rowsResult.error);
+    return ok(rowsResult.value);
+  }
+
+  async insertMutedPreference(input: {
+    userId: string;
+    kind: string;
+    channel: NotificationChannel;
+  }): ServerResultAsync<void> {
+    const now = new Date();
+    const insertResult = await this.throwableQuery(() =>
+      this.orm
+        .insert(this.schema.notificationPreferences)
+        .values({
+          userId: input.userId,
+          kind: input.kind,
+          channel: input.channel,
+          updatedAt: now,
+        })
+        .onConflictDoNothing({
+          target: [
+            this.schema.notificationPreferences.userId,
+            this.schema.notificationPreferences.kind,
+            this.schema.notificationPreferences.channel,
+          ],
+        })
+    );
+    if (insertResult.isErr()) return err(insertResult.error);
+    return ok();
+  }
+
+  async deleteMutedPreference(input: {
+    userId: string;
+    kind: string;
+    channel: NotificationChannel;
+  }): ServerResultAsync<void> {
+    const deleteResult = await this.throwableQuery(() =>
+      this.orm
+        .delete(this.schema.notificationPreferences)
+        .where(
+          and(
+            eq(this.schema.notificationPreferences.userId, input.userId),
+            eq(this.schema.notificationPreferences.kind, input.kind),
+            eq(this.schema.notificationPreferences.channel, input.channel)
+          )
+        )
+    );
+    if (deleteResult.isErr()) return err(deleteResult.error);
+    return ok();
   }
 
   async findDeviceByEndpoint(

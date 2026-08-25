@@ -1,4 +1,5 @@
 import type {
+  NotificationChannel,
   NotificationKind,
   NotificationPlatform,
   NotificationProvider,
@@ -220,13 +221,24 @@ export class NotificationService extends BasePermissionService<
     title: string;
     body: string;
     data?: Record<string, unknown> | null;
+    channels?: readonly NotificationChannel[];
   }): ServerResultAsync<NotificationInstanceRow> {
     const kind = this.kindsById.get(input.kind);
     if (!kind) {
       return this.error("BAD_REQUEST", "Unknown Notification kind");
     }
 
-    const visibleInInbox = kind.defaultChannels.includes("in-app");
+    const muted = await this.repository.notification.listMutedPreferencesByUserId(input.userId);
+    if (muted.isErr()) return err(muted.error);
+    const mutedSet = new Set(
+      muted.value.filter((row) => row.kind === kind.id).map((row) => row.channel)
+    );
+    const offered = kind.defaultChannels;
+    const requested = input.channels ?? offered;
+    const armed = requested.filter(
+      (channel) => offered.includes(channel) && !mutedSet.has(channel)
+    );
+    const visibleInInbox = armed.includes("in-app");
 
     const inserted = await this.repository.notification.insertNotification({
       userId: input.userId,
@@ -254,6 +266,74 @@ export class NotificationService extends BasePermissionService<
     if (readGuard.isErr()) return err(readGuard.error);
 
     return this.repository.notification.listVisibleInboxByUserId(ctx.actor.userId);
+  }
+
+  async getMyPreferences(ctx: Context): ServerResultAsync<
+    {
+      kind: string;
+      channels: { channel: NotificationChannel; enabled: boolean }[];
+    }[]
+  > {
+    const readGuard = this.accessGuard(ctx.actor, "read", { userId: ctx.actor.userId });
+    if (readGuard.isErr()) return err(readGuard.error);
+
+    const muted = await this.repository.notification.listMutedPreferencesByUserId(ctx.actor.userId);
+    if (muted.isErr()) return err(muted.error);
+    const mutedSet = new Set(muted.value.map((row) => `${row.kind}:${row.channel}`));
+
+    return ok(
+      [...this.kindsById.values()].map((kind) => ({
+        kind: kind.id,
+        channels: kind.defaultChannels.map((channel) => ({
+          channel,
+          enabled: !mutedSet.has(`${kind.id}:${channel}`),
+        })),
+      }))
+    );
+  }
+
+  async setMyPreference(
+    ctx: Context,
+    input: { kind: string; channel: NotificationChannel; enabled: boolean }
+  ): ServerResultAsync<{
+    kind: string;
+    channels: { channel: NotificationChannel; enabled: boolean }[];
+  }> {
+    const writeGuard = this.accessGuard(ctx.actor, "write", { userId: ctx.actor.userId });
+    if (writeGuard.isErr()) return err(writeGuard.error);
+
+    const kind = this.kindsById.get(input.kind);
+    if (!kind) {
+      return this.error("BAD_REQUEST", "Unknown Notification kind");
+    }
+    if (!kind.defaultChannels.includes(input.channel)) {
+      return this.error("BAD_REQUEST", "Channel is not offered by this Notification kind");
+    }
+
+    const userId = ctx.actor.userId;
+    if (input.enabled) {
+      const cleared = await this.repository.notification.deleteMutedPreference({
+        userId,
+        kind: kind.id,
+        channel: input.channel,
+      });
+      if (cleared.isErr()) return err(cleared.error);
+    } else {
+      const muted = await this.repository.notification.insertMutedPreference({
+        userId,
+        kind: kind.id,
+        channel: input.channel,
+      });
+      if (muted.isErr()) return err(muted.error);
+    }
+
+    const listed = await this.getMyPreferences(ctx);
+    if (listed.isErr()) return err(listed.error);
+    const updated = listed.value.find((row) => row.kind === kind.id);
+    if (!updated) {
+      return this.error("INTERNAL_SERVER_ERROR", "Notification kind preference missing after save");
+    }
+    return ok(updated);
   }
 
   async markRead(ctx: Context, id: string): ServerResultAsync<NotificationInstanceRow> {

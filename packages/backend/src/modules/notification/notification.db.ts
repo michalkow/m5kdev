@@ -1,9 +1,10 @@
 import type {
+  NotificationChannel,
   NotificationPlatform,
   NotificationProvider,
   NotificationSendStatus,
 } from "@m5kdev/commons/modules/notification/notification.constants";
-import { integer, sqliteTable as table, text } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable as table, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
 import { users } from "../auth/auth.db";
 
@@ -44,6 +45,31 @@ export const notifications = table("notifications", {
     .notNull()
     .$default(() => new Date()),
 });
+
+export const notificationPreferences = table(
+  "notification_preferences",
+  {
+    id: text("id").primaryKey().$default(uuidv4),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    channel: text("channel").notNull().$type<NotificationChannel>(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$default(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$default(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("notification_preferences_user_kind_channel_unique").on(
+      t.userId,
+      t.kind,
+      t.channel
+    ),
+  ]
+);
 
 export const notificationSendLogs = table("notification_send_logs", {
   id: text("id").primaryKey().$default(uuidv4),
