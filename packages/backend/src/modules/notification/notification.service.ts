@@ -103,6 +103,13 @@ export class NotificationService extends BasePermissionService<
 
     const userId = ctx.actor.userId;
     if (input.platform === "web") {
+      const existing = await this.repository.notification.findDeviceByEndpoint(
+        input.subscription.endpoint
+      );
+      if (existing.isErr()) return err(existing.error);
+      if (existing.value && existing.value.userId !== userId) {
+        return this.error("CONFLICT", "Device already registered to another User");
+      }
       const row = await this.repository.notification.upsertWebDevice({
         userId,
         endpoint: input.subscription.endpoint,
@@ -111,6 +118,11 @@ export class NotificationService extends BasePermissionService<
       });
       if (row.isErr()) return err(row.error);
       return ok({ deviceId: row.value.id });
+    }
+    const existing = await this.repository.notification.findDeviceByToken(input.token);
+    if (existing.isErr()) return err(existing.error);
+    if (existing.value && existing.value.userId !== userId) {
+      return this.error("CONFLICT", "Device already registered to another User");
     }
     const row = await this.repository.notification.upsertNativeDevice({
       userId,

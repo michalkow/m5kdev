@@ -39,6 +39,34 @@ export interface InsertSendLogRow {
 }
 
 export class NotificationRepository extends BaseRepository<Orm, Schema, Record<string, never>> {
+  async findDeviceByEndpoint(
+    endpoint: string
+  ): ServerResultAsync<NotificationDeviceRow | undefined> {
+    const rowResult = await this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(this.schema.notificationDevices)
+        .where(eq(this.schema.notificationDevices.endpoint, endpoint))
+        .limit(1)
+    );
+    if (rowResult.isErr()) return err(rowResult.error);
+    const [row] = rowResult.value;
+    return ok(row as NotificationDeviceRow | undefined);
+  }
+
+  async findDeviceByToken(token: string): ServerResultAsync<NotificationDeviceRow | undefined> {
+    const rowResult = await this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(this.schema.notificationDevices)
+        .where(eq(this.schema.notificationDevices.token, token))
+        .limit(1)
+    );
+    if (rowResult.isErr()) return err(rowResult.error);
+    const [row] = rowResult.value;
+    return ok(row as NotificationDeviceRow | undefined);
+  }
+
   async upsertWebDevice(input: {
     userId: string;
     endpoint: string;
@@ -62,7 +90,6 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
         .onConflictDoUpdate({
           target: this.schema.notificationDevices.endpoint,
           set: {
-            userId: input.userId,
             subscription: input.subscription,
             label: input.label,
             enabled: true,
@@ -99,7 +126,6 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
         .onConflictDoUpdate({
           target: this.schema.notificationDevices.token,
           set: {
-            userId: input.userId,
             platform: input.platform,
             label: input.label,
             enabled: true,
