@@ -7,22 +7,53 @@ import type { User } from "../auth/auth.lib";
 import type { WorkflowService } from "../workflow/workflow.service";
 import * as notificationTables from "./notification.db";
 import { defaultNotificationGrants } from "./notification.grants";
+import {
+  sendApnNotification,
+  sendFcmNotification,
+  sendWebPushNotification,
+} from "./notification.providers";
 import { NotificationRepository } from "./notification.repository";
 import { NotificationService } from "./notification.service";
+
+jest.mock("./notification.providers", () => {
+  const actual = jest.requireActual(
+    "./notification.providers"
+  ) as typeof import("./notification.providers");
+  return {
+    ...actual,
+    sendWebPushNotification: jest.fn().mockResolvedValue(undefined),
+    sendApnNotification: jest.fn().mockResolvedValue(undefined),
+    sendFcmNotification: jest.fn().mockResolvedValue(undefined),
+  };
+});
+
+const sendWebPushMock = sendWebPushNotification as jest.MockedFunction<
+  typeof sendWebPushNotification
+>;
+const sendApnMock = sendApnNotification as jest.MockedFunction<typeof sendApnNotification>;
+const sendFcmMock = sendFcmNotification as jest.MockedFunction<typeof sendFcmNotification>;
 
 const OWNER_ID = "user-owner";
 const OTHER_ID = "user-other";
 const WEB_ENDPOINT = "https://push.example.com/sub-1";
+const WEB_ENDPOINT_2 = "https://push.example.com/sub-2";
 const WEB_SUBSCRIPTION = {
   endpoint: WEB_ENDPOINT,
   keys: { p256dh: "p256dh-key", auth: "auth-key" },
 };
+const WEB_SUBSCRIPTION_2 = {
+  endpoint: WEB_ENDPOINT_2,
+  keys: { p256dh: "p256dh-key-2", auth: "auth-key-2" },
+};
 const NATIVE_TOKEN = "apns-token-1";
+const ANDROID_TOKEN = "fcm-token-1";
 
 const TEST_KINDS = [
   { id: "demo.ping", defaultChannels: ["in-app"] },
   { id: "demo.silent", defaultChannels: ["web-push"] },
   { id: "demo.full", defaultChannels: ["in-app", "web-push"] },
+  { id: "demo.push", defaultChannels: ["in-app", "web-push", "mobile-push"] },
+  { id: "demo.fast-web", defaultChannels: ["web-push"], delays: { webPushMs: 1_000 } },
 ] as const satisfies readonly NotificationKind[];
 
 function stubWorkflow(trigger: jest.Mock): WorkflowService {
@@ -97,6 +128,9 @@ async function createTables(client: Client): Promise<void> {
       body TEXT NOT NULL,
       data TEXT,
       visible_in_inbox INTEGER NOT NULL,
+      armed_channels TEXT NOT NULL DEFAULT '[]',
+      web_pushed_at INTEGER,
+      mobile_pushed_at INTEGER,
       read_at INTEGER,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
@@ -117,9 +151,11 @@ async function createTables(client: Client): Promise<void> {
     CREATE TABLE notification_send_logs (
       id TEXT PRIMARY KEY NOT NULL,
       batch_id TEXT NOT NULL,
+      notification_id TEXT NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      device_id TEXT NOT NULL REFERENCES notification_devices(id) ON DELETE CASCADE,
-      provider TEXT NOT NULL,
+      device_id TEXT REFERENCES notification_devices(id) ON DELETE SET NULL,
+      channel TEXT NOT NULL,
+      provider TEXT,
       title TEXT NOT NULL,
       body TEXT NOT NULL,
       data TEXT,
@@ -518,6 +554,15 @@ describe("NotificationService preferences", () => {
             { channel: "web-push", enabled: true },
           ],
         },
+        {
+          kind: "demo.push",
+          channels: [
+            { channel: "in-app", enabled: true },
+            { channel: "web-push", enabled: true },
+            { channel: "mobile-push", enabled: true },
+          ],
+        },
+        { kind: "demo.fast-web", channels: [{ channel: "web-push", enabled: true }] },
       ]);
     }
   });
@@ -728,6 +773,268 @@ describe("NotificationService preferences", () => {
     expect(otherInbox.isOk()).toBe(true);
     if (otherInbox.isOk()) {
       expect(otherInbox.value).toHaveLength(0);
+    }
+  });
+});
+
+describe("NotificationService push cascade", () => {
+  let client: Client;
+
+  beforeEach(async () => {
+    sendWebPushMock.mockReset().mockResolvedValue(undefined);
+    sendApnMock.mockReset().mockResolvedValue(undefined);
+    sendFcmMock.mockReset().mockResolvedValue(undefined);
+    client = createClient({ url: ":memory:" });
+    await createTables(client);
+    await insertUser(client, OWNER_ID, "owner@example.com");
+    await insertUser(client, OTHER_ID, "other@example.com");
+  });
+
+  afterEach(async () => {
+    await client.close?.();
+  });
+
+  it("does not send push immediately and schedules delayed web/mobile jobs", async () => {
+    const { service, trigger } = createHarness(client);
+    await service.registerDevice(userContext(OWNER_ID), {
+      platform: "web",
+      subscription: WEB_SUBSCRIPTION,
+    });
+    const sent = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.push",
+      title: "Hello",
+      body: "World",
+    });
+    expect(sent.isOk()).toBe(true);
+    expect(sendWebPushMock).not.toHaveBeenCalled();
+    expect(sendApnMock).not.toHaveBeenCalled();
+    expect(sendFcmMock).not.toHaveBeenCalled();
+    const logs = await service.listMySendLogs(userContext(OWNER_ID));
+    expect(logs.isOk()).toBe(true);
+    if (logs.isOk()) {
+      expect(logs.value).toHaveLength(0);
+    }
+    if (sent.isOk()) {
+      expect(trigger).toHaveBeenCalledWith(
+        { notificationId: sent.value.id },
+        { jobOptions: { delay: 2 * 60 * 1000 } }
+      );
+      expect(trigger).toHaveBeenCalledWith(
+        { notificationId: sent.value.id },
+        { jobOptions: { delay: 5 * 60 * 1000 } }
+      );
+    }
+  });
+
+  it("uses kind delay override when scheduling web push", async () => {
+    const { service, trigger } = createHarness(client);
+    const sent = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.fast-web",
+      title: "Fast",
+      body: "Web",
+    });
+    expect(sent.isOk()).toBe(true);
+    if (sent.isOk()) {
+      expect(trigger).toHaveBeenCalledWith(
+        { notificationId: sent.value.id },
+        { jobOptions: { delay: 1_000 } }
+      );
+    }
+  });
+
+  it("does not schedule or deliver a Channel muted at send", async () => {
+    const { service, trigger } = createHarness(client);
+    await service.setMyPreference(userContext(OWNER_ID), {
+      kind: "demo.push",
+      channel: "web-push",
+      enabled: false,
+    });
+    await service.registerDevice(userContext(OWNER_ID), {
+      platform: "web",
+      subscription: WEB_SUBSCRIPTION,
+    });
+    const sent = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.push",
+      title: "Muted web",
+      body: "Mobile only",
+    });
+    expect(sent.isOk()).toBe(true);
+    if (sent.isOk()) {
+      expect(sent.value.armedChannels).toEqual(["in-app", "mobile-push"]);
+      expect(trigger).toHaveBeenCalledWith(
+        { notificationId: sent.value.id },
+        { jobOptions: { delay: 5 * 60 * 1000 } }
+      );
+      expect(trigger).not.toHaveBeenCalledWith(
+        { notificationId: sent.value.id },
+        { jobOptions: { delay: 2 * 60 * 1000 } }
+      );
+      const delivered = await service.deliverWebPush(sent.value.id);
+      expect(delivered.isOk()).toBe(true);
+    }
+    expect(sendWebPushMock).not.toHaveBeenCalled();
+    const logs = await service.listMySendLogs(userContext(OWNER_ID));
+    expect(logs.isOk()).toBe(true);
+    if (logs.isOk()) {
+      expect(logs.value).toHaveLength(0);
+    }
+  });
+
+  it("sends once per web Device and stamps webPushedAt on first success", async () => {
+    const { service } = createHarness(client);
+    await service.registerDevice(userContext(OWNER_ID), {
+      platform: "web",
+      subscription: WEB_SUBSCRIPTION,
+    });
+    await service.registerDevice(userContext(OWNER_ID), {
+      platform: "web",
+      subscription: WEB_SUBSCRIPTION_2,
+    });
+    const sent = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.push",
+      title: "Hello",
+      body: "World",
+    });
+    expect(sent.isOk()).toBe(true);
+    const id = sent.isOk() ? sent.value.id : "";
+
+    const first = await service.deliverWebPush(id);
+    expect(first.isOk()).toBe(true);
+    expect(sendWebPushMock).toHaveBeenCalledTimes(2);
+
+    const inbox = await service.listMyInbox(userContext(OWNER_ID));
+    expect(inbox.isOk()).toBe(true);
+    if (inbox.isOk()) {
+      expect(inbox.value[0]?.webPushedAt).not.toBeNull();
+      expect(inbox.value[0]?.mobilePushedAt).toBeNull();
+    }
+
+    const logs = await service.listMySendLogs(userContext(OWNER_ID));
+    expect(logs.isOk()).toBe(true);
+    if (logs.isOk()) {
+      expect(logs.value).toHaveLength(2);
+      expect(logs.value.every((row) => row.notificationId === id)).toBe(true);
+      expect(logs.value.every((row) => row.channel === "web-push")).toBe(true);
+      expect(logs.value.every((row) => row.status === "sent")).toBe(true);
+    }
+
+    const second = await service.deliverWebPush(id);
+    expect(second.isOk()).toBe(true);
+    expect(sendWebPushMock).toHaveBeenCalledTimes(2);
+
+    const otherLogs = await service.listMySendLogs(userContext(OTHER_ID));
+    expect(otherLogs.isOk()).toBe(true);
+    if (otherLogs.isOk()) {
+      expect(otherLogs.value).toHaveLength(0);
+    }
+  });
+
+  it("shares mobile push across iOS and Android and still runs after web failure", async () => {
+    const { service } = createHarness(client);
+    sendWebPushMock.mockRejectedValue(new Error("web down"));
+    await service.registerDevice(userContext(OWNER_ID), {
+      platform: "web",
+      subscription: WEB_SUBSCRIPTION,
+    });
+    await service.registerDevice(userContext(OWNER_ID), {
+      platform: "ios",
+      token: NATIVE_TOKEN,
+    });
+    await service.registerDevice(userContext(OWNER_ID), {
+      platform: "android",
+      token: ANDROID_TOKEN,
+    });
+    const sent = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.push",
+      title: "Hello",
+      body: "World",
+    });
+    expect(sent.isOk()).toBe(true);
+    const id = sent.isOk() ? sent.value.id : "";
+
+    const web = await service.deliverWebPush(id);
+    expect(web.isOk()).toBe(true);
+    const afterWeb = await service.listMyInbox(userContext(OWNER_ID));
+    expect(afterWeb.isOk()).toBe(true);
+    if (afterWeb.isOk()) {
+      expect(afterWeb.value[0]?.webPushedAt).toBeNull();
+    }
+
+    const mobile = await service.deliverMobilePush(id);
+    expect(mobile.isOk()).toBe(true);
+    expect(sendApnMock).toHaveBeenCalledTimes(1);
+    expect(sendFcmMock).toHaveBeenCalledTimes(1);
+
+    const afterMobile = await service.listMyInbox(userContext(OWNER_ID));
+    expect(afterMobile.isOk()).toBe(true);
+    if (afterMobile.isOk()) {
+      expect(afterMobile.value[0]?.mobilePushedAt).not.toBeNull();
+      expect(afterMobile.value[0]?.webPushedAt).toBeNull();
+    }
+
+    const logs = await service.listMySendLogs(userContext(OWNER_ID));
+    expect(logs.isOk()).toBe(true);
+    if (logs.isOk()) {
+      expect(logs.value.filter((row) => row.channel === "web-push")).toHaveLength(1);
+      expect(logs.value.filter((row) => row.channel === "mobile-push")).toHaveLength(2);
+      expect(logs.value.find((row) => row.channel === "web-push")?.status).toBe("failed");
+    }
+  });
+
+  it("skips remaining push after mark-read and logs failure when no Device is enabled", async () => {
+    const { service } = createHarness(client);
+    const sent = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.push",
+      title: "Hello",
+      body: "World",
+    });
+    expect(sent.isOk()).toBe(true);
+    const id = sent.isOk() ? sent.value.id : "";
+
+    const marked = await service.markRead(userContext(OWNER_ID), id);
+    expect(marked.isOk()).toBe(true);
+    const skipped = await service.deliverWebPush(id);
+    expect(skipped.isOk()).toBe(true);
+    expect(sendWebPushMock).not.toHaveBeenCalled();
+    const skippedLogs = await service.listMySendLogs(userContext(OWNER_ID));
+    expect(skippedLogs.isOk()).toBe(true);
+    if (skippedLogs.isOk()) {
+      expect(skippedLogs.value).toHaveLength(0);
+    }
+
+    const unread = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.push",
+      title: "Later",
+      body: "No device",
+    });
+    expect(unread.isOk()).toBe(true);
+    const unreadId = unread.isOk() ? unread.value.id : "";
+    const noDevice = await service.deliverWebPush(unreadId);
+    expect(noDevice.isOk()).toBe(true);
+    expect(sendWebPushMock).not.toHaveBeenCalled();
+
+    const inbox = await service.listMyInbox(userContext(OWNER_ID));
+    expect(inbox.isOk()).toBe(true);
+    if (inbox.isOk()) {
+      const row = inbox.value.find((item) => item.id === unreadId);
+      expect(row?.webPushedAt).toBeNull();
+    }
+
+    const logs = await service.listMySendLogs(userContext(OWNER_ID));
+    expect(logs.isOk()).toBe(true);
+    if (logs.isOk()) {
+      expect(logs.value).toHaveLength(1);
+      expect(logs.value[0]?.notificationId).toBe(unreadId);
+      expect(logs.value[0]?.deviceId).toBeNull();
+      expect(logs.value[0]?.status).toBe("failed");
+      expect(logs.value[0]?.error).toBe("No enabled Device");
     }
   });
 });

@@ -7,7 +7,11 @@ export type NotificationProvider = (typeof NOTIFICATION_PROVIDERS)[number];
 export const NOTIFICATION_SEND_STATUSES = ["pending", "sent", "failed"] as const;
 export type NotificationSendStatus = (typeof NOTIFICATION_SEND_STATUSES)[number];
 
-export const NOTIFICATION_DELIVER_JOB_NAME = "notification.deliver" as const;
+export const NOTIFICATION_WEB_PUSH_JOB_NAME = "notification.webPush" as const;
+export const NOTIFICATION_MOBILE_PUSH_JOB_NAME = "notification.mobilePush" as const;
+
+export const NOTIFICATION_DEFAULT_WEB_PUSH_DELAY_MS = 2 * 60 * 1000;
+export const NOTIFICATION_DEFAULT_MOBILE_PUSH_DELAY_MS = 5 * 60 * 1000;
 
 export const NOTIFICATION_CHANNELS = ["in-app", "web-push", "mobile-push", "email"] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];

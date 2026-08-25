@@ -5,7 +5,6 @@ import type {
   NotificationProvider,
   NotificationSendStatus,
 } from "@m5kdev/commons/modules/notification/notification.constants";
-import { NOTIFICATION_DELIVER_JOB_NAME } from "@m5kdev/commons/modules/notification/notification.constants";
 import type { NotificationRegisterDeviceInput } from "@m5kdev/commons/modules/notification/notification.schema";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
@@ -26,8 +25,7 @@ import {
 import type { NotificationInstanceRow, NotificationRepository } from "./notification.repository";
 
 export interface NotificationServiceJobPayload {
-  readonly batchId: string;
-  readonly userId: string;
+  readonly notificationId: string;
 }
 
 export interface NotificationServiceOptions {
@@ -35,6 +33,11 @@ export interface NotificationServiceOptions {
   notificationQueue?: string;
   kinds?: readonly NotificationKind[];
 }
+
+const NOTIFICATION_WEB_PUSH_JOB_NAME = "notification.webPush";
+const NOTIFICATION_MOBILE_PUSH_JOB_NAME = "notification.mobilePush";
+const NOTIFICATION_DEFAULT_WEB_PUSH_DELAY_MS = 2 * 60 * 1000;
+const NOTIFICATION_DEFAULT_MOBILE_PUSH_DELAY_MS = 5 * 60 * 1000;
 
 function platformToProvider(platform: NotificationPlatform): NotificationProvider {
   if (platform === "web") return "web";
@@ -64,7 +67,8 @@ export class NotificationService extends BasePermissionService<
   { notification: NotificationRepository },
   { workflow: WorkflowService; auth: Pick<AuthService, "userEmit"> }
 > {
-  readonly deliverNotificationJob: FireAndForgetJobDefinition<NotificationServiceJobPayload>;
+  readonly webPushJob: FireAndForgetJobDefinition<NotificationServiceJobPayload>;
+  readonly mobilePushJob: FireAndForgetJobDefinition<NotificationServiceJobPayload>;
   private readonly kindsById: ReadonlyMap<string, NotificationKind>;
 
   constructor(
@@ -77,16 +81,28 @@ export class NotificationService extends BasePermissionService<
 
     this.kindsById = new Map((options?.kinds ?? []).map((kind) => [kind.id, kind]));
 
-    this.deliverNotificationJob = this.service.workflow
+    this.webPushJob = this.service.workflow
       .job<NotificationServiceJobPayload>({
-        name: NOTIFICATION_DELIVER_JOB_NAME,
+        name: NOTIFICATION_WEB_PUSH_JOB_NAME,
         ...(options?.notificationQueue ? { queue: options.notificationQueue } : {}),
         timeout: options?.deliveryTimeout ?? 60_000,
-        id: (p) => p.batchId,
-        meta: (p) => ({ userId: p.userId }),
+        id: (p) => `web:${p.notificationId}`,
       })
       .handle(async (payload) => {
-        await this.deliverBatch(payload);
+        const result = await this.deliverWebPush(payload.notificationId);
+        if (result.isErr()) throw new Error(result.error.message);
+      });
+
+    this.mobilePushJob = this.service.workflow
+      .job<NotificationServiceJobPayload>({
+        name: NOTIFICATION_MOBILE_PUSH_JOB_NAME,
+        ...(options?.notificationQueue ? { queue: options.notificationQueue } : {}),
+        timeout: options?.deliveryTimeout ?? 60_000,
+        id: (p) => `mobile:${p.notificationId}`,
+      })
+      .handle(async (payload) => {
+        const result = await this.deliverMobilePush(payload.notificationId);
+        if (result.isErr()) throw new Error(result.error.message);
       });
   }
 
@@ -192,9 +208,11 @@ export class NotificationService extends BasePermissionService<
     {
       id: string;
       batchId: string;
+      notificationId: string;
       userId: string;
-      deviceId: string;
-      provider: NotificationProvider;
+      deviceId: string | null;
+      channel: NotificationChannel;
+      provider: NotificationProvider | null;
       title: string;
       body: string;
       data: Record<string, unknown> | null;
@@ -247,6 +265,7 @@ export class NotificationService extends BasePermissionService<
       body: input.body,
       data: input.data ?? null,
       visibleInInbox,
+      armedChannels: armed,
     });
     if (inserted.isErr()) return err(inserted.error);
 
@@ -257,6 +276,8 @@ export class NotificationService extends BasePermissionService<
       change: "created",
       organizationId: null,
     });
+
+    await this.enqueueArmedPushJobs(inserted.value.id, kind, armed);
 
     return ok(inserted.value);
   }
@@ -349,59 +370,6 @@ export class NotificationService extends BasePermissionService<
     return ok(updated.value);
   }
 
-  async enqueueSendToUser(input: {
-    userId: string;
-    title: string;
-    body: string;
-    data?: Record<string, unknown> | null;
-  }): ServerResultAsync<{ batchId: string; jobId: string }> {
-    const devices = await this.repository.notification.listEnabledDevicesForUser(input.userId);
-    if (devices.isErr()) return err(devices.error);
-    if (devices.value.length === 0) {
-      return this.error("BAD_REQUEST", "No enabled notification devices for user");
-    }
-
-    const batchId = uuidv4();
-
-    const insert = await this.repository.notification.insertSendLogs(
-      devices.value.map((d) => ({
-        batchId,
-        userId: input.userId,
-        deviceId: d.id,
-        provider: platformToProvider(d.platform),
-        title: input.title,
-        body: input.body,
-        data: input.data ?? null,
-        status: "pending",
-      }))
-    );
-    if (insert.isErr()) return err(insert.error);
-
-    const jobId = batchId;
-    const patchJob = await this.repository.notification.updateSendLogJobIdForBatch(batchId, jobId);
-    if (patchJob.isErr()) return err(patchJob.error);
-
-    try {
-      await this.deliverNotificationJob.trigger({
-        batchId,
-        userId: input.userId,
-      });
-    } catch (cause) {
-      const rollback = await this.repository.notification.clearSendLogJobIdForBatch(batchId, jobId);
-      if (rollback.isErr()) {
-        this.logger.error(
-          { err: rollback.error, batchId, jobId },
-          "Failed to clear send log jobId after notification enqueue failure"
-        );
-      }
-      return this.error("INTERNAL_SERVER_ERROR", "Failed to enqueue notification delivery job", {
-        cause,
-      });
-    }
-
-    return ok({ batchId, jobId });
-  }
-
   async sendTestAsAdmin(
     ctx: Context,
     input: {
@@ -424,91 +392,197 @@ export class NotificationService extends BasePermissionService<
     return ok({ id: sent.value.id });
   }
 
-  private async deliverBatch(payload: NotificationServiceJobPayload): Promise<void> {
-    const logs = await this.repository.notification.listPendingLogsByBatch(payload.batchId);
-    if (logs.isErr()) {
-      throw new Error(logs.error.message);
-    }
+  async deliverWebPush(notificationId: string): ServerResultAsync<void> {
+    return this.deliverPushChannel({
+      notificationId,
+      channel: "web-push",
+      platforms: ["web"],
+      stamp: (id) => this.repository.notification.stampWebPushedAt(id),
+    });
+  }
 
-    for (const log of logs.value) {
-      const deviceRow = await this.repository.notification.getDeviceById(log.deviceId);
-      if (deviceRow.isErr()) {
-        throw new Error(deviceRow.error.message);
-      }
-      const device = deviceRow.value;
-      if (!device) {
-        await this.repository.notification.updateSendLogResult(log.id, {
-          status: "failed",
-          error: "Device not found",
-        });
-        continue;
-      }
-      if (!device.enabled) {
-        await this.repository.notification.updateSendLogResult(log.id, {
-          status: "failed",
-          error: "Device disabled",
-        });
-        continue;
-      }
+  async deliverMobilePush(notificationId: string): ServerResultAsync<void> {
+    return this.deliverPushChannel({
+      notificationId,
+      channel: "mobile-push",
+      platforms: ["ios", "android"],
+      stamp: (id) => this.repository.notification.stampMobilePushedAt(id),
+    });
+  }
 
-      const payloadBody = { title: log.title, body: log.body, data: log.data };
-
+  private async enqueueArmedPushJobs(
+    notificationId: string,
+    kind: NotificationKind,
+    armed: readonly NotificationChannel[]
+  ): Promise<void> {
+    if (armed.includes("web-push")) {
       try {
-        if (log.provider === "web") {
-          if (!device.subscription || typeof device.subscription !== "object") {
-            throw new Error("Invalid web subscription");
-          }
-          const sub = device.subscription as {
-            endpoint: string;
-            keys: { p256dh: string; auth: string };
-          };
-          await sendWebPushNotification(sub, JSON.stringify(payloadBody));
-        } else if (log.provider === "apn") {
-          if (!device.token) throw new Error("Missing APNs device token");
-          await sendApnNotification(
-            device.token,
-            { title: log.title, body: log.body },
-            {
-              ...payloadBody,
-            }
-          );
-        } else {
-          if (!device.token) throw new Error("Missing FCM token");
-          await sendFcmNotification(
-            device.token,
-            { title: log.title, body: log.body },
-            fcmDataStrings(log.data)
-          );
-        }
-
-        const okUpdate = await this.repository.notification.updateSendLogResult(log.id, {
-          status: "sent",
-          error: null,
-        });
-        if (okUpdate.isErr()) {
-          this.logger.error(
-            {
-              err: okUpdate.error,
-              logId: log.id,
-              batchId: payload.batchId,
-              deviceId: log.deviceId,
+        await this.webPushJob.trigger(
+          { notificationId },
+          {
+            jobOptions: {
+              delay: kind.delays?.webPushMs ?? NOTIFICATION_DEFAULT_WEB_PUSH_DELAY_MS,
             },
-            "Notification was sent but updating send log to sent failed — not retrying send"
-          );
-        }
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        const failUpdate = await this.repository.notification.updateSendLogResult(log.id, {
-          status: "failed",
-          error: message,
-        });
-        if (failUpdate.isErr()) throw new Error(failUpdate.error.message);
+          }
+        );
+      } catch (cause) {
+        this.logger.error({ err: cause, notificationId }, "Failed to enqueue web push cascade");
+      }
+    }
+    if (armed.includes("mobile-push")) {
+      try {
+        await this.mobilePushJob.trigger(
+          { notificationId },
+          {
+            jobOptions: {
+              delay: kind.delays?.mobilePushMs ?? NOTIFICATION_DEFAULT_MOBILE_PUSH_DELAY_MS,
+            },
+          }
+        );
+      } catch (cause) {
+        this.logger.error({ err: cause, notificationId }, "Failed to enqueue mobile push cascade");
+      }
+    }
+  }
 
-        if (providerForPermanentTokenFailure(log.provider, e)) {
+  private async deliverPushChannel(input: {
+    notificationId: string;
+    channel: Extract<NotificationChannel, "web-push" | "mobile-push">;
+    platforms: readonly NotificationPlatform[];
+    stamp: (id: string) => ServerResultAsync<void>;
+  }): ServerResultAsync<void> {
+    const instance = await this.repository.notification.findNotificationById(input.notificationId);
+    if (instance.isErr()) return err(instance.error);
+    if (!instance.value) return ok();
+    if (instance.value.readAt) return ok();
+    if (!instance.value.armedChannels.includes(input.channel)) return ok();
+
+    const existing = await this.repository.notification.listSendLogsForNotificationChannel({
+      notificationId: input.notificationId,
+      channel: input.channel,
+    });
+    if (existing.isErr()) return err(existing.error);
+    if (existing.value.length > 0) return ok();
+
+    const devices = await this.repository.notification.listEnabledDevicesForUser(
+      instance.value.userId
+    );
+    if (devices.isErr()) return err(devices.error);
+    const channelDevices = devices.value.filter((device) =>
+      input.platforms.includes(device.platform)
+    );
+
+    const batchId = uuidv4();
+    if (channelDevices.length === 0) {
+      const logged = await this.repository.notification.insertSendLogs([
+        {
+          batchId,
+          notificationId: instance.value.id,
+          userId: instance.value.userId,
+          deviceId: null,
+          channel: input.channel,
+          provider: null,
+          title: instance.value.title,
+          body: instance.value.body,
+          data: instance.value.data,
+          status: "failed",
+          error: "No enabled Device",
+        },
+      ]);
+      if (logged.isErr()) return err(logged.error);
+      return ok();
+    }
+
+    let anySent = false;
+    for (const device of channelDevices) {
+      const provider = platformToProvider(device.platform);
+      try {
+        await this.sendToDevice(device, instance.value);
+        anySent = true;
+        const logged = await this.repository.notification.insertSendLogs([
+          {
+            batchId,
+            notificationId: instance.value.id,
+            userId: instance.value.userId,
+            deviceId: device.id,
+            channel: input.channel,
+            provider,
+            title: instance.value.title,
+            body: instance.value.body,
+            data: instance.value.data,
+            status: "sent",
+            error: null,
+          },
+        ]);
+        if (logged.isErr()) return err(logged.error);
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        const logged = await this.repository.notification.insertSendLogs([
+          {
+            batchId,
+            notificationId: instance.value.id,
+            userId: instance.value.userId,
+            deviceId: device.id,
+            channel: input.channel,
+            provider,
+            title: instance.value.title,
+            body: instance.value.body,
+            data: instance.value.data,
+            status: "failed",
+            error: message,
+          },
+        ]);
+        if (logged.isErr()) return err(logged.error);
+        if (providerForPermanentTokenFailure(provider, cause)) {
           const disable = await this.repository.notification.setDeviceEnabled(device.id, false);
-          if (disable.isErr()) throw new Error(disable.error.message);
+          if (disable.isErr()) return err(disable.error);
         }
       }
     }
+
+    if (anySent) {
+      const stamped = await input.stamp(instance.value.id);
+      if (stamped.isErr()) return err(stamped.error);
+    }
+    return ok();
+  }
+
+  private async sendToDevice(
+    device: {
+      platform: NotificationPlatform;
+      subscription: Record<string, unknown> | null;
+      token: string | null;
+    },
+    instance: NotificationInstanceRow
+  ): Promise<void> {
+    const payloadBody = { title: instance.title, body: instance.body, data: instance.data };
+    if (device.platform === "web") {
+      if (!device.subscription || typeof device.subscription !== "object") {
+        throw new Error("Invalid web subscription");
+      }
+      const sub = device.subscription as {
+        endpoint: string;
+        keys: { p256dh: string; auth: string };
+      };
+      await sendWebPushNotification(sub, JSON.stringify(payloadBody));
+      return;
+    }
+    if (device.platform === "ios") {
+      if (!device.token) throw new Error("Missing APNs device token");
+      await sendApnNotification(
+        device.token,
+        { title: instance.title, body: instance.body },
+        {
+          ...payloadBody,
+        }
+      );
+      return;
+    }
+    if (!device.token) throw new Error("Missing FCM token");
+    await sendFcmNotification(
+      device.token,
+      { title: instance.title, body: instance.body },
+      fcmDataStrings(instance.data)
+    );
   }
 }

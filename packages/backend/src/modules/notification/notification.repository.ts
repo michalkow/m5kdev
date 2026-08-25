@@ -46,6 +46,9 @@ export interface NotificationInstanceRow {
   readonly body: string;
   readonly data: Record<string, unknown> | null;
   readonly visibleInInbox: boolean;
+  readonly armedChannels: readonly NotificationChannel[];
+  readonly webPushedAt: Date | null;
+  readonly mobilePushedAt: Date | null;
   readonly readAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -53,13 +56,16 @@ export interface NotificationInstanceRow {
 
 export interface InsertSendLogRow {
   readonly batchId: string;
+  readonly notificationId: string;
   readonly userId: string;
-  readonly deviceId: string;
-  readonly provider: NotificationProvider;
+  readonly deviceId: string | null;
+  readonly channel: NotificationChannel;
+  readonly provider: NotificationProvider | null;
   readonly title: string;
   readonly body: string;
   readonly data: Record<string, unknown> | null;
   readonly status: NotificationSendStatus;
+  readonly error: string | null;
 }
 
 export class NotificationRepository extends BaseRepository<Orm, Schema, Record<string, never>> {
@@ -70,6 +76,7 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
     body: string;
     data: Record<string, unknown> | null;
     visibleInInbox: boolean;
+    armedChannels: readonly NotificationChannel[];
   }): ServerResultAsync<NotificationInstanceRow> {
     const now = new Date();
     const rowResult = await this.throwableQuery(() =>
@@ -82,6 +89,9 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
           body: input.body,
           data: input.data,
           visibleInInbox: input.visibleInInbox,
+          armedChannels: [...input.armedChannels],
+          webPushedAt: null,
+          mobilePushedAt: null,
           readAt: null,
           updatedAt: now,
         })
@@ -130,6 +140,43 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
     if (rowResult.isErr()) return err(rowResult.error);
     const [row] = rowResult.value;
     return ok(row as NotificationInstanceRow | undefined);
+  }
+
+  async findNotificationById(id: string): ServerResultAsync<NotificationInstanceRow | undefined> {
+    const rowResult = await this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(this.schema.notifications)
+        .where(eq(this.schema.notifications.id, id))
+        .limit(1)
+    );
+    if (rowResult.isErr()) return err(rowResult.error);
+    const [row] = rowResult.value;
+    return ok(row as NotificationInstanceRow | undefined);
+  }
+
+  async stampWebPushedAt(id: string): ServerResultAsync<void> {
+    const now = new Date();
+    const updateResult = await this.throwableQuery(() =>
+      this.orm
+        .update(this.schema.notifications)
+        .set({ webPushedAt: now, updatedAt: now })
+        .where(eq(this.schema.notifications.id, id))
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+    return ok();
+  }
+
+  async stampMobilePushedAt(id: string): ServerResultAsync<void> {
+    const now = new Date();
+    const updateResult = await this.throwableQuery(() =>
+      this.orm
+        .update(this.schema.notifications)
+        .set({ mobilePushedAt: now, updatedAt: now })
+        .where(eq(this.schema.notifications.id, id))
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+    return ok();
   }
 
   async listMutedPreferencesByUserId(
@@ -344,19 +391,6 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
     return ok(row as NotificationDeviceRow | undefined);
   }
 
-  async getDeviceById(deviceId: string): ServerResultAsync<NotificationDeviceRow | undefined> {
-    const rowResult = await this.throwableQuery(() =>
-      this.orm
-        .select()
-        .from(this.schema.notificationDevices)
-        .where(eq(this.schema.notificationDevices.id, deviceId))
-        .limit(1)
-    );
-    if (rowResult.isErr()) return err(rowResult.error);
-    const [row] = rowResult.value;
-    return ok(row as NotificationDeviceRow | undefined);
-  }
-
   async setDeviceEnabled(deviceId: string, enabled: boolean): ServerResultAsync<void> {
     const updateResult = await this.throwableQuery(() =>
       this.orm
@@ -391,14 +425,16 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
       this.orm.insert(this.schema.notificationSendLogs).values(
         rows.map((r) => ({
           batchId: r.batchId,
+          notificationId: r.notificationId,
           userId: r.userId,
           deviceId: r.deviceId,
+          channel: r.channel,
           provider: r.provider,
           title: r.title,
           body: r.body,
           data: r.data,
           status: r.status,
-          error: null,
+          error: r.error,
           jobId: null,
           updatedAt: now,
         }))
@@ -408,79 +444,18 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
     return ok();
   }
 
-  async updateSendLogJobIdForBatch(batchId: string, jobId: string): ServerResultAsync<void> {
-    const updateResult = await this.throwableQuery(() =>
-      this.orm
-        .update(this.schema.notificationSendLogs)
-        .set({ jobId, updatedAt: new Date() })
-        .where(eq(this.schema.notificationSendLogs.batchId, batchId))
-    );
-    if (updateResult.isErr()) return err(updateResult.error);
-    return ok();
-  }
-
-  /** Clears jobId for send logs in a batch when enqueue failed after the job id was persisted. */
-  async clearSendLogJobIdForBatch(batchId: string, jobId: string): ServerResultAsync<void> {
-    const updateResult = await this.throwableQuery(() =>
-      this.orm
-        .update(this.schema.notificationSendLogs)
-        .set({ jobId: null, updatedAt: new Date() })
-        .where(
-          and(
-            eq(this.schema.notificationSendLogs.batchId, batchId),
-            eq(this.schema.notificationSendLogs.jobId, jobId)
-          )
-        )
-    );
-    if (updateResult.isErr()) return err(updateResult.error);
-    return ok();
-  }
-
-  async updateSendLogResult(
-    logId: string,
-    patch: { status: NotificationSendStatus; error: string | null }
-  ): ServerResultAsync<void> {
-    const updateResult = await this.throwableQuery(() =>
-      this.orm
-        .update(this.schema.notificationSendLogs)
-        .set({
-          status: patch.status,
-          error: patch.error,
-          updatedAt: new Date(),
-        })
-        .where(eq(this.schema.notificationSendLogs.id, logId))
-    );
-    if (updateResult.isErr()) return err(updateResult.error);
-    return ok();
-  }
-
-  async listPendingLogsByBatch(batchId: string): ServerResultAsync<
-    {
-      id: string;
-      deviceId: string;
-      provider: NotificationProvider;
-      title: string;
-      body: string;
-      data: Record<string, unknown> | null;
-      userId: string;
-    }[]
-  > {
+  async listSendLogsForNotificationChannel(input: {
+    notificationId: string;
+    channel: NotificationChannel;
+  }): ServerResultAsync<{ id: string }[]> {
     const rowsResult = await this.throwableQuery(() =>
       this.orm
-        .select({
-          id: this.schema.notificationSendLogs.id,
-          deviceId: this.schema.notificationSendLogs.deviceId,
-          provider: this.schema.notificationSendLogs.provider,
-          title: this.schema.notificationSendLogs.title,
-          body: this.schema.notificationSendLogs.body,
-          data: this.schema.notificationSendLogs.data,
-          userId: this.schema.notificationSendLogs.userId,
-        })
+        .select({ id: this.schema.notificationSendLogs.id })
         .from(this.schema.notificationSendLogs)
         .where(
           and(
-            eq(this.schema.notificationSendLogs.batchId, batchId),
-            eq(this.schema.notificationSendLogs.status, "pending")
+            eq(this.schema.notificationSendLogs.notificationId, input.notificationId),
+            eq(this.schema.notificationSendLogs.channel, input.channel)
           )
         )
     );

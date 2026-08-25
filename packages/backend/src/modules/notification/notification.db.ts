@@ -37,6 +37,12 @@ export const notifications = table("notifications", {
   body: text("body").notNull(),
   data: text("data", { mode: "json" }).$type<Record<string, unknown> | null>(),
   visibleInInbox: integer("visible_in_inbox", { mode: "boolean" }).notNull().default(false),
+  armedChannels: text("armed_channels", { mode: "json" })
+    .notNull()
+    .$type<NotificationChannel[]>()
+    .default([]),
+  webPushedAt: integer("web_pushed_at", { mode: "timestamp" }),
+  mobilePushedAt: integer("mobile_pushed_at", { mode: "timestamp" }),
   readAt: integer("read_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
@@ -74,13 +80,15 @@ export const notificationPreferences = table(
 export const notificationSendLogs = table("notification_send_logs", {
   id: text("id").primaryKey().$default(uuidv4),
   batchId: text("batch_id").notNull(),
+  notificationId: text("notification_id")
+    .notNull()
+    .references(() => notifications.id, { onDelete: "cascade" }),
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  deviceId: text("device_id")
-    .notNull()
-    .references(() => notificationDevices.id, { onDelete: "cascade" }),
-  provider: text("provider").notNull().$type<NotificationProvider>(),
+  deviceId: text("device_id").references(() => notificationDevices.id, { onDelete: "set null" }),
+  channel: text("channel").notNull().$type<NotificationChannel>(),
+  provider: text("provider").$type<NotificationProvider | null>(),
   title: text("title").notNull(),
   body: text("body").notNull(),
   data: text("data", { mode: "json" }).$type<Record<string, unknown> | null>(),

@@ -69,12 +69,16 @@ export const notificationVapidPublicKeyOutputSchema = z.object({
   publicKey: z.string(),
 });
 
+export const notificationChannelSchema = z.enum(NOTIFICATION_CHANNELS);
+
 export const notificationSendLogSelectSchema = z.object({
   id: z.string(),
   batchId: z.string(),
+  notificationId: z.string(),
   userId: z.string(),
-  deviceId: z.string(),
-  provider: notificationProviderSchema,
+  deviceId: z.string().nullable(),
+  channel: notificationChannelSchema,
+  provider: notificationProviderSchema.nullable(),
   title: z.string(),
   body: z.string(),
   data: z.record(z.string(), z.unknown()).nullable(),
@@ -92,8 +96,6 @@ export const notificationListSendLogsInputSchema = z.object({
 
 export const notificationListSendLogsOutputSchema = z.array(notificationSendLogSelectSchema);
 
-export const notificationChannelSchema = z.enum(NOTIFICATION_CHANNELS);
-
 export const notificationInstanceSelectSchema = z.object({
   id: z.string(),
   userId: z.string(),
@@ -102,6 +104,8 @@ export const notificationInstanceSelectSchema = z.object({
   body: z.string(),
   data: z.record(z.string(), z.unknown()).nullable(),
   visibleInInbox: z.boolean(),
+  webPushedAt: z.date().nullable(),
+  mobilePushedAt: z.date().nullable(),
   readAt: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
