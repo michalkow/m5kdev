@@ -48,14 +48,12 @@ export class PostsModule extends BaseModule<
   override services({
     repositories,
     deps,
-    infra,
   }: ModuleServicesContext<PostsModuleDeps, PostsModuleRepositories>) {
     return {
       posts: new PostsService(
         { posts: repositories.posts },
         { auth: deps.auth.services.auth },
-        postsGrants,
-        infra.serverEvents
+        postsGrants
       ),
     };
   }

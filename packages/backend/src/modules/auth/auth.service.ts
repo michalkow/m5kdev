@@ -19,7 +19,6 @@ import type { InferSelectModel } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import type { TFunction } from "i18next";
 import { err, ok } from "neverthrow";
-import type { Logger } from "pino";
 import { z } from "zod";
 import type { BackendAppMetadata } from "../../app";
 import type { ServerEventBus } from "../../base/server-event";
@@ -135,7 +134,6 @@ export class AuthService extends BasePermissionService<
     service: AuthServiceDependencies,
     grants: ResourceGrant[],
     private readonly serverEvents: ServerEventBus,
-    private readonly logger: Logger,
     appUrls?: BackendAppMetadata["urls"],
     hooks?: AuthServiceHooks,
     locales?: AuthLocaleConfig,

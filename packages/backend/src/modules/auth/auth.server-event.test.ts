@@ -1,5 +1,4 @@
 import { err, ok } from "neverthrow";
-import type { Logger } from "pino";
 import type { ServerEventBus } from "../../base/server-event";
 import { ServerError } from "../../utils/errors";
 import type { EmailService } from "../email/email.service";
@@ -45,7 +44,6 @@ function createFakeBus(): {
 
 function createAuthService(input: {
   bus: ServerEventBus;
-  logger?: Logger;
   listOrganizationMembers: AuthOrganizationRepository["listOrganizationMembers"];
 }): AuthService {
   return new AuthService(
@@ -60,9 +58,12 @@ function createAuthService(input: {
     },
     { email: {} as EmailService },
     defaultAuthGrants,
-    input.bus,
-    input.logger ?? ({ error: jest.fn() } as unknown as Logger)
+    input.bus
   );
+}
+
+function spyLoggerError(auth: AuthService): jest.SpiedFunction<AuthService["logger"]["error"]> {
+  return jest.spyOn(auth.logger, "error").mockImplementation(() => auth.logger);
 }
 
 function listingError(): ServerError {
@@ -108,12 +109,11 @@ describe("AuthService Server event emit", () => {
 
   it("userEmit drops an invalid envelope without forwarding", () => {
     const { bus, emits } = createFakeBus();
-    const logger = { error: jest.fn() } as unknown as Logger;
     const auth = createAuthService({
       bus,
-      logger,
       listOrganizationMembers: jest.fn(),
     });
+    const error = spyLoggerError(auth);
 
     auth.userEmit({
       userId: "user-1",
@@ -124,7 +124,7 @@ describe("AuthService Server event emit", () => {
     });
 
     expect(emits).toEqual([]);
-    expect(logger.error).toHaveBeenCalled();
+    expect(error).toHaveBeenCalled();
   });
 
   it("batchUserEmit forwards a valid envelope to Kernel batchEmit", () => {
@@ -158,12 +158,11 @@ describe("AuthService Server event emit", () => {
 
   it("batchUserEmit drops an invalid envelope without forwarding", () => {
     const { bus, batchEmits } = createFakeBus();
-    const logger = { error: jest.fn() } as unknown as Logger;
     const auth = createAuthService({
       bus,
-      logger,
       listOrganizationMembers: jest.fn(),
     });
+    const error = spyLoggerError(auth);
 
     auth.batchUserEmit({
       userIds: ["user-1"],
@@ -174,7 +173,7 @@ describe("AuthService Server event emit", () => {
     });
 
     expect(batchEmits).toEqual([]);
-    expect(logger.error).toHaveBeenCalled();
+    expect(error).toHaveBeenCalled();
   });
 
   it("organizationEmit lists Members, fills the tag, and batchEmits", async () => {
@@ -215,12 +214,11 @@ describe("AuthService Server event emit", () => {
 
   it("organizationEmit emits to nobody when listing fails", async () => {
     const { bus, emits, batchEmits } = createFakeBus();
-    const logger = { error: jest.fn() } as unknown as Logger;
     const auth = createAuthService({
       bus,
-      logger,
       listOrganizationMembers: jest.fn(async () => err(listingError())),
     });
+    const error = spyLoggerError(auth);
 
     auth.organizationEmit({
       organizationId: "org-1",
@@ -233,17 +231,16 @@ describe("AuthService Server event emit", () => {
 
     expect(emits).toEqual([]);
     expect(batchEmits).toEqual([]);
-    expect(logger.error).toHaveBeenCalled();
+    expect(error).toHaveBeenCalled();
   });
 
   it("organizationEmit emits to nobody when the Organization has no Members", async () => {
     const { bus, emits, batchEmits } = createFakeBus();
-    const logger = { error: jest.fn() } as unknown as Logger;
     const auth = createAuthService({
       bus,
-      logger,
       listOrganizationMembers: jest.fn(async () => ok([])),
     });
+    const error = spyLoggerError(auth);
 
     auth.organizationEmit({
       organizationId: "org-1",
@@ -256,7 +253,7 @@ describe("AuthService Server event emit", () => {
 
     expect(emits).toEqual([]);
     expect(batchEmits).toEqual([]);
-    expect(logger.error).toHaveBeenCalled();
+    expect(error).toHaveBeenCalled();
   });
 
   it("emitServerEvent with a null organizationId userEmits with tag null", () => {

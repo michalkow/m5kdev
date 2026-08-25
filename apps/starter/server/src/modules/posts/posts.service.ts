@@ -1,6 +1,4 @@
-import type { ServerEventBus } from "@m5kdev/backend/base/server-event";
 import type { AuthService } from "@m5kdev/backend/modules/auth/auth.service";
-import type { ResourceGrant } from "@m5kdev/backend/modules/base/base.grants";
 import { BasePermissionService } from "@m5kdev/backend/modules/base/base.service";
 import { serializeSpanValue, withSpan } from "@m5kdev/backend/utils/telemetry";
 import type { Context } from "@m5kdev/backend/utils/trpc";
@@ -16,15 +14,6 @@ export class PostsService extends BasePermissionService<
   { auth: AuthService },
   Context
 > {
-  constructor(
-    repository: { posts: PostsRepository },
-    service: { auth: AuthService },
-    grants: ResourceGrant[],
-    private readonly serverEvents: ServerEventBus
-  ) {
-    super(repository, service, grants);
-  }
-
   readonly list = this.procedure("list")
     .input(postSchemas.input.list)
     .output(postSchemas.output.list)
@@ -167,28 +156,12 @@ export class PostsService extends BasePermissionService<
     id: string;
     change: ServerEventChange;
   }): void {
-    void this.resolveRecipientUserIds(input).then((userIds) => {
-      this.serverEvents.batchEmit({
-        userIds,
-        payload: {
-          resource: POST_SERVER_EVENT_RESOURCE,
-          id: input.id,
-          change: input.change,
-          organizationId: input.organizationId,
-        },
-      });
+    this.service.auth.emitServerEvent({
+      userId: input.userId,
+      organizationId: input.organizationId,
+      resource: POST_SERVER_EVENT_RESOURCE,
+      id: input.id,
+      change: input.change,
     });
-  }
-
-  private async resolveRecipientUserIds(input: {
-    userId: string;
-    organizationId: string | null;
-  }): Promise<string[]> {
-    if (!input.organizationId) return [input.userId];
-    const members = await this.service.auth.repository.organization.listOrganizationMembers(
-      input.organizationId
-    );
-    if (members.isErr()) return [input.userId];
-    return members.value.map((member) => member.userId);
   }
 }

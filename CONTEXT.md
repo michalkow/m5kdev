@@ -87,7 +87,7 @@ _Avoid_: Package, Plugin, Feature (when you mean the server module), Model; `bac
 _Avoid_: Utils Backend Module; calling Base "the module" as if it were Auth
 
 **Server event**:
-A Kernel-owned, one-way HTTP Server-Sent Event that a resource was created, updated, or deleted. It is addressed to a UserId. It names the resource, its id, that change, and organizationId or null (a tag, not the audience). An optional snapshot of the entity may ride along. Services emit to explicit UserIds; the authenticated User subscribes on one stream. The bus does not enforce Grants on snapshots. Not a Core Module. See [ADR-0010](docs/adr/0010-kernel-owns-server-events.md).
+A Kernel-owned, one-way HTTP Server-Sent Event that a resource was created, updated, or deleted. It is addressed to a UserId. It names the resource, its id, that change, and organizationId or null (a tag, not the audience). An optional snapshot of the entity may ride along. Services emit Server events through Auth; emitting to an Organization's Members is Auth resolving Memberships, not a bus audience. The authenticated User subscribes on one stream. The bus does not enforce Grants on snapshots. Not a Core Module. See [ADR-0010](docs/adr/0010-kernel-owns-server-events.md).
 _Avoid_: organization-addressed fan-out; WebSocket; Subscription (that is Billing); Notification (that may consume one); Action (that is Grant); Inbound callback; Backend Module
 
 **Core Module**:
