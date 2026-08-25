@@ -23,6 +23,9 @@ import {
   APP_NAME,
   APP_ROLES_CONFIG,
 } from "@starter-app/shared/modules/app/app.constants";
+// m5k:notifications:start
+import { NOTIFICATION_KINDS } from "@starter-app/shared/modules/notification/notification.constants";
+// m5k:notifications:end
 // m5k:ai:start
 import { mastra, openrouter } from "./modules/conversation/conversation.mastra";
 // m5k:ai:end
@@ -138,7 +141,7 @@ export const builtBackendApp = createBackendApp(
     new DemoWorkflowModule(),
     // m5k:workflows:end
     // m5k:notifications:start
-    new NotificationModule(),
+    new NotificationModule({ kinds: NOTIFICATION_KINDS }),
     // m5k:notifications:end
     new PostsModule(),
     new EmailPreviewModule({ allowDelete: process.env.NODE_ENV !== "production" }),

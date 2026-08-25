@@ -26,6 +26,25 @@ export const notificationDevices = table("notification_devices", {
     .$default(() => new Date()),
 });
 
+export const notifications = table("notifications", {
+  id: text("id").primaryKey().$default(uuidv4),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  data: text("data", { mode: "json" }).$type<Record<string, unknown> | null>(),
+  visibleInInbox: integer("visible_in_inbox", { mode: "boolean" }).notNull().default(false),
+  readAt: integer("read_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .$default(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .$default(() => new Date()),
+});
+
 export const notificationSendLogs = table("notification_send_logs", {
   id: text("id").primaryKey().$default(uuidv4),
   batchId: text("batch_id").notNull(),

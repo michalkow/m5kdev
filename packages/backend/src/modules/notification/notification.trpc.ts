@@ -1,7 +1,10 @@
 import {
+  notificationInstanceSelectSchema,
   notificationListDevicesOutputSchema,
+  notificationListInboxOutputSchema,
   notificationListSendLogsInputSchema,
   notificationListSendLogsOutputSchema,
+  notificationMarkReadInputSchema,
   notificationRegisterDeviceInputSchema,
   notificationRegisterDeviceOutputSchema,
   notificationSendTestInputSchema,
@@ -39,6 +42,17 @@ export function createNotificationTRPC(
     listMyDevices: privateProcedure
       .output(notificationListDevicesOutputSchema)
       .query(async ({ ctx }) => handleTRPCResult(await notificationService.listMyDevices(ctx))),
+
+    listMyInbox: privateProcedure
+      .output(notificationListInboxOutputSchema)
+      .query(async ({ ctx }) => handleTRPCResult(await notificationService.listMyInbox(ctx))),
+
+    markRead: privateProcedure
+      .input(notificationMarkReadInputSchema)
+      .output(notificationInstanceSelectSchema)
+      .mutation(async ({ ctx, input }) =>
+        handleTRPCResult(await notificationService.markRead(ctx, input.id))
+      ),
 
     listMySendLogs: privateProcedure
       .input(notificationListSendLogsInputSchema)

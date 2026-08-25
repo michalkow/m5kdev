@@ -1,3 +1,4 @@
+import type { NotificationKind } from "@m5kdev/commons/modules/notification/notification.constants";
 import { createBackendRouterMap } from "../../app";
 import type { AuthModule } from "../auth/auth.module";
 import type { Grant } from "../base/base.grants";
@@ -37,17 +38,20 @@ export class NotificationModule<const Namespace extends string = "notification">
   override readonly dependsOn = ["auth", "workflow"] as const;
   private readonly grants: Grant[];
   private readonly config: NotificationServiceOptions;
+  private readonly kinds: readonly NotificationKind[];
 
   constructor(
     private readonly options: {
       namespace?: Namespace;
       grants?: Grant[];
       config?: NotificationServiceOptions;
+      kinds?: readonly NotificationKind[];
     } = {}
   ) {
     super();
     this.grants = options.grants ?? defaultNotificationGrants;
     this.config = options.config ?? {};
+    this.kinds = options.kinds ?? [];
   }
 
   override repositories({
@@ -68,9 +72,12 @@ export class NotificationModule<const Namespace extends string = "notification">
     return {
       notification: new NotificationService(
         { notification: repositories.notification },
-        { workflow: deps.workflow.services.workflow },
+        {
+          workflow: deps.workflow.services.workflow,
+          auth: deps.auth.services.auth,
+        },
         this.grants,
-        this.config
+        { ...this.config, kinds: this.kinds }
       ),
     };
   }

@@ -8,9 +8,9 @@ import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseRepository } from "../base/base.repository";
-import { notificationDevices, notificationSendLogs } from "./notification.db";
+import { notificationDevices, notificationSendLogs, notifications } from "./notification.db";
 
-const schema = { notificationDevices, notificationSendLogs };
+const schema = { notifications, notificationDevices, notificationSendLogs };
 type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;
 
@@ -27,6 +27,19 @@ export interface NotificationDeviceRow {
   readonly updatedAt: Date;
 }
 
+export interface NotificationInstanceRow {
+  readonly id: string;
+  readonly userId: string;
+  readonly kind: string;
+  readonly title: string;
+  readonly body: string;
+  readonly data: Record<string, unknown> | null;
+  readonly visibleInInbox: boolean;
+  readonly readAt: Date | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
 export interface InsertSendLogRow {
   readonly batchId: string;
   readonly userId: string;
@@ -39,6 +52,75 @@ export interface InsertSendLogRow {
 }
 
 export class NotificationRepository extends BaseRepository<Orm, Schema, Record<string, never>> {
+  async insertNotification(input: {
+    userId: string;
+    kind: string;
+    title: string;
+    body: string;
+    data: Record<string, unknown> | null;
+    visibleInInbox: boolean;
+  }): ServerResultAsync<NotificationInstanceRow> {
+    const now = new Date();
+    const rowResult = await this.throwableQuery(() =>
+      this.orm
+        .insert(this.schema.notifications)
+        .values({
+          userId: input.userId,
+          kind: input.kind,
+          title: input.title,
+          body: input.body,
+          data: input.data,
+          visibleInInbox: input.visibleInInbox,
+          readAt: null,
+          updatedAt: now,
+        })
+        .returning()
+    );
+    if (rowResult.isErr()) return err(rowResult.error);
+    const [row] = rowResult.value;
+    return ok(row as NotificationInstanceRow);
+  }
+
+  async listVisibleInboxByUserId(userId: string): ServerResultAsync<NotificationInstanceRow[]> {
+    const rowsResult = await this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(this.schema.notifications)
+        .where(
+          and(
+            eq(this.schema.notifications.userId, userId),
+            eq(this.schema.notifications.visibleInInbox, true)
+          )
+        )
+        .orderBy(desc(this.schema.notifications.createdAt))
+    );
+    if (rowsResult.isErr()) return err(rowsResult.error);
+    return ok(rowsResult.value as NotificationInstanceRow[]);
+  }
+
+  async markNotificationRead(input: {
+    id: string;
+    userId: string;
+  }): ServerResultAsync<NotificationInstanceRow | undefined> {
+    const now = new Date();
+    const rowResult = await this.throwableQuery(() =>
+      this.orm
+        .update(this.schema.notifications)
+        .set({ readAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(this.schema.notifications.id, input.id),
+            eq(this.schema.notifications.userId, input.userId),
+            eq(this.schema.notifications.visibleInInbox, true)
+          )
+        )
+        .returning()
+    );
+    if (rowResult.isErr()) return err(rowResult.error);
+    const [row] = rowResult.value;
+    return ok(row as NotificationInstanceRow | undefined);
+  }
+
   async findDeviceByEndpoint(
     endpoint: string
   ): ServerResultAsync<NotificationDeviceRow | undefined> {

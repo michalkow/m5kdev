@@ -1,4 +1,5 @@
 import type {
+  NotificationKind,
   NotificationPlatform,
   NotificationProvider,
   NotificationSendStatus,
@@ -8,6 +9,7 @@ import type { NotificationRegisterDeviceInput } from "@m5kdev/commons/modules/no
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
 import type { Context } from "../../utils/trpc";
+import type { AuthService } from "../auth/auth.service";
 import type { ServerResultAsync } from "../base/base.dto";
 import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
@@ -20,7 +22,7 @@ import {
   sendFcmNotification,
   sendWebPushNotification,
 } from "./notification.providers";
-import type { NotificationRepository } from "./notification.repository";
+import type { NotificationInstanceRow, NotificationRepository } from "./notification.repository";
 
 export interface NotificationServiceJobPayload {
   readonly batchId: string;
@@ -30,6 +32,7 @@ export interface NotificationServiceJobPayload {
 export interface NotificationServiceOptions {
   deliveryTimeout?: number;
   notificationQueue?: string;
+  kinds?: readonly NotificationKind[];
 }
 
 function platformToProvider(platform: NotificationPlatform): NotificationProvider {
@@ -58,17 +61,20 @@ function maskEndpoint(endpoint: string): string {
 
 export class NotificationService extends BasePermissionService<
   { notification: NotificationRepository },
-  { workflow: WorkflowService }
+  { workflow: WorkflowService; auth: Pick<AuthService, "userEmit"> }
 > {
   readonly deliverNotificationJob: FireAndForgetJobDefinition<NotificationServiceJobPayload>;
+  private readonly kindsById: ReadonlyMap<string, NotificationKind>;
 
   constructor(
     repositories: { notification: NotificationRepository },
-    services: { workflow: WorkflowService },
+    services: { workflow: WorkflowService; auth: Pick<AuthService, "userEmit"> },
     grants: ResourceGrant[],
     options?: NotificationServiceOptions
   ) {
     super(repositories, services, grants);
+
+    this.kindsById = new Map((options?.kinds ?? []).map((kind) => [kind.id, kind]));
 
     this.deliverNotificationJob = this.service.workflow
       .job<NotificationServiceJobPayload>({
@@ -208,6 +214,61 @@ export class NotificationService extends BasePermissionService<
     });
   }
 
+  async send(input: {
+    userId: string;
+    kind: string;
+    title: string;
+    body: string;
+    data?: Record<string, unknown> | null;
+  }): ServerResultAsync<NotificationInstanceRow> {
+    const kind = this.kindsById.get(input.kind);
+    if (!kind) {
+      return this.error("BAD_REQUEST", "Unknown Notification kind");
+    }
+
+    const visibleInInbox = kind.defaultChannels.includes("in-app");
+
+    const inserted = await this.repository.notification.insertNotification({
+      userId: input.userId,
+      kind: kind.id,
+      title: input.title,
+      body: input.body,
+      data: input.data ?? null,
+      visibleInInbox,
+    });
+    if (inserted.isErr()) return err(inserted.error);
+
+    this.service.auth.userEmit({
+      userId: input.userId,
+      resource: "notification",
+      id: inserted.value.id,
+      change: "created",
+      organizationId: null,
+    });
+
+    return ok(inserted.value);
+  }
+
+  async listMyInbox(ctx: Context): ServerResultAsync<NotificationInstanceRow[]> {
+    const readGuard = this.accessGuard(ctx.actor, "read", { userId: ctx.actor.userId });
+    if (readGuard.isErr()) return err(readGuard.error);
+
+    return this.repository.notification.listVisibleInboxByUserId(ctx.actor.userId);
+  }
+
+  async markRead(ctx: Context, id: string): ServerResultAsync<NotificationInstanceRow> {
+    const writeGuard = this.accessGuard(ctx.actor, "write", { userId: ctx.actor.userId });
+    if (writeGuard.isErr()) return err(writeGuard.error);
+
+    const updated = await this.repository.notification.markNotificationRead({
+      id,
+      userId: ctx.actor.userId,
+    });
+    if (updated.isErr()) return err(updated.error);
+    if (!updated.value) return this.error("NOT_FOUND", "Notification not found");
+    return ok(updated.value);
+  }
+
   async enqueueSendToUser(input: {
     userId: string;
     title: string;
@@ -263,15 +324,24 @@ export class NotificationService extends BasePermissionService<
 
   async sendTestAsAdmin(
     ctx: Context,
-    input: { userId?: string; title: string; body: string; data?: Record<string, unknown> }
-  ): ServerResultAsync<{ batchId: string; jobId: string }> {
+    input: {
+      userId?: string;
+      kind: string;
+      title: string;
+      body: string;
+      data?: Record<string, unknown>;
+    }
+  ): ServerResultAsync<{ id: string }> {
     const userId = input.userId ?? ctx.actor.userId;
-    return this.enqueueSendToUser({
+    const sent = await this.send({
       userId,
+      kind: input.kind,
       title: input.title,
       body: input.body,
       data: input.data ?? null,
     });
+    if (sent.isErr()) return err(sent.error);
+    return ok({ id: sent.value.id });
   }
 
   private async deliverBatch(payload: NotificationServiceJobPayload): Promise<void> {

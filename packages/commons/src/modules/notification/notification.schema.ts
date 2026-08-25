@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  NOTIFICATION_CHANNELS,
   NOTIFICATION_PLATFORMS,
   NOTIFICATION_PROVIDERS,
   NOTIFICATION_SEND_STATUSES,
@@ -91,14 +92,35 @@ export const notificationListSendLogsInputSchema = z.object({
 
 export const notificationListSendLogsOutputSchema = z.array(notificationSendLogSelectSchema);
 
+export const notificationChannelSchema = z.enum(NOTIFICATION_CHANNELS);
+
+export const notificationInstanceSelectSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  kind: z.string(),
+  title: z.string(),
+  body: z.string(),
+  data: z.record(z.string(), z.unknown()).nullable(),
+  visibleInInbox: z.boolean(),
+  readAt: z.date().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+export const notificationListInboxOutputSchema = z.array(notificationInstanceSelectSchema);
+
+export const notificationMarkReadInputSchema = z.object({
+  id: z.string(),
+});
+
 export const notificationSendTestInputSchema = z.object({
   userId: z.string().optional(),
+  kind: z.string().min(1),
   title: z.string().min(1).max(200),
   body: z.string().min(1).max(2000),
   data: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const notificationSendTestOutputSchema = z.object({
-  batchId: z.string(),
-  jobId: z.string(),
+  id: z.string(),
 });

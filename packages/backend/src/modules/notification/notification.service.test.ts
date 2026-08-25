@@ -1,4 +1,5 @@
 import { type Client, createClient } from "@libsql/client";
+import type { NotificationKind } from "@m5kdev/commons/modules/notification/notification.constants";
 import { drizzle } from "drizzle-orm/libsql";
 import type { Context } from "../../utils/trpc";
 import * as authTables from "../auth/auth.db";
@@ -18,10 +19,15 @@ const WEB_SUBSCRIPTION = {
 };
 const NATIVE_TOKEN = "apns-token-1";
 
-function stubWorkflow(): WorkflowService {
+const TEST_KINDS = [
+  { id: "demo.ping", defaultChannels: ["in-app"] },
+  { id: "demo.silent", defaultChannels: ["web-push"] },
+] as const satisfies readonly NotificationKind[];
+
+function stubWorkflow(trigger: jest.Mock): WorkflowService {
   return {
     job: () => ({
-      handle: () => ({ trigger: jest.fn() }),
+      handle: () => ({ trigger }),
     }),
   } as unknown as WorkflowService;
 }
@@ -82,6 +88,20 @@ async function createTables(client: Client): Promise<void> {
     );
   `);
   await client.execute(`
+    CREATE TABLE notifications (
+      id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      data TEXT,
+      visible_in_inbox INTEGER NOT NULL,
+      read_at INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+  `);
+  await client.execute(`
     CREATE TABLE notification_send_logs (
       id TEXT PRIMARY KEY NOT NULL,
       batch_id TEXT NOT NULL,
@@ -110,9 +130,21 @@ async function insertUser(client: Client, id: string, email: string): Promise<vo
   });
 }
 
-function createService(client: Client): NotificationService {
+async function countNotificationRows(client: Client): Promise<number> {
+  const result = await client.execute("SELECT COUNT(*) AS n FROM notifications");
+  return Number(result.rows[0]?.n ?? 0);
+}
+
+function createHarness(client: Client): {
+  service: NotificationService;
+  userEmit: jest.Mock;
+  trigger: jest.Mock;
+} {
+  const userEmit = jest.fn();
+  const trigger = jest.fn();
   const orm = drizzle(client, {
     schema: {
+      notifications: notificationTables.notifications,
       notificationDevices: notificationTables.notificationDevices,
       notificationSendLogs: notificationTables.notificationSendLogs,
     },
@@ -120,15 +152,22 @@ function createService(client: Client): NotificationService {
   const repository = new NotificationRepository({
     orm,
     schema: {
+      notifications: notificationTables.notifications,
       notificationDevices: notificationTables.notificationDevices,
       notificationSendLogs: notificationTables.notificationSendLogs,
     },
   });
-  return new NotificationService(
+  const service = new NotificationService(
     { notification: repository },
-    { workflow: stubWorkflow() },
-    defaultNotificationGrants
+    { workflow: stubWorkflow(trigger), auth: { userEmit } },
+    defaultNotificationGrants,
+    { kinds: TEST_KINDS }
   );
+  return { service, userEmit, trigger };
+}
+
+function createService(client: Client): NotificationService {
+  return createHarness(client).service;
 }
 
 describe("NotificationService Device tenancy", () => {
@@ -279,5 +318,159 @@ describe("defaultNotificationGrants", () => {
       (grant) => grant.level === "user" && grant.role === "admin" && grant.action === "read"
     );
     expect(adminRead?.access).toBe("own");
+  });
+});
+
+describe("NotificationService inbox", () => {
+  let client: Client;
+
+  beforeEach(async () => {
+    client = createClient({ url: ":memory:" });
+    await createTables(client);
+    await insertUser(client, OWNER_ID, "owner@example.com");
+    await insertUser(client, OTHER_ID, "other@example.com");
+  });
+
+  afterEach(async () => {
+    await client.close?.();
+  });
+
+  it("fails send for an unknown kind without inserting or emitting", async () => {
+    const { service, userEmit } = createHarness(client);
+    const result = await service.send({
+      userId: OWNER_ID,
+      kind: "missing.kind",
+      title: "Hello",
+      body: "World",
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("BAD_REQUEST");
+    }
+    expect(userEmit).not.toHaveBeenCalled();
+    expect(await countNotificationRows(client)).toBe(0);
+  });
+
+  it("inserts a new instance per send and lists only the owner's visible inbox", async () => {
+    const { service, userEmit } = createHarness(client);
+    const first = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.ping",
+      title: "One",
+      body: "First",
+      data: { n: 1 },
+    });
+    const second = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.ping",
+      title: "Two",
+      body: "Second",
+    });
+    expect(first.isOk()).toBe(true);
+    expect(second.isOk()).toBe(true);
+    if (first.isOk() && second.isOk()) {
+      expect(first.value.id).not.toBe(second.value.id);
+    }
+    expect(userEmit).toHaveBeenCalledTimes(2);
+    expect(userEmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: OWNER_ID,
+        resource: "notification",
+        change: "created",
+        organizationId: null,
+      })
+    );
+
+    const ownerInbox = await service.listMyInbox(userContext(OWNER_ID));
+    expect(ownerInbox.isOk()).toBe(true);
+    if (ownerInbox.isOk()) {
+      expect(ownerInbox.value).toHaveLength(2);
+    }
+
+    const otherInbox = await service.listMyInbox(userContext(OTHER_ID));
+    expect(otherInbox.isOk()).toBe(true);
+    if (otherInbox.isOk()) {
+      expect(otherInbox.value).toHaveLength(0);
+    }
+  });
+
+  it("inserts a silent instance when the kind has no in-app Channel", async () => {
+    const { service } = createHarness(client);
+    const sent = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.silent",
+      title: "Quiet",
+      body: "No inbox",
+    });
+    expect(sent.isOk()).toBe(true);
+    if (sent.isOk()) {
+      expect(sent.value.visibleInInbox).toBe(false);
+    }
+    const inbox = await service.listMyInbox(userContext(OWNER_ID));
+    expect(inbox.isOk()).toBe(true);
+    if (inbox.isOk()) {
+      expect(inbox.value).toHaveLength(0);
+    }
+  });
+
+  it("marks own visible instances read and rejects another User", async () => {
+    const { service } = createHarness(client);
+    const sent = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.ping",
+      title: "Read me",
+      body: "Please",
+    });
+    expect(sent.isOk()).toBe(true);
+    const id = sent.isOk() ? sent.value.id : "";
+
+    const foreign = await service.markRead(userContext(OTHER_ID), id);
+    expect(foreign.isErr()).toBe(true);
+    if (foreign.isErr()) {
+      expect(foreign.error.code).toBe("NOT_FOUND");
+    }
+
+    const marked = await service.markRead(userContext(OWNER_ID), id);
+    expect(marked.isOk()).toBe(true);
+    if (marked.isOk()) {
+      expect(marked.value.readAt).not.toBeNull();
+    }
+  });
+
+  it("sendTest inserts an inbox instance for a UserId and does not enqueue Device push", async () => {
+    const { service, trigger } = createHarness(client);
+    const registered = await service.registerDevice(userContext(OTHER_ID), {
+      platform: "ios",
+      token: NATIVE_TOKEN,
+    });
+    expect(registered.isOk()).toBe(true);
+
+    const result = await service.sendTestAsAdmin(userContext(OWNER_ID), {
+      userId: OTHER_ID,
+      kind: "demo.ping",
+      title: "Test",
+      body: "Inbox only",
+    });
+    expect(result.isOk()).toBe(true);
+    expect(trigger).not.toHaveBeenCalled();
+
+    const otherInbox = await service.listMyInbox(userContext(OTHER_ID));
+    expect(otherInbox.isOk()).toBe(true);
+    if (otherInbox.isOk()) {
+      expect(otherInbox.value).toHaveLength(1);
+      expect(otherInbox.value[0]?.title).toBe("Test");
+    }
+
+    const ownerInbox = await service.listMyInbox(userContext(OWNER_ID));
+    expect(ownerInbox.isOk()).toBe(true);
+    if (ownerInbox.isOk()) {
+      expect(ownerInbox.value).toHaveLength(0);
+    }
+
+    const logs = await service.listMySendLogs(userContext(OTHER_ID));
+    expect(logs.isOk()).toBe(true);
+    if (logs.isOk()) {
+      expect(logs.value).toHaveLength(0);
+    }
   });
 });

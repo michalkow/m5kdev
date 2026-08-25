@@ -23,6 +23,7 @@ export { files } from "@m5kdev/backend/modules/file/file.db";
 export {
   notificationDevices,
   notificationSendLogs,
+  notifications,
 } from "@m5kdev/backend/modules/notification/notification.db";
 // m5k:notifications:end
 // m5k:workflows:start

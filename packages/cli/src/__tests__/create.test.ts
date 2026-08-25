@@ -513,6 +513,7 @@ describe("scaffoldProject", () => {
     expect(schema).toContain('from "@m5kdev/backend/modules/notification/notification.db"');
     expect(schema).toContain("notificationDevices");
     expect(schema).toContain("notificationSendLogs");
+    expect(schema).toContain("notifications");
     expect(schema).not.toContain("m5k:");
 
     const serverAgents = await fs.readFile(
