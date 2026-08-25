@@ -8,6 +8,7 @@ import {
   type ModuleServicesContext,
   type ModuleTRPCContext,
 } from "../base/base.module";
+import type { EmailModule } from "../email/email.module";
 import type { WorkflowModule } from "../workflow/workflow.module";
 import type * as notificationTables from "./notification.db";
 import { defaultNotificationGrants } from "./notification.grants";
@@ -15,7 +16,7 @@ import { NotificationRepository } from "./notification.repository";
 import { NotificationService, type NotificationServiceOptions } from "./notification.service";
 import { createNotificationTRPC } from "./notification.trpc";
 
-type NotificationModuleDeps = { auth: AuthModule; workflow: WorkflowModule };
+type NotificationModuleDeps = { auth: AuthModule; workflow: WorkflowModule; email?: EmailModule };
 type NotificationModuleTables = typeof notificationTables;
 type NotificationModuleRepositories = {
   notification: NotificationRepository;
@@ -36,6 +37,7 @@ export class NotificationModule<const Namespace extends string = "notification">
 > {
   readonly id = "notification";
   override readonly dependsOn = ["auth", "workflow"] as const;
+  override readonly optionalDependsOn = ["email"] as const;
   private readonly grants: Grant[];
   private readonly config: NotificationServiceOptions;
   private readonly kinds: readonly NotificationKind[];
@@ -75,6 +77,7 @@ export class NotificationModule<const Namespace extends string = "notification">
         {
           workflow: deps.workflow.services.workflow,
           auth: deps.auth.services.auth,
+          email: deps.email?.services.email,
         },
         this.grants,
         { ...this.config, kinds: this.kinds }

@@ -106,6 +106,7 @@ export const notificationInstanceSelectSchema = z.object({
   visibleInInbox: z.boolean(),
   webPushedAt: z.date().nullable(),
   mobilePushedAt: z.date().nullable(),
+  emailedAt: z.date().nullable(),
   readAt: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),

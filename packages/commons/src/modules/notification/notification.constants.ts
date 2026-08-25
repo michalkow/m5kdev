@@ -12,6 +12,8 @@ export const NOTIFICATION_MOBILE_PUSH_JOB_NAME = "notification.mobilePush" as co
 
 export const NOTIFICATION_DEFAULT_WEB_PUSH_DELAY_MS = 2 * 60 * 1000;
 export const NOTIFICATION_DEFAULT_MOBILE_PUSH_DELAY_MS = 5 * 60 * 1000;
+export const NOTIFICATION_EMAIL_JOB_NAME = "notification.email" as const;
+export const NOTIFICATION_DEFAULT_EMAIL_DELAY_MS = 15 * 60 * 1000;
 
 export const NOTIFICATION_CHANNELS = ["in-app", "web-push", "mobile-push", "email"] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];

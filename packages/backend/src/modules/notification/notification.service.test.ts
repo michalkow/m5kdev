@@ -1,6 +1,8 @@
 import { type Client, createClient } from "@libsql/client";
 import type { NotificationKind } from "@m5kdev/commons/modules/notification/notification.constants";
 import { drizzle } from "drizzle-orm/libsql";
+import { err, ok } from "neverthrow";
+import type { ServerError } from "../../utils/errors";
 import type { Context } from "../../utils/trpc";
 import * as authTables from "../auth/auth.db";
 import type { User } from "../auth/auth.lib";
@@ -13,7 +15,7 @@ import {
   sendWebPushNotification,
 } from "./notification.providers";
 import { NotificationRepository } from "./notification.repository";
-import { NotificationService } from "./notification.service";
+import { type NotificationEmailSender, NotificationService } from "./notification.service";
 
 jest.mock("./notification.providers", () => {
   const actual = jest.requireActual(
@@ -54,6 +56,22 @@ const TEST_KINDS = [
   { id: "demo.full", defaultChannels: ["in-app", "web-push"] },
   { id: "demo.push", defaultChannels: ["in-app", "web-push", "mobile-push"] },
   { id: "demo.fast-web", defaultChannels: ["web-push"], delays: { webPushMs: 1_000 } },
+  {
+    id: "demo.mail",
+    defaultChannels: ["in-app", "email"],
+    emailTemplate: "notificationInbox",
+  },
+  {
+    id: "demo.fast-mail",
+    defaultChannels: ["email"],
+    emailTemplate: "notificationInbox",
+    delays: { emailMs: 2_000 },
+  },
+  {
+    id: "demo.cascade-mail",
+    defaultChannels: ["in-app", "web-push", "email"],
+    emailTemplate: "notificationInbox",
+  },
 ] as const satisfies readonly NotificationKind[];
 
 function stubWorkflow(trigger: jest.Mock): WorkflowService {
@@ -131,6 +149,7 @@ async function createTables(client: Client): Promise<void> {
       armed_channels TEXT NOT NULL DEFAULT '[]',
       web_pushed_at INTEGER,
       mobile_pushed_at INTEGER,
+      emailed_at INTEGER,
       read_at INTEGER,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
@@ -183,33 +202,31 @@ async function countNotificationRows(client: Client): Promise<number> {
   return Number(result.rows[0]?.n ?? 0);
 }
 
-function createHarness(client: Client): {
+function createHarness(
+  client: Client,
+  options?: { email?: NotificationEmailSender }
+): {
   service: NotificationService;
   userEmit: jest.Mock;
   trigger: jest.Mock;
 } {
   const userEmit = jest.fn();
   const trigger = jest.fn();
-  const orm = drizzle(client, {
-    schema: {
-      notifications: notificationTables.notifications,
-      notificationDevices: notificationTables.notificationDevices,
-      notificationPreferences: notificationTables.notificationPreferences,
-      notificationSendLogs: notificationTables.notificationSendLogs,
-    },
-  });
+  const schema = {
+    notifications: notificationTables.notifications,
+    notificationDevices: notificationTables.notificationDevices,
+    notificationPreferences: notificationTables.notificationPreferences,
+    notificationSendLogs: notificationTables.notificationSendLogs,
+    users: authTables.users,
+  };
+  const orm = drizzle(client, { schema });
   const repository = new NotificationRepository({
     orm,
-    schema: {
-      notifications: notificationTables.notifications,
-      notificationDevices: notificationTables.notificationDevices,
-      notificationPreferences: notificationTables.notificationPreferences,
-      notificationSendLogs: notificationTables.notificationSendLogs,
-    },
+    schema,
   });
   const service = new NotificationService(
     { notification: repository },
-    { workflow: stubWorkflow(trigger), auth: { userEmit } },
+    { workflow: stubWorkflow(trigger), auth: { userEmit }, email: options?.email },
     defaultNotificationGrants,
     { kinds: TEST_KINDS }
   );
@@ -563,6 +580,22 @@ describe("NotificationService preferences", () => {
           ],
         },
         { kind: "demo.fast-web", channels: [{ channel: "web-push", enabled: true }] },
+        {
+          kind: "demo.mail",
+          channels: [
+            { channel: "in-app", enabled: true },
+            { channel: "email", enabled: true },
+          ],
+        },
+        { kind: "demo.fast-mail", channels: [{ channel: "email", enabled: true }] },
+        {
+          kind: "demo.cascade-mail",
+          channels: [
+            { channel: "in-app", enabled: true },
+            { channel: "web-push", enabled: true },
+            { channel: "email", enabled: true },
+          ],
+        },
       ]);
     }
   });
@@ -1035,6 +1068,253 @@ describe("NotificationService push cascade", () => {
       expect(logs.value[0]?.deviceId).toBeNull();
       expect(logs.value[0]?.status).toBe("failed");
       expect(logs.value[0]?.error).toBe("No enabled Device");
+    }
+  });
+});
+
+describe("NotificationService email cascade", () => {
+  let client: Client;
+
+  beforeEach(async () => {
+    sendWebPushMock.mockReset().mockResolvedValue(undefined);
+    client = createClient({ url: ":memory:" });
+    await createTables(client);
+    await insertUser(client, OWNER_ID, "owner@example.com");
+    await insertUser(client, OTHER_ID, "other@example.com");
+  });
+
+  afterEach(async () => {
+    await client.close?.();
+  });
+
+  it("does not send email immediately and schedules a 15m job", async () => {
+    const sendTemplate = jest.fn().mockResolvedValue(ok({}));
+    const { service, trigger } = createHarness(client, { email: { sendTemplate } });
+    const sent = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.mail",
+      title: "Hello",
+      body: "World",
+      data: { ticket: "DEV-358" },
+    });
+    expect(sent.isOk()).toBe(true);
+    expect(sendTemplate).not.toHaveBeenCalled();
+    if (sent.isOk()) {
+      expect(trigger).toHaveBeenCalledWith(
+        { notificationId: sent.value.id },
+        { jobOptions: { delay: 15 * 60 * 1000 } }
+      );
+    }
+  });
+
+  it("uses kind delay override when scheduling email", async () => {
+    const sendTemplate = jest.fn().mockResolvedValue(ok({}));
+    const { service, trigger } = createHarness(client, { email: { sendTemplate } });
+    const sent = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.fast-mail",
+      title: "Fast",
+      body: "Mail",
+    });
+    expect(sent.isOk()).toBe(true);
+    if (sent.isOk()) {
+      expect(trigger).toHaveBeenCalledWith(
+        { notificationId: sent.value.id },
+        { jobOptions: { delay: 2_000 } }
+      );
+    }
+  });
+
+  it("sends once with kind template and instance payload, then stamps emailedAt", async () => {
+    const sendTemplate = jest.fn().mockResolvedValue(ok({}));
+    const { service } = createHarness(client, { email: { sendTemplate } });
+    const sent = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.mail",
+      title: "Hello",
+      body: "World",
+      data: { ticket: "DEV-358" },
+    });
+    expect(sent.isOk()).toBe(true);
+    const id = sent.isOk() ? sent.value.id : "";
+
+    const first = await service.deliverEmail(id);
+    expect(first.isOk()).toBe(true);
+    expect(sendTemplate).toHaveBeenCalledTimes(1);
+    expect(sendTemplate).toHaveBeenCalledWith("owner@example.com", "notificationInbox", {
+      title: "Hello",
+      body: "World",
+      data: { ticket: "DEV-358" },
+    });
+
+    const inbox = await service.listMyInbox(userContext(OWNER_ID));
+    expect(inbox.isOk()).toBe(true);
+    if (inbox.isOk()) {
+      expect(inbox.value[0]?.emailedAt).not.toBeNull();
+    }
+
+    const logs = await service.listMySendLogs(userContext(OWNER_ID));
+    expect(logs.isOk()).toBe(true);
+    if (logs.isOk()) {
+      expect(logs.value).toHaveLength(1);
+      expect(logs.value[0]?.notificationId).toBe(id);
+      expect(logs.value[0]?.channel).toBe("email");
+      expect(logs.value[0]?.deviceId).toBeNull();
+      expect(logs.value[0]?.status).toBe("sent");
+    }
+
+    const second = await service.deliverEmail(id);
+    expect(second.isOk()).toBe(true);
+    expect(sendTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs failure and leaves emailedAt unset when EmailModule send fails", async () => {
+    const sendTemplate = jest
+      .fn()
+      .mockResolvedValue(err({ message: "resend down" } as ServerError));
+    const { service } = createHarness(client, { email: { sendTemplate } });
+    const sent = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.mail",
+      title: "Hello",
+      body: "World",
+    });
+    expect(sent.isOk()).toBe(true);
+    const id = sent.isOk() ? sent.value.id : "";
+
+    const delivered = await service.deliverEmail(id);
+    expect(delivered.isOk()).toBe(true);
+
+    const inbox = await service.listMyInbox(userContext(OWNER_ID));
+    expect(inbox.isOk()).toBe(true);
+    if (inbox.isOk()) {
+      expect(inbox.value[0]?.emailedAt).toBeNull();
+    }
+
+    const logs = await service.listMySendLogs(userContext(OWNER_ID));
+    expect(logs.isOk()).toBe(true);
+    if (logs.isOk()) {
+      expect(logs.value).toHaveLength(1);
+      expect(logs.value[0]?.status).toBe("failed");
+      expect(logs.value[0]?.error).toBe("resend down");
+    }
+  });
+
+  it("logs failure when EmailModule send throws", async () => {
+    const sendTemplate = jest.fn().mockRejectedValue(new Error("resend threw"));
+    const { service } = createHarness(client, { email: { sendTemplate } });
+    const sent = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.mail",
+      title: "Hello",
+      body: "World",
+    });
+    expect(sent.isOk()).toBe(true);
+    const id = sent.isOk() ? sent.value.id : "";
+
+    const delivered = await service.deliverEmail(id);
+    expect(delivered.isOk()).toBe(true);
+
+    const inbox = await service.listMyInbox(userContext(OWNER_ID));
+    expect(inbox.isOk()).toBe(true);
+    if (inbox.isOk()) {
+      expect(inbox.value[0]?.emailedAt).toBeNull();
+    }
+
+    const logs = await service.listMySendLogs(userContext(OWNER_ID));
+    expect(logs.isOk()).toBe(true);
+    if (logs.isOk()) {
+      expect(logs.value).toHaveLength(1);
+      expect(logs.value[0]?.status).toBe("failed");
+      expect(logs.value[0]?.error).toBe("resend threw");
+    }
+  });
+
+  it("boots send() without EmailModule and does not succeed email", async () => {
+    const { service, trigger } = createHarness(client);
+    const sent = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.mail",
+      title: "Hello",
+      body: "World",
+    });
+    expect(sent.isOk()).toBe(true);
+    if (sent.isOk()) {
+      expect(trigger).toHaveBeenCalledWith(
+        { notificationId: sent.value.id },
+        { jobOptions: { delay: 15 * 60 * 1000 } }
+      );
+      const delivered = await service.deliverEmail(sent.value.id);
+      expect(delivered.isOk()).toBe(true);
+    }
+
+    const inbox = await service.listMyInbox(userContext(OWNER_ID));
+    expect(inbox.isOk()).toBe(true);
+    if (inbox.isOk()) {
+      expect(inbox.value[0]?.emailedAt).toBeNull();
+    }
+
+    const logs = await service.listMySendLogs(userContext(OWNER_ID));
+    expect(logs.isOk()).toBe(true);
+    if (logs.isOk()) {
+      expect(logs.value).toHaveLength(1);
+      expect(logs.value[0]?.channel).toBe("email");
+      expect(logs.value[0]?.status).toBe("failed");
+      expect(logs.value[0]?.error).toBe("EmailModule is not registered");
+    }
+  });
+
+  it("skips email after mark-read and still emails after web failure", async () => {
+    const sendTemplate = jest.fn().mockResolvedValue(ok({}));
+    const { service } = createHarness(client, { email: { sendTemplate } });
+    sendWebPushMock.mockRejectedValue(new Error("web down"));
+    await service.registerDevice(userContext(OWNER_ID), {
+      platform: "web",
+      subscription: WEB_SUBSCRIPTION,
+    });
+
+    const skippedSend = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.mail",
+      title: "Read first",
+      body: "Skip",
+    });
+    expect(skippedSend.isOk()).toBe(true);
+    const skippedId = skippedSend.isOk() ? skippedSend.value.id : "";
+    const marked = await service.markRead(userContext(OWNER_ID), skippedId);
+    expect(marked.isOk()).toBe(true);
+    const skipped = await service.deliverEmail(skippedId);
+    expect(skipped.isOk()).toBe(true);
+    expect(sendTemplate).not.toHaveBeenCalled();
+
+    const cascade = await service.send({
+      userId: OWNER_ID,
+      kind: "demo.cascade-mail",
+      title: "Keep going",
+      body: "Email after web",
+    });
+    expect(cascade.isOk()).toBe(true);
+    const cascadeId = cascade.isOk() ? cascade.value.id : "";
+    const web = await service.deliverWebPush(cascadeId);
+    expect(web.isOk()).toBe(true);
+    const emailed = await service.deliverEmail(cascadeId);
+    expect(emailed.isOk()).toBe(true);
+    expect(sendTemplate).toHaveBeenCalledTimes(1);
+
+    const inbox = await service.listMyInbox(userContext(OWNER_ID));
+    expect(inbox.isOk()).toBe(true);
+    if (inbox.isOk()) {
+      const row = inbox.value.find((item) => item.id === cascadeId);
+      expect(row?.webPushedAt).toBeNull();
+      expect(row?.emailedAt).not.toBeNull();
+    }
+
+    const logs = await service.listMySendLogs(userContext(OWNER_ID));
+    expect(logs.isOk()).toBe(true);
+    if (logs.isOk()) {
+      expect(logs.value.filter((row) => row.notificationId === skippedId)).toHaveLength(0);
+      expect(logs.value.find((row) => row.channel === "web-push")?.status).toBe("failed");
+      expect(logs.value.find((row) => row.channel === "email")?.status).toBe("sent");
     }
   });
 });

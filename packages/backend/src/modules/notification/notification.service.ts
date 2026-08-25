@@ -28,6 +28,14 @@ export interface NotificationServiceJobPayload {
   readonly notificationId: string;
 }
 
+export interface NotificationEmailSender {
+  sendTemplate(
+    to: string,
+    templateKey: string,
+    templateProps: Record<string, unknown>
+  ): ServerResultAsync<unknown>;
+}
+
 export interface NotificationServiceOptions {
   deliveryTimeout?: number;
   notificationQueue?: string;
@@ -36,8 +44,10 @@ export interface NotificationServiceOptions {
 
 const NOTIFICATION_WEB_PUSH_JOB_NAME = "notification.webPush";
 const NOTIFICATION_MOBILE_PUSH_JOB_NAME = "notification.mobilePush";
+const NOTIFICATION_EMAIL_JOB_NAME = "notification.email";
 const NOTIFICATION_DEFAULT_WEB_PUSH_DELAY_MS = 2 * 60 * 1000;
 const NOTIFICATION_DEFAULT_MOBILE_PUSH_DELAY_MS = 5 * 60 * 1000;
+const NOTIFICATION_DEFAULT_EMAIL_DELAY_MS = 15 * 60 * 1000;
 
 function platformToProvider(platform: NotificationPlatform): NotificationProvider {
   if (platform === "web") return "web";
@@ -65,15 +75,24 @@ function maskEndpoint(endpoint: string): string {
 
 export class NotificationService extends BasePermissionService<
   { notification: NotificationRepository },
-  { workflow: WorkflowService; auth: Pick<AuthService, "userEmit"> }
+  {
+    workflow: WorkflowService;
+    auth: Pick<AuthService, "userEmit">;
+    email?: NotificationEmailSender;
+  }
 > {
   readonly webPushJob: FireAndForgetJobDefinition<NotificationServiceJobPayload>;
   readonly mobilePushJob: FireAndForgetJobDefinition<NotificationServiceJobPayload>;
+  readonly emailJob: FireAndForgetJobDefinition<NotificationServiceJobPayload>;
   private readonly kindsById: ReadonlyMap<string, NotificationKind>;
 
   constructor(
     repositories: { notification: NotificationRepository },
-    services: { workflow: WorkflowService; auth: Pick<AuthService, "userEmit"> },
+    services: {
+      workflow: WorkflowService;
+      auth: Pick<AuthService, "userEmit">;
+      email?: NotificationEmailSender;
+    },
     grants: ResourceGrant[],
     options?: NotificationServiceOptions
   ) {
@@ -102,6 +121,18 @@ export class NotificationService extends BasePermissionService<
       })
       .handle(async (payload) => {
         const result = await this.deliverMobilePush(payload.notificationId);
+        if (result.isErr()) throw new Error(result.error.message);
+      });
+
+    this.emailJob = this.service.workflow
+      .job<NotificationServiceJobPayload>({
+        name: NOTIFICATION_EMAIL_JOB_NAME,
+        ...(options?.notificationQueue ? { queue: options.notificationQueue } : {}),
+        timeout: options?.deliveryTimeout ?? 60_000,
+        id: (p) => `email:${p.notificationId}`,
+      })
+      .handle(async (payload) => {
+        const result = await this.deliverEmail(payload.notificationId);
         if (result.isErr()) throw new Error(result.error.message);
       });
   }
@@ -277,7 +308,7 @@ export class NotificationService extends BasePermissionService<
       organizationId: null,
     });
 
-    await this.enqueueArmedPushJobs(inserted.value.id, kind, armed);
+    await this.enqueueArmedOutboundJobs(inserted.value.id, kind, armed);
 
     return ok(inserted.value);
   }
@@ -410,7 +441,86 @@ export class NotificationService extends BasePermissionService<
     });
   }
 
-  private async enqueueArmedPushJobs(
+  async deliverEmail(notificationId: string): ServerResultAsync<void> {
+    const instance = await this.repository.notification.findNotificationById(notificationId);
+    if (instance.isErr()) return err(instance.error);
+    if (!instance.value) return ok();
+    if (instance.value.readAt) return ok();
+    if (!instance.value.armedChannels.includes("email")) return ok();
+
+    const existing = await this.repository.notification.listSendLogsForNotificationChannel({
+      notificationId,
+      channel: "email",
+    });
+    if (existing.isErr()) return err(existing.error);
+    if (existing.value.length > 0) return ok();
+
+    const kind = this.kindsById.get(instance.value.kind);
+    const fail = async (error: string): ServerResultAsync<void> => {
+      const logged = await this.repository.notification.insertSendLogs([
+        {
+          batchId: uuidv4(),
+          notificationId: instance.value.id,
+          userId: instance.value.userId,
+          deviceId: null,
+          channel: "email",
+          provider: null,
+          title: instance.value.title,
+          body: instance.value.body,
+          data: instance.value.data,
+          status: "failed",
+          error,
+        },
+      ]);
+      if (logged.isErr()) return err(logged.error);
+      return ok();
+    };
+
+    if (!this.service.email) {
+      return fail("EmailModule is not registered");
+    }
+    if (!kind?.emailTemplate) {
+      return fail("Email template is not configured on this Notification kind");
+    }
+    const to = await this.repository.notification.findUserEmail(instance.value.userId);
+    if (to.isErr()) return err(to.error);
+    if (!to.value) {
+      return fail("User email is missing");
+    }
+
+    try {
+      const sent = await this.service.email.sendTemplate(to.value, kind.emailTemplate, {
+        title: instance.value.title,
+        body: instance.value.body,
+        data: instance.value.data,
+      });
+      if (sent.isErr()) {
+        return fail(sent.error.message);
+      }
+    } catch (cause) {
+      return fail(cause instanceof Error ? cause.message : String(cause));
+    }
+
+    const logged = await this.repository.notification.insertSendLogs([
+      {
+        batchId: uuidv4(),
+        notificationId: instance.value.id,
+        userId: instance.value.userId,
+        deviceId: null,
+        channel: "email",
+        provider: null,
+        title: instance.value.title,
+        body: instance.value.body,
+        data: instance.value.data,
+        status: "sent",
+        error: null,
+      },
+    ]);
+    if (logged.isErr()) return err(logged.error);
+    return this.repository.notification.stampEmailedAt(instance.value.id);
+  }
+
+  private async enqueueArmedOutboundJobs(
     notificationId: string,
     kind: NotificationKind,
     armed: readonly NotificationChannel[]
@@ -441,6 +551,20 @@ export class NotificationService extends BasePermissionService<
         );
       } catch (cause) {
         this.logger.error({ err: cause, notificationId }, "Failed to enqueue mobile push cascade");
+      }
+    }
+    if (armed.includes("email")) {
+      try {
+        await this.emailJob.trigger(
+          { notificationId },
+          {
+            jobOptions: {
+              delay: kind.delays?.emailMs ?? NOTIFICATION_DEFAULT_EMAIL_DELAY_MS,
+            },
+          }
+        );
+      } catch (cause) {
+        this.logger.error({ err: cause, notificationId }, "Failed to enqueue email cascade");
       }
     }
   }

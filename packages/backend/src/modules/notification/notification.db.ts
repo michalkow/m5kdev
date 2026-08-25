@@ -43,6 +43,7 @@ export const notifications = table("notifications", {
     .default([]),
   webPushedAt: integer("web_pushed_at", { mode: "timestamp" }),
   mobilePushedAt: integer("mobile_pushed_at", { mode: "timestamp" }),
+  emailedAt: integer("emailed_at", { mode: "timestamp" }),
   readAt: integer("read_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()

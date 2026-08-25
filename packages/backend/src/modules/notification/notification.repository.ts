@@ -7,6 +7,7 @@ import type {
 import { and, desc, eq } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
+import { users } from "../auth/auth.db";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseRepository } from "../base/base.repository";
 import {
@@ -21,6 +22,7 @@ const schema = {
   notificationDevices,
   notificationPreferences,
   notificationSendLogs,
+  users,
 };
 type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;
@@ -49,6 +51,7 @@ export interface NotificationInstanceRow {
   readonly armedChannels: readonly NotificationChannel[];
   readonly webPushedAt: Date | null;
   readonly mobilePushedAt: Date | null;
+  readonly emailedAt: Date | null;
   readonly readAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -92,6 +95,7 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
           armedChannels: [...input.armedChannels],
           webPushedAt: null,
           mobilePushedAt: null,
+          emailedAt: null,
           readAt: null,
           updatedAt: now,
         })
@@ -177,6 +181,31 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
     );
     if (updateResult.isErr()) return err(updateResult.error);
     return ok();
+  }
+
+  async stampEmailedAt(id: string): ServerResultAsync<void> {
+    const now = new Date();
+    const updateResult = await this.throwableQuery(() =>
+      this.orm
+        .update(this.schema.notifications)
+        .set({ emailedAt: now, updatedAt: now })
+        .where(eq(this.schema.notifications.id, id))
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+    return ok();
+  }
+
+  async findUserEmail(userId: string): ServerResultAsync<string | undefined> {
+    const rowResult = await this.throwableQuery(() =>
+      this.orm
+        .select({ email: this.schema.users.email })
+        .from(this.schema.users)
+        .where(eq(this.schema.users.id, userId))
+        .limit(1)
+    );
+    if (rowResult.isErr()) return err(rowResult.error);
+    const [row] = rowResult.value;
+    return ok(row?.email);
   }
 
   async listMutedPreferencesByUserId(
