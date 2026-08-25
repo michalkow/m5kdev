@@ -20,7 +20,7 @@ Not registered with `createBackendApp`. Import Base from `@m5kdev/backend/base/*
 | Surface | Packages | What it does |
 | --- | --- | --- |
 | [Base](/modules/base) | commons, backend | `BaseModule`, services, actors, Grants, procedures, result pattern, list/match query helpers |
-| Server events | commons, backend, frontend | Kernel SSE subscribe; Services emit through Auth when background work finishes. See [Auth](/modules/auth) and [Workflow](/modules/workflow) |
+| [Server events](/modules/server-events) | commons, backend, frontend | Kernel SSE subscribe; Services emit through Auth when background work finishes |
 | [Query helpers](/modules/utils) | backend | Drizzle helpers for pagination, sorting, QueryFilters, QueryMatch, search (folded into Kernel infrastructure; not a Backend Module) |
 
 ## Core Modules

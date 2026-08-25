@@ -92,6 +92,7 @@ Existing apps should work through these guides (skip any that already apply):
 ## Upgrading to 0.35.0 {#upgrade-0-35-0}
 
 - [Kernel Fly deploy commands](/guides/v0.35.0-kernel-fly-commands-migration)
+- [Kernel Server events](/guides/v0.35.0-kernel-server-events-migration)
 
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 

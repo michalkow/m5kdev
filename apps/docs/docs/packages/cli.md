@@ -96,6 +96,7 @@ Run these on existing apps, in this order when they apply:
 ## 0.35.0 upgrades
 
 1. [Kernel Fly deploy commands](/guides/v0.35.0-kernel-fly-commands-migration)
+2. [Kernel Server events](/guides/v0.35.0-kernel-server-events-migration)
 
 Operational Fly runbook: [Deploy with Docker and Fly.io](/guides/fly-deploy).
 

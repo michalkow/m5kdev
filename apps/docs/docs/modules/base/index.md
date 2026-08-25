@@ -103,3 +103,6 @@ Pagination, sorting, `q`, and soft-delete are shared. Operator semantics and
 opt-in steps:
 [List query and Match query](/guides/list-query-and-match-query),
 [Match query migration](/guides/v0.33.0-match-query-migration).
+
+SSE subscribe and Auth emit are a separate Kernel surface:
+[Server events](/modules/server-events).

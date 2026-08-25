@@ -86,16 +86,10 @@ Better Auth's own HTTP endpoints stay under `/api/auth/*`.
 
 ### Server events
 
-Services emit Server events through Auth, not the Kernel bus:
-`userEmit`, `batchUserEmit`, `organizationEmit`, and `emitServerEvent`.
-Kernel publishes untyped JSON to UserIds; Auth validates the Shared envelope.
-`organizationId` on the event is a tag for the client, not the audience —
-`organizationEmit` lists active Members and then batch-emits.
-
-Emit when background work finishes (typically a Workflow job) so the UI can
-refresh a change the triggering mutation did not return. The acting User already
-receives the entity on a tRPC write; they do not need an SSE for that request.
-See [Workflow](/modules/workflow).
+Services emit through Auth (`userEmit`, `batchUserEmit`, `organizationEmit`,
+`emitServerEvent`), not the Kernel bus. See [Server events](/modules/server-events)
+and [Workflow](/modules/workflow). Upgrade:
+[Kernel Server events in 0.35.0](/guides/v0.35.0-kernel-server-events-migration).
 
 ## Frontend
 
@@ -141,3 +135,4 @@ membership as `memberId` (organization and team scopes require it).
 - [User and organization locale migration](/guides/user-org-locale-migration)
 - [Admin create verified user migration](/guides/admin-create-verified-user-migration)
 - [Custom app roles migration](/guides/custom-app-roles-migration)
+- [Kernel Server events in 0.35.0](/guides/v0.35.0-kernel-server-events-migration)

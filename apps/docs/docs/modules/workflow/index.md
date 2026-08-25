@@ -81,7 +81,8 @@ on, emit a Server event through Auth so the UI can refetch:
 Mount `ServerEventProvider` and invalidate the matching `queryFilter()`.
 Reconnect has no replay: invalidate the same queries in `onReconnect`. Keep
 polling only as a fallback for in-progress status if you emit only on
-completion.
+completion. Full contract: [Server events](/modules/server-events). Upgrade:
+[Kernel Server events in 0.35.0](/guides/v0.35.0-kernel-server-events-migration).
 
 The Starter `DemoWorkflowService` `demo.ping` job is the reference: it
 `userEmit`s when the ping finishes; the webapp invalidates `workflow.list`.

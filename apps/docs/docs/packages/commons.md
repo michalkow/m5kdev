@@ -23,6 +23,7 @@ Start with these module pages:
 - [Table](/modules/table)
 - [Schemas](/modules/schemas)
 - [Workflow](/modules/workflow)
+- [Server events](/modules/server-events)
 
 ## Package rule
 

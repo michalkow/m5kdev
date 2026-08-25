@@ -14,7 +14,7 @@ Package docs explain ownership and imports. Detailed usage belongs in
 | [Web UI](./web-ui) | Shared HeroUI/Tailwind component library. |
 | [Commons](./commons) | Shared schemas, constants, and utilities. |
 | [Email](./email) | Shared React Email chrome and template types (not `EmailModule`). |
-| [CLI](./cli) | Project creation, `init` / `doctor` / `update`, and 0.34.0 upgrade entry. |
+| [CLI](./cli) | Project creation, `init` / `doctor` / `update`, and 0.34.0 / 0.35.0 upgrade entry. |
 | [Config](./config) | Shared workspace configuration package. |
 
 ## 0.34.0 upgrades
@@ -29,3 +29,4 @@ Package docs explain ownership and imports. Detailed usage belongs in
 ## 0.35.0 upgrades
 
 - [Kernel Fly deploy commands](/guides/v0.35.0-kernel-fly-commands-migration)
+- [Kernel Server events](/guides/v0.35.0-kernel-server-events-migration)

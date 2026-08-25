@@ -55,7 +55,7 @@ mount feature-level global providers ad hoc.
 (it needs the session and the query client). Register handlers that invalidate
 queries when a Workflow job (or other background work) finishes. The acting User
 already receives tRPC mutation results; those writes do not need an SSE. See
-[Auth](/modules/auth) and [Workflow](/modules/workflow).
+[Server events](/modules/server-events).
 
 ## Shell UI
 
