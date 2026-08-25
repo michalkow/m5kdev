@@ -1,5 +1,12 @@
 # create-m5kdev
 
+## 0.35.0
+
+### Minor Changes
+
+- 3021d9a: Kernel owns Fly deploy and secrets wrappers (`m5kdev-fly-deploy` / `m5kdev-fly-secrets`). Starter drops copied `fly-*.mjs` scripts; root `app:deploy` / `landing:*` call the bins via a root `@m5kdev/backend` devDependency.
+- sse
+
 ## 0.34.0
 
 ### Minor Changes

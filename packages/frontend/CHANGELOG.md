@@ -1,5 +1,16 @@
 # @m5kdev/frontend
 
+## 0.35.0
+
+### Minor Changes
+
+- sse
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.35.0
+
 ## 0.34.0
 
 ### Minor Changes

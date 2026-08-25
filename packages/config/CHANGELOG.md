@@ -1,5 +1,11 @@
 # @m5kdev/config
 
+## 0.35.0
+
+### Minor Changes
+
+- sse
+
 ## 0.34.0
 
 ### Minor Changes

@@ -1,5 +1,17 @@
 # @m5kdev/module-docx
 
+## 0.35.0
+
+### Minor Changes
+
+- sse
+
+### Patch Changes
+
+- Updated dependencies [3021d9a]
+- Updated dependencies
+  - @m5kdev/backend@0.35.0
+
 ## 0.34.0
 
 ### Minor Changes
