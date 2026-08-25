@@ -8,15 +8,17 @@ export const serverEventHandlerContext = createContext<
   ((input: { resource: string; handler: ServerEventHandler }) => () => void) | null
 >(null);
 
-export function ServerEventProvider({
-  children,
-  handlers,
-  onReconnect,
-}: {
+type Props = {
   children: ReactNode;
   handlers?: Readonly<Record<string, ServerEventHandler>>;
   onReconnect?: (queryClient: QueryClient) => void;
-}) {
+};
+
+/**
+ * Holds one cookie EventSource for the authenticated User and dispatches
+ * Shared-envelope Server events to composition and mounted handlers.
+ */
+export function ServerEventProvider({ children, handlers, onReconnect }: Props) {
   const queryClient = useQueryClient();
   const { serverUrl } = useAppConfig();
   const session = useSession();
@@ -30,6 +32,7 @@ export function ServerEventProvider({
   onReconnectRef.current = onReconnect;
   const mountedHandlers = useRef(new Map<string, Set<ServerEventHandler>>());
 
+  // Stable identity so route handlers are not unregistered/re-registered every render.
   const register = useCallback(
     (input: { resource: string; handler: ServerEventHandler }): (() => void) => {
       let set = mountedHandlers.current.get(input.resource);

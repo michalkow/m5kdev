@@ -53,39 +53,30 @@ export type User = InferSelectModel<typeof auth.users>;
 export type Organization = InferSelectModel<typeof auth.organizations>;
 export type Member = InferSelectModel<typeof auth.members>;
 
-export interface AuthUserServerEventInput {
-  readonly userId: string;
+interface AuthServerEventFields {
   readonly resource: string;
   readonly id: string;
   readonly change: ServerEventChange;
-  readonly organizationId: string | null;
   readonly snapshot?: unknown;
 }
 
-export interface AuthBatchUserServerEventInput {
+export interface AuthUserServerEventInput extends AuthServerEventFields {
+  readonly userId: string;
+  readonly organizationId: string | null;
+}
+
+export interface AuthBatchUserServerEventInput extends AuthServerEventFields {
   readonly userIds: readonly string[];
-  readonly resource: string;
-  readonly id: string;
-  readonly change: ServerEventChange;
   readonly organizationId: string | null;
-  readonly snapshot?: unknown;
 }
 
-export interface AuthOrganizationServerEventInput {
+export interface AuthOrganizationServerEventInput extends AuthServerEventFields {
   readonly organizationId: string;
-  readonly resource: string;
-  readonly id: string;
-  readonly change: ServerEventChange;
-  readonly snapshot?: unknown;
 }
 
-export interface AuthEmitServerEventInput {
+export interface AuthEmitServerEventInput extends AuthServerEventFields {
   readonly userId: string;
   readonly organizationId: string | null;
-  readonly resource: string;
-  readonly id: string;
-  readonly change: ServerEventChange;
-  readonly snapshot?: unknown;
 }
 
 const ACCOUNT_CLAIM_MAGIC_LINK_FETCH_MS = 10_000;
@@ -1299,7 +1290,39 @@ export class AuthService extends BasePermissionService<
   }
 
   organizationEmit(input: AuthOrganizationServerEventInput): void {
-    void this.emitToOrganizationMembers(input);
+    void this.repository.organization
+      .listOrganizationMembers(input.organizationId)
+      .then((members) => {
+        if (members.isErr()) {
+          this.logger.error(
+            { err: members.error, organizationId: input.organizationId },
+            "Server event organization emit listing failed"
+          );
+          return;
+        }
+        const userIds = members.value.map((member) => member.userId);
+        if (userIds.length === 0) {
+          this.logger.error(
+            { organizationId: input.organizationId },
+            "Server event organization emit has no Members"
+          );
+          return;
+        }
+        this.batchUserEmit({
+          userIds,
+          resource: input.resource,
+          id: input.id,
+          change: input.change,
+          organizationId: input.organizationId,
+          snapshot: input.snapshot,
+        });
+      })
+      .catch((err: unknown) => {
+        this.logger.error(
+          { err, organizationId: input.organizationId },
+          "Server event organization emit listing failed"
+        );
+      });
   }
 
   emitServerEvent(input: AuthEmitServerEventInput): void {
@@ -1323,13 +1346,9 @@ export class AuthService extends BasePermissionService<
     });
   }
 
-  private parseServerEventEnvelope(input: {
-    resource: string;
-    id: string;
-    change: ServerEventChange;
-    organizationId: string | null;
-    snapshot?: unknown;
-  }): ServerEventEnvelope | undefined {
+  private parseServerEventEnvelope(
+    input: AuthServerEventFields & { organizationId: string | null }
+  ): ServerEventEnvelope | undefined {
     const parsed = serverEventEnvelopeSchema.safeParse({
       resource: input.resource,
       id: input.id,
@@ -1342,34 +1361,5 @@ export class AuthService extends BasePermissionService<
       return undefined;
     }
     return parsed.data;
-  }
-
-  private async emitToOrganizationMembers(input: AuthOrganizationServerEventInput): Promise<void> {
-    const members = await this.repository.organization.listOrganizationMembers(
-      input.organizationId
-    );
-    if (members.isErr()) {
-      this.logger.error(
-        { err: members.error, organizationId: input.organizationId },
-        "Server event organization emit listing failed"
-      );
-      return;
-    }
-    const userIds = members.value.map((member) => member.userId);
-    if (userIds.length === 0) {
-      this.logger.error(
-        { organizationId: input.organizationId },
-        "Server event organization emit has no Members"
-      );
-      return;
-    }
-    this.batchUserEmit({
-      userIds,
-      resource: input.resource,
-      id: input.id,
-      change: input.change,
-      organizationId: input.organizationId,
-      snapshot: input.snapshot,
-    });
   }
 }

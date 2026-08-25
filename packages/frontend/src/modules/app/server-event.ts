@@ -40,6 +40,7 @@ function shouldDeliverServerEvent(input: {
   return input.organizationId === (input.activeOrganizationId ?? null);
 }
 
+/** Opens one credentialed EventSource and runs handlers for valid Shared envelopes. */
 export function subscribeToServerEvents(input: SubscribeToServerEventsInput): {
   close(): void;
 } {

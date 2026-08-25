@@ -87,9 +87,16 @@ describe("scaffoldProject", () => {
     expect(appConstants).toContain('APP_SLUG = "editorial-desk"');
     expect(providers).toContain("AppConfigProvider");
     expect(providers).toContain("AppTrpcQueryProvider");
-    expect(providers).toContain("ServerEventProvider");
+    expect(providers).toContain("StarterServerEventProvider");
     expect(providers).not.toContain("DEMO_WORKFLOW");
     expect(providers).not.toContain("createWorkflowListServerEventHandler");
+    const serverEventShell = await fs.readFile(
+      path.join(result.targetDirectory, "apps/webapp/src/StarterServerEventProvider.tsx"),
+      "utf8"
+    );
+    expect(serverEventShell).toContain("ServerEventProvider");
+    expect(serverEventShell).not.toContain("DEMO_WORKFLOW");
+    expect(serverEventShell).not.toContain("m5k:");
     expect(appTs).toContain("createBackendApp(");
     expect(appTs).not.toContain(".build()");
     expect(appTs).not.toContain("cors(");
@@ -451,9 +458,14 @@ describe("scaffoldProject", () => {
       path.join(result.targetDirectory, "apps/webapp/src/App.tsx"),
       "utf8"
     );
-    expect(webappApp).toContain("DEMO_WORKFLOW_SERVER_EVENT_RESOURCE");
-    expect(webappApp).toContain("createWorkflowListServerEventHandler");
-    expect(webappApp).not.toContain("m5k:");
+    const serverEventProvider = await fs.readFile(
+      path.join(result.targetDirectory, "apps/webapp/src/StarterServerEventProvider.tsx"),
+      "utf8"
+    );
+    expect(webappApp).toContain("StarterServerEventProvider");
+    expect(serverEventProvider).toContain("DEMO_WORKFLOW_SERVER_EVENT_RESOURCE");
+    expect(serverEventProvider).toContain("trpc.workflow.list");
+    expect(serverEventProvider).not.toContain("m5k:");
 
     await expect(
       fs.stat(

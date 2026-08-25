@@ -1,5 +1,4 @@
 import { createBackendRouterMap } from "@m5kdev/backend/app";
-import type { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
 import {
   BaseModule,
   type ModuleRepositoriesContext,
@@ -12,7 +11,7 @@ import { PostsRepository } from "./posts.repository";
 import { PostsService } from "./posts.service";
 import { createPostsTRPC } from "./posts.trpc";
 
-type PostsModuleDeps = { auth: AuthModule };
+type PostsModuleDeps = Record<string, never>;
 type PostsModuleTables = typeof postsTables;
 type PostsModuleRepositories = {
   posts: PostsRepository;
@@ -32,7 +31,6 @@ export class PostsModule extends BaseModule<
   PostsModuleRouters
 > {
   readonly id = "posts";
-  override readonly dependsOn = ["auth"] as const;
   override readonly dbDependsOn = ["auth"] as const;
 
   override repositories({ db }: ModuleRepositoriesContext<PostsModuleDeps, PostsModuleTables>) {

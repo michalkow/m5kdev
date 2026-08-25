@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef } from "react";
 import { serverEventHandlerContext } from "../components/ServerEventProvider";
 import type { ServerEventHandler } from "../server-event";
 
+/** Registers a Server event handler for `resource` while the caller is mounted. */
 export function useServerEventHandler(input: {
   resource: string;
   handler: ServerEventHandler;

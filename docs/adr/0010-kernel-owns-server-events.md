@@ -20,4 +20,5 @@ Live UI in this stack is React Query polling; 1.0 still needs a Kernel-owned one
 - Kernel emit/batchEmit do not Zod-parse the envelope; the client safe-parses and ignores garbage.
 - A sloppy org-wide snapshot can bypass `read:own`; that is the emitter’s problem.
 - Emit from Workflow job handlers (and similar background work) so the UI can refresh a change that did not return on the triggering request. Starter demo: `DemoWorkflowService` `demo.ping`.
+- Kernel shutdown ends Server event streams (and rejects later subscribe with 503) before closing HTTP.
 - Web client is `ServerEventProvider` in `@m5kdev/frontend` (handlers optional, filter by active Organization). Expo is out of 1.0 freeze.

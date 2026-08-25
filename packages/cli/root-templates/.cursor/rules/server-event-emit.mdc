@@ -1,6 +1,6 @@
 ---
 description: Emit Server events from background jobs, not from mutations that already return the entity
-globs: **/*.service.ts,**/*.jobs.ts,**/App.tsx
+globs: **/*.service.ts,**/*.jobs.ts,**/App.tsx,**/*ServerEventProvider.tsx
 alwaysApply: false
 ---
 
@@ -32,7 +32,7 @@ Call Auth directly. Do not wrap `userEmit` in a private helper that only forward
 
 ## Organization fan-out
 
-`organizationEmit` (or `emitServerEvent` with an Organization id) notifies **other Members**. Use it when those Members must see a change they did not make — a job created an org-scoped entity, a publish, an assignment. Skip it for routine field edits.
+`organizationEmit` (or `emitServerEvent` with an Organization id) notifies **other Members**. Use it when a background job (or similar off-request work) creates or changes an org-scoped entity those Members must see. Skip it for tRPC writes that already return the entity, including publish.
 
 ## Client
 

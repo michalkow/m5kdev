@@ -326,4 +326,41 @@ describe("Kernel Server events HTTP", () => {
     });
     built.serverEvents.close();
   });
+
+  it("ends an open subscribe stream when the bus closes", async () => {
+    const built = createBackendApp({
+      db: { client },
+      app: { urls: { web: WEB_ORIGIN } },
+      auth: { factory: () => stubAuth() },
+    });
+
+    await withServer(built.express.app, async (baseUrl) => {
+      const stream = await openSse(baseUrl, "user-a");
+      try {
+        built.serverEvents.close();
+        const result = await stream.reader.read();
+        expect(result.done).toBe(true);
+      } finally {
+        stream.abort.abort();
+        await stream.reader.cancel().catch(() => undefined);
+      }
+    });
+  });
+
+  it("rejects subscribe with 503 after the bus has closed", async () => {
+    const built = createBackendApp({
+      db: { client },
+      app: { urls: { web: WEB_ORIGIN } },
+      auth: { factory: () => stubAuth() },
+    });
+
+    built.serverEvents.close();
+
+    await withServer(built.express.app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/events`, {
+        headers: { cookie: "session=user-a" },
+      });
+      expect(response.status).toBe(503);
+    });
+  });
 });
