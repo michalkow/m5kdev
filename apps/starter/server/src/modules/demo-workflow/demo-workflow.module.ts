@@ -1,4 +1,5 @@
 import { createBackendRouterMap } from "@m5kdev/backend/app";
+import type { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
 import {
   BaseModule,
   type ModuleServicesContext,
@@ -9,7 +10,7 @@ import type { WorkflowModule } from "@m5kdev/backend/modules/workflow/workflow.m
 import { DemoWorkflowService } from "./demo-workflow.service";
 import { createDemoWorkflowTRPC } from "./demo-workflow.trpc";
 
-type DemoWorkflowModuleDeps = { workflow: WorkflowModule };
+type DemoWorkflowModuleDeps = { workflow: WorkflowModule; auth: AuthModule };
 type DemoWorkflowModuleServices = {
   demoWorkflow: DemoWorkflowService;
 };
@@ -25,13 +26,16 @@ export class DemoWorkflowModule extends BaseModule<
   DemoWorkflowModuleRouters
 > {
   readonly id = "demo-workflow";
-  override readonly dependsOn = ["workflow"] as const;
+  override readonly dependsOn = ["workflow", "auth"] as const;
 
   override services({
     deps,
   }: ModuleServicesContext<DemoWorkflowModuleDeps, Record<string, never>>) {
     return {
-      demoWorkflow: new DemoWorkflowService({ workflow: deps.workflow.services.workflow }),
+      demoWorkflow: new DemoWorkflowService({
+        workflow: deps.workflow.services.workflow,
+        auth: deps.auth.services.auth,
+      }),
     };
   }
 

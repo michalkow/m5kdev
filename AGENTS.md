@@ -92,6 +92,7 @@ Do not import services into repositories.
 - Avoid passing full request/session/context objects in queue payloads.
 - Keep job modules thin; business rules belong in services.
 - Avoid global singleton service imports inside jobs when an injected registry/factory is feasible.
+- Server event: emit through Auth (`userEmit` / `organizationEmit` / `emitServerEvent`) when a Workflow job (or other background work) finishes a change the User did not wait on. See `.cursor/rules/server-event-emit.mdc`.
 
 ## Do Not
 

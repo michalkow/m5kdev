@@ -1,5 +1,4 @@
 import { usePostActions } from "./usePostActions";
-import { usePostServerEvents } from "./usePostServerEvents";
 import { usePostsList } from "./usePostsList";
 
 /**
@@ -9,7 +8,6 @@ import { usePostsList } from "./usePostsList";
 export function usePostsRoute() {
   const list = usePostsList();
   const actions = usePostActions();
-  usePostServerEvents();
 
   return { ...list, ...actions };
 }

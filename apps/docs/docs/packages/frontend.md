@@ -10,6 +10,7 @@ logic used by Vite React web apps and Expo React Native apps.
 ## Use it for
 
 - App config and tRPC query providers.
+- `ServerEventProvider` for Kernel SSE (invalidate queries when background work finishes).
 - Auth, billing, file, table, AI Conversation, and operations hooks.
 - Client-side utilities that do not belong in UI components.
 - Platform-neutral table query state and query/filter serialization.

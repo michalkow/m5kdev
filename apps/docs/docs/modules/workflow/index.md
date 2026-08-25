@@ -69,6 +69,23 @@ Example from the notification module:
 readonly deliverNotificationJob = this.service.workflow.job({ /* config */ });
 ```
 
+## Notifying the UI
+
+A fire-and-forget job does not return its result on the triggering mutation
+(that call returns `jobId`). When the job finishes work the User did not wait
+on, emit a Server event through Auth so the UI can refetch:
+
+- `userEmit` — that User (personal work, or the User who queued the job)
+- `organizationEmit` — other Members must see an org-scoped entity the job created
+
+Mount `ServerEventProvider` and invalidate the matching `queryFilter()`.
+Reconnect has no replay: invalidate the same queries in `onReconnect`. Keep
+polling only as a fallback for in-progress status if you emit only on
+completion.
+
+The Starter `DemoWorkflowService` `demo.ping` job is the reference: it
+`userEmit`s when the ping finishes; the webapp invalidates `workflow.list`.
+
 ## Service API
 
 - `read(id)` / `list(query)` — read persisted workflow runs (backing the tRPC

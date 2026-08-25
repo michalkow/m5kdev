@@ -25,6 +25,7 @@
 - Do not add service methods that merely call another service. Call the owning service directly unless the method adds a business rule, authorization, validation, orchestration, a transaction boundary, or meaningful domain translation.
 - Renaming a dependency method, repackaging arguments, constructing a prompt, or forwarding actor/context data alone does not justify a service wrapper.
 - Do not create Drizzle migrations by hand. Use the scaffolded config and your project migration workflow later if you need generated migrations.
+- Server event: emit through Auth from Workflow job handlers (and similar background work) when the UI must refresh a change the triggering mutation did not return. See `.cursor/rules/server-event-emit.mdc`.
 
 ## Frontend Conventions
 

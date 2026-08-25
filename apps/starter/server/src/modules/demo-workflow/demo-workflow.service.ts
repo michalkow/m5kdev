@@ -1,9 +1,11 @@
+import type { AuthService } from "@m5kdev/backend/modules/auth/auth.service";
 import type { ServerResultAsync } from "@m5kdev/backend/modules/base/base.dto";
 import { BaseService } from "@m5kdev/backend/modules/base/base.service";
 import type { WorkflowService } from "@m5kdev/backend/modules/workflow/workflow.service";
 import type { FireAndForgetJobDefinition } from "@m5kdev/backend/modules/workflow/workflow.types";
 import type { Context } from "@m5kdev/backend/utils/trpc";
 import { workflowTriggerOutputSchema } from "@m5kdev/commons/modules/workflow/workflow.schema";
+import { DEMO_WORKFLOW_SERVER_EVENT_RESOURCE } from "@starter-app/shared/modules/demo-workflow/demo-workflow.constants";
 import { ok } from "neverthrow";
 
 const DEMO_PING_JOB_NAME = "demo.ping";
@@ -14,12 +16,12 @@ interface DemoPingJobPayload {
 
 export class DemoWorkflowService extends BaseService<
   Record<string, never>,
-  { workflow: WorkflowService },
+  { workflow: WorkflowService; auth: AuthService },
   Context
 > {
   readonly demoPingJob: FireAndForgetJobDefinition<DemoPingJobPayload>;
 
-  constructor(services: { workflow: WorkflowService }) {
+  constructor(services: { workflow: WorkflowService; auth: AuthService }) {
     super({}, services);
 
     this.demoPingJob = this.service.workflow
@@ -28,8 +30,14 @@ export class DemoWorkflowService extends BaseService<
         queue: "fast",
         meta: (payload) => ({ userId: payload.userId }),
       })
-      .handle(async () => {
-        // Completes immediately so the Starter webapp can observe a finished run.
+      .handle(async (payload) => {
+        this.service.auth.userEmit({
+          userId: payload.userId,
+          resource: DEMO_WORKFLOW_SERVER_EVENT_RESOURCE,
+          id: DEMO_PING_JOB_NAME,
+          change: "updated",
+          organizationId: null,
+        });
       });
   }
 

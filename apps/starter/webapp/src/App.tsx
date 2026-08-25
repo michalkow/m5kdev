@@ -1,3 +1,4 @@
+// biome-ignore-all assist/source/organizeImports: feature-gated Server event imports stay in marker blocks
 import { Toast } from "@heroui/react";
 import { AppConfigProvider } from "@m5kdev/frontend/modules/app/components/AppConfigProvider";
 import { AppTrpcQueryProvider } from "@m5kdev/frontend/modules/app/components/AppTrpcQueryProvider";
@@ -11,24 +12,33 @@ import {
   APP_NAME,
   APP_ROLES_CONFIG,
 } from "@starter-app/shared/modules/app/app.constants";
-import { POST_SERVER_EVENT_RESOURCE } from "@starter-app/shared/modules/posts/posts.constants";
+// m5k:workflows:start
+import { DEMO_WORKFLOW_SERVER_EVENT_RESOURCE } from "@starter-app/shared/modules/demo-workflow/demo-workflow.constants";
+// m5k:workflows:end
 import { NuqsAdapter } from "nuqs/adapters/react-router/v7";
 import type { ReactNode } from "react";
 import { BrowserRouter } from "react-router";
 import { Toaster } from "sonner";
-import { createPostListServerEventHandler } from "./modules/posts/hooks/usePostServerEvents";
-import { Router } from "./Router";
+// m5k:workflows:start
+import { createWorkflowListServerEventHandler } from "./modules/workflows/hooks/useWorkflowServerEvents";
 import { useTRPC } from "./utils/trpc";
+// m5k:workflows:end
+import { Router } from "./Router";
 
 function StarterServerEventProvider({ children }: { children: ReactNode }) {
+  // m5k:workflows:start
   const trpc = useTRPC();
-  const onPostEvent = createPostListServerEventHandler(trpc);
+  // m5k:workflows:end
   return (
     <ServerEventProvider
-      handlers={{ [POST_SERVER_EVENT_RESOURCE]: onPostEvent }}
-      onReconnect={(queryClient) => {
-        void queryClient.invalidateQueries(trpc.posts.list.queryFilter());
+      // m5k:workflows:start
+      handlers={{
+        [DEMO_WORKFLOW_SERVER_EVENT_RESOURCE]: createWorkflowListServerEventHandler(trpc),
       }}
+      onReconnect={(queryClient) => {
+        void queryClient.invalidateQueries(trpc.workflow.list.queryFilter());
+      }}
+      // m5k:workflows:end
     >
       {children}
     </ServerEventProvider>

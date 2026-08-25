@@ -1,9 +1,6 @@
-import type { AuthService } from "@m5kdev/backend/modules/auth/auth.service";
 import { BasePermissionService } from "@m5kdev/backend/modules/base/base.service";
 import { serializeSpanValue, withSpan } from "@m5kdev/backend/utils/telemetry";
 import type { Context } from "@m5kdev/backend/utils/trpc";
-import type { ServerEventChange } from "@m5kdev/commons/modules/base/server-event.schema";
-import { POST_SERVER_EVENT_RESOURCE } from "@starter-app/shared/modules/posts/posts.constants";
 import { err, ok } from "neverthrow";
 import { postSchemas } from "./posts.dto";
 import type { PostsRepository } from "./posts.repository";
@@ -11,7 +8,7 @@ import { createExcerpt, slugify } from "./posts.utils";
 
 export class PostsService extends BasePermissionService<
   { posts: PostsRepository },
-  { auth: AuthService },
+  Record<string, never>,
   Context
 > {
   readonly list = this.procedure("list")
@@ -49,7 +46,7 @@ export class PostsService extends BasePermissionService<
         return err(uniqueSlug.error);
       }
 
-      const created = await this.repository.posts.create({
+      return this.repository.posts.create({
         authorUserId: ctx.user.id,
         memberId: ctx.actor.memberId ?? null,
         organizationId: ctx.session.activeOrganizationId ?? null,
@@ -60,15 +57,6 @@ export class PostsService extends BasePermissionService<
         content: input.content.trim(),
         status: "draft",
       });
-      if (created.isOk()) {
-        this.emitPostChanged({
-          userId: ctx.user.id,
-          organizationId: created.value.organizationId,
-          id: created.value.id,
-          change: "created",
-        });
-      }
-      return created;
     });
 
   readonly update = this.procedure("update")
@@ -80,24 +68,15 @@ export class PostsService extends BasePermissionService<
       action: "write",
       entityStep: "post",
     })
-    .handle(async ({ input, ctx, state }) => {
+    .handle(async ({ input, state }) => {
       const content = input.content?.trim() ?? state.post.content;
 
-      const updated = await this.repository.posts.update({
+      return this.repository.posts.update({
         id: input.id,
         title: input.title ? input.title.trim() : state.post.title,
         excerpt: createExcerpt(input.excerpt, content),
         content: content.trim(),
       });
-      if (updated.isOk()) {
-        this.emitPostChanged({
-          userId: ctx.user.id,
-          organizationId: updated.value.organizationId,
-          id: updated.value.id,
-          change: "updated",
-        });
-      }
-      return updated;
     });
 
   readonly publish = this.procedure("publish")
@@ -109,21 +88,12 @@ export class PostsService extends BasePermissionService<
       action: "publish",
       entityStep: "post",
     })
-    .handle(async ({ input, ctx, state }) => {
-      const updated = await this.repository.posts.update({
+    .handle(async ({ input, state }) => {
+      return this.repository.posts.update({
         id: input.id,
         status: "published",
         publishedAt: state.post?.publishedAt ?? new Date(),
       });
-      if (updated.isOk()) {
-        this.emitPostChanged({
-          userId: ctx.user.id,
-          organizationId: updated.value.organizationId,
-          id: updated.value.id,
-          change: "updated",
-        });
-      }
-      return updated;
     });
 
   readonly softDelete = this.procedure("softDelete")
@@ -135,33 +105,12 @@ export class PostsService extends BasePermissionService<
       action: "delete",
       entityStep: "post",
     })
-    .handle(async ({ input, ctx, state }) => {
+    .handle(async ({ input }) => {
       const updated = await this.repository.posts.update({
         id: input.id,
         deletedAt: new Date(),
       });
       if (updated.isErr()) return err(updated.error);
-      this.emitPostChanged({
-        userId: ctx.user.id,
-        organizationId: state.post.organizationId,
-        id: updated.value.id,
-        change: "deleted",
-      });
       return ok({ id: updated.value.id });
     });
-
-  private emitPostChanged(input: {
-    userId: string;
-    organizationId: string | null;
-    id: string;
-    change: ServerEventChange;
-  }): void {
-    this.service.auth.emitServerEvent({
-      userId: input.userId,
-      organizationId: input.organizationId,
-      resource: POST_SERVER_EVENT_RESOURCE,
-      id: input.id,
-      change: input.change,
-    });
-  }
 }

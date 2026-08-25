@@ -84,6 +84,19 @@ The `auth` router covers, by area:
 
 Better Auth's own HTTP endpoints stay under `/api/auth/*`.
 
+### Server events
+
+Services emit Server events through Auth, not the Kernel bus:
+`userEmit`, `batchUserEmit`, `organizationEmit`, and `emitServerEvent`.
+Kernel publishes untyped JSON to UserIds; Auth validates the Shared envelope.
+`organizationId` on the event is a tag for the client, not the audience —
+`organizationEmit` lists active Members and then batch-emits.
+
+Emit when background work finishes (typically a Workflow job) so the UI can
+refresh a change the triggering mutation did not return. The acting User already
+receives the entity on a tRPC write; they do not need an SSE for that request.
+See [Workflow](/modules/workflow).
+
 ## Frontend
 
 `@m5kdev/frontend` exports the auth client plus hooks: `useSession`,

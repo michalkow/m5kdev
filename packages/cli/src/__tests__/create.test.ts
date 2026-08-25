@@ -34,6 +34,9 @@ describe("scaffoldProject", () => {
     await expect(fs.stat(path.join(result.targetDirectory, "AGENTS.md"))).resolves.toBeTruthy();
     await expect(fs.stat(path.join(result.targetDirectory, "CLAUDE.md"))).resolves.toBeTruthy();
     await expect(
+      fs.stat(path.join(result.targetDirectory, ".cursor/rules/server-event-emit.mdc"))
+    ).resolves.toBeTruthy();
+    await expect(
       fs.stat(path.join(result.targetDirectory, "apps/server/src/modules/posts/posts.service.ts"))
     ).resolves.toBeTruthy();
     await expect(
@@ -66,11 +69,13 @@ describe("scaffoldProject", () => {
     expect(rootPackage).toContain('"name": "editorial-desk"');
     expect(rootAgents).toContain("Editorial Desk");
     expect(rootAgents).toContain("A clean newsroom starter.");
+    expect(rootAgents).toContain("Server event:");
 
     const rootClaude = await fs.readFile(path.join(result.targetDirectory, "CLAUDE.md"), "utf8");
     expect(rootClaude).toContain("Editorial Desk");
     expect(rootClaude).toContain("A clean newsroom starter.");
     expect(rootClaude).toContain(".cursor/rules/module-db-guide.mdc");
+    expect(rootClaude).toContain(".cursor/rules/server-event-emit.mdc");
     expect(rootClaude).toContain("`apps/webapp`");
     // web platform without the test harness: expo and e2e marker blocks are stripped
     expect(rootClaude).not.toContain("apps/expo");
@@ -82,6 +87,9 @@ describe("scaffoldProject", () => {
     expect(appConstants).toContain('APP_SLUG = "editorial-desk"');
     expect(providers).toContain("AppConfigProvider");
     expect(providers).toContain("AppTrpcQueryProvider");
+    expect(providers).toContain("ServerEventProvider");
+    expect(providers).not.toContain("DEMO_WORKFLOW");
+    expect(providers).not.toContain("createWorkflowListServerEventHandler");
     expect(appTs).toContain("createBackendApp(");
     expect(appTs).not.toContain(".build()");
     expect(appTs).not.toContain("cors(");
@@ -438,6 +446,14 @@ describe("scaffoldProject", () => {
     );
     expect(router).toContain("WorkflowsRoute");
     expect(router).toContain('path="workflows"');
+
+    const webappApp = await fs.readFile(
+      path.join(result.targetDirectory, "apps/webapp/src/App.tsx"),
+      "utf8"
+    );
+    expect(webappApp).toContain("DEMO_WORKFLOW_SERVER_EVENT_RESOURCE");
+    expect(webappApp).toContain("createWorkflowListServerEventHandler");
+    expect(webappApp).not.toContain("m5k:");
 
     await expect(
       fs.stat(

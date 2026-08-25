@@ -12,7 +12,7 @@ TanStack Query provider, role helpers, and the reusable shell/sidebar UI.
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/frontend` | `AppConfigProvider`, `AppTrpcQueryProvider`, `useAppConfig`, `useAppTrpc`, `useAppRoles`, `useRoleLabel`, locale utilities. |
+| `@m5kdev/frontend` | `AppConfigProvider`, `AppTrpcQueryProvider`, `ServerEventProvider`, `useAppConfig`, `useAppTrpc`, `useAppRoles`, `useRoleLabel`, locale utilities. |
 | `@m5kdev/web-ui` | `AppShell`, `AppLoader`, `AppSidebar` (+ header, content, invites, user sections). |
 
 ## App configuration
@@ -50,6 +50,12 @@ Follow the app shell pattern from AGENTS.md: `NuqsAdapter` + `BrowserRouter` +
 `Providers.tsx`, where `Providers.tsx` composes `AppConfigProvider`,
 `AppTrpcQueryProvider`, `AuthProvider`, and any other global providers. Do not
 mount feature-level global providers ad hoc.
+
+`ServerEventProvider` belongs inside `AuthProvider` + `AppTrpcQueryProvider`
+(it needs the session and the query client). Register handlers that invalidate
+queries when a Workflow job (or other background work) finishes. The acting User
+already receives tRPC mutation results; those writes do not need an SSE. See
+[Auth](/modules/auth) and [Workflow](/modules/workflow).
 
 ## Shell UI
 

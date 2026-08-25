@@ -47,14 +47,9 @@ export class PostsModule extends BaseModule<
 
   override services({
     repositories,
-    deps,
   }: ModuleServicesContext<PostsModuleDeps, PostsModuleRepositories>) {
     return {
-      posts: new PostsService(
-        { posts: repositories.posts },
-        { auth: deps.auth.services.auth },
-        postsGrants
-      ),
+      posts: new PostsService({ posts: repositories.posts }, {}, postsGrants),
     };
   }
 

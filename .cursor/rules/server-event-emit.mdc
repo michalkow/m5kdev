@@ -1,0 +1,41 @@
+---
+description: Emit Server events from background jobs, not from mutations that already return the entity
+globs: **/*.service.ts,**/*.jobs.ts,**/App.tsx
+alwaysApply: false
+---
+
+# Server event emit
+
+Emit through Auth (`userEmit`, `batchUserEmit`, `organizationEmit`, `emitServerEvent`) when work finishes **off the request** that started it. Typical case: a Workflow job. The UI will not get a completion payload, so SSE tells it to refetch or patch cache.
+
+The acting User already receives the mutation result. They do not need an SSE for that write.
+
+## Emit from
+
+- Workflow job `.handle` after the job creates or updates a resource
+- Other background work the User did not wait on (cron, inbound callback that persisted something)
+
+```typescript
+.handle(async (payload) => {
+  // ... job work ...
+  this.service.auth.userEmit({
+    userId: payload.userId,
+    resource: "workflow",
+    id: jobName,
+    change: "updated",
+    organizationId: null,
+  });
+});
+```
+
+Call Auth directly. Do not wrap `userEmit` in a private helper that only forwards.
+
+## Organization fan-out
+
+`organizationEmit` (or `emitServerEvent` with an Organization id) notifies **other Members**. Use it when those Members must see a change they did not make — a job created an org-scoped entity, a publish, an assignment. Skip it for routine field edits.
+
+## Client
+
+Mount `ServerEventProvider` in the app shell. Register a handler that invalidates the matching `queryFilter()`. Reconnect has no replay: `onReconnect` should invalidate the same queries. Keep polling only as a fallback for in-progress status (queued → running) if you emit only when the job finishes.
+
+Starter: `DemoWorkflowService` `demo.ping` + `trpc.workflow.list`.

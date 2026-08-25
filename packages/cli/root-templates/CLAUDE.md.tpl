@@ -117,6 +117,7 @@ The framework's detailed conventions live in `.cursor/rules/*.mdc`. Cursor appli
 | `.cursor/rules/module-dto-guide.mdc` | `apps/server/src/modules/**/*.dto.ts` |
 | `.cursor/rules/module-repository-guide.mdc` | `apps/server/src/modules/**/*.repository.ts` |
 | `.cursor/rules/module-service-guide.mdc` | `apps/server/src/modules/**/*.service.ts` |
+| `.cursor/rules/server-event-emit.mdc` | `*.service.ts`, `*.jobs.ts`, webapp `App.tsx` |
 | `.cursor/rules/module-trpc-guide.mdc` | `apps/server/src/modules/**/*.trpc.ts` |
 | `.cursor/rules/module-grants-guide.mdc` | `apps/server/src/modules/**/*.grants.ts` |
 | `.cursor/rules/module-module-guide.mdc` | `apps/server/src/modules/**/*.module.ts` |

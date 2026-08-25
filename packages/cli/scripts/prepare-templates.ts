@@ -100,6 +100,7 @@ const FEATURE_MANIFEST = {
       paths: [
         "apps/webapp/src/modules/workflows/",
         "apps/server/src/modules/demo-workflow/",
+        "apps/shared/src/modules/demo-workflow/",
         "apps/e2e/tests/workflow.spec.ts",
       ],
     },

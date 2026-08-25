@@ -45,6 +45,7 @@ apps/server/src/modules/<module>/
 
 // m5k:workflows:start
 - `WorkflowModule` is registered in `app.ts`. Start **Redis** locally (`REDIS_URL`) before `pnpm dev` on the server, or background jobs will not run.
+- Server event: emit through Auth from a job `.handle` when the UI must refresh a change the trigger mutation did not return. See `.cursor/rules/server-event-emit.mdc`.
 // m5k:workflows:end
 - `index.ts` calls `builtBackendApp.start()`, which listens and handles SIGINT/SIGTERM. Extra shutdown work (telemetry) is `onShutdown` on `createBackendApp`.
 - After changing Drizzle tables, run `pnpm --filter ./apps/server drizzle:generate` then `drizzle:migrate` — do not hand-edit SQL migrations in this repo.
