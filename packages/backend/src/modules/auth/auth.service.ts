@@ -9,13 +9,20 @@ import {
   isAllowedRole,
   type NormalizedAuthRolesConfig,
 } from "@m5kdev/commons/modules/auth/auth.roles";
+import {
+  type ServerEventChange,
+  type ServerEventEnvelope,
+  serverEventEnvelopeSchema,
+} from "@m5kdev/commons/modules/base/server-event.schema";
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { InferSelectModel } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import type { TFunction } from "i18next";
 import { err, ok } from "neverthrow";
+import type { Logger } from "pino";
 import { z } from "zod";
 import type { BackendAppMetadata } from "../../app";
+import type { ServerEventBus } from "../../base/server-event";
 import type { AppI18n } from "../../i18n/app-i18n";
 import { posthogCapture } from "../../utils/posthog";
 import type { OrganizationContext, RequestContext } from "../../utils/trpc";
@@ -46,6 +53,41 @@ type Orm = LibSQLDatabase<Schema>;
 export type User = InferSelectModel<typeof auth.users>;
 export type Organization = InferSelectModel<typeof auth.organizations>;
 export type Member = InferSelectModel<typeof auth.members>;
+
+export interface AuthUserServerEventInput {
+  readonly userId: string;
+  readonly resource: string;
+  readonly id: string;
+  readonly change: ServerEventChange;
+  readonly organizationId: string | null;
+  readonly snapshot?: unknown;
+}
+
+export interface AuthBatchUserServerEventInput {
+  readonly userIds: readonly string[];
+  readonly resource: string;
+  readonly id: string;
+  readonly change: ServerEventChange;
+  readonly organizationId: string | null;
+  readonly snapshot?: unknown;
+}
+
+export interface AuthOrganizationServerEventInput {
+  readonly organizationId: string;
+  readonly resource: string;
+  readonly id: string;
+  readonly change: ServerEventChange;
+  readonly snapshot?: unknown;
+}
+
+export interface AuthEmitServerEventInput {
+  readonly userId: string;
+  readonly organizationId: string | null;
+  readonly resource: string;
+  readonly id: string;
+  readonly change: ServerEventChange;
+  readonly snapshot?: unknown;
+}
 
 const ACCOUNT_CLAIM_MAGIC_LINK_FETCH_MS = 10_000;
 
@@ -92,6 +134,8 @@ export class AuthService extends BasePermissionService<
     },
     service: AuthServiceDependencies,
     grants: ResourceGrant[],
+    private readonly serverEvents: ServerEventBus,
+    private readonly logger: Logger,
     appUrls?: BackendAppMetadata["urls"],
     hooks?: AuthServiceHooks,
     locales?: AuthLocaleConfig,
@@ -1243,4 +1287,91 @@ export class AuthService extends BasePermissionService<
     });
 
   // #endregion Account Claims
+
+  userEmit(input: AuthUserServerEventInput): void {
+    const envelope = this.parseServerEventEnvelope(input);
+    if (!envelope) return;
+    this.serverEvents.emit({ userId: input.userId, payload: envelope });
+  }
+
+  batchUserEmit(input: AuthBatchUserServerEventInput): void {
+    const envelope = this.parseServerEventEnvelope(input);
+    if (!envelope) return;
+    this.serverEvents.batchEmit({ userIds: input.userIds, payload: envelope });
+  }
+
+  organizationEmit(input: AuthOrganizationServerEventInput): void {
+    void this.emitToOrganizationMembers(input);
+  }
+
+  emitServerEvent(input: AuthEmitServerEventInput): void {
+    if (input.organizationId !== null) {
+      this.organizationEmit({
+        organizationId: input.organizationId,
+        resource: input.resource,
+        id: input.id,
+        change: input.change,
+        snapshot: input.snapshot,
+      });
+      return;
+    }
+    this.userEmit({
+      userId: input.userId,
+      resource: input.resource,
+      id: input.id,
+      change: input.change,
+      organizationId: null,
+      snapshot: input.snapshot,
+    });
+  }
+
+  private parseServerEventEnvelope(input: {
+    resource: string;
+    id: string;
+    change: ServerEventChange;
+    organizationId: string | null;
+    snapshot?: unknown;
+  }): ServerEventEnvelope | undefined {
+    const parsed = serverEventEnvelopeSchema.safeParse({
+      resource: input.resource,
+      id: input.id,
+      change: input.change,
+      organizationId: input.organizationId,
+      snapshot: input.snapshot,
+    });
+    if (!parsed.success) {
+      this.logger.error({ issues: parsed.error.issues }, "Dropped invalid Server event emit");
+      return undefined;
+    }
+    return parsed.data;
+  }
+
+  private async emitToOrganizationMembers(input: AuthOrganizationServerEventInput): Promise<void> {
+    const members = await this.repository.organization.listOrganizationMembers(
+      input.organizationId
+    );
+    if (members.isErr()) {
+      this.logger.error(
+        { err: members.error, organizationId: input.organizationId },
+        "Server event organization emit listing failed"
+      );
+      return;
+    }
+    const userIds = members.value.map((member) => member.userId);
+    if (userIds.length === 0) {
+      this.logger.error(
+        { organizationId: input.organizationId },
+        "Server event organization emit has no Members"
+      );
+      return;
+    }
+    this.batchUserEmit({
+      userIds,
+      resource: input.resource,
+      id: input.id,
+      change: input.change,
+      organizationId: input.organizationId,
+      snapshot: input.snapshot,
+    });
+  }
 }

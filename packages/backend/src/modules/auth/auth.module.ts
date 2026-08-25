@@ -90,6 +90,8 @@ export class AuthModule extends BaseModule<
     deps,
     appConfig,
     i18n,
+    infra,
+    logger,
   }: ModuleServicesContext<AuthModuleDeps, AuthModuleRepositories>) {
     return {
       auth: new AuthService(
@@ -99,6 +101,8 @@ export class AuthModule extends BaseModule<
           billing: deps.billing?.services.billing,
         },
         this.grants,
+        infra.serverEvents,
+        logger,
         appConfig.urls,
         this.hooks,
         appConfig.locales,
