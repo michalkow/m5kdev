@@ -1,7 +1,6 @@
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { createClient } from "@libsql/client";
-import { serverEventEnvelopeSchema } from "@m5kdev/commons/modules/base/server-event.schema";
 import { createBackendApp } from "./app";
 import type { BetterAuth } from "./modules/auth/auth.lib";
 
@@ -199,7 +198,7 @@ describe("Kernel Server events HTTP", () => {
     built.serverEvents.close();
   });
 
-  it("delivers a created envelope with snapshot only to the addressed User", async () => {
+  it("delivers an untyped payload only to the addressed User", async () => {
     const built = createBackendApp({
       db: { client },
       app: { urls: { web: WEB_ORIGIN } },
@@ -214,30 +213,16 @@ describe("Kernel Server events HTTP", () => {
         expect(userA.response.headers.get("content-type")).toContain("text/event-stream");
 
         built.serverEvents.emit({
-          userIds: ["user-a", "user-a"],
-          resource: "post",
-          id: "post-1",
-          change: "created",
-          organizationId: "org-1",
-          snapshot: { title: "Hello" },
+          userId: "user-a",
+          payload: { foo: 1, extra: true },
         });
         built.serverEvents.emit({
-          userIds: [],
-          resource: "post",
-          id: "ignored",
-          change: "created",
-          organizationId: null,
+          userId: "",
+          payload: { ignored: true },
         });
 
         const received = await userA.pullData(1);
-        expect(received).toHaveLength(1);
-        expect(serverEventEnvelopeSchema.parse(received[0])).toEqual({
-          resource: "post",
-          id: "post-1",
-          change: "created",
-          organizationId: "org-1",
-          snapshot: { title: "Hello" },
-        });
+        expect(received).toEqual([{ foo: 1, extra: true }]);
 
         const leaked = await userB.pullData(1, 200);
         expect(leaked).toEqual([]);
@@ -251,7 +236,69 @@ describe("Kernel Server events HTTP", () => {
     built.serverEvents.close();
   });
 
-  it("delivers updated and deleted changes after comment frames", async () => {
+  it("batchEmits one payload to several Users and collapses duplicates", async () => {
+    const built = createBackendApp({
+      db: { client },
+      app: { urls: { web: WEB_ORIGIN } },
+      auth: { factory: () => stubAuth() },
+    });
+
+    await withServer(built.express.app, async (baseUrl) => {
+      const userA = await openSse(baseUrl, "user-a");
+      const userB = await openSse(baseUrl, "user-b");
+      const userC = await openSse(baseUrl, "user-c");
+      try {
+        built.serverEvents.batchEmit({
+          userIds: ["user-a", "user-b", "user-a"],
+          payload: { id: "shared" },
+        });
+
+        expect(await userA.pullData(1)).toEqual([{ id: "shared" }]);
+        expect(await userB.pullData(1)).toEqual([{ id: "shared" }]);
+
+        const extraA = await userA.pullData(1, 200);
+        expect(extraA).toEqual([]);
+
+        const leaked = await userC.pullData(1, 200);
+        expect(leaked).toEqual([]);
+      } finally {
+        userA.abort.abort();
+        userB.abort.abort();
+        userC.abort.abort();
+        await userA.reader.cancel().catch(() => undefined);
+        await userB.reader.cancel().catch(() => undefined);
+        await userC.reader.cancel().catch(() => undefined);
+      }
+    });
+    built.serverEvents.close();
+  });
+
+  it("does not deliver when batchEmit has no UserIds", async () => {
+    const built = createBackendApp({
+      db: { client },
+      app: { urls: { web: WEB_ORIGIN } },
+      auth: { factory: () => stubAuth() },
+    });
+
+    await withServer(built.express.app, async (baseUrl) => {
+      const stream = await openSse(baseUrl, "user-a");
+      try {
+        built.serverEvents.batchEmit({
+          userIds: [],
+          payload: { ignored: true },
+        });
+
+        const received = await stream.pullData(1, 200);
+        expect(received).toEqual([]);
+      } finally {
+        stream.abort.abort();
+        await stream.reader.cancel().catch(() => undefined);
+      }
+    });
+    built.serverEvents.close();
+  });
+
+  it("delivers successive untyped payloads after comment frames", async () => {
     const built = createBackendApp({
       db: { client },
       app: { urls: { web: WEB_ORIGIN } },
@@ -262,35 +309,16 @@ describe("Kernel Server events HTTP", () => {
       const stream = await openSse(baseUrl, "user-a");
       try {
         built.serverEvents.emit({
-          userIds: ["user-a"],
-          resource: "file",
-          id: "file-1",
-          change: "updated",
-          organizationId: null,
+          userId: "user-a",
+          payload: { change: "updated" },
         });
         built.serverEvents.emit({
-          userIds: ["user-a"],
-          resource: "file",
-          id: "file-1",
-          change: "deleted",
-          organizationId: null,
+          userId: "user-a",
+          payload: { change: "deleted" },
         });
 
         const received = await stream.pullData(2);
-        expect(received.map((event) => serverEventEnvelopeSchema.parse(event))).toEqual([
-          {
-            resource: "file",
-            id: "file-1",
-            change: "updated",
-            organizationId: null,
-          },
-          {
-            resource: "file",
-            id: "file-1",
-            change: "deleted",
-            organizationId: null,
-          },
-        ]);
+        expect(received).toEqual([{ change: "updated" }, { change: "deleted" }]);
       } finally {
         stream.abort.abort();
         await stream.reader.cancel().catch(() => undefined);

@@ -168,12 +168,14 @@ export class PostsService extends BasePermissionService<
     change: ServerEventChange;
   }): void {
     void this.resolveRecipientUserIds(input).then((userIds) => {
-      this.serverEvents.emit({
+      this.serverEvents.batchEmit({
         userIds,
-        resource: POST_SERVER_EVENT_RESOURCE,
-        id: input.id,
-        change: input.change,
-        organizationId: input.organizationId,
+        payload: {
+          resource: POST_SERVER_EVENT_RESOURCE,
+          id: input.id,
+          change: input.change,
+          organizationId: input.organizationId,
+        },
       });
     });
   }

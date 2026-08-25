@@ -1,8 +1,4 @@
-import {
-  type ServerEventEnvelope,
-  SERVER_EVENT_SUBSCRIBE_PATH,
-  serverEventEnvelopeSchema,
-} from "@m5kdev/commons/modules/base/server-event.schema";
+import { SERVER_EVENT_SUBSCRIBE_PATH } from "@m5kdev/commons/modules/base/server-event.schema";
 import type { Response } from "express";
 import type IORedis from "ioredis";
 import type { Logger } from "pino";
@@ -12,12 +8,19 @@ export { SERVER_EVENT_SUBSCRIBE_PATH };
 const CHANNEL_PREFIX = "m5kdev:server-event:";
 const KEEPALIVE_MS = 15_000;
 
-export interface ServerEventEmitInput extends ServerEventEnvelope {
+export interface ServerEventEmitInput {
+  readonly userId: string;
+  readonly payload: unknown;
+}
+
+export interface ServerEventBatchEmitInput {
   readonly userIds: readonly string[];
+  readonly payload: unknown;
 }
 
 export interface ServerEventBus {
   emit(input: ServerEventEmitInput): void;
+  batchEmit(input: ServerEventBatchEmitInput): void;
   attach(input: { userId: string; res: Response }): void;
   close(): void;
 }
@@ -37,15 +40,12 @@ export function createServerEventBus(options: { redis?: IORedis; logger: Logger 
     }
   };
 
-  const writeEnvelope = (res: Response, envelope: ServerEventEnvelope): void => {
-    writeFrame(res, `data: ${JSON.stringify(envelope)}\n\n`);
-  };
-
-  const deliverLocal = (userId: string, envelope: ServerEventEnvelope): void => {
-    const responses = connections.get(userId);
+  const deliverSerialized = (input: { userId: string; serialized: string }): void => {
+    const responses = connections.get(input.userId);
     if (!responses) return;
+    const frame = `data: ${input.serialized}\n\n`;
     for (const res of responses) {
-      writeEnvelope(res, envelope);
+      writeFrame(res, frame);
     }
   };
 
@@ -55,19 +55,13 @@ export function createServerEventBus(options: { redis?: IORedis; logger: Logger 
     subscriber.on("pmessage", (_pattern: string, channel: string, message: string) => {
       const userId = channel.startsWith(CHANNEL_PREFIX) ? channel.slice(CHANNEL_PREFIX.length) : "";
       if (!userId) return;
-      let raw: unknown;
       try {
-        raw = JSON.parse(message) as unknown;
+        JSON.parse(message);
       } catch (err) {
         options.logger.error({ err, channel }, "Dropped non-JSON Server event from Redis");
         return;
       }
-      const parsed = serverEventEnvelopeSchema.safeParse(raw);
-      if (!parsed.success) {
-        options.logger.error({ channel }, "Dropped invalid Server event from Redis");
-        return;
-      }
-      deliverLocal(userId, parsed.data);
+      deliverSerialized({ userId, serialized: message });
     });
     subscriber.on("error", (err: Error) => {
       options.logger.error({ err }, "Server event Redis subscriber error");
@@ -86,37 +80,40 @@ export function createServerEventBus(options: { redis?: IORedis; logger: Logger 
     if (responses.size === 0) connections.delete(userId);
   };
 
+  const deliverPayload = (input: { userIds: readonly string[]; payload: unknown }): void => {
+    if (closed) return;
+    const uniqueUserIds = [...new Set(input.userIds.filter((id) => id.length > 0))];
+    if (uniqueUserIds.length === 0) return;
+
+    let serialized: string;
+    try {
+      serialized = JSON.stringify(input.payload);
+    } catch (err) {
+      options.logger.error({ err }, "Dropped non-serializable Server event emit");
+      return;
+    }
+    if (serialized === undefined) return;
+
+    for (const userId of uniqueUserIds) {
+      if (options.redis) {
+        void options.redis
+          .publish(`${CHANNEL_PREFIX}${userId}`, serialized)
+          .catch((err: unknown) => {
+            options.logger.error({ err, userId }, "Server event Redis publish failed");
+          });
+      } else {
+        deliverSerialized({ userId, serialized });
+      }
+    }
+  };
+
   return {
     emit(input) {
-      if (closed) return;
-      const userIds = [...new Set(input.userIds.filter((id) => id.length > 0))];
-      if (userIds.length === 0) return;
+      deliverPayload({ userIds: [input.userId], payload: input.payload });
+    },
 
-      const parsed = serverEventEnvelopeSchema.safeParse({
-        resource: input.resource,
-        id: input.id,
-        change: input.change,
-        organizationId: input.organizationId,
-        snapshot: input.snapshot,
-      });
-      if (!parsed.success) {
-        options.logger.error({ issues: parsed.error.issues }, "Dropped invalid Server event emit");
-        return;
-      }
-      const envelope = parsed.data;
-      const payload = JSON.stringify(envelope);
-
-      for (const userId of userIds) {
-        if (options.redis) {
-          void options.redis
-            .publish(`${CHANNEL_PREFIX}${userId}`, payload)
-            .catch((err: unknown) => {
-              options.logger.error({ err, userId }, "Server event Redis publish failed");
-            });
-        } else {
-          deliverLocal(userId, envelope);
-        }
-      }
+    batchEmit(input) {
+      deliverPayload(input);
     },
 
     attach({ userId, res }) {
