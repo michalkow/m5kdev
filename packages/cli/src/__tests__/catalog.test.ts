@@ -228,6 +228,7 @@ const BOUNDARY_PEERS: Record<string, readonly string[]> = {
   ],
   "@m5kdev/commons": ["zod"],
   "@m5kdev/frontend": ["@trpc/client", "@trpc/server", "better-auth", "react", "react-dom", "zod"],
+  "@m5kdev/expo": ["react"],
   "@m5kdev/web-ui": ["@heroui/react", "nuqs", "react", "react-dom", "zod"],
   "@m5kdev/module-pdf": ["neverthrow"],
   "@m5kdev/module-docx": ["neverthrow"],

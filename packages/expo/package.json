@@ -1,0 +1,74 @@
+{
+  "name": "@m5kdev/expo",
+  "version": "0.35.0",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michalkow/m5kdev.git"
+  },
+  "homepage": "https://github.com/michalkow/m5kdev#readme",
+  "bugs": "https://github.com/michalkow/m5kdev/issues",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "version:patch": "npm version patch",
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write",
+    "check-types": "tsc --noEmit",
+    "build": "tsdown"
+  },
+  "dependencies": {
+    "@m5kdev/commons": "workspace:*",
+    "@m5kdev/frontend": "workspace:*",
+    "@tanstack/react-query": "catalog:"
+  },
+  "peerDependencies": {
+    "expo": "*",
+    "expo-notifications": "*",
+    "react": "catalog:",
+    "react-native": "*"
+  },
+  "devDependencies": {
+    "@m5kdev/config": "workspace:*",
+    "@types/react": "catalog:",
+    "expo": "~56.0.5",
+    "expo-notifications": "~56.0.18",
+    "react": "catalog:",
+    "react-native": "0.85.3",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/src/index.d.mts",
+        "default": "./dist/src/index.mjs"
+      },
+      "require": {
+        "types": "./dist/src/index.d.ts",
+        "default": "./dist/src/index.js"
+      }
+    },
+    "./hooks/useNativePush": {
+      "import": {
+        "types": "./dist/src/hooks/useNativePush.d.mts",
+        "default": "./dist/src/hooks/useNativePush.mjs"
+      },
+      "require": {
+        "types": "./dist/src/hooks/useNativePush.d.ts",
+        "default": "./dist/src/hooks/useNativePush.js"
+      }
+    },
+    "./modules/notification/components/*": {
+      "import": {
+        "types": "./dist/src/modules/notification/components/*.d.mts",
+        "default": "./dist/src/modules/notification/components/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/notification/components/*.d.ts",
+        "default": "./dist/src/modules/notification/components/*.js"
+      }
+    }
+  }
+}

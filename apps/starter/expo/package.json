@@ -21,11 +21,14 @@
     "@expo/metro-runtime": "~56.0.13",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@m5kdev/commons": "workspace:*",
+    "@m5kdev/expo": "workspace:*",
     "@m5kdev/frontend": "workspace:*",
     "@trpc/client": "catalog:",
+    "@tanstack/react-query": "catalog:",
     "expo": "~56.0.5",
     "expo-constants": "~56.0.16",
     "expo-linking": "~56.0.12",
+    "expo-notifications": "~56.0.18",
     "expo-router": "~56.2.7",
     "expo-splash-screen": "~56.0.10",
     "expo-status-bar": "~56.0.4",
@@ -47,6 +50,7 @@
     "uniwind": "^1.5.0"
   },
   "devDependencies": {
+    "@starter-app/server": "workspace:*",
     "@biomejs/biome": "catalog:",
     "@m5kdev/backend": "workspace:*",
     "@m5kdev/config": "workspace:*",

@@ -1,4 +1,5 @@
 import { AppConfigProvider } from "@m5kdev/frontend/modules/app/components/AppConfigProvider";
+import { AppTrpcQueryProvider } from "@m5kdev/frontend/modules/app/components/AppTrpcQueryProvider";
 import { AuthProvider } from "@m5kdev/frontend/modules/auth/components/AuthProvider";
 import { APP_NAME } from "@starter-app/shared/modules/app/app.constants";
 import { Stack } from "expo-router";
@@ -22,7 +23,9 @@ export default function RootLayout(): JSX.Element {
           }}
         >
           <AuthProvider loader={<LoadingScreen />}>
-            <Stack screenOptions={{ headerShown: false }} />
+            <AppTrpcQueryProvider>
+              <Stack screenOptions={{ headerShown: false }} />
+            </AppTrpcQueryProvider>
           </AuthProvider>
         </AppConfigProvider>
       </HeroUINativeProvider>

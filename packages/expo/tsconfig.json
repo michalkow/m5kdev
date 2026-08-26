@@ -1,0 +1,17 @@
+{
+  "extends": "@m5kdev/config/tsconfig.vite.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo",
+    "types": ["react-native"],
+    "lib": ["ES2022"],
+    "jsx": "react-jsx",
+    "emitDeclarationOnly": false,
+    "allowImportingTsExtensions": false,
+    "noEmit": false,
+    "skipLibCheck": true
+  },
+  "include": ["src"],
+  "exclude": ["out-tsc", "dist", "tsdown.config.ts"]
+}

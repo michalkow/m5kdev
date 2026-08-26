@@ -1,5 +1,5 @@
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
-import { Link, Redirect } from "expo-router";
+import { type Href, Link, Redirect } from "expo-router";
 import { Button, Card, Typography } from "heroui-native";
 import { ScrollView, Text, View } from "react-native";
 
@@ -29,6 +29,9 @@ export default function PostsScreen() {
             @m5kdev/frontend.
           </Typography.Paragraph>
         </Card>
+        <Link href={"/notifications" as Href} asChild>
+          <Button variant="outline">Notifications</Button>
+        </Link>
         <Link href="/logout" asChild>
           <Button testID="logout-submit" variant="outline">
             Logout

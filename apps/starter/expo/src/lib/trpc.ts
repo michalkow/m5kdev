@@ -1,9 +1,10 @@
-import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { transformer } from "@m5kdev/commons/utils/trpc";
+import { useAppTRPC, useAppTRPCClient } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
+import type { AppRouter } from "@starter-app/server/types";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { serverUrl } from "../config";
 
-export const trpcClient = createTRPCClient<BackendTRPCRouter>({
+export const trpcClient = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
       url: `${serverUrl}/trpc`,
@@ -18,3 +19,11 @@ export const trpcClient = createTRPCClient<BackendTRPCRouter>({
     }),
   ],
 });
+
+export function useTRPC() {
+  return useAppTRPC<AppRouter>();
+}
+
+export function useTRPCClient() {
+  return useAppTRPCClient<AppRouter>();
+}
