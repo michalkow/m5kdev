@@ -19,6 +19,7 @@
       "organization": "Organization",
       "account": "Account",
       "members": "Members",
+      "notifications": "Notifications",
       "childOrgs": "Child orgs",
       "orgPreferences": "Org preferences",
       "profile": "Profile",
@@ -182,6 +183,13 @@
     "toast": {
       "uploaded": "File uploaded.",
       "failed": "Upload failed."
+    }
+  },
+  "notifications": {
+    "hero": {
+      "eyebrow": "This membership",
+      "title": "Notification preferences",
+      "body": "Mute channels for this organization. Other organizations keep their own settings."
     }
   },
   "auth": {

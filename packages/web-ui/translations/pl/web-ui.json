@@ -281,5 +281,11 @@
   "ai.conversation.tool.status.error": "Błąd",
   "notification.inbox.title": "Powiadomienia",
   "notification.inbox.empty": "Brak powiadomień",
-  "notification.inbox.markRead": "Oznacz jako przeczytane"
+  "notification.inbox.markRead": "Oznacz jako przeczytane",
+  "notification.preferences.empty": "Brak rodzajów powiadomień do skonfigurowania",
+  "notification.preferences.noOrganization": "Wybierz organizację, aby zarządzać preferencjami powiadomień",
+  "notification.channel.inApp": "W aplikacji",
+  "notification.channel.webPush": "Powiadomienia web push",
+  "notification.channel.mobilePush": "Powiadomienia mobilne",
+  "notification.channel.email": "E-mail"
 }

@@ -20,6 +20,9 @@ import { FilesRoute } from "@/modules/files/FilesRoute";
 // m5k:workflows:start
 import { WorkflowsRoute } from "@/modules/workflows/WorkflowsRoute";
 // m5k:workflows:end
+// m5k:notifications:start
+import { NotificationPreferencesRoute } from "@/modules/notification/NotificationPreferencesRoute";
+// m5k:notifications:end
 import { Layout } from "./Layout";
 
 const preferenceSchema = z.object({
@@ -93,6 +96,13 @@ export function Router() {
           // m5k:workflows:start
           <Route key="workflows" path="workflows" element={<WorkflowsRoute />} />,
           // m5k:workflows:end
+          // m5k:notifications:start
+          <Route
+            key="notifications"
+            path="notifications"
+            element={<NotificationPreferencesRoute />}
+          />,
+          // m5k:notifications:end
         ]}
 
         {AuthUserRouter({

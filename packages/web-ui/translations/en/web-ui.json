@@ -281,5 +281,11 @@
   "ai.conversation.tool.status.error": "Error",
   "notification.inbox.title": "Notifications",
   "notification.inbox.empty": "No notifications yet",
-  "notification.inbox.markRead": "Mark as read"
+  "notification.inbox.markRead": "Mark as read",
+  "notification.preferences.empty": "No notification kinds to configure",
+  "notification.preferences.noOrganization": "Select an organization to manage notification preferences",
+  "notification.channel.inApp": "In-app",
+  "notification.channel.webPush": "Web push",
+  "notification.channel.mobilePush": "Mobile push",
+  "notification.channel.email": "Email"
 }

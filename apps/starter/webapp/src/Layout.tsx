@@ -9,7 +9,7 @@ import { AuthOrganizationSelect } from "@m5kdev/web-ui/modules/auth/components/A
 import { AuthUtilityImpersonationBanner } from "@m5kdev/web-ui/modules/auth/components/AuthUtilityImpersonationBanner";
 import { NotificationInbox } from "@m5kdev/web-ui/modules/notification/components/NotificationInbox";
 import { APP_NAME } from "@starter-app/shared/modules/app/app.constants";
-import { FileIcon, UsersIcon } from "lucide-react";
+import { BellIcon, FileIcon, UsersIcon } from "lucide-react";
 // m5k:ai:start
 import { SparklesIcon } from "lucide-react";
 // m5k:ai:end
@@ -83,6 +83,13 @@ export function Layout() {
                   link: "/workflows",
                 },
                 // m5k:workflows:end
+                // m5k:notifications:start
+                {
+                  label: t("layout.navigation.notifications"),
+                  icon: <BellIcon />,
+                  link: "/notifications",
+                },
+                // m5k:notifications:end
                 {
                   label: t("layout.navigation.members"),
                   icon: <UsersIcon />,
