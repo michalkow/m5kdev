@@ -185,12 +185,28 @@ A repeating calendar pattern stored as a row with RRULE-shaped rules. A log of r
 _Avoid_: Workflow, cron (that is Workflow), schedule
 
 **Device**:
-A User's push endpoint (web, iOS, Android). Personal; keyed by UserId, not MemberId.
-_Avoid_: Notification (that is the inbox item)
+A User's push endpoint (web, iOS, Android). Personal; keyed by UserId, not MemberId. Web push and mobile push (iOS+Android) are different delivery Channels that use Devices.
+_Avoid_: Notification (that is the inbox instance)
+
+**Notification kind**:
+A developer-declared class of Notifications, listed in the app Shared contract. User mute and Channel preferences apply to the kind, not to a single instance.
+_Avoid_: Notification (that is the instance); template (that is EmailModule); a kinds table as the source of truth
+
+**Channel**:
+A delivery means for a Notification: in-app, web push, mobile push, or email. In-app is visibility in the inbox, not whether the instance exists. Server event is not a Channel; creating a Notification emits a Server event addressed to that UserId.
+_Avoid_: Server event; Device (that is the endpoint web/mobile push uses); treating SSE mute as a Channel
 
 **Notification**:
-A persisted in-app inbox item owned by a User. May also be pushed to that User's Devices. Not outbound email.
-_Avoid_: Device, Email, push (that is delivery)
+A persisted inbox instance owned by a User and classified by a Notification kind. Always inserted on send (orchestration), even when in-app is muted. Inbox visibility is decided at send from the in-app Channel; later preference changes do not hide or reveal existing instances. Unread until the User marks it read. Personal; keyed by UserId. First successful web push, mobile push, and email are stamped on the instance; every outbound attempt is a send log.
+_Avoid_: Device, Email, push, send log, Server event
+
+**Send log**:
+An outbound delivery attempt for a Notification on web push, mobile push, or email (not in-app). User-readable. One attempt per Device or email send, not the inbox instance.
+_Avoid_: Notification (the instance); Device (the endpoint)
+
+**Notification preference**:
+A User's off switch for a Channel of a Notification kind. Offered Channels are that kind's default Channels and start on. Missing preference means on. User preference wins over the Channels named in send.
+_Avoid_: browser or OS push permission; Device enabled flag
 
 **File**:
 An S3 or local object, optionally inventoried as a `files` row. Upload status: `PENDING` | `UPLOADED` | `DELETED` | `FAILED`. Org-scoped Files stamp MemberId.
