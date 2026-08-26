@@ -284,7 +284,9 @@ export class NotificationService extends BasePermissionService<
     }
 
     const userId = membership.value.userId;
-    const muted = await this.repository.notification.listMutedPreferencesByUserId(userId);
+    const muted = await this.repository.notification.listMutedPreferencesByMemberId(
+      membership.value.id
+    );
     if (muted.isErr()) return err(muted.error);
     const mutedSet = new Set(
       muted.value.filter((row) => row.kind === kind.id).map((row) => row.channel)
@@ -338,10 +340,14 @@ export class NotificationService extends BasePermissionService<
       channels: { channel: NotificationChannel; enabled: boolean }[];
     }[]
   > {
-    const readGuard = this.accessGuard(ctx.actor, "read", { userId: ctx.actor.userId });
+    const memberId = ctx.actor.memberId;
+    if (!memberId || !ctx.actor.organizationId) {
+      return this.error("FORBIDDEN");
+    }
+    const readGuard = this.accessGuard(ctx.actor, "read", { memberId });
     if (readGuard.isErr()) return err(readGuard.error);
 
-    const muted = await this.repository.notification.listMutedPreferencesByUserId(ctx.actor.userId);
+    const muted = await this.repository.notification.listMutedPreferencesByMemberId(memberId);
     if (muted.isErr()) return err(muted.error);
     const mutedSet = new Set(muted.value.map((row) => `${row.kind}:${row.channel}`));
 
@@ -363,7 +369,11 @@ export class NotificationService extends BasePermissionService<
     kind: string;
     channels: { channel: NotificationChannel; enabled: boolean }[];
   }> {
-    const writeGuard = this.accessGuard(ctx.actor, "write", { userId: ctx.actor.userId });
+    const memberId = ctx.actor.memberId;
+    if (!memberId || !ctx.actor.organizationId) {
+      return this.error("FORBIDDEN");
+    }
+    const writeGuard = this.accessGuard(ctx.actor, "write", { memberId });
     if (writeGuard.isErr()) return err(writeGuard.error);
 
     const kind = this.kindsById.get(input.kind);
@@ -374,17 +384,16 @@ export class NotificationService extends BasePermissionService<
       return this.error("BAD_REQUEST", "Channel is not offered by this Notification kind");
     }
 
-    const userId = ctx.actor.userId;
     if (input.enabled) {
       const cleared = await this.repository.notification.deleteMutedPreference({
-        userId,
+        memberId,
         kind: kind.id,
         channel: input.channel,
       });
       if (cleared.isErr()) return err(cleared.error);
     } else {
       const muted = await this.repository.notification.insertMutedPreference({
-        userId,
+        memberId,
         kind: kind.id,
         channel: input.channel,
       });

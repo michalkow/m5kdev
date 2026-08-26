@@ -237,8 +237,8 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
     return ok(row?.email);
   }
 
-  async listMutedPreferencesByUserId(
-    userId: string
+  async listMutedPreferencesByMemberId(
+    memberId: string
   ): ServerResultAsync<{ kind: string; channel: NotificationChannel }[]> {
     const rowsResult = await this.throwableQuery(() =>
       this.orm
@@ -247,14 +247,14 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
           channel: this.schema.notificationPreferences.channel,
         })
         .from(this.schema.notificationPreferences)
-        .where(eq(this.schema.notificationPreferences.userId, userId))
+        .where(eq(this.schema.notificationPreferences.memberId, memberId))
     );
     if (rowsResult.isErr()) return err(rowsResult.error);
     return ok(rowsResult.value);
   }
 
   async insertMutedPreference(input: {
-    userId: string;
+    memberId: string;
     kind: string;
     channel: NotificationChannel;
   }): ServerResultAsync<void> {
@@ -263,14 +263,14 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
       this.orm
         .insert(this.schema.notificationPreferences)
         .values({
-          userId: input.userId,
+          memberId: input.memberId,
           kind: input.kind,
           channel: input.channel,
           updatedAt: now,
         })
         .onConflictDoNothing({
           target: [
-            this.schema.notificationPreferences.userId,
+            this.schema.notificationPreferences.memberId,
             this.schema.notificationPreferences.kind,
             this.schema.notificationPreferences.channel,
           ],
@@ -281,7 +281,7 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
   }
 
   async deleteMutedPreference(input: {
-    userId: string;
+    memberId: string;
     kind: string;
     channel: NotificationChannel;
   }): ServerResultAsync<void> {
@@ -290,7 +290,7 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
         .delete(this.schema.notificationPreferences)
         .where(
           and(
-            eq(this.schema.notificationPreferences.userId, input.userId),
+            eq(this.schema.notificationPreferences.memberId, input.memberId),
             eq(this.schema.notificationPreferences.kind, input.kind),
             eq(this.schema.notificationPreferences.channel, input.channel)
           )

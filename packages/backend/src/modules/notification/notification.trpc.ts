@@ -50,11 +50,11 @@ export function createNotificationTRPC(
       .output(notificationListInboxOutputSchema)
       .query(async ({ ctx }) => handleTRPCResult(await notificationService.listMyInbox(ctx))),
 
-    getMyPreferences: privateProcedure
+    getMyPreferences: organizationProcedure
       .output(notificationListPreferencesOutputSchema)
       .query(async ({ ctx }) => handleTRPCResult(await notificationService.getMyPreferences(ctx))),
 
-    setMyPreference: privateProcedure
+    setMyPreference: organizationProcedure
       .input(notificationSetPreferenceInputSchema)
       .output(notificationSetPreferenceOutputSchema)
       .mutation(async ({ ctx, input }) =>

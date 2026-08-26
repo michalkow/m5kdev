@@ -236,12 +236,12 @@ async function createTables(client: Client): Promise<void> {
   await client.execute(`
     CREATE TABLE notification_preferences (
       id TEXT PRIMARY KEY NOT NULL,
-      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
       kind TEXT NOT NULL,
       channel TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
-      UNIQUE (user_id, kind, channel)
+      UNIQUE (member_id, kind, channel)
     );
   `);
   await client.execute(`
@@ -772,7 +772,7 @@ describe("NotificationService preferences", () => {
 
   it("returns catalog kinds with default Channels on when prefs are missing", async () => {
     const { service } = createHarness(client);
-    const prefs = await service.getMyPreferences(userContext(OWNER_ID));
+    const prefs = await service.getMyPreferences(ownerOrgAContext());
     expect(prefs.isOk()).toBe(true);
     if (prefs.isOk()) {
       expect(prefs.value).toEqual([
@@ -814,9 +814,9 @@ describe("NotificationService preferences", () => {
     }
   });
 
-  it("lets a User mute only their own offered Channels", async () => {
+  it("lets a Member mute only their own offered Channels", async () => {
     const { service } = createHarness(client);
-    const muted = await service.setMyPreference(userContext(OWNER_ID), {
+    const muted = await service.setMyPreference(ownerOrgAContext(), {
       kind: "demo.full",
       channel: "web-push",
       enabled: false,
@@ -832,7 +832,7 @@ describe("NotificationService preferences", () => {
       });
     }
 
-    const ownerPrefs = await service.getMyPreferences(userContext(OWNER_ID));
+    const ownerPrefs = await service.getMyPreferences(ownerOrgAContext());
     expect(ownerPrefs.isOk()).toBe(true);
     if (ownerPrefs.isOk()) {
       expect(ownerPrefs.value.find((row) => row.kind === "demo.full")?.channels).toEqual([
@@ -841,7 +841,7 @@ describe("NotificationService preferences", () => {
       ]);
     }
 
-    const otherPrefs = await service.getMyPreferences(userContext(OTHER_ID));
+    const otherPrefs = await service.getMyPreferences(otherOrgAContext());
     expect(otherPrefs.isOk()).toBe(true);
     if (otherPrefs.isOk()) {
       expect(otherPrefs.value.find((row) => row.kind === "demo.full")?.channels).toEqual([
@@ -850,14 +850,14 @@ describe("NotificationService preferences", () => {
       ]);
     }
 
-    const otherUnmute = await service.setMyPreference(userContext(OTHER_ID), {
+    const otherUnmute = await service.setMyPreference(otherOrgAContext(), {
       kind: "demo.full",
       channel: "web-push",
       enabled: true,
     });
     expect(otherUnmute.isOk()).toBe(true);
 
-    const ownerAfter = await service.getMyPreferences(userContext(OWNER_ID));
+    const ownerAfter = await service.getMyPreferences(ownerOrgAContext());
     expect(ownerAfter.isOk()).toBe(true);
     if (ownerAfter.isOk()) {
       expect(ownerAfter.value.find((row) => row.kind === "demo.full")?.channels).toEqual([
@@ -866,7 +866,7 @@ describe("NotificationService preferences", () => {
       ]);
     }
 
-    const notOffered = await service.setMyPreference(userContext(OWNER_ID), {
+    const notOffered = await service.setMyPreference(ownerOrgAContext(), {
       kind: "demo.silent",
       channel: "in-app",
       enabled: false,
@@ -889,7 +889,7 @@ describe("NotificationService preferences", () => {
       expect(sent.isOk()).toBe(true);
     }
 
-    const muted = await service.setMyPreference(userContext(OWNER_ID), {
+    const muted = await service.setMyPreference(ownerOrgAContext(), {
       kind: "demo.ping",
       channel: "in-app",
       enabled: false,
@@ -922,7 +922,7 @@ describe("NotificationService preferences", () => {
       expect(listed.value.some((row) => row.title === "Four")).toBe(false);
     }
 
-    const unmuted = await service.setMyPreference(userContext(OWNER_ID), {
+    const unmuted = await service.setMyPreference(ownerOrgAContext(), {
       kind: "demo.ping",
       channel: "in-app",
       enabled: true,
@@ -939,7 +939,7 @@ describe("NotificationService preferences", () => {
 
   it("intersects send Channels with prefs and does not expose foreign prefs via sendTest", async () => {
     const { service } = createHarness(client);
-    const muted = await service.setMyPreference(userContext(OTHER_ID), {
+    const muted = await service.setMyPreference(otherOrgAContext(), {
       kind: "demo.full",
       channel: "in-app",
       enabled: false,
@@ -958,7 +958,7 @@ describe("NotificationService preferences", () => {
       expect(webOnly.value.visibleInInbox).toBe(false);
     }
 
-    const ownerMutedWeb = await service.setMyPreference(userContext(OWNER_ID), {
+    const ownerMutedWeb = await service.setMyPreference(ownerOrgAContext(), {
       kind: "demo.full",
       channel: "web-push",
       enabled: false,
@@ -977,7 +977,7 @@ describe("NotificationService preferences", () => {
       expect(webMutedStillVisible.value.visibleInInbox).toBe(true);
     }
 
-    const ownerMutedInApp = await service.setMyPreference(userContext(OWNER_ID), {
+    const ownerMutedInApp = await service.setMyPreference(ownerOrgAContext(), {
       kind: "demo.full",
       channel: "in-app",
       enabled: false,
@@ -1007,7 +1007,7 @@ describe("NotificationService preferences", () => {
       expect(tested.value).toEqual({ id: expect.any(String) });
     }
 
-    const ownerPrefs = await service.getMyPreferences(userContext(OWNER_ID));
+    const ownerPrefs = await service.getMyPreferences(ownerOrgAContext());
     expect(ownerPrefs.isOk()).toBe(true);
     if (ownerPrefs.isOk()) {
       expect(ownerPrefs.value.find((row) => row.kind === "demo.full")?.channels).toEqual([
@@ -1021,6 +1021,122 @@ describe("NotificationService preferences", () => {
     if (otherInbox.isOk()) {
       expect(otherInbox.value).toHaveLength(0);
     }
+  });
+
+  it("requires an Organization Actor for get and set preferences", async () => {
+    const { service } = createHarness(client);
+    const listed = await service.getMyPreferences(userContext(OWNER_ID));
+    expect(listed.isErr()).toBe(true);
+    if (listed.isErr()) {
+      expect(listed.error.code).toBe("FORBIDDEN");
+    }
+    const muted = await service.setMyPreference(userContext(OWNER_ID), {
+      kind: "demo.full",
+      channel: "web-push",
+      enabled: false,
+    });
+    expect(muted.isErr()).toBe(true);
+    if (muted.isErr()) {
+      expect(muted.error.code).toBe("FORBIDDEN");
+    }
+  });
+
+  it("lets two Memberships of one User mute different Channels for the same kind", async () => {
+    const { service } = createHarness(client);
+    const muteA = await service.setMyPreference(ownerOrgAContext(), {
+      kind: "demo.full",
+      channel: "web-push",
+      enabled: false,
+    });
+    const muteB = await service.setMyPreference(ownerOrgBContext(), {
+      kind: "demo.full",
+      channel: "in-app",
+      enabled: false,
+    });
+    expect(muteA.isOk()).toBe(true);
+    expect(muteB.isOk()).toBe(true);
+
+    const prefsA = await service.getMyPreferences(ownerOrgAContext());
+    expect(prefsA.isOk()).toBe(true);
+    if (prefsA.isOk()) {
+      expect(prefsA.value.find((row) => row.kind === "demo.full")?.channels).toEqual([
+        { channel: "in-app", enabled: true },
+        { channel: "web-push", enabled: false },
+      ]);
+    }
+    const prefsB = await service.getMyPreferences(ownerOrgBContext());
+    expect(prefsB.isOk()).toBe(true);
+    if (prefsB.isOk()) {
+      expect(prefsB.value.find((row) => row.kind === "demo.full")?.channels).toEqual([
+        { channel: "in-app", enabled: false },
+        { channel: "web-push", enabled: true },
+      ]);
+    }
+
+    const sentA = await service.send({
+      memberId: MEMBER_OWNER_A,
+      kind: "demo.full",
+      title: "A",
+      body: "A",
+    });
+    const sentB = await service.send({
+      memberId: MEMBER_OWNER_B,
+      kind: "demo.full",
+      title: "B",
+      body: "B",
+    });
+    expect(sentA.isOk()).toBe(true);
+    expect(sentB.isOk()).toBe(true);
+    if (sentA.isOk()) {
+      expect(sentA.value.armedChannels).toEqual(["in-app"]);
+      expect(sentA.value.visibleInInbox).toBe(true);
+    }
+    if (sentB.isOk()) {
+      expect(sentB.value.armedChannels).toEqual(["web-push"]);
+      expect(sentB.value.visibleInInbox).toBe(false);
+    }
+  });
+
+  it("does not skip Org B mobile-push when Org A muted that Channel for the same User Device", async () => {
+    sendApnMock.mockReset().mockResolvedValue(undefined);
+    const { service } = createHarness(client);
+    await service.registerDevice(userContext(OWNER_ID), {
+      platform: "ios",
+      token: NATIVE_TOKEN,
+    });
+    const mutedA = await service.setMyPreference(ownerOrgAContext(), {
+      kind: "demo.push",
+      channel: "mobile-push",
+      enabled: false,
+    });
+    expect(mutedA.isOk()).toBe(true);
+
+    const sentA = await service.send({
+      memberId: MEMBER_OWNER_A,
+      kind: "demo.push",
+      title: "A",
+      body: "Muted mobile",
+    });
+    const sentB = await service.send({
+      memberId: MEMBER_OWNER_B,
+      kind: "demo.push",
+      title: "B",
+      body: "Mobile on",
+    });
+    expect(sentA.isOk()).toBe(true);
+    expect(sentB.isOk()).toBe(true);
+    if (sentA.isOk()) {
+      expect(sentA.value.armedChannels).toEqual(["in-app", "web-push"]);
+      const deliveredA = await service.deliverMobilePush(sentA.value.id);
+      expect(deliveredA.isOk()).toBe(true);
+    }
+    expect(sendApnMock).not.toHaveBeenCalled();
+    if (sentB.isOk()) {
+      expect(sentB.value.armedChannels).toEqual(["in-app", "web-push", "mobile-push"]);
+      const deliveredB = await service.deliverMobilePush(sentB.value.id);
+      expect(deliveredB.isOk()).toBe(true);
+    }
+    expect(sendApnMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -1092,7 +1208,7 @@ describe("NotificationService push cascade", () => {
 
   it("does not schedule or deliver a Channel muted at send", async () => {
     const { service, trigger } = createHarness(client);
-    await service.setMyPreference(userContext(OWNER_ID), {
+    await service.setMyPreference(ownerOrgAContext(), {
       kind: "demo.push",
       channel: "web-push",
       enabled: false,
