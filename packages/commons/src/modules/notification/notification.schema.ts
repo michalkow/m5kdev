@@ -98,6 +98,7 @@ export const notificationListSendLogsOutputSchema = z.array(notificationSendLogS
 
 export const notificationInstanceSelectSchema = z.object({
   id: z.string(),
+  memberId: z.string(),
   userId: z.string(),
   kind: z.string(),
   title: z.string(),
@@ -119,7 +120,7 @@ export const notificationMarkReadInputSchema = z.object({
 });
 
 export const notificationSendTestInputSchema = z.object({
-  userId: z.string().optional(),
+  memberId: z.string().min(1),
   kind: z.string().min(1),
   title: z.string().min(1).max(200),
   body: z.string().min(1).max(2000),

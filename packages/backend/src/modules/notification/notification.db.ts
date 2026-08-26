@@ -6,7 +6,7 @@ import type {
 } from "@m5kdev/commons/modules/notification/notification.constants";
 import { integer, sqliteTable as table, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
-import { users } from "../auth/auth.db";
+import { members, users } from "../auth/auth.db";
 
 export const notificationDevices = table("notification_devices", {
   id: text("id").primaryKey().$default(uuidv4),
@@ -29,6 +29,9 @@ export const notificationDevices = table("notification_devices", {
 
 export const notifications = table("notifications", {
   id: text("id").primaryKey().$default(uuidv4),
+  memberId: text("member_id")
+    .notNull()
+    .references(() => members.id, { onDelete: "cascade" }),
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),

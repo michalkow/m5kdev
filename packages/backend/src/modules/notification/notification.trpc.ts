@@ -20,7 +20,7 @@ import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 import type { NotificationService } from "./notification.service";
 
 export function createNotificationTRPC(
-  { router, publicProcedure, privateProcedure, adminProcedure }: TRPCMethods,
+  { router, publicProcedure, privateProcedure, organizationProcedure, adminProcedure }: TRPCMethods,
   notificationService: NotificationService
 ) {
   return router({
@@ -46,7 +46,7 @@ export function createNotificationTRPC(
       .output(notificationListDevicesOutputSchema)
       .query(async ({ ctx }) => handleTRPCResult(await notificationService.listMyDevices(ctx))),
 
-    listMyInbox: privateProcedure
+    listMyInbox: organizationProcedure
       .output(notificationListInboxOutputSchema)
       .query(async ({ ctx }) => handleTRPCResult(await notificationService.listMyInbox(ctx))),
 
@@ -61,7 +61,7 @@ export function createNotificationTRPC(
         handleTRPCResult(await notificationService.setMyPreference(ctx, input))
       ),
 
-    markRead: privateProcedure
+    markRead: organizationProcedure
       .input(notificationMarkReadInputSchema)
       .output(notificationInstanceSelectSchema)
       .mutation(async ({ ctx, input }) =>
@@ -78,8 +78,8 @@ export function createNotificationTRPC(
     sendTest: adminProcedure
       .input(notificationSendTestInputSchema)
       .output(notificationSendTestOutputSchema)
-      .mutation(async ({ ctx, input }) =>
-        handleTRPCResult(await notificationService.sendTestAsAdmin(ctx, input))
+      .mutation(async ({ input }) =>
+        handleTRPCResult(await notificationService.sendTestAsAdmin(input))
       ),
   });
 }

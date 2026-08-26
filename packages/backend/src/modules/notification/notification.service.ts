@@ -265,7 +265,7 @@ export class NotificationService extends BasePermissionService<
   }
 
   async send(input: {
-    userId: string;
+    memberId: string;
     kind: string;
     title: string;
     body: string;
@@ -277,7 +277,14 @@ export class NotificationService extends BasePermissionService<
       return this.error("BAD_REQUEST", "Unknown Notification kind");
     }
 
-    const muted = await this.repository.notification.listMutedPreferencesByUserId(input.userId);
+    const membership = await this.repository.notification.findActiveMembership(input.memberId);
+    if (membership.isErr()) return err(membership.error);
+    if (!membership.value) {
+      return this.error("NOT_FOUND", "Membership not found");
+    }
+
+    const userId = membership.value.userId;
+    const muted = await this.repository.notification.listMutedPreferencesByUserId(userId);
     if (muted.isErr()) return err(muted.error);
     const mutedSet = new Set(
       muted.value.filter((row) => row.kind === kind.id).map((row) => row.channel)
@@ -290,7 +297,8 @@ export class NotificationService extends BasePermissionService<
     const visibleInInbox = armed.includes("in-app");
 
     const inserted = await this.repository.notification.insertNotification({
-      userId: input.userId,
+      memberId: membership.value.id,
+      userId,
       kind: kind.id,
       title: input.title,
       body: input.body,
@@ -301,11 +309,11 @@ export class NotificationService extends BasePermissionService<
     if (inserted.isErr()) return err(inserted.error);
 
     this.service.auth.userEmit({
-      userId: input.userId,
+      userId,
       resource: "notification",
       id: inserted.value.id,
       change: "created",
-      organizationId: null,
+      organizationId: membership.value.organizationId,
     });
 
     await this.enqueueArmedOutboundJobs(inserted.value.id, kind, armed);
@@ -314,10 +322,14 @@ export class NotificationService extends BasePermissionService<
   }
 
   async listMyInbox(ctx: Context): ServerResultAsync<NotificationInstanceRow[]> {
-    const readGuard = this.accessGuard(ctx.actor, "read", { userId: ctx.actor.userId });
+    const memberId = ctx.actor.memberId;
+    if (!memberId || !ctx.actor.organizationId) {
+      return this.error("FORBIDDEN");
+    }
+    const readGuard = this.accessGuard(ctx.actor, "read", { memberId });
     if (readGuard.isErr()) return err(readGuard.error);
 
-    return this.repository.notification.listVisibleInboxByUserId(ctx.actor.userId);
+    return this.repository.notification.listVisibleInboxByMemberId(memberId);
   }
 
   async getMyPreferences(ctx: Context): ServerResultAsync<
@@ -389,31 +401,31 @@ export class NotificationService extends BasePermissionService<
   }
 
   async markRead(ctx: Context, id: string): ServerResultAsync<NotificationInstanceRow> {
-    const writeGuard = this.accessGuard(ctx.actor, "write", { userId: ctx.actor.userId });
+    const memberId = ctx.actor.memberId;
+    if (!memberId || !ctx.actor.organizationId) {
+      return this.error("FORBIDDEN");
+    }
+    const writeGuard = this.accessGuard(ctx.actor, "write", { memberId });
     if (writeGuard.isErr()) return err(writeGuard.error);
 
     const updated = await this.repository.notification.markNotificationRead({
       id,
-      userId: ctx.actor.userId,
+      memberId,
     });
     if (updated.isErr()) return err(updated.error);
     if (!updated.value) return this.error("NOT_FOUND", "Notification not found");
     return ok(updated.value);
   }
 
-  async sendTestAsAdmin(
-    ctx: Context,
-    input: {
-      userId?: string;
-      kind: string;
-      title: string;
-      body: string;
-      data?: Record<string, unknown>;
-    }
-  ): ServerResultAsync<{ id: string }> {
-    const userId = input.userId ?? ctx.actor.userId;
+  async sendTestAsAdmin(input: {
+    memberId: string;
+    kind: string;
+    title: string;
+    body: string;
+    data?: Record<string, unknown>;
+  }): ServerResultAsync<{ id: string }> {
     const sent = await this.send({
-      userId,
+      memberId: input.memberId,
       kind: input.kind,
       title: input.title,
       body: input.body,

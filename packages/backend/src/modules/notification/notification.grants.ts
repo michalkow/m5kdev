@@ -14,5 +14,19 @@ export const defaultNotificationGrants = flattenNestedGrants({
         delete: "own",
       },
     },
+    organization: {
+      owner: {
+        read: "own",
+        write: "own",
+      },
+      admin: {
+        read: "own",
+        write: "own",
+      },
+      member: {
+        read: "own",
+        write: "own",
+      },
+    },
   },
 });

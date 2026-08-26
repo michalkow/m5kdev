@@ -4,10 +4,10 @@ import type {
   NotificationProvider,
   NotificationSendStatus,
 } from "@m5kdev/commons/modules/notification/notification.constants";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
-import { users } from "../auth/auth.db";
+import { members, users } from "../auth/auth.db";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseRepository } from "../base/base.repository";
 import {
@@ -23,6 +23,7 @@ const schema = {
   notificationPreferences,
   notificationSendLogs,
   users,
+  members,
 };
 type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;
@@ -40,8 +41,15 @@ export interface NotificationDeviceRow {
   readonly updatedAt: Date;
 }
 
+export interface NotificationMembershipRow {
+  readonly id: string;
+  readonly userId: string;
+  readonly organizationId: string;
+}
+
 export interface NotificationInstanceRow {
   readonly id: string;
+  readonly memberId: string;
   readonly userId: string;
   readonly kind: string;
   readonly title: string;
@@ -72,7 +80,27 @@ export interface InsertSendLogRow {
 }
 
 export class NotificationRepository extends BaseRepository<Orm, Schema, Record<string, never>> {
+  async findActiveMembership(
+    memberId: string
+  ): ServerResultAsync<NotificationMembershipRow | undefined> {
+    const rowResult = await this.throwableQuery(() =>
+      this.orm
+        .select({
+          id: this.schema.members.id,
+          userId: this.schema.members.userId,
+          organizationId: this.schema.members.organizationId,
+        })
+        .from(this.schema.members)
+        .where(and(eq(this.schema.members.id, memberId), isNull(this.schema.members.deletedAt)))
+        .limit(1)
+    );
+    if (rowResult.isErr()) return err(rowResult.error);
+    const [row] = rowResult.value;
+    return ok(row);
+  }
+
   async insertNotification(input: {
+    memberId: string;
     userId: string;
     kind: string;
     title: string;
@@ -86,6 +114,7 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
       this.orm
         .insert(this.schema.notifications)
         .values({
+          memberId: input.memberId,
           userId: input.userId,
           kind: input.kind,
           title: input.title,
@@ -106,14 +135,14 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
     return ok(row as NotificationInstanceRow);
   }
 
-  async listVisibleInboxByUserId(userId: string): ServerResultAsync<NotificationInstanceRow[]> {
+  async listVisibleInboxByMemberId(memberId: string): ServerResultAsync<NotificationInstanceRow[]> {
     const rowsResult = await this.throwableQuery(() =>
       this.orm
         .select()
         .from(this.schema.notifications)
         .where(
           and(
-            eq(this.schema.notifications.userId, userId),
+            eq(this.schema.notifications.memberId, memberId),
             eq(this.schema.notifications.visibleInInbox, true)
           )
         )
@@ -125,7 +154,7 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
 
   async markNotificationRead(input: {
     id: string;
-    userId: string;
+    memberId: string;
   }): ServerResultAsync<NotificationInstanceRow | undefined> {
     const now = new Date();
     const rowResult = await this.throwableQuery(() =>
@@ -135,7 +164,7 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
         .where(
           and(
             eq(this.schema.notifications.id, input.id),
-            eq(this.schema.notifications.userId, input.userId),
+            eq(this.schema.notifications.memberId, input.memberId),
             eq(this.schema.notifications.visibleInInbox, true)
           )
         )

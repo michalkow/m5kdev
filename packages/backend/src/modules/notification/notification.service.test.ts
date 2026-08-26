@@ -37,6 +37,11 @@ const sendFcmMock = sendFcmNotification as jest.MockedFunction<typeof sendFcmNot
 
 const OWNER_ID = "user-owner";
 const OTHER_ID = "user-other";
+const ORG_A_ID = "org-a";
+const ORG_B_ID = "org-b";
+const MEMBER_OWNER_A = "member-owner-a";
+const MEMBER_OWNER_B = "member-owner-b";
+const MEMBER_OTHER_A = "member-other-a";
 const WEB_ENDPOINT = "https://push.example.com/sub-1";
 const WEB_ENDPOINT_2 = "https://push.example.com/sub-2";
 const WEB_SUBSCRIPTION = {
@@ -98,6 +103,46 @@ function userContext(userId: string): Context {
   };
 }
 
+function orgContext(input: { userId: string; organizationId: string; memberId: string }): Context {
+  return {
+    session: {} as Context["session"],
+    user: { id: input.userId } as User,
+    actor: {
+      userId: input.userId,
+      userRole: "user",
+      organizationId: input.organizationId,
+      organizationRole: "member",
+      memberId: input.memberId,
+      teamId: null,
+      teamRole: null,
+    },
+  };
+}
+
+function ownerOrgAContext(): Context {
+  return orgContext({
+    userId: OWNER_ID,
+    organizationId: ORG_A_ID,
+    memberId: MEMBER_OWNER_A,
+  });
+}
+
+function ownerOrgBContext(): Context {
+  return orgContext({
+    userId: OWNER_ID,
+    organizationId: ORG_B_ID,
+    memberId: MEMBER_OWNER_B,
+  });
+}
+
+function otherOrgAContext(): Context {
+  return orgContext({
+    userId: OTHER_ID,
+    organizationId: ORG_A_ID,
+    memberId: MEMBER_OTHER_A,
+  });
+}
+
 async function createTables(client: Client): Promise<void> {
   await client.execute(`
     CREATE TABLE users (
@@ -124,6 +169,38 @@ async function createTables(client: Client): Promise<void> {
     );
   `);
   await client.execute(`
+    CREATE TABLE organizations (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      slug TEXT UNIQUE,
+      logo TEXT,
+      type TEXT,
+      parent_id TEXT,
+      created_at INTEGER NOT NULL,
+      onboarding INTEGER,
+      preferences TEXT DEFAULT '{}',
+      metadata TEXT DEFAULT '{}',
+      flags TEXT DEFAULT '[]',
+      locale TEXT
+    );
+  `);
+  await client.execute(`
+    CREATE TABLE members (
+      id TEXT PRIMARY KEY NOT NULL,
+      organization_id TEXT NOT NULL REFERENCES organizations(id),
+      user_id TEXT NOT NULL REFERENCES users(id),
+      name TEXT NOT NULL DEFAULT '',
+      image TEXT,
+      role TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      deleted_at INTEGER,
+      preferences TEXT DEFAULT '{}',
+      metadata TEXT DEFAULT '{}',
+      onboarding INTEGER,
+      flags TEXT DEFAULT '[]'
+    );
+  `);
+  await client.execute(`
     CREATE TABLE notification_devices (
       id TEXT PRIMARY KEY NOT NULL,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -140,6 +217,7 @@ async function createTables(client: Client): Promise<void> {
   await client.execute(`
     CREATE TABLE notifications (
       id TEXT PRIMARY KEY NOT NULL,
+      member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       kind TEXT NOT NULL,
       title TEXT NOT NULL,
@@ -197,6 +275,58 @@ async function insertUser(client: Client, id: string, email: string): Promise<vo
   });
 }
 
+async function insertOrganization(client: Client, id: string, name: string): Promise<void> {
+  const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
+  await orm.insert(authTables.organizations).values({
+    id,
+    name,
+    slug: id,
+  });
+}
+
+async function insertMember(input: {
+  client: Client;
+  id: string;
+  organizationId: string;
+  userId: string;
+  deletedAt?: Date | null;
+}): Promise<void> {
+  const orm = drizzle(input.client, { schema: { members: authTables.members } });
+  await orm.insert(authTables.members).values({
+    id: input.id,
+    organizationId: input.organizationId,
+    userId: input.userId,
+    name: input.userId,
+    role: "member",
+    deletedAt: input.deletedAt ?? null,
+  });
+}
+
+async function seedUsersAndMembers(client: Client): Promise<void> {
+  await insertUser(client, OWNER_ID, "owner@example.com");
+  await insertUser(client, OTHER_ID, "other@example.com");
+  await insertOrganization(client, ORG_A_ID, "Org A");
+  await insertOrganization(client, ORG_B_ID, "Org B");
+  await insertMember({
+    client,
+    id: MEMBER_OWNER_A,
+    organizationId: ORG_A_ID,
+    userId: OWNER_ID,
+  });
+  await insertMember({
+    client,
+    id: MEMBER_OWNER_B,
+    organizationId: ORG_B_ID,
+    userId: OWNER_ID,
+  });
+  await insertMember({
+    client,
+    id: MEMBER_OTHER_A,
+    organizationId: ORG_A_ID,
+    userId: OTHER_ID,
+  });
+}
+
 async function countNotificationRows(client: Client): Promise<number> {
   const result = await client.execute("SELECT COUNT(*) AS n FROM notifications");
   return Number(result.rows[0]?.n ?? 0);
@@ -218,6 +348,7 @@ function createHarness(
     notificationPreferences: notificationTables.notificationPreferences,
     notificationSendLogs: notificationTables.notificationSendLogs,
     users: authTables.users,
+    members: authTables.members,
   };
   const orm = drizzle(client, { schema });
   const repository = new NotificationRepository({
@@ -243,8 +374,7 @@ describe("NotificationService Device tenancy", () => {
   beforeEach(async () => {
     client = createClient({ url: ":memory:" });
     await createTables(client);
-    await insertUser(client, OWNER_ID, "owner@example.com");
-    await insertUser(client, OTHER_ID, "other@example.com");
+    await seedUsersAndMembers(client);
   });
 
   afterEach(async () => {
@@ -379,8 +509,13 @@ describe("NotificationService Device tenancy", () => {
 });
 
 describe("defaultNotificationGrants", () => {
-  it("has no organization Grants and does not give admin read-all on Devices", () => {
-    expect(defaultNotificationGrants.some((grant) => grant.level === "organization")).toBe(false);
+  it("has organization own Grants and does not give admin read-all on Devices", () => {
+    expect(defaultNotificationGrants.some((grant) => grant.level === "organization")).toBe(true);
+    const orgMemberRead = defaultNotificationGrants.find(
+      (grant) =>
+        grant.level === "organization" && grant.role === "member" && grant.action === "read"
+    );
+    expect(orgMemberRead?.access).toBe("own");
     const adminRead = defaultNotificationGrants.find(
       (grant) => grant.level === "user" && grant.role === "admin" && grant.action === "read"
     );
@@ -394,8 +529,7 @@ describe("NotificationService inbox", () => {
   beforeEach(async () => {
     client = createClient({ url: ":memory:" });
     await createTables(client);
-    await insertUser(client, OWNER_ID, "owner@example.com");
-    await insertUser(client, OTHER_ID, "other@example.com");
+    await seedUsersAndMembers(client);
   });
 
   afterEach(async () => {
@@ -405,7 +539,7 @@ describe("NotificationService inbox", () => {
   it("fails send for an unknown kind without inserting or emitting", async () => {
     const { service, userEmit } = createHarness(client);
     const result = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "missing.kind",
       title: "Hello",
       body: "World",
@@ -421,14 +555,14 @@ describe("NotificationService inbox", () => {
   it("inserts a new instance per send and lists only the owner's visible inbox", async () => {
     const { service, userEmit } = createHarness(client);
     const first = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.ping",
       title: "One",
       body: "First",
       data: { n: 1 },
     });
     const second = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.ping",
       title: "Two",
       body: "Second",
@@ -444,17 +578,17 @@ describe("NotificationService inbox", () => {
         userId: OWNER_ID,
         resource: "notification",
         change: "created",
-        organizationId: null,
+        organizationId: ORG_A_ID,
       })
     );
 
-    const ownerInbox = await service.listMyInbox(userContext(OWNER_ID));
+    const ownerInbox = await service.listMyInbox(ownerOrgAContext());
     expect(ownerInbox.isOk()).toBe(true);
     if (ownerInbox.isOk()) {
       expect(ownerInbox.value).toHaveLength(2);
     }
 
-    const otherInbox = await service.listMyInbox(userContext(OTHER_ID));
+    const otherInbox = await service.listMyInbox(otherOrgAContext());
     expect(otherInbox.isOk()).toBe(true);
     if (otherInbox.isOk()) {
       expect(otherInbox.value).toHaveLength(0);
@@ -464,7 +598,7 @@ describe("NotificationService inbox", () => {
   it("inserts a silent instance when the kind has no in-app Channel", async () => {
     const { service } = createHarness(client);
     const sent = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.silent",
       title: "Quiet",
       body: "No inbox",
@@ -473,7 +607,7 @@ describe("NotificationService inbox", () => {
     if (sent.isOk()) {
       expect(sent.value.visibleInInbox).toBe(false);
     }
-    const inbox = await service.listMyInbox(userContext(OWNER_ID));
+    const inbox = await service.listMyInbox(ownerOrgAContext());
     expect(inbox.isOk()).toBe(true);
     if (inbox.isOk()) {
       expect(inbox.value).toHaveLength(0);
@@ -483,7 +617,7 @@ describe("NotificationService inbox", () => {
   it("marks own visible instances read and rejects another User", async () => {
     const { service } = createHarness(client);
     const sent = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.ping",
       title: "Read me",
       body: "Please",
@@ -491,20 +625,20 @@ describe("NotificationService inbox", () => {
     expect(sent.isOk()).toBe(true);
     const id = sent.isOk() ? sent.value.id : "";
 
-    const foreign = await service.markRead(userContext(OTHER_ID), id);
+    const foreign = await service.markRead(otherOrgAContext(), id);
     expect(foreign.isErr()).toBe(true);
     if (foreign.isErr()) {
       expect(foreign.error.code).toBe("NOT_FOUND");
     }
 
-    const marked = await service.markRead(userContext(OWNER_ID), id);
+    const marked = await service.markRead(ownerOrgAContext(), id);
     expect(marked.isOk()).toBe(true);
     if (marked.isOk()) {
       expect(marked.value.readAt).not.toBeNull();
     }
   });
 
-  it("sendTest inserts an inbox instance for a UserId and does not enqueue Device push", async () => {
+  it("sendTest inserts an inbox instance for a MemberId and does not enqueue Device push", async () => {
     const { service, trigger } = createHarness(client);
     const registered = await service.registerDevice(userContext(OTHER_ID), {
       platform: "ios",
@@ -512,8 +646,8 @@ describe("NotificationService inbox", () => {
     });
     expect(registered.isOk()).toBe(true);
 
-    const result = await service.sendTestAsAdmin(userContext(OWNER_ID), {
-      userId: OTHER_ID,
+    const result = await service.sendTestAsAdmin({
+      memberId: MEMBER_OTHER_A,
       kind: "demo.ping",
       title: "Test",
       body: "Inbox only",
@@ -521,14 +655,14 @@ describe("NotificationService inbox", () => {
     expect(result.isOk()).toBe(true);
     expect(trigger).not.toHaveBeenCalled();
 
-    const otherInbox = await service.listMyInbox(userContext(OTHER_ID));
+    const otherInbox = await service.listMyInbox(otherOrgAContext());
     expect(otherInbox.isOk()).toBe(true);
     if (otherInbox.isOk()) {
       expect(otherInbox.value).toHaveLength(1);
       expect(otherInbox.value[0]?.title).toBe("Test");
     }
 
-    const ownerInbox = await service.listMyInbox(userContext(OWNER_ID));
+    const ownerInbox = await service.listMyInbox(ownerOrgAContext());
     expect(ownerInbox.isOk()).toBe(true);
     if (ownerInbox.isOk()) {
       expect(ownerInbox.value).toHaveLength(0);
@@ -540,6 +674,87 @@ describe("NotificationService inbox", () => {
       expect(logs.value).toHaveLength(0);
     }
   });
+
+  it("fails send closed when the Membership is missing or soft-deleted", async () => {
+    const { service, userEmit } = createHarness(client);
+    const missing = await service.send({
+      memberId: "member-missing",
+      kind: "demo.ping",
+      title: "Nope",
+      body: "Gone",
+    });
+    expect(missing.isErr()).toBe(true);
+    if (missing.isErr()) {
+      expect(missing.error.code).toBe("NOT_FOUND");
+    }
+
+    await insertMember({
+      client,
+      id: "member-deleted",
+      organizationId: ORG_A_ID,
+      userId: OWNER_ID,
+      deletedAt: new Date(),
+    });
+    const deleted = await service.send({
+      memberId: "member-deleted",
+      kind: "demo.ping",
+      title: "Nope",
+      body: "Deleted",
+    });
+    expect(deleted.isErr()).toBe(true);
+    if (deleted.isErr()) {
+      expect(deleted.error.code).toBe("NOT_FOUND");
+    }
+    expect(userEmit).not.toHaveBeenCalled();
+    expect(await countNotificationRows(client)).toBe(0);
+  });
+
+  it("isolates inbox and mark-read across a User's Memberships and requires an Organization Actor", async () => {
+    const { service } = createHarness(client);
+    const inA = await service.send({
+      memberId: MEMBER_OWNER_A,
+      kind: "demo.ping",
+      title: "Org A",
+      body: "A",
+    });
+    const inB = await service.send({
+      memberId: MEMBER_OWNER_B,
+      kind: "demo.ping",
+      title: "Org B",
+      body: "B",
+    });
+    expect(inA.isOk()).toBe(true);
+    expect(inB.isOk()).toBe(true);
+    const idA = inA.isOk() ? inA.value.id : "";
+    const idB = inB.isOk() ? inB.value.id : "";
+
+    const inboxA = await service.listMyInbox(ownerOrgAContext());
+    expect(inboxA.isOk()).toBe(true);
+    if (inboxA.isOk()) {
+      expect(inboxA.value.map((row) => row.title)).toEqual(["Org A"]);
+    }
+    const inboxB = await service.listMyInbox(ownerOrgBContext());
+    expect(inboxB.isOk()).toBe(true);
+    if (inboxB.isOk()) {
+      expect(inboxB.value.map((row) => row.title)).toEqual(["Org B"]);
+    }
+
+    const userActorInbox = await service.listMyInbox(userContext(OWNER_ID));
+    expect(userActorInbox.isErr()).toBe(true);
+    if (userActorInbox.isErr()) {
+      expect(userActorInbox.error.code).toBe("FORBIDDEN");
+    }
+
+    const crossMark = await service.markRead(ownerOrgAContext(), idB);
+    expect(crossMark.isErr()).toBe(true);
+    if (crossMark.isErr()) {
+      expect(crossMark.error.code).toBe("NOT_FOUND");
+    }
+    const markedB = await service.markRead(ownerOrgBContext(), idB);
+    expect(markedB.isOk()).toBe(true);
+    const markedA = await service.markRead(ownerOrgAContext(), idA);
+    expect(markedA.isOk()).toBe(true);
+  });
 });
 
 describe("NotificationService preferences", () => {
@@ -548,8 +763,7 @@ describe("NotificationService preferences", () => {
   beforeEach(async () => {
     client = createClient({ url: ":memory:" });
     await createTables(client);
-    await insertUser(client, OWNER_ID, "owner@example.com");
-    await insertUser(client, OTHER_ID, "other@example.com");
+    await seedUsersAndMembers(client);
   });
 
   afterEach(async () => {
@@ -667,7 +881,7 @@ describe("NotificationService preferences", () => {
     const { service } = createHarness(client);
     for (const title of ["One", "Two", "Three"]) {
       const sent = await service.send({
-        userId: OWNER_ID,
+        memberId: MEMBER_OWNER_A,
         kind: "demo.ping",
         title,
         body: title,
@@ -682,7 +896,7 @@ describe("NotificationService preferences", () => {
     });
     expect(muted.isOk()).toBe(true);
 
-    const afterMute = await service.listMyInbox(userContext(OWNER_ID));
+    const afterMute = await service.listMyInbox(ownerOrgAContext());
     expect(afterMute.isOk()).toBe(true);
     if (afterMute.isOk()) {
       expect(afterMute.value).toHaveLength(3);
@@ -690,7 +904,7 @@ describe("NotificationService preferences", () => {
     }
 
     const silent = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.ping",
       title: "Four",
       body: "Muted",
@@ -701,7 +915,7 @@ describe("NotificationService preferences", () => {
     }
     expect(await countNotificationRows(client)).toBe(4);
 
-    const listed = await service.listMyInbox(userContext(OWNER_ID));
+    const listed = await service.listMyInbox(ownerOrgAContext());
     expect(listed.isOk()).toBe(true);
     if (listed.isOk()) {
       expect(listed.value).toHaveLength(3);
@@ -715,7 +929,7 @@ describe("NotificationService preferences", () => {
     });
     expect(unmuted.isOk()).toBe(true);
 
-    const afterUnmute = await service.listMyInbox(userContext(OWNER_ID));
+    const afterUnmute = await service.listMyInbox(ownerOrgAContext());
     expect(afterUnmute.isOk()).toBe(true);
     if (afterUnmute.isOk()) {
       expect(afterUnmute.value).toHaveLength(3);
@@ -733,7 +947,7 @@ describe("NotificationService preferences", () => {
     expect(muted.isOk()).toBe(true);
 
     const webOnly = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.full",
       title: "Skip inbox",
       body: "Developer channels",
@@ -752,7 +966,7 @@ describe("NotificationService preferences", () => {
     expect(ownerMutedWeb.isOk()).toBe(true);
 
     const webMutedStillVisible = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.full",
       title: "Keep inbox",
       body: "In-app still on",
@@ -771,7 +985,7 @@ describe("NotificationService preferences", () => {
     expect(ownerMutedInApp.isOk()).toBe(true);
 
     const prefsWin = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.full",
       title: "Silent",
       body: "Requested in-app but muted",
@@ -782,8 +996,8 @@ describe("NotificationService preferences", () => {
       expect(prefsWin.value.visibleInInbox).toBe(false);
     }
 
-    const tested = await service.sendTestAsAdmin(userContext(OWNER_ID), {
-      userId: OTHER_ID,
+    const tested = await service.sendTestAsAdmin({
+      memberId: MEMBER_OTHER_A,
       kind: "demo.full",
       title: "Admin",
       body: "Test",
@@ -802,7 +1016,7 @@ describe("NotificationService preferences", () => {
       ]);
     }
 
-    const otherInbox = await service.listMyInbox(userContext(OTHER_ID));
+    const otherInbox = await service.listMyInbox(otherOrgAContext());
     expect(otherInbox.isOk()).toBe(true);
     if (otherInbox.isOk()) {
       expect(otherInbox.value).toHaveLength(0);
@@ -819,8 +1033,7 @@ describe("NotificationService push cascade", () => {
     sendFcmMock.mockReset().mockResolvedValue(undefined);
     client = createClient({ url: ":memory:" });
     await createTables(client);
-    await insertUser(client, OWNER_ID, "owner@example.com");
-    await insertUser(client, OTHER_ID, "other@example.com");
+    await seedUsersAndMembers(client);
   });
 
   afterEach(async () => {
@@ -834,7 +1047,7 @@ describe("NotificationService push cascade", () => {
       subscription: WEB_SUBSCRIPTION,
     });
     const sent = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.push",
       title: "Hello",
       body: "World",
@@ -863,7 +1076,7 @@ describe("NotificationService push cascade", () => {
   it("uses kind delay override when scheduling web push", async () => {
     const { service, trigger } = createHarness(client);
     const sent = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.fast-web",
       title: "Fast",
       body: "Web",
@@ -889,7 +1102,7 @@ describe("NotificationService push cascade", () => {
       subscription: WEB_SUBSCRIPTION,
     });
     const sent = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.push",
       title: "Muted web",
       body: "Mobile only",
@@ -927,7 +1140,7 @@ describe("NotificationService push cascade", () => {
       subscription: WEB_SUBSCRIPTION_2,
     });
     const sent = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.push",
       title: "Hello",
       body: "World",
@@ -939,7 +1152,7 @@ describe("NotificationService push cascade", () => {
     expect(first.isOk()).toBe(true);
     expect(sendWebPushMock).toHaveBeenCalledTimes(2);
 
-    const inbox = await service.listMyInbox(userContext(OWNER_ID));
+    const inbox = await service.listMyInbox(ownerOrgAContext());
     expect(inbox.isOk()).toBe(true);
     if (inbox.isOk()) {
       expect(inbox.value[0]?.webPushedAt).not.toBeNull();
@@ -982,7 +1195,7 @@ describe("NotificationService push cascade", () => {
       token: ANDROID_TOKEN,
     });
     const sent = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.push",
       title: "Hello",
       body: "World",
@@ -992,7 +1205,7 @@ describe("NotificationService push cascade", () => {
 
     const web = await service.deliverWebPush(id);
     expect(web.isOk()).toBe(true);
-    const afterWeb = await service.listMyInbox(userContext(OWNER_ID));
+    const afterWeb = await service.listMyInbox(ownerOrgAContext());
     expect(afterWeb.isOk()).toBe(true);
     if (afterWeb.isOk()) {
       expect(afterWeb.value[0]?.webPushedAt).toBeNull();
@@ -1003,7 +1216,7 @@ describe("NotificationService push cascade", () => {
     expect(sendApnMock).toHaveBeenCalledTimes(1);
     expect(sendFcmMock).toHaveBeenCalledTimes(1);
 
-    const afterMobile = await service.listMyInbox(userContext(OWNER_ID));
+    const afterMobile = await service.listMyInbox(ownerOrgAContext());
     expect(afterMobile.isOk()).toBe(true);
     if (afterMobile.isOk()) {
       expect(afterMobile.value[0]?.mobilePushedAt).not.toBeNull();
@@ -1022,7 +1235,7 @@ describe("NotificationService push cascade", () => {
   it("skips remaining push after mark-read and logs failure when no Device is enabled", async () => {
     const { service } = createHarness(client);
     const sent = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.push",
       title: "Hello",
       body: "World",
@@ -1030,7 +1243,7 @@ describe("NotificationService push cascade", () => {
     expect(sent.isOk()).toBe(true);
     const id = sent.isOk() ? sent.value.id : "";
 
-    const marked = await service.markRead(userContext(OWNER_ID), id);
+    const marked = await service.markRead(ownerOrgAContext(), id);
     expect(marked.isOk()).toBe(true);
     const skipped = await service.deliverWebPush(id);
     expect(skipped.isOk()).toBe(true);
@@ -1042,7 +1255,7 @@ describe("NotificationService push cascade", () => {
     }
 
     const unread = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.push",
       title: "Later",
       body: "No device",
@@ -1053,7 +1266,7 @@ describe("NotificationService push cascade", () => {
     expect(noDevice.isOk()).toBe(true);
     expect(sendWebPushMock).not.toHaveBeenCalled();
 
-    const inbox = await service.listMyInbox(userContext(OWNER_ID));
+    const inbox = await service.listMyInbox(ownerOrgAContext());
     expect(inbox.isOk()).toBe(true);
     if (inbox.isOk()) {
       const row = inbox.value.find((item) => item.id === unreadId);
@@ -1079,8 +1292,7 @@ describe("NotificationService email cascade", () => {
     sendWebPushMock.mockReset().mockResolvedValue(undefined);
     client = createClient({ url: ":memory:" });
     await createTables(client);
-    await insertUser(client, OWNER_ID, "owner@example.com");
-    await insertUser(client, OTHER_ID, "other@example.com");
+    await seedUsersAndMembers(client);
   });
 
   afterEach(async () => {
@@ -1091,7 +1303,7 @@ describe("NotificationService email cascade", () => {
     const sendTemplate = jest.fn().mockResolvedValue(ok({}));
     const { service, trigger } = createHarness(client, { email: { sendTemplate } });
     const sent = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.mail",
       title: "Hello",
       body: "World",
@@ -1111,7 +1323,7 @@ describe("NotificationService email cascade", () => {
     const sendTemplate = jest.fn().mockResolvedValue(ok({}));
     const { service, trigger } = createHarness(client, { email: { sendTemplate } });
     const sent = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.fast-mail",
       title: "Fast",
       body: "Mail",
@@ -1129,7 +1341,7 @@ describe("NotificationService email cascade", () => {
     const sendTemplate = jest.fn().mockResolvedValue(ok({}));
     const { service } = createHarness(client, { email: { sendTemplate } });
     const sent = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.mail",
       title: "Hello",
       body: "World",
@@ -1147,7 +1359,7 @@ describe("NotificationService email cascade", () => {
       data: { ticket: "DEV-358" },
     });
 
-    const inbox = await service.listMyInbox(userContext(OWNER_ID));
+    const inbox = await service.listMyInbox(ownerOrgAContext());
     expect(inbox.isOk()).toBe(true);
     if (inbox.isOk()) {
       expect(inbox.value[0]?.emailedAt).not.toBeNull();
@@ -1174,7 +1386,7 @@ describe("NotificationService email cascade", () => {
       .mockResolvedValue(err({ message: "resend down" } as ServerError));
     const { service } = createHarness(client, { email: { sendTemplate } });
     const sent = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.mail",
       title: "Hello",
       body: "World",
@@ -1185,7 +1397,7 @@ describe("NotificationService email cascade", () => {
     const delivered = await service.deliverEmail(id);
     expect(delivered.isOk()).toBe(true);
 
-    const inbox = await service.listMyInbox(userContext(OWNER_ID));
+    const inbox = await service.listMyInbox(ownerOrgAContext());
     expect(inbox.isOk()).toBe(true);
     if (inbox.isOk()) {
       expect(inbox.value[0]?.emailedAt).toBeNull();
@@ -1204,7 +1416,7 @@ describe("NotificationService email cascade", () => {
     const sendTemplate = jest.fn().mockRejectedValue(new Error("resend threw"));
     const { service } = createHarness(client, { email: { sendTemplate } });
     const sent = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.mail",
       title: "Hello",
       body: "World",
@@ -1215,7 +1427,7 @@ describe("NotificationService email cascade", () => {
     const delivered = await service.deliverEmail(id);
     expect(delivered.isOk()).toBe(true);
 
-    const inbox = await service.listMyInbox(userContext(OWNER_ID));
+    const inbox = await service.listMyInbox(ownerOrgAContext());
     expect(inbox.isOk()).toBe(true);
     if (inbox.isOk()) {
       expect(inbox.value[0]?.emailedAt).toBeNull();
@@ -1233,7 +1445,7 @@ describe("NotificationService email cascade", () => {
   it("boots send() without EmailModule and does not succeed email", async () => {
     const { service, trigger } = createHarness(client);
     const sent = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.mail",
       title: "Hello",
       body: "World",
@@ -1248,7 +1460,7 @@ describe("NotificationService email cascade", () => {
       expect(delivered.isOk()).toBe(true);
     }
 
-    const inbox = await service.listMyInbox(userContext(OWNER_ID));
+    const inbox = await service.listMyInbox(ownerOrgAContext());
     expect(inbox.isOk()).toBe(true);
     if (inbox.isOk()) {
       expect(inbox.value[0]?.emailedAt).toBeNull();
@@ -1274,21 +1486,21 @@ describe("NotificationService email cascade", () => {
     });
 
     const skippedSend = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.mail",
       title: "Read first",
       body: "Skip",
     });
     expect(skippedSend.isOk()).toBe(true);
     const skippedId = skippedSend.isOk() ? skippedSend.value.id : "";
-    const marked = await service.markRead(userContext(OWNER_ID), skippedId);
+    const marked = await service.markRead(ownerOrgAContext(), skippedId);
     expect(marked.isOk()).toBe(true);
     const skipped = await service.deliverEmail(skippedId);
     expect(skipped.isOk()).toBe(true);
     expect(sendTemplate).not.toHaveBeenCalled();
 
     const cascade = await service.send({
-      userId: OWNER_ID,
+      memberId: MEMBER_OWNER_A,
       kind: "demo.cascade-mail",
       title: "Keep going",
       body: "Email after web",
@@ -1301,7 +1513,7 @@ describe("NotificationService email cascade", () => {
     expect(emailed.isOk()).toBe(true);
     expect(sendTemplate).toHaveBeenCalledTimes(1);
 
-    const inbox = await service.listMyInbox(userContext(OWNER_ID));
+    const inbox = await service.listMyInbox(ownerOrgAContext());
     expect(inbox.isOk()).toBe(true);
     if (inbox.isOk()) {
       const row = inbox.value.find((item) => item.id === cascadeId);
