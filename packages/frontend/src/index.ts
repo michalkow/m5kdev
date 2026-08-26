@@ -35,6 +35,13 @@ export * from "./modules/billing/hooks/useSubscription";
 export * from "./modules/file/hooks/useS3DownloadUrl";
 export * from "./modules/file/hooks/useS3Upload";
 export * from "./modules/file/hooks/useUpload";
+export * from "./modules/notification/hooks/useNotificationInbox";
+export * from "./modules/notification/hooks/useNotificationPreferences";
+export {
+  notificationInboxQueryKey,
+  notificationPreferencesQueryKey,
+} from "./modules/notification/notification.query";
+
 export * from "./modules/table/hooks/useQueryWithParams";
 export * from "./modules/table/hooks/useTableQueryParams";
 export * from "./modules/table/queryParams";

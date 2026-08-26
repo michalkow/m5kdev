@@ -176,6 +176,16 @@
         "default": "./dist/src/modules/file/hooks/*.js"
       }
     },
+    "./modules/notification/hooks/*": {
+      "import": {
+        "types": "./dist/src/modules/notification/hooks/*.d.mts",
+        "default": "./dist/src/modules/notification/hooks/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/notification/hooks/*.d.ts",
+        "default": "./dist/src/modules/notification/hooks/*.js"
+      }
+    },
     "./modules/ai/hooks/*": {
       "import": {
         "types": "./dist/src/modules/ai/hooks/*.d.mts",
