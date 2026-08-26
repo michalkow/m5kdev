@@ -278,5 +278,8 @@
   "ai.conversation.tool.result": "Wynik",
   "ai.conversation.tool.status.running": "W toku",
   "ai.conversation.tool.status.complete": "Zakończone",
-  "ai.conversation.tool.status.error": "Błąd"
+  "ai.conversation.tool.status.error": "Błąd",
+  "notification.inbox.title": "Powiadomienia",
+  "notification.inbox.empty": "Brak powiadomień",
+  "notification.inbox.markRead": "Oznacz jako przeczytane"
 }

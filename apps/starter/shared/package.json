@@ -21,6 +21,7 @@
     "./modules/app/*": "./src/modules/app/*.ts",
     "./modules/conversation/*": "./src/modules/conversation/*.ts",
     "./modules/demo-workflow/*": "./src/modules/demo-workflow/*.ts",
+    "./modules/notification/*": "./src/modules/notification/*.ts",
     "./modules/posts/*": "./src/modules/posts/*.ts"
   }
 }

@@ -278,5 +278,8 @@
   "ai.conversation.tool.result": "Result",
   "ai.conversation.tool.status.running": "Running",
   "ai.conversation.tool.status.complete": "Complete",
-  "ai.conversation.tool.status.error": "Error"
+  "ai.conversation.tool.status.error": "Error",
+  "notification.inbox.title": "Notifications",
+  "notification.inbox.empty": "No notifications yet",
+  "notification.inbox.markRead": "Mark as read"
 }

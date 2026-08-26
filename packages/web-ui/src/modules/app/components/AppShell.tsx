@@ -11,9 +11,9 @@ export type AppShellProps = {
 export function AppShell({ header, sidebar }: AppShellProps) {
   return (
     <SidebarProvider>
-      {header}
       <AppSidebar {...sidebar} />
       <SidebarInset>
+        {header}
         <Outlet />
       </SidebarInset>
     </SidebarProvider>

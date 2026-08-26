@@ -7,6 +7,7 @@ import { AppSidebarHeader } from "@m5kdev/web-ui/modules/app/components/AppSideb
 import { AppSidebarUser } from "@m5kdev/web-ui/modules/app/components/AppSidebarUser";
 import { AuthOrganizationSelect } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationSelect";
 import { AuthUtilityImpersonationBanner } from "@m5kdev/web-ui/modules/auth/components/AuthUtilityImpersonationBanner";
+import { NotificationInbox } from "@m5kdev/web-ui/modules/notification/components/NotificationInbox";
 import { APP_NAME } from "@starter-app/shared/modules/app/app.constants";
 import { FileIcon, UsersIcon } from "lucide-react";
 // m5k:ai:start
@@ -21,6 +22,7 @@ import { WorkflowIcon } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
+import { StarterWebPush } from "./modules/notification/StarterWebPush";
 
 export function Layout() {
   const { data: session } = useSession();
@@ -37,7 +39,15 @@ export function Layout() {
 
   return (
     <AppShell
-      header={<AuthUtilityImpersonationBanner />}
+      header={
+        <>
+          <AuthUtilityImpersonationBanner />
+          <div className="flex h-12 shrink-0 items-center justify-end gap-2 border-b border-border px-4">
+            <NotificationInbox />
+            <StarterWebPush />
+          </div>
+        </>
+      }
       sidebar={{
         header: <AppSidebarHeader logo={{ src: "/logo.svg", alt: APP_NAME }} title={APP_NAME} />,
         content: (

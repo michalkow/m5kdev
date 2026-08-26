@@ -217,6 +217,16 @@
         "default": "./dist/src/modules/ai/components/*.js"
       }
     },
+    "./modules/notification/components/*": {
+      "import": {
+        "types": "./dist/src/modules/notification/components/*.d.mts",
+        "default": "./dist/src/modules/notification/components/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/notification/components/*.d.ts",
+        "default": "./dist/src/modules/notification/components/*.js"
+      }
+    },
     "./modules/charts/components/*": {
       "import": {
         "types": "./dist/src/modules/charts/components/*.d.mts",

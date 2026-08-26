@@ -21,7 +21,11 @@ export interface VapidPublicKeyQueryData {
   readonly publicKey: string;
 }
 
-export interface UseWebPushOptions {
+export interface UseWebPushOptions<
+  TQueryKey extends readonly unknown[] = readonly unknown[],
+  TQueryError = unknown,
+  TMutationError = unknown,
+> {
   /** When false, the VAPID query stays disabled (e.g. signed-out). */
   readonly enabled: boolean;
   readonly messages: UseWebPushMessages;
@@ -33,18 +37,21 @@ export interface UseWebPushOptions {
    * `enabled` is merged with {@link UseWebPushOptions.enabled}.
    */
   readonly vapidPublicKeyQuery: Omit<
-    UseQueryOptions<VapidPublicKeyQueryData, Error, VapidPublicKeyQueryData>,
+    UseQueryOptions<VapidPublicKeyQueryData, TQueryError, VapidPublicKeyQueryData, TQueryKey>,
     "enabled"
   > &
     Partial<
-      Pick<UseQueryOptions<VapidPublicKeyQueryData, Error, VapidPublicKeyQueryData>, "enabled">
+      Pick<
+        UseQueryOptions<VapidPublicKeyQueryData, TQueryError, VapidPublicKeyQueryData, TQueryKey>,
+        "enabled"
+      >
     >;
   /**
    * Register device mutation — typically `trpc.notification.registerDevice.mutationOptions()`.
    */
   readonly registerDeviceMutation: UseMutationOptions<
     { deviceId: string },
-    Error,
+    TMutationError,
     NotificationRegisterDeviceInput
   >;
 }
@@ -64,7 +71,13 @@ function urlBase64ToUint8Array(base64String: string): BufferSource {
  * Web Push: VAPID query + service worker + {@link useNotificationPermission} + `pushManager.subscribe` + server registration.
  * Pass tRPC (or other) query/mutation options from your app.
  */
-export function useWebPush(options: UseWebPushOptions): {
+export function useWebPush<
+  TQueryKey extends readonly unknown[] = readonly unknown[],
+  TQueryError = unknown,
+  TMutationError = unknown,
+>(
+  options: UseWebPushOptions<TQueryKey, TQueryError, TMutationError>
+): {
   permission: NotificationPermission;
   isSupported: boolean;
   vapidQuery: ReturnType<typeof useQuery<VapidPublicKeyQueryData, Error, VapidPublicKeyQueryData>>;
