@@ -4,18 +4,22 @@ sidebar_position: 17
 
 # Email module
 
-`EmailModule` is a Core Module. It renders React Email templates and sends them
-through Resend, with locale-aware subjects, a local store mode for development,
-and a browser preview module.
+`EmailModule` is a Core Module. It renders registered Email templates and sends
+them through Resend. 1.0 apps register it with Auth (Auth depends on EmailModule).
+It is not a Notification, not a Channel, and not `@m5kdev/email` chrome.
 
-`@m5kdev/email` is shared React Email chrome (layout, buttons, brand types) — not
-the Email module package. Product templates live in the app email package.
+`@m5kdev/email` is shared React Email chrome (layout, buttons, brand types).
+Product templates live in the app email package.
+
+`EmailPreviewModule` is a Kernel-exported helper in the same package — not a
+Core Module. It mounts only when EmailService mode is `store` and env is not
+production.
 
 ## Package map
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/backend` | `EmailModule` + `EmailService` (send, brand, locale, store mode) and `EmailPreviewModule`. |
+| `@m5kdev/backend` | `EmailModule` + `EmailService` (send, brand, locale, exclusive `send` / `store` / `log` modes). `EmailPreviewModule` is a helper, not Core. |
 | `@m5kdev/email` | Shared React Email layout (`EmailLayout`, `CtaButton`, brand chrome) and template prop types. |
 | App email package | Per-app template components and `emailResources` registered in `createBackendApp`. |
 
@@ -30,23 +34,40 @@ createBackendApp(config, [new EmailModule(templates)]);
 
 The Resend client, sender address, and mode come from the kernel
 (`createBackendApp({ resend, email })`); brand and app metadata come from
-`app` config. In non-production modes the service writes rendered emails to an
-output directory instead of (or in addition to) sending, and exposes
-`listStoredEmails`, `readStoredEmail`, `findLatestStoredEmail`, and
-`clearStoredEmails` — which e2e tests use to assert on sent mail.
+`app` config.
+
+Mode is exclusive: `send` (Resend only), `store` (write JSON to an output
+directory only), or `log` (log only). Store is not a dual-write on top of
+sending. Store mode exposes `listStoredEmails`, `readStoredEmail`,
+`findLatestStoredEmail`, and `clearStoredEmails` — which e2e tests use to
+assert on mail that was stored, not sent.
 
 ## Sending
 
-- `sendTemplate(...)` / `sendBrandTemplate(...)` — render a registered template
-  with brand chrome and i18n, then send.
-- Built-in auth flows: `sendVerification`, `sendResetPassword`,
-  `sendDeleteAccountVerification`, `sendOrganizationInvite`,
-  `sendWaitlistConfirmation`, `sendWaitlistInvite`, `sendWaitlistUserInvite`,
-  and `sendSystemWaitlistNotification` (to `SYSTEM_NOTIFICATION_EMAIL`).
+- `sendTemplate(...)` / `sendBrandTemplate(...)` — render a registered Email
+  template with brand chrome and i18n, then deliver according to mode.
+- Built-in Auth wrappers: `sendVerification`, `sendResetPassword`,
+  `sendDeleteAccountVerification`, `sendOrganizationInvite`.
+- Waitlist wrappers stay public (`sendWaitlistConfirmation`,
+  `sendWaitlistInvite`, `sendWaitlistUserInvite`,
+  `sendSystemWaitlistNotification`) and fail at send time if that Email
+  template is not registered.
 
-## Email preview module
+Required Email templates: `verification`, `passwordReset`, `accountDeletion`,
+`organizationInvite`. Optional: waitlist templates, `trialEnding`, and extra
+keys (for example a Notification kind’s Email template name). Notification may
+call `sendTemplate`; EmailModule does not own inbox or Channel policy.
 
-`EmailPreviewModule` mounts a dev-only Express UI for stored emails:
+`trialEnding` is optional on `EmailTemplates`. Billing uses it for the Trial
+cancel warning; omit it to skip send. See the
+[Billing module](/modules/billing) and
+[Billing trial-ending email in 0.34.0](/guides/v0.34.0-billing-trial-ending-email-migration).
+
+## Email preview helper
+
+`EmailPreviewModule` mounts an unauthenticated Express UI for stored emails
+only when mode is `store` and env is not production. Registering it in
+production or in `send` mode is a no-op (routes are not mounted).
 
 ```ts
 import { createBackendApp } from "@m5kdev/backend/app";
@@ -56,6 +77,8 @@ createBackendApp(config, [
   new EmailPreviewModule({ mountPath: "/__emails", allowDelete: true }),
 ]);
 ```
+
+`mountPath` defaults to `/__emails`. Inbox and detail HTML use that path.
 
 ## App template pattern
 
@@ -78,13 +101,9 @@ export function VerificationEmail({ previewText, brand, url, t, htmlLang }) {
 ```
 
 Register templates with `EmailModule` and translation keys for `subject` /
-`previewText`. Subjects and bodies follow the recipient's locale — see
-[User and organization locale migration](/guides/user-org-locale-migration).
-
-`trialEnding` is optional on `EmailTemplates`. Billing uses it for the Trial
-cancel warning; omit it to skip send. See the
-[Billing module](/modules/billing) and
-[Billing trial-ending email in 0.34.0](/guides/v0.34.0-billing-trial-ending-email-migration).
+`previewText`. Subjects and bodies follow the recipient's locale (pass
+`OverrideOptions.locale`; EmailModule does not load User or Organization) —
+see [User and organization locale migration](/guides/user-org-locale-migration).
 
 ## Related docs
 

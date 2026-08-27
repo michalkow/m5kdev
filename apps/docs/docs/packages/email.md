@@ -7,8 +7,10 @@ sidebar_position: 6
 `@m5kdev/email` is shared React Email chrome and template prop types — layout,
 buttons, and brand wrapping. It is not the Email module package.
 
-`EmailModule` (send orchestration, Resend, store mode, preview) is a Core Module
-in `@m5kdev/backend`. Product templates live in the app email package.
+`EmailModule` (send orchestration, Resend, exclusive send/store/log modes) is a
+Core Module in `@m5kdev/backend`. `EmailPreviewModule` is a Kernel helper in
+that package, not a Core Module. Product templates live in the app email
+package.
 
 ## Use it for
 
