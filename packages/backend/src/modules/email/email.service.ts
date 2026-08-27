@@ -38,12 +38,12 @@ export type EmailTemplate = {
 export type EmailTemplates = {
   accountDeletion: EmailTemplate;
   verification: EmailTemplate;
-  waitlistConfirmation: EmailTemplate;
   passwordReset: EmailTemplate;
-  systemWaitlistNotification: EmailTemplate;
-  waitlistInvite: EmailTemplate;
-  waitlistUserInvite: EmailTemplate;
   organizationInvite: EmailTemplate;
+  waitlistConfirmation?: EmailTemplate;
+  waitlistInvite?: EmailTemplate;
+  waitlistUserInvite?: EmailTemplate;
+  systemWaitlistNotification?: EmailTemplate;
   trialEnding?: EmailTemplate;
   [key: string]: EmailTemplate | undefined;
 };

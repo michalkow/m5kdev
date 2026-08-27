@@ -59,6 +59,25 @@ const templates: EmailTemplates = {
   },
 };
 
+const authTemplates: EmailTemplates = {
+  accountDeletion: {
+    id: "account-deletion",
+    react: Template,
+  },
+  verification: {
+    id: "verification",
+    react: Template,
+  },
+  passwordReset: {
+    id: "password-reset",
+    react: Template,
+  },
+  organizationInvite: {
+    id: "organization-invite",
+    react: Template,
+  },
+};
+
 describe("EmailService", () => {
   it("uses app config links in log mode without requiring Resend", async () => {
     const service = new EmailService({
@@ -336,6 +355,40 @@ describe("EmailService", () => {
       expect(payload.subject).toBe("verification.subject");
     } finally {
       await fs.rm(outputDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts extra Email template keys besides the Auth set", () => {
+    const withKind: EmailTemplates = {
+      ...authTemplates,
+      notificationInbox: {
+        id: "notification-inbox",
+        react: Template,
+      },
+    };
+    expect(withKind.notificationInbox?.id).toBe("notification-inbox");
+  });
+
+  it("fails sendWaitlistInvite when the waitlist Email template is missing", async () => {
+    const service = new EmailService({
+      templates: authTemplates,
+      appConfig: {
+        urls: {
+          web: "http://localhost:5173",
+        },
+      },
+      emailConfig: {
+        mode: "log",
+        from: "no-reply@example.com",
+      },
+    });
+
+    const result = await service.sendWaitlistInvite("person@example.com", "abc123");
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("INTERNAL_SERVER_ERROR");
+      expect(result.error.message).toContain("waitlistInvite");
     }
   });
 });
