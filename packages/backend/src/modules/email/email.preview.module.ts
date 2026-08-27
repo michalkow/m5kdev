@@ -23,16 +23,16 @@ function getRecipients(email: Pick<StoredEmailSummary, "to">) {
   return Array.isArray(email.to) ? email.to.join(", ") : email.to;
 }
 
-function renderInbox(emails: StoredEmailSummary[]) {
+function renderInbox(emails: StoredEmailSummary[], mountPath: string) {
   const rows = emails
     .map(
       (email) => `
         <tr>
-          <td><a href="/__emails/${escapeHtml(email.id)}">${escapeHtml(email.subject)}</a></td>
+          <td><a href="${escapeHtml(mountPath)}/${escapeHtml(email.id)}">${escapeHtml(email.subject)}</a></td>
           <td>${escapeHtml(email.templateId)}</td>
           <td>${escapeHtml(getRecipients(email))}</td>
           <td>${escapeHtml(email.createdAt)}</td>
-          <td><a href="/__emails/${escapeHtml(email.id)}.json">json</a></td>
+          <td><a href="${escapeHtml(mountPath)}/${escapeHtml(email.id)}.json">json</a></td>
         </tr>`
     )
     .join("");
@@ -66,7 +66,7 @@ function renderInbox(emails: StoredEmailSummary[]) {
 </html>`;
 }
 
-function renderEmailPreview(email: StoredEmail) {
+function renderEmailPreview(email: StoredEmail, mountPath: string) {
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -89,12 +89,12 @@ function renderEmailPreview(email: StoredEmail) {
         <dt>Template</dt><dd>${escapeHtml(email.templateId)}</dd>
         <dt>To</dt><dd>${escapeHtml(getRecipients(email))}</dd>
         <dt>Created</dt><dd>${escapeHtml(email.createdAt)}</dd>
-        <dt>Raw</dt><dd><a href="/__emails/${escapeHtml(email.id)}/raw.html">raw.html</a> · <a href="/__emails/${escapeHtml(email.id)}.json">json</a></dd>
+        <dt>Raw</dt><dd><a href="${escapeHtml(mountPath)}/${escapeHtml(email.id)}/raw.html">raw.html</a> · <a href="${escapeHtml(mountPath)}/${escapeHtml(email.id)}.json">json</a></dd>
       </dl>
     </header>
     ${
       email.html
-        ? `<iframe title="Rendered email" src="/__emails/${escapeHtml(email.id)}/raw.html"></iframe>`
+        ? `<iframe title="Rendered email" src="${escapeHtml(mountPath)}/${escapeHtml(email.id)}/raw.html"></iframe>`
         : '<div class="missing">This stored email did not include rendered HTML.</div>'
     }
   </body>
@@ -129,11 +129,15 @@ export class EmailPreviewModule extends BaseModule<
 
   override express({ deps, infra }: ModuleExpressContext<EmailPreviewModuleDeps>) {
     const emailService = deps.email.services.email as EmailService;
+    if (emailService.mode !== "store" || process.env.NODE_ENV === "production") {
+      return;
+    }
+
     const router = infra.express;
 
     router.get(this.mountPath, async (_req: Request, res: Response) => {
       const emails = await emailService.listStoredEmails();
-      res.type("html").send(renderInbox(emails));
+      res.type("html").send(renderInbox(emails, this.mountPath));
     });
 
     if (this.allowDelete) {
@@ -181,7 +185,7 @@ export class EmailPreviewModule extends BaseModule<
         res.status(404).type("text/plain").send("Email not found");
         return;
       }
-      res.type("html").send(renderEmailPreview(email));
+      res.type("html").send(renderEmailPreview(email, this.mountPath));
     });
   }
 }
