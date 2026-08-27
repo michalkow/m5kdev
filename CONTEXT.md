@@ -91,8 +91,8 @@ A Kernel-owned, one-way HTTP Server-Sent Event that a resource was created, upda
 _Avoid_: organization-addressed fan-out; WebSocket; Subscription (that is Billing); Notification (that may consume one); Action (that is Grant); Inbound callback; Backend Module
 
 **Core Module**:
-A Backend Module that ships in the Kernel package. Apps may omit it from `createBackendApp`. Core set: AI, Auth, Billing, Connection, Email (`EmailModule`), File, Notification, Recurrence, Tag, Inbound callback, Workflow. `@m5kdev/email` is React Email chrome, not EmailModule.
-_Avoid_: Optional Backend Module; putting Core Auth/Billing/File into `module-*` packages
+A Backend Module that ships in the Kernel package. Apps may omit it from `createBackendApp`. Core set: AI, Auth, Billing, Connection, EmailModule, File, Notification, Recurrence, Tag, Inbound callback, Workflow. `@m5kdev/email` is React Email chrome, not EmailModule. EmailPreviewModule is a Kernel-exported helper, not a Core Module.
+_Avoid_: Optional Backend Module; putting Core Auth/Billing/File into `module-*` packages; treating EmailPreviewModule as Core
 
 **Optional Backend Module**:
 A Backend Module published as `@m5kdev/module-<name>`: Clay, Docx, Pdf, Social, Video. `create-m5kdev` never adds these packages. When an app depends on one, the pin belongs in `catalogs.m5kdev`. At 1.0 they are experimental: lockstep Semver with the Kernel, quality not guaranteed. Shared contracts/UI for those slices, if added, live in the Optional package — not commons/frontend/web-ui.
@@ -200,9 +200,17 @@ _Avoid_: Workflow, cron (that is Workflow), schedule
 A User's push endpoint (web, iOS, Android). Personal; keyed by UserId, not MemberId. Web push and mobile push (iOS+Android) are different delivery Channels that use Devices.
 _Avoid_: Notification (that is the inbox instance)
 
+**EmailModule**:
+The Core Module that renders registered Email templates and sends them through Resend. 1.0 apps register it with Auth (Auth depends on it). Not a Notification, not a Channel, not `@m5kdev/email` chrome. Notification may call it to deliver the email Channel; EmailModule does not own inbox or Channel policy.
+_Avoid_: Email (the address or the Channel); Notification; the `@m5kdev/email` package; EmailModule without Auth as a 1.0 composition
+
+**Email template**:
+A named React Email document registered on EmailModule and selected by key at send time.
+_Avoid_: Notification kind; chrome; CLI Template
+
 **Notification kind**:
 A developer-declared class of Notifications, listed in the app Shared contract. Mute and Channel preferences apply to the kind, not to a single instance.
-_Avoid_: Notification (that is the instance); template (that is EmailModule); a kinds table as the source of truth
+_Avoid_: Notification (that is the instance); Email template; a kinds table as the source of truth
 
 **Channel**:
 A delivery means for a Notification: in-app, web push, mobile push, or email. In-app is visibility in the inbox, not whether the instance exists. Server event is not a Channel; creating a Notification emits a Server event addressed to that UserId.
