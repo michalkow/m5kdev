@@ -28,6 +28,28 @@ CREATE TABLE `accounts` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE TABLE `ai_usage` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text,
+	`member_id` text,
+	`team_id` text,
+	`organization_id` text,
+	`feature` text NOT NULL,
+	`provider` text NOT NULL,
+	`model` text NOT NULL,
+	`input_tokens` integer,
+	`output_tokens` integer,
+	`total_tokens` integer,
+	`cost` real,
+	`trace_id` text,
+	`created_at` integer NOT NULL,
+	`metadata` text,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`member_id`) REFERENCES `members`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`team_id`) REFERENCES `teams`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`organization_id`) REFERENCES `organizations`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
 CREATE TABLE `apikeys` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text,
@@ -53,6 +75,44 @@ CREATE TABLE `apikeys` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
+CREATE TABLE `chats` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`title` text,
+	`type` text,
+	`conversation` text,
+	`created_at` integer,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE TABLE `files` (
+	`id` text PRIMARY KEY NOT NULL,
+	`created_at` integer NOT NULL,
+	`updated_at` integer,
+	`deleted_at` integer,
+	`user_id` text,
+	`member_id` text,
+	`organization_id` text,
+	`team_id` text,
+	`bucket` text NOT NULL,
+	`key` text NOT NULL,
+	`original_name` text NOT NULL,
+	`original_extension` text,
+	`content_type` text NOT NULL,
+	`size_bytes` integer,
+	`etag` text,
+	`checksum_sha256` text,
+	`metadata` text,
+	`status` text NOT NULL,
+	`uploaded_at` integer,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`member_id`) REFERENCES `members`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`organization_id`) REFERENCES `organizations`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`team_id`) REFERENCES `teams`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `files_bucket_key_unique` ON `files` (`bucket`,`key`);--> statement-breakpoint
 CREATE TABLE `invitations` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -72,8 +132,11 @@ CREATE TABLE `members` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
 	`user_id` text NOT NULL,
+	`name` text DEFAULT '' NOT NULL,
+	`image` text,
 	`role` text NOT NULL,
 	`created_at` integer NOT NULL,
+	`deleted_at` integer,
 	`preferences` text DEFAULT '{}',
 	`metadata` text DEFAULT '{}',
 	`onboarding` integer,
@@ -98,12 +161,25 @@ CREATE TABLE `notification_devices` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `notification_devices_endpoint_unique` ON `notification_devices` (`endpoint`);--> statement-breakpoint
 CREATE UNIQUE INDEX `notification_devices_token_unique` ON `notification_devices` (`token`);--> statement-breakpoint
+CREATE TABLE `notification_preferences` (
+	`id` text PRIMARY KEY NOT NULL,
+	`member_id` text NOT NULL,
+	`kind` text NOT NULL,
+	`channel` text NOT NULL,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`member_id`) REFERENCES `members`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `notification_preferences_member_kind_channel_unique` ON `notification_preferences` (`member_id`,`kind`,`channel`);--> statement-breakpoint
 CREATE TABLE `notification_send_logs` (
 	`id` text PRIMARY KEY NOT NULL,
 	`batch_id` text NOT NULL,
+	`notification_id` text NOT NULL,
 	`user_id` text NOT NULL,
-	`device_id` text NOT NULL,
-	`provider` text NOT NULL,
+	`device_id` text,
+	`channel` text NOT NULL,
+	`provider` text,
 	`title` text NOT NULL,
 	`body` text NOT NULL,
 	`data` text,
@@ -112,8 +188,29 @@ CREATE TABLE `notification_send_logs` (
 	`job_id` text,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`notification_id`) REFERENCES `notifications`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`device_id`) REFERENCES `notification_devices`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`device_id`) REFERENCES `notification_devices`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
+CREATE TABLE `notifications` (
+	`id` text PRIMARY KEY NOT NULL,
+	`member_id` text NOT NULL,
+	`user_id` text NOT NULL,
+	`kind` text NOT NULL,
+	`title` text NOT NULL,
+	`body` text NOT NULL,
+	`data` text,
+	`visible_in_inbox` integer DEFAULT false NOT NULL,
+	`armed_channels` text DEFAULT '[]' NOT NULL,
+	`web_pushed_at` integer,
+	`mobile_pushed_at` integer,
+	`emailed_at` integer,
+	`read_at` integer,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`member_id`) REFERENCES `members`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
 CREATE TABLE `organizations` (
@@ -136,6 +233,7 @@ CREATE UNIQUE INDEX `organizations_slug_unique` ON `organizations` (`slug`);--> 
 CREATE TABLE `posts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`author_user_id` text,
+	`member_id` text,
 	`organization_id` text,
 	`team_id` text,
 	`title` text NOT NULL,
@@ -148,6 +246,7 @@ CREATE TABLE `posts` (
 	`updated_at` integer,
 	`deleted_at` integer,
 	FOREIGN KEY (`author_user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`member_id`) REFERENCES `members`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`organization_id`) REFERENCES `organizations`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`team_id`) REFERENCES `teams`(`id`) ON UPDATE no action ON DELETE set null
 );

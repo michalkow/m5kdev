@@ -7,7 +7,7 @@ import { AppSidebarHeader } from "@m5kdev/web-ui/modules/app/components/AppSideb
 import { AppSidebarUser } from "@m5kdev/web-ui/modules/app/components/AppSidebarUser";
 import { AuthOrganizationSelect } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationSelect";
 import { AuthUtilityImpersonationBanner } from "@m5kdev/web-ui/modules/auth/components/AuthUtilityImpersonationBanner";
-import { NotificationInbox } from "@m5kdev/web-ui/modules/notification/components/NotificationInbox";
+import { NotificationSidebarInbox } from "@m5kdev/web-ui/modules/notification/components/NotificationSidebarInbox";
 import { APP_NAME } from "@starter-app/shared/modules/app/app.constants";
 import { BellIcon, FileIcon, UsersIcon } from "lucide-react";
 // m5k:ai:start
@@ -39,19 +39,12 @@ export function Layout() {
 
   return (
     <AppShell
-      header={
-        <>
-          <AuthUtilityImpersonationBanner />
-          <div className="flex h-12 shrink-0 items-center justify-end gap-2 border-b border-border px-4">
-            <NotificationInbox />
-            <StarterWebPush />
-          </div>
-        </>
-      }
+      header={<AuthUtilityImpersonationBanner />}
       sidebar={{
         header: <AppSidebarHeader logo={{ src: "/logo.svg", alt: APP_NAME }} title={APP_NAME} />,
         content: (
           <>
+            <NotificationSidebarInbox enablePush={<StarterWebPush />} />
             <div className="px-2 group-data-[collapsible=icon]:hidden">
               <AuthOrganizationSelect />
             </div>

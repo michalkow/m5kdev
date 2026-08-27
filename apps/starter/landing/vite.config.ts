@@ -18,8 +18,7 @@ export default defineConfig({
     dedupe: ["react", "react-dom", "react-router"],
   },
   envDir: "../shared",
-  preview: {
-    host: "0.0.0.0",
-    port: 8080,
+  server: {
+    port: 5174,
   },
 });

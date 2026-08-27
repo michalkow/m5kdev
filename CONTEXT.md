@@ -170,6 +170,18 @@ _Avoid_: Managed catalog (that is the app’s enrolled pin set); the stack works
 A third-party whose types cross the app / `@m5kdev/*` package boundary. Closed set: `drizzle-orm`, `drizzle-zod`, `zod`, `neverthrow`, `@trpc/server`, `@trpc/client`, `react`, `react-dom`, `better-auth`, `express`, `@heroui/react`, `nuqs`. Published packages declare them as peers so the app and Kernel share one physical copy.
 _Avoid_: nested Kernel deps (pino, BullMQ, AWS, OTEL exporters); treating OpenTelemetry as an app-facing peer
 
+**Frontend**:
+The `@m5kdev/frontend` package: platform-agnostic React providers and data hooks, importable from the Webapp and Expo.
+_Avoid_: Frontend Module; Web UI; visual chrome; browser-only APIs (HeroUI, React Router, nuqs, Web Push)
+
+**Web UI**:
+The `@m5kdev/web-ui` package: browser Webapp chrome (HeroUI, React Router, nuqs) and browser APIs.
+_Avoid_: Frontend; Expo importing this package; treating a `modules/` folder as a registerable Backend Module
+
+**Expo client**:
+The `@m5kdev/expo` package: Expo-only adapters (native push). The Starter Expo app may import it; Frontend stays platform-agnostic.
+_Avoid_: the Starter Expo app (`apps/*/expo`); putting Expo APIs in Frontend or Web UI
+
 ### Product surfaces
 
 **Landing**:
@@ -189,7 +201,7 @@ A User's push endpoint (web, iOS, Android). Personal; keyed by UserId, not Membe
 _Avoid_: Notification (that is the inbox instance)
 
 **Notification kind**:
-A developer-declared class of Notifications, listed in the app Shared contract. User mute and Channel preferences apply to the kind, not to a single instance.
+A developer-declared class of Notifications, listed in the app Shared contract. Mute and Channel preferences apply to the kind, not to a single instance.
 _Avoid_: Notification (that is the instance); template (that is EmailModule); a kinds table as the source of truth
 
 **Channel**:
@@ -197,16 +209,16 @@ A delivery means for a Notification: in-app, web push, mobile push, or email. In
 _Avoid_: Server event; Device (that is the endpoint web/mobile push uses); treating SSE mute as a Channel
 
 **Notification**:
-A persisted inbox instance owned by a User and classified by a Notification kind. Always inserted on send (orchestration), even when in-app is muted. Inbox visibility is decided at send from the in-app Channel; later preference changes do not hide or reveal existing instances. Unread until the User marks it read. Personal; keyed by UserId. First successful web push, mobile push, and email are stamped on the instance; every outbound attempt is a send log.
-_Avoid_: Device, Email, push, send log, Server event
+A persisted inbox instance owned by a Member and classified by a Notification kind. Always inserted on send (orchestration), even when in-app is muted. Inbox visibility is decided at send from the in-app Channel; later preference changes do not hide or reveal existing instances. Unread until the Member marks it read. Org-scoped; keyed by MemberId. The inbox is that Membership only (the active Organization), not a merge across Organizations. First successful web push, mobile push, and email are stamped on the instance; every outbound attempt is a send log.
+_Avoid_: UserId as the ownership key; Device, Email, push, send log, Server event
 
 **Send log**:
-An outbound delivery attempt for a Notification on web push, mobile push, or email (not in-app). User-readable. One attempt per Device or email send, not the inbox instance.
+An outbound delivery attempt for a Notification on web push, mobile push, or email (not in-app). Readable with that Notification. One attempt per Device or email send, not the inbox instance.
 _Avoid_: Notification (the instance); Device (the endpoint)
 
 **Notification preference**:
-A User's off switch for a Channel of a Notification kind. Offered Channels are that kind's default Channels and start on. Missing preference means on. User preference wins over the Channels named in send.
-_Avoid_: browser or OS push permission; Device enabled flag
+A Member's off switch for a Channel of a Notification kind. Offered Channels are that kind's default Channels and start on. Missing preference means on. Preference wins over the Channels named in send. Distinct per Membership, so the same User can mute a Channel in one Organization and leave it on in another.
+_Avoid_: User-wide mute; browser or OS push permission; Device enabled flag
 
 **File**:
 An S3 or local object, optionally inventoried as a `files` row. Upload status: `PENDING` | `UPLOADED` | `DELETED` | `FAILED`. Org-scoped Files stamp MemberId.

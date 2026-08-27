@@ -282,6 +282,7 @@
   "notification.inbox.title": "Notifications",
   "notification.inbox.empty": "No notifications yet",
   "notification.inbox.markRead": "Mark as read",
+  "notification.inbox.triggerAriaUnread": "{{count}} unread notifications",
   "notification.preferences.empty": "No notification kinds to configure",
   "notification.preferences.noOrganization": "Select an organization to manage notification preferences",
   "notification.channel.inApp": "In-app",
