@@ -96,13 +96,18 @@ an organization (it does not remap to `memberId`).
 
 Keep `userId` (and user-level grants) for resources that are not org tenancy:
 
-- Billing / Stripe customer linkage
-- Notification devices
+- Billing / Stripe customer linkage (`subscriptions.referenceId`)
+- Notification **Devices** (web / iOS / Android push endpoints)
 - OAuth accounts and sessions
 - User-global preferences that are intentionally cross-org
 
 Do not put those on `memberId` unless the product truly wants them to reset or
 fork per organization.
+
+Notification **inbox instances** and kind × Channel **preferences** are
+Member-owned. The same User can mute a Channel in one Organization and leave it
+on in another; Devices are still shared across Organizations. See
+[Notification](/modules/notification).
 
 ## Membership lifecycle
 

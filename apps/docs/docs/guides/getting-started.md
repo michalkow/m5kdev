@@ -8,12 +8,14 @@ Scaffold an app with the CLI, then read by [module](/modules) or
 [package](/packages).
 
 ```sh
-pnpm dlx create-m5kdev@0.34.0
+pnpm dlx create-m5kdev@0.35.0
 ```
 
 `--yes` scaffolds web with always-on modules only. Interactive create prompts
 for Backend Modules (`files`, `workflows`, `ai`, …). Full command list:
-[CLI package](/packages/cli). Existing apps: [0.34.0 upgrades](/#upgrade-0-34-0).
+[CLI package](/packages/cli). Existing apps:
+[0.34.0 upgrades](/#upgrade-0-34-0),
+[0.35.0 upgrades](/#upgrade-0-35-0).
 
 ## Docs site
 

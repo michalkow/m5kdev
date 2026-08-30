@@ -10,7 +10,8 @@ and the repo's shared frontend hooks.
 ## Use it for
 
 - Shared app shell components.
-- Auth, billing, and AI Conversation route components.
+- Auth, billing, Notification inbox/preferences, and AI Conversation route components.
+- Browser Web Push (`useWebPush`).
 - Table controls, `nuqs` URL-state hooks, and reusable UI primitives.
 
 ## Module docs
@@ -19,6 +20,7 @@ Start with these module pages:
 
 - [Auth](/modules/auth)
 - [Billing](/modules/billing)
+- [Notification](/modules/notification)
 - [AI](/modules/ai)
 - [Table](/modules/table)
 - [App shell](/modules/app)
@@ -27,6 +29,7 @@ Start with these module pages:
 
 Prefer HeroUI components and shared UI primitives before adding local duplicates
 inside an app. Keep browser-only adapters here instead of `@m5kdev/frontend`.
+Do not import this package from Expo.
 
 See [Frontend and Web UI split migration](/guides/frontend-web-ui-split) for
 the table hook import map.

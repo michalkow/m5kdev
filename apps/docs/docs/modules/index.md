@@ -35,7 +35,7 @@ requires Email.
 | [File](/modules/file) | commons, backend, frontend | Browser uploads, presigned S3 URLs, upload inventory, download resolution |
 | [AI](/modules/ai) | commons, backend | Mastra agents, OpenRouter generation, embeddings, image generation, usage tracking |
 | [Workflow](/modules/workflow) | commons, backend | BullMQ jobs and cron schedules with persisted run tracking |
-| [Notification](/modules/notification) | commons, backend | Web Push / APNs / FCM delivery with device registry and send logs |
+| [Notification](/modules/notification) | commons, backend, frontend, web-ui, expo | Membership inbox, kind × Channel mutes, delayed web/mobile/email; Devices stay User-owned |
 | [Email](/modules/email) | backend | `EmailModule` send orchestration over Resend; EmailPreview is a store-mode non-production helper |
 | [Recurrence](/modules/recurrence) | commons, backend | Recurring schedules and rules with permissioned CRUD |
 | [Tag](/modules/tag) | commons, backend | Polymorphic tags and taggings for any resource type |
