@@ -25,9 +25,10 @@ That choice is what lets the framework go further than wiring:
   build on top instead of designing the same tables for the tenth time.
 - **It ships the common business logic of AI SaaS apps.** Waitlists and invite
   codes, organization membership and roles, Stripe subscription sync, presigned
-  S3 uploads, web push delivery, background jobs with cron schedules, LLM calls
-  with usage tracking — the services every AI SaaS ends up writing are already
-  implemented as composable backend modules.
+  S3 uploads, Membership inboxes with delayed web/mobile/email delivery,
+  background jobs with cron schedules, LLM calls with usage tracking — the
+  services every AI SaaS ends up writing are already implemented as composable
+  backend modules.
 - **Extension over abstraction.** Modules are class-based and extensible; apps
   override grants, hooks, and services rather than swapping out infrastructure.
 
@@ -44,7 +45,7 @@ That choice is what lets the framework go further than wiring:
 | Jobs / queues | BullMQ on Redis |
 | Email | Resend + React Email templates |
 | Payments | Stripe |
-| File storage | AWS S3 (presigned uploads) + local uploads |
+| File storage | AWS S3 (presigned uploads) + local uploads with inventory |
 | AI | Mastra agents, OpenRouter models, Replicate, Ideogram |
 | Error handling | `neverthrow` results (`ServerResult` / `ServerResultAsync`) |
 | Frontend | React 19, react-router v7, TanStack Query over tRPC |
@@ -113,6 +114,7 @@ code should live.
 - [Frontend package](/packages/frontend) owns shared React hooks and client-side
   module logic.
 - [Web UI package](/packages/web-ui) owns reusable HeroUI/Tailwind components.
+- [Expo package](/packages/expo) owns Expo-only adapters (native push).
 - [Commons package](/packages/commons) owns shared constants, schemas, and types.
 - [CLI package](/packages/cli) scaffolds apps and runs `init` / `doctor` / `update`.
 

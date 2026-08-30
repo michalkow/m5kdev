@@ -4,8 +4,9 @@ sidebar_position: 1
 
 # File module
 
-The file module covers browser uploads, S3 presigned URLs, upload inventory, and
-download URL resolution.
+The file module covers browser uploads, S3 presigned URLs, upload inventory
+(including local disk rows), and download URL resolution. AWS is not required
+at boot; the S3 client is created on first S3 call.
 
 ## Package map
 

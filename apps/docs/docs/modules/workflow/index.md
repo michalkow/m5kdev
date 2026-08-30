@@ -52,21 +52,38 @@ new WorkflowModule({
 
 ## Defining jobs
 
-Modules and apps register jobs against the workflow service in their
-`workflows(...)` hook. A job config declares its `name`, target `queue`,
-`retries`, `timeout`, an optional deterministic `id(payload)`, and `meta(payload)`
-for attribution (`userId`, `tags`). Jobs can be `awaitable` when the caller needs
-the result. Cron schedules are declared with `workflow.cron(config)`, which
-upserts a BullMQ job scheduler.
+Define jobs as **service fields**. A job config declares its `name`, target
+`queue`, `retries`, `timeout`, an optional deterministic `id(payload)`, and
+`meta(payload)` for attribution (`userId`, `tags`). Jobs can be `awaitable`
+when the caller needs the result. Cron schedules are declared with
+`workflow.cron(config)`, which upserts a BullMQ job scheduler.
+
+After services are constructed, the Kernel calls
+`registry.registerService(service)` on every module service. That scan picks up
+fields with `.job().handle()` or `.cron().handle()`. A job or cron **without**
+`.handle()` throws at registration (property name is in the error).
+
+The Kernel still calls each module's `workflows(...)` hook after that scan.
+First-party code uses service fields; use the hook only for extra registration
+that cannot live on a service.
 
 Payload rules (from AGENTS.md): serializable and minimal — ids and typed input,
-never request/session objects. Business logic stays in services; job modules are
-thin glue.
+never request/session objects. Business logic stays in services; job handlers
+are thin glue.
 
-Example from the notification module:
+Example from `NotificationService`:
 
 ```ts
-readonly deliverNotificationJob = this.service.workflow.job({ /* config */ });
+readonly webPushJob = this.service.workflow
+  .job<NotificationServiceJobPayload>({
+    name: "notification.webPush",
+    timeout: 60_000,
+    id: (p) => `web:${p.notificationId}`,
+  })
+  .handle(async (payload) => {
+    const result = await this.deliverWebPush(payload.notificationId);
+    if (result.isErr()) throw new Error(result.error.message);
+  });
 ```
 
 ## Notifying the UI

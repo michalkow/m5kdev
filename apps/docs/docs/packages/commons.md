@@ -20,6 +20,7 @@ Start with these module pages:
 - [File](/modules/file)
 - [Auth](/modules/auth)
 - [Billing](/modules/billing)
+- [Notification](/modules/notification)
 - [Table](/modules/table)
 - [Schemas](/modules/schemas)
 - [Workflow](/modules/workflow)

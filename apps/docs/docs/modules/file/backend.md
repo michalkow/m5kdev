@@ -9,7 +9,9 @@ Backend file support lives in `@m5kdev/backend/modules/file/*`.
 ## Register the module
 
 `FileModule` depends on auth and mounts an Express upload router. The default mount
-path is `/upload`.
+path is `/upload`. The AWS S3 client is constructed **lazily** on first S3 call
+(`FileS3Repository`). Missing `AWS_*` env does not fail boot; S3 operations fail
+when used. Local uploads do not need AWS.
 
 ```ts
 import { createBackendApp } from "@m5kdev/backend/app";
@@ -58,6 +60,12 @@ With the default mount path, the module exposes:
 
 Prefer the inventory-backed routes when the app needs ownership, metadata,
 soft-delete state, or status tracking.
+
+Local `POST /upload/file/:type` also writes an inventory row when the file
+repository is present: `bucket` is `"local"` (`LOCAL_FILE_BUCKET`), status
+`UPLOADED`, and `memberId` is stamped when the actor has an Organization.
+`file.list` is organization-scoped (`organizationProcedure` +
+`addContextFilter(["organization"])`).
 
 ## Service helpers
 

@@ -18,10 +18,10 @@ are **Node.js >= 24**.
 ## Commands
 
 ```sh
-pnpm dlx create-m5kdev@0.34.0 [directory] [create options]
-pnpm dlx create-m5kdev@0.34.0 init [--yes] [--force] [--json]
-pnpm dlx create-m5kdev@0.34.0 doctor [--full] [--json]
-pnpm dlx create-m5kdev@0.34.0 update [--dry-run] [--skip-install] [--json]
+pnpm dlx create-m5kdev@0.35.0 [directory] [create options]
+pnpm dlx create-m5kdev@0.35.0 init [--yes] [--force] [--json]
+pnpm dlx create-m5kdev@0.35.0 doctor [--full] [--json]
+pnpm dlx create-m5kdev@0.35.0 update [--dry-run] [--skip-install] [--json]
 ```
 
 A first positional argument that is not a command is treated as `create`.
@@ -50,7 +50,7 @@ Kernel infrastructure is not a selectable module.
 | `files` | File module + web Files UI |
 | `workflows` | Workflow module + demo job + run-status UI |
 | `ai` | `AIModule` + app-owned Mastra Agent + `/conversation` |
-| `notifications` | Experimental. Notification tables and `NotificationModule` (no extra UI paths) |
+| `notifications` | Experimental. Notification tables, `NotificationModule` + kind catalog, Starter inbox/preferences UI, Expo native Device registration |
 | `billing` | Records the feature id only. Does **not** scaffold `BillingModule` |
 | `tags` / `connect` / `webhook` / `recurrence` | Experimental stubs. Prompt-only; empty template paths |
 

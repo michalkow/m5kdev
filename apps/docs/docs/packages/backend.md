@@ -33,6 +33,28 @@ Mastra helpers and Conversation: [0.34.0 agents](/guides/v0.34.0-mastra-app-owne
 Billing trial warning: [0.34.0 trial email](/guides/v0.34.0-billing-trial-ending-email-migration).
 Catalog pins and boundary peers: [Catalog lockstep](/guides/v0.33.0-catalog-lockstep-migration).
 
+## Database commands
+
+Kernel `runDb` from `@m5kdev/backend/db` owns reset / sync / seed. The app
+supplies App schema and optional seed in server `db.ts`. **Do not import
+`app.ts`** from that file — Database commands must not boot HTTP, Redis, or
+queues.
+
+Starter scripts (from `apps/starter/server`):
+
+```sh
+pnpm --filter ./apps/server drizzle:reset
+pnpm --filter ./apps/server drizzle:sync
+pnpm --filter ./apps/server drizzle:seed
+```
+
+Stop the server first for `file:` databases, or the local-file guard aborts
+(override with `SKIP_DB_GUARD=true` only when you know nothing else holds the
+file). drizzle-kit `generate` / `migrate` / `studio` stay app-owned.
+
+Full upgrade path:
+[Kernel Database commands](/guides/v0.34.0-kernel-database-commands-migration).
+
 ## Package rule
 
 Keep persistence logic in repositories, business logic in services, and transport
