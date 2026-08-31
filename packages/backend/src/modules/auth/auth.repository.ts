@@ -522,6 +522,22 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     return ok(member);
   }
 
+  async findLiveOrganizationMember({
+    organizationId,
+    memberId,
+  }: {
+    organizationId: string;
+    memberId: string;
+  }): ServerResultAsync<OrganizationMemberRow> {
+    const memberResult = await this.throwableQuery(() =>
+      this.selectMemberRows(organizationId, { memberId, limit: 1 })
+    );
+    if (memberResult.isErr()) return err(memberResult.error);
+    const [member] = memberResult.value;
+    if (!member) return this.error("NOT_FOUND", "Member not found");
+    return ok(member);
+  }
+
   async removeOrganizationMember({
     organizationId,
     memberId,

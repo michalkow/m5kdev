@@ -67,6 +67,19 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.cancelOrganizationInvitation(input, ctx));
       }),
 
+    removeOrganizationMember: organizationProcedure
+      .input(invitationSchemas.input.remove)
+      .output(invitationSchemas.output.removed)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.removeOrganizationMember(input, ctx));
+      }),
+
+    leaveOrganization: organizationProcedure
+      .output(invitationSchemas.output.removed)
+      .mutation(async ({ ctx }) => {
+        return handleTRPCResult(await authService.leaveOrganization(undefined, ctx));
+      }),
+
     createInvitationCode: procedure
       .input(waitlistSchemas.input.create)
       .output(waitlistSchemas.output.full)

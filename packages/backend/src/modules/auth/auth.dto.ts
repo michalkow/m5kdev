@@ -237,6 +237,9 @@ export const invitationSchemas = {
       invitationId: z.string(),
       memberId: z.string().nullable(),
     }),
+    removed: z.object({
+      id: z.string(),
+    }),
   },
   input: {
     read: z.object({
@@ -255,6 +258,9 @@ export const invitationSchemas = {
     }),
     cancel: z.object({
       invitationId: z.string(),
+    }),
+    remove: z.object({
+      memberId: z.string(),
     }),
   },
 };

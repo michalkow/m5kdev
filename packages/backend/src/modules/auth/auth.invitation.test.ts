@@ -1021,3 +1021,182 @@ describe("AuthService.inviteOrganizationMember resend and revive", () => {
     expect(invitationCreate).toHaveBeenCalledWith(expect.objectContaining({ memberId: MEMBER_ID }));
   });
 });
+
+describe("AuthService.removeOrganizationMember", () => {
+  function createRemoveAuth(fakes: {
+    findLiveOrganizationMember: AuthOrganizationRepository["findLiveOrganizationMember"];
+    removeOrganizationMember: AuthOrganizationRepository["removeOrganizationMember"];
+    listOrganizationMembers?: AuthOrganizationRepository["listOrganizationMembers"];
+  }): AuthService {
+    return new AuthService(
+      {
+        accountClaim: {} as AuthAccountClaimRepository,
+        user: {} as AuthUserRepository,
+        invitation: {
+          listExpiredPendingByOrganization: jest.fn().mockResolvedValue(ok([])),
+        } as unknown as AuthInvitationRepository,
+        waitlist: {} as AuthWaitlistRepository,
+        organization: {
+          findLiveOrganizationMember: fakes.findLiveOrganizationMember,
+          removeOrganizationMember: fakes.removeOrganizationMember,
+          listOrganizationMembers: fakes.listOrganizationMembers ?? jest.fn(),
+        } as unknown as AuthOrganizationRepository,
+      },
+      { email: {} as EmailService },
+      defaultAuthGrants,
+      createFakeBus()
+    );
+  }
+
+  it("soft-deletes the live Membership", async () => {
+    const findLiveOrganizationMember = jest.fn().mockResolvedValue(
+      ok({
+        id: "member-active",
+        organizationId: ORG_ID,
+        userId: "user-2",
+        role: "member",
+      })
+    );
+    const removeOrganizationMember = jest.fn().mockResolvedValue(ok({ id: "member-active" }));
+    const auth = createRemoveAuth({ findLiveOrganizationMember, removeOrganizationMember });
+
+    const result = await auth.removeOrganizationMember(
+      { memberId: "member-active" },
+      organizationCtx("owner")
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toEqual({ id: "member-active" });
+    }
+    expect(removeOrganizationMember).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      memberId: "member-active",
+    });
+  });
+
+  it("excludes the removed Membership from list Members", async () => {
+    const findLiveOrganizationMember = jest.fn().mockResolvedValue(
+      ok({
+        id: "member-active",
+        organizationId: ORG_ID,
+        userId: "user-2",
+        role: "member",
+      })
+    );
+    const removeOrganizationMember = jest.fn().mockResolvedValue(ok({ id: "member-active" }));
+    const listOrganizationMembers = jest.fn().mockResolvedValue(
+      ok([
+        {
+          id: "member-remaining",
+          organizationId: ORG_ID,
+          userId: "user-1",
+          role: "owner",
+        },
+      ])
+    );
+    const auth = createRemoveAuth({
+      findLiveOrganizationMember,
+      removeOrganizationMember,
+      listOrganizationMembers,
+    });
+
+    await auth.removeOrganizationMember({ memberId: "member-active" }, organizationCtx("owner"));
+    const listed = await auth.listOrganizationMembers(undefined, organizationCtx("owner"));
+
+    expect(listed.isOk()).toBe(true);
+    if (listed.isOk()) {
+      expect(listed.value.map((row) => row.id)).toEqual(["member-remaining"]);
+      expect(listed.value.some((row) => row.id === "member-active")).toBe(false);
+    }
+  });
+
+  it("forbids organization members who cannot manage Members", async () => {
+    const removeOrganizationMember = jest.fn();
+    const auth = createRemoveAuth({
+      findLiveOrganizationMember: jest.fn(),
+      removeOrganizationMember,
+    });
+
+    const result = await auth.removeOrganizationMember(
+      { memberId: "member-active" },
+      organizationCtx("member")
+    );
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("FORBIDDEN");
+    }
+    expect(removeOrganizationMember).not.toHaveBeenCalled();
+  });
+});
+
+describe("AuthService.leaveOrganization", () => {
+  function createLeaveAuth(fakes: {
+    findLiveOrganizationMember: AuthOrganizationRepository["findLiveOrganizationMember"];
+    removeOrganizationMember: AuthOrganizationRepository["removeOrganizationMember"];
+  }): AuthService {
+    return new AuthService(
+      {
+        accountClaim: {} as AuthAccountClaimRepository,
+        user: {} as AuthUserRepository,
+        invitation: {} as AuthInvitationRepository,
+        waitlist: {} as AuthWaitlistRepository,
+        organization: {
+          findLiveOrganizationMember: fakes.findLiveOrganizationMember,
+          removeOrganizationMember: fakes.removeOrganizationMember,
+        } as unknown as AuthOrganizationRepository,
+      },
+      { email: {} as EmailService },
+      defaultAuthGrants,
+      createFakeBus()
+    );
+  }
+
+  it("soft-deletes the current User's Membership", async () => {
+    const findLiveOrganizationMember = jest.fn().mockResolvedValue(
+      ok({
+        id: "member-1",
+        organizationId: ORG_ID,
+        userId: "user-1",
+        role: "member",
+      })
+    );
+    const removeOrganizationMember = jest.fn().mockResolvedValue(ok({ id: "member-1" }));
+    const auth = createLeaveAuth({ findLiveOrganizationMember, removeOrganizationMember });
+
+    const result = await auth.leaveOrganization(undefined, organizationCtx("member"));
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toEqual({ id: "member-1" });
+    }
+    expect(removeOrganizationMember).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      memberId: "member-1",
+    });
+  });
+
+  it("blocks the Owner from leaving", async () => {
+    const removeOrganizationMember = jest.fn();
+    const auth = createLeaveAuth({
+      findLiveOrganizationMember: jest.fn().mockResolvedValue(
+        ok({
+          id: "member-1",
+          organizationId: ORG_ID,
+          userId: "user-1",
+          role: "owner",
+        })
+      ),
+      removeOrganizationMember,
+    });
+
+    const result = await auth.leaveOrganization(undefined, organizationCtx("owner"));
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("BAD_REQUEST");
+    }
+    expect(removeOrganizationMember).not.toHaveBeenCalled();
+  });
+});

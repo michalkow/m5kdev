@@ -1639,6 +1639,44 @@ export class AuthService extends BasePermissionService<
       return this.cancelInvitationSeat(invitation.value);
     });
 
+  removeOrganizationMember = this.procedure("removeOrganizationMember")
+    .input(invitationSchemas.input.remove)
+    .output(invitationSchemas.output.removed)
+    .requireAuth("organization")
+    .access({
+      action: "write",
+      entities: ({ ctx }) => ({
+        organizationId: ctx.actor.organizationId,
+      }),
+    })
+    .handle(async ({ input, ctx }) => {
+      const member = await this.repository.organization.findLiveOrganizationMember({
+        organizationId: ctx.actor.organizationId,
+        memberId: input.memberId,
+      });
+      if (member.isErr()) return err(member.error);
+      if (member.value.role === "owner") {
+        return this.error("BAD_REQUEST", "Cannot remove the Owner");
+      }
+      return this.repository.organization.removeOrganizationMember({
+        organizationId: ctx.actor.organizationId,
+        memberId: input.memberId,
+      });
+    });
+
+  leaveOrganization = this.procedure("leaveOrganization")
+    .output(invitationSchemas.output.removed)
+    .requireAuth("organization")
+    .handle(async ({ ctx }) => {
+      if (ctx.actor.organizationRole === "owner") {
+        return this.error("BAD_REQUEST", "The Owner cannot leave");
+      }
+      return this.repository.organization.removeOrganizationMember({
+        organizationId: ctx.actor.organizationId,
+        memberId: ctx.actor.memberId,
+      });
+    });
+
   // #endregion Invitations
 
   // #region Account Claims

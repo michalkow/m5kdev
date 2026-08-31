@@ -242,31 +242,20 @@ export function AuthOrganizationMembersRoute({
     })
   );
 
-  const removeMemberMutation = useMutation({
-    mutationFn: async ({
-      memberId,
-      organizationId,
-    }: {
-      memberId: string;
-      organizationId: string;
-    }) => {
-      const { error } = await authClient.organization.removeMember({
-        memberIdOrEmail: memberId,
-        organizationId,
-      });
-      if (error) throw new Error(error.message ?? resolvedLabels.removeMemberError);
-    },
-    onSuccess: async () => {
-      await refreshOrganizationQueriesStable();
-      await queryClient.invalidateQueries({
-        queryKey: trpc.auth.listOrganizationMembers.queryKey(),
-      });
-      toast.success(resolvedLabels.removeMemberSuccess);
-    },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : resolvedLabels.removeMemberError);
-    },
-  });
+  const removeMemberMutation = useMutation(
+    trpc.auth.removeOrganizationMember.mutationOptions({
+      onSuccess: async () => {
+        await refreshOrganizationQueriesStable();
+        await queryClient.invalidateQueries({
+          queryKey: trpc.auth.listOrganizationMembers.queryKey(),
+        });
+        toast.success(resolvedLabels.removeMemberSuccess);
+      },
+      onError: (error) => {
+        toast.error(error instanceof Error ? error.message : resolvedLabels.removeMemberError);
+      },
+    })
+  );
 
   const createInvitationMutation = useAuthMemberInvite({
     onSuccess: async () => {
@@ -359,7 +348,7 @@ export function AuthOrganizationMembersRoute({
   const onRemoveMember = useCallback(
     (memberId: string) => {
       if (!canManageOrganization || !activeOrganizationId) return;
-      removeMemberMutation.mutate({ memberId, organizationId: activeOrganizationId });
+      removeMemberMutation.mutate({ memberId });
     },
     [canManageOrganization, activeOrganizationId, removeMemberMutation]
   );
