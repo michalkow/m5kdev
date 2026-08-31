@@ -63,7 +63,7 @@ export const APP_ROLES_CONFIG = defineAuthRoles({
 | --- | --- |
 | `roles` | Canonical role keys for the scope. Used for backend validation and UI option lists. |
 | `managerRoles` | Roles that can manage organization settings, members, and child orgs. Defaults to built-in values when omitted. |
-| `assignableRoles` | Roles shown in org self-service invite/member pickers (`AuthOrganizationMembersRoute`). Defaults to all `roles` when omitted. Platform admin org management (`AuthAdminOrganizationManagement`) always offers every configured `roles` key. |
+| `assignableRoles` | Roles shown in org self-service invite/member pickers (`AuthOrganizationMembersRoute`). Defaults to all `roles` except `owner` when omitted. `normalizeAuthRolesConfig` always strips `owner` from organization assignable roles. Platform admin org management (`AuthAdminOrganizationManagement`) offers configured `roles` keys; Auth refuses granting Owner except transfer or add-member repair. |
 | `defaultRole` | Bootstrap default for new members or pickers. Falls back to the first configured role when omitted or invalid. |
 
 When `managerRoles` or `assignableRoles` reference keys not present in `roles`,

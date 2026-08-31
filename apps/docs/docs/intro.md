@@ -94,6 +94,10 @@ Existing apps should work through these guides (skip any that already apply):
 - [Kernel Fly deploy commands](/guides/v0.35.0-kernel-fly-commands-migration)
 - [Kernel Server events](/guides/v0.35.0-kernel-server-events-migration)
 
+## Upgrading to 0.36.0 {#upgrade-0-36-0}
+
+- [Membership at invite](/guides/v0.36.0-membership-at-invite-migration)
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module

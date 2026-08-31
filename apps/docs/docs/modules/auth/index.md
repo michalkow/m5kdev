@@ -76,6 +76,14 @@ The `auth` router covers, by area:
   `flags` at user, organization, and member scope.
 - **Organizations** — `createOrganization`, `listUserOrganizations`,
   `listChildOrganizations`, `updateChildOrganization`, org preferences/flags.
+- **Members and invitations** — `inviteOrganizationMember`,
+  `listOrganizationMembers`, `updateMemberRole`,
+  `acceptOrganizationInvitation` (authenticated User),
+  `cancelOrganizationInvitation`, `removeOrganizationMember`,
+  `leaveOrganization`. `readInvitation` stays public. There is no
+  `updateInvitationRole`.
+- **Admin Owner** — `transferOrganizationOwner`; add-member may assign Owner
+  only when none exists.
 - **Waitlist** — `joinWaitlist` (public), `validateWaitlistCode` (public),
   `inviteToWaitlist`, `listWaitlist`, plus admin add/invite/remove.
 - **Account claims** — `createAccountClaimCode`, `generateAccountClaimMagicLink`,
@@ -94,7 +102,7 @@ and [Workflow](/modules/workflow). Upgrade:
 ## Frontend
 
 `@m5kdev/frontend` exports the auth client plus hooks: `useSession`,
-`useAuthClient`, `useAuthAdmin`, `useAuthLocale`, `useMemberInvite`,
+`useAuthClient`, `useAuthAdmin`, `useAuthLocale`, `useAuthMemberInvite`,
 `useOrganizationAccess`, `useUserOrganizations`, `useUpdateUser`, and
 `useUpdateUserPreferences`. Wrap the app in `AuthProvider` (composed in
 `Providers.tsx` alongside `AppConfigProvider`).
@@ -104,9 +112,11 @@ and [Workflow](/modules/workflow). Upgrade:
 `@m5kdev/web-ui` ships route-level routers you mount in your app router:
 
 - `AuthPublicRouter` — login, signup, forgot/reset password, waitlist card and
-  code validation, OAuth provider buttons, account claim.
+  code validation, OAuth provider buttons, account claim, and
+  `/organization/accept-invitation` (must stay public so a logged-out invitee
+  can be sent to signup instead of bouncing inside protected routes).
 - `AuthUserRouter` — profile editor, preferences, logout, invite friends.
-- `AuthOrganizationRouter` — org profile, preferences, members, invitations,
+- `AuthOrganizationRouter` — org profile, preferences, members,
   child organizations, org select.
 - `AuthAdminRouter` — user management, organization management, waitlist.
 - Utilities — `AuthUtilityProtectedRoutes`, impersonation banner, locale and
@@ -114,11 +124,19 @@ and [Workflow](/modules/workflow). Upgrade:
 
 ## Membership lifecycle
 
-- Active membership requires `members.deletedAt` to be null.
-- Leave / remove soft-deletes the row and clears active org session fields for
-  that organization.
-- Invite accept or add-member for an existing `(userId, organizationId)` pair
-  revives a soft-deleted membership when present.
+- Invite creates a live Membership (`userId` unset; email and name snapshots)
+  plus an Invitation token with `memberId`. Accept attaches the User to that
+  same row. Signup with an invite must not create a second personal
+  Organization.
+- Active membership requires `members.deletedAt` to be null. Invited Members
+  are not Actors.
+- Leave / remove / invite cancel / lazy expiry soft-delete the row and clear
+  active org session fields for that organization. Re-invite revives
+  `memberId`.
+- Pending tokens without `memberId` are leftovers; accept fails until a new
+  Auth invite. There is no Invitation backfill.
+- Org self-service cannot grant or change Owner. A User-role `admin` transfers
+  Owner (exactly one live Owner) or assigns Owner when there is none.
 - `members.name` mirrors `users.name` while active and remains after leave for
   historical display.
 - `members.image` mirrors `users.image` (including OAuth provider avatars on
@@ -132,6 +150,7 @@ membership as `memberId` (organization and team scopes require it).
 
 - [Organizations and members](/guides/organizations-and-members) (intended usage)
 - [Member ownership migration](/guides/v0.32.0-memberid-ownership-migration)
+- [Membership at invite in 0.36.0](/guides/v0.36.0-membership-at-invite-migration)
 - [User and organization locale migration](/guides/user-org-locale-migration)
 - [Admin create verified user migration](/guides/admin-create-verified-user-migration)
 - [Custom app roles migration](/guides/custom-app-roles-migration)

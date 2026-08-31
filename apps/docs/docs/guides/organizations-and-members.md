@@ -108,8 +108,9 @@ fork per organization.
 
 | Event | Behavior |
 | --- | --- |
-| Join / invite accept | Insert a `members` row, or **revive** a soft-deleted row for the same `(userId, organizationId)` so `memberId` is stable. |
-| Leave / remove | Soft-delete (`deletedAt`); do not hard-delete by default. |
+| Invite | Insert a `members` row with `userId` unset (email / name snapshots), or **revive** a left row for that email so `memberId` is stable. Invitation is the accept token (`memberId` + expiry). |
+| Accept | Attach the User to the **same** Membership. Tokens without `memberId` fail until a new Auth invite (no backfill). |
+| Leave / remove / cancel / expiry | Soft-delete (`deletedAt`); do not hard-delete by default. |
 | Display name / image | `members.name` and `members.image` are snapshots. Active members stay in sync with `users.name` / `users.image` (including OAuth avatars on signup); after leave, the snapshots remain for attribution. |
 | Active session | Soft-deleted memberships cannot be the active organization. Org/team actor scopes require `memberId`. |
 
@@ -130,5 +131,8 @@ See [Kernel infrastructure (Base)](/modules/base) for actors and grants, and the
 
 - [Member ownership migration](/guides/v0.32.0-memberid-ownership-migration) —
   upgrade path for existing apps (schema, backfill, service cutover).
+- [Membership at invite in 0.36.0](/guides/v0.36.0-membership-at-invite-migration) —
+  Membership exists at invite; Auth tRPC for invite/accept/cancel/role/remove;
+  leftover tokens are not backfilled.
 - [Custom app roles migration](/guides/custom-app-roles-migration) — configuring
-  organization and team role keys.
+  organization and team role keys. Owner is not an org-assignable role.
