@@ -30,6 +30,7 @@ import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
 import * as auth from "./auth.db";
 import { createAuthOrganizationInvitationPolicy } from "./auth.organization-invitation-policy";
+import { createAuthUserAdditionalFields } from "./auth.user-additional-fields";
 import {
   attachUserToInvitedMember,
   createOrganizationAndTeam,
@@ -370,63 +371,7 @@ export function createBetterAuth<
           }
         },
       },
-      additionalFields: {
-        onboarding: {
-          type: "number",
-          required: false,
-          defaultValue: null,
-        },
-        // returned: false keeps these out of session responses and the
-        // session cookie cache (4KB limit); read them via auth.service procedures
-        preferences: {
-          type: "string",
-          required: false,
-          defaultValue: null,
-          returned: false,
-        },
-        metadata: {
-          type: "string",
-          required: false,
-          defaultValue: null,
-          returned: false,
-        },
-        flags: {
-          type: "string",
-          required: false,
-          defaultValue: null,
-          returned: false,
-        },
-        stripeCustomerId: {
-          type: "string",
-          required: false,
-          defaultValue: null,
-          input: false,
-        },
-        paymentCustomerId: {
-          type: "string",
-          required: false,
-          defaultValue: null,
-          input: false,
-        },
-        paymentPlanTier: {
-          type: "string",
-          required: false,
-          defaultValue: null,
-          input: false,
-        },
-        paymentPlanExpiresAt: {
-          type: "number",
-          required: false,
-          defaultValue: null,
-          input: false,
-        },
-        locale: {
-          type: "string",
-          required: false,
-          defaultValue: null,
-          input: true,
-        },
-      },
+      additionalFields: createAuthUserAdditionalFields(),
     },
     database: drizzleAdapter(orm, {
       provider: "sqlite",

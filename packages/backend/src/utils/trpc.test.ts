@@ -43,9 +43,6 @@ function createUser(overrides: Partial<User> = {}): User {
     preferences: null,
     flags: null,
     stripeCustomerId: null,
-    paymentCustomerId: null,
-    paymentPlanTier: null,
-    paymentPlanExpiresAt: null,
     ...overrides,
   } as User;
 }

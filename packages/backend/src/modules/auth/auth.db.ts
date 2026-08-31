@@ -19,11 +19,6 @@ export const users = sqliteTable("users", {
   banReason: text("ban_reason"),
   banExpires: integer("ban_expires", { mode: "timestamp" }),
   stripeCustomerId: text("stripe_customer_id").unique(),
-  paymentCustomerId: text("payment_customer_id").unique(),
-  paymentPlanTier: text("payment_plan_tier"),
-  paymentPlanExpiresAt: integer("payment_plan_expires_at", {
-    mode: "timestamp",
-  }),
   preferences: text("preferences", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
   metadata: text("metadata", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
   onboarding: integer("onboarding"),

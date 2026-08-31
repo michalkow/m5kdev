@@ -12,9 +12,6 @@ export const userSchema = z.object({
   banned: z.boolean().nullable(),
   banReason: z.string().nullable(),
   banExpires: z.date().nullable(),
-  paymentCustomerId: z.string().nullable(),
-  paymentPlanTier: z.string().nullable(),
-  paymentPlanExpiresAt: z.date().nullable(),
   preferences: z.string().nullable(),
   onboarding: z.boolean().nullable(),
 });
