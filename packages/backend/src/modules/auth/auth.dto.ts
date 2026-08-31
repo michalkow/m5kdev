@@ -228,6 +228,11 @@ export const invitationSchemas = {
       }),
     }),
     members: organizationMemberListItemSchema.array(),
+    accept: z.object({
+      organizationId: z.string(),
+      memberId: z.string(),
+      role: z.string(),
+    }),
   },
   input: {
     read: z.object({
@@ -240,6 +245,9 @@ export const invitationSchemas = {
     updateMemberRole: z.object({
       memberId: z.string(),
       role: z.string(),
+    }),
+    accept: z.object({
+      id: z.string(),
     }),
   },
 };

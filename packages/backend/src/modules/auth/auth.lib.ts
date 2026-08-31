@@ -30,6 +30,7 @@ import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
 import * as auth from "./auth.db";
 import {
+  attachUserToInvitedMember,
   createOrganizationAndTeam,
   getActiveOrganizationAndTeam,
   getNewOrganization,
@@ -675,6 +676,11 @@ export function createBetterAuth<
                   message,
                 });
               }
+              if (!invitation.memberId) {
+                const message = "Invitation has no Membership";
+                logger.error({ message, organizationInvitationCode });
+                throw new APIError("BAD_REQUEST", { message });
+              }
               const userWithLocale = await withResolvedLocale(
                 user,
                 ctx,
@@ -760,50 +766,30 @@ export function createBetterAuth<
                 logger.error({ message, organizationInvitationCode });
                 throw new APIError("NOT_FOUND", { message });
               }
-
-              const [existingMember] = await orm
-                .select()
-                .from(schema.members)
-                .where(
-                  and(
-                    eq(schema.members.userId, user.id),
-                    eq(schema.members.organizationId, invitation.organizationId)
-                  )
-                )
-                .limit(1);
-
-              let member = existingMember;
-              if (existingMember?.deletedAt) {
-                const [revived] = await orm
-                  .update(schema.members)
-                  .set({
-                    deletedAt: null,
-                    role: invitation.role || "member",
-                    name: user.name,
-                    email: user.email,
-                    image: user.image ?? null,
-                  })
-                  .where(eq(schema.members.id, existingMember.id))
-                  .returning();
-                member = revived;
-              } else if (!existingMember) {
-                const [inserted] = await orm
-                  .insert(schema.members)
-                  .values({
-                    userId: user.id,
-                    organizationId: invitation.organizationId,
-                    role: invitation.role || "member",
-                    name: user.name,
-                    email: user.email,
-                    image: user.image ?? null,
-                  })
-                  .returning();
-                member = inserted;
+              if (!invitation.memberId) {
+                const message = "Invitation has no Membership";
+                logger.error({ message, organizationInvitationCode });
+                throw new APIError("BAD_REQUEST", { message });
               }
-              if (!member) {
-                const message = "Failed to add user to organization";
-                logger.error({ message });
-                throw new APIError("INTERNAL_SERVER_ERROR", { message });
+
+              const attached = await attachUserToInvitedMember(orm, {
+                memberId: invitation.memberId,
+                organizationId: invitation.organizationId,
+                userId: user.id,
+                name: typeof user.name === "string" ? user.name : "",
+                email: user.email,
+                image: typeof user.image === "string" ? user.image : null,
+              });
+              if (!attached.ok) {
+                const message =
+                  attached.reason === "conflict"
+                    ? "Membership already belongs to another User"
+                    : "Failed to add user to organization";
+                logger.error({ message, memberId: invitation.memberId });
+                throw new APIError(
+                  attached.reason === "conflict" ? "BAD_REQUEST" : "INTERNAL_SERVER_ERROR",
+                  { message }
+                );
               }
               await orm
                 .update(schema.invitations)

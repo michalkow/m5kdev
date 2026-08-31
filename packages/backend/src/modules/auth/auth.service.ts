@@ -1399,6 +1399,74 @@ export class AuthService extends BasePermissionService<
       return this.repository.organization.listOrganizationMembers(ctx.actor.organizationId);
     });
 
+  acceptOrganizationInvitation = this.procedure("acceptOrganizationInvitation")
+    .input(invitationSchemas.input.accept)
+    .output(invitationSchemas.output.accept)
+    .requireAuth("user")
+    .handle(async ({ input, ctx }) => {
+      const invitation = await this.repository.invitation.findById(input.id);
+      if (invitation.isErr()) return err(invitation.error);
+      if (!invitation.value) return this.error("NOT_FOUND", "Invitation not found");
+
+      if (invitation.value.status !== "pending") {
+        return this.error("BAD_REQUEST", "Invitation is not pending");
+      }
+      if (invitation.value.expiresAt.getTime() <= Date.now()) {
+        return this.error("BAD_REQUEST", "Invitation has expired");
+      }
+      if (!invitation.value.memberId) {
+        return this.error("BAD_REQUEST", "Invitation has no Membership");
+      }
+
+      const user = await this.repository.user.findById(ctx.actor.userId);
+      if (user.isErr()) return err(user.error);
+      if (!user.value) return this.error("NOT_FOUND", "User not found");
+      const email = (ctx.user?.email ?? user.value.email).trim().toLowerCase();
+      if (invitation.value.email.trim().toLowerCase() !== email) {
+        return this.error("FORBIDDEN", "Invitation email does not match");
+      }
+
+      const member = await this.repository.organization.attachUserToInvitedMember({
+        memberId: invitation.value.memberId,
+        organizationId: invitation.value.organizationId,
+        userId: ctx.actor.userId,
+        name: user.value.name,
+        email: user.value.email,
+        image: user.value.image ?? null,
+      });
+      if (member.isErr()) return err(member.error);
+
+      const accepted = await this.repository.invitation.update({
+        id: invitation.value.id,
+        status: "accepted",
+      });
+      if (accepted.isErr()) return err(accepted.error);
+
+      const organization = await this.repository.organization.findById(
+        invitation.value.organizationId,
+        undefined,
+        ["id", "type"]
+      );
+      if (organization.isErr()) return err(organization.error);
+
+      const sessionId = ctx.session?.id;
+      const activated = await this.repository.organization.activateOrganizationSession({
+        sessionId,
+        userId: ctx.actor.userId,
+        organizationId: invitation.value.organizationId,
+        role: member.value.role,
+        memberId: member.value.id,
+        organizationType: organization.value?.type ?? null,
+      });
+      if (activated.isErr()) return err(activated.error);
+
+      return ok({
+        organizationId: invitation.value.organizationId,
+        memberId: member.value.id,
+        role: member.value.role,
+      });
+    });
+
   // #endregion Invitations
 
   // #region Account Claims

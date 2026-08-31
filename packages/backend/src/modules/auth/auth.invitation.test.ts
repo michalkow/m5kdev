@@ -36,11 +36,23 @@ function pendingInvitation(overrides: Record<string, unknown> = {}) {
     role: "member",
     status: "pending",
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    expiresAt: new Date("2026-01-08T00:00:00.000Z"),
+    expiresAt: new Date("2099-01-08T00:00:00.000Z"),
     inviterId: "user-owner",
     memberId: "member-invited",
     ...overrides,
   };
+}
+
+function userCtx(overrides: { email?: string } = {}) {
+  const email = overrides.email ?? "invitee@example.com";
+  return {
+    actor: createServiceActor({
+      userId: "user-invitee",
+      userRole: "user",
+    }),
+    user: { id: "user-invitee", email, name: "Ivy", image: "https://img/ivy.png" },
+    session: { id: "session-1", userId: "user-invitee" },
+  } as never;
 }
 
 function organizationCtx(role: string) {
@@ -483,5 +495,181 @@ describe("AuthService.listOrganizationMembers", () => {
       expect(result.value[1]?.userId).toBeNull();
     }
     expect(listOrganizationMembers).toHaveBeenCalledWith(ORG_ID);
+  });
+});
+
+describe("AuthService.acceptOrganizationInvitation", () => {
+  function createAcceptAuth(fakes: {
+    findById: AuthInvitationRepository["findById"];
+    invitationUpdate: AuthInvitationRepository["update"];
+    attachUserToInvitedMember: AuthOrganizationRepository["attachUserToInvitedMember"];
+    createOrganization: AuthOrganizationRepository["createOrganization"];
+    activateOrganizationSession: AuthOrganizationRepository["activateOrganizationSession"];
+    findOrganization: AuthOrganizationRepository["findById"];
+  }): AuthService {
+    return new AuthService(
+      {
+        accountClaim: {} as AuthAccountClaimRepository,
+        user: {
+          findById: jest.fn().mockResolvedValue(
+            ok({
+              id: "user-invitee",
+              email: "invitee@example.com",
+              name: "Ivy",
+              image: "https://img/ivy.png",
+            })
+          ),
+        } as unknown as AuthUserRepository,
+        invitation: {
+          findById: fakes.findById,
+          update: fakes.invitationUpdate,
+        } as unknown as AuthInvitationRepository,
+        waitlist: {} as AuthWaitlistRepository,
+        organization: {
+          findById: fakes.findOrganization,
+          attachUserToInvitedMember: fakes.attachUserToInvitedMember,
+          createOrganization: fakes.createOrganization,
+          activateOrganizationSession: fakes.activateOrganizationSession,
+        } as unknown as AuthOrganizationRepository,
+      },
+      { email: {} as EmailService },
+      defaultAuthGrants,
+      createFakeBus()
+    );
+  }
+
+  it("attaches the User to the existing Membership and marks the token accepted", async () => {
+    const invitation = pendingInvitation();
+    const findById = jest.fn().mockResolvedValue(ok(invitation));
+    const invitationUpdate = jest.fn().mockResolvedValue(ok({ ...invitation, status: "accepted" }));
+    const attachUserToInvitedMember = jest.fn().mockResolvedValue(
+      ok({
+        id: MEMBER_ID,
+        organizationId: ORG_ID,
+        userId: "user-invitee",
+        role: "member",
+      })
+    );
+    const createOrganization = jest.fn();
+    const activateOrganizationSession = jest.fn().mockResolvedValue(ok(undefined));
+    const findOrganization = jest.fn().mockResolvedValue(ok({ id: ORG_ID, type: "organization" }));
+    const auth = createAcceptAuth({
+      findById,
+      invitationUpdate,
+      attachUserToInvitedMember,
+      createOrganization,
+      activateOrganizationSession,
+      findOrganization,
+    });
+
+    const result = await auth.acceptOrganizationInvitation({ id: INVITATION_ID }, userCtx());
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toEqual({
+        organizationId: ORG_ID,
+        memberId: MEMBER_ID,
+        role: "member",
+      });
+    }
+    expect(attachUserToInvitedMember).toHaveBeenCalledWith({
+      memberId: MEMBER_ID,
+      organizationId: ORG_ID,
+      userId: "user-invitee",
+      name: "Ivy",
+      email: "invitee@example.com",
+      image: "https://img/ivy.png",
+    });
+    expect(invitationUpdate).toHaveBeenCalledWith({ id: INVITATION_ID, status: "accepted" });
+    expect(createOrganization).not.toHaveBeenCalled();
+  });
+
+  it("does not create a second Organization on the signup-with-invite path", async () => {
+    const invitation = pendingInvitation();
+    const createOrganization = jest.fn();
+    const auth = createAcceptAuth({
+      findById: jest.fn().mockResolvedValue(ok(invitation)),
+      invitationUpdate: jest.fn().mockResolvedValue(ok({ ...invitation, status: "accepted" })),
+      attachUserToInvitedMember: jest
+        .fn()
+        .mockResolvedValue(
+          ok({ id: MEMBER_ID, organizationId: ORG_ID, userId: "user-invitee", role: "member" })
+        ),
+      createOrganization,
+      activateOrganizationSession: jest.fn().mockResolvedValue(ok(undefined)),
+      findOrganization: jest.fn().mockResolvedValue(ok({ id: ORG_ID, type: "organization" })),
+    });
+
+    const result = await auth.acceptOrganizationInvitation({ id: INVITATION_ID }, userCtx());
+
+    expect(result.isOk()).toBe(true);
+    expect(createOrganization).not.toHaveBeenCalled();
+  });
+
+  it("rejects a token without memberId", async () => {
+    const attachUserToInvitedMember = jest.fn();
+    const auth = createAcceptAuth({
+      findById: jest.fn().mockResolvedValue(ok(pendingInvitation({ memberId: null }))),
+      invitationUpdate: jest.fn(),
+      attachUserToInvitedMember,
+      createOrganization: jest.fn(),
+      activateOrganizationSession: jest.fn(),
+      findOrganization: jest.fn(),
+    });
+
+    const result = await auth.acceptOrganizationInvitation({ id: INVITATION_ID }, userCtx());
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("BAD_REQUEST");
+    }
+    expect(attachUserToInvitedMember).not.toHaveBeenCalled();
+  });
+
+  it("rejects an expired token", async () => {
+    const attachUserToInvitedMember = jest.fn();
+    const auth = createAcceptAuth({
+      findById: jest
+        .fn()
+        .mockResolvedValue(
+          ok(pendingInvitation({ expiresAt: new Date("2020-01-01T00:00:00.000Z") }))
+        ),
+      invitationUpdate: jest.fn(),
+      attachUserToInvitedMember,
+      createOrganization: jest.fn(),
+      activateOrganizationSession: jest.fn(),
+      findOrganization: jest.fn(),
+    });
+
+    const result = await auth.acceptOrganizationInvitation({ id: INVITATION_ID }, userCtx());
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("BAD_REQUEST");
+    }
+    expect(attachUserToInvitedMember).not.toHaveBeenCalled();
+  });
+
+  it("rejects an email mismatch", async () => {
+    const attachUserToInvitedMember = jest.fn();
+    const auth = createAcceptAuth({
+      findById: jest.fn().mockResolvedValue(ok(pendingInvitation())),
+      invitationUpdate: jest.fn(),
+      attachUserToInvitedMember,
+      createOrganization: jest.fn(),
+      activateOrganizationSession: jest.fn(),
+      findOrganization: jest.fn(),
+    });
+
+    const result = await auth.acceptOrganizationInvitation(
+      { id: INVITATION_ID },
+      userCtx({ email: "other@example.com" })
+    );
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("FORBIDDEN");
+    }
+    expect(attachUserToInvitedMember).not.toHaveBeenCalled();
   });
 });

@@ -12,7 +12,10 @@ import {
   waitlistSchema,
   waitlistSchemas,
 } from "./auth.dto";
-import { softDeleteOrganizationMember } from "./auth.utils";
+import {
+  attachUserToInvitedMember as attachUserToInvitedMemberRow,
+  softDeleteOrganizationMember,
+} from "./auth.utils";
 
 const schema = { ...auth };
 type Schema = typeof schema;
@@ -478,6 +481,89 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     if (removeResult.isErr()) return err(removeResult.error);
     if (!removeResult.value) return this.error("NOT_FOUND", "Member not found");
     return ok(removeResult.value);
+  }
+
+  async attachUserToInvitedMember({
+    memberId,
+    organizationId,
+    userId,
+    name,
+    email,
+    image,
+  }: {
+    memberId: string;
+    organizationId: string;
+    userId: string;
+    name: string;
+    email: string;
+    image: string | null;
+  }): ServerResultAsync<OrganizationMemberRow> {
+    const existingResult = await this.throwableQuery(() =>
+      this.selectMemberRows(organizationId, { memberId, limit: 1 })
+    );
+    if (existingResult.isErr()) return err(existingResult.error);
+    const [existing] = existingResult.value;
+    if (!existing) return this.error("NOT_FOUND", "Member not found");
+
+    const attached = await this.throwableQuery(() =>
+      attachUserToInvitedMemberRow(this.orm, {
+        memberId,
+        organizationId,
+        userId,
+        name,
+        email,
+        image,
+      })
+    );
+    if (attached.isErr()) return err(attached.error);
+    if (!attached.value.ok) {
+      if (attached.value.reason === "conflict") {
+        return this.error("CONFLICT", "Membership already belongs to another User");
+      }
+      return this.error("NOT_FOUND", "Member not found");
+    }
+
+    const memberResult = await this.throwableQuery(() =>
+      this.selectMemberRows(organizationId, { memberId, limit: 1 })
+    );
+    if (memberResult.isErr()) return err(memberResult.error);
+    const [member] = memberResult.value;
+    if (!member) return this.error("NOT_FOUND", "Member not found");
+    return ok(member);
+  }
+
+  async activateOrganizationSession({
+    sessionId,
+    userId,
+    organizationId,
+    role,
+    memberId,
+    organizationType,
+  }: {
+    sessionId?: string;
+    userId: string;
+    organizationId: string;
+    role: string;
+    memberId: string;
+    organizationType: string | null;
+  }): ServerResultAsync<void> {
+    const result = await this.throwableQuery(() =>
+      this.orm
+        .update(this.schema.sessions)
+        .set({
+          activeOrganizationId: organizationId,
+          activeOrganizationRole: role,
+          activeOrganizationMemberId: memberId,
+          activeOrganizationType: organizationType,
+        })
+        .where(
+          sessionId
+            ? eq(this.schema.sessions.id, sessionId)
+            : eq(this.schema.sessions.userId, userId)
+        )
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(undefined);
   }
 }
 

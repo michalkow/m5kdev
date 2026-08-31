@@ -53,6 +53,13 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.listOrganizationMembers(undefined, ctx));
       }),
 
+    acceptOrganizationInvitation: procedure
+      .input(invitationSchemas.input.accept)
+      .output(invitationSchemas.output.accept)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.acceptOrganizationInvitation(input, ctx));
+      }),
+
     createInvitationCode: procedure
       .input(waitlistSchemas.input.create)
       .output(waitlistSchemas.output.full)

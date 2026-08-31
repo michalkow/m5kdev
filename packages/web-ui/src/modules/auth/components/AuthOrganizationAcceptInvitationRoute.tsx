@@ -4,7 +4,7 @@ import { useAppRoles } from "@m5kdev/frontend/modules/app/hooks/useAppRoles";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router";
@@ -32,14 +32,17 @@ export function AuthOrganizationAcceptInvitationRoute({
   const organizationRoles = useAppRoles("organization");
   const resolvedManagerRoles = managerRoles ?? organizationRoles.managerRoles;
   const [searchParams] = useSearchParams();
-  const { data: session, registerSession } = useSession();
+  const { data: session, isLoading, registerSession } = useSession();
   const navigate = useNavigate();
   const invitationId = searchParams.get("id");
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const managerRoleSet = useMemo(() => new Set(resolvedManagerRoles), [resolvedManagerRoles]);
   const trpc = useAppTRPC<BackendTRPCRouter>();
-  const { data: invitationData } = useQuery(
+  const { mutateAsync: acceptOrganizationInvitation } = useMutation(
+    trpc.auth.acceptOrganizationInvitation.mutationOptions()
+  );
+  const { data: invitationData, isError: invitationFailed } = useQuery(
     trpc.auth.readInvitation.queryOptions({ id: invitationId || "" }, { enabled: !!invitationId })
   );
 
@@ -50,6 +53,16 @@ export function AuthOrganizationAcceptInvitationRoute({
       return;
     }
 
+    if (invitationFailed) {
+      setPhase("error");
+      setErrorMessage(t("web-ui:organization.invitation.unableAccept"));
+      return;
+    }
+
+    if (isLoading) {
+      return;
+    }
+
     if (!session && invitationData) {
       const search = new URLSearchParams({
         invitation: invitationId,
@@ -57,7 +70,7 @@ export function AuthOrganizationAcceptInvitationRoute({
       }).toString();
       navigate(`${signupPath}?${search}`, { replace: true });
     }
-  }, [invitationId, signupPath, navigate, session, invitationData, t]);
+  }, [invitationFailed, invitationId, invitationData, isLoading, navigate, session, signupPath, t]);
 
   useEffect(() => {
     if (!session || !invitationId || phase !== "idle") {
@@ -69,16 +82,9 @@ export function AuthOrganizationAcceptInvitationRoute({
     const run = async () => {
       try {
         setPhase("accepting");
-        const { data, error } = await authClient.organization.acceptInvitation({ invitationId });
-        if (error) {
-          throw new Error(error.message ?? t("web-ui:organization.invitation.acceptFailed"));
-        }
-
-        const organizationId =
-          (data as { invitation?: { organizationId?: string } | null } | null)?.invitation
-            ?.organizationId ?? null;
-        const invitationRole =
-          (data as { invitation?: { role?: string } | null } | null)?.invitation?.role ?? "member";
+        const accepted = await acceptOrganizationInvitation({ id: invitationId });
+        const organizationId = accepted.organizationId;
+        const invitationRole = accepted.role;
 
         if (organizationId) {
           const result = await authClient.organization.setActive({ organizationId });
@@ -118,6 +124,7 @@ export function AuthOrganizationAcceptInvitationRoute({
       isMounted = false;
     };
   }, [
+    acceptOrganizationInvitation,
     defaultRedirectPath,
     invitationId,
     managerRedirectPath,

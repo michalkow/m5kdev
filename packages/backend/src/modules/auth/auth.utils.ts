@@ -273,6 +273,63 @@ export async function createOrganizationAndTeam<O extends Orm, S extends Schema>
   });
 }
 
+export async function attachUserToInvitedMember(
+  orm: Orm,
+  {
+    memberId,
+    organizationId,
+    userId,
+    name,
+    email,
+    image,
+  }: {
+    memberId: string;
+    organizationId: string;
+    userId: string;
+    name: string;
+    email: string;
+    image: string | null;
+  }
+): Promise<
+  | { ok: true; member: typeof auth.members.$inferSelect }
+  | { ok: false; reason: "not_found" | "conflict" }
+> {
+  const [existing] = await orm
+    .select()
+    .from(schema.members)
+    .where(
+      and(
+        eq(schema.members.id, memberId),
+        eq(schema.members.organizationId, organizationId),
+        isNull(schema.members.deletedAt)
+      )
+    )
+    .limit(1);
+  if (!existing) return { ok: false, reason: "not_found" };
+  if (existing.userId && existing.userId !== userId) {
+    return { ok: false, reason: "conflict" };
+  }
+
+  const [updated] = await orm
+    .update(schema.members)
+    .set({
+      userId,
+      name,
+      email,
+      image,
+    })
+    .where(
+      and(
+        eq(schema.members.id, memberId),
+        eq(schema.members.organizationId, organizationId),
+        isNull(schema.members.deletedAt)
+      )
+    )
+    .returning();
+  if (!updated) return { ok: false, reason: "not_found" };
+  return { ok: true, member: updated };
+}
+
 export async function syncActiveMemberProfiles(
   orm: Orm,
   userId: string,

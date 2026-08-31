@@ -46,22 +46,14 @@ export default function AcceptInvitationScreen() {
       return;
     }
 
-    authClient.organization
-      .acceptInvitation({ invitationId })
-      .then(async ({ data, error }) => {
-        if (error) {
-          throw new Error(error.message ?? "Unable to accept invitation");
-        }
-
-        const organizationId =
-          (data as { invitation?: { organizationId?: string } | null } | null)?.invitation
-            ?.organizationId ?? null;
-
-        if (organizationId) {
-          const activeResult = await authClient.organization.setActive({ organizationId });
-          if (activeResult.error) {
-            throw new Error(activeResult.error.message ?? "Unable to activate organization");
-          }
+    trpcClient.auth.acceptOrganizationInvitation
+      .mutate({ id: invitationId })
+      .then(async (accepted) => {
+        const activeResult = await authClient.organization.setActive({
+          organizationId: accepted.organizationId,
+        });
+        if (activeResult.error) {
+          throw new Error(activeResult.error.message ?? "Unable to activate organization");
         }
 
         if (!cancelled) {
