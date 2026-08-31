@@ -512,16 +512,20 @@ export function AuthOrganizationMembersRoute({
                       <Table.Cell>{row.displayName}</Table.Cell>
                       <Table.Cell>{row.email}</Table.Cell>
                       <Table.Cell>
-                        <OrganizationRoleSelect
-                          ariaLabel={resolvedLabels.roleFor(row.displayName)}
-                          selectedKey={row.role}
-                          isDisabled={updatingMemberId === row.memberId}
-                          roles={resolvedAssignableRoles}
-                          getRoleLabel={getRoleLabel}
-                          onRoleChange={(role) => {
-                            void onUpdateMemberRole(row.memberId, role);
-                          }}
-                        />
+                        {row.role === "owner" ? (
+                          <span>{getRoleLabel(row.role)}</span>
+                        ) : (
+                          <OrganizationRoleSelect
+                            ariaLabel={resolvedLabels.roleFor(row.displayName)}
+                            selectedKey={row.role}
+                            isDisabled={updatingMemberId === row.memberId}
+                            roles={resolvedAssignableRoles}
+                            getRoleLabel={getRoleLabel}
+                            onRoleChange={(role) => {
+                              void onUpdateMemberRole(row.memberId, role);
+                            }}
+                          />
+                        )}
                       </Table.Cell>
                       <Table.Cell>
                         <Chip
@@ -535,7 +539,7 @@ export function AuthOrganizationMembersRoute({
                         </Chip>
                       </Table.Cell>
                       <Table.Cell className="text-right">
-                        {row.status === "active" ? (
+                        {row.role === "owner" ? null : row.status === "active" ? (
                           <Button
                             size="sm"
                             variant="ghost"

@@ -704,6 +704,16 @@ export class AuthService extends BasePermissionService<
     .handle(async ({ input }) => {
       const roleCheck = this.validateOrganizationRole(input.role);
       if (roleCheck.isErr()) return err(roleCheck.error);
+      if (input.role === "owner") {
+        const owners = await this.repository.organization.listLiveOwners(input.organizationId);
+        if (owners.isErr()) return err(owners.error);
+        if (owners.value.length !== 0) {
+          return this.error(
+            "BAD_REQUEST",
+            "Owner can only be assigned when there is no live Owner"
+          );
+        }
+      }
       return this.repository.organization.addOrganizationMember(input);
     });
 
@@ -720,7 +730,61 @@ export class AuthService extends BasePermissionService<
     .handle(async ({ input }) => {
       const roleCheck = this.validateOrganizationRole(input.role);
       if (roleCheck.isErr()) return err(roleCheck.error);
+      if (input.role === "owner") {
+        return this.error(
+          "BAD_REQUEST",
+          "Cannot assign the Owner role; transfer ownership instead"
+        );
+      }
       return this.repository.organization.updateOrganizationMemberRole(input);
+    });
+
+  transferOrganizationOwner = this.procedure("transferOrganizationOwner")
+    .input(organizationSchemas.input.transferOwner)
+    .output(organizationSchemas.output.transferOwner)
+    .requireAuth("admin")
+    .handle(async ({ input }) => {
+      const target = await this.repository.organization.findLiveOrganizationMember({
+        organizationId: input.organizationId,
+        memberId: input.memberId,
+      });
+      if (target.isErr()) return err(target.error);
+      if (!target.value.userId) {
+        return this.error("BAD_REQUEST", "Owner can only be transferred to an active Member");
+      }
+      if (target.value.role === "owner") {
+        return this.error("BAD_REQUEST", "Member is already the Owner");
+      }
+
+      const owners = await this.repository.organization.listLiveOwners(input.organizationId);
+      if (owners.isErr()) return err(owners.error);
+      if (owners.value.length !== 1) {
+        return this.error(
+          "BAD_REQUEST",
+          "Owner can only be transferred when there is exactly one live Owner"
+        );
+      }
+
+      const [previousOwner] = owners.value;
+      const transferred = await this.repository.organization.transferOrganizationOwner({
+        organizationId: input.organizationId,
+        previousOwnerMemberId: previousOwner.id,
+        previousOwnerUserId: previousOwner.userId,
+        nextOwnerMemberId: target.value.id,
+        nextOwnerUserId: target.value.userId,
+      });
+      if (transferred.isErr()) return err(transferred.error);
+
+      return ok({
+        previousOwner: {
+          id: transferred.value.previousOwner.id,
+          role: transferred.value.previousOwner.role,
+        },
+        owner: {
+          id: transferred.value.owner.id,
+          role: transferred.value.owner.role,
+        },
+      });
     });
 
   removeAdminOrganizationMember = this.procedure("removeAdminOrganizationMember")
@@ -1380,6 +1444,15 @@ export class AuthService extends BasePermissionService<
       }
       const roleCheck = this.validateOrganizationRole(input.role);
       if (roleCheck.isErr()) return err(roleCheck.error);
+
+      const existing = await this.repository.organization.findLiveOrganizationMember({
+        organizationId: ctx.actor.organizationId,
+        memberId: input.memberId,
+      });
+      if (existing.isErr()) return err(existing.error);
+      if (existing.value.role === "owner") {
+        return this.error("BAD_REQUEST", "Cannot change the Owner role");
+      }
 
       const member = await this.repository.organization.updateOrganizationMemberRole({
         organizationId: ctx.actor.organizationId,

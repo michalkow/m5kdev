@@ -21,7 +21,7 @@ import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useRoleLabel } from "@m5kdev/frontend/modules/app/hooks/useRoleLabel";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
-import { Pencil, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import { Crown, Pencil, Plus, Trash2, UserPlus, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -321,6 +321,20 @@ export function AuthAdminOrganizationManagement() {
     })
   );
 
+  const transferOwnerMutation = useMutation(
+    trpc.auth.transferOrganizationOwner.mutationOptions({
+      onSuccess: async () => {
+        toast.success("Owner transferred");
+        await invalidateMemberLists();
+      },
+      onError: (error: unknown) => {
+        toast.error(
+          `Failed to transfer owner: ${error instanceof Error ? error.message : String(error)}`
+        );
+      },
+    })
+  );
+
   const handleAddMember = (): void => {
     if (!membersOrg || !selectedUserId) return;
     addMemberMutation.mutate({
@@ -348,6 +362,21 @@ export function AuthAdminOrganizationManagement() {
   }, [parentSearchQuery.data, editingOrg?.id, editParentId, rows]);
 
   const members = membersQuery.data?.members ?? [];
+  const liveOwnerCount = members.filter((member) => member.role === "owner").length;
+  const addMemberRoleOptions = useMemo(
+    (): { value: string; label: string }[] =>
+      liveOwnerCount === 0
+        ? organizationRoleOptions
+        : organizationRoleOptions.filter((role) => role.value !== "owner"),
+    [liveOwnerCount, organizationRoleOptions]
+  );
+
+  useEffect(() => {
+    if (newMemberRole === "owner" && liveOwnerCount !== 0) {
+      setNewMemberRole(organizationRoles.defaultRole);
+    }
+  }, [liveOwnerCount, newMemberRole, organizationRoles.defaultRole]);
+
   const currentMemberUserIds = useMemo(
     () => new Set(members.flatMap((member) => (member.userId ? [member.userId] : []))),
     [members]
@@ -738,7 +767,7 @@ export function AuthAdminOrganizationManagement() {
                     </Select.Trigger>
                     <Select.Popover>
                       <ListBox>
-                        {organizationRoleOptions.map((role) => (
+                        {addMemberRoleOptions.map((role) => (
                           <ListBox.Item key={role.value} id={role.value} textValue={role.label}>
                             {role.label}
                             <ListBox.ItemIndicator />
@@ -818,22 +847,50 @@ export function AuthAdminOrganizationManagement() {
                                   </Select.Trigger>
                                   <Select.Popover>
                                     <ListBox>
-                                      {organizationRoleOptions.map((role) => (
-                                        <ListBox.Item
-                                          key={role.value}
-                                          id={role.value}
-                                          textValue={role.label}
-                                        >
-                                          {role.label}
-                                          <ListBox.ItemIndicator />
-                                        </ListBox.Item>
-                                      ))}
+                                      {organizationRoleOptions
+                                        .filter(
+                                          (role) =>
+                                            role.value !== "owner" || member.role === "owner"
+                                        )
+                                        .map((role) => (
+                                          <ListBox.Item
+                                            key={role.value}
+                                            id={role.value}
+                                            textValue={role.label}
+                                          >
+                                            {role.label}
+                                            <ListBox.ItemIndicator />
+                                          </ListBox.Item>
+                                        ))}
                                     </ListBox>
                                   </Select.Popover>
                                 </Select>
                               </Table.Cell>
                               <Table.Cell className="text-right">
                                 <div className="flex justify-end gap-2">
+                                  {liveOwnerCount === 1 &&
+                                  member.role !== "owner" &&
+                                  member.userId ? (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      isIconOnly
+                                      onPress={() => {
+                                        if (!membersOrg) return;
+                                        transferOwnerMutation.mutate({
+                                          organizationId: membersOrg.id,
+                                          memberId: member.id,
+                                        });
+                                      }}
+                                      isDisabled={
+                                        transferOwnerMutation.isPending &&
+                                        transferOwnerMutation.variables?.memberId === member.id
+                                      }
+                                      aria-label={`Transfer owner to ${member.user?.email ?? member.email ?? member.name}`}
+                                    >
+                                      <Crown className="h-4 w-4" />
+                                    </Button>
+                                  ) : null}
                                   <Button
                                     size="sm"
                                     variant="ghost"

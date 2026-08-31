@@ -38,7 +38,7 @@ const DEFAULT_USER_SCOPE: NormalizedAuthRoleScopeConfig = {
 const DEFAULT_ORGANIZATION_SCOPE: NormalizedAuthRoleScopeConfig = {
   roles: ["member", "admin", "owner"],
   managerRoles: ["admin", "owner"],
-  assignableRoles: ["member", "admin", "owner"],
+  assignableRoles: ["member", "admin"],
   defaultRole: "member",
 };
 
@@ -104,6 +104,15 @@ export function normalizeRoleScopeConfig(
   };
 }
 
+function withoutOwnerAssignable(
+  scope: NormalizedAuthRoleScopeConfig
+): NormalizedAuthRoleScopeConfig {
+  return {
+    ...scope,
+    assignableRoles: scope.assignableRoles.filter((role) => role !== "owner"),
+  };
+}
+
 export function normalizeAuthRolesConfig(
   config?: AuthRolesConfig | null
 ): NormalizedAuthRolesConfig {
@@ -113,7 +122,9 @@ export function normalizeAuthRolesConfig(
 
   return {
     user: normalizeRoleScopeConfig(config.user, DEFAULT_AUTH_ROLES.user),
-    organization: normalizeRoleScopeConfig(config.organization, DEFAULT_AUTH_ROLES.organization),
+    organization: withoutOwnerAssignable(
+      normalizeRoleScopeConfig(config.organization, DEFAULT_AUTH_ROLES.organization)
+    ),
     team: normalizeRoleScopeConfig(config.team, DEFAULT_AUTH_ROLES.team),
   };
 }

@@ -18,7 +18,7 @@ export const APP_ROLES_CONFIG = defineAuthRoles({
   organization: {
     roles: ["member", "admin", "owner"],
     managerRoles: ["admin", "owner"],
-    assignableRoles: ["member", "admin", "owner"],
+    assignableRoles: ["member", "admin"],
     defaultRole: "member",
   },
   team: {

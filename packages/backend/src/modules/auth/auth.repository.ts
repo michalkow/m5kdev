@@ -538,6 +538,92 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     return ok(member);
   }
 
+  async listLiveOwners(organizationId: string): ServerResultAsync<OrganizationMemberRow[]> {
+    const membersResult = await this.throwableQuery(() => this.selectMemberRows(organizationId));
+    if (membersResult.isErr()) return err(membersResult.error);
+    return ok(membersResult.value.filter((member) => member.role === "owner"));
+  }
+
+  async transferOrganizationOwner({
+    organizationId,
+    previousOwnerMemberId,
+    previousOwnerUserId,
+    nextOwnerMemberId,
+    nextOwnerUserId,
+  }: {
+    organizationId: string;
+    previousOwnerMemberId: string;
+    previousOwnerUserId: string | null;
+    nextOwnerMemberId: string;
+    nextOwnerUserId: string;
+  }): ServerResultAsync<{
+    previousOwner: OrganizationMemberRow;
+    owner: OrganizationMemberRow;
+  }> {
+    const updateResult = await this.throwableQuery(() =>
+      this.orm.transaction(async (tx) => {
+        await tx
+          .update(this.schema.members)
+          .set({ role: "admin" })
+          .where(
+            and(
+              eq(this.schema.members.id, previousOwnerMemberId),
+              eq(this.schema.members.organizationId, organizationId)
+            )
+          );
+
+        await tx
+          .update(this.schema.members)
+          .set({ role: "owner" })
+          .where(
+            and(
+              eq(this.schema.members.id, nextOwnerMemberId),
+              eq(this.schema.members.organizationId, organizationId)
+            )
+          );
+
+        if (previousOwnerUserId) {
+          await tx
+            .update(this.schema.sessions)
+            .set({ activeOrganizationRole: "admin" })
+            .where(
+              and(
+                eq(this.schema.sessions.userId, previousOwnerUserId),
+                eq(this.schema.sessions.activeOrganizationId, organizationId)
+              )
+            );
+        }
+
+        await tx
+          .update(this.schema.sessions)
+          .set({ activeOrganizationRole: "owner" })
+          .where(
+            and(
+              eq(this.schema.sessions.userId, nextOwnerUserId),
+              eq(this.schema.sessions.activeOrganizationId, organizationId)
+            )
+          );
+      })
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+
+    const previousOwnerResult = await this.throwableQuery(() =>
+      this.selectMemberRows(organizationId, { memberId: previousOwnerMemberId, limit: 1 })
+    );
+    if (previousOwnerResult.isErr()) return err(previousOwnerResult.error);
+    const [previousOwner] = previousOwnerResult.value;
+    if (!previousOwner) return this.error("NOT_FOUND", "Member not found");
+
+    const ownerResult = await this.throwableQuery(() =>
+      this.selectMemberRows(organizationId, { memberId: nextOwnerMemberId, limit: 1 })
+    );
+    if (ownerResult.isErr()) return err(ownerResult.error);
+    const [owner] = ownerResult.value;
+    if (!owner) return this.error("NOT_FOUND", "Member not found");
+
+    return ok({ previousOwner, owner });
+  }
+
   async removeOrganizationMember({
     organizationId,
     memberId,

@@ -33,6 +33,22 @@ describe("auth.roles", () => {
       expect(config.organization.defaultRole).toBe("member");
     });
 
+    it("strips owner from organization assignable roles", () => {
+      expect(DEFAULT_AUTH_ROLES.organization.assignableRoles).toEqual(["member", "admin"]);
+
+      const config = defineAuthRoles({
+        user: { roles: ["user", "admin"] },
+        organization: {
+          roles: ["member", "admin", "owner"],
+          assignableRoles: ["member", "admin", "owner"],
+        },
+        team: { roles: ["owner"] },
+      });
+
+      expect(config.organization.assignableRoles).toEqual(["member", "admin"]);
+      expect(config.organization.roles).toEqual(["member", "admin", "owner"]);
+    });
+
     it("filters manager and assignable roles to configured role keys", () => {
       const config = defineAuthRoles({
         user: { roles: ["user", "admin"] },

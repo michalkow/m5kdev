@@ -79,12 +79,26 @@ export function createOrganizationSchemas(roles: AuthRolesConfig | NormalizedAut
         members: organizationMemberSchema.array(),
       }),
       adminUsers: queryListOutput(adminUserSummarySchema),
+      transferOwner: z.object({
+        previousOwner: z.object({
+          id: z.string(),
+          role: z.string(),
+        }),
+        owner: z.object({
+          id: z.string(),
+          role: z.string(),
+        }),
+      }),
     },
     input: {
       list: querySchema,
 
       adminMembers: z.object({
         organizationId: z.string(),
+      }),
+      transferOwner: z.object({
+        organizationId: z.string(),
+        memberId: z.string(),
       }),
       create: z.object({
         name: z.string(),

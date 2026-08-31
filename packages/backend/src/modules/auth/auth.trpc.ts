@@ -178,6 +178,13 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.updateAdminOrganizationMemberRole(input, ctx));
       }),
 
+    transferOrganizationOwner: adminProcedure
+      .input(organizationSchemas.input.transferOwner)
+      .output(organizationSchemas.output.transferOwner)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.transferOrganizationOwner(input, ctx));
+      }),
+
     removeAdminOrganizationMember: adminProcedure
       .input(organizationSchemas.input.removeAdminMember)
       .output(z.object({ id: z.string() }))
