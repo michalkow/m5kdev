@@ -31,7 +31,6 @@ function pendingInvitation(overrides: Record<string, unknown> = {}) {
   return {
     id: INVITATION_ID,
     organizationId: ORG_ID,
-    teamId: null,
     email: "invitee@example.com",
     role: "member",
     status: "pending",

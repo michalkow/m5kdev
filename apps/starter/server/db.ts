@@ -7,14 +7,13 @@ import * as schema from "./src/schema";
 const DEMO_EMAIL = "admin@starter-app.local";
 const DEMO_PASSWORD = "password1234";
 const ORGANIZATION_ID = "starter-app-org";
-const TEAM_ID = "starter-app-team";
 
 void runDb({
   schema,
   seed: async ({ orm }) => {
     const user = await ensureDemoUser(orm);
-    const { organizationId, teamId } = await ensureOrganization({ orm, userId: user.id });
-    await seedPosts({ orm, userId: user.id, organizationId, teamId });
+    const { organizationId } = await ensureOrganization({ orm, userId: user.id });
+    await seedPosts({ orm, userId: user.id, organizationId });
     console.info(`Seed completed. Demo login: ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
   },
 });
@@ -66,7 +65,7 @@ async function ensureDemoUser(orm: SeedOrm): Promise<typeof schema.users.$inferS
 async function ensureOrganization(input: {
   orm: SeedOrm;
   userId: string;
-}): Promise<{ organizationId: string; teamId: string }> {
+}): Promise<{ organizationId: string }> {
   const { orm, userId } = input;
   const [existingOrganization] = await orm
     .select()
@@ -100,48 +99,15 @@ async function ensureOrganization(input: {
     });
   }
 
-  const [existingTeam] = await orm
-    .select()
-    .from(schema.teams)
-    .where(eq(schema.teams.id, TEAM_ID))
-    .limit(1);
-
-  if (!existingTeam) {
-    await orm.insert(schema.teams).values({
-      id: TEAM_ID,
-      name: "Editorial",
-      organizationId: ORGANIZATION_ID,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-  }
-
-  const [existingTeamMember] = await orm
-    .select()
-    .from(schema.teamMembers)
-    .where(eq(schema.teamMembers.userId, userId))
-    .limit(1);
-
-  if (!existingTeamMember) {
-    await orm.insert(schema.teamMembers).values({
-      id: uuidv4(),
-      teamId: TEAM_ID,
-      userId,
-      role: "owner",
-      createdAt: new Date(),
-    });
-  }
-
-  return { organizationId: ORGANIZATION_ID, teamId: TEAM_ID };
+  return { organizationId: ORGANIZATION_ID };
 }
 
 async function seedPosts(input: {
   orm: SeedOrm;
   userId: string;
   organizationId: string | null;
-  teamId: string;
 }): Promise<void> {
-  const { orm, userId, organizationId, teamId } = input;
+  const { orm, userId, organizationId } = input;
   const existingPosts = await orm.select().from(schema.posts).limit(1);
   if (existingPosts.length > 0) {
     return;
@@ -151,7 +117,6 @@ async function seedPosts(input: {
     {
       authorUserId: userId,
       organizationId,
-      teamId,
       title: "An editorial workflow you can ship in an afternoon",
       slug: "editorial-workflow-in-an-afternoon",
       excerpt: "A first draft on how this minimal starter is wired together.",
@@ -164,7 +129,6 @@ async function seedPosts(input: {
     {
       authorUserId: userId,
       organizationId,
-      teamId,
       title: "Three habits that keep CRUD apps from drifting into chaos",
       slug: "three-habits-that-keep-crud@starter-apps-focused",
       excerpt: "A draft about explicit composition, typed contracts, and URL state.",
@@ -176,7 +140,6 @@ async function seedPosts(input: {
     {
       authorUserId: userId,
       organizationId,
-      teamId,
       title: "What a minimal platform starter should still refuse to compromise on",
       slug: "minimal-platform-starter-non-negotiables",
       excerpt: "A published note on keeping the foundation opinionated without being heavy.",

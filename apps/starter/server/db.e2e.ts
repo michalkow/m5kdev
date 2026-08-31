@@ -96,10 +96,9 @@ async function ensureUser(input: {
 async function ensureOrganization(input: {
   orm: SeedOrm;
   userId: string;
-}): Promise<{ organizationId: string; teamId: string }> {
+}): Promise<{ organizationId: string }> {
   const { orm, userId } = input;
   const organizationId = `auth-e2e-enterprise-${profile}`;
-  const teamId = `auth-e2e-team-${profile}`;
 
   const [existingOrganization] = await orm
     .select()
@@ -133,39 +132,7 @@ async function ensureOrganization(input: {
     });
   }
 
-  const [existingTeam] = await orm
-    .select()
-    .from(schema.teams)
-    .where(eq(schema.teams.id, teamId))
-    .limit(1);
-
-  if (!existingTeam) {
-    await orm.insert(schema.teams).values({
-      id: teamId,
-      name: "Editorial",
-      organizationId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-  }
-
-  const [existingTeamMember] = await orm
-    .select()
-    .from(schema.teamMembers)
-    .where(eq(schema.teamMembers.userId, userId))
-    .limit(1);
-
-  if (!existingTeamMember) {
-    await orm.insert(schema.teamMembers).values({
-      id: uuidv4(),
-      teamId,
-      userId,
-      role: "owner",
-      createdAt: new Date(),
-    });
-  }
-
-  return { organizationId, teamId };
+  return { organizationId };
 }
 
 async function seedPosts(input: {

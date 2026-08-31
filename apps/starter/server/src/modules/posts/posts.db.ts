@@ -1,4 +1,4 @@
-import { members, organizations, teams, users } from "@m5kdev/backend/modules/auth/auth.db";
+import { members, organizations, users } from "@m5kdev/backend/modules/auth/auth.db";
 import { integer, sqliteTable as table, text } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
 
@@ -13,7 +13,7 @@ export const posts = table("posts", {
   organizationId: text("organization_id").references(() => organizations.id, {
     onDelete: "set null",
   }),
-  teamId: text("team_id").references(() => teams.id, { onDelete: "set null" }),
+  teamId: text("team_id"),
   title: text("title").notNull(),
   slug: text("slug").notNull().unique(),
   excerpt: text("excerpt"),

@@ -1,6 +1,6 @@
 import { type AnySQLiteColumn, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
-import { members, organizations, teams, users } from "../auth/auth.db";
+import { members, organizations, users } from "../auth/auth.db";
 
 export const tags = sqliteTable("tags", {
   id: text("id").primaryKey().$default(uuidv4),
@@ -14,7 +14,7 @@ export const tags = sqliteTable("tags", {
   organizationId: text("organization_id").references(() => organizations.id, {
     onDelete: "set null",
   }),
-  teamId: text("team_id").references(() => teams.id, { onDelete: "set null" }),
+  teamId: text("team_id"),
   name: text("name").notNull(),
   color: text("color"),
   type: text("type"),

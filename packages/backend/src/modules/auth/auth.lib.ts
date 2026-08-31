@@ -30,13 +30,13 @@ import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
 import * as auth from "./auth.db";
 import { createAuthOrganizationInvitationPolicy } from "./auth.organization-invitation-policy";
+import { createAuthOrganizationTeamsOptions } from "./auth.organization-teams-policy";
 import { createAuthUserAdditionalFields } from "./auth.user-additional-fields";
 import {
   attachUserToInvitedMember,
-  createOrganizationAndTeam,
-  getActiveOrganizationAndTeam,
+  createOrganizationWithOwner,
+  getActiveOrganization,
   getNewOrganization,
-  getNewTeam,
   syncActiveMemberProfiles,
 } from "./auth.utils";
 
@@ -83,7 +83,7 @@ export type CreateBetterAuthConfigParams = {
     onError?: (error: unknown) => void;
     afterCreateUser?: (
       user: Pick<User, "id" | "email" | "emailVerified" | "name" | "createdAt" | "updatedAt">,
-      membership: { organizationId: string; teamId?: string },
+      membership: { organizationId: string },
       ctx?: { i18n: AppI18n; locale: string; t: TFunction }
     ) => Promise<void>;
   };
@@ -445,23 +445,8 @@ export function createBetterAuth<
       organization({
         ...createAuthOrganizationInvitationPolicy(),
         allowUserToCreateOrganization: false,
-        teams: {
-          enabled: true,
-          allowRemovingAllTeams: false,
-        },
+        teams: createAuthOrganizationTeamsOptions(),
         schema: {
-          team: {
-            modelName: "team",
-          },
-          teamMember: {
-            modelName: "teamMember",
-            additionalFields: {
-              role: {
-                type: "string",
-                required: true,
-              },
-            },
-          },
           member: {
             modelName: "member",
             additionalFields: {
@@ -723,7 +708,7 @@ export function createBetterAuth<
               }
             } else {
               const userLocale = typeof user.locale === "string" ? user.locale : undefined;
-              const membership = await createOrganizationAndTeam(orm, schema, user, userLocale);
+              const membership = await createOrganizationWithOwner(orm, schema, user, userLocale);
               if (hooks?.afterCreateUser) {
                 const i18nCtx = createUserHookI18nContext(user, i18n);
                 await hooks.afterCreateUser(user, membership, i18nCtx);
@@ -751,21 +736,17 @@ export function createBetterAuth<
           before: async (session) => {
             const {
               organizationId,
-              teamId,
               organizationRole,
-              teamRole,
               organizationType,
               organizationMemberId,
-            } = await getActiveOrganizationAndTeam(orm, schema, session.userId);
+            } = await getActiveOrganization(orm, schema, session.userId);
             return {
               data: {
                 ...session,
                 activeOrganizationId: organizationId,
-                activeTeamId: teamId,
                 activeOrganizationType: organizationType,
                 activeOrganizationRole: organizationRole,
                 activeOrganizationMemberId: organizationMemberId,
-                activeTeamRole: teamRole,
               },
             };
           },
@@ -774,7 +755,7 @@ export function createBetterAuth<
           before: async (session, ctx) => {
             const data = { ...session };
             const prevSession = ctx?.context.session?.session;
-            const { activeOrganizationId, activeTeamId } = session;
+            const { activeOrganizationId } = session;
 
             if (prevSession) {
               if (
@@ -791,18 +772,6 @@ export function createBetterAuth<
                 data.activeOrganizationType = newOrganization.type;
                 data.activeOrganizationRole = newOrganization.role;
                 data.activeOrganizationMemberId = newOrganization.memberId;
-                data.activeTeamId = newOrganization.teamId;
-                data.activeTeamRole = newOrganization.teamRole;
-              }
-
-              if (activeTeamId && activeTeamId !== prevSession.activeTeamId) {
-                const newTeam = await getNewTeam(
-                  orm,
-                  schema,
-                  activeTeamId as string,
-                  prevSession.userId
-                );
-                data.activeTeamRole = newTeam.role;
               }
             }
             logger.debug({

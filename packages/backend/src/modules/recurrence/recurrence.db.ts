@@ -1,6 +1,6 @@
 import { integer, sqliteTable as table, text } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
-import { members, organizations, teams, users } from "../auth/auth.db";
+import { members, organizations, users } from "../auth/auth.db";
 
 export const recurrence = table("recurrence", {
   id: text("id").primaryKey().$default(uuidv4),
@@ -9,7 +9,7 @@ export const recurrence = table("recurrence", {
   organizationId: text("organization_id").references(() => organizations.id, {
     onDelete: "cascade",
   }),
-  teamId: text("team_id").references(() => teams.id, { onDelete: "set null" }),
+  teamId: text("team_id"),
   name: text("name"),
   kind: text("kind"),
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),

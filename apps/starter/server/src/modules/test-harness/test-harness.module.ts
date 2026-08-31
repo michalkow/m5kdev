@@ -167,7 +167,6 @@ export class TestHarnessModule extends BaseModule<
         const now = new Date();
         const userId = uuidv4();
         const organizationId = uuidv4();
-        const teamId = uuidv4();
         const claimId = createClaim ? uuidv4() : null;
 
         await db.orm.transaction(async (tx) => {
@@ -192,22 +191,6 @@ export class TestHarnessModule extends BaseModule<
           await tx.insert(db.schema.members).values({
             id: uuidv4(),
             organizationId,
-            userId,
-            role: "owner",
-            createdAt: now,
-          });
-
-          await tx.insert(db.schema.teams).values({
-            id: teamId,
-            name: "Editorial",
-            organizationId,
-            createdAt: now,
-            updatedAt: now,
-          });
-
-          await tx.insert(db.schema.teamMembers).values({
-            id: uuidv4(),
-            teamId,
             userId,
             role: "owner",
             createdAt: now,

@@ -8,8 +8,6 @@ export {
   members,
   organizations,
   sessions,
-  teamMembers,
-  teams,
   users,
   verifications,
   waitlist,

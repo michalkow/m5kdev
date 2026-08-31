@@ -14,9 +14,6 @@ export function createM5KAuthClient(baseURL?: string) {
     plugins: [
       lastLoginMethodClient(),
       organizationClient({
-        teams: {
-          enabled: true,
-        },
         schema: inferOrgAdditionalFields<BetterAuth>(),
       }),
       adminClient(),
@@ -74,12 +71,6 @@ export function createM5KAuthClient(baseURL?: string) {
           stripeCustomerId: {
             type: "string",
             required: false,
-          },
-        },
-        teamMembers: {
-          role: {
-            type: "string",
-            required: true,
           },
         },
       }),

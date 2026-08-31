@@ -138,38 +138,11 @@ export const members = sqliteTable(
   ]
 );
 
-export const teams = sqliteTable("teams", {
-  id: text("id").primaryKey().$default(uuidv4),
-  name: text("name").notNull(),
-  organizationId: text("organization_id")
-    .notNull()
-    .references(() => organizations.id),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .$default(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" }),
-});
-
-export const teamMembers = sqliteTable("teammembers", {
-  id: text("id").primaryKey().$default(uuidv4),
-  teamId: text("team_id")
-    .notNull()
-    .references(() => teams.id),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id),
-  role: text("role").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .$default(() => new Date()),
-});
-
 export const invitations = sqliteTable("invitations", {
   id: text("id").primaryKey().$default(uuidv4),
   organizationId: text("organization_id")
     .notNull()
     .references(() => organizations.id),
-  teamId: text("team_id").references(() => teams.id),
   memberId: text("member_id").references(() => members.id),
   email: text("email").notNull(),
   role: text("role"),
