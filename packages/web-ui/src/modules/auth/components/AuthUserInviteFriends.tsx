@@ -15,8 +15,12 @@ export function AuthUserInviteFriends() {
 
   const { data: waitlist = [] } = useQuery(trpc.auth.listWaitlist.queryOptions());
   const { data: count = 0 } = useQuery(trpc.auth.getUserWaitlistCount.queryOptions());
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
 
   const invitesAvailable = Math.max(0, 3 - count);
+  const mintedCodes = waitlist.filter((item) => !item.email).length;
+  const codesAvailable = Math.max(0, 3 - mintedCodes);
 
   const inviteMutation = useMutation(
     trpc.auth.inviteToWaitlist.mutationOptions({
@@ -37,18 +41,16 @@ export function AuthUserInviteFriends() {
     })
   );
 
-  const createInvitationCodeMutation = useMutation(
-    trpc.auth.createInvitationCode.mutationOptions({
+  const createWaitlistCodeMutation = useMutation(
+    trpc.auth.createWaitlistCode.mutationOptions({
       onSuccess: (result) => {
-        queryClient.setQueryData(
-          trpc.auth.getUserWaitlistCount.queryKey(),
-          (old) => (old ?? 0) + 1
-        );
         queryClient.setQueryData(trpc.auth.listWaitlist.queryKey(), (old) => [
           ...(old ?? []),
           result,
         ]);
         toast.success("Code created successfully!");
+        setEmail("");
+        setName("");
       },
       onError: (error) => {
         toast.danger(error.message);
@@ -56,9 +58,7 @@ export function AuthUserInviteFriends() {
     })
   );
 
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-  const isLoading = inviteMutation.isPending || createInvitationCodeMutation.isPending;
+  const isLoading = inviteMutation.isPending || createWaitlistCodeMutation.isPending;
 
   const isEmailValid = useMemo(() => {
     return z.email().safeParse(email).success;
@@ -74,19 +74,7 @@ export function AuthUserInviteFriends() {
   };
 
   const handleCreateCode = async () => {
-    createInvitationCodeMutation.mutate(
-      { name: name.length > 0 ? name : undefined },
-      {
-        onSuccess: () => {
-          toast.success("Code created successfully!");
-          setEmail("");
-          setName("");
-        },
-        onError: (error) => {
-          toast.danger(error.message);
-        },
-      }
-    );
+    createWaitlistCodeMutation.mutate({ name: name.length > 0 ? name : undefined });
   };
 
   const getStatusColor = (status: string) => {
@@ -177,7 +165,7 @@ export function AuthUserInviteFriends() {
                   variant="outline"
                   type="button"
                   isPending={isLoading}
-                  isDisabled={invitesAvailable <= 0}
+                  isDisabled={codesAvailable <= 0}
                   onPress={handleCreateCode}
                   className="font-medium"
                 >

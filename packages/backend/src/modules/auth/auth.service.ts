@@ -1199,11 +1199,14 @@ export class AuthService extends BasePermissionService<
       return ok(waitlist.value);
     });
 
-  createInvitationCode = this.procedure("createInvitationCode")
+  createWaitlistCode = this.procedure("createWaitlistCode")
     .input(waitlistSchemas.input.create)
     .output(waitlistSchemas.output.full)
     .requireAuth()
     .handle(async ({ input: { name }, ctx }) => {
+      const count = await this.repository.waitlist.getUserWaitlistCodeCount(ctx.actor.userId);
+      if (count.isErr()) return err(count.error);
+      if (count.value >= 3) return this.error("BAD_REQUEST", "Run out of Waitlist codes");
       posthogCapture({
         distinctId: ctx.actor.userId,
         event: "waitlist_invitation_code_created",
@@ -1211,7 +1214,7 @@ export class AuthService extends BasePermissionService<
           name,
         },
       });
-      return this.repository.waitlist.createInvitationCode({ userId: ctx.actor.userId, name });
+      return this.repository.waitlist.createWaitlistCode({ userId: ctx.actor.userId, name });
     });
 
   joinWaitlist = this.procedure("joinWaitlist")
@@ -1222,7 +1225,7 @@ export class AuthService extends BasePermissionService<
       if (waitlist.isErr()) return err(waitlist.error);
       await this.service.email.sendWaitlistConfirmation(input.email);
       await this.service.email.sendSystemWaitlistNotification(input.email);
-      return ok(waitlist.value);
+      return ok(waitlistSchemas.output.single.parse(waitlist.value));
     });
 
   removeFromWaitlist = this.procedure("removeFromWaitlist")

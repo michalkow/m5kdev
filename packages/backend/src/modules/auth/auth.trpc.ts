@@ -81,11 +81,11 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.leaveOrganization(undefined, ctx));
       }),
 
-    createInvitationCode: procedure
+    createWaitlistCode: procedure
       .input(waitlistSchemas.input.create)
       .output(waitlistSchemas.output.full)
       .mutation(async ({ input, ctx }) => {
-        return handleTRPCResult(await authService.createInvitationCode(input, ctx));
+        return handleTRPCResult(await authService.createWaitlistCode(input, ctx));
       }),
 
     createAccountClaimCode: adminProcedure

@@ -39,6 +39,11 @@ import {
   getNewOrganization,
   syncActiveMemberProfiles,
 } from "./auth.utils";
+import {
+  acceptWaitlistCodeAfterUser,
+  assertWaitlistCodeUsable,
+  WaitlistCodeNotFound,
+} from "./auth.waitlist-signup";
 
 const schema = { ...auth };
 type Schema = typeof schema;
@@ -608,30 +613,15 @@ export function createBetterAuth<
             if (waitlist) {
               const waitlistCode = await getWaitlistInvitationCode(ctx);
               if (waitlistCode) {
-                const [waitlistInvitation] = await orm
-                  .select()
-                  .from(schema.waitlist)
-                  .where(
-                    and(
-                      eq(schema.waitlist.code, waitlistCode),
-                      eq(schema.waitlist.status, "INVITED"),
-                      gte(schema.waitlist.expiresAt, new Date())
-                    )
-                  )
-                  .limit(1);
-
-                if (!waitlistInvitation) {
-                  const message = "Invalid or expired waitlist invitation code";
-                  logger.error({ message, waitlistCode });
-                  throw new APIError("NOT_FOUND", { message });
+                try {
+                  await assertWaitlistCodeUsable(orm, schema, waitlistCode);
+                } catch (error) {
+                  if (error instanceof WaitlistCodeNotFound) {
+                    logger.error({ message: error.message, waitlistCode });
+                    throw new APIError("NOT_FOUND", { message: error.message });
+                  }
+                  throw error;
                 }
-                await orm
-                  .update(schema.waitlist)
-                  .set({
-                    status: "ACCEPTED",
-                    updatedAt: new Date(),
-                  })
-                  .where(eq(schema.waitlist.id, waitlistInvitation.id));
                 const userWithLocale = await withResolvedLocale(user, ctx, null);
                 return {
                   data: {
@@ -648,6 +638,25 @@ export function createBetterAuth<
             return { data: userWithLocale };
           },
           after: async (user, ctx) => {
+            if (waitlist) {
+              const waitlistCode = await getWaitlistInvitationCode(ctx);
+              if (waitlistCode) {
+                try {
+                  const waitlistInvitation = await assertWaitlistCodeUsable(
+                    orm,
+                    schema,
+                    waitlistCode
+                  );
+                  await acceptWaitlistCodeAfterUser(orm, schema, waitlistInvitation.id);
+                } catch (error) {
+                  if (error instanceof WaitlistCodeNotFound) {
+                    logger.error({ message: error.message, waitlistCode });
+                    throw new APIError("NOT_FOUND", { message: error.message });
+                  }
+                  throw error;
+                }
+              }
+            }
             const organizationInvitationCode = await getOrganizationInvitationCode(ctx);
             if (organizationInvitationCode) {
               const [invitation] = await orm

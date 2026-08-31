@@ -839,7 +839,20 @@ export class AuthWaitlistRepository extends BaseTableRepository<
       db
         .select({ count: count() })
         .from(this.schema.waitlist)
-        .where(eq(this.schema.waitlist.userId, userId))
+        .where(and(eq(this.schema.waitlist.userId, userId), isNotNull(this.schema.waitlist.email)))
+    );
+    if (result.isErr()) return err(result.error);
+    const [waitlist] = result.value;
+    return ok(waitlist.count ?? 0);
+  }
+
+  async getUserWaitlistCodeCount(userId: string, tx?: Orm): ServerResultAsync<number> {
+    const db = tx ?? this.orm;
+    const result = await this.throwableQuery(() =>
+      db
+        .select({ count: count() })
+        .from(this.schema.waitlist)
+        .where(and(eq(this.schema.waitlist.userId, userId), isNull(this.schema.waitlist.email)))
     );
     if (result.isErr()) return err(result.error);
     const [waitlist] = result.value;
@@ -889,7 +902,7 @@ export class AuthWaitlistRepository extends BaseTableRepository<
       return waitlist;
     });
 
-  createInvitationCode = this.query<{ userId: string; name?: string }>("createInvitationCode")
+  createWaitlistCode = this.query<{ userId: string; name?: string }>("createWaitlistCode")
     .output(waitlistSchemas.output.full)
     .handle(async ({ userId, name }) => {
       const result = await this.throwableQuery(() =>

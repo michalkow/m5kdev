@@ -85,7 +85,7 @@ The `auth` router covers, by area:
 - **Admin Owner** — `transferOrganizationOwner`; add-member may assign Owner
   only when none exists.
 - **Waitlist** — `joinWaitlist` (public), `validateWaitlistCode` (public),
-  `inviteToWaitlist`, `listWaitlist`, plus admin add/invite/remove.
+  `inviteToWaitlist`, `createWaitlistCode`, `listWaitlist`, plus admin add/invite/remove.
 - **Account claims** — `createAccountClaimCode`, `generateAccountClaimMagicLink`,
   `getMyAccountClaimStatus`, `setMyAccountClaimEmail`, `acceptMyAccountClaim`.
 - **Admin** — organization CRUD, `searchAdminUsers`, member add/update/remove.
