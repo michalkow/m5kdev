@@ -29,6 +29,7 @@ import { posthogCapture } from "../../utils/posthog";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
 import * as auth from "./auth.db";
+import { createAuthOrganizationInvitationPolicy } from "./auth.organization-invitation-policy";
 import {
   attachUserToInvitedMember,
   createOrganizationAndTeam,
@@ -498,39 +499,11 @@ export function createBetterAuth<
       admin(),
       lastLoginMethod(),
       organization({
-        organizationHooks: {
-          beforeCreateInvitation: async ({ invitation }) => {
-            const customExpiration = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7 days
-            return {
-              data: {
-                ...invitation,
-                expiresAt: customExpiration,
-              },
-            };
-          },
-        },
+        ...createAuthOrganizationInvitationPolicy(),
         allowUserToCreateOrganization: false,
         teams: {
           enabled: true,
           allowRemovingAllTeams: false,
-        },
-        sendInvitationEmail: async (data) => {
-          const invitationUrl = `${webUrl}/organization/accept-invitation?id=${data.id}`;
-          const inviterName = data.inviter.user.name || data.inviter.user.email;
-          const organizationLocale = getRecordLocale(data.organization);
-          const result = await emailService?.sendOrganizationInvite(
-            data.email,
-            data.organization.name,
-            inviterName,
-            data.role,
-            invitationUrl,
-            { locale: organizationLocale }
-          );
-          if (result?.isErr()) {
-            captureServerError(result.error, { logger }); // no-op when captured at creation
-            hooks?.onError?.(result.error);
-            throw result.error;
-          }
         },
         schema: {
           team: {

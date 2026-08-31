@@ -869,6 +869,7 @@ describe("AuthService.inviteOrganizationMember resend and revive", () => {
     invitationUpdate?: AuthInvitationRepository["update"];
     findLeftMemberByEmail?: AuthOrganizationRepository["findLeftMemberByEmail"];
     reviveInvitedMember?: AuthOrganizationRepository["reviveInvitedMember"];
+    updateOrganizationMemberRole?: AuthOrganizationRepository["updateOrganizationMemberRole"];
   }): AuthService {
     return new AuthService(
       {
@@ -895,6 +896,7 @@ describe("AuthService.inviteOrganizationMember resend and revive", () => {
           findLeftMemberByEmail:
             fakes.findLeftMemberByEmail ?? jest.fn().mockResolvedValue(ok(null)),
           reviveInvitedMember: fakes.reviveInvitedMember ?? jest.fn(),
+          updateOrganizationMemberRole: fakes.updateOrganizationMemberRole ?? jest.fn(),
         } as unknown as AuthOrganizationRepository,
       },
       { email: { sendOrganizationInvite: fakes.sendOrganizationInvite } as EmailService },
@@ -948,6 +950,66 @@ describe("AuthService.inviteOrganizationMember resend and revive", () => {
       })
     );
     expect(sendOrganizationInvite).toHaveBeenCalled();
+  });
+
+  it("writes the new role onto a live pending Membership and Invitation before emailing", async () => {
+    const invitation = pendingInvitation({ role: "member" });
+    const member = {
+      id: MEMBER_ID,
+      organizationId: ORG_ID,
+      userId: null,
+      email: "invitee@example.com",
+      name: "invitee@example.com",
+      role: "member",
+    };
+    const updatedMember = { ...member, role: "admin" };
+    const updatedInvitation = { ...invitation, role: "admin" };
+    const updateOrganizationMemberRole = jest.fn().mockResolvedValue(ok(updatedMember));
+    const invitationUpdate = jest.fn().mockResolvedValue(ok(updatedInvitation));
+    const createInvitedMember = jest.fn();
+    const invitationCreate = jest.fn();
+    const sendOrganizationInvite = jest.fn().mockResolvedValue(ok(undefined));
+    const auth = createInviteAuthService({
+      findLiveMemberByEmail: jest.fn().mockResolvedValue(ok(member)),
+      createInvitedMember,
+      invitationCreate,
+      sendOrganizationInvite,
+      findPendingByMemberId: jest.fn().mockResolvedValue(ok(invitation)),
+      invitationUpdate,
+      updateOrganizationMemberRole,
+    });
+
+    const result = await auth.inviteOrganizationMember(
+      { email: "invitee@example.com", role: "admin" },
+      organizationCtx("owner")
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.member.role).toBe("admin");
+      expect(result.value.invitation.role).toBe("admin");
+    }
+    expect(updateOrganizationMemberRole).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      role: "admin",
+    });
+    expect(invitationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: INVITATION_ID,
+        role: "admin",
+      })
+    );
+    expect(createInvitedMember).not.toHaveBeenCalled();
+    expect(invitationCreate).not.toHaveBeenCalled();
+    expect(sendOrganizationInvite).toHaveBeenCalledWith(
+      "invitee@example.com",
+      "Acme",
+      "Pat",
+      "admin",
+      `${WEB_URL}/organization/accept-invitation?id=${INVITATION_ID}`,
+      { locale: "en" }
+    );
   });
 
   it("revives a left Member as invited with the same MemberId", async () => {

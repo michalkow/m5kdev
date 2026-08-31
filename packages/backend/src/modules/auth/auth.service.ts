@@ -1522,18 +1522,28 @@ export class AuthService extends BasePermissionService<
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
       let member = existing.value;
       if (member) {
+        if (member.role !== input.role) {
+          const updatedSeat = await this.repository.organization.updateOrganizationMemberRole({
+            organizationId: ctx.actor.organizationId,
+            memberId: member.id,
+            role: input.role,
+          });
+          if (updatedSeat.isErr()) return err(updatedSeat.error);
+          member = updatedSeat.value;
+        }
         const pending = await this.repository.invitation.findPendingByMemberId(member.id);
         if (pending.isErr()) return err(pending.error);
         const invitation = pending.value
           ? await this.repository.invitation.update({
               id: pending.value.id,
               email,
+              role: input.role,
               expiresAt,
             })
           : await this.repository.invitation.create({
               organizationId: ctx.actor.organizationId,
               email,
-              role: member.role,
+              role: input.role,
               status: "pending",
               memberId: member.id,
               inviterId: ctx.actor.userId,
