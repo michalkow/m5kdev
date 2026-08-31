@@ -60,7 +60,7 @@ export class AuthModule extends BaseModule<
       accountClaim: new AuthAccountClaimRepository({
         orm: db.orm,
         schema: db.schema,
-        table: db.schema.accountClaimMagicLinks,
+        table: db.schema.accountClaims,
       }),
       user: new AuthUserRepository({
         orm: db.orm,

@@ -220,7 +220,6 @@ async function seedExpiredWaitlistCode(orm: SeedOrm): Promise<void> {
     id: uuidv4(),
     email: `expired.${profile}@auth-e2e.local`,
     name: "Expired Invite",
-    type: "WAITLIST",
     status: "INVITED",
     code: "expired-waitlist-code",
     expiresAt: new Date(Date.now() - 60_000),
@@ -241,16 +240,15 @@ async function seedProvisionedClaimUser(orm: SeedOrm): Promise<typeof schema.use
 
   const [existingClaim] = await orm
     .select()
-    .from(schema.waitlist)
-    .where(eq(schema.waitlist.claimUserId, user.id))
+    .from(schema.accountClaims)
+    .where(eq(schema.accountClaims.claimUserId, user.id))
     .limit(1);
   if (existingClaim) {
     return user;
   }
 
-  await orm.insert(schema.waitlist).values({
+  await orm.insert(schema.accountClaims).values({
     id: `auth-e2e-claim-${profile}`,
-    type: "ACCOUNT_CLAIM",
     status: "INVITED",
     claimUserId: user.id,
     code: uuidv4(),

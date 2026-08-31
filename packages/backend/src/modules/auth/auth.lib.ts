@@ -472,17 +472,16 @@ export function createBetterAuth<
           if (!user) return;
 
           const [claim] = await orm
-            .select({ id: schema.waitlist.id })
-            .from(schema.waitlist)
+            .select({ id: schema.accountClaims.id })
+            .from(schema.accountClaims)
             .where(
               and(
-                eq(schema.waitlist.type, "ACCOUNT_CLAIM"),
-                eq(schema.waitlist.claimUserId, user.id),
-                eq(schema.waitlist.status, "INVITED"),
-                gte(schema.waitlist.expiresAt, new Date())
+                eq(schema.accountClaims.claimUserId, user.id),
+                eq(schema.accountClaims.status, "INVITED"),
+                gte(schema.accountClaims.expiresAt, new Date())
               )
             )
-            .orderBy(desc(schema.waitlist.createdAt))
+            .orderBy(desc(schema.accountClaims.createdAt))
             .limit(1);
           if (claim) {
             await orm.insert(schema.accountClaimMagicLinks).values({
@@ -685,7 +684,6 @@ export function createBetterAuth<
                   .where(
                     and(
                       eq(schema.waitlist.code, waitlistCode),
-                      eq(schema.waitlist.type, "WAITLIST"),
                       eq(schema.waitlist.status, "INVITED"),
                       gte(schema.waitlist.expiresAt, new Date())
                     )

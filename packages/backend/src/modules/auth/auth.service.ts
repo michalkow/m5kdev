@@ -33,6 +33,7 @@ import type { EmailService } from "../email/email.service";
 import * as auth from "./auth.db";
 import {
   accountClaimMagicLinkSchemas,
+  accountClaimSchemas,
   invitationSchemas,
   organizationSchemas,
   waitlistSchemas,
@@ -1117,16 +1118,7 @@ export class AuthService extends BasePermissionService<
     .requireAuth("admin")
     .loadResource("waitlist", () =>
       this.repository.waitlist.queryList(
-        {
-          filters: [
-            {
-              columnId: "type",
-              type: "string",
-              method: "equals",
-              value: "WAITLIST",
-            },
-          ],
-        },
+        {},
         {
           columns: ["id", "email", "name", "createdAt", "updatedAt", "status"],
         }
@@ -1147,13 +1139,7 @@ export class AuthService extends BasePermissionService<
     .requireAuth()
     .addContextFilter(["user"])
     .use("waitlist", ({ input }) =>
-      this.repository.waitlist.queryList({
-        ...input,
-        filters: [
-          ...(input.filters ?? []),
-          { columnId: "type", type: "string", method: "equals", value: "WAITLIST" },
-        ],
-      })
+      this.repository.waitlist.queryList(input)
     )
     .handle(({ state }) => {
       return ok(state.waitlist.rows);
@@ -1255,19 +1241,18 @@ export class AuthService extends BasePermissionService<
 
   createAccountClaimCode = this.procedure("createAccountClaimCode")
     .input(accountClaimMagicLinkSchemas.input.create)
-    .output(waitlistSchemas.output.claim)
+    .output(accountClaimSchemas.output.claim)
     .requireAuth("admin")
     .handle(async ({ input }) => {
-      return this.repository.waitlist.createAccountClaimCode(input);
+      return this.repository.accountClaim.createAccountClaimCode(input);
     });
 
   listAccountClaims = this.procedure("listAccountClaims")
-    .output(waitlistSchemas.output.accountClaim.array())
+    .output(accountClaimSchemas.output.list.array())
     .requireAuth("admin")
     .handle(async () => {
-      const result = await this.repository.waitlist.queryList(
+      const result = await this.repository.accountClaim.queryList(
         {
-          filters: [{ columnId: "type", type: "string", method: "equals", value: "ACCOUNT_CLAIM" }],
           sort: "createdAt",
           order: "desc",
         },
@@ -1289,28 +1274,28 @@ export class AuthService extends BasePermissionService<
     });
 
   getMyAccountClaimStatus = this.procedure("getMyAccountClaimStatus")
-    .output(waitlistSchemas.output.claim.nullable())
+    .output(accountClaimSchemas.output.claim.nullable())
     .requireAuth()
     .handle(async ({ ctx }) => {
-      return this.repository.waitlist.findPendingAccountClaimForUser(ctx.actor.userId);
+      return this.repository.accountClaim.findPendingAccountClaimForUser(ctx.actor.userId);
     });
 
   setMyAccountClaimEmail = this.procedure("setMyAccountClaimEmail")
     .input(accountClaimMagicLinkSchemas.input.setEmail)
     .requireAuth()
     .handle(async ({ ctx, input: { email } }): ServerResultAsync<{ status: boolean }> => {
-      return this.repository.waitlist.setAccountClaimEmail({ userId: ctx.actor.userId, email });
+      return this.repository.accountClaim.setAccountClaimEmail({ userId: ctx.actor.userId, email });
     });
 
   acceptMyAccountClaim = this.procedure("acceptMyAccountClaim")
     .requireAuth()
     .handle(async ({ ctx }): ServerResultAsync<{ status: boolean }> => {
-      const pendingClaim = await this.repository.waitlist.findPendingAccountClaimForUser(
+      const pendingClaim = await this.repository.accountClaim.findPendingAccountClaimForUser(
         ctx.user.id
       );
       if (pendingClaim.isErr()) return err(pendingClaim.error);
 
-      const accepted = await this.repository.waitlist.acceptAccountClaim(ctx.user.id);
+      const accepted = await this.repository.accountClaim.acceptAccountClaim(ctx.user.id);
       if (accepted.isErr()) return err(accepted.error);
 
       if (pendingClaim.value) {
@@ -1328,7 +1313,7 @@ export class AuthService extends BasePermissionService<
     .output(accountClaimMagicLinkSchemas.output.single)
     .requireAuth("admin")
     .handle(async ({ input: { claimId, email } }) => {
-      const claim = await this.repository.waitlist.findAccountClaimById(claimId);
+      const claim = await this.repository.accountClaim.findAccountClaimById(claimId);
       if (claim.isErr()) return err(claim.error);
       if (!claim.value) return this.error("NOT_FOUND", "Claim not found");
       if (!claim.value.claimUserId) return this.error("BAD_REQUEST", "Claim has no user");
@@ -1344,7 +1329,7 @@ export class AuthService extends BasePermissionService<
         return this.error("BAD_REQUEST", "Email required to generate magic link");
       }
 
-      const setEmail = await this.repository.waitlist.setAccountClaimEmail({
+      const setEmail = await this.repository.accountClaim.setAccountClaimEmail({
         userId: claim.value.claimUserId,
         email: targetEmail,
       });

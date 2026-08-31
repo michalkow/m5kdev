@@ -12,7 +12,14 @@ import {
 import { queryListOutput, querySchema } from "@m5kdev/commons/modules/schemas/query.schema";
 import { createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
-import { accountClaimMagicLinks, members, organizations, users, waitlist } from "./auth.db";
+import {
+  accountClaimMagicLinks,
+  accountClaims,
+  members,
+  organizations,
+  users,
+  waitlist,
+} from "./auth.db";
 
 export const settingsSchemas = {
   output: {
@@ -145,6 +152,7 @@ export type OrganizationSchemas = ReturnType<typeof createOrganizationSchemas>;
 export const organizationSchemas = createOrganizationSchemas(DEFAULT_AUTH_ROLES);
 
 export const waitlistSchema = createSelectSchema(waitlist);
+export const accountClaimSchema = createSelectSchema(accountClaims);
 
 export const waitlistSchemas = {
   output: {
@@ -158,16 +166,6 @@ export const waitlistSchemas = {
       createdAt: true,
       updatedAt: true,
       status: true,
-    }),
-    accountClaim: waitlistSchema.pick({
-      id: true,
-      claimUserId: true,
-      status: true,
-      expiresAt: true,
-      claimedAt: true,
-      claimedEmail: true,
-      createdAt: true,
-      updatedAt: true,
     }),
   },
   input: {
@@ -275,6 +273,22 @@ export const invitationSchemas = {
     }),
     remove: z.object({
       memberId: z.string(),
+    }),
+  },
+};
+
+export const accountClaimSchemas = {
+  output: {
+    claim: accountClaimSchema.omit({ code: true }),
+    list: accountClaimSchema.pick({
+      id: true,
+      claimUserId: true,
+      status: true,
+      expiresAt: true,
+      claimedAt: true,
+      claimedEmail: true,
+      createdAt: true,
+      updatedAt: true,
     }),
   },
 };

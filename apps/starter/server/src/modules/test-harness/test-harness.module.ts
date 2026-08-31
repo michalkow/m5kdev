@@ -99,21 +99,16 @@ export class TestHarnessModule extends BaseModule<
 
       const accountClaims = await db.orm
         .select({
-          id: db.schema.waitlist.id,
-          status: db.schema.waitlist.status,
-          claimUserId: db.schema.waitlist.claimUserId,
-          claimedEmail: db.schema.waitlist.claimedEmail,
-          claimedAt: db.schema.waitlist.claimedAt,
-          expiresAt: db.schema.waitlist.expiresAt,
+          id: db.schema.accountClaims.id,
+          status: db.schema.accountClaims.status,
+          claimUserId: db.schema.accountClaims.claimUserId,
+          claimedEmail: db.schema.accountClaims.claimedEmail,
+          claimedAt: db.schema.accountClaims.claimedAt,
+          expiresAt: db.schema.accountClaims.expiresAt,
         })
-        .from(db.schema.waitlist)
-        .where(
-          and(
-            eq(db.schema.waitlist.type, "ACCOUNT_CLAIM"),
-            eq(db.schema.waitlist.claimUserId, user.id)
-          )
-        )
-        .orderBy(desc(db.schema.waitlist.createdAt));
+        .from(db.schema.accountClaims)
+        .where(eq(db.schema.accountClaims.claimUserId, user.id))
+        .orderBy(desc(db.schema.accountClaims.createdAt));
 
       const [latestSession] = await db.orm
         .select({
@@ -219,9 +214,8 @@ export class TestHarnessModule extends BaseModule<
           });
 
           if (claimId) {
-            await tx.insert(db.schema.waitlist).values({
+            await tx.insert(db.schema.accountClaims).values({
               id: claimId,
-              type: "ACCOUNT_CLAIM",
               status: "INVITED",
               claimUserId: userId,
               code: uuidv4(),

@@ -227,20 +227,32 @@ export const waitlist = sqliteTable("waitlist", {
     .$default(() => new Date()),
   updatedAt: integer("updated_at", { mode: "timestamp" }),
   status: text("status").notNull().default("WAITLIST"),
-  type: text("type").notNull().default("WAITLIST"),
   code: text("code"),
   expiresAt: integer("expires_at", { mode: "timestamp" }),
   userId: text("user_id").references(() => users.id),
-  claimUserId: text("claim_user_id").references(() => users.id),
+});
+
+export const accountClaims = sqliteTable("account_claims", {
+  id: text("id").primaryKey().$default(uuidv4),
+  claimUserId: text("claim_user_id")
+    .notNull()
+    .references(() => users.id),
+  status: text("status").notNull(),
+  code: text("code"),
+  expiresAt: integer("expires_at", { mode: "timestamp" }),
   claimedAt: integer("claimed_at", { mode: "timestamp" }),
   claimedEmail: text("claimed_email"),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .$default(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }),
 });
 
 export const accountClaimMagicLinks = sqliteTable("account_claim_magic_links", {
   id: text("id").primaryKey().$default(uuidv4),
   claimId: text("claim_id")
     .notNull()
-    .references(() => waitlist.id, { onDelete: "cascade" }),
+    .references(() => accountClaims.id, { onDelete: "cascade" }),
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),

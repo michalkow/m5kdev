@@ -2,6 +2,7 @@ import { z } from "zod";
 import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 import {
   accountClaimMagicLinkSchemas,
+  accountClaimSchemas,
   organizationSchemas as defaultOrganizationSchemas,
   invitationSchemas,
   type OrganizationSchemas,
@@ -89,13 +90,13 @@ export function createAuthTRPC(
 
     createAccountClaimCode: adminProcedure
       .input(accountClaimMagicLinkSchemas.input.create)
-      .output(waitlistSchemas.output.claim)
+      .output(accountClaimSchemas.output.claim)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.createAccountClaimCode(input, ctx));
       }),
 
     listAccountClaims: adminProcedure
-      .output(waitlistSchemas.output.accountClaim.array())
+      .output(accountClaimSchemas.output.list.array())
       .query(async ({ ctx }) => {
         return handleTRPCResult(await authService.listAccountClaims(undefined, ctx));
       }),
@@ -115,7 +116,7 @@ export function createAuthTRPC(
       }),
 
     getMyAccountClaimStatus: procedure
-      .output(waitlistSchemas.output.claim.nullable())
+      .output(accountClaimSchemas.output.claim.nullable())
       .query(async ({ ctx }) => {
         return handleTRPCResult(await authService.getMyAccountClaimStatus(undefined, ctx));
       }),

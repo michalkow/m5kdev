@@ -1,6 +1,7 @@
 // biome-ignore-all assist/source/organizeImports: feature-gated table exports stay in marker blocks
 export {
   accountClaimMagicLinks,
+  accountClaims,
   accounts,
   apikeys,
   invitations,
