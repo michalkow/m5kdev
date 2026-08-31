@@ -281,22 +281,20 @@ export function AuthOrganizationMembersRoute({
     },
   });
 
-  const cancelInvitationMutation = useMutation({
-    mutationFn: async ({ invitationId }: { invitationId: string }) => {
-      const { error } = await authClient.organization.cancelInvitation({ invitationId });
-      if (error) throw new Error(error.message ?? resolvedLabels.cancelInvitationError);
-    },
-    onSuccess: async () => {
-      await refreshOrganizationQueriesStable();
-      await queryClient.invalidateQueries({
-        queryKey: trpc.auth.listOrganizationMembers.queryKey(),
-      });
-      toast.success(resolvedLabels.cancelInvitationSuccess);
-    },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : resolvedLabels.cancelInvitationError);
-    },
-  });
+  const cancelInvitationMutation = useMutation(
+    trpc.auth.cancelOrganizationInvitation.mutationOptions({
+      onSuccess: async () => {
+        await refreshOrganizationQueriesStable();
+        await queryClient.invalidateQueries({
+          queryKey: trpc.auth.listOrganizationMembers.queryKey(),
+        });
+        toast.success(resolvedLabels.cancelInvitationSuccess);
+      },
+      onError: (error) => {
+        toast.error(error instanceof Error ? error.message : resolvedLabels.cancelInvitationError);
+      },
+    })
+  );
 
   const updatingMemberId =
     updateRoleMutation.isPending && updateRoleMutation.variables

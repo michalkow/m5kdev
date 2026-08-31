@@ -287,6 +287,11 @@ describe("AuthService.inviteOrganizationMember", () => {
     createInvitedMember: AuthOrganizationRepository["createInvitedMember"];
     invitationCreate: AuthInvitationRepository["create"];
     sendOrganizationInvite: EmailService["sendOrganizationInvite"];
+    findPendingLeftoverByEmail?: AuthInvitationRepository["findPendingLeftoverByEmail"];
+    findPendingByMemberId?: AuthInvitationRepository["findPendingByMemberId"];
+    invitationUpdate?: AuthInvitationRepository["update"];
+    findLeftMemberByEmail?: AuthOrganizationRepository["findLeftMemberByEmail"];
+    reviveInvitedMember?: AuthOrganizationRepository["reviveInvitedMember"];
   }): AuthService {
     return new AuthService(
       {
@@ -298,14 +303,21 @@ describe("AuthService.inviteOrganizationMember", () => {
         } as unknown as AuthUserRepository,
         invitation: {
           findById: jest.fn(),
-          update: jest.fn(),
+          update: fakes.invitationUpdate ?? jest.fn().mockResolvedValue(ok(pendingInvitation())),
           create: fakes.invitationCreate,
+          findPendingByMemberId:
+            fakes.findPendingByMemberId ?? jest.fn().mockResolvedValue(ok(null)),
+          findPendingLeftoverByEmail:
+            fakes.findPendingLeftoverByEmail ?? jest.fn().mockResolvedValue(ok([])),
         } as unknown as AuthInvitationRepository,
         waitlist: {} as AuthWaitlistRepository,
         organization: {
           findById: jest.fn().mockResolvedValue(ok({ id: ORG_ID, name: "Acme", locale: "en" })),
           findLiveMemberByEmail: fakes.findLiveMemberByEmail,
           createInvitedMember: fakes.createInvitedMember,
+          findLeftMemberByEmail:
+            fakes.findLeftMemberByEmail ?? jest.fn().mockResolvedValue(ok(null)),
+          reviveInvitedMember: fakes.reviveInvitedMember ?? jest.fn(),
         } as unknown as AuthOrganizationRepository,
       },
       { email: { sendOrganizationInvite: fakes.sendOrganizationInvite } as EmailService },
@@ -387,7 +399,9 @@ describe("AuthService.inviteOrganizationMember", () => {
   it("refuses a second live Membership for the same email in the Organization", async () => {
     const findLiveMemberByEmail = jest
       .fn()
-      .mockResolvedValue(ok({ id: "member-existing", email: "invitee@example.com" }));
+      .mockResolvedValue(
+        ok({ id: "member-existing", userId: "user-2", email: "invitee@example.com" })
+      );
     const createInvitedMember = jest.fn();
     const invitationCreate = jest.fn();
     const sendOrganizationInvite = jest.fn();
@@ -476,7 +490,9 @@ describe("AuthService.listOrganizationMembers", () => {
       {
         accountClaim: {} as AuthAccountClaimRepository,
         user: {} as AuthUserRepository,
-        invitation: {} as AuthInvitationRepository,
+        invitation: {
+          listExpiredPendingByOrganization: jest.fn().mockResolvedValue(ok([])),
+        } as unknown as AuthInvitationRepository,
         waitlist: {} as AuthWaitlistRepository,
         organization: {
           listOrganizationMembers,
@@ -506,6 +522,7 @@ describe("AuthService.acceptOrganizationInvitation", () => {
     createOrganization: AuthOrganizationRepository["createOrganization"];
     activateOrganizationSession: AuthOrganizationRepository["activateOrganizationSession"];
     findOrganization: AuthOrganizationRepository["findById"];
+    removeOrganizationMember?: AuthOrganizationRepository["removeOrganizationMember"];
   }): AuthService {
     return new AuthService(
       {
@@ -530,6 +547,8 @@ describe("AuthService.acceptOrganizationInvitation", () => {
           attachUserToInvitedMember: fakes.attachUserToInvitedMember,
           createOrganization: fakes.createOrganization,
           activateOrganizationSession: fakes.activateOrganizationSession,
+          removeOrganizationMember:
+            fakes.removeOrganizationMember ?? jest.fn().mockResolvedValue(ok({ id: MEMBER_ID })),
         } as unknown as AuthOrganizationRepository,
       },
       { email: {} as EmailService },
@@ -628,17 +647,26 @@ describe("AuthService.acceptOrganizationInvitation", () => {
 
   it("rejects an expired token", async () => {
     const attachUserToInvitedMember = jest.fn();
+    const invitationUpdate = jest
+      .fn()
+      .mockResolvedValue(
+        ok(
+          pendingInvitation({ status: "canceled", expiresAt: new Date("2020-01-01T00:00:00.000Z") })
+        )
+      );
+    const removeOrganizationMember = jest.fn().mockResolvedValue(ok({ id: MEMBER_ID }));
     const auth = createAcceptAuth({
       findById: jest
         .fn()
         .mockResolvedValue(
           ok(pendingInvitation({ expiresAt: new Date("2020-01-01T00:00:00.000Z") }))
         ),
-      invitationUpdate: jest.fn(),
+      invitationUpdate,
       attachUserToInvitedMember,
       createOrganization: jest.fn(),
       activateOrganizationSession: jest.fn(),
       findOrganization: jest.fn(),
+      removeOrganizationMember,
     });
 
     const result = await auth.acceptOrganizationInvitation({ id: INVITATION_ID }, userCtx());
@@ -648,6 +676,11 @@ describe("AuthService.acceptOrganizationInvitation", () => {
       expect(result.error.code).toBe("BAD_REQUEST");
     }
     expect(attachUserToInvitedMember).not.toHaveBeenCalled();
+    expect(removeOrganizationMember).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+    });
+    expect(invitationUpdate).toHaveBeenCalledWith({ id: INVITATION_ID, status: "canceled" });
   });
 
   it("rejects an email mismatch", async () => {
@@ -671,5 +704,320 @@ describe("AuthService.acceptOrganizationInvitation", () => {
       expect(result.error.code).toBe("FORBIDDEN");
     }
     expect(attachUserToInvitedMember).not.toHaveBeenCalled();
+  });
+});
+
+describe("AuthService.cancelOrganizationInvitation", () => {
+  function createCancelAuth(fakes: {
+    findById: AuthInvitationRepository["findById"];
+    invitationUpdate: AuthInvitationRepository["update"];
+    removeOrganizationMember: AuthOrganizationRepository["removeOrganizationMember"];
+  }): AuthService {
+    return new AuthService(
+      {
+        accountClaim: {} as AuthAccountClaimRepository,
+        user: {} as AuthUserRepository,
+        invitation: {
+          findById: fakes.findById,
+          update: fakes.invitationUpdate,
+        } as unknown as AuthInvitationRepository,
+        waitlist: {} as AuthWaitlistRepository,
+        organization: {
+          removeOrganizationMember: fakes.removeOrganizationMember,
+        } as unknown as AuthOrganizationRepository,
+      },
+      { email: {} as EmailService },
+      defaultAuthGrants,
+      createFakeBus()
+    );
+  }
+
+  it("soft-deletes the invited Membership and invalidates the token", async () => {
+    const invitation = pendingInvitation();
+    const findById = jest.fn().mockResolvedValue(ok(invitation));
+    const invitationUpdate = jest.fn().mockResolvedValue(ok({ ...invitation, status: "canceled" }));
+    const removeOrganizationMember = jest.fn().mockResolvedValue(ok({ id: MEMBER_ID }));
+    const auth = createCancelAuth({ findById, invitationUpdate, removeOrganizationMember });
+
+    const result = await auth.cancelOrganizationInvitation(
+      { invitationId: INVITATION_ID },
+      organizationCtx("owner")
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toEqual({ invitationId: INVITATION_ID, memberId: MEMBER_ID });
+    }
+    expect(removeOrganizationMember).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+    });
+    expect(invitationUpdate).toHaveBeenCalledWith({ id: INVITATION_ID, status: "canceled" });
+  });
+
+  it("forbids organization members who cannot manage Members", async () => {
+    const removeOrganizationMember = jest.fn();
+    const auth = createCancelAuth({
+      findById: jest.fn(),
+      invitationUpdate: jest.fn(),
+      removeOrganizationMember,
+    });
+
+    const result = await auth.cancelOrganizationInvitation(
+      { invitationId: INVITATION_ID },
+      organizationCtx("member")
+    );
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("FORBIDDEN");
+    }
+    expect(removeOrganizationMember).not.toHaveBeenCalled();
+  });
+});
+
+describe("AuthService.listOrganizationMembers lazy expiry", () => {
+  it("applies cancel to expired pending tokens before listing", async () => {
+    const expired = pendingInvitation({ expiresAt: new Date("2020-01-01T00:00:00.000Z") });
+    const listExpiredPendingByOrganization = jest.fn().mockResolvedValue(ok([expired]));
+    const invitationUpdate = jest.fn().mockResolvedValue(ok({ ...expired, status: "canceled" }));
+    const removeOrganizationMember = jest.fn().mockResolvedValue(ok({ id: MEMBER_ID }));
+    const listOrganizationMembers = jest.fn().mockResolvedValue(ok([]));
+    const auth = new AuthService(
+      {
+        accountClaim: {} as AuthAccountClaimRepository,
+        user: {} as AuthUserRepository,
+        invitation: {
+          listExpiredPendingByOrganization,
+          update: invitationUpdate,
+        } as unknown as AuthInvitationRepository,
+        waitlist: {} as AuthWaitlistRepository,
+        organization: {
+          listOrganizationMembers,
+          removeOrganizationMember,
+        } as unknown as AuthOrganizationRepository,
+      },
+      { email: {} as EmailService },
+      defaultAuthGrants,
+      createFakeBus()
+    );
+
+    const result = await auth.listOrganizationMembers(undefined, organizationCtx("owner"));
+
+    expect(result.isOk()).toBe(true);
+    expect(listExpiredPendingByOrganization).toHaveBeenCalledWith(ORG_ID);
+    expect(removeOrganizationMember).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+    });
+    expect(invitationUpdate).toHaveBeenCalledWith({ id: INVITATION_ID, status: "canceled" });
+    expect(listOrganizationMembers).toHaveBeenCalledWith(ORG_ID);
+  });
+});
+
+describe("AuthService.inviteOrganizationMember resend and revive", () => {
+  function createInviteAuthService(fakes: {
+    findLiveMemberByEmail: AuthOrganizationRepository["findLiveMemberByEmail"];
+    createInvitedMember: AuthOrganizationRepository["createInvitedMember"];
+    invitationCreate: AuthInvitationRepository["create"];
+    sendOrganizationInvite: EmailService["sendOrganizationInvite"];
+    findPendingLeftoverByEmail?: AuthInvitationRepository["findPendingLeftoverByEmail"];
+    findPendingByMemberId?: AuthInvitationRepository["findPendingByMemberId"];
+    invitationUpdate?: AuthInvitationRepository["update"];
+    findLeftMemberByEmail?: AuthOrganizationRepository["findLeftMemberByEmail"];
+    reviveInvitedMember?: AuthOrganizationRepository["reviveInvitedMember"];
+  }): AuthService {
+    return new AuthService(
+      {
+        accountClaim: {} as AuthAccountClaimRepository,
+        user: {
+          findById: jest
+            .fn()
+            .mockResolvedValue(ok({ id: "user-1", name: "Pat", email: "pat@example.com" })),
+        } as unknown as AuthUserRepository,
+        invitation: {
+          findById: jest.fn(),
+          update: fakes.invitationUpdate ?? jest.fn().mockResolvedValue(ok(pendingInvitation())),
+          create: fakes.invitationCreate,
+          findPendingByMemberId:
+            fakes.findPendingByMemberId ?? jest.fn().mockResolvedValue(ok(null)),
+          findPendingLeftoverByEmail:
+            fakes.findPendingLeftoverByEmail ?? jest.fn().mockResolvedValue(ok([])),
+        } as unknown as AuthInvitationRepository,
+        waitlist: {} as AuthWaitlistRepository,
+        organization: {
+          findById: jest.fn().mockResolvedValue(ok({ id: ORG_ID, name: "Acme", locale: "en" })),
+          findLiveMemberByEmail: fakes.findLiveMemberByEmail,
+          createInvitedMember: fakes.createInvitedMember,
+          findLeftMemberByEmail:
+            fakes.findLeftMemberByEmail ?? jest.fn().mockResolvedValue(ok(null)),
+          reviveInvitedMember: fakes.reviveInvitedMember ?? jest.fn(),
+        } as unknown as AuthOrganizationRepository,
+      },
+      { email: { sendOrganizationInvite: fakes.sendOrganizationInvite } as EmailService },
+      defaultAuthGrants,
+      createFakeBus(),
+      { web: WEB_URL, api: "https://api.example.com" }
+    );
+  }
+
+  it("resends to a live invited email without creating a second Membership", async () => {
+    const invitation = pendingInvitation();
+    const refreshed = { ...invitation, expiresAt: new Date("2099-02-01T00:00:00.000Z") };
+    const createInvitedMember = jest.fn();
+    const invitationCreate = jest.fn();
+    const invitationUpdate = jest.fn().mockResolvedValue(ok(refreshed));
+    const sendOrganizationInvite = jest.fn().mockResolvedValue(ok(undefined));
+    const auth = createInviteAuthService({
+      findLiveMemberByEmail: jest.fn().mockResolvedValue(
+        ok({
+          id: MEMBER_ID,
+          organizationId: ORG_ID,
+          userId: null,
+          email: "invitee@example.com",
+          name: "invitee@example.com",
+          role: "member",
+        })
+      ),
+      createInvitedMember,
+      invitationCreate,
+      sendOrganizationInvite,
+      findPendingByMemberId: jest.fn().mockResolvedValue(ok(invitation)),
+      invitationUpdate,
+    });
+
+    const result = await auth.inviteOrganizationMember(
+      { email: "invitee@example.com", role: "member" },
+      organizationCtx("owner")
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.member.id).toBe(MEMBER_ID);
+      expect(result.value.invitation.id).toBe(INVITATION_ID);
+    }
+    expect(createInvitedMember).not.toHaveBeenCalled();
+    expect(invitationCreate).not.toHaveBeenCalled();
+    expect(invitationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: INVITATION_ID,
+        email: "invitee@example.com",
+      })
+    );
+    expect(sendOrganizationInvite).toHaveBeenCalled();
+  });
+
+  it("revives a left Member as invited with the same MemberId", async () => {
+    const createInvitedMember = jest.fn();
+    const reviveInvitedMember = jest.fn().mockResolvedValue(
+      ok({
+        id: MEMBER_ID,
+        organizationId: ORG_ID,
+        userId: null,
+        email: "invitee@example.com",
+        name: "invitee@example.com",
+        role: "member",
+      })
+    );
+    const invitationCreate = jest.fn().mockResolvedValue(
+      ok({
+        id: INVITATION_ID,
+        organizationId: ORG_ID,
+        email: "invitee@example.com",
+        role: "member",
+        status: "pending",
+        memberId: MEMBER_ID,
+        inviterId: "user-1",
+        expiresAt: new Date("2099-02-01T00:00:00.000Z"),
+      })
+    );
+    const sendOrganizationInvite = jest.fn().mockResolvedValue(ok(undefined));
+    const auth = createInviteAuthService({
+      findLiveMemberByEmail: jest.fn().mockResolvedValue(ok(null)),
+      createInvitedMember,
+      invitationCreate,
+      sendOrganizationInvite,
+      findLeftMemberByEmail: jest.fn().mockResolvedValue(
+        ok({
+          id: MEMBER_ID,
+          organizationId: ORG_ID,
+          userId: "user-invitee",
+          email: "invitee@example.com",
+          deletedAt: new Date("2026-02-01T00:00:00.000Z"),
+        })
+      ),
+      reviveInvitedMember,
+    });
+
+    const result = await auth.inviteOrganizationMember(
+      { email: "invitee@example.com", role: "member" },
+      organizationCtx("owner")
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.member.id).toBe(MEMBER_ID);
+    }
+    expect(reviveInvitedMember).toHaveBeenCalledWith({
+      memberId: MEMBER_ID,
+      organizationId: ORG_ID,
+      email: "invitee@example.com",
+      role: "member",
+    });
+    expect(createInvitedMember).not.toHaveBeenCalled();
+    expect(invitationCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ memberId: MEMBER_ID, email: "invitee@example.com" })
+    );
+  });
+
+  it("cancels a leftover pending token without memberId and creates Member plus a new Invitation", async () => {
+    const leftover = pendingInvitation({ id: "legacy-invite", memberId: null });
+    const findPendingLeftoverByEmail = jest.fn().mockResolvedValue(ok([leftover]));
+    const invitationUpdate = jest.fn().mockResolvedValue(ok({ ...leftover, status: "canceled" }));
+    const createInvitedMember = jest.fn().mockResolvedValue(
+      ok({
+        id: MEMBER_ID,
+        organizationId: ORG_ID,
+        userId: null,
+        email: "invitee@example.com",
+        name: "invitee@example.com",
+        role: "member",
+      })
+    );
+    const invitationCreate = jest.fn().mockResolvedValue(
+      ok({
+        id: INVITATION_ID,
+        organizationId: ORG_ID,
+        email: "invitee@example.com",
+        role: "member",
+        status: "pending",
+        memberId: MEMBER_ID,
+        inviterId: "user-1",
+        expiresAt: new Date("2099-02-01T00:00:00.000Z"),
+      })
+    );
+    const sendOrganizationInvite = jest.fn().mockResolvedValue(ok(undefined));
+    const auth = createInviteAuthService({
+      findLiveMemberByEmail: jest.fn().mockResolvedValue(ok(null)),
+      createInvitedMember,
+      invitationCreate,
+      sendOrganizationInvite,
+      findPendingLeftoverByEmail,
+      invitationUpdate,
+    });
+
+    const result = await auth.inviteOrganizationMember(
+      { email: "invitee@example.com", role: "member" },
+      organizationCtx("owner")
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(invitationUpdate).toHaveBeenCalledWith({ id: "legacy-invite", status: "canceled" });
+    expect(createInvitedMember).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      email: "invitee@example.com",
+      role: "member",
+    });
+    expect(invitationCreate).toHaveBeenCalledWith(expect.objectContaining({ memberId: MEMBER_ID }));
   });
 });

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, isNull, ne, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
@@ -128,6 +128,71 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     );
     if (result.isErr()) return err(result.error);
     return ok(result.value[0]?.member ?? null);
+  }
+
+  async findLeftMemberByEmail({
+    organizationId,
+    email,
+  }: {
+    organizationId: string;
+    email: string;
+  }): ServerResultAsync<MemberRow | null> {
+    const result = await this.throwableQuery(() =>
+      this.orm
+        .select({ member: this.schema.members })
+        .from(this.schema.members)
+        .leftJoin(this.schema.users, eq(this.schema.members.userId, this.schema.users.id))
+        .where(
+          and(
+            eq(this.schema.members.organizationId, organizationId),
+            isNotNull(this.schema.members.deletedAt),
+            or(
+              sql`lower(${this.schema.members.email}) = ${email}`,
+              sql`lower(${this.schema.users.email}) = ${email}`
+            )
+          )
+        )
+        .orderBy(desc(this.schema.members.deletedAt))
+        .limit(1)
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value[0]?.member ?? null);
+  }
+
+  async reviveInvitedMember({
+    memberId,
+    organizationId,
+    email,
+    role,
+  }: {
+    memberId: string;
+    organizationId: string;
+    email: string;
+    role: string;
+  }): ServerResultAsync<MemberRow> {
+    const result = await this.throwableQuery(() =>
+      this.orm
+        .update(this.schema.members)
+        .set({
+          deletedAt: null,
+          userId: null,
+          email,
+          name: email,
+          role,
+          image: null,
+        })
+        .where(
+          and(
+            eq(this.schema.members.id, memberId),
+            eq(this.schema.members.organizationId, organizationId)
+          )
+        )
+        .returning()
+    );
+    if (result.isErr()) return err(result.error);
+    const [member] = result.value;
+    if (!member) return this.error("NOT_FOUND", "Member not found");
+    return ok(member);
   }
 
   async createInvitedMember({
@@ -590,6 +655,49 @@ export class AuthInvitationRepository extends BaseTableRepository<
     );
     if (result.isErr()) return err(result.error);
     return ok(result.value[0] ?? null);
+  }
+
+  async findPendingLeftoverByEmail({
+    organizationId,
+    email,
+  }: {
+    organizationId: string;
+    email: string;
+  }): ServerResultAsync<(typeof auth.invitations.$inferSelect)[]> {
+    const result = await this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(this.schema.invitations)
+        .where(
+          and(
+            eq(this.schema.invitations.organizationId, organizationId),
+            eq(this.schema.invitations.status, "pending"),
+            isNull(this.schema.invitations.memberId),
+            sql`lower(${this.schema.invitations.email}) = ${email}`
+          )
+        )
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value);
+  }
+
+  async listExpiredPendingByOrganization(
+    organizationId: string
+  ): ServerResultAsync<(typeof auth.invitations.$inferSelect)[]> {
+    const result = await this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(this.schema.invitations)
+        .where(
+          and(
+            eq(this.schema.invitations.organizationId, organizationId),
+            eq(this.schema.invitations.status, "pending"),
+            lte(this.schema.invitations.expiresAt, new Date())
+          )
+        )
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value);
   }
 }
 
