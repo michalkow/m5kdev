@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, isNull, ne } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNull, ne, or, sql } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
@@ -21,7 +21,8 @@ type UserRow = typeof auth.users.$inferSelect;
 type OrganizationRow = typeof auth.organizations.$inferSelect;
 type MemberRow = typeof auth.members.$inferSelect;
 type OrganizationMemberRow = typeof auth.members.$inferSelect & {
-  user: Pick<UserRow, "id" | "name" | "email" | "role" | "banned" | "emailVerified">;
+  invitationId: string | null;
+  user: Pick<UserRow, "id" | "name" | "email" | "role" | "banned" | "emailVerified"> | null;
 };
 
 export class AuthUserRepository extends BaseTableRepository<
@@ -39,18 +40,19 @@ export class AuthOrganizationRepository extends BaseTableRepository<
 > {
   private selectMemberRows(
     organizationId: string,
-    filters?: { memberId?: string; userId?: string; includeDeleted?: boolean }
+    filters?: { memberId?: string; userId?: string; includeDeleted?: boolean; limit?: number }
   ) {
     const conditions = [eq(this.schema.members.organizationId, organizationId)];
     if (!filters?.includeDeleted) conditions.push(isNull(this.schema.members.deletedAt));
     if (filters?.memberId) conditions.push(eq(this.schema.members.id, filters.memberId));
     if (filters?.userId) conditions.push(eq(this.schema.members.userId, filters.userId));
 
-    return this.orm
+    const query = this.orm
       .select({
         id: this.schema.members.id,
         organizationId: this.schema.members.organizationId,
         userId: this.schema.members.userId,
+        email: this.schema.members.email,
         name: this.schema.members.name,
         image: this.schema.members.image,
         role: this.schema.members.role,
@@ -60,6 +62,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
         metadata: this.schema.members.metadata,
         onboarding: this.schema.members.onboarding,
         flags: this.schema.members.flags,
+        invitationId: this.schema.invitations.id,
         user: {
           id: this.schema.users.id,
           name: this.schema.users.name,
@@ -71,9 +74,84 @@ export class AuthOrganizationRepository extends BaseTableRepository<
         },
       })
       .from(this.schema.members)
-      .innerJoin(this.schema.users, eq(this.schema.members.userId, this.schema.users.id))
+      .leftJoin(this.schema.users, eq(this.schema.members.userId, this.schema.users.id))
+      .leftJoin(
+        this.schema.invitations,
+        and(
+          eq(this.schema.invitations.memberId, this.schema.members.id),
+          eq(this.schema.invitations.status, "pending")
+        )
+      )
       .where(and(...conditions))
-      .orderBy(this.schema.users.email);
+      .orderBy(sql`lower(coalesce(${this.schema.members.email}, ${this.schema.users.email}))`);
+
+    const limited = filters?.limit ? query.limit(filters.limit) : query;
+    return limited.then((rows) => {
+      const seen = new Map<string, OrganizationMemberRow>();
+      for (const row of rows) {
+        if (seen.has(row.id)) continue;
+        seen.set(row.id, {
+          ...row,
+          user: row.user?.id ? row.user : null,
+        });
+      }
+      return [...seen.values()];
+    });
+  }
+
+  async findLiveMemberByEmail({
+    organizationId,
+    email,
+  }: {
+    organizationId: string;
+    email: string;
+  }): ServerResultAsync<MemberRow | null> {
+    const result = await this.throwableQuery(() =>
+      this.orm
+        .select({ member: this.schema.members })
+        .from(this.schema.members)
+        .leftJoin(this.schema.users, eq(this.schema.members.userId, this.schema.users.id))
+        .where(
+          and(
+            eq(this.schema.members.organizationId, organizationId),
+            isNull(this.schema.members.deletedAt),
+            or(
+              sql`lower(${this.schema.members.email}) = ${email}`,
+              sql`lower(${this.schema.users.email}) = ${email}`
+            )
+          )
+        )
+        .limit(1)
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value[0]?.member ?? null);
+  }
+
+  async createInvitedMember({
+    organizationId,
+    email,
+    role,
+  }: {
+    organizationId: string;
+    email: string;
+    role: string;
+  }): ServerResultAsync<MemberRow> {
+    const result = await this.throwableQuery(() =>
+      this.orm
+        .insert(this.schema.members)
+        .values({
+          organizationId,
+          userId: null,
+          email,
+          name: email,
+          role,
+        })
+        .returning()
+    );
+    if (result.isErr()) return err(result.error);
+    const [member] = result.value;
+    if (!member) return this.error("INTERNAL_SERVER_ERROR");
+    return ok(member);
   }
 
   async findMemberByUserAndOrganization({
@@ -84,7 +162,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     organizationId: string;
   }): ServerResultAsync<OrganizationMemberRow> {
     const result = await this.throwableQuery(() =>
-      this.selectMemberRows(organizationId, { userId }).limit(1)
+      this.selectMemberRows(organizationId, { userId, limit: 1 })
     );
     if (result.isErr()) return err(result.error);
     const [member] = result.value;
@@ -157,7 +235,11 @@ export class AuthOrganizationRepository extends BaseTableRepository<
         if (!organization) throw new Error("Failed to create organization");
 
         const [user] = await t
-          .select({ name: this.schema.users.name, image: this.schema.users.image })
+          .select({
+            name: this.schema.users.name,
+            image: this.schema.users.image,
+            email: this.schema.users.email,
+          })
           .from(this.schema.users)
           .where(eq(this.schema.users.id, userId))
           .limit(1);
@@ -168,6 +250,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
             userId,
             organizationId: organization.id,
             role,
+            email: user?.email ?? null,
             name: user?.name ?? "",
             image: user?.image ?? null,
           })
@@ -237,6 +320,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
           id: this.schema.users.id,
           name: this.schema.users.name,
           image: this.schema.users.image,
+          email: this.schema.users.email,
         })
         .from(this.schema.users)
         .where(eq(this.schema.users.id, userId))
@@ -273,6 +357,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
             deletedAt: null,
             role,
             name: user.name,
+            email: user.email,
             image: user.image ?? null,
           })
           .where(eq(this.schema.members.id, existing.id))
@@ -283,7 +368,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
       if (!revived) return this.error("INTERNAL_SERVER_ERROR");
 
       const memberResult = await this.throwableQuery(() =>
-        this.selectMemberRows(organizationId, { memberId: revived.id }).limit(1)
+        this.selectMemberRows(organizationId, { memberId: revived.id, limit: 1 })
       );
       if (memberResult.isErr()) return err(memberResult.error);
       const [member] = memberResult.value;
@@ -298,6 +383,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
           organizationId,
           userId,
           role,
+          email: user.email,
           name: user.name,
           image: user.image ?? null,
         })
@@ -308,7 +394,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     if (!inserted) return this.error("INTERNAL_SERVER_ERROR");
 
     const memberResult = await this.throwableQuery(() =>
-      this.selectMemberRows(organizationId, { memberId: inserted.id }).limit(1)
+      this.selectMemberRows(organizationId, { memberId: inserted.id, limit: 1 })
     );
     if (memberResult.isErr()) return err(memberResult.error);
     const [member] = memberResult.value;
@@ -326,7 +412,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     role: string;
   }): ServerResultAsync<OrganizationMemberRow> {
     const existingResult = await this.throwableQuery(() =>
-      this.selectMemberRows(organizationId, { memberId }).limit(1)
+      this.selectMemberRows(organizationId, { memberId, limit: 1 })
     );
     if (existingResult.isErr()) return err(existingResult.error);
     const [existing] = existingResult.value;
@@ -344,21 +430,23 @@ export class AuthOrganizationRepository extends BaseTableRepository<
             )
           );
 
-        await tx
-          .update(this.schema.sessions)
-          .set({ activeOrganizationRole: role })
-          .where(
-            and(
-              eq(this.schema.sessions.userId, existing.userId),
-              eq(this.schema.sessions.activeOrganizationId, organizationId)
-            )
-          );
+        if (existing.userId) {
+          await tx
+            .update(this.schema.sessions)
+            .set({ activeOrganizationRole: role })
+            .where(
+              and(
+                eq(this.schema.sessions.userId, existing.userId),
+                eq(this.schema.sessions.activeOrganizationId, organizationId)
+              )
+            );
+        }
       })
     );
     if (updateResult.isErr()) return err(updateResult.error);
 
     const memberResult = await this.throwableQuery(() =>
-      this.selectMemberRows(organizationId, { memberId }).limit(1)
+      this.selectMemberRows(organizationId, { memberId, limit: 1 })
     );
     if (memberResult.isErr()) return err(memberResult.error);
     const [member] = memberResult.value;
@@ -374,7 +462,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     memberId: string;
   }): ServerResultAsync<{ id: string }> {
     const existingResult = await this.throwableQuery(() =>
-      this.selectMemberRows(organizationId, { memberId }).limit(1)
+      this.selectMemberRows(organizationId, { memberId, limit: 1 })
     );
     if (existingResult.isErr()) return err(existingResult.error);
     const [existing] = existingResult.value;
@@ -623,6 +711,7 @@ export class AuthWaitlistRepository extends BaseTableRepository<
             userId: user.id,
             organizationId: organization.id,
             role: "owner",
+            email: user.email,
             name: user.name,
             image: user.image ?? null,
           })

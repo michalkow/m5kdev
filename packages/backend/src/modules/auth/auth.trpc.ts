@@ -33,6 +33,26 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.readInvitation(input, ctx));
       }),
 
+    updateInvitationRole: organizationProcedure
+      .input(invitationSchemas.input.updateRole)
+      .output(invitationSchemas.output.role)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.updateInvitationRole(input, ctx));
+      }),
+
+    inviteOrganizationMember: organizationProcedure
+      .input(invitationSchemas.input.invite)
+      .output(invitationSchemas.output.invite)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.inviteOrganizationMember(input, ctx));
+      }),
+
+    listOrganizationMembers: organizationProcedure
+      .output(invitationSchemas.output.members)
+      .query(async ({ ctx }) => {
+        return handleTRPCResult(await authService.listOrganizationMembers(undefined, ctx));
+      }),
+
     createInvitationCode: procedure
       .input(waitlistSchemas.input.create)
       .output(waitlistSchemas.output.full)

@@ -201,6 +201,8 @@
   "organization.members.loadInvitationsError": "Nie udało się załadować zaproszeń",
   "organization.members.roleUpdateSuccess": "Rola członka zaktualizowana",
   "organization.members.roleUpdateError": "Nie udało się zaktualizować roli członka",
+  "organization.members.invitationRoleUpdateSuccess": "Rola zaproszenia zaktualizowana",
+  "organization.members.invitationRoleUpdateError": "Nie udało się zaktualizować roli zaproszenia",
   "organization.members.removeMemberSuccess": "Członek usunięty",
   "organization.members.removeMemberError": "Nie udało się usunąć członka",
   "organization.members.emailRequired": "Adres e-mail jest wymagany",

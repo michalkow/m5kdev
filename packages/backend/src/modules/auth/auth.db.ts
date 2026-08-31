@@ -113,9 +113,8 @@ export const members = sqliteTable("members", {
   organizationId: text("organization_id")
     .notNull()
     .references(() => organizations.id),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id),
+  userId: text("user_id").references(() => users.id),
+  email: text("email"),
   /** Snapshot of the user's display name for attribution after leave/remove. */
   name: text("name").notNull().default(""),
   /** Snapshot of the user's image (e.g. OAuth avatar) for attribution after leave/remove. */
@@ -164,6 +163,7 @@ export const invitations = sqliteTable("invitations", {
     .notNull()
     .references(() => organizations.id),
   teamId: text("team_id").references(() => teams.id),
+  memberId: text("member_id").references(() => members.id),
   email: text("email").notNull(),
   role: text("role"),
   status: text("status").notNull(),

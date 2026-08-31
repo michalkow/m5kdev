@@ -8,15 +8,15 @@ Opinionated TypeScript stack for AI SaaS apps. This file is the domain glossary:
 
 **Organization**:
 The default tenancy unit. Every authenticated User belongs to at least one, including single-user products where the org stays invisible in the UI.
-_Avoid_: Workspace, tenant, account, company
+_Avoid_: Workspace, tenant, account, company, Team (not a 1.0 tenancy unit)
 
 **Membership**:
-A durable `members` row (`userId` + `organizationId` + `role`). Leave soft-deletes it; rejoin revives the same row so MemberId stays stable.
-_Avoid_: OrgUser, OrganizationUser; using "member" to mean only the default role name
+A durable `members` row: one seat in an Organization. Invite creates it before a User exists (`userId` unset; email and name snapshots). Accept attaches that User to the same row. Leave, invite cancel, and invite expiry soft-delete it, including Better Auth leave/remove; rejoin or re-invite revives it so MemberId stays stable. An Organization has exactly one Owner. The Owner cannot leave; they delete the Organization, or a User-role `admin` transfers Owner first.
+_Avoid_: OrgUser, OrganizationUser; a second live row for the same person in the same Organization; using "member" to mean only the default role name; treating Invitation as the seat; a second Owner; org self-service granting or transferring Owner
 
 **Member**:
-The Membership principal used to attribute and authorize org-scoped assets.
-_Avoid_: User (when you mean the membership), author, owner (when you mean the membership row)
+The Membership principal used to attribute and authorize org-scoped assets, including invited seats that do not yet have a User.
+_Avoid_: User (when you mean the membership), author, owner (when you mean the membership row), Invitation
 
 **MemberId**:
 The Membership id stamped on org-scoped rows. In organization context, `"own"` grants compare this field, not UserId.
@@ -30,17 +30,13 @@ _Avoid_: Account, Customer, Client, Member
 The User id. Correct key for personal resources (devices, OAuth, sessions) and optional audit dual-write. Not the org-scoped ownership key. Billing is not a personal User resource.
 _Avoid_: MemberId (they are different principals)
 
-**Team**:
-An optional subgroup inside an Organization. Team-scoped Actors require MemberId plus team id and role.
-_Avoid_: Organization (teams nest inside orgs)
-
 **Invitation**:
-An Organization or Team membership invite.
-_Avoid_: Waitlist code, Account claim
+The Better Auth accept token (email link, expiry) that attaches a User to an invited Membership. Not a person and not assignable.
+_Avoid_: Waitlist code, Account claim, Team invite; pending Member; a principal apps stamp on rows
 
 **Waitlist**:
-A signup gate: a User is not created until an invitation code is accepted.
-_Avoid_: Invitation (that is org membership), Account claim
+A signup gate: a User is not created until a Waitlist code is accepted. Users may mint those codes.
+_Avoid_: Invitation (that is the Membership accept token), Account claim, createInvitationCode
 
 **Account claim**:
 An admin-provisioned User that a person later claims via code or magic link.
@@ -49,16 +45,16 @@ _Avoid_: Invitation, Waitlist, signup
 ### Identity and access
 
 **Actor**:
-Who a Service call is made on behalf of: `UserActor`, `OrganizationActor`, `TeamActor`, or `AdminActor`. Organization and team scopes require MemberId.
-_Avoid_: Session, Context, Principal, Request
+Who a Service call is made on behalf of: `UserActor`, `OrganizationActor`, or `AdminActor`. Organization scope requires an active Membership (User attached, not soft-deleted). Invited Members are not Actors.
+_Avoid_: Session, Context, Principal, Request, TeamActor
 
 **ActorScope**:
-Auth requirement on a Procedure: `user` | `organization` | `team` | `admin`.
-_Avoid_: Level (that is Grants), Role, Access
+Auth requirement on a Procedure: `user` | `organization` | `admin`.
+_Avoid_: Level (that is Grants), Role, Access; `team`
 
 **Grant**:
-A flattened permission tuple: resource, level (`user` | `team` | `organization`), role, Action, Access. Declared in `<module>.grants.ts`.
-_Avoid_: Permission, Policy, ACL, CASL statement, AccessModule (removed; Access is Grant width only)
+A flattened permission tuple: resource, level (`user` | `organization`), role, Action, Access. Declared in `<module>.grants.ts`.
+_Avoid_: Permission, Policy, ACL, CASL statement, AccessModule (removed; Access is Grant width only); Grant level `team`
 
 **Action**:
 Canonical Grant verbs: `read`, `write`, `delete`, `publish`.
@@ -69,8 +65,12 @@ How wide a Grant is: `all` (any entity), `own` (ownership), `org` (same Organiza
 _Avoid_: Scope, Role
 
 **Role**:
-A named key at User, Organization, or Team scope, configured once in `defineAuthRoles` and passed through kernel metadata and `AppConfigProvider`. Starter defaults: User `user`/`admin`; Organization `member`/`admin`/`owner`.
-_Avoid_: Grant, Access, permission
+A named key at User or Organization scope, configured once in `defineAuthRoles` and passed through kernel metadata and `AppConfigProvider`. Starter defaults: User `user`/`admin`; Organization `member`/`admin`/`owner`.
+_Avoid_: Grant, Access, permission; Team role scope
+
+**Owner**:
+The Organization Role `owner`. Steady state is exactly one per Organization. Creating an Organization (signup) makes that User the Owner. Invite and org self-service cannot grant or change it. A User-role `admin` (AdminActor) may grant Owner only when there is none, or transfer when there is exactly one: promote an active Member and demote the previous Owner to Organization Role `admin` in one operation. Extra Owners from before this rule stay until an Admin demotes them; Auth refuses another Owner grant while more than one exists. The Owner cannot leave; they delete the Organization, or an Admin transfers first.
+_Avoid_: multiple Owners as a product feature; inviting Owner; org members UI assigning Owner
 
 ### Composition
 
@@ -246,7 +246,7 @@ _Avoid_: Plan, beta, Customer
 
 **Tag**:
 A polymorphic label attached to any resource type via taggings. Ownership is UserId (personal), MemberId (Member-owned), or organizationId (org-shared).
-_Avoid_: Label, Category (unless the product truly means a separate taxonomy); Team-scoped Tag as a fourth 1.0 resource
+_Avoid_: Label, Category (unless the product truly means a separate taxonomy); a fourth ownership besides UserId, MemberId, and organizationId
 
 **Conversation**:
 Ordered UI transcript of AI turns. A turn is a Vercel AI SDK `UIMessage`. When persisted, it is the UI projection of a Thread. Ownership follows that Thread's resource.

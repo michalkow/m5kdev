@@ -43,7 +43,8 @@ export const adminUserSummarySchema = createSelectSchema(users).pick({
 
 export const organizationSchema = createSelectSchema(organizations);
 const organizationMemberSchema = createSelectSchema(members).extend({
-  user: adminUserSummarySchema,
+  user: adminUserSummarySchema.nullable(),
+  invitationId: z.string().nullable(),
 });
 
 export function createOrganizationSchemas(roles: AuthRolesConfig | NormalizedAuthRolesConfig) {
@@ -181,6 +182,20 @@ export const waitlistSchemas = {
   },
 };
 
+export const organizationMemberListItemSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  userId: z.string().nullable(),
+  email: z.string().nullable(),
+  name: z.string(),
+  image: z.string().nullable(),
+  role: z.string(),
+  createdAt: z.date(),
+  deletedAt: z.date().nullable(),
+  invitationId: z.string().nullable(),
+  user: adminUserSummarySchema.nullable(),
+});
+
 export const invitationSchemas = {
   output: {
     read: z.object({
@@ -190,10 +205,41 @@ export const invitationSchemas = {
       slug: z.string().nullable(),
       logo: z.string().nullable(),
     }),
+    role: z.object({
+      id: z.string(),
+      role: z.string(),
+    }),
+    invite: z.object({
+      member: z.object({
+        id: z.string(),
+        organizationId: z.string(),
+        userId: z.string().nullable(),
+        email: z.string(),
+        name: z.string(),
+        role: z.string(),
+      }),
+      invitation: z.object({
+        id: z.string(),
+        memberId: z.string().nullable(),
+        email: z.string(),
+        role: z.string().nullable(),
+        status: z.string(),
+        expiresAt: z.date(),
+      }),
+    }),
+    members: organizationMemberListItemSchema.array(),
   },
   input: {
     read: z.object({
       id: z.string(),
+    }),
+    updateRole: z.object({
+      id: z.string(),
+      role: z.string(),
+    }),
+    invite: z.object({
+      email: z.string(),
+      role: z.string(),
     }),
   },
 };

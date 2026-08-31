@@ -349,7 +349,7 @@ export function AuthAdminOrganizationManagement() {
 
   const members = membersQuery.data?.members ?? [];
   const currentMemberUserIds = useMemo(
-    () => new Set(members.map((member) => member.userId)),
+    () => new Set(members.flatMap((member) => (member.userId ? [member.userId] : []))),
     [members]
   );
 
@@ -774,7 +774,7 @@ export function AuthAdminOrganizationManagement() {
                     <Table.ScrollContainer>
                       <Table.Content>
                         <Table.Header>
-                          <Table.Column>Name</Table.Column>
+                          <Table.Column isRowHeader>Name</Table.Column>
                           <Table.Column>Email</Table.Column>
                           <Table.Column>Role</Table.Column>
                           <Table.Column className="text-right">Actions</Table.Column>
@@ -784,16 +784,18 @@ export function AuthAdminOrganizationManagement() {
                             <Table.Row id={member.id}>
                               <Table.Cell>
                                 <div className="flex flex-col">
-                                  <span className="font-medium">{member.user.name}</span>
+                                  <span className="font-medium">
+                                    {member.user?.name ?? member.name}
+                                  </span>
                                   <span className="text-xs text-muted-foreground">
-                                    {member.user.emailVerified ? "Verified" : "Unverified"}
+                                    {member.user?.emailVerified ? "Verified" : "Unverified"}
                                   </span>
                                 </div>
                               </Table.Cell>
-                              <Table.Cell>{member.user.email}</Table.Cell>
+                              <Table.Cell>{member.user?.email ?? member.email ?? ""}</Table.Cell>
                               <Table.Cell>
                                 <Select
-                                  aria-label={`Role for ${member.user.email}`}
+                                  aria-label={`Role for ${member.user?.email ?? member.email ?? member.name}`}
                                   selectedKey={member.role}
                                   isDisabled={
                                     updateMemberRoleMutation.isPending &&
@@ -847,7 +849,7 @@ export function AuthAdminOrganizationManagement() {
                                       removeMemberMutation.isPending &&
                                       removeMemberMutation.variables?.memberId === member.id
                                     }
-                                    aria-label={`Remove ${member.user.email}`}
+                                    aria-label={`Remove ${member.user?.email ?? member.email ?? member.name}`}
                                     className="text-danger"
                                   >
                                     <Trash2 className="h-4 w-4" />

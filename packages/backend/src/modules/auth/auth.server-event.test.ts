@@ -184,7 +184,7 @@ describe("AuthService Server event emit", () => {
     const auth = createAuthService({
       bus,
       listOrganizationMembers:
-        listOrganizationMembers as AuthOrganizationRepository["listOrganizationMembers"],
+        listOrganizationMembers as unknown as AuthOrganizationRepository["listOrganizationMembers"],
     });
 
     auth.organizationEmit({
@@ -293,7 +293,7 @@ describe("AuthService Server event emit", () => {
     const auth = createAuthService({
       bus,
       listOrganizationMembers:
-        listOrganizationMembers as AuthOrganizationRepository["listOrganizationMembers"],
+        listOrganizationMembers as unknown as AuthOrganizationRepository["listOrganizationMembers"],
     });
 
     auth.emitServerEvent({

@@ -241,6 +241,7 @@ export async function createOrganizationAndTeam<O extends Orm, S extends Schema>
         userId: user.id,
         organizationId: organization.id,
         role: "owner",
+        email: user.email,
         name: user.name ?? "",
         image: user.image ?? null,
       })
@@ -301,7 +302,7 @@ export async function softDeleteOrganizationMember(
   }: {
     memberId: string;
     organizationId: string;
-    userId: string;
+    userId: string | null;
   }
 ): Promise<{ id: string } | null> {
   return orm.transaction(async (tx) => {
@@ -319,22 +320,24 @@ export async function softDeleteOrganizationMember(
 
     if (!removed) return null;
 
-    await tx
-      .update(schema.sessions)
-      .set({
-        activeOrganizationId: null,
-        activeOrganizationRole: null,
-        activeOrganizationMemberId: null,
-        activeOrganizationType: null,
-        activeTeamId: null,
-        activeTeamRole: null,
-      })
-      .where(
-        and(
-          eq(schema.sessions.userId, userId),
-          eq(schema.sessions.activeOrganizationId, organizationId)
-        )
-      );
+    if (userId) {
+      await tx
+        .update(schema.sessions)
+        .set({
+          activeOrganizationId: null,
+          activeOrganizationRole: null,
+          activeOrganizationMemberId: null,
+          activeOrganizationType: null,
+          activeTeamId: null,
+          activeTeamRole: null,
+        })
+        .where(
+          and(
+            eq(schema.sessions.userId, userId),
+            eq(schema.sessions.activeOrganizationId, organizationId)
+          )
+        );
+    }
 
     return removed;
   });

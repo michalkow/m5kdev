@@ -1,34 +1,30 @@
-import { type UseMutationOptions, useMutation } from "@tanstack/react-query";
-import { useAuthClient } from "./useAuthClient";
-import {
-  type AuthOrganizationRole,
-  type UseOrganizationAccessProps,
-  useOrganizationAccess,
-} from "./useOrganizationAccess";
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAppTRPC } from "../../app/hooks/useAppTrpc";
+import { type UseOrganizationAccessProps, useOrganizationAccess } from "./useOrganizationAccess";
 
-type Variables = { email: string; role: AuthOrganizationRole };
+interface UseAuthMemberInviteOptions {
+  onSuccess?: () => void | Promise<void>;
+  onError?: (error: unknown) => void;
+}
 
 export function useAuthMemberInvite(
-  options: Omit<UseMutationOptions<void, Error, Variables, unknown>, "mutationFn">,
+  options: UseAuthMemberInviteOptions,
   props?: UseOrganizationAccessProps
-): ReturnType<typeof useMutation<void, Error, Variables, unknown>> {
-  const { onSuccess, ...rest } = options;
-  const authClient = useAuthClient();
-  const { refreshOrganizationQueries, activeOrganizationId } = useOrganizationAccess(props ?? {});
-  return useMutation({
-    mutationFn: async ({ email, role }: { email: string; role: AuthOrganizationRole }) => {
-      const { error } = await authClient.organization.inviteMember({
-        organizationId: activeOrganizationId,
-        email: email.trim(),
-        role,
-      } as Parameters<typeof authClient.organization.inviteMember>[0]);
-      if (error) throw new Error(error.message);
-    },
-
-    onSuccess: async (data, variables, context) => {
-      await refreshOrganizationQueries();
-      await onSuccess?.(data, variables, context);
-    },
-    ...rest,
-  });
+) {
+  const trpc = useAppTRPC<BackendTRPCRouter>();
+  const queryClient = useQueryClient();
+  const { refreshOrganizationQueries } = useOrganizationAccess(props ?? {});
+  return useMutation(
+    trpc.auth.inviteOrganizationMember.mutationOptions({
+      onSuccess: async () => {
+        await refreshOrganizationQueries();
+        await queryClient.invalidateQueries({
+          queryKey: trpc.auth.listOrganizationMembers.queryKey(),
+        });
+        await options.onSuccess?.();
+      },
+      onError: options.onError,
+    })
+  );
 }

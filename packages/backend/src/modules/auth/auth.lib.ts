@@ -780,6 +780,7 @@ export function createBetterAuth<
                     deletedAt: null,
                     role: invitation.role || "member",
                     name: user.name,
+                    email: user.email,
                     image: user.image ?? null,
                   })
                   .where(eq(schema.members.id, existingMember.id))
@@ -793,6 +794,7 @@ export function createBetterAuth<
                     organizationId: invitation.organizationId,
                     role: invitation.role || "member",
                     name: user.name,
+                    email: user.email,
                     image: user.image ?? null,
                   })
                   .returning();

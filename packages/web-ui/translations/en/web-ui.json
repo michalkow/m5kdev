@@ -201,6 +201,8 @@
   "organization.members.loadInvitationsError": "Failed to load invitations",
   "organization.members.roleUpdateSuccess": "Member role updated",
   "organization.members.roleUpdateError": "Failed to update member role",
+  "organization.members.invitationRoleUpdateSuccess": "Invitation role updated",
+  "organization.members.invitationRoleUpdateError": "Failed to update invitation role",
   "organization.members.removeMemberSuccess": "Member removed",
   "organization.members.removeMemberError": "Failed to remove member",
   "organization.members.emailRequired": "Email is required",

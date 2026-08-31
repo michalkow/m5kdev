@@ -1,4 +1,6 @@
 import { Button, Card, Chip, Input, Label, ListBox, Select, Spinner, Table } from "@heroui/react";
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useRoleLabel } from "@m5kdev/frontend/modules/app/hooks/useRoleLabel";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useAuthMemberInvite } from "@m5kdev/frontend/modules/auth/hooks/useMemberInvite";
@@ -7,11 +9,16 @@ import {
   useOrganizationAccess,
 } from "@m5kdev/frontend/modules/auth/hooks/useOrganizationAccess";
 import type { Key } from "@react-types/shared";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Trash2, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import {
+  type CombinedMemberRow,
+  ORGANIZATION_ROLE_FALLBACK,
+  toOrganizationMemberRows,
+} from "./organizationMemberRows";
 
 type OrganizationDetails = {
   id: string;
@@ -20,51 +27,6 @@ type OrganizationDetails = {
   logo?: string | null;
   metadata?: Record<string, unknown> | null;
 };
-
-type OrganizationMember = {
-  id: string;
-  userId: string;
-  role: string;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    image?: string | null;
-  };
-};
-
-type OrganizationInvitation = {
-  id: string;
-  organizationId: string;
-  email: string;
-  role: string;
-  status: string;
-  inviterId: string;
-  createdAt: Date | string;
-  expiresAt: Date | string;
-};
-
-type CombinedMemberRow =
-  | {
-      kind: "member";
-      id: string;
-      displayName: string;
-      email: string;
-      role: string;
-      status: "active";
-      memberId: string;
-    }
-  | {
-      kind: "invitation";
-      id: string;
-      displayName: string;
-      email: string;
-      role: string;
-      status: "invited";
-      invitationId: string;
-    };
-
-const ORGANIZATION_ROLE_FALLBACK = "member";
 
 export interface AuthOrganizationMembersRouteLabels {
   loadError: string;
@@ -77,6 +39,8 @@ export interface AuthOrganizationMembersRouteLabels {
   loadInvitationsError: string;
   roleUpdateSuccess: string;
   roleUpdateError: string;
+  invitationRoleUpdateSuccess: string;
+  invitationRoleUpdateError: string;
   removeMemberSuccess: string;
   removeMemberError: string;
   emailRequired: string;
@@ -126,6 +90,51 @@ function OrganizationStateCard({ title, message }: { title: string; message: str
   );
 }
 
+function OrganizationRoleSelect({
+  ariaLabel,
+  selectedKey,
+  isDisabled,
+  roles,
+  getRoleLabel,
+  onRoleChange,
+}: {
+  ariaLabel: string;
+  selectedKey: string;
+  isDisabled: boolean;
+  roles: readonly string[];
+  getRoleLabel: (role: string) => string;
+  onRoleChange: (role: AuthOrganizationRole) => void;
+}) {
+  return (
+    <Select
+      aria-label={ariaLabel}
+      selectedKey={selectedKey}
+      isDisabled={isDisabled}
+      onSelectionChange={(key: Key | null) => {
+        const role = key == null ? undefined : String(key);
+        if (role && role !== selectedKey && roles.includes(role)) {
+          onRoleChange(role);
+        }
+      }}
+    >
+      <Select.Trigger aria-label={ariaLabel} className="min-h-9">
+        <Select.Value />
+        <Select.Indicator />
+      </Select.Trigger>
+      <Select.Popover>
+        <ListBox>
+          {roles.map((role) => (
+            <ListBox.Item key={role} id={role} textValue={getRoleLabel(role)}>
+              {getRoleLabel(role)}
+              <ListBox.ItemIndicator />
+            </ListBox.Item>
+          ))}
+        </ListBox>
+      </Select.Popover>
+    </Select>
+  );
+}
+
 function useOrganizationConfig() {
   const { t } = useTranslation();
 
@@ -142,6 +151,8 @@ function useOrganizationConfig() {
       loadInvitationsError: t("web-ui:organization.members.loadInvitationsError"),
       roleUpdateSuccess: t("web-ui:organization.members.roleUpdateSuccess"),
       roleUpdateError: t("web-ui:organization.members.roleUpdateError"),
+      invitationRoleUpdateSuccess: t("web-ui:organization.members.invitationRoleUpdateSuccess"),
+      invitationRoleUpdateError: t("web-ui:organization.members.invitationRoleUpdateError"),
       removeMemberSuccess: t("web-ui:organization.members.removeMemberSuccess"),
       removeMemberError: t("web-ui:organization.members.removeMemberError"),
       emailRequired: t("web-ui:organization.members.emailRequired"),
@@ -188,6 +199,8 @@ export function AuthOrganizationMembersRoute({
 }: AuthOrganizationMembersRouteProps) {
   const { resolvedLabels } = useOrganizationConfig();
   const getRoleLabel = useRoleLabel("organization");
+  const trpc = useAppTRPC<BackendTRPCRouter>();
+  const queryClient = useQueryClient();
 
   const {
     activeOrganizationId,
@@ -237,12 +250,32 @@ export function AuthOrganizationMembersRoute({
     },
     onSuccess: async () => {
       await refreshOrganizationQueriesStable();
+      await queryClient.invalidateQueries({
+        queryKey: trpc.auth.listOrganizationMembers.queryKey(),
+      });
       toast.success(resolvedLabels.roleUpdateSuccess);
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : resolvedLabels.roleUpdateError);
     },
   });
+
+  const updateInvitationRoleMutation = useMutation(
+    trpc.auth.updateInvitationRole.mutationOptions({
+      onSuccess: async () => {
+        await refreshOrganizationQueriesStable();
+        await queryClient.invalidateQueries({
+          queryKey: trpc.auth.listOrganizationMembers.queryKey(),
+        });
+        toast.success(resolvedLabels.invitationRoleUpdateSuccess);
+      },
+      onError: (error) => {
+        toast.error(
+          error instanceof Error ? error.message : resolvedLabels.invitationRoleUpdateError
+        );
+      },
+    })
+  );
 
   const removeMemberMutation = useMutation({
     mutationFn: async ({
@@ -260,6 +293,9 @@ export function AuthOrganizationMembersRoute({
     },
     onSuccess: async () => {
       await refreshOrganizationQueriesStable();
+      await queryClient.invalidateQueries({
+        queryKey: trpc.auth.listOrganizationMembers.queryKey(),
+      });
       toast.success(resolvedLabels.removeMemberSuccess);
     },
     onError: (error) => {
@@ -287,6 +323,9 @@ export function AuthOrganizationMembersRoute({
     },
     onSuccess: async () => {
       await refreshOrganizationQueriesStable();
+      await queryClient.invalidateQueries({
+        queryKey: trpc.auth.listOrganizationMembers.queryKey(),
+      });
       toast.success(resolvedLabels.cancelInvitationSuccess);
     },
     onError: (error) => {
@@ -297,6 +336,10 @@ export function AuthOrganizationMembersRoute({
   const updatingMemberId =
     updateRoleMutation.isPending && updateRoleMutation.variables
       ? updateRoleMutation.variables.memberId
+      : null;
+  const updatingInvitationId =
+    updateInvitationRoleMutation.isPending && updateInvitationRoleMutation.variables
+      ? updateInvitationRoleMutation.variables.id
       : null;
   const removingMemberId =
     removeMemberMutation.isPending && removeMemberMutation.variables
@@ -330,72 +373,21 @@ export function AuthOrganizationMembersRoute({
     },
   });
 
-  const membersQuery = useQuery({
-    queryKey: ["auth-organization-members", activeOrganizationId],
-    enabled: Boolean(activeOrganizationId && canManageOrganization),
-    queryFn: async () => {
-      const { data, error } = await authClient.organization.listMembers({
-        query: {
-          organizationId: activeOrganizationId,
-          limit: 200,
-          offset: 0,
-        },
-      });
-      if (error) {
-        throw new Error(error.message ?? resolvedLabels.loadMembersError);
-      }
-      return ((data as { members: OrganizationMember[] } | null)?.members ??
-        []) as OrganizationMember[];
-    },
-  });
+  const membersQuery = useQuery(
+    trpc.auth.listOrganizationMembers.queryOptions(undefined, {
+      enabled: Boolean(activeOrganizationId && canManageOrganization),
+    })
+  );
 
-  const invitationsQuery = useQuery({
-    queryKey: ["auth-organization-invitations", activeOrganizationId],
-    enabled: Boolean(activeOrganizationId && canManageOrganization),
-    queryFn: async () => {
-      const { data, error } = await authClient.organization.listInvitations({
-        query: {
-          organizationId: activeOrganizationId,
-        },
-      });
-      if (error) {
-        throw new Error(error.message ?? resolvedLabels.loadInvitationsError);
-      }
-      return (data ?? []) as OrganizationInvitation[];
-    },
-  });
-
-  const members = membersQuery.data ?? [];
-  const invitations = invitationsQuery.data ?? [];
-
-  const rows = useMemo<CombinedMemberRow[]>(() => {
-    const memberRows: CombinedMemberRow[] = members.map((member) => ({
-      kind: "member",
-      id: `member-${member.id}`,
-      displayName: member.user?.name || resolvedLabels.unknownName,
-      email: member.user?.email || "-",
-      role: member.role,
-      status: "active",
-      memberId: member.id,
-    }));
-
-    const invitationRows: CombinedMemberRow[] = invitations.map((invitation) => ({
-      kind: "invitation",
-      id: `invitation-${invitation.id}`,
-      displayName: resolvedLabels.invitedUser,
-      email: invitation.email,
-      role: invitation.role,
-      status: "invited",
-      invitationId: invitation.id,
-    }));
-
-    return [...memberRows, ...invitationRows].sort((left, right) => {
-      if (left.status === right.status) {
-        return left.email.localeCompare(right.email);
-      }
-      return left.status === "active" ? -1 : 1;
-    });
-  }, [invitations, members, resolvedLabels.invitedUser, resolvedLabels.unknownName]);
+  const rows = useMemo<CombinedMemberRow[]>(
+    () =>
+      toOrganizationMemberRows(
+        membersQuery.data ?? [],
+        resolvedLabels.unknownName,
+        resolvedLabels.invitedUser
+      ),
+    [membersQuery.data, resolvedLabels.invitedUser, resolvedLabels.unknownName]
+  );
 
   const onUpdateMemberRole = useCallback(
     (memberId: string, role: AuthOrganizationRole) => {
@@ -403,6 +395,14 @@ export function AuthOrganizationMembersRoute({
       updateRoleMutation.mutate({ memberId, role, organizationId: activeOrganizationId });
     },
     [canManageOrganization, activeOrganizationId, updateRoleMutation]
+  );
+
+  const onUpdateInvitationRole = useCallback(
+    (invitationId: string, role: AuthOrganizationRole) => {
+      if (!canManageOrganization) return;
+      updateInvitationRoleMutation.mutate({ id: invitationId, role });
+    },
+    [canManageOrganization, updateInvitationRoleMutation]
   );
 
   const onRemoveMember = useCallback(
@@ -477,7 +477,7 @@ export function AuthOrganizationMembersRoute({
     );
   }
 
-  if (organizationQuery.isLoading || membersQuery.isLoading || invitationsQuery.isLoading) {
+  if (organizationQuery.isLoading || membersQuery.isLoading) {
     return (
       <div className="p-6 flex justify-center">
         <Spinner />
@@ -520,7 +520,7 @@ export function AuthOrganizationMembersRoute({
                 }
               }}
             >
-              <Select.Trigger className="min-h-10">
+              <Select.Trigger aria-label={resolvedLabels.roleLabel} className="min-h-10">
                 <Select.Value />
                 <Select.Indicator />
               </Select.Trigger>
@@ -560,7 +560,7 @@ export function AuthOrganizationMembersRoute({
             <Table.ScrollContainer>
               <Table.Content>
                 <Table.Header>
-                  <Table.Column>{resolvedLabels.columnName}</Table.Column>
+                  <Table.Column isRowHeader>{resolvedLabels.columnName}</Table.Column>
                   <Table.Column>{resolvedLabels.columnEmail}</Table.Column>
                   <Table.Column>{resolvedLabels.columnRole}</Table.Column>
                   <Table.Column>{resolvedLabels.columnStatus}</Table.Column>
@@ -572,40 +572,26 @@ export function AuthOrganizationMembersRoute({
                       <Table.Cell>{row.displayName}</Table.Cell>
                       <Table.Cell>{row.email}</Table.Cell>
                       <Table.Cell>
-                        {row.kind === "member" ? (
-                          <Select
-                            aria-label={resolvedLabels.roleFor(row.displayName)}
-                            selectedKey={row.role}
-                            isDisabled={updatingMemberId === row.memberId}
-                            onSelectionChange={(key: Key | null) => {
-                              const role = key == null ? undefined : String(key);
-                              if (
-                                role &&
-                                role !== row.role &&
-                                resolvedAssignableRoles.includes(role)
-                              ) {
-                                void onUpdateMemberRole(row.memberId, role);
-                              }
-                            }}
-                          >
-                            <Select.Trigger className="min-h-9">
-                              <Select.Value />
-                              <Select.Indicator />
-                            </Select.Trigger>
-                            <Select.Popover>
-                              <ListBox>
-                                {resolvedAssignableRoles.map((role) => (
-                                  <ListBox.Item key={role} id={role} textValue={getRoleLabel(role)}>
-                                    {getRoleLabel(role)}
-                                    <ListBox.ItemIndicator />
-                                  </ListBox.Item>
-                                ))}
-                              </ListBox>
-                            </Select.Popover>
-                          </Select>
-                        ) : (
-                          getRoleLabel(row.role)
-                        )}
+                        <OrganizationRoleSelect
+                          ariaLabel={resolvedLabels.roleFor(row.displayName)}
+                          selectedKey={row.role}
+                          isDisabled={
+                            row.status === "active"
+                              ? updatingMemberId === row.memberId
+                              : updatingInvitationId === row.invitationId
+                          }
+                          roles={resolvedAssignableRoles}
+                          getRoleLabel={getRoleLabel}
+                          onRoleChange={(role) => {
+                            if (row.status === "active") {
+                              void onUpdateMemberRole(row.memberId, role);
+                              return;
+                            }
+                            if (row.invitationId) {
+                              void onUpdateInvitationRole(row.invitationId, role);
+                            }
+                          }}
+                        />
                       </Table.Cell>
                       <Table.Cell>
                         <Chip
@@ -619,7 +605,7 @@ export function AuthOrganizationMembersRoute({
                         </Chip>
                       </Table.Cell>
                       <Table.Cell className="text-right">
-                        {row.kind === "member" ? (
+                        {row.status === "active" ? (
                           <Button
                             size="sm"
                             variant="ghost"
@@ -631,13 +617,16 @@ export function AuthOrganizationMembersRoute({
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
-                        ) : (
+                        ) : row.invitationId ? (
                           <div className="flex justify-end gap-2">
                             <Button
                               size="sm"
                               variant="ghost"
                               isIconOnly
-                              onPress={() => void onCopyInvitationLink(row.invitationId)}
+                              onPress={() => {
+                                const invitationId = row.invitationId;
+                                if (invitationId) void onCopyInvitationLink(invitationId);
+                              }}
                               aria-label={resolvedLabels.copyInviteLink}
                             >
                               <Copy className="h-4 w-4" />
@@ -646,7 +635,10 @@ export function AuthOrganizationMembersRoute({
                               size="sm"
                               variant="ghost"
                               isIconOnly
-                              onPress={() => void onCancelInvitation(row.invitationId)}
+                              onPress={() => {
+                                const invitationId = row.invitationId;
+                                if (invitationId) void onCancelInvitation(invitationId);
+                              }}
                               isDisabled={cancelingInvitationId === row.invitationId}
                               aria-label={resolvedLabels.cancelInvitation}
                               className="text-danger"
@@ -654,7 +646,7 @@ export function AuthOrganizationMembersRoute({
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
-                        )}
+                        ) : null}
                       </Table.Cell>
                     </Table.Row>
                   )}

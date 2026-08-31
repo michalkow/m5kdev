@@ -1260,6 +1260,133 @@ export class AuthService extends BasePermissionService<
       });
     });
 
+  updateInvitationRole = this.procedure("updateInvitationRole")
+    .input(invitationSchemas.input.updateRole)
+    .output(invitationSchemas.output.role)
+    .requireAuth("organization")
+    .loadResource("invitation", ({ input }) => this.repository.invitation.findById(input.id))
+    .access({
+      action: "write",
+      entities: ({ state }) => ({
+        organizationId: state.invitation.organizationId,
+      }),
+    })
+    .handle(async ({ input, state }) => {
+      const roleCheck = this.validateOrganizationRole(input.role);
+      if (roleCheck.isErr()) return err(roleCheck.error);
+      if (state.invitation.status !== "pending") {
+        return this.error("BAD_REQUEST", "Invitation is not pending");
+      }
+      const result = await this.repository.invitation.update({
+        id: input.id,
+        role: input.role,
+      });
+      if (result.isErr()) return err(result.error);
+      return ok({ id: result.value.id, role: result.value.role ?? input.role });
+    });
+
+  inviteOrganizationMember = this.procedure("inviteOrganizationMember")
+    .input(invitationSchemas.input.invite)
+    .output(invitationSchemas.output.invite)
+    .requireAuth("organization")
+    .loadResource("organization", ({ ctx }) =>
+      this.repository.organization.findById(ctx.actor.organizationId)
+    )
+    .access({
+      action: "write",
+      entities: ({ state }) => ({
+        organizationId: state.organization.id,
+      }),
+    })
+    .handle(async ({ input, ctx, state }) => {
+      const email = input.email.trim().toLowerCase();
+      if (input.role === "owner") {
+        return this.error("BAD_REQUEST", "Cannot invite the Owner role");
+      }
+      const roleCheck = this.validateOrganizationRole(input.role);
+      if (roleCheck.isErr()) return err(roleCheck.error);
+
+      const webUrl = this.appUrls?.web;
+      if (!webUrl) {
+        return this.error("INTERNAL_SERVER_ERROR", "Web URL is not configured");
+      }
+
+      const existing = await this.repository.organization.findLiveMemberByEmail({
+        organizationId: ctx.actor.organizationId,
+        email,
+      });
+      if (existing.isErr()) return err(existing.error);
+      if (existing.value) {
+        return this.error("CONFLICT", "A live Membership already exists for this email");
+      }
+
+      const member = await this.repository.organization.createInvitedMember({
+        organizationId: ctx.actor.organizationId,
+        email,
+        role: input.role,
+      });
+      if (member.isErr()) return err(member.error);
+
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const invitation = await this.repository.invitation.create({
+        organizationId: ctx.actor.organizationId,
+        email,
+        role: input.role,
+        status: "pending",
+        memberId: member.value.id,
+        inviterId: ctx.actor.userId,
+        expiresAt,
+      });
+      if (invitation.isErr()) return err(invitation.error);
+
+      const inviter = await this.repository.user.findById(ctx.actor.userId);
+      if (inviter.isErr()) return err(inviter.error);
+      const inviterName = inviter.value?.name || inviter.value?.email || "";
+
+      const inviteUrl = `${webUrl}/organization/accept-invitation?id=${invitation.value.id}`;
+      const emailResult = await this.service.email.sendOrganizationInvite(
+        email,
+        state.organization.name,
+        inviterName,
+        input.role,
+        inviteUrl,
+        state.organization.locale ? { locale: state.organization.locale } : undefined
+      );
+      if (emailResult.isErr()) return err(emailResult.error);
+
+      return ok({
+        member: {
+          id: member.value.id,
+          organizationId: member.value.organizationId,
+          userId: member.value.userId,
+          email: member.value.email ?? email,
+          name: member.value.name,
+          role: member.value.role,
+        },
+        invitation: {
+          id: invitation.value.id,
+          memberId: invitation.value.memberId,
+          email: invitation.value.email,
+          role: invitation.value.role,
+          status: invitation.value.status,
+          expiresAt: invitation.value.expiresAt,
+        },
+      });
+    });
+
+  listOrganizationMembers = this.procedure("listOrganizationMembers")
+    .output(invitationSchemas.output.members)
+    .requireAuth("organization")
+    .access({
+      action: "read",
+      entities: ({ ctx }) => ({
+        organizationId: ctx.actor.organizationId,
+      }),
+    })
+    .handle(async ({ ctx }) => {
+      return this.repository.organization.listOrganizationMembers(ctx.actor.organizationId);
+    });
+
   // #endregion Invitations
 
   // #region Account Claims
@@ -1300,7 +1427,9 @@ export class AuthService extends BasePermissionService<
           );
           return;
         }
-        const userIds = members.value.map((member) => member.userId);
+        const userIds = members.value
+          .map((member) => member.userId)
+          .filter((userId): userId is string => typeof userId === "string" && userId.length > 0);
         if (userIds.length === 0) {
           this.logger.error(
             { organizationId: input.organizationId },
