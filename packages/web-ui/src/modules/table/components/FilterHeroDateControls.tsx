@@ -14,11 +14,13 @@ export function FilterHeroDatePicker({
   onChange,
   maxValue,
   className,
+  portalContainer,
 }: {
   value: DateValue | null | undefined;
   onChange: (next: DateValue | null) => void;
   maxValue: DateValue;
   className?: string;
+  portalContainer?: Element;
 }) {
   return (
     <DatePicker
@@ -37,7 +39,7 @@ export function FilterHeroDatePicker({
           </DatePicker.Trigger>
         </DateField.Suffix>
       </DateField.Group>
-      <DatePicker.Popover>
+      <DatePicker.Popover UNSTABLE_portalContainer={portalContainer}>
         <Calendar aria-label="Filter date">
           <Calendar.Header>
             <Calendar.YearPickerTrigger>
@@ -70,12 +72,14 @@ export function FilterHeroDateRangePicker({
   maxValue,
   className,
   onBlur,
+  portalContainer,
 }: {
   value: RangeValue<DateValue> | null | undefined;
   onChange: (next: RangeValue<DateValue> | null) => void;
   maxValue: DateValue;
   className?: string;
   onBlur?: () => void;
+  portalContainer?: Element;
 }) {
   return (
     <DateRangePicker
@@ -102,7 +106,7 @@ export function FilterHeroDateRangePicker({
           </DateRangePicker.Trigger>
         </DateField.Suffix>
       </DateField.Group>
-      <DateRangePicker.Popover>
+      <DateRangePicker.Popover UNSTABLE_portalContainer={portalContainer}>
         <RangeCalendar aria-label="Filter date range">
           <RangeCalendar.Header>
             <RangeCalendar.YearPickerTrigger>

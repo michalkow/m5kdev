@@ -7,7 +7,9 @@ import { AppSidebarHeader } from "@m5kdev/web-ui/modules/app/components/AppSideb
 import { AppSidebarUser } from "@m5kdev/web-ui/modules/app/components/AppSidebarUser";
 import { AuthOrganizationSelect } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationSelect";
 import { AuthUtilityImpersonationBanner } from "@m5kdev/web-ui/modules/auth/components/AuthUtilityImpersonationBanner";
+// m5k:notifications:start
 import { NotificationSidebarInbox } from "@m5kdev/web-ui/modules/notification/components/NotificationSidebarInbox";
+// m5k:notifications:end
 import { APP_NAME } from "@starter-app/shared/modules/app/app.constants";
 import { BellIcon, FileIcon, UsersIcon } from "lucide-react";
 // m5k:ai:start
@@ -22,7 +24,9 @@ import { WorkflowIcon } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
+// m5k:notifications:start
 import { StarterWebPush } from "./modules/notification/StarterWebPush";
+// m5k:notifications:end
 
 export function Layout() {
   const { data: session } = useSession();
@@ -44,7 +48,9 @@ export function Layout() {
         header: <AppSidebarHeader logo={{ src: "/logo.svg", alt: APP_NAME }} title={APP_NAME} />,
         content: (
           <>
+            {/* m5k:notifications:start */}
             <NotificationSidebarInbox enablePush={<StarterWebPush />} />
+            {/* m5k:notifications:end */}
             <div className="px-2 group-data-[collapsible=icon]:hidden">
               <AuthOrganizationSelect />
             </div>

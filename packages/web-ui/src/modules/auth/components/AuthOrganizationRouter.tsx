@@ -1,10 +1,6 @@
 import { Route } from "react-router";
 import type { z } from "zod";
 import {
-  AuthOrganizationAcceptInvitationRoute,
-  type AuthOrganizationAcceptInvitationRouteProps,
-} from "./AuthOrganizationAcceptInvitationRoute";
-import {
   AuthOrganizationChildOrganizationsRoute,
   type AuthOrganizationChildOrganizationsRouteProps,
 } from "./AuthOrganizationChildOrganizationsRoute";
@@ -19,7 +15,6 @@ import {
 
 export interface AuthOrganizationRouterProps<S extends z.ZodObject<z.ZodRawShape>>
   extends AuthOrganizationPreferencesProps<S>,
-    AuthOrganizationAcceptInvitationRouteProps,
     AuthOrganizationChildOrganizationsRouteProps,
     AuthOrganizationMembersRouteProps {}
 
@@ -28,10 +23,6 @@ export function AuthOrganizationRouter<S extends z.ZodObject<z.ZodRawShape>>(
 ) {
   return (
     <>
-      <Route
-        path="/organization/accept-invitation"
-        element={<AuthOrganizationAcceptInvitationRoute {...props} />}
-      />
       <Route
         path="/organization/manage"
         element={<AuthOrganizationChildOrganizationsRoute {...props} />}

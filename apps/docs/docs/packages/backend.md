@@ -29,6 +29,7 @@ Core vs Optional Backend Modules: [0.34.0 packaging split](/guides/v0.34.0-core-
 Docker / Fly / Node 24: [0.34.0 deploy](/guides/v0.34.0-fly-deploy-migration).
 Fly deploy wrappers in the Kernel: [0.35.0 Fly commands](/guides/v0.35.0-kernel-fly-commands-migration).
 Server events (SSE): [0.35.0 Server events](/guides/v0.35.0-kernel-server-events-migration).
+Notification inbox (MemberId, kinds, Channels): [0.36.0 Notification inbox](/guides/v0.36.0-notification-inbox-migration).
 Mastra helpers and Conversation: [0.34.0 agents](/guides/v0.34.0-mastra-app-owned-agents-migration).
 Billing trial warning: [0.34.0 trial email](/guides/v0.34.0-billing-trial-ending-email-migration).
 Catalog pins and boundary peers: [Catalog lockstep](/guides/v0.33.0-catalog-lockstep-migration).

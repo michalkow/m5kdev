@@ -10,7 +10,7 @@ and the repo's shared frontend hooks.
 ## Use it for
 
 - Shared app shell components.
-- Auth, billing, and AI Conversation route components.
+- Auth, billing, notification inbox/preferences, and AI Conversation route components.
 - Table controls, `nuqs` URL-state hooks, and reusable UI primitives.
 
 ## Module docs
@@ -22,6 +22,7 @@ Start with these module pages:
 - [AI](/modules/ai)
 - [Table](/modules/table)
 - [App shell](/modules/app)
+- [Notification](/modules/notification)
 
 ## Package rule
 

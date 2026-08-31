@@ -61,7 +61,9 @@ already receives tRPC mutation results; those writes do not need an SSE. See
 
 `@m5kdev/web-ui` ships the application chrome:
 
-- `AppShell` — layout frame for authenticated routes.
+- `AppShell` — layout frame for authenticated routes. It does not import
+  Notification; the app mounts `NotificationSidebarInbox` in sidebar `content`.
+  See [Notification](/modules/notification).
 - `AppLoader` — full-screen loading state while session/config resolve.
 - `AppSidebar` with `AppSidebarHeader`, `AppSidebarContent`,
   `AppSidebarInvites` (pending organization invitations), and `AppSidebarUser`

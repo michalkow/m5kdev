@@ -11,7 +11,7 @@ logic used by Vite React web apps and Expo React Native apps.
 
 - App config and tRPC query providers.
 - `ServerEventProvider` for Kernel SSE (invalidate queries when background work finishes). See [Server events](/modules/server-events).
-- Auth, billing, file, table, AI Conversation, and operations hooks.
+- Auth, billing, file, notification inbox/preferences, table, AI Conversation, and operations hooks.
 - Client-side utilities that do not belong in UI components.
 - Platform-neutral table query state and query/filter serialization.
 
@@ -27,6 +27,7 @@ Start with these module pages:
 - [Base](/modules/base)
 - [App shell](/modules/app)
 - [Server events](/modules/server-events)
+- [Notification](/modules/notification)
 
 List endpoints: [List query and Match query](/guides/list-query-and-match-query).
 
@@ -39,3 +40,4 @@ adapters in app code or `@m5kdev/web-ui`.
 See [Frontend and Web UI split migration](/guides/frontend-web-ui-split) for
 import changes after the `nuqs` split. Compose SSE:
 [Kernel Server events in 0.35.0](/guides/v0.35.0-kernel-server-events-migration).
+Inbox hooks: [Notification inbox in 0.36.0](/guides/v0.36.0-notification-inbox-migration).

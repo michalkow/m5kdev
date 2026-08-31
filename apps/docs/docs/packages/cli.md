@@ -50,7 +50,7 @@ Kernel infrastructure is not a selectable module.
 | `files` | File module + web Files UI |
 | `workflows` | Workflow module + demo job + run-status UI |
 | `ai` | `AIModule` + app-owned Mastra Agent + `/conversation` |
-| `notifications` | Experimental. Notification tables and `NotificationModule` (no extra UI paths) |
+| `notifications` | Experimental. Notification tables, `NotificationModule`, Shared kinds, web inbox/preferences UI, Expo `/notifications` |
 | `billing` | Records the feature id only. Does **not** scaffold `BillingModule` |
 | `tags` / `connect` / `webhook` / `recurrence` | Experimental stubs. Prompt-only; empty template paths |
 
@@ -79,8 +79,9 @@ from a fresh scaffold if you want Fly. See
 Root deploy scripts call Kernel bins; see
 [Kernel Fly deploy commands](/guides/v0.35.0-kernel-fly-commands-migration).
 
-The production migration registry is empty for 0.34.0 and 0.35.0. Structural
-upgrades are documented as Manual / Conditional steps in the guides below.
+The production migration registry is empty for 0.34.0, 0.35.0, and 0.36.0.
+Structural upgrades are documented as Manual / Conditional steps in the guides
+below.
 
 ## 0.34.0 upgrades
 
@@ -97,6 +98,10 @@ Run these on existing apps, in this order when they apply:
 
 1. [Kernel Fly deploy commands](/guides/v0.35.0-kernel-fly-commands-migration)
 2. [Kernel Server events](/guides/v0.35.0-kernel-server-events-migration)
+
+## 0.36.0 upgrades
+
+1. [Notification inbox](/guides/v0.36.0-notification-inbox-migration)
 
 Operational Fly runbook: [Deploy with Docker and Fly.io](/guides/fly-deploy).
 

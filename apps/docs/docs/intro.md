@@ -21,11 +21,11 @@ That choice is what lets the framework go further than wiring:
 - **It ships its own database schemas.** Modules like auth, billing, files,
   notifications, tags, and workflows come with Drizzle tables out of the box —
   users, organizations, members, invitations, subscriptions, upload inventory,
-  notification devices, and more. You migrate them into your app database and
+  notification inbox instances and devices, and more. You migrate them into your app database and
   build on top instead of designing the same tables for the tenth time.
 - **It ships the common business logic of AI SaaS apps.** Waitlists and invite
   codes, organization membership and roles, Stripe subscription sync, presigned
-  S3 uploads, web push delivery, background jobs with cron schedules, LLM calls
+  S3 uploads, in-app Notification inbox and optional push/email, background jobs with cron schedules, LLM calls
   with usage tracking — the services every AI SaaS ends up writing are already
   implemented as composable backend modules.
 - **Extension over abstraction.** Modules are class-based and extensible; apps
@@ -97,6 +97,7 @@ Existing apps should work through these guides (skip any that already apply):
 ## Upgrading to 0.36.0 {#upgrade-0-36-0}
 
 - [Membership at invite](/guides/v0.36.0-membership-at-invite-migration)
+- [Notification inbox](/guides/v0.36.0-notification-inbox-migration)
 
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 

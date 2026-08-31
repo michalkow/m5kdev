@@ -609,8 +609,8 @@ export const NuqsTable = <T,>({
                     </div>
                   </Button>
                 </Popover.Trigger>
-                <Popover.Content placement="bottom">
-                  <Popover.Dialog>
+                <Popover.Content placement="bottom" className="overflow-visible">
+                  <Popover.Dialog aria-label="Filters" className="overflow-visible">
                     <TableFiltering
                       columns={filterableColumns}
                       onFiltersChange={onFiltersChange}
@@ -636,7 +636,7 @@ export const NuqsTable = <T,>({
                   </Button>
                 </Popover.Trigger>
                 <Popover.Content placement="bottom">
-                  <Popover.Dialog>
+                  <Popover.Dialog aria-label="Group by">
                     <TableGroupBy
                       columns={groupableColumns}
                       activeGrouping={grouping}
@@ -662,7 +662,7 @@ export const NuqsTable = <T,>({
                   </Button>
                 </Popover.Trigger>
                 <Popover.Content placement="bottom">
-                  <Popover.Dialog>
+                  <Popover.Dialog aria-label="Columns">
                     <ColumnOrderAndVisibility
                       layout={layout}
                       onChangeOrder={onChangeOrder}

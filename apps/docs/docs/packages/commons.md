@@ -24,6 +24,7 @@ Start with these module pages:
 - [Schemas](/modules/schemas)
 - [Workflow](/modules/workflow)
 - [Server events](/modules/server-events)
+- [Notification](/modules/notification)
 
 ## Package rule
 

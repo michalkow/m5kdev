@@ -162,4 +162,5 @@ Starter reference: `DemoWorkflowService` `demo.ping` emits resource
 - [Workflow](/modules/workflow) — typical emit site
 - [App shell](/modules/app) — provider order
 - [Kernel Server events in 0.35.0](/guides/v0.35.0-kernel-server-events-migration)
+- [Notification](/modules/notification) — `send` `userEmit`s `resource: "notification"`
 - [Kernel Express HTTP shell](/guides/v0.33.0-kernel-express-http-shell-migration)

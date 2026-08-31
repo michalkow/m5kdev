@@ -63,10 +63,18 @@ Payload rules (from AGENTS.md): serializable and minimal — ids and typed input
 never request/session objects. Business logic stays in services; job modules are
 thin glue.
 
-Example from the notification module:
+Example from the notification module (`notification.webPush` / `.mobilePush` /
+`.email`):
 
 ```ts
-readonly deliverNotificationJob = this.service.workflow.job({ /* config */ });
+this.webPushJob = this.service.workflow
+  .job<{ notificationId: string }>({
+    name: "notification.webPush",
+    id: (p) => `web:${p.notificationId}`,
+  })
+  .handle(async (payload) => {
+    /* deliver; throw on failure */
+  });
 ```
 
 ## Notifying the UI

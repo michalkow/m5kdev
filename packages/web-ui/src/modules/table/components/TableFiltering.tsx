@@ -10,8 +10,18 @@ import type {
 import type { DateValue } from "@react-types/calendar";
 import type { Key, RangeValue, Selection } from "@react-types/shared";
 import { PlusIcon, XIcon } from "lucide-react";
-import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   type FilterValue,
@@ -20,6 +30,80 @@ import {
   transformFiltersToHeroUI,
 } from "../filterTransformers";
 import { FilterHeroDatePicker, FilterHeroDateRangePicker } from "./FilterHeroDateControls";
+
+const FilterOverlayPortalContext = createContext<Element | undefined>(undefined);
+
+function useFilterOverlayPortalHost(): {
+  hostRef: RefObject<HTMLDivElement | null>;
+  portalContainer: Element | undefined;
+} {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [portalContainer, setPortalContainer] = useState<Element | undefined>();
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const dialog = host.closest("[role='dialog']");
+    setPortalContainer(dialog instanceof HTMLElement ? dialog : undefined);
+  }, []);
+
+  return { hostRef, portalContainer };
+}
+
+function FilterSelectPopover({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}): ReactNode {
+  const portalContainer = useContext(FilterOverlayPortalContext);
+  // Nested lists must portal into the Filters dialog so the parent overlay
+  // focus scope does not immediately close them.
+  return (
+    <Select.Popover className={className} UNSTABLE_portalContainer={portalContainer}>
+      {children}
+    </Select.Popover>
+  );
+}
+
+function FilterDateValue({
+  value,
+  onChange,
+}: {
+  value: FilterValue;
+  onChange: (next: FilterValue) => void;
+}): ReactNode {
+  const portalContainer = useContext(FilterOverlayPortalContext);
+  return (
+    <FilterHeroDatePicker
+      className="flex-1 min-w-0 text-sm"
+      maxValue={today(getLocalTimeZone()) as unknown as DateValue}
+      portalContainer={portalContainer}
+      value={(value as DateValue | null | undefined) ?? null}
+      onChange={(date) => date && onChange(date as FilterValue)}
+    />
+  );
+}
+
+function FilterDateRangeValue({
+  value,
+  onChange,
+}: {
+  value: FilterValue;
+  onChange: (next: FilterValue) => void;
+}): ReactNode {
+  const portalContainer = useContext(FilterOverlayPortalContext);
+  return (
+    <FilterHeroDateRangePicker
+      className="flex-1 min-w-0 text-sm"
+      maxValue={today(getLocalTimeZone()) as unknown as DateValue}
+      portalContainer={portalContainer}
+      value={(value as RangeValue<DateValue> | null | undefined) ?? null}
+      onChange={(range) => range && onChange(range as FilterValue)}
+    />
+  );
+}
 
 type ComponentRenderer = (
   value: FilterValue,
@@ -47,22 +131,8 @@ const componentForFilterMethod: Record<ComponentForFilterMethod, ComponentRender
       onChange={(e) => onChange(Number.parseFloat(e.target.value) || 0)}
     />
   ),
-  date: (value, onChange) => (
-    <FilterHeroDatePicker
-      className="flex-1 min-w-0 text-sm"
-      maxValue={today(getLocalTimeZone()) as unknown as DateValue}
-      value={(value as DateValue | null | undefined) ?? null}
-      onChange={(date) => date && onChange(date as FilterValue)}
-    />
-  ),
-  range: (value, onChange) => (
-    <FilterHeroDateRangePicker
-      className="flex-1 min-w-0 text-sm"
-      maxValue={today(getLocalTimeZone()) as unknown as DateValue}
-      value={(value as RangeValue<DateValue> | null | undefined) ?? null}
-      onChange={(range) => range && onChange(range as FilterValue)}
-    />
-  ),
+  date: (value, onChange) => <FilterDateValue value={value} onChange={onChange} />,
+  range: (value, onChange) => <FilterDateRangeValue value={value} onChange={onChange} />,
   radio: (value, onChange) => (
     <Select
       aria-label="Select Value"
@@ -74,7 +144,7 @@ const componentForFilterMethod: Record<ComponentForFilterMethod, ComponentRender
         <Select.Value />
         <Select.Indicator />
       </Select.Trigger>
-      <Select.Popover>
+      <FilterSelectPopover>
         <ListBox>
           <ListBox.Item className="text-sm" id="true" textValue="True">
             True
@@ -85,13 +155,13 @@ const componentForFilterMethod: Record<ComponentForFilterMethod, ComponentRender
             <ListBox.ItemIndicator />
           </ListBox.Item>
         </ListBox>
-      </Select.Popover>
+      </FilterSelectPopover>
     </Select>
   ),
   select: (value, onChange, options = []) => {
     const selection = (value as Selection | undefined) ?? new Set<string>();
     const selectedKey =
-      selection === "all" ? undefined : selection.size > 0 ? String([...selection][0]) : undefined;
+      selection === "all" ? null : selection.size > 0 ? String([...selection][0]) : null;
     return (
       <Select
         aria-label="Select Value"
@@ -106,7 +176,7 @@ const componentForFilterMethod: Record<ComponentForFilterMethod, ComponentRender
           <Select.Value />
           <Select.Indicator />
         </Select.Trigger>
-        <Select.Popover>
+        <FilterSelectPopover>
           <ListBox>
             {options.map((option) => (
               <ListBox.Item
@@ -120,7 +190,7 @@ const componentForFilterMethod: Record<ComponentForFilterMethod, ComponentRender
               </ListBox.Item>
             ))}
           </ListBox>
-        </Select.Popover>
+        </FilterSelectPopover>
       </Select>
     );
   },
@@ -150,7 +220,7 @@ const componentForFilterMethod: Record<ComponentForFilterMethod, ComponentRender
           <Select.Value />
           <Select.Indicator />
         </Select.Trigger>
-        <Select.Popover>
+        <FilterSelectPopover>
           <ListBox>
             {options.map((option) => (
               <ListBox.Item
@@ -164,7 +234,7 @@ const componentForFilterMethod: Record<ComponentForFilterMethod, ComponentRender
               </ListBox.Item>
             ))}
           </ListBox>
-        </Select.Popover>
+        </FilterSelectPopover>
       </Select>
     );
   },
@@ -400,34 +470,38 @@ export const TableFiltering = ({
     onClose?.();
   }, [filters, onFiltersChange, onClose]);
 
+  const { hostRef, portalContainer } = useFilterOverlayPortalHost();
+
   return (
-    <div className="flex flex-col gap-2 min-w-[600px]">
-      {filterEntries.map(([filterId, filter]) => {
-        const availableColumns = availableColumnsMap.get(filterId) ?? columns;
-        return (
-          <TableFilteringItem
-            key={filterId}
-            id={filterId}
-            filter={filter}
-            columns={availableColumns}
-            selectColumn={selectColumn}
-            selectMethod={selectMethod}
-            removeFilter={removeFilter}
-            selectValue={selectValue}
-            filterMethods={effectiveFilterMethods}
-          />
-        );
-      })}
-      {!singleFilter && (
-        <Button fullWidth variant="ghost" size="sm" onPress={addFilter}>
-          <PlusIcon className="h-4 w-4" />
-          Add Filter
+    <FilterOverlayPortalContext.Provider value={portalContainer}>
+      <div ref={hostRef} className="flex flex-col gap-2 min-w-[600px] overflow-visible">
+        {filterEntries.map(([filterId, filter]) => {
+          const availableColumns = availableColumnsMap.get(filterId) ?? columns;
+          return (
+            <TableFilteringItem
+              key={filterId}
+              id={filterId}
+              filter={filter}
+              columns={availableColumns}
+              selectColumn={selectColumn}
+              selectMethod={selectMethod}
+              removeFilter={removeFilter}
+              selectValue={selectValue}
+              filterMethods={effectiveFilterMethods}
+            />
+          );
+        })}
+        {!singleFilter && (
+          <Button fullWidth variant="ghost" size="sm" onPress={addFilter}>
+            <PlusIcon className="h-4 w-4" />
+            Add Filter
+          </Button>
+        )}
+        <Button fullWidth size="sm" onPress={applyFilters}>
+          {singleFilter ? "Apply Filter" : "Apply Filters"}
         </Button>
-      )}
-      <Button fullWidth size="sm" onPress={applyFilters}>
-        {singleFilter ? "Apply Filter" : "Apply Filters"}
-      </Button>
-    </div>
+      </div>
+    </FilterOverlayPortalContext.Provider>
   );
 };
 
@@ -515,14 +589,14 @@ const TableFilteringItem = ({
       <Select
         aria-label="Select Method"
         className="w-40 flex-shrink-0 text-sm"
-        selectedKey={filter.method?.value ?? undefined}
+        selectedKey={filter.method?.value ?? null}
         onSelectionChange={handleMethodChange}
       >
         <Select.Trigger className="min-h-8 text-sm">
           <Select.Value />
           <Select.Indicator />
         </Select.Trigger>
-        <Select.Popover className="w-auto min-w-max">
+        <FilterSelectPopover className="w-auto min-w-max">
           <ListBox>
             {methodsForType.map((method: FilterMethod) => (
               <ListBox.Item
@@ -536,7 +610,7 @@ const TableFilteringItem = ({
               </ListBox.Item>
             ))}
           </ListBox>
-        </Select.Popover>
+        </FilterSelectPopover>
       </Select>
     );
   }, [filter.type, filter.method?.value, methodsForType, handleMethodChange]);
@@ -558,14 +632,14 @@ const TableFilteringItem = ({
         <Select
           aria-label="Select Column"
           className="w-40 flex-shrink-0 text-sm"
-          selectedKey={filter.columnId || undefined}
+          selectedKey={filter.columnId || null}
           onSelectionChange={handleColumnChange}
         >
           <Select.Trigger className="min-h-8 text-sm">
             <Select.Value />
             <Select.Indicator />
           </Select.Trigger>
-          <Select.Popover className="w-auto min-w-max">
+          <FilterSelectPopover className="w-auto min-w-max">
             <ListBox>
               {columns.map((column) => (
                 <ListBox.Item
@@ -579,7 +653,7 @@ const TableFilteringItem = ({
                 </ListBox.Item>
               ))}
             </ListBox>
-          </Select.Popover>
+          </FilterSelectPopover>
         </Select>
         {methodSelect}
         {filterValueComponent}

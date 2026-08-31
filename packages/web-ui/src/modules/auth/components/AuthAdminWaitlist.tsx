@@ -198,7 +198,7 @@ export function AuthAdminWaitlist() {
             <Table.ScrollContainer>
               <Table.Content>
                 <Table.Header>
-                  <Table.Column>Email</Table.Column>
+                  <Table.Column isRowHeader>Email</Table.Column>
                   <Table.Column>Status</Table.Column>
                   <Table.Column>Created At</Table.Column>
                   <Table.Column>Updated At</Table.Column>

@@ -320,7 +320,9 @@ export function AuthOrganizationChildOrganizationsRoute({
               <Table.ScrollContainer>
                 <Table.Content>
                   <Table.Header>
-                    <Table.Column>{t("web-ui:organization.childOrgs.column.name")}</Table.Column>
+                    <Table.Column isRowHeader>
+                      {t("web-ui:organization.childOrgs.column.name")}
+                    </Table.Column>
                     <Table.Column>{t("web-ui:organization.childOrgs.column.slug")}</Table.Column>
                     <Table.Column>
                       {t("web-ui:organization.childOrgs.column.createdAt")}

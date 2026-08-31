@@ -110,3 +110,4 @@ see [User and organization locale migration](/guides/user-org-locale-migration).
 - [User and organization locale migration](/guides/user-org-locale-migration)
 - [`@m5kdev/email` package](/packages/email)
 - [Billing trial-ending email](/guides/v0.34.0-billing-trial-ending-email-migration)
+- [Notification](/modules/notification) — email Channel may call EmailModule

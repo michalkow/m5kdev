@@ -50,7 +50,7 @@ export function AuthPublicSignupRoute({ providers, waitlist = false }: AuthPubli
           </Alert.Content>
         </Alert>
       )}
-      {hasWaitlist && !code ? (
+      {hasWaitlist && !code && !hasInvitation ? (
         <AuthPublicWaitlistCard />
       ) : (
         <Card>

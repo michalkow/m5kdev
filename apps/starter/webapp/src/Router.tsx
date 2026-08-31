@@ -1,7 +1,6 @@
 // biome-ignore-all assist/source/organizeImports: feature-gated route imports stay in marker blocks
 import { syncI18nLocale } from "@m5kdev/frontend/modules/app/utils/locale";
 import { AuthAdminRouter } from "@m5kdev/web-ui/modules/auth/components/AuthAdminRouter";
-import { AuthOrganizationAcceptInvitationRoute } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationAcceptInvitationRoute";
 import { AuthOrganizationRouter } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationRouter";
 import { AuthPublicRouter } from "@m5kdev/web-ui/modules/auth/components/AuthPublicRouter";
 import { AuthUserRouter } from "@m5kdev/web-ui/modules/auth/components/AuthUserRouter";
@@ -70,13 +69,6 @@ export function Router() {
         waitlist: isWaitlist,
         onLocaleChange: syncI18nLocale,
       })}
-
-      {/* public: a logged-out invitee must reach this route so it can send
-          them to signup — inside ProtectedRoutes they'd bounce to /login */}
-      <Route
-        path="/organization/accept-invitation"
-        element={<AuthOrganizationAcceptInvitationRoute />}
-      />
 
       <Route
         element={

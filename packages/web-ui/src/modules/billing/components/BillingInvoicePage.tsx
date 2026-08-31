@@ -137,7 +137,7 @@ export function BillingInvoicePage() {
               <Table.ScrollContainer>
                 <Table.Content>
                   <Table.Header>
-                    <Table.Column>Date</Table.Column>
+                    <Table.Column isRowHeader>Date</Table.Column>
                     <Table.Column>Amount</Table.Column>
                     <Table.Column>Status</Table.Column>
                     <Table.Column className="text-right">Action</Table.Column>
