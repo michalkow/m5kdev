@@ -1,4 +1,5 @@
-import { type AnySQLiteColumn, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { type AnySQLiteColumn, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
 
 export const users = sqliteTable("users", {
@@ -108,28 +109,39 @@ export const organizations = sqliteTable("organizations", {
   locale: text("locale"),
 });
 
-export const members = sqliteTable("members", {
-  id: text("id").primaryKey().$default(uuidv4),
-  organizationId: text("organization_id")
-    .notNull()
-    .references(() => organizations.id),
-  userId: text("user_id").references(() => users.id),
-  email: text("email"),
-  /** Snapshot of the user's display name for attribution after leave/remove. */
-  name: text("name").notNull().default(""),
-  /** Snapshot of the user's image (e.g. OAuth avatar) for attribution after leave/remove. */
-  image: text("image"),
-  role: text("role").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .$default(() => new Date()),
-  /** Soft-delete timestamp; active membership requires this to be null. */
-  deletedAt: integer("deleted_at", { mode: "timestamp" }),
-  preferences: text("preferences", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
-  metadata: text("metadata", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
-  onboarding: integer("onboarding"),
-  flags: text("flags", { mode: "json" }).default([]).$type<string[]>(),
-});
+export const members = sqliteTable(
+  "members",
+  {
+    id: text("id").primaryKey().$default(uuidv4),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    userId: text("user_id").references(() => users.id),
+    email: text("email"),
+    /** Snapshot of the user's display name for attribution after leave/remove. */
+    name: text("name").notNull().default(""),
+    /** Snapshot of the user's image (e.g. OAuth avatar) for attribution after leave/remove. */
+    image: text("image"),
+    role: text("role").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$default(() => new Date()),
+    /** Soft-delete timestamp; active membership requires this to be null. */
+    deletedAt: integer("deleted_at", { mode: "timestamp" }),
+    preferences: text("preferences", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
+    metadata: text("metadata", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
+    onboarding: integer("onboarding"),
+    flags: text("flags", { mode: "json" }).default([]).$type<string[]>(),
+  },
+  (t) => [
+    uniqueIndex("members_attached_user_organization_unique")
+      .on(t.userId, t.organizationId)
+      .where(sql`${t.userId} is not null`),
+    uniqueIndex("members_live_pending_email_organization_unique")
+      .on(t.email, t.organizationId)
+      .where(sql`${t.userId} is null and ${t.deletedAt} is null`),
+  ]
+);
 
 export const teams = sqliteTable("teams", {
   id: text("id").primaryKey().$default(uuidv4),

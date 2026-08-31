@@ -1659,6 +1659,15 @@ export class AuthService extends BasePermissionService<
         return this.error("FORBIDDEN", "Invitation email does not match");
       }
 
+      const attached = await this.repository.organization.findAttachedMemberByUserId({
+        organizationId: invitation.value.organizationId,
+        userId: ctx.actor.userId,
+      });
+      if (attached.isErr()) return err(attached.error);
+      if (attached.value && attached.value.id !== invitation.value.memberId) {
+        return this.error("CONFLICT", "A Membership already exists for this User");
+      }
+
       const member = await this.repository.organization.attachUserToInvitedMember({
         memberId: invitation.value.memberId,
         organizationId: invitation.value.organizationId,

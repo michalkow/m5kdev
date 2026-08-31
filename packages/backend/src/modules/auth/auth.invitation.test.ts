@@ -566,6 +566,7 @@ describe("AuthService.acceptOrganizationInvitation", () => {
     activateOrganizationSession: AuthOrganizationRepository["activateOrganizationSession"];
     findOrganization: AuthOrganizationRepository["findById"];
     removeOrganizationMember?: AuthOrganizationRepository["removeOrganizationMember"];
+    findAttachedMemberByUserId?: AuthOrganizationRepository["findAttachedMemberByUserId"];
   }): AuthService {
     return new AuthService(
       {
@@ -590,6 +591,8 @@ describe("AuthService.acceptOrganizationInvitation", () => {
           attachUserToInvitedMember: fakes.attachUserToInvitedMember,
           createOrganization: fakes.createOrganization,
           activateOrganizationSession: fakes.activateOrganizationSession,
+          findAttachedMemberByUserId:
+            fakes.findAttachedMemberByUserId ?? jest.fn().mockResolvedValue(ok(null)),
           removeOrganizationMember:
             fakes.removeOrganizationMember ?? jest.fn().mockResolvedValue(ok({ id: MEMBER_ID })),
         } as unknown as AuthOrganizationRepository,
@@ -724,6 +727,42 @@ describe("AuthService.acceptOrganizationInvitation", () => {
       memberId: MEMBER_ID,
     });
     expect(invitationUpdate).toHaveBeenCalledWith({ id: INVITATION_ID, status: "canceled" });
+  });
+
+  it("returns CONFLICT when the User already has an attached Membership in the Organization", async () => {
+    const attachUserToInvitedMember = jest.fn();
+    const invitationUpdate = jest.fn();
+    const findAttachedMemberByUserId = jest.fn().mockResolvedValue(
+      ok({
+        id: "member-already-attached",
+        organizationId: ORG_ID,
+        userId: "user-invitee",
+        email: "invitee@example.com",
+        role: "member",
+      })
+    );
+    const auth = createAcceptAuth({
+      findById: jest.fn().mockResolvedValue(ok(pendingInvitation())),
+      invitationUpdate,
+      attachUserToInvitedMember,
+      createOrganization: jest.fn(),
+      activateOrganizationSession: jest.fn(),
+      findOrganization: jest.fn(),
+      findAttachedMemberByUserId,
+    });
+
+    const result = await auth.acceptOrganizationInvitation({ id: INVITATION_ID }, userCtx());
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("CONFLICT");
+    }
+    expect(findAttachedMemberByUserId).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      userId: "user-invitee",
+    });
+    expect(attachUserToInvitedMember).not.toHaveBeenCalled();
+    expect(invitationUpdate).not.toHaveBeenCalled();
   });
 
   it("rejects an email mismatch", async () => {

@@ -130,6 +130,29 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     return ok(result.value[0]?.member ?? null);
   }
 
+  async findAttachedMemberByUserId({
+    organizationId,
+    userId,
+  }: {
+    organizationId: string;
+    userId: string;
+  }): ServerResultAsync<MemberRow | null> {
+    const result = await this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(this.schema.members)
+        .where(
+          and(
+            eq(this.schema.members.organizationId, organizationId),
+            eq(this.schema.members.userId, userId)
+          )
+        )
+        .limit(1)
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value[0] ?? null);
+  }
+
   async findLeftMemberByEmail({
     organizationId,
     email,
