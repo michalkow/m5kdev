@@ -39,8 +39,6 @@ export interface AuthOrganizationMembersRouteLabels {
   loadInvitationsError: string;
   roleUpdateSuccess: string;
   roleUpdateError: string;
-  invitationRoleUpdateSuccess: string;
-  invitationRoleUpdateError: string;
   removeMemberSuccess: string;
   removeMemberError: string;
   emailRequired: string;
@@ -151,8 +149,6 @@ function useOrganizationConfig() {
       loadInvitationsError: t("web-ui:organization.members.loadInvitationsError"),
       roleUpdateSuccess: t("web-ui:organization.members.roleUpdateSuccess"),
       roleUpdateError: t("web-ui:organization.members.roleUpdateError"),
-      invitationRoleUpdateSuccess: t("web-ui:organization.members.invitationRoleUpdateSuccess"),
-      invitationRoleUpdateError: t("web-ui:organization.members.invitationRoleUpdateError"),
       removeMemberSuccess: t("web-ui:organization.members.removeMemberSuccess"),
       removeMemberError: t("web-ui:organization.members.removeMemberError"),
       emailRequired: t("web-ui:organization.members.emailRequired"),
@@ -231,48 +227,17 @@ export function AuthOrganizationMembersRoute({
     [refreshOrganizationQueries]
   );
 
-  const updateRoleMutation = useMutation({
-    mutationFn: async ({
-      memberId,
-      role,
-      organizationId,
-    }: {
-      memberId: string;
-      role: AuthOrganizationRole;
-      organizationId: string;
-    }) => {
-      const { error } = await authClient.organization.updateMemberRole({
-        memberId,
-        role,
-        organizationId,
-      } as Parameters<typeof authClient.organization.updateMemberRole>[0]);
-      if (error) throw new Error(error.message ?? resolvedLabels.roleUpdateError);
-    },
-    onSuccess: async () => {
-      await refreshOrganizationQueriesStable();
-      await queryClient.invalidateQueries({
-        queryKey: trpc.auth.listOrganizationMembers.queryKey(),
-      });
-      toast.success(resolvedLabels.roleUpdateSuccess);
-    },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : resolvedLabels.roleUpdateError);
-    },
-  });
-
-  const updateInvitationRoleMutation = useMutation(
-    trpc.auth.updateInvitationRole.mutationOptions({
+  const updateRoleMutation = useMutation(
+    trpc.auth.updateMemberRole.mutationOptions({
       onSuccess: async () => {
         await refreshOrganizationQueriesStable();
         await queryClient.invalidateQueries({
           queryKey: trpc.auth.listOrganizationMembers.queryKey(),
         });
-        toast.success(resolvedLabels.invitationRoleUpdateSuccess);
+        toast.success(resolvedLabels.roleUpdateSuccess);
       },
       onError: (error) => {
-        toast.error(
-          error instanceof Error ? error.message : resolvedLabels.invitationRoleUpdateError
-        );
+        toast.error(error instanceof Error ? error.message : resolvedLabels.roleUpdateError);
       },
     })
   );
@@ -337,10 +302,6 @@ export function AuthOrganizationMembersRoute({
     updateRoleMutation.isPending && updateRoleMutation.variables
       ? updateRoleMutation.variables.memberId
       : null;
-  const updatingInvitationId =
-    updateInvitationRoleMutation.isPending && updateInvitationRoleMutation.variables
-      ? updateInvitationRoleMutation.variables.id
-      : null;
   const removingMemberId =
     removeMemberMutation.isPending && removeMemberMutation.variables
       ? removeMemberMutation.variables.memberId
@@ -391,18 +352,10 @@ export function AuthOrganizationMembersRoute({
 
   const onUpdateMemberRole = useCallback(
     (memberId: string, role: AuthOrganizationRole) => {
-      if (!canManageOrganization || !activeOrganizationId) return;
-      updateRoleMutation.mutate({ memberId, role, organizationId: activeOrganizationId });
-    },
-    [canManageOrganization, activeOrganizationId, updateRoleMutation]
-  );
-
-  const onUpdateInvitationRole = useCallback(
-    (invitationId: string, role: AuthOrganizationRole) => {
       if (!canManageOrganization) return;
-      updateInvitationRoleMutation.mutate({ id: invitationId, role });
+      updateRoleMutation.mutate({ memberId, role });
     },
-    [canManageOrganization, updateInvitationRoleMutation]
+    [canManageOrganization, updateRoleMutation]
   );
 
   const onRemoveMember = useCallback(
@@ -575,21 +528,11 @@ export function AuthOrganizationMembersRoute({
                         <OrganizationRoleSelect
                           ariaLabel={resolvedLabels.roleFor(row.displayName)}
                           selectedKey={row.role}
-                          isDisabled={
-                            row.status === "active"
-                              ? updatingMemberId === row.memberId
-                              : updatingInvitationId === row.invitationId
-                          }
+                          isDisabled={updatingMemberId === row.memberId}
                           roles={resolvedAssignableRoles}
                           getRoleLabel={getRoleLabel}
                           onRoleChange={(role) => {
-                            if (row.status === "active") {
-                              void onUpdateMemberRole(row.memberId, role);
-                              return;
-                            }
-                            if (row.invitationId) {
-                              void onUpdateInvitationRole(row.invitationId, role);
-                            }
+                            void onUpdateMemberRole(row.memberId, role);
                           }}
                         />
                       </Table.Cell>

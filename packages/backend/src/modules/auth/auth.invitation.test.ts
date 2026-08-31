@@ -1,6 +1,7 @@
-import { ok } from "neverthrow";
+import { err, ok } from "neverthrow";
 import { createServiceActor } from "../../base/base.actor";
 import type { ServerEventBus } from "../../base/server-event";
+import { ServerError } from "../../utils/errors";
 import type { EmailService } from "../email/email.service";
 import { defaultAuthGrants } from "./auth.grants";
 import type {
@@ -37,29 +38,9 @@ function pendingInvitation(overrides: Record<string, unknown> = {}) {
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     expiresAt: new Date("2026-01-08T00:00:00.000Z"),
     inviterId: "user-owner",
+    memberId: "member-invited",
     ...overrides,
   };
-}
-
-function createAuthService(invitation: {
-  findById: AuthInvitationRepository["findById"];
-  update: AuthInvitationRepository["update"];
-}): AuthService {
-  return new AuthService(
-    {
-      accountClaim: {} as AuthAccountClaimRepository,
-      user: {} as AuthUserRepository,
-      invitation: {
-        findById: invitation.findById,
-        update: invitation.update,
-      } as AuthInvitationRepository,
-      waitlist: {} as AuthWaitlistRepository,
-      organization: {} as AuthOrganizationRepository,
-    },
-    { email: {} as EmailService },
-    defaultAuthGrants,
-    createFakeBus()
-  );
 }
 
 function organizationCtx(role: string) {
@@ -76,33 +57,165 @@ function organizationCtx(role: string) {
   } as never;
 }
 
-describe("AuthService.updateInvitationRole", () => {
-  it("updates the role on a pending invitation for an organization manager", async () => {
-    const invitation = pendingInvitation();
-    const findById = jest.fn().mockResolvedValue(ok(invitation));
-    const update = jest.fn().mockResolvedValue(ok({ ...invitation, role: "admin" }));
-    const auth = createAuthService({ findById, update });
+const MEMBER_ID = "member-invited";
 
-    const result = await auth.updateInvitationRole(
-      { id: INVITATION_ID, role: "admin" },
+describe("AuthService.updateMemberRole", () => {
+  function createUpdateMemberRoleAuth(fakes: {
+    updateOrganizationMemberRole: AuthOrganizationRepository["updateOrganizationMemberRole"];
+    findPendingByMemberId: AuthInvitationRepository["findPendingByMemberId"];
+    invitationUpdate: AuthInvitationRepository["update"];
+  }): AuthService {
+    return new AuthService(
+      {
+        accountClaim: {} as AuthAccountClaimRepository,
+        user: {} as AuthUserRepository,
+        invitation: {
+          findById: jest.fn(),
+          update: fakes.invitationUpdate,
+          findPendingByMemberId: fakes.findPendingByMemberId,
+        } as unknown as AuthInvitationRepository,
+        waitlist: {} as AuthWaitlistRepository,
+        organization: {
+          updateOrganizationMemberRole: fakes.updateOrganizationMemberRole,
+        } as unknown as AuthOrganizationRepository,
+      },
+      { email: {} as EmailService },
+      defaultAuthGrants,
+      createFakeBus()
+    );
+  }
+
+  it("updates an invited Membership role and copies it onto the pending Invitation token", async () => {
+    const updateOrganizationMemberRole = jest.fn().mockResolvedValue(
+      ok({
+        id: MEMBER_ID,
+        organizationId: ORG_ID,
+        userId: null,
+        role: "admin",
+      })
+    );
+    const invitation = pendingInvitation({ memberId: MEMBER_ID, role: "member" });
+    const findPendingByMemberId = jest.fn().mockResolvedValue(ok(invitation));
+    const invitationUpdate = jest.fn().mockResolvedValue(ok({ ...invitation, role: "admin" }));
+    const auth = createUpdateMemberRoleAuth({
+      updateOrganizationMemberRole,
+      findPendingByMemberId,
+      invitationUpdate,
+    });
+
+    const result = await auth.updateMemberRole(
+      { memberId: MEMBER_ID, role: "admin" },
       organizationCtx("owner")
     );
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value).toEqual({ id: INVITATION_ID, role: "admin" });
+      expect(result.value).toEqual({ id: MEMBER_ID, role: "admin" });
     }
-    expect(update).toHaveBeenCalledWith({ id: INVITATION_ID, role: "admin" });
+    expect(updateOrganizationMemberRole).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      role: "admin",
+    });
+    expect(invitationUpdate).toHaveBeenCalledWith({ id: INVITATION_ID, role: "admin" });
   });
 
-  it("rejects role changes on invitations that are not pending", async () => {
-    const invitation = pendingInvitation({ status: "canceled" });
-    const findById = jest.fn().mockResolvedValue(ok(invitation));
-    const update = jest.fn();
-    const auth = createAuthService({ findById, update });
+  it("updates an active Membership role", async () => {
+    const updateOrganizationMemberRole = jest.fn().mockResolvedValue(
+      ok({
+        id: MEMBER_ID,
+        organizationId: ORG_ID,
+        userId: "user-2",
+        role: "admin",
+      })
+    );
+    const findPendingByMemberId = jest.fn().mockResolvedValue(ok(null));
+    const invitationUpdate = jest.fn();
+    const auth = createUpdateMemberRoleAuth({
+      updateOrganizationMemberRole,
+      findPendingByMemberId,
+      invitationUpdate,
+    });
 
-    const result = await auth.updateInvitationRole(
-      { id: INVITATION_ID, role: "admin" },
+    const result = await auth.updateMemberRole(
+      { memberId: MEMBER_ID, role: "admin" },
+      organizationCtx("owner")
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toEqual({ id: MEMBER_ID, role: "admin" });
+    }
+    expect(invitationUpdate).not.toHaveBeenCalled();
+  });
+
+  it("does not copy the role onto a non-pending Invitation", async () => {
+    const updateOrganizationMemberRole = jest.fn().mockResolvedValue(
+      ok({
+        id: MEMBER_ID,
+        organizationId: ORG_ID,
+        userId: null,
+        role: "admin",
+      })
+    );
+    const findPendingByMemberId = jest.fn().mockResolvedValue(ok(null));
+    const invitationUpdate = jest.fn();
+    const auth = createUpdateMemberRoleAuth({
+      updateOrganizationMemberRole,
+      findPendingByMemberId,
+      invitationUpdate,
+    });
+
+    const result = await auth.updateMemberRole(
+      { memberId: MEMBER_ID, role: "admin" },
+      organizationCtx("owner")
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(invitationUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses a left Membership", async () => {
+    const updateOrganizationMemberRole = jest.fn().mockResolvedValue(
+      err(
+        new ServerError({
+          code: "NOT_FOUND",
+          layer: "repository",
+          layerName: "organization",
+          message: "Member not found",
+        })
+      )
+    );
+    const invitationUpdate = jest.fn();
+    const auth = createUpdateMemberRoleAuth({
+      updateOrganizationMemberRole,
+      findPendingByMemberId: jest.fn(),
+      invitationUpdate,
+    });
+
+    const result = await auth.updateMemberRole(
+      { memberId: MEMBER_ID, role: "admin" },
+      organizationCtx("owner")
+    );
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("NOT_FOUND");
+    }
+    expect(invitationUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses assigning the Owner Role", async () => {
+    const updateOrganizationMemberRole = jest.fn();
+    const invitationUpdate = jest.fn();
+    const auth = createUpdateMemberRoleAuth({
+      updateOrganizationMemberRole,
+      findPendingByMemberId: jest.fn(),
+      invitationUpdate,
+    });
+
+    const result = await auth.updateMemberRole(
+      { memberId: MEMBER_ID, role: "owner" },
       organizationCtx("owner")
     );
 
@@ -110,17 +223,20 @@ describe("AuthService.updateInvitationRole", () => {
     if (result.isErr()) {
       expect(result.error.code).toBe("BAD_REQUEST");
     }
-    expect(update).not.toHaveBeenCalled();
+    expect(updateOrganizationMemberRole).not.toHaveBeenCalled();
   });
 
   it("rejects unknown organization roles", async () => {
-    const invitation = pendingInvitation();
-    const findById = jest.fn().mockResolvedValue(ok(invitation));
-    const update = jest.fn();
-    const auth = createAuthService({ findById, update });
+    const updateOrganizationMemberRole = jest.fn();
+    const invitationUpdate = jest.fn();
+    const auth = createUpdateMemberRoleAuth({
+      updateOrganizationMemberRole,
+      findPendingByMemberId: jest.fn(),
+      invitationUpdate,
+    });
 
-    const result = await auth.updateInvitationRole(
-      { id: INVITATION_ID, role: "editor" },
+    const result = await auth.updateMemberRole(
+      { memberId: MEMBER_ID, role: "editor" },
       organizationCtx("owner")
     );
 
@@ -128,17 +244,20 @@ describe("AuthService.updateInvitationRole", () => {
     if (result.isErr()) {
       expect(result.error.code).toBe("BAD_REQUEST");
     }
-    expect(update).not.toHaveBeenCalled();
+    expect(updateOrganizationMemberRole).not.toHaveBeenCalled();
   });
 
-  it("forbids organization members who cannot manage invitations", async () => {
-    const invitation = pendingInvitation();
-    const findById = jest.fn().mockResolvedValue(ok(invitation));
-    const update = jest.fn();
-    const auth = createAuthService({ findById, update });
+  it("forbids organization members who cannot manage Members", async () => {
+    const updateOrganizationMemberRole = jest.fn();
+    const invitationUpdate = jest.fn();
+    const auth = createUpdateMemberRoleAuth({
+      updateOrganizationMemberRole,
+      findPendingByMemberId: jest.fn(),
+      invitationUpdate,
+    });
 
-    const result = await auth.updateInvitationRole(
-      { id: INVITATION_ID, role: "admin" },
+    const result = await auth.updateMemberRole(
+      { memberId: MEMBER_ID, role: "admin" },
       organizationCtx("member")
     );
 
@@ -146,7 +265,7 @@ describe("AuthService.updateInvitationRole", () => {
     if (result.isErr()) {
       expect(result.error.code).toBe("FORBIDDEN");
     }
-    expect(update).not.toHaveBeenCalled();
+    expect(updateOrganizationMemberRole).not.toHaveBeenCalled();
   });
 });
 

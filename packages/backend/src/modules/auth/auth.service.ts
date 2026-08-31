@@ -1260,29 +1260,41 @@ export class AuthService extends BasePermissionService<
       });
     });
 
-  updateInvitationRole = this.procedure("updateInvitationRole")
-    .input(invitationSchemas.input.updateRole)
+  updateMemberRole = this.procedure("updateMemberRole")
+    .input(invitationSchemas.input.updateMemberRole)
     .output(invitationSchemas.output.role)
     .requireAuth("organization")
-    .loadResource("invitation", ({ input }) => this.repository.invitation.findById(input.id))
     .access({
       action: "write",
-      entities: ({ state }) => ({
-        organizationId: state.invitation.organizationId,
+      entities: ({ ctx }) => ({
+        organizationId: ctx.actor.organizationId,
       }),
     })
-    .handle(async ({ input, state }) => {
+    .handle(async ({ input, ctx }) => {
+      if (input.role === "owner") {
+        return this.error("BAD_REQUEST", "Cannot assign the Owner role");
+      }
       const roleCheck = this.validateOrganizationRole(input.role);
       if (roleCheck.isErr()) return err(roleCheck.error);
-      if (state.invitation.status !== "pending") {
-        return this.error("BAD_REQUEST", "Invitation is not pending");
-      }
-      const result = await this.repository.invitation.update({
-        id: input.id,
+
+      const member = await this.repository.organization.updateOrganizationMemberRole({
+        organizationId: ctx.actor.organizationId,
+        memberId: input.memberId,
         role: input.role,
       });
-      if (result.isErr()) return err(result.error);
-      return ok({ id: result.value.id, role: result.value.role ?? input.role });
+      if (member.isErr()) return err(member.error);
+
+      const pending = await this.repository.invitation.findPendingByMemberId(input.memberId);
+      if (pending.isErr()) return err(pending.error);
+      if (pending.value) {
+        const invitation = await this.repository.invitation.update({
+          id: pending.value.id,
+          role: input.role,
+        });
+        if (invitation.isErr()) return err(invitation.error);
+      }
+
+      return ok({ id: member.value.id, role: member.value.role });
     });
 
   inviteOrganizationMember = this.procedure("inviteOrganizationMember")

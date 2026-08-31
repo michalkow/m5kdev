@@ -486,7 +486,26 @@ export class AuthInvitationRepository extends BaseTableRepository<
   Schema,
   Record<string, never>,
   Schema["invitations"]
-> {}
+> {
+  async findPendingByMemberId(
+    memberId: string
+  ): ServerResultAsync<typeof auth.invitations.$inferSelect | null> {
+    const result = await this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(this.schema.invitations)
+        .where(
+          and(
+            eq(this.schema.invitations.memberId, memberId),
+            eq(this.schema.invitations.status, "pending")
+          )
+        )
+        .limit(1)
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value[0] ?? null);
+  }
+}
 
 export class AuthWaitlistRepository extends BaseTableRepository<
   Orm,

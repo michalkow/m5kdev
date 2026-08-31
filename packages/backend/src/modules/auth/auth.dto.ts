@@ -233,12 +233,12 @@ export const invitationSchemas = {
     read: z.object({
       id: z.string(),
     }),
-    updateRole: z.object({
-      id: z.string(),
-      role: z.string(),
-    }),
     invite: z.object({
       email: z.string(),
+      role: z.string(),
+    }),
+    updateMemberRole: z.object({
+      memberId: z.string(),
       role: z.string(),
     }),
   },
