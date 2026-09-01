@@ -11,6 +11,12 @@ node_modules
 # Local env files — never bake secrets into the image
 .env*
 
+# Databases
+*.db
+*.db-wal
+*.db-shm
+*.db-info
+
 # Testing
 coverage
 
