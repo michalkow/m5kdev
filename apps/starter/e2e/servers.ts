@@ -61,6 +61,9 @@ function serverEnv(profile: E2EProfile, expo: boolean): Record<string, string> {
     BETTER_AUTH_SECRET: "auth-e2e-local-secret-auth-e2e-local-secret",
     SYSTEM_NOTIFICATION_EMAIL: "ops@auth-e2e.local",
     NODE_ENV: "development",
+    // hermetic: shared/.env Turso credentials must not leak into drizzle-kit
+    TURSO_DATABASE_URL: "",
+    TURSO_AUTH_TOKEN: "",
     // hermetic: a real key in the invoking shell would flip email mode to
     // "send" and the stored-email assertions would find nothing
     RESEND_API_KEY: "",

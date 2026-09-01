@@ -96,7 +96,13 @@ Existing apps should work through these guides (skip any that already apply):
 
 ## Upgrading to 0.36.0 {#upgrade-0-36-0}
 
+Auth schema guides (Membership, Account claim / Waitlist, Team drop) can share
+one Drizzle generate after the catalog bump.
+
 - [Membership at invite](/guides/v0.36.0-membership-at-invite-migration)
+- [Account claim and Waitlist](/guides/v0.36.0-account-claim-waitlist-migration)
+- [Team drop and unused User payment columns](/guides/v0.36.0-team-drop-migration)
+- [Email preview gate](/guides/v0.36.0-email-preview-gate-migration)
 - [Notification inbox](/guides/v0.36.0-notification-inbox-migration)
 
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).

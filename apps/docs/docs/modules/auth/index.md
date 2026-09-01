@@ -5,8 +5,9 @@ sidebar_position: 2
 # Auth module
 
 The auth module is the identity backbone of an m5kdev app: Better Auth wiring,
-users, organizations, teams, invitations, waitlists, API keys, and the settings
-storage (preferences, flags, metadata, onboarding) that other modules build on.
+users, organizations, invitations, waitlists, Account claim, API keys, and the
+settings storage (preferences, flags, metadata, onboarding) that other modules
+build on.
 
 Organizations are the **default tenancy** model: every user has at least one
 membership. Soft-deleted members keep a snapshot `name` for attribution; rejoin
@@ -26,8 +27,9 @@ that membership — see
 ## Database tables
 
 `AuthModule` ships these Drizzle tables: `users`, `sessions`, `accounts`,
-`verifications`, `organizations`, `members`, `teams`, `teammembers`,
-`invitations`, `apikeys`, `waitlist`, and `account_claim_magic_links`.
+`verifications`, `organizations`, `members`, `invitations`, `apikeys`,
+`waitlist`, `account_claims`, and `account_claim_magic_links`. There are no
+`teams` / `teammembers` tables.
 
 ## Backend
 
@@ -62,11 +64,13 @@ Express middleware: `createAuthMiddleware(auth)` populates `req.user` /
 
 ### Roles
 
-Role keys for `user`, `organization`, and `team` scopes are configured once via
+Role keys for `user` and `organization` are configured once via
 `createBackendApp({ app: { roles } })` and mirrored to the frontend through
 `AppConfigProvider`. Defaults: users `user`/`admin`, organizations
-`member`/`admin`/`owner`. See the
-[custom app roles migration](/guides/custom-app-roles-migration).
+`member`/`admin`/`owner`. `AuthRolesConfig` still requires a `team` block
+because Kernel Grant level `team` / `TeamActor` remain; Auth does not create
+Teams. See the [custom app roles migration](/guides/custom-app-roles-migration)
+and [Team drop in 0.36.0](/guides/v0.36.0-team-drop-migration).
 
 ### tRPC surface
 
@@ -85,9 +89,14 @@ The `auth` router covers, by area:
 - **Admin Owner** — `transferOrganizationOwner`; add-member may assign Owner
   only when none exists.
 - **Waitlist** — `joinWaitlist` (public), `validateWaitlistCode` (public),
-  `inviteToWaitlist`, `createWaitlistCode`, `listWaitlist`, plus admin add/invite/remove.
-- **Account claims** — `createAccountClaimCode`, `generateAccountClaimMagicLink`,
-  `getMyAccountClaimStatus`, `setMyAccountClaimEmail`, `acceptMyAccountClaim`.
+  `inviteToWaitlist`, `createWaitlistCode` (not `createInvitationCode`),
+  `listWaitlist` (own rows include `code`), `listAdminWaitlist` (no codes),
+  plus admin add/invite/remove. Minted-code cap is 3 per User, separate from
+  the emailed-invite cap of 3.
+- **Account claims** — stored on `account_claims`, not Waitlist.
+  `createAccountClaimCode`, `listAccountClaims`,
+  `generateAccountClaimMagicLink`, `getMyAccountClaimStatus`,
+  `setMyAccountClaimEmail`, `acceptMyAccountClaim`.
 - **Admin** — organization CRUD, `searchAdminUsers`, member add/update/remove.
 
 Better Auth's own HTTP endpoints stay under `/api/auth/*`.
@@ -143,14 +152,19 @@ and [Workflow](/modules/workflow). Upgrade:
   signup) while active and remains after leave for attribution.
 
 Session context for org work includes `activeOrganizationId`,
-`activeOrganizationRole`, and `activeOrganizationMemberId`. Actors expose that
-membership as `memberId` (organization and team scopes require it).
+`activeOrganizationRole`, and `activeOrganizationMemberId`. There is no
+`activeTeamId`. Actors expose that membership as `memberId` (organization
+scope requires it). Kernel `TeamActor` still exists but Auth does not stamp
+team on the session.
 
 ## Migration guides
 
 - [Organizations and members](/guides/organizations-and-members) (intended usage)
 - [Member ownership migration](/guides/v0.32.0-memberid-ownership-migration)
 - [Membership at invite in 0.36.0](/guides/v0.36.0-membership-at-invite-migration)
+- [Account claim and Waitlist in 0.36.0](/guides/v0.36.0-account-claim-waitlist-migration)
+- [Team drop and unused User payment columns in 0.36.0](/guides/v0.36.0-team-drop-migration)
+- [Email preview gate in 0.36.0](/guides/v0.36.0-email-preview-gate-migration)
 - [User and organization locale migration](/guides/user-org-locale-migration)
 - [Admin create verified user migration](/guides/admin-create-verified-user-migration)
 - [Custom app roles migration](/guides/custom-app-roles-migration)

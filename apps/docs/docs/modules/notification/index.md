@@ -225,3 +225,4 @@ Upgrade from device-only Notification:
 - [App shell](/modules/app)
 - [Organizations and members](/guides/organizations-and-members)
 - [Notification inbox in 0.36.0](/guides/v0.36.0-notification-inbox-migration)
+- [Email preview gate in 0.36.0](/guides/v0.36.0-email-preview-gate-migration)

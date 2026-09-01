@@ -101,7 +101,14 @@ Run these on existing apps, in this order when they apply:
 
 ## 0.36.0 upgrades
 
-1. [Notification inbox](/guides/v0.36.0-notification-inbox-migration)
+Run these on existing apps, in this order when they apply. Auth schema
+guides (1–3) can share one Drizzle generate after the catalog bump.
+
+1. [Membership at invite](/guides/v0.36.0-membership-at-invite-migration)
+2. [Account claim and Waitlist](/guides/v0.36.0-account-claim-waitlist-migration)
+3. [Team drop and unused User payment columns](/guides/v0.36.0-team-drop-migration)
+4. [Email preview gate](/guides/v0.36.0-email-preview-gate-migration)
+5. [Notification inbox](/guides/v0.36.0-notification-inbox-migration)
 
 Operational Fly runbook: [Deploy with Docker and Fly.io](/guides/fly-deploy).
 

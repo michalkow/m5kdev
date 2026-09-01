@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.36.0
+
+### Minor Changes
+
+- 0.36.0
+
 ## 0.35.0
 
 ### Minor Changes

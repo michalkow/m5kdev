@@ -20,4 +20,5 @@ package.
 
 ## Module docs
 
-See the [Email Core Module](/modules/email).
+See the [Email Core Module](/modules/email). Upgrade:
+[Email preview gate in 0.36.0](/guides/v0.36.0-email-preview-gate-migration).

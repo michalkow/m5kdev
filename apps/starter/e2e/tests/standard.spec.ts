@@ -3,8 +3,10 @@ import {
   authFetch,
   clearEmails,
   createProvisionedClaimUser,
+  createTrpcClient,
   emailUrl,
   expectLoginRejected,
+  findMemberByEmail,
   getUserState,
   latestEmail,
   login,
@@ -27,6 +29,43 @@ async function createVerifiedAccount(
 ) {
   await signUp(page, email, password);
   await verifyLatestEmail(request, profile, email);
+}
+
+async function inviteFromMembersPage(page: Page, email: string) {
+  await page.goto("/organization/members");
+  await expect(page.getByRole("button", { name: /^invite$/i })).toBeEnabled();
+  await page.locator('input[type="email"]').fill(email);
+  const inviteResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" && response.url().includes("inviteOrganizationMember")
+  );
+  await page.getByRole("button", { name: /^invite$/i }).click();
+  const inviteResponse = await inviteResponsePromise;
+  expect(
+    inviteResponse.ok(),
+    `${inviteResponse.status()} ${inviteResponse.statusText()}: ${await inviteResponse.text()}`
+  ).toBe(true);
+  const invitedRow = page.getByRole("row").filter({ hasText: email });
+  await expect(invitedRow.getByText(/^invited$/i)).toBeVisible();
+  return invitedRow;
+}
+
+async function listOrganizationMembers(page: Page) {
+  const trpc = await createTrpcClient(page, profile);
+  return trpc.auth.listOrganizationMembers.query();
+}
+
+async function expectBetterAuthInviteForbidden(page: Page, email: string) {
+  const response = await authFetch(page, profile, "/api/auth/organization/invite-member", {
+    method: "POST",
+    body: {
+      organizationId: enterpriseOrgId,
+      email,
+      role: "member",
+    },
+  });
+  expect(response.ok, `${response.status} ${response.statusText}: ${response.text}`).toBe(false);
+  expect(response.status).toBe(403);
 }
 
 test.beforeEach(async ({ request }) => {
@@ -52,7 +91,7 @@ test("signup, verification email, login, protected app, and logout", async ({ pa
 
   await login(page, email, password);
   await expect(page.getByTestId("posts-route")).toBeVisible();
-  await expect(page.getByText(/small blog that protects auth changes/i).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /create post/i })).toBeVisible();
 
   await logout(page);
 });
@@ -144,14 +183,19 @@ test("organization invite email lets a new user join without creating a separate
   const invitee = `member.${Date.now()}@auth-e2e.local`;
 
   await login(page, profiles.standard.adminEmail, profiles.standard.adminPassword);
-  await page.goto("/organization/members");
-  await page.locator('input[type="email"]').fill(invitee);
-  await page.getByRole("button", { name: /invite/i }).click();
+  await inviteFromMembersPage(page, invitee);
+
+  const invited = findMemberByEmail(await listOrganizationMembers(page), invitee);
+  expect(invited?.userId).toBeNull();
+  expect(invited?.invitationId).toBeTruthy();
+  const invitedMemberId = invited?.id;
+  expect(invitedMemberId).toBeTruthy();
 
   const invite = await latestEmail(request, profile, {
     to: invitee,
     templateId: "organization-invite",
   });
+  expect(emailUrl(invite)).toContain("/organization/accept-invitation?id=");
 
   await logout(page);
   await page.goto(emailUrl(invite));
@@ -163,7 +207,9 @@ test("organization invite email lets a new user join without creating a separate
   const state = await getUserState(request, profile, invitee);
   expect(state.user.emailVerified).toBe(true);
   expect(state.organizations.map((organization) => organization.id)).toEqual([enterpriseOrgId]);
+  expect(state.organizations[0]?.memberId).toBe(invitedMemberId);
   expect(state.latestSession?.activeOrganizationId).toBe(enterpriseOrgId);
+  expect(state.latestSession?.activeOrganizationMemberId).toBe(invitedMemberId);
 });
 
 test("organization invite lets an existing user join an additional org", async ({
@@ -179,14 +225,16 @@ test("organization invite lets an existing user join an additional org", async (
   expect(beforeInvite.organizations[0]?.id).not.toBe(enterpriseOrgId);
 
   await login(page, profiles.standard.adminEmail, profiles.standard.adminPassword);
-  await page.goto("/organization/members");
-  await page.locator('input[type="email"]').fill(email);
-  await page.getByRole("button", { name: /invite/i }).click();
+  await inviteFromMembersPage(page, email);
+  const invited = findMemberByEmail(await listOrganizationMembers(page), email);
+  expect(invited?.userId).toBeNull();
+  const invitedMemberId = invited?.id;
 
   const invite = await latestEmail(request, profile, {
     to: email,
     templateId: "organization-invite",
   });
+  expect(emailUrl(invite)).toContain("/organization/accept-invitation?id=");
 
   await logout(page);
   await login(page, email, password);
@@ -203,7 +251,184 @@ test("organization invite lets an existing user join an additional org", async (
   expect(afterInvite.organizations.map((organization) => organization.id)).toContain(
     enterpriseOrgId
   );
+  expect(
+    afterInvite.organizations.find((organization) => organization.id === enterpriseOrgId)?.memberId
+  ).toBe(invitedMemberId);
   expect(afterInvite.latestSession?.activeOrganizationId).toBe(enterpriseOrgId);
+  expect(afterInvite.latestSession?.activeOrganizationMemberId).toBe(invitedMemberId);
+});
+
+test("organization members page changes an invited member role before they accept", async ({
+  page,
+  request,
+}) => {
+  const invitee = `invite-role.${Date.now()}@auth-e2e.local`;
+
+  await login(page, profiles.standard.adminEmail, profiles.standard.adminPassword);
+  await inviteFromMembersPage(page, invitee);
+  const invited = findMemberByEmail(await listOrganizationMembers(page), invitee);
+  expect(invited?.role).toBe("member");
+  expect(invited?.userId).toBeNull();
+  const invitedMemberId = invited?.id;
+  expect(invitedMemberId).toBeTruthy();
+
+  const invitedRow = page.getByRole("row").filter({ hasText: invitee });
+  await invitedRow.getByRole("button", { name: `Role for ${invitee}` }).click();
+  const roleResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" && response.url().includes("updateMemberRole")
+  );
+  await page.getByRole("option", { name: /^Admin$/ }).click();
+  const roleResponse = await roleResponsePromise;
+  expect(
+    roleResponse.ok(),
+    `${roleResponse.status()} ${roleResponse.statusText()}: ${await roleResponse.text()}`
+  ).toBe(true);
+
+  const afterRole = findMemberByEmail(await listOrganizationMembers(page), invitee);
+  expect(afterRole?.id).toBe(invitedMemberId);
+  expect(afterRole?.role).toBe("admin");
+  expect(afterRole?.userId).toBeNull();
+  expect(afterRole?.invitationId).toBeTruthy();
+
+  const invite = await latestEmail(request, profile, {
+    to: invitee,
+    templateId: "organization-invite",
+  });
+  await logout(page);
+  await page.goto(emailUrl(invite));
+  await expect(page).toHaveURL(/\/signup/);
+  await page.locator('[name="signup-password"]').fill("password1234");
+  await page.getByRole("button", { name: /sign up/i }).click();
+  await expect(page.getByTestId("session-email")).toContainText(invitee);
+
+  const state = await getUserState(request, profile, invitee);
+  expect(state.organizations).toEqual([
+    expect.objectContaining({
+      id: enterpriseOrgId,
+      memberId: invitedMemberId,
+      role: "admin",
+    }),
+  ]);
+});
+
+test("organization members page resends, updates, cancels, and revives an invited seat", async ({
+  page,
+}) => {
+  const invitee = `invite-manage.${Date.now()}@auth-e2e.local`;
+
+  await login(page, profiles.standard.adminEmail, profiles.standard.adminPassword);
+  await inviteFromMembersPage(page, invitee);
+  const firstSeat = findMemberByEmail(await listOrganizationMembers(page), invitee);
+  const memberId = firstSeat?.id;
+  expect(memberId).toBeTruthy();
+
+  await inviteFromMembersPage(page, invitee);
+  const resent = findMemberByEmail(await listOrganizationMembers(page), invitee);
+  expect(resent?.id).toBe(memberId);
+  expect(resent?.userId).toBeNull();
+
+  const invitedRow = page.getByRole("row").filter({ hasText: invitee });
+  await invitedRow.getByRole("button", { name: `Role for ${invitee}` }).click();
+  await page.getByRole("option", { name: /^Admin$/ }).click();
+  await expect(page.getByText(/member role updated/i)).toBeVisible();
+  await expect
+    .poll(async () => findMemberByEmail(await listOrganizationMembers(page), invitee)?.role)
+    .toBe("admin");
+
+  await invitedRow.getByRole("button", { name: /cancel invitation/i }).click();
+  await expect(page.getByText(/invitation canceled/i)).toBeVisible();
+  await expect(invitedRow).toBeHidden();
+  expect(findMemberByEmail(await listOrganizationMembers(page), invitee)).toBeUndefined();
+
+  await inviteFromMembersPage(page, invitee);
+  const revived = findMemberByEmail(await listOrganizationMembers(page), invitee);
+  expect(revived?.id).toBe(memberId);
+  expect(revived?.userId).toBeNull();
+});
+
+test("organization members page refuses a live member invite, then remove and leave drop the seat", async ({
+  page,
+  request,
+}) => {
+  const email = `live-member.${Date.now()}@auth-e2e.local`;
+  const password = "password1234";
+
+  await createVerifiedAccount(page, request, email, password);
+  await login(page, profiles.standard.adminEmail, profiles.standard.adminPassword);
+  await inviteFromMembersPage(page, email);
+  const invitedMemberId = findMemberByEmail(await listOrganizationMembers(page), email)?.id;
+
+  const invite = await latestEmail(request, profile, {
+    to: email,
+    templateId: "organization-invite",
+  });
+  await logout(page);
+  await login(page, email, password);
+  await page.goto(emailUrl(invite));
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, email);
+      return (
+        state.organizations.find((organization) => organization.id === enterpriseOrgId)?.memberId ??
+        null
+      );
+    })
+    .toBe(invitedMemberId);
+
+  await logout(page);
+  await login(page, profiles.standard.adminEmail, profiles.standard.adminPassword);
+  await page.goto("/organization/members");
+  await page.locator('input[type="email"]').fill(email);
+  await page.getByRole("button", { name: /^invite$/i }).click();
+  await expect(page.getByText(/live membership already exists/i)).toBeVisible();
+
+  const memberRow = page.getByRole("row").filter({ hasText: email });
+  await expect(memberRow.getByText(/^active$/i)).toBeVisible();
+  await memberRow.getByRole("button", { name: /remove member/i }).click();
+  await expect(page.getByText(/member removed/i)).toBeVisible();
+  await expect(memberRow).toBeHidden();
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, email);
+      return state.organizations.some((organization) => organization.id === enterpriseOrgId);
+    })
+    .toBe(false);
+
+  await inviteFromMembersPage(page, email);
+  const revived = findMemberByEmail(await listOrganizationMembers(page), email);
+  expect(revived?.id).toBe(invitedMemberId);
+
+  const reinvite = await latestEmail(request, profile, {
+    to: email,
+    templateId: "organization-invite",
+  });
+  await logout(page);
+  await login(page, email, password);
+  await page.goto(emailUrl(reinvite));
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, email);
+      return (
+        state.organizations.find((organization) => organization.id === enterpriseOrgId)?.memberId ??
+        null
+      );
+    })
+    .toBe(invitedMemberId);
+
+  const memberTrpc = await createTrpcClient(page, profile);
+  await memberTrpc.auth.leaveOrganization.mutate();
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, email);
+      return state.organizations.some((organization) => organization.id === enterpriseOrgId);
+    })
+    .toBe(false);
+});
+
+test("Better Auth organization invite HTTP is not a public invite path", async ({ page }) => {
+  await login(page, profiles.standard.adminEmail, profiles.standard.adminPassword);
+  await expectBetterAuthInviteForbidden(page, `ba-invite.${Date.now()}@auth-e2e.local`);
 });
 
 test("admin creates, bans, unbans, and authenticates a user", async ({ page, request }) => {
@@ -318,7 +543,7 @@ test("admin manages organization members from organization admin", async ({ page
     })
     .toBe("member");
 
-  await memberRow.getByRole("button", { name: `Member Role for ${email}` }).click();
+  await memberRow.getByRole("button", { name: `Role for ${email}` }).click();
   await page.getByRole("option", { name: /^Admin$/ }).click();
   await expect
     .poll(async () => {
@@ -338,6 +563,63 @@ test("admin manages organization members from organization admin", async ({ page
       return state.organizations.some((organization) => organization.id === enterpriseOrgId);
     })
     .toBe(false);
+});
+
+test("admin transfers organization ownership to an active member", async ({ page, request }) => {
+  const email = `org-owner.${Date.now()}@auth-e2e.local`;
+  const password = "password1234";
+  const childOrgName = `Transfer Org ${Date.now()}`;
+
+  await createVerifiedAccount(page, request, email, password);
+  await login(page, profiles.standard.adminEmail, profiles.standard.adminPassword);
+  await page.goto("/organization/manage");
+  await page.getByRole("button", { name: /new organization/i }).click();
+  const createDialog = page.getByRole("dialog");
+  await createDialog.getByPlaceholder(/acme subsidiary/i).fill(childOrgName);
+  await createDialog.getByRole("button", { name: /create organization/i }).click();
+  await expect(page.getByText(childOrgName)).toBeVisible();
+
+  await page.goto("/admin/organizations");
+  await page.locator('input[name="search"]').fill(childOrgName);
+  const organizationRow = page.getByRole("row").filter({ hasText: childOrgName });
+  await expect(organizationRow).toBeVisible();
+  await organizationRow.getByLabel(/manage members/i).click();
+
+  const dialog = page.getByRole("dialog").filter({ hasText: "Manage Members" });
+  await expect(dialog.getByText(childOrgName)).toBeVisible();
+  await dialog.getByText("Select user", { exact: true }).click();
+  await page.getByPlaceholder("Search users...").fill(email);
+  await page.getByRole("option", { name: new RegExp(email) }).click();
+  await dialog.getByRole("button", { name: /add member/i }).click();
+
+  const memberRow = dialog.getByRole("row").filter({ hasText: email });
+  await expect(memberRow).toBeVisible();
+  await expect(memberRow.getByRole("button", { name: `Transfer owner to ${email}` })).toBeVisible();
+
+  const transferResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" && response.url().includes("transferOrganizationOwner")
+  );
+  await memberRow.getByRole("button", { name: `Transfer owner to ${email}` }).click();
+  const transferResponse = await transferResponsePromise;
+  expect(
+    transferResponse.ok(),
+    `${transferResponse.status()} ${transferResponse.statusText()}: ${await transferResponse.text()}`
+  ).toBe(true);
+
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, email);
+      return state.organizations.find((organization) => organization.name === childOrgName)?.role;
+    })
+    .toBe("owner");
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, profiles.standard.adminEmail);
+      return state.organizations.find((organization) => organization.name === childOrgName)?.role;
+    })
+    .toBe("admin");
+  await expect(memberRow.getByRole("button", { name: `Transfer owner to ${email}` })).toBeHidden();
 });
 
 test("admin organization pagination stays on the selected page", async ({ page, request }) => {

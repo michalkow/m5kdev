@@ -107,6 +107,7 @@ see [User and organization locale migration](/guides/user-org-locale-migration).
 
 ## Related docs
 
+- [Email preview gate in 0.36.0](/guides/v0.36.0-email-preview-gate-migration)
 - [User and organization locale migration](/guides/user-org-locale-migration)
 - [`@m5kdev/email` package](/packages/email)
 - [Billing trial-ending email](/guides/v0.34.0-billing-trial-ending-email-migration)

@@ -23,9 +23,14 @@ steps below.
 
 ## Database migration
 
-**No schema change is required.** User, organization, and team membership roles
+**No schema change is required for role keys.** User and organization roles
 are already stored as plain `text` columns (`users.role`, `members.role`,
-`teamMembers.role`, session active-role fields).
+session active-role fields).
+
+From 0.36.0 there is no `teammembers` table and no session `activeTeamRole`.
+`AuthRolesConfig` still requires a `team` block because Kernel Grant level
+`team` remains; Auth does not create Teams. See
+[Team drop in 0.36.0](/guides/v0.36.0-team-drop-migration).
 
 Custom role keys (for example `editor`) work as soon as app config, grants, and
 translations are updated. Existing rows keep their stored role strings.
@@ -256,5 +261,7 @@ See [auth-e2e `roles.constants.ts`](https://github.com/michalkow/m5kdev/blob/mai
 ## Related docs
 
 - [Auth module](/modules/auth)
+- [Team drop in 0.36.0](/guides/v0.36.0-team-drop-migration)
+- [Membership at invite in 0.36.0](/guides/v0.36.0-membership-at-invite-migration)
 - [User and organization locale migration](/guides/user-org-locale-migration)
 - [Module grants guide](https://github.com/michalkow/m5kdev/blob/main/.cursor/rules/module-grants-guide.mdc) (repository)

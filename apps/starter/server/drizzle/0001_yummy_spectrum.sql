@@ -17,7 +17,7 @@ CREATE TABLE `__new_members` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-INSERT INTO `__new_members`("id", "organization_id", "user_id", "email", "name", "image", "role", "created_at", "deleted_at", "preferences", "metadata", "onboarding", "flags") SELECT "id", "organization_id", "user_id", "email", "name", "image", "role", "created_at", "deleted_at", "preferences", "metadata", "onboarding", "flags" FROM `members`;--> statement-breakpoint
+INSERT INTO `__new_members`("id", "organization_id", "user_id", "email", "name", "image", "role", "created_at", "deleted_at", "preferences", "metadata", "onboarding", "flags") SELECT "id", "organization_id", "user_id", NULL, "name", "image", "role", "created_at", "deleted_at", "preferences", "metadata", "onboarding", "flags" FROM `members`;--> statement-breakpoint
 DROP TABLE `members`;--> statement-breakpoint
 ALTER TABLE `__new_members` RENAME TO `members`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint

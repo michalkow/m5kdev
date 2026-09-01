@@ -33,4 +33,8 @@ Package docs explain ownership and imports. Detailed usage belongs in
 
 ## 0.36.0 upgrades
 
+- [Membership at invite](/guides/v0.36.0-membership-at-invite-migration)
+- [Account claim and Waitlist](/guides/v0.36.0-account-claim-waitlist-migration)
+- [Team drop and unused User payment columns](/guides/v0.36.0-team-drop-migration)
+- [Email preview gate](/guides/v0.36.0-email-preview-gate-migration)
 - [Notification inbox](/guides/v0.36.0-notification-inbox-migration)

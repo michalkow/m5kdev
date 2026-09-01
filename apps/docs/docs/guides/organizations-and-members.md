@@ -24,10 +24,10 @@ principal for app assets.
 
 | Concern | Framework default |
 | --- | --- |
-| Isolation | Data is scoped by `organizationId` (and often `teamId`). |
+| Isolation | Data is scoped by `organizationId`. |
 | Roles | Organization roles (`member` / `admin` / `owner`, or app-defined keys) drive grants. |
 | Session | `activeOrganizationId`, `activeOrganizationRole`, and `activeOrganizationMemberId` define the current tenancy. |
-| Growth path | Adding a second org, invitations, or teams does not require re-keying ownership from user → member. |
+| Growth path | Adding a second org or invitations does not require re-keying ownership from user → member. Auth 1.0 has no Team. |
 
 If you model “my stuff” only as `userId`, a user who joins two orgs cannot keep
 separate ownership, and leaving an org breaks attribution on historical rows.
@@ -134,5 +134,7 @@ See [Kernel infrastructure (Base)](/modules/base) for actors and grants, and the
 - [Membership at invite in 0.36.0](/guides/v0.36.0-membership-at-invite-migration) —
   Membership exists at invite; Auth tRPC for invite/accept/cancel/role/remove;
   leftover tokens are not backfilled.
+- [Team drop in 0.36.0](/guides/v0.36.0-team-drop-migration) — Auth no longer
+  creates Teams; leftover `team_id` columns are not a tenancy unit.
 - [Custom app roles migration](/guides/custom-app-roles-migration) — configuring
-  organization and team role keys. Owner is not an org-assignable role.
+  organization role keys. Owner is not an org-assignable role.

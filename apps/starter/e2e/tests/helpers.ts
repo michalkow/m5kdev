@@ -1,5 +1,8 @@
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { transformer } from "@m5kdev/commons/utils/trpc";
 import type { APIRequestContext, Page, TestInfo } from "@playwright/test";
 import { expect } from "@playwright/test";
+import { createTRPCClient, httpBatchLink } from "@trpc/client";
 
 export type Profile = "standard" | "waitlist" | "expoStandard" | "expoWaitlist";
 
@@ -29,6 +32,7 @@ export type UserHarnessState = {
     type: string | null;
     parentId: string | null;
     role: string;
+    memberId: string;
   }>;
   credentialAccount: boolean;
   accountClaims: Array<{
@@ -285,4 +289,47 @@ export function resetTokenFrom(url: string) {
   const token = parts.at(-1);
   if (!token) throw new Error(`Could not read reset token from ${url}`);
   return token;
+}
+
+export function memberEmail(member: {
+  email?: string | null;
+  user?: { email?: string | null } | null;
+}): string {
+  return (member.email ?? member.user?.email ?? "").trim().toLowerCase();
+}
+
+export function findMemberByEmail<
+  T extends {
+    email?: string | null;
+    user?: { email?: string | null } | null;
+  },
+>(members: readonly T[], email: string): T | undefined {
+  const needle = email.trim().toLowerCase();
+  return members.find((member) => memberEmail(member) === needle);
+}
+
+export async function createTrpcClient(page: Page, profile: Profile) {
+  const cookies = await page.context().cookies(profiles[profile].serverUrl);
+  const cookie = cookies.map((entry) => `${entry.name}=${entry.value}`).join("; ");
+  type FetchInit = NonNullable<Parameters<typeof fetch>[1]>;
+
+  return createTRPCClient<BackendTRPCRouter>({
+    links: [
+      httpBatchLink({
+        url: `${profiles[profile].serverUrl}/trpc`,
+        fetch(url, options) {
+          const headers = new Headers(options?.headers);
+          if (cookie) {
+            headers.set("cookie", cookie);
+          }
+          return fetch(url, {
+            ...options,
+            body: options?.body ? (options.body as FetchInit["body"]) : undefined,
+            headers,
+          });
+        },
+        transformer,
+      }),
+    ],
+  });
 }

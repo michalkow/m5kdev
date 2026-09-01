@@ -3,7 +3,7 @@ import {
   type ModuleExpressContext,
   type TableMap,
 } from "@m5kdev/backend/modules/base/base.module";
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import type { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 
@@ -77,13 +77,14 @@ export class TestHarnessModule extends BaseModule<
           type: db.schema.organizations.type,
           parentId: db.schema.organizations.parentId,
           role: db.schema.members.role,
+          memberId: db.schema.members.id,
         })
         .from(db.schema.members)
         .innerJoin(
           db.schema.organizations,
           eq(db.schema.members.organizationId, db.schema.organizations.id)
         )
-        .where(eq(db.schema.members.userId, user.id));
+        .where(and(eq(db.schema.members.userId, user.id), isNull(db.schema.members.deletedAt)));
 
       const [credentialAccount] = await db.orm
         .select({ id: db.schema.accounts.id })

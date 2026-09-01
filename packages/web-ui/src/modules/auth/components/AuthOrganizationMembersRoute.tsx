@@ -2,12 +2,12 @@ import { Button, Card, Chip, Input, Label, ListBox, Select, Spinner, Table } fro
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useRoleLabel } from "@m5kdev/frontend/modules/app/hooks/useRoleLabel";
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useAuthMemberInvite } from "@m5kdev/frontend/modules/auth/hooks/useMemberInvite";
 import {
   type AuthOrganizationRole,
   useOrganizationAccess,
 } from "@m5kdev/frontend/modules/auth/hooks/useOrganizationAccess";
+import { useUserOrganizations } from "@m5kdev/frontend/modules/auth/hooks/useUserOrganizations";
 import type { Key } from "@react-types/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Trash2, UserPlus } from "lucide-react";
@@ -19,14 +19,6 @@ import {
   ORGANIZATION_ROLE_FALLBACK,
   toOrganizationMemberRows,
 } from "./organizationMemberRows";
-
-type OrganizationDetails = {
-  id: string;
-  name: string;
-  slug: string;
-  logo?: string | null;
-  metadata?: Record<string, unknown> | null;
-};
 
 export interface AuthOrganizationMembersRouteLabels {
   loadError: string;
@@ -197,6 +189,7 @@ export function AuthOrganizationMembersRoute({
   const getRoleLabel = useRoleLabel("organization");
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();
+  const { data: organizations = [] } = useUserOrganizations();
 
   const {
     activeOrganizationId,
@@ -304,27 +297,17 @@ export function AuthOrganizationMembersRoute({
     }
   }, [inviteRole, resolvedAssignableRoles]);
 
-  const organizationQuery = useQuery({
-    queryKey: ["auth-organization-details", activeOrganizationId],
-    enabled: Boolean(activeOrganizationId && canManageOrganization),
-    queryFn: async () => {
-      const { data, error } = await authClient.organization.getFullOrganization({
-        query: {
-          organizationId: activeOrganizationId,
-          membersLimit: 200,
-        },
-      });
-      if (error) {
-        throw new Error(error.message ?? resolvedLabels.loadError);
-      }
-      return data as OrganizationDetails | null;
-    },
-  });
-
   const membersQuery = useQuery(
     trpc.auth.listOrganizationMembers.queryOptions(undefined, {
       enabled: Boolean(activeOrganizationId && canManageOrganization),
     })
+  );
+
+  const organizationName = useMemo(
+    () =>
+      organizations.find((organization) => organization.id === activeOrganizationId)?.name ??
+      resolvedLabels.defaultOrganizationName,
+    [activeOrganizationId, organizations, resolvedLabels.defaultOrganizationName]
   );
 
   const rows = useMemo<CombinedMemberRow[]>(
@@ -417,7 +400,7 @@ export function AuthOrganizationMembersRoute({
     );
   }
 
-  if (organizationQuery.isLoading || membersQuery.isLoading) {
+  if (membersQuery.isLoading) {
     return (
       <div className="p-6 flex justify-center">
         <Spinner />
@@ -430,9 +413,7 @@ export function AuthOrganizationMembersRoute({
       <div className="flex flex-col gap-1 mb-4">
         <p className="text-xl font-semibold">{resolvedLabels.membersTitle}</p>
         <p className="text-sm text-muted">
-          {resolvedLabels.membersDescription(
-            organizationQuery.data?.name ?? resolvedLabels.defaultOrganizationName
-          )}
+          {resolvedLabels.membersDescription(organizationName)}
         </p>
       </div>
 

@@ -11,6 +11,7 @@ import {
   clearEmails,
   createProvisionedClaimUser,
   emailUrl,
+  findMemberByEmail,
   getUserState,
   latestEmail,
   profiles,
@@ -37,15 +38,26 @@ async function expectAuthOk(response: Awaited<ReturnType<typeof authFetch>>) {
 }
 
 async function inviteOrganizationMember(page: Page, email: string, role: "member" | "admin") {
+  const trpc = await createExpoTrpcClient(page, profile);
+  return trpc.auth.inviteOrganizationMember.mutate({ email, role });
+}
+
+async function listOrganizationMembers(page: Page) {
+  const trpc = await createExpoTrpcClient(page, profile);
+  return trpc.auth.listOrganizationMembers.query();
+}
+
+async function expectBetterAuthInviteForbidden(page: Page, email: string) {
   const response = await authFetch(page, profile, "/api/auth/organization/invite-member", {
     method: "POST",
     body: {
       organizationId: enterpriseOrgId,
       email,
-      role,
+      role: "member",
     },
   });
-  await expectAuthOk(response);
+  expect(response.ok, `${response.status} ${response.statusText}: ${response.text}`).toBe(false);
+  expect(response.status).toBe(403);
 }
 
 test.beforeEach(async ({ request }) => {
@@ -151,12 +163,21 @@ test("organization invite email lets a new user join without creating a separate
   const invitee = `expo.member.${Date.now()}@auth-e2e.local`;
 
   await expoLoginNative(page, profiles[profile].adminEmail, profiles[profile].adminPassword);
-  await inviteOrganizationMember(page, invitee, "member");
+  const invited = await inviteOrganizationMember(page, invitee, "member");
+  expect(invited.member.userId).toBeNull();
+  expect(invited.invitation.memberId).toBe(invited.member.id);
+  expect(invited.invitation.status).toBe("pending");
+
+  const listed = findMemberByEmail(await listOrganizationMembers(page), invitee);
+  expect(listed?.id).toBe(invited.member.id);
+  expect(listed?.userId).toBeNull();
+  expect(listed?.invitationId).toBe(invited.invitation.id);
 
   const invite = await latestEmail(request, profile, {
     to: invitee,
     templateId: "organization-invite",
   });
+  expect(emailUrl(invite)).toContain(`/organization/accept-invitation?id=${invited.invitation.id}`);
 
   await expoLogoutNative(page);
   await page.goto(emailUrl(invite));
@@ -168,7 +189,9 @@ test("organization invite email lets a new user join without creating a separate
   const state = await getUserState(request, profile, invitee);
   expect(state.user.emailVerified).toBe(true);
   expect(state.organizations.map((organization) => organization.id)).toEqual([enterpriseOrgId]);
+  expect(state.organizations[0]?.memberId).toBe(invited.member.id);
   expect(state.latestSession?.activeOrganizationId).toBe(enterpriseOrgId);
+  expect(state.latestSession?.activeOrganizationMemberId).toBe(invited.member.id);
 });
 
 test("organization invite lets an existing user join an additional org", async ({
@@ -184,12 +207,14 @@ test("organization invite lets an existing user join an additional org", async (
   expect(beforeInvite.organizations[0]?.id).not.toBe(enterpriseOrgId);
 
   await expoLoginNative(page, profiles[profile].adminEmail, profiles[profile].adminPassword);
-  await inviteOrganizationMember(page, email, "member");
+  const invited = await inviteOrganizationMember(page, email, "member");
+  expect(invited.member.userId).toBeNull();
 
   const invite = await latestEmail(request, profile, {
     to: email,
     templateId: "organization-invite",
   });
+  expect(emailUrl(invite)).toContain("/organization/accept-invitation?id=");
 
   await expoLogoutNative(page);
   await expoLoginNative(page, email, password);
@@ -206,7 +231,156 @@ test("organization invite lets an existing user join an additional org", async (
   expect(afterInvite.organizations.map((organization) => organization.id)).toContain(
     enterpriseOrgId
   );
+  expect(
+    afterInvite.organizations.find((organization) => organization.id === enterpriseOrgId)?.memberId
+  ).toBe(invited.member.id);
   expect(afterInvite.latestSession?.activeOrganizationId).toBe(enterpriseOrgId);
+  expect(afterInvite.latestSession?.activeOrganizationMemberId).toBe(invited.member.id);
+});
+
+test("invited membership role change applies before accept", async ({ page, request }) => {
+  const invitee = `expo.invite-role.${Date.now()}@auth-e2e.local`;
+
+  await expoLoginNative(page, profiles[profile].adminEmail, profiles[profile].adminPassword);
+  const invited = await inviteOrganizationMember(page, invitee, "member");
+  expect(invited.member.role).toBe("member");
+  expect(invited.member.userId).toBeNull();
+
+  const trpc = await createExpoTrpcClient(page, profile);
+  const updated = await trpc.auth.updateMemberRole.mutate({
+    memberId: invited.member.id,
+    role: "admin",
+  });
+  expect(updated).toEqual({ id: invited.member.id, role: "admin" });
+
+  const afterRole = findMemberByEmail(await listOrganizationMembers(page), invitee);
+  expect(afterRole?.id).toBe(invited.member.id);
+  expect(afterRole?.role).toBe("admin");
+  expect(afterRole?.userId).toBeNull();
+  expect(afterRole?.invitationId).toBe(invited.invitation.id);
+
+  const invite = await latestEmail(request, profile, {
+    to: invitee,
+    templateId: "organization-invite",
+  });
+  await expoLogoutNative(page);
+  await page.goto(emailUrl(invite));
+  await expect(page).toHaveURL(/\/signup/);
+  await page.getByTestId("signup-password").fill("password1234");
+  await page.getByTestId("signup-submit").click();
+  await expect(page.getByTestId("session-email")).toContainText(invitee);
+
+  const state = await getUserState(request, profile, invitee);
+  expect(state.organizations).toEqual([
+    expect.objectContaining({
+      id: enterpriseOrgId,
+      memberId: invited.member.id,
+      role: "admin",
+    }),
+  ]);
+});
+
+test("invited membership can be resent, role-updated, canceled, and revived", async ({ page }) => {
+  const invitee = `expo.invite-manage.${Date.now()}@auth-e2e.local`;
+
+  await expoLoginNative(page, profiles[profile].adminEmail, profiles[profile].adminPassword);
+  const invited = await inviteOrganizationMember(page, invitee, "member");
+  const resent = await inviteOrganizationMember(page, invitee, "member");
+  expect(resent.member.id).toBe(invited.member.id);
+  expect(resent.invitation.id).toBe(invited.invitation.id);
+
+  const trpc = await createExpoTrpcClient(page, profile);
+  await trpc.auth.updateMemberRole.mutate({ memberId: invited.member.id, role: "admin" });
+  const afterRole = findMemberByEmail(await listOrganizationMembers(page), invitee);
+  expect(afterRole?.role).toBe("admin");
+  expect(afterRole?.userId).toBeNull();
+
+  await trpc.auth.cancelOrganizationInvitation.mutate({
+    invitationId: invited.invitation.id,
+  });
+  expect(findMemberByEmail(await listOrganizationMembers(page), invitee)).toBeUndefined();
+
+  const revived = await inviteOrganizationMember(page, invitee, "member");
+  expect(revived.member.id).toBe(invited.member.id);
+  expect(revived.member.userId).toBeNull();
+});
+
+test("live member invite is rejected; remove and leave drop the seat", async ({
+  page,
+  request,
+}) => {
+  const email = `expo.live-member.${Date.now()}@auth-e2e.local`;
+  const password = "password1234";
+
+  await createVerifiedExpoAccount(page, request, email, password);
+  await expoLoginNative(page, profiles[profile].adminEmail, profiles[profile].adminPassword);
+  const invited = await inviteOrganizationMember(page, email, "member");
+
+  const invite = await latestEmail(request, profile, {
+    to: email,
+    templateId: "organization-invite",
+  });
+  await expoLogoutNative(page);
+  await expoLoginNative(page, email, password);
+  await page.goto(emailUrl(invite));
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, email);
+      return (
+        state.organizations.find((organization) => organization.id === enterpriseOrgId)?.memberId ??
+        null
+      );
+    })
+    .toBe(invited.member.id);
+
+  await expoLogoutNative(page);
+  await expoLoginNative(page, profiles[profile].adminEmail, profiles[profile].adminPassword);
+  const adminTrpc = await createExpoTrpcClient(page, profile);
+  await expect(
+    adminTrpc.auth.inviteOrganizationMember.mutate({ email, role: "member" })
+  ).rejects.toThrow(/live membership already exists/i);
+
+  await adminTrpc.auth.removeOrganizationMember.mutate({ memberId: invited.member.id });
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, email);
+      return state.organizations.some((organization) => organization.id === enterpriseOrgId);
+    })
+    .toBe(false);
+
+  const revived = await inviteOrganizationMember(page, email, "member");
+  expect(revived.member.id).toBe(invited.member.id);
+
+  const reinvite = await latestEmail(request, profile, {
+    to: email,
+    templateId: "organization-invite",
+  });
+  await expoLogoutNative(page);
+  await expoLoginNative(page, email, password);
+  await page.goto(emailUrl(reinvite));
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, email);
+      return (
+        state.organizations.find((organization) => organization.id === enterpriseOrgId)?.memberId ??
+        null
+      );
+    })
+    .toBe(invited.member.id);
+
+  const memberTrpc = await createExpoTrpcClient(page, profile);
+  await memberTrpc.auth.leaveOrganization.mutate();
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, email);
+      return state.organizations.some((organization) => organization.id === enterpriseOrgId);
+    })
+    .toBe(false);
+});
+
+test("Better Auth organization invite HTTP is not a public invite path", async ({ page }) => {
+  await expoLoginNative(page, profiles[profile].adminEmail, profiles[profile].adminPassword);
+  await expectBetterAuthInviteForbidden(page, `expo.ba-invite.${Date.now()}@auth-e2e.local`);
 });
 
 test("admin creates, bans, unbans, and authenticates a user", async ({ page, request }) => {
@@ -316,7 +490,7 @@ test("admin manages organization members from organization admin", async ({ page
   const membersAfterAdd = await trpc.auth.listAdminOrganizationMembers.query({
     organizationId: enterpriseOrgId,
   });
-  const member = membersAfterAdd.members.find((row) => row.user.email === email);
+  const member = membersAfterAdd.members.find((row) => row.user?.email === email);
   expect(member).toBeTruthy();
   await expect
     .poll(async () => {
@@ -353,6 +527,52 @@ test("admin manages organization members from organization admin", async ({ page
       return state.organizations.some((organization) => organization.id === enterpriseOrgId);
     })
     .toBe(false);
+});
+
+test("admin transfers organization ownership to an active member", async ({ page, request }) => {
+  const email = `expo.org-owner.${Date.now()}@auth-e2e.local`;
+  const password = "password1234";
+  const childOrgName = `Expo Transfer Org ${Date.now()}`;
+
+  await createVerifiedExpoAccount(page, request, email, password);
+  await expoLoginNative(page, profiles[profile].adminEmail, profiles[profile].adminPassword);
+  const trpc = await createExpoTrpcClient(page, profile);
+  const childOrg = await trpc.auth.createOrganization.mutate({ name: childOrgName });
+
+  const users = await trpc.auth.searchAdminUsers.query({ q: email, limit: 10 });
+  const user = users.rows.find((row) => row.email === email);
+  expect(user).toBeTruthy();
+
+  await trpc.auth.addAdminOrganizationMember.mutate({
+    organizationId: childOrg.id,
+    userId: user?.id ?? "",
+    role: "member",
+  });
+  const membersAfterAdd = await trpc.auth.listAdminOrganizationMembers.query({
+    organizationId: childOrg.id,
+  });
+  const member = membersAfterAdd.members.find((row) => row.user?.email === email);
+  expect(member).toBeTruthy();
+
+  const transferred = await trpc.auth.transferOrganizationOwner.mutate({
+    organizationId: childOrg.id,
+    memberId: member?.id ?? "",
+  });
+  expect(transferred.owner).toEqual({ id: member?.id, role: "owner" });
+  expect(transferred.previousOwner.role).toBe("admin");
+
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, email);
+      return state.organizations.find((organization) => organization.id === childOrg.id)?.role;
+    })
+    .toBe("owner");
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, profiles[profile].adminEmail);
+      return state.organizations.find((organization) => organization.id === childOrg.id)?.role;
+    })
+    .toBe("admin");
 });
 
 test("admin organization pagination stays on the selected page", async ({ page, request }) => {
