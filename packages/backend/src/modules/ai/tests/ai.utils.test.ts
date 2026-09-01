@@ -1,7 +1,7 @@
 import { RANKED_MODELS } from "@m5kdev/commons/modules/ai/ai.constants";
 import type { RankedModel } from "@m5kdev/commons/modules/ai/ai.types";
 import { getSortedRecommendedModelIds, rankModels } from "@m5kdev/commons/modules/ai/ai.utils";
-import { resolveModels, resolveRetryModels } from "./ai.utils";
+import { resolveModels, resolveRetryModels } from "../ai.utils";
 
 const tokenProfile = { inputTokens: 1_000, outputTokens: 500 };
 

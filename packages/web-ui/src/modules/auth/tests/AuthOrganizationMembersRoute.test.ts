@@ -1,4 +1,4 @@
-import { toOrganizationMemberRows } from "./organizationMemberRows";
+import { toOrganizationMemberRows } from "../components/organizationMemberRows";
 
 describe("toOrganizationMemberRows", () => {
   it("maps invited Memberships from Auth list rows without an Invitation kind", () => {

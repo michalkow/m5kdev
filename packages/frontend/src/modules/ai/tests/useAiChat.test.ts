@@ -1,4 +1,4 @@
-import { getOrCreateAiChat, setConversationHasMemory } from "./useAiChat";
+import { getOrCreateAiChat, setConversationHasMemory } from "../hooks/useAiChat";
 
 interface TransportInit {
   readonly api: string;
@@ -25,7 +25,7 @@ jest.mock("ai", () => ({
   },
 }));
 
-jest.mock("./hydrateConversation", () => ({
+jest.mock("../hooks/hydrateConversation", () => ({
   hydrateConversation: jest.fn(),
 }));
 

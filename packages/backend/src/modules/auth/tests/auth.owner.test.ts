@@ -1,16 +1,16 @@
 import { ok } from "neverthrow";
-import { createServiceActor } from "../../base/base.actor";
-import type { ServerEventBus } from "../../base/server-event";
-import type { EmailService } from "../email/email.service";
-import { defaultAuthGrants } from "./auth.grants";
+import { createServiceActor } from "../../../base/base.actor";
+import type { ServerEventBus } from "../../../base/server-event";
+import type { EmailService } from "../../email/email.service";
+import { defaultAuthGrants } from "../auth.grants";
 import type {
   AuthAccountClaimRepository,
   AuthInvitationRepository,
   AuthOrganizationRepository,
   AuthUserRepository,
   AuthWaitlistRepository,
-} from "./auth.repository";
-import { AuthService } from "./auth.service";
+} from "../auth.repository";
+import { AuthService } from "../auth.service";
 
 const ORG_ID = "org-1";
 const OWNER_MEMBER_ID = "member-owner";

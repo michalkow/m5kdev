@@ -1,11 +1,11 @@
-import { WorkflowRegistry } from "./workflow.registry";
-import type { WorkflowService } from "./workflow.service";
+import { WorkflowRegistry } from "../workflow.registry";
+import type { WorkflowService } from "../workflow.service";
 import type {
   ResolvedCronConfig,
   ResolvedJobConfig,
   WorkflowCronDefinition,
   WorkflowJobDefinition,
-} from "./workflow.types";
+} from "../workflow.types";
 
 function createMockConfig(overrides?: Partial<ResolvedJobConfig>): ResolvedJobConfig {
   return {

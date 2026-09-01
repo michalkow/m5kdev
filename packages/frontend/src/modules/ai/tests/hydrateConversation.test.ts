@@ -1,4 +1,4 @@
-import { hydrateConversation } from "./hydrateConversation";
+import { hydrateConversation } from "../hooks/hydrateConversation";
 
 describe("hydrateConversation", () => {
   const originalFetch = globalThis.fetch;

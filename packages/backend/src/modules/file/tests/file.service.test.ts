@@ -1,8 +1,8 @@
 import { ok } from "neverthrow";
-import type { OrganizationActor } from "../base/base.actor";
-import { defaultFileGrants } from "./file.grants";
-import type { FileRepository, FileS3Repository } from "./file.repository";
-import { FileService } from "./file.service";
+import type { OrganizationActor } from "../../base/base.actor";
+import { defaultFileGrants } from "../file.grants";
+import type { FileRepository, FileS3Repository } from "../file.repository";
+import { FileService } from "../file.service";
 
 function organizationActor(): OrganizationActor {
   return {

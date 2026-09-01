@@ -4,10 +4,10 @@ import path from "node:path";
 import { type Client, createClient } from "@libsql/client";
 import type { Logger } from "pino";
 import type { FunctionComponent } from "react";
-import { createBackendApp } from "../../app";
-import { createAppI18n } from "../../i18n/app-i18n";
-import { EmailModule } from "./email.module";
-import { EmailService, type EmailTemplates } from "./email.service";
+import { createBackendApp } from "../../../app";
+import { createAppI18n } from "../../../i18n/app-i18n";
+import { EmailModule } from "../email.module";
+import { EmailService, type EmailTemplates } from "../email.service";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {

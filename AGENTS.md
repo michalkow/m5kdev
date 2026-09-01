@@ -35,6 +35,7 @@ For server modules:
   - `<module>.trpc.ts` and/or `<module>.router.ts`
   - `<module>.grants.ts` (if permissioned)
   - `<module>.jobs.ts` (if queued workflows)
+  - `<module>/tests/*.test.ts` (module tests)
 
 ## Layer Boundaries (Strict)
 

@@ -4,8 +4,8 @@ import path from "node:path";
 import { type Client, createClient } from "@libsql/client";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
-import * as auth from "./auth.db";
-import { createOrganizationWithOwner, getActiveOrganization } from "./auth.utils";
+import * as auth from "../auth.db";
+import { createOrganizationWithOwner, getActiveOrganization } from "../auth.utils";
 
 async function createTables(client: Client): Promise<void> {
   await client.execute(`

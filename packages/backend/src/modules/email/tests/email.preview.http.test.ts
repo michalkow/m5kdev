@@ -6,10 +6,10 @@ import path from "node:path";
 import { type Client, createClient } from "@libsql/client";
 import type { Express } from "express";
 import type { FunctionComponent } from "react";
-import { createBackendApp } from "../../app";
-import { EmailModule } from "./email.module";
-import { EmailPreviewModule } from "./email.preview.module";
-import type { EmailService, EmailTemplates } from "./email.service";
+import { createBackendApp } from "../../../app";
+import { EmailModule } from "../email.module";
+import { EmailPreviewModule } from "../email.preview.module";
+import type { EmailService, EmailTemplates } from "../email.service";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {

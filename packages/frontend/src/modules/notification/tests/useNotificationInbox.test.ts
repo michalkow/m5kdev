@@ -9,7 +9,7 @@ import type {
   NotificationInbox,
   NotificationInboxItem,
   NotificationTrpc,
-} from "./useNotificationTrpc";
+} from "../hooks/useNotificationTrpc";
 
 async function runQueryFn<T>(queryFn: unknown): Promise<T> {
   if (typeof queryFn !== "function") {

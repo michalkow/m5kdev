@@ -42,7 +42,7 @@ src/
 
 * Components: `PascalCase.tsx`
 * Other files: **camelCase** with suffix: `*.utils.ts`, `*.constants.ts`, `*.types.ts`, `*.hooks.ts`, `*.api.ts`.
-* Test files (when present): `*.test.ts(x)` near source.
+* Test files (when present): `modules/<feature>/tests/*.test.ts(x)`.
 
 ## Components & JSX
 

@@ -1,4 +1,4 @@
-import { FileS3Repository } from "./file.repository";
+import { FileS3Repository } from "../file.repository";
 
 const AWS_KEYS = [
   "AWS_REGION",

@@ -7,13 +7,13 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import type { FunctionComponent } from "react";
 import type Stripe from "stripe";
-import { createBackendApp } from "../../app";
-import * as authTables from "../auth/auth.db";
-import { EmailModule } from "../email/email.module";
-import type { EmailTemplates } from "../email/email.service";
-import * as billingTables from "./billing.db";
-import { BillingModule } from "./billing.module";
-import type { BillingService } from "./billing.service";
+import { createBackendApp } from "../../../app";
+import * as authTables from "../../auth/auth.db";
+import { EmailModule } from "../../email/email.module";
+import type { EmailTemplates } from "../../email/email.service";
+import * as billingTables from "../billing.db";
+import { BillingModule } from "../billing.module";
+import type { BillingService } from "../billing.service";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {

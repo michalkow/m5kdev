@@ -1,7 +1,7 @@
 import { useAiChat } from "@m5kdev/frontend/modules/ai/hooks/useAiChat";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AiConversation } from "./AiConversation";
+import { AiConversation } from "../components/AiConversation";
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({

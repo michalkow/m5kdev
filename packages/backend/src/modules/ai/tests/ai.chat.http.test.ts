@@ -5,11 +5,11 @@ import type { Mastra } from "@mastra/core";
 import { pipeUIMessageStreamToResponse } from "ai";
 import type { NextFunction, Response } from "express";
 import express from "express";
-import type { Session, User } from "../auth/auth.lib";
-import type { AuthMiddleware, AuthRequest } from "../auth/auth.middleware";
-import type { AiUsageRepository } from "./ai.repository";
-import { createAiConversationRouter } from "./ai.router";
-import { AIService } from "./ai.service";
+import type { Session, User } from "../../auth/auth.lib";
+import type { AuthMiddleware, AuthRequest } from "../../auth/auth.middleware";
+import type { AiUsageRepository } from "../ai.repository";
+import { createAiConversationRouter } from "../ai.router";
+import { AIService } from "../ai.service";
 
 jest.mock("@mastra/core/request-context", () => ({
   RequestContext: class {

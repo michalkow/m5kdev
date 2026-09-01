@@ -5,7 +5,7 @@ import {
   type ServerEventSource,
   type ServerEventSourceConstructor,
   subscribeToServerEvents,
-} from "./server-event";
+} from "../server-event";
 
 class FakeEventSource implements ServerEventSource {
   static instances: FakeEventSource[] = [];

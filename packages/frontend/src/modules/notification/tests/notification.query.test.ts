@@ -4,7 +4,7 @@ import {
   notificationInboxQueryKey,
   notificationPreferencesQueryKey,
   shouldInvalidateNotificationInbox,
-} from "./notification.query";
+} from "../notification.query";
 
 describe("notification query keys", () => {
   it("scopes inbox and preferences to the active Organization", () => {

@@ -1,9 +1,9 @@
 import type { ZodTypeAny } from "zod";
-import type { GeneratePromptParamsFor } from "./ai.prompt";
+import type { GeneratePromptParamsFor } from "../ai.prompt";
 import type {
   AIServiceGenerateExtractedObjectParams,
   AIServiceGenerateObjectParams,
-} from "./ai.service";
+} from "../ai.service";
 
 type Equals<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;

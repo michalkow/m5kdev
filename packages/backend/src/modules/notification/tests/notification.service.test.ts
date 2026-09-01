@@ -2,25 +2,25 @@ import { type Client, createClient } from "@libsql/client";
 import type { NotificationKind } from "@m5kdev/commons/modules/notification/notification.constants";
 import { drizzle } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
-import type { ServerError } from "../../utils/errors";
-import type { Context } from "../../utils/trpc";
-import * as authTables from "../auth/auth.db";
-import type { User } from "../auth/auth.lib";
-import type { WorkflowService } from "../workflow/workflow.service";
-import * as notificationTables from "./notification.db";
-import { defaultNotificationGrants } from "./notification.grants";
+import type { ServerError } from "../../../utils/errors";
+import type { Context } from "../../../utils/trpc";
+import * as authTables from "../../auth/auth.db";
+import type { User } from "../../auth/auth.lib";
+import type { WorkflowService } from "../../workflow/workflow.service";
+import * as notificationTables from "../notification.db";
+import { defaultNotificationGrants } from "../notification.grants";
 import {
   sendApnNotification,
   sendFcmNotification,
   sendWebPushNotification,
-} from "./notification.providers";
-import { NotificationRepository } from "./notification.repository";
-import { type NotificationEmailSender, NotificationService } from "./notification.service";
+} from "../notification.providers";
+import { NotificationRepository } from "../notification.repository";
+import { type NotificationEmailSender, NotificationService } from "../notification.service";
 
-jest.mock("./notification.providers", () => {
+jest.mock("../notification.providers", () => {
   const actual = jest.requireActual(
-    "./notification.providers"
-  ) as typeof import("./notification.providers");
+    "../notification.providers"
+  ) as typeof import("../notification.providers");
   return {
     ...actual,
     sendWebPushNotification: jest.fn().mockResolvedValue(undefined),

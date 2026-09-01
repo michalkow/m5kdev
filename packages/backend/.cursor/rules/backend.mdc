@@ -22,6 +22,7 @@ For backend modules in `src/modules/<name>/`, prefer:
 - `<name>.service.ts` for orchestration/business rules
 - `<name>.trpc.ts` and optional `<name>.router.ts` for transport adapters
 - optional `<name>.types.ts`, `<name>.utils.ts`, `<name>.constants.ts`
+- `tests/*.test.ts` for module tests
 
 ## Layer Boundaries
 

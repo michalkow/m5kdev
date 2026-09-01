@@ -2,7 +2,7 @@ import type { Mastra } from "@mastra/core";
 import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { NoObjectGeneratedError } from "ai";
 import { z } from "zod";
-import { AIService, type AIServiceOptions } from "./ai.service";
+import { AIService, type AIServiceOptions } from "../ai.service";
 
 const mockGenerateText = jest.fn();
 

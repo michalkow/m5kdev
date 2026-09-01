@@ -1,4 +1,4 @@
-import { createAiVectorStore } from "./ai.vector";
+import { createAiVectorStore } from "../ai.vector";
 
 jest.mock("@mastra/libsql", () => ({
   LibSQLVector: jest.fn().mockImplementation((config: { id: string; url: string }) => ({

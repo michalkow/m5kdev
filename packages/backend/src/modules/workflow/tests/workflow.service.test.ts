@@ -66,8 +66,8 @@ import { BullMQOtel } from "bullmq-otel";
 import type IORedis from "ioredis";
 import { ok } from "neverthrow";
 import { z } from "zod";
-import type { WorkflowRepository } from "./workflow.repository";
-import { WorkflowService } from "./workflow.service";
+import type { WorkflowRepository } from "../workflow.repository";
+import { WorkflowService } from "../workflow.service";
 
 type MockedRepo = WorkflowRepository & Record<string, jest.Mock>;
 

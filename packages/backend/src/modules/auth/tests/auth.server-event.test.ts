@@ -1,16 +1,16 @@
 import { err, ok } from "neverthrow";
-import type { ServerEventBus } from "../../base/server-event";
-import { ServerError } from "../../utils/errors";
-import type { EmailService } from "../email/email.service";
-import { defaultAuthGrants } from "./auth.grants";
+import type { ServerEventBus } from "../../../base/server-event";
+import { ServerError } from "../../../utils/errors";
+import type { EmailService } from "../../email/email.service";
+import { defaultAuthGrants } from "../auth.grants";
 import type {
   AuthAccountClaimRepository,
   AuthInvitationRepository,
   AuthOrganizationRepository,
   AuthUserRepository,
   AuthWaitlistRepository,
-} from "./auth.repository";
-import { AuthService } from "./auth.service";
+} from "../auth.repository";
+import { AuthService } from "../auth.service";
 
 interface RecordedEmit {
   readonly userId: string;
