@@ -8,10 +8,10 @@ Opinionated TypeScript stack for AI SaaS apps. This file is the domain glossary:
 
 **Organization**:
 The default tenancy unit. Every authenticated User belongs to at least one, including single-user products where the org stays invisible in the UI.
-_Avoid_: Workspace, tenant, account, company, Team (not a 1.0 tenancy unit)
+_Avoid_: Workspace, tenant, account, company, Team (not a 1.0 tenancy unit; [ADR-0011](docs/adr/0011-no-team-at-1.0.md))
 
 **Membership**:
-A durable `members` row: one seat in an Organization. Invite creates it before a User exists (`userId` unset; email and name snapshots). Accept attaches that User to the same row. Leave, invite cancel, and invite expiry soft-delete it, including Better Auth leave/remove; rejoin or re-invite revives it so MemberId stays stable. An Organization has exactly one Owner. The Owner cannot leave; they delete the Organization, or a User-role `admin` transfers Owner first.
+A durable `members` row: one seat in an Organization. Invite creates it before a User exists (`userId` unset; email and name snapshots). Accept attaches that User to the same row. Leave, invite cancel, and invite expiry soft-delete it; rejoin or re-invite revives it so MemberId stays stable. An Organization has exactly one Owner. The Owner cannot leave; they delete the Organization, or a User-role `admin` transfers Owner first.
 _Avoid_: OrgUser, OrganizationUser; a second live row for the same person in the same Organization; using "member" to mean only the default role name; treating Invitation as the seat; a second Owner; org self-service granting or transferring Owner
 
 **Member**:
@@ -31,8 +31,8 @@ The User id. Correct key for personal resources (devices, OAuth, sessions) and o
 _Avoid_: MemberId (they are different principals)
 
 **Invitation**:
-The Better Auth accept token (email link, expiry) that attaches a User to an invited Membership. Not a person and not assignable.
-_Avoid_: Waitlist code, Account claim, Team invite; pending Member; a principal apps stamp on rows
+The accept token (email link, expiry) that attaches a User to an invited Membership. Auth Procedures mint and accept it; not a person and not assignable. See [ADR-0012](docs/adr/0012-auth-trpc-owns-membership.md).
+_Avoid_: Waitlist code, Account claim, Team invite; pending Member; a principal apps stamp on rows; Better Auth invite HTTP as the public Membership API
 
 **Waitlist**:
 A signup gate: a User is not created until a Waitlist code is accepted. Users may mint those codes.
