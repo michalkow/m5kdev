@@ -4,7 +4,7 @@ import type {
   NotificationProvider,
   NotificationSendStatus,
 } from "@m5kdev/commons/modules/notification/notification.constants";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import { members, users } from "../auth/auth.db";
@@ -91,12 +91,23 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
           organizationId: this.schema.members.organizationId,
         })
         .from(this.schema.members)
-        .where(and(eq(this.schema.members.id, memberId), isNull(this.schema.members.deletedAt)))
+        .where(
+          and(
+            eq(this.schema.members.id, memberId),
+            isNull(this.schema.members.deletedAt),
+            isNotNull(this.schema.members.userId)
+          )
+        )
         .limit(1)
     );
     if (rowResult.isErr()) return err(rowResult.error);
     const [row] = rowResult.value;
-    return ok(row);
+    if (!row?.userId) return ok(undefined);
+    return ok({
+      id: row.id,
+      userId: row.userId,
+      organizationId: row.organizationId,
+    });
   }
 
   async insertNotification(input: {

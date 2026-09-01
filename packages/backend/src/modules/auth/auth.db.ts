@@ -46,8 +46,6 @@ export const sessions = sqliteTable("sessions", {
   activeOrganizationMemberId: text("active_organization_member_id"),
   activeOrganizationRole: text("active_organization_role"),
   activeOrganizationType: text("active_organization_type"),
-  activeTeamId: text("active_team_id"),
-  activeTeamRole: text("active_team_role"),
 });
 
 export const accounts = sqliteTable("accounts", {

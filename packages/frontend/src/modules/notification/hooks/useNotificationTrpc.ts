@@ -13,7 +13,7 @@ export type NotificationInbox = z.infer<typeof notificationListInboxOutputSchema
 export type NotificationPreferences = z.infer<typeof notificationListPreferencesOutputSchema>;
 export type NotificationSetPreferenceInput = z.infer<typeof notificationSetPreferenceInputSchema>;
 
-interface NotificationTrpc {
+export interface NotificationTrpc {
   listMyInbox: {
     queryOptions: (
       input?: undefined,

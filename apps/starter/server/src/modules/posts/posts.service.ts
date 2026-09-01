@@ -50,7 +50,7 @@ export class PostsService extends BasePermissionService<
         authorUserId: ctx.user.id,
         memberId: ctx.actor.memberId ?? null,
         organizationId: ctx.session.activeOrganizationId ?? null,
-        teamId: ctx.session.activeTeamId ?? null,
+        teamId: null,
         title: input.title.trim(),
         slug: uniqueSlug.value,
         excerpt: createExcerpt(input.excerpt, input.content),

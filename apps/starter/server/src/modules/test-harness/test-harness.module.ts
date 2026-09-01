@@ -118,7 +118,6 @@ export class TestHarnessModule extends BaseModule<
           activeOrganizationRole: db.schema.sessions.activeOrganizationRole,
           activeOrganizationMemberId: db.schema.sessions.activeOrganizationMemberId,
           activeOrganizationType: db.schema.sessions.activeOrganizationType,
-          activeTeamId: db.schema.sessions.activeTeamId,
           impersonatedBy: db.schema.sessions.impersonatedBy,
           createdAt: db.schema.sessions.createdAt,
         })

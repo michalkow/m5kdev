@@ -32,6 +32,37 @@ export function invalidateNotificationInbox(
   void queryClient.invalidateQueries({ queryKey: notificationInboxQueryKey(organizationId) });
 }
 
+export function invalidateNotificationPreferences(
+  queryClient: QueryClient,
+  organizationId: string | null | undefined
+): void {
+  void queryClient.invalidateQueries({
+    queryKey: notificationPreferencesQueryKey(organizationId),
+  });
+}
+
+export function createNotificationInboxQuery<TQuery extends object>(input: {
+  organizationId: string | null | undefined;
+  listOptions: TQuery;
+}): TQuery & { queryKey: readonly [string, string, string]; enabled: boolean } {
+  return {
+    ...input.listOptions,
+    queryKey: notificationInboxQueryKey(input.organizationId),
+    enabled: Boolean(input.organizationId),
+  };
+}
+
+export function createNotificationPreferencesQuery<TQuery extends object>(input: {
+  organizationId: string | null | undefined;
+  listOptions: TQuery;
+}): TQuery & { queryKey: readonly [string, string, string]; enabled: boolean } {
+  return {
+    ...input.listOptions,
+    queryKey: notificationPreferencesQueryKey(input.organizationId),
+    enabled: Boolean(input.organizationId),
+  };
+}
+
 export function handleNotificationInboxServerEvent(input: {
   event: ServerEventEnvelope;
   activeOrganizationId: string | null | undefined;

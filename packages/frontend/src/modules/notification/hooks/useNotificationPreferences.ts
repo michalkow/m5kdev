@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "../../auth/hooks/useSession";
-import { notificationPreferencesQueryKey } from "../notification.query";
+import {
+  createNotificationPreferencesQuery,
+  invalidateNotificationPreferences,
+} from "../notification.query";
 import {
   type NotificationPreferences,
   type NotificationSetPreferenceInput,
@@ -21,18 +24,17 @@ export function useNotificationPreferences(): {
   const listOptions = notification.getMyPreferences.queryOptions(undefined, {
     enabled: Boolean(organizationId),
   });
-  const prefsQuery = useQuery({
-    ...listOptions,
-    queryKey: notificationPreferencesQueryKey(organizationId),
-    enabled: Boolean(organizationId),
-  });
+  const prefsQuery = useQuery(
+    createNotificationPreferencesQuery({
+      organizationId,
+      listOptions,
+    })
+  );
 
   const setPreferenceMutation = useMutation(
     notification.setMyPreference.mutationOptions({
       onSuccess: () => {
-        void queryClient.invalidateQueries({
-          queryKey: notificationPreferencesQueryKey(organizationId),
-        });
+        invalidateNotificationPreferences(queryClient, organizationId);
       },
     })
   );

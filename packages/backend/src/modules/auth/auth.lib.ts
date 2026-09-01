@@ -354,11 +354,6 @@ export function createBetterAuth<
           required: false,
           defaultValue: null,
         },
-        activeTeamRole: {
-          type: "string",
-          required: false,
-          defaultValue: null,
-        },
       },
     },
     user: {
@@ -496,6 +491,13 @@ export function createBetterAuth<
           },
           invitation: {
             modelName: "invitation",
+            additionalFields: {
+              memberId: {
+                type: "string",
+                required: false,
+                defaultValue: null,
+              },
+            },
           },
           organization: {
             modelName: "organization",
@@ -576,6 +578,7 @@ export function createBetterAuth<
                   )
                 )
                 .limit(1);
+
               if (!invitation) {
                 const message = "Invalid or expired organization invitation code";
                 logger.error({ message, organizationInvitationCode });
@@ -583,11 +586,13 @@ export function createBetterAuth<
                   message,
                 });
               }
+
               if (!invitation.memberId) {
                 const message = "Invitation has no Membership";
                 logger.error({ message, organizationInvitationCode });
                 throw new APIError("BAD_REQUEST", { message });
               }
+
               const userWithLocale = await withResolvedLocale(
                 user,
                 ctx,
@@ -743,12 +748,8 @@ export function createBetterAuth<
       session: {
         create: {
           before: async (session) => {
-            const {
-              organizationId,
-              organizationRole,
-              organizationType,
-              organizationMemberId,
-            } = await getActiveOrganization(orm, schema, session.userId);
+            const { organizationId, organizationRole, organizationType, organizationMemberId } =
+              await getActiveOrganization(orm, schema, session.userId);
             return {
               data: {
                 ...session,

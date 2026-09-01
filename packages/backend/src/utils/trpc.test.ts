@@ -59,8 +59,7 @@ function createSession(overrides: Partial<Session> = {}): Session {
     userAgent: null,
     activeOrganizationId: null,
     activeOrganizationRole: null,
-    activeTeamId: null,
-    activeTeamRole: null,
+    activeOrganizationMemberId: null,
     ...overrides,
   } as Session;
 }
@@ -77,8 +76,8 @@ function createRequestContext(overrides: Partial<RequestContext> = {}): RequestC
           organizationId: session.activeOrganizationId,
           organizationRole: session.activeOrganizationRole,
           memberId: session.activeOrganizationMemberId,
-          teamId: session.activeTeamId,
-          teamRole: session.activeTeamRole,
+          teamId: null,
+          teamRole: null,
         } satisfies UserActor)
       : null);
 
@@ -96,8 +95,7 @@ describe("trpc auth helpers", () => {
     const session = createSession({
       activeOrganizationId: "org-1",
       activeOrganizationRole: "owner",
-      activeTeamId: "team-1",
-      activeTeamRole: "manager",
+      activeOrganizationMemberId: "member-1",
     });
 
     const auth = {
@@ -116,8 +114,9 @@ describe("trpc auth helpers", () => {
       userRole: "member",
       organizationId: "org-1",
       organizationRole: "owner",
-      teamId: "team-1",
-      teamRole: "manager",
+      memberId: "member-1",
+      teamId: null,
+      teamRole: null,
     });
     expect(ctx.req).toEqual({ headers: {} });
   });

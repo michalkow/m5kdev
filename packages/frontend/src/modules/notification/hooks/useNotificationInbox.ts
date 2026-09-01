@@ -2,9 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerEventHandler } from "../../app/hooks/useServerEventHandler";
 import { useSession } from "../../auth/hooks/useSession";
 import {
+  createNotificationInboxQuery,
   handleNotificationInboxServerEvent,
   invalidateNotificationInbox,
-  notificationInboxQueryKey,
 } from "../notification.query";
 import { type NotificationInbox, useNotificationTrpc } from "./useNotificationTrpc";
 
@@ -33,11 +33,12 @@ export function useNotificationInbox(): {
   const listOptions = notification.listMyInbox.queryOptions(undefined, {
     enabled: Boolean(organizationId),
   });
-  const inboxQuery = useQuery({
-    ...listOptions,
-    queryKey: notificationInboxQueryKey(organizationId),
-    enabled: Boolean(organizationId),
-  });
+  const inboxQuery = useQuery(
+    createNotificationInboxQuery({
+      organizationId,
+      listOptions,
+    })
+  );
 
   const markReadMutation = useMutation(
     notification.markRead.mutationOptions({

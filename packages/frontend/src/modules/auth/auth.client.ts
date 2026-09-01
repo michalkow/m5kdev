@@ -23,14 +23,6 @@ export function createM5KAuthClient(baseURL?: string) {
             type: "string",
             required: false,
           },
-          activeTeamId: {
-            type: "string",
-            required: false,
-          },
-          activeTeamRole: {
-            type: "string",
-            required: false,
-          },
           activeOrganizationRole: {
             type: "string",
             required: false,

@@ -5,7 +5,7 @@ import { type Client, createClient } from "@libsql/client";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import * as auth from "./auth.db";
-import { createOrganizationWithOwner } from "./auth.utils";
+import { createOrganizationWithOwner, getActiveOrganization } from "./auth.utils";
 
 async function createTables(client: Client): Promise<void> {
   await client.execute(`
@@ -62,6 +62,23 @@ async function createTables(client: Client): Promise<void> {
       flags TEXT DEFAULT '[]'
     );
   `);
+  await client.execute(`
+    CREATE TABLE sessions (
+      id TEXT PRIMARY KEY NOT NULL,
+      expires_at INTEGER NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      ip_address TEXT,
+      user_agent TEXT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      impersonated_by TEXT,
+      active_organization_id TEXT,
+      active_organization_member_id TEXT,
+      active_organization_role TEXT,
+      active_organization_type TEXT
+    );
+  `);
 }
 
 describe("createOrganizationWithOwner", () => {
@@ -108,5 +125,93 @@ describe("createOrganizationWithOwner", () => {
     expect(members).toHaveLength(1);
     expect(members[0]?.role).toBe("owner");
     expect(members[0]?.organizationId).toBe(result.organizationId);
+  });
+});
+
+describe("getActiveOrganization", () => {
+  let client: Client;
+  let dbDir: string;
+
+  beforeEach(async () => {
+    dbDir = await fs.mkdtemp(path.join(os.tmpdir(), "auth-active-org-"));
+    client = createClient({ url: `file:${path.join(dbDir, "test.db")}` });
+    await createTables(client);
+  });
+
+  afterEach(async () => {
+    client.close();
+    await fs.rm(dbDir, { recursive: true, force: true });
+  });
+
+  it("does not treat an invited Membership as the Organization Actor", async () => {
+    const orm = drizzle(client, { schema: auth });
+    const now = new Date();
+    await orm.insert(auth.users).values([
+      {
+        id: "user-owner",
+        name: "Pat",
+        email: "pat@example.com",
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "user-invitee",
+        name: "Ivy",
+        email: "ivy@example.com",
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+    await orm.insert(auth.organizations).values({
+      id: "org-1",
+      name: "Org",
+      slug: "org-1",
+      createdAt: now,
+    });
+    await orm.insert(auth.members).values([
+      {
+        id: "member-owner",
+        organizationId: "org-1",
+        userId: "user-owner",
+        email: "pat@example.com",
+        name: "Pat",
+        role: "owner",
+        createdAt: now,
+      },
+      {
+        id: "member-invited",
+        organizationId: "org-1",
+        userId: null,
+        email: "ivy@example.com",
+        name: "Ivy",
+        role: "member",
+        createdAt: now,
+      },
+    ]);
+    await orm.insert(auth.sessions).values({
+      id: "session-invitee",
+      token: "token-invitee",
+      userId: "user-invitee",
+      expiresAt: new Date(now.getTime() + 60_000),
+      createdAt: now,
+      updatedAt: now,
+      activeOrganizationId: "org-1",
+      activeOrganizationMemberId: "member-invited",
+      activeOrganizationRole: "member",
+    });
+
+    const invitedActor = await getActiveOrganization(orm, auth, "user-invitee");
+    expect(invitedActor.organizationMemberId).toBeUndefined();
+    expect(invitedActor.organizationId).toBeUndefined();
+
+    const ownerActor = await getActiveOrganization(orm, auth, "user-owner");
+    expect(ownerActor).toEqual({
+      organizationId: "org-1",
+      organizationRole: "owner",
+      organizationType: undefined,
+      organizationMemberId: "member-owner",
+    });
   });
 });

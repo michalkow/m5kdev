@@ -185,7 +185,8 @@ async function createTables(client: Client): Promise<void> {
     CREATE TABLE members (
       id TEXT PRIMARY KEY NOT NULL,
       organization_id TEXT NOT NULL REFERENCES organizations(id),
-      user_id TEXT NOT NULL REFERENCES users(id),
+      user_id TEXT REFERENCES users(id),
+      email TEXT,
       name TEXT NOT NULL DEFAULT '',
       image TEXT,
       role TEXT NOT NULL,
@@ -285,7 +286,7 @@ async function insertMember(input: {
   client: Client;
   id: string;
   organizationId: string;
-  userId: string;
+  userId: string | null;
   deletedAt?: Date | null;
 }): Promise<void> {
   const orm = drizzle(input.client, { schema: { members: authTables.members } });
@@ -293,7 +294,7 @@ async function insertMember(input: {
     id: input.id,
     organizationId: input.organizationId,
     userId: input.userId,
-    name: input.userId,
+    name: input.userId ?? input.id,
     role: "member",
     deletedAt: input.deletedAt ?? null,
   });
@@ -701,6 +702,28 @@ describe("NotificationService inbox", () => {
     expect(deleted.isErr()).toBe(true);
     if (deleted.isErr()) {
       expect(deleted.error.code).toBe("NOT_FOUND");
+    }
+    expect(userEmit).not.toHaveBeenCalled();
+    expect(await countNotificationRows(client)).toBe(0);
+  });
+
+  it("fails send closed when the Membership is invited", async () => {
+    const { service, userEmit } = createHarness(client);
+    await insertMember({
+      client,
+      id: "member-invited",
+      organizationId: ORG_A_ID,
+      userId: null,
+    });
+    const invited = await service.send({
+      memberId: "member-invited",
+      kind: "demo.ping",
+      title: "Nope",
+      body: "Invited",
+    });
+    expect(invited.isErr()).toBe(true);
+    if (invited.isErr()) {
+      expect(invited.error.code).toBe("NOT_FOUND");
     }
     expect(userEmit).not.toHaveBeenCalled();
     expect(await countNotificationRows(client)).toBe(0);

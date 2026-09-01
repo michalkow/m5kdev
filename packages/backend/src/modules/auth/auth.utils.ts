@@ -95,6 +95,7 @@ export async function getActiveOrganization<O extends Orm, S extends Schema>(
         and(
           eq(schema.members.id, organizationMemberId),
           eq(schema.members.organizationId, organizationId),
+          eq(schema.members.userId, userId),
           isNull(schema.members.deletedAt)
         )
       )
@@ -299,8 +300,6 @@ export async function softDeleteOrganizationMember(
           activeOrganizationRole: null,
           activeOrganizationMemberId: null,
           activeOrganizationType: null,
-          activeTeamId: null,
-          activeTeamRole: null,
         })
         .where(
           and(

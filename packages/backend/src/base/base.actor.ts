@@ -1,5 +1,5 @@
-import { ServerError } from "../utils/errors";
 import type { Session, User } from "../modules/auth/auth.lib";
+import { ServerError } from "../utils/errors";
 
 export type UserActor = {
   userId: string;
@@ -127,14 +127,12 @@ export function createActorFromContext(
         layerName: "ActorValidation",
       });
     }
-    if (!context.session.activeTeamId || !context.session.activeTeamRole) {
-      throw new ServerError({
-        code: "FORBIDDEN",
-        message: "Active team context required",
-        layer: "controller",
-        layerName: "ActorValidation",
-      });
-    }
+    throw new ServerError({
+      code: "FORBIDDEN",
+      message: "Active team context required",
+      layer: "controller",
+      layerName: "ActorValidation",
+    });
   }
 
   return {
@@ -143,8 +141,8 @@ export function createActorFromContext(
     organizationId: context.session.activeOrganizationId,
     organizationRole: context.session.activeOrganizationRole,
     memberId: context.session.activeOrganizationMemberId,
-    teamId: context.session.activeTeamId,
-    teamRole: context.session.activeTeamRole,
+    teamId: null,
+    teamRole: null,
   };
 }
 
