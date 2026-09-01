@@ -1,0 +1,1 @@
+Update app to use m5kdev X.Y.Z version. You can check ~/Projects/m5kdev/apps/docs folder for migration documentation.
