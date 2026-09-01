@@ -29,21 +29,16 @@ import { posthogCapture } from "../../utils/posthog";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
 import * as auth from "./auth.db";
-import { createAuthOrganizationInvitationPolicy } from "./auth.organization-invitation-policy";
-import { createAuthOrganizationTeamsOptions } from "./auth.organization-teams-policy";
-import { createAuthUserAdditionalFields } from "./auth.user-additional-fields";
 import {
+  acceptWaitlistCodeAfterUser,
+  assertWaitlistCodeUsable,
   attachUserToInvitedMember,
   createOrganizationWithOwner,
   getActiveOrganization,
   getNewOrganization,
   syncActiveMemberProfiles,
-} from "./auth.utils";
-import {
-  acceptWaitlistCodeAfterUser,
-  assertWaitlistCodeUsable,
   WaitlistCodeNotFound,
-} from "./auth.waitlist-signup";
+} from "./auth.utils";
 
 const schema = { ...auth };
 type Schema = typeof schema;
@@ -371,7 +366,45 @@ export function createBetterAuth<
           }
         },
       },
-      additionalFields: createAuthUserAdditionalFields(),
+      additionalFields: {
+        onboarding: {
+          type: "number",
+          required: false,
+          defaultValue: null,
+        },
+        stripeCustomerId: {
+          type: "string",
+          required: false,
+          defaultValue: null,
+          input: false,
+        },
+        locale: {
+          type: "string",
+          required: false,
+          defaultValue: null,
+          input: true,
+        },
+        // returned: false keeps these out of session responses and the
+        // session cookie cache (4KB limit); read them via auth.service procedures
+        preferences: {
+          type: "string",
+          required: false,
+          defaultValue: null,
+          returned: false,
+        },
+        metadata: {
+          type: "string",
+          required: false,
+          defaultValue: null,
+          returned: false,
+        },
+        flags: {
+          type: "string",
+          required: false,
+          defaultValue: null,
+          returned: false,
+        },
+      },
     },
     database: drizzleAdapter(orm, {
       provider: "sqlite",
@@ -443,9 +476,11 @@ export function createBetterAuth<
       admin(),
       lastLoginMethod(),
       organization({
-        ...createAuthOrganizationInvitationPolicy(),
-        allowUserToCreateOrganization: false,
-        teams: createAuthOrganizationTeamsOptions(),
+        organizationHooks: {
+          beforeCreateInvitation: async () => {
+            throw new APIError("FORBIDDEN", { message: "Use Auth inviteOrganizationMember" });
+          },
+        },
         schema: {
           member: {
             modelName: "member",
@@ -565,6 +600,8 @@ export function createBetterAuth<
           before: async (user, ctx) => {
             logger.info({ step: "before create user", user, ctx });
             const organizationInvitationCode = await getOrganizationInvitationCode(ctx);
+
+            // If the user is invited to an organization, attach them to the organization
             if (organizationInvitationCode) {
               const [invitation] = await orm
                 .select()
@@ -606,6 +643,8 @@ export function createBetterAuth<
                 },
               };
             }
+
+            // If user is created by an admin, verify their email
             if (shouldVerifyEmailForAdminCreate(ctx)) {
               const userWithLocale = await withResolvedLocale(user, ctx, null);
               return {
@@ -615,6 +654,8 @@ export function createBetterAuth<
                 },
               };
             }
+
+            // If user is created by a waitlist code, verify their email
             if (waitlist) {
               const waitlistCode = await getWaitlistInvitationCode(ctx);
               if (waitlistCode) {
@@ -639,10 +680,12 @@ export function createBetterAuth<
               logger.error({ message, waitlistCode });
               throw new APIError("NOT_FOUND", { message });
             }
+
             const userWithLocale = await withResolvedLocale(user, ctx, null);
             return { data: userWithLocale };
           },
           after: async (user, ctx) => {
+            // If user is created by a waitlist code, accept the waitlist code
             if (waitlist) {
               const waitlistCode = await getWaitlistInvitationCode(ctx);
               if (waitlistCode) {
@@ -662,6 +705,8 @@ export function createBetterAuth<
                 }
               }
             }
+
+            // If the user is invited to an organization, attach them to the organization
             const organizationInvitationCode = await getOrganizationInvitationCode(ctx);
             if (organizationInvitationCode) {
               const [invitation] = await orm
@@ -676,11 +721,13 @@ export function createBetterAuth<
                   )
                 )
                 .limit(1);
+
               if (!invitation) {
                 const message = "Invalid or expired organization invitation code (after)";
                 logger.error({ message, organizationInvitationCode });
                 throw new APIError("NOT_FOUND", { message });
               }
+
               if (!invitation.memberId) {
                 const message = "Invitation has no Membership";
                 logger.error({ message, organizationInvitationCode });
@@ -695,6 +742,7 @@ export function createBetterAuth<
                 email: user.email,
                 image: typeof user.image === "string" ? user.image : null,
               });
+
               if (!attached.ok) {
                 const message =
                   attached.reason === "conflict"
