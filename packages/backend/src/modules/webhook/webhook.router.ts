@@ -1,23 +1,29 @@
 import bodyParser from "body-parser";
-import { Router } from "express";
+import { type Request, Router } from "express";
 import type { WebhookService } from "./webhook.service";
+
+function presentedToken(req: Request): string | undefined {
+  const { authorization } = req.headers;
+  if (typeof authorization === "string" && authorization.startsWith("Bearer ")) {
+    const token = authorization.slice("Bearer ".length);
+    return token || undefined;
+  }
+  const queryToken = req.query.token;
+  return typeof queryToken === "string" && queryToken ? queryToken : undefined;
+}
 
 export function createWebhookRouter(webhookService: WebhookService): Router {
   const webhookRouter = Router();
 
   webhookRouter.post("/:id", bodyParser.json(), async (req, res) => {
-    const { authorization } = req.headers;
-    if (!authorization) return res.status(401).json({ message: "Missing authorization header" });
-    if (typeof authorization !== "string")
-      return res.status(401).json({ message: "Authorization header is not a string" });
-    if (!authorization.startsWith("Bearer "))
-      return res.status(401).json({ message: "Invalid authorization header" });
-    const token = authorization.split(" ")[1];
+    const token = presentedToken(req);
     if (!token) return res.status(401).json({ message: "Missing token" });
-    if (token !== process.env.WEBHOOK_SECRET)
-      return res.status(401).json({ message: "Invalid token" });
 
-    const result = await webhookService.completed(req.params.id, req.body);
+    const result = await webhookService.receive({
+      id: req.params.id,
+      token,
+      payload: req.body,
+    });
     if (result.isErr())
       return res
         .status(result.error.getHTTPStatusCode() || 500)

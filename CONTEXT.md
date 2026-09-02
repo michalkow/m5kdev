@@ -103,8 +103,12 @@ Linked third-party API accounts. Personal; keyed by UserId, not MemberId. Module
 _Avoid_: Connect as the product noun; treating a Connection row as a login account
 
 **Inbound callback**:
-One-shot inbound callbacks with awaitable payloads. Unattributed (not a User or Member resource). Module id and table stay `webhook`. Not Stripe Billing `POST /webhook`.
-_Avoid_: Webhook (when you mean this primitive vs Stripe Subscription sync); Connection
+One-shot inbound callbacks with awaitable payloads. Unattributed (not a User or Member resource). A wait may carry a name (Named Inbound Callback) or its own secret. Module id and table stay `webhook`. Not Stripe Billing `POST /webhook`.
+_Avoid_: Webhook (when you mean this primitive vs Stripe Subscription sync); Connection; inbox (that is Notification)
+
+**Named Inbound Callback**:
+An Inbound callback that carries a name. The name selects a shared secret registered for that name; every wait with that name and no secret of its own shares it.
+_Avoid_: Callback type, webhook type, kind (that is Notification)
 
 **App schema**:
 The table map the app composes from Backend Module tables plus its own tables. One composition root, passed to the Kernel at boot, to drizzle-kit, and to Database commands.

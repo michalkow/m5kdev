@@ -28,7 +28,10 @@ export class WebhookModule extends BaseModule<
 > {
   readonly id = "webhook";
 
-  constructor(private readonly mountPath: string = "/webhook") {
+  constructor(
+    private readonly mountPath: string = "/webhook",
+    private readonly secrets: Readonly<Record<string, string>> = {}
+  ) {
     super();
   }
 
@@ -44,9 +47,16 @@ export class WebhookModule extends BaseModule<
 
   override services({
     repositories,
+    appConfig,
+    env,
   }: ModuleServicesContext<WebhookModuleDeps, WebhookModuleRepositories>) {
     return {
-      webhook: new WebhookService({ webhook: repositories.webhook }, undefined as never),
+      webhook: new WebhookService({ webhook: repositories.webhook }, undefined as never, {
+        apiUrl: appConfig.urls.api,
+        mountPath: this.mountPath,
+        secrets: this.secrets,
+        env,
+      }),
     };
   }
 

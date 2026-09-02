@@ -19,6 +19,9 @@ export class WebhookRepository extends BaseTableRepository<
     const webhook = await this.findById(id, tx);
     if (webhook.isErr()) return err(webhook.error);
     if (!webhook.value) return this.error("NOT_FOUND");
+    if (webhook.value.status !== WEBHOOK_STATUS_ENUM.WAITING) {
+      return this.error("CONFLICT", "Inbound callback is not waiting");
+    }
 
     const payloadResult = this.throwable(() => ok(JSON.stringify(payload)));
     if (payloadResult.isErr()) return err(payloadResult.error);

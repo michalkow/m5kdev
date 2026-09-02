@@ -23,25 +23,47 @@ This is not Stripe Subscription sync. Stripe Billing hooks stay on
 import { createBackendApp } from "@m5kdev/backend/app";
 import { WebhookModule } from "@m5kdev/backend/modules/webhook/webhook.module";
 
-createBackendApp(config, [new WebhookModule("/webhook")]); // mount path, default "/webhook"
+createBackendApp(config, [new WebhookModule("/webhook")]);
+// Named Inbound Callbacks: new WebhookModule("/webhook", { adobe: process.env.ADOBE_CALLBACK_SECRET! })
 ```
+
+`mountPath` defaults to `/webhook`. The second argument is the name→secret map
+for Named Inbound Callbacks.
 
 ## How it works
 
-1. A service calls `waitForRequest<T>(callback, timeoutSec)`. The module creates
-   a pending `webhook` row and passes the callback URL to your `callback`
-   function, which triggers the external system.
-2. The external system eventually POSTs to the callback URL; the route handler
-   calls `completed(id, payload)` to store the payload and mark the row done.
-3. `waitForRequest` resolves with the typed payload, or fails after
-   `timeoutSec` (default 60s).
+1. A service calls `waitForRequest<T>(callback, timeoutSec?, { name?, secret? })`.
+   The module creates a pending `webhook` row and passes a callback URL (including
+   `?token=`) to your `callback` function, which triggers the external system.
+2. The external system POSTs to that URL. The route accepts the token from
+   `Authorization: Bearer` when present, otherwise from the `token` query param.
+3. `waitForRequest` resolves with a `ServerResult` of the typed payload, or an
+   error after `timeoutSec` (default 60s). It does not reject the Promise.
 
 This request/response-over-webhook pattern is what the
-[Clay module](/modules/clay) builds on.
+[Clay module](/modules/clay) builds on. Clay stays untyped in 1.0: those waits
+use `WEBHOOK_SECRET` as the token (and embed it in `?token=`).
+
+### Credentials (exclusive; no cascade)
+
+| Row | Token must equal |
+| --- | --- |
+| `secret` set | that row secret |
+| `name` set, no secret | `secrets[name]` from the module constructor (unknown name fails at mint) |
+| neither | `WEBHOOK_SECRET` (unset fails at mint) |
+
+The minted URL origin is `NGROK_LOCALHOST_TUNNEL` if set, otherwise Kernel
+`app.urls.api`. The path is the module `mountPath` plus `/{id}`.
+
+Only `WAITING` rows can be completed. A matching token on a non-waiting row
+returns 409. A missing row or wrong token returns 401. In-process
+`completed(id, payload)` stays callable without the token and still requires
+`WAITING`.
 
 ## Service API
 
 | Method | Description |
 | --- | --- |
-| `waitForRequest<T>(callback, timeoutSec?)` | Create a webhook, trigger the caller-provided side effect, await the payload |
-| `completed(id, payload)` | Mark a webhook completed with its payload |
+| `waitForRequest<T>(callback, timeoutSec?, opts?)` | Create an Inbound callback, trigger the caller-provided side effect, await the payload as a Result |
+| `completed(id, payload)` | Mark a waiting Inbound callback completed with its payload |
+| `receive({ id, token, payload })` | HTTP path: verify the exclusive token, then complete |

@@ -39,7 +39,9 @@ createBackendApp(config, [
 
 Table keys are typed (`ClayModule<"enrichment">`), so `sendToTable` only accepts
 configured tables. `ClayModule` `dependsOn` Inbound callback in the Kernel
-(`id` remains `webhook`).
+(`id` remains `webhook`). Clay waits are untyped: they use `WEBHOOK_SECRET`
+(embedded as `?token=` on the callback URL). Pass a Named Inbound Callback
+secret map on `WebhookModule` only when you call `waitForRequest` with `name`.
 
 ## Service API
 
