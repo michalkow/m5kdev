@@ -29,6 +29,8 @@ import { posthogCapture } from "../../utils/posthog";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
 import * as auth from "./auth.db";
+import { createMcpOAuthPlugins } from "./auth.mcp-plugins";
+import * as oauth from "./auth.oauth.db";
 import {
   acceptWaitlistCodeAfterUser,
   assertWaitlistCodeUsable,
@@ -40,7 +42,7 @@ import {
   WaitlistCodeNotFound,
 } from "./auth.utils";
 
-const schema = { ...auth };
+const schema = { ...auth, ...oauth };
 type Schema = typeof schema;
 export type Orm = LibSQLDatabase<Schema>;
 
@@ -79,6 +81,10 @@ function createUserHookI18nContext(
 }
 
 export type CreateBetterAuthConfigParams = {
+  /** When set, Auth registers jwt + mcp + CIMD. Omit so apps without McpModule stay off MCP OAuth. */
+  mcp?: {
+    resource: string;
+  };
   hooks?: {
     onError?: (error: unknown) => void;
     afterCreateUser?: (
@@ -109,6 +115,11 @@ type CreateBetterAuthParams<
   };
   i18n?: AppI18n;
 } & CreateBetterAuthConfigParams;
+
+function joinAppPath(baseUrl: string, pathSegment: string): string {
+  const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  return new URL(pathSegment, base).href;
+}
 
 function setPasswordEndpointPlugin(): BetterAuthPlugin {
   return {
@@ -170,6 +181,7 @@ export function createBetterAuth<
   app,
   config,
   i18n,
+  mcp,
 }: CreateBetterAuthParams<O, S, E, B>): BetterAuth {
   const { email: emailService, billing: billingService } = services;
   const { waitlist = false, provisionedAccountEmailDomain } = config ?? {};
@@ -578,6 +590,15 @@ export function createBetterAuth<
         },
       }),
       apiKey(),
+      ...createMcpOAuthPlugins(
+        mcp
+          ? {
+              resource: mcp.resource,
+              loginPage: webUrl ? joinAppPath(webUrl, "login") : "/login",
+              consentPage: webUrl ? joinAppPath(webUrl, "consent") : "/consent",
+            }
+          : undefined
+      ),
     ],
     trustedOrigins: [webUrl!, apiUrl!],
 

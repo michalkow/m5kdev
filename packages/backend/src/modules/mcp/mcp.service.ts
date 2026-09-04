@@ -100,6 +100,10 @@ export class McpService extends Base {
     ];
   }
 
+  getCall(name: string): McpCallDefinition | undefined {
+    return this.calls.get(name);
+  }
+
   replaceAllowlist(input: {
     oauthClientId: string;
     userId: string;

@@ -71,11 +71,11 @@ describe("Kernel infrastructure package surface", () => {
     expect(pkg.peerDependencies?.["@modelcontextprotocol/server"]).toBeUndefined();
   });
 
-  it("does not register MCP OAuth plugins until McpModule wiring lands", () => {
+  it("does not register a standalone oauthProvider() next to mcp()", () => {
     const authLib = readFileSync(join(__dirname, "modules/auth/auth.lib.ts"), "utf8");
-    expect(authLib).not.toMatch(/\bmcp\s*\(/);
-    expect(authLib).not.toMatch(/\bjwt\s*\(/);
+    const mcpPlugins = readFileSync(join(__dirname, "modules/auth/auth.mcp-plugins.ts"), "utf8");
     expect(authLib).not.toMatch(/\boauthProvider\s*\(/);
+    expect(mcpPlugins).not.toMatch(/\boauthProvider\s*\(/);
   });
 
   it("does not export AccessModule, CryptoModule, PdfModule, DocxModule, VideoModule, SocialModule, or ClayModule", () => {

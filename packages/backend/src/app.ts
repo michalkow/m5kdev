@@ -37,6 +37,7 @@ import type { AuthRequest } from "./modules/auth/auth.middleware";
 import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/auth.middleware";
 import type { BaseModule } from "./modules/base/base.module";
 import { McpService } from "./modules/mcp/mcp.service";
+import { mcpResourceUrl } from "./modules/mcp/mcp.types";
 import { WorkflowRegistry } from "./modules/workflow/workflow.registry";
 import { WorkflowService } from "./modules/workflow/workflow.service";
 import { logger as rootLogger } from "./utils/logger";
@@ -294,6 +295,10 @@ export type BackendAppAuthFactoryContext = {
   modules: ModuleRuntimeMap;
   repositories: Record<string, AnyRecord>;
   services: Record<string, AnyRecord>;
+  /** Present when McpModule is registered and `app.urls.api` is set. */
+  mcp?: {
+    resource: string;
+  };
 };
 
 export type BackendAppConfig = {
@@ -560,6 +565,16 @@ function createDependencyMap(
   return deps;
 }
 
+function mcpOAuthFactoryConfig(
+  modules: readonly BackendAppModule[],
+  appConfig: ResolvedBackendAppMetadata
+): { resource: string } | undefined {
+  if (!modules.some((module) => module.id === "mcp")) return undefined;
+  const apiUrl = appConfig.urls.api;
+  if (!apiUrl) return undefined;
+  return { resource: mcpResourceUrl(apiUrl) };
+}
+
 function parseListenPort(value: string | undefined): number {
   if (value === undefined || value === "") {
     return 8080;
@@ -715,6 +730,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
     repositories: repositoryModules,
     services: serviceModules,
+    mcp: mcpOAuthFactoryConfig(orderedModules, appConfig),
   });
 
   for (const module of orderedModules) {

@@ -10,6 +10,7 @@ import { EmailPreviewModule } from "@m5kdev/backend/modules/email/email.preview.
 // m5k:files:start
 import { FileModule } from "@m5kdev/backend/modules/file/file.module";
 // m5k:files:end
+import { McpModule } from "@m5kdev/backend/modules/mcp/mcp.module";
 // m5k:notifications:start
 import { NotificationModule } from "@m5kdev/backend/modules/notification/notification.module";
 // m5k:notifications:end
@@ -94,7 +95,7 @@ export const builtBackendApp = createBackendApp(
       outputDirectory: process.env.EMAIL_OUTPUT_DIRECTORY ?? ".emails",
     },
     auth: {
-      factory({ db, services, appConfig, i18n }) {
+      factory({ db, services, appConfig, i18n, mcp }) {
         return createBetterAuth({
           orm: db.orm,
           schema: db.schema,
@@ -103,6 +104,7 @@ export const builtBackendApp = createBackendApp(
           },
           app: appConfig,
           i18n,
+          mcp,
           config: {
             waitlist: enableWaitlist,
             provisionedAccountEmailDomain:
@@ -118,6 +120,7 @@ export const builtBackendApp = createBackendApp(
   [
     new EmailModule(templates as never),
     new AuthModule(),
+    new McpModule(),
     // m5k:ai:start
     new AIModule({
       libs: { mastra, openrouter },

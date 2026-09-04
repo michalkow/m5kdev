@@ -1,12 +1,15 @@
 import type { AuthModule } from "../auth/auth.module";
 import {
   BaseModule,
+  type ModuleExpressContext,
   type ModuleRepositoriesContext,
   type ModuleServicesContext,
 } from "../base/base.module";
 import type * as mcpTables from "./mcp.db";
+import { mountMcpHttp } from "./mcp.http";
 import { McpRepository } from "./mcp.repository";
 import { McpService } from "./mcp.service";
+import { mcpResourceUrl } from "./mcp.types";
 
 type McpModuleDeps = { auth: AuthModule };
 type McpModuleTables = typeof mcpTables;
@@ -48,5 +51,23 @@ export class McpModule extends BaseModule<
         deps.auth.repositories.user
       ),
     };
+  }
+
+  override express({
+    infra,
+    services,
+    auth,
+    appConfig,
+  }: ModuleExpressContext<McpModuleDeps, McpModuleServices>) {
+    if (!auth) return;
+    const apiUrl = appConfig.urls.api;
+    if (!apiUrl) return;
+    mountMcpHttp({
+      express: infra.express,
+      mcp: services.mcp,
+      auth,
+      resource: mcpResourceUrl(apiUrl),
+      serverName: appConfig.name ?? "m5kdev",
+    });
   }
 }
