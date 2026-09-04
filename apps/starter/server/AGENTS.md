@@ -50,6 +50,10 @@ apps/server/src/modules/<module>/
 - `index.ts` calls `builtBackendApp.start()`, which listens and handles SIGINT/SIGTERM. Extra shutdown work (telemetry) is `onShutdown` on `createBackendApp`.
 - After changing Drizzle tables, run `pnpm --filter ./apps/server drizzle:generate` then `drizzle:migrate` — do not hand-edit SQL migrations in this repo.
 
+// m5k:mcp:start
+- `McpModule` is registered in `app.ts`. MCP clients authenticate with Better Auth MCP OAuth (not API keys). Compose `auth.oauth.db` plus `mcpAllowlistEntries`. Omit the module to disable MCP.
+// m5k:mcp:end
+
 // m5k:notifications:start
 - `NotificationModule` is registered in `app.ts` when this feature is selected. Push-related server env vars are documented in `apps/shared/.env.example`.
 // m5k:notifications:end

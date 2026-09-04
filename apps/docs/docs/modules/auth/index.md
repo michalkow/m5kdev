@@ -29,7 +29,8 @@ that membership — see
 `AuthModule` ships these Drizzle tables: `users`, `sessions`, `accounts`,
 `verifications`, `organizations`, `members`, `invitations`, `apikeys`,
 `waitlist`, `account_claims`, and `account_claim_magic_links`. There are no
-`teams` / `teammembers` tables.
+`teams` / `teammembers` tables. OAuth/JWKS tables live in `auth.oauth.db` and
+are composed into App schema only when [McpModule](/modules/mcp) is registered.
 
 ## Backend
 
@@ -58,6 +59,10 @@ preconfigured with the `admin`, `organization`, `apiKey`, `magicLink`, and
   relaxed while the waitlist gates access.
 - **Account claim** — admins pre-provision accounts and issue claim codes or
   magic links (`account_claim_magic_links`) that users redeem.
+- **MCP OAuth** — when [McpModule](/modules/mcp) is registered, Auth also
+  registers jwt + MCP + CIMD. MCP clients (Cursor, Claude Desktop) use Better
+  Auth MCP OAuth, not API keys and not the webapp cookie session. API keys
+  remain User-keyed Better Auth HTTP credentials for other clients.
 
 Express middleware: `createAuthMiddleware(auth)` populates `req.user` /
 `req.session`; `createRoleAuthMiddleware(auth)` adds role checks.
@@ -121,7 +126,8 @@ and [Workflow](/modules/workflow). Upgrade:
 `@m5kdev/web-ui` ships route-level routers you mount in your app router:
 
 - `AuthPublicRouter` — login, signup, forgot/reset password, waitlist card and
-  code validation, OAuth provider buttons, account claim, and
+  code validation, OAuth provider buttons, account claim,
+  `/consent` (MCP allowlist picker during Better Auth MCP OAuth), and
   `/organization/accept-invitation` (must stay public so a logged-out invitee
   can be sent to signup instead of bouncing inside protected routes).
 - `AuthUserRouter` — profile editor, preferences, logout, invite friends.

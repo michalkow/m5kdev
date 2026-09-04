@@ -41,6 +41,7 @@ requires Email.
 | [Tag](/modules/tag) | commons, backend | Polymorphic tags and taggings for any resource type |
 | [Connection](/modules/connect) | backend | Linked third-party API accounts (`id` remains `connect`) |
 | [Inbound callback](/modules/webhook) | backend | One-shot inbound callbacks with awaitable payloads (`id` remains `webhook`) |
+| [McpModule](/modules/mcp) | backend, web-ui | MCP HTTP for MCP clients, MCP call discovery, per-client MCP allowlist, builtin list-organizations |
 
 ## Optional Backend Modules
 

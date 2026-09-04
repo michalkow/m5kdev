@@ -114,6 +114,11 @@ const FEATURE_MANIFEST = {
         "apps/e2e/tests/conversation.spec.ts",
       ],
     },
+    mcp: {
+      kind: "module",
+      label: "MCP",
+      paths: [],
+    },
     notifications: {
       kind: "module",
       label: "Notifications",

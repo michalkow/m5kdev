@@ -10,7 +10,9 @@ import { EmailPreviewModule } from "@m5kdev/backend/modules/email/email.preview.
 // m5k:files:start
 import { FileModule } from "@m5kdev/backend/modules/file/file.module";
 // m5k:files:end
+// m5k:mcp:start
 import { McpModule } from "@m5kdev/backend/modules/mcp/mcp.module";
+// m5k:mcp:end
 // m5k:notifications:start
 import { NotificationModule } from "@m5kdev/backend/modules/notification/notification.module";
 // m5k:notifications:end
@@ -120,7 +122,9 @@ export const builtBackendApp = createBackendApp(
   [
     new EmailModule(templates as never),
     new AuthModule(),
+    // m5k:mcp:start
     new McpModule(),
+    // m5k:mcp:end
     // m5k:ai:start
     new AIModule({
       libs: { mastra, openrouter },

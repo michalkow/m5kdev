@@ -12,6 +12,7 @@ export {
   verifications,
   waitlist,
 } from "@m5kdev/backend/modules/auth/auth.db";
+// m5k:mcp:start
 export {
   jwks,
   oauthAccessTokens,
@@ -23,6 +24,7 @@ export {
   oauthResources,
 } from "@m5kdev/backend/modules/auth/auth.oauth.db";
 export { mcpAllowlistEntries } from "@m5kdev/backend/modules/mcp/mcp.db";
+// m5k:mcp:end
 // m5k:ai:start
 export { aiUsage, chats } from "@m5kdev/backend/modules/ai/ai.db";
 // m5k:ai:end

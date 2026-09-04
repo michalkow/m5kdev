@@ -164,6 +164,7 @@ describe("scaffoldProject", () => {
     expect(appTs).not.toContain("DemoWorkflowModule");
     expect(appTs).not.toContain("NotificationModule");
     expect(appTs).not.toContain("AIModule");
+    expect(appTs).not.toContain("McpModule");
     expect(appTs).not.toContain("redis:");
     expect(appTs).not.toContain("m5k:");
 
@@ -174,6 +175,9 @@ describe("scaffoldProject", () => {
     expect(schema).not.toContain('from "@m5kdev/backend/modules/workflow/workflow.db"');
     expect(schema).not.toContain('from "@m5kdev/backend/modules/notification/notification.db"');
     expect(schema).not.toContain('from "@m5kdev/backend/modules/ai/ai.db"');
+    expect(schema).not.toContain('from "@m5kdev/backend/modules/mcp/mcp.db"');
+    expect(schema).not.toContain("mcpAllowlistEntries");
+    expect(schema).not.toContain("auth.oauth.db");
     expect(schema).not.toContain("m5k:");
 
     const serverPackage = await fs.readFile(
@@ -192,6 +196,7 @@ describe("scaffoldProject", () => {
       "utf8"
     );
     expect(serverAgents).not.toContain("NotificationModule");
+    expect(serverAgents).not.toContain("McpModule");
 
     const router = await fs.readFile(
       path.join(result.targetDirectory, "apps/webapp/src/Router.tsx"),
@@ -303,6 +308,78 @@ describe("scaffoldProject", () => {
     const source = await fs.readFile(path.join(on.targetDirectory, ".m5kdev.json"), "utf8");
     const state = JSON.parse(source) as { template: { features: string[] } };
     expect(state.template.features).toEqual(["files", "webapp"]);
+  });
+
+  it("omits McpModule unless that Backend Module is selected", async () => {
+    const off = await scaffoldProject({
+      targetDirectory: "mcp-off-desk",
+      appName: "Mcp Off Desk",
+      appDescription: "McpModule omitted fixture.",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    const offApp = await fs.readFile(
+      path.join(off.targetDirectory, "apps/server/src/app.ts"),
+      "utf8"
+    );
+    expect(offApp).not.toContain("McpModule");
+    expect(offApp).not.toContain("m5k:");
+
+    const offSchema = await fs.readFile(
+      path.join(off.targetDirectory, "apps/server/src/schema.ts"),
+      "utf8"
+    );
+    expect(offSchema).not.toContain('from "@m5kdev/backend/modules/mcp/mcp.db"');
+    expect(offSchema).not.toContain("mcpAllowlistEntries");
+    expect(offSchema).not.toContain("auth.oauth.db");
+
+    const on = await scaffoldProject({
+      targetDirectory: "mcp-on-desk",
+      appName: "Mcp On Desk",
+      appDescription: "McpModule fixture.",
+      yes: true,
+      modules: ["mcp"],
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    const onApp = await fs.readFile(
+      path.join(on.targetDirectory, "apps/server/src/app.ts"),
+      "utf8"
+    );
+    expect(onApp).toContain("McpModule");
+    expect(onApp).toContain("new McpModule(");
+    expect(onApp).not.toContain("m5k:");
+
+    const onSchema = await fs.readFile(
+      path.join(on.targetDirectory, "apps/server/src/schema.ts"),
+      "utf8"
+    );
+    expect(onSchema).toContain("mcpAllowlistEntries");
+    expect(onSchema).toContain("oauthClients");
+    expect(onSchema).toContain("auth.oauth.db");
+    expect(onSchema).not.toContain("m5k:");
+
+    const postsSource = await fs.readFile(
+      path.join(on.targetDirectory, "apps/server/src/modules/posts/posts.service.ts"),
+      "utf8"
+    );
+    expect(postsSource).not.toContain("mcpCall");
+    expect(postsSource).not.toMatch(/\.mcp\./);
+
+    const onAgents = await fs.readFile(
+      path.join(on.targetDirectory, "apps/server/AGENTS.md"),
+      "utf8"
+    );
+    expect(onAgents).toContain("McpModule");
+
+    const source = await fs.readFile(path.join(on.targetDirectory, ".m5kdev.json"), "utf8");
+    const state = JSON.parse(source) as { template: { features: string[] } };
+    expect(state.template.features).toEqual(["mcp", "webapp"]);
   });
 
   it("omits AI unless that Backend Module is selected", async () => {

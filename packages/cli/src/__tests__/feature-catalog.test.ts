@@ -22,6 +22,7 @@ describe("CLI Backend Module feature catalog", () => {
       "workflows",
       "ai",
       "notifications",
+      "mcp",
       "tags",
       "connect",
       "webhook",
@@ -30,5 +31,39 @@ describe("CLI Backend Module feature catalog", () => {
     for (const id of ids) {
       expect(prepareTemplates).toMatch(new RegExp(`^\\s+${id}:`, "m"));
     }
+  });
+});
+
+describe("McpModule docs", () => {
+  it("covers the MCP call builder, allowlist, and omit-to-disable", () => {
+    const mcpDocs = readFileSync(
+      join(__dirname, "../../../../apps/docs/docs/modules/mcp/index.md"),
+      "utf8"
+    );
+    expect(mcpDocs).toMatch(/list-organizations/);
+    expect(mcpDocs).toMatch(/organizationId/);
+    expect(mcpDocs).toMatch(/MCP allowlist/);
+    expect(mcpDocs).toMatch(/re-consent/);
+    expect(mcpDocs).toMatch(/omit/i);
+    expect(mcpDocs).toMatch(/Better Auth MCP OAuth/);
+    expect(mcpDocs).toMatch(/API keys/);
+    expect(mcpDocs).toMatch(/\bGrant/);
+    expect(mcpDocs).not.toMatch(/trpc-mcp/);
+    expect(mcpDocs).not.toMatch(/wrap(?:ping)? tRPC/i);
+  });
+
+  it("lists McpModule as Core and documents the create-m5kdev flag as default off", () => {
+    const modulesIndex = readFileSync(
+      join(__dirname, "../../../../apps/docs/docs/modules/index.md"),
+      "utf8"
+    );
+    const cliDocs = readFileSync(
+      join(__dirname, "../../../../apps/docs/docs/packages/cli.md"),
+      "utf8"
+    );
+    expect(modulesIndex).toMatch(/\[McpModule\]\(\/modules\/mcp\)/);
+    expect(modulesIndex).not.toMatch(/trpc-mcp/);
+    expect(cliDocs).toMatch(/`mcp`/);
+    expect(cliDocs).toMatch(/default off/i);
   });
 });
