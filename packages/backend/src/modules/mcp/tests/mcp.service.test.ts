@@ -497,4 +497,82 @@ describe("McpService", () => {
       expect(result.error.context?.reason).toBe("membership");
     }
   });
+
+  it("lists consent Organizations as live Memberships only and marks the current allowlist", async () => {
+    await mcp.replaceAllowlist({
+      oauthClientId: CLIENT_CURSOR,
+      userId: USER_ID,
+      organizationIds: [ORG_A, ORG_C],
+    });
+    const listed = await mcp.listConsentOrganizations({
+      userId: USER_ID,
+      oauthClientId: CLIENT_CURSOR,
+    });
+    expect(listed.isOk()).toBe(true);
+    if (listed.isOk()) {
+      expect(listed.value).toEqual([
+        { id: ORG_A, name: "Acme", allowlisted: true },
+        { id: ORG_B, name: "Beta", allowlisted: false },
+      ]);
+    }
+  });
+
+  it("replaces a consent allowlist with live Memberships only, including empty", async () => {
+    mcp.registerService({
+      announce: mcp
+        .description("Announce")
+        .input(z.object({ title: z.string() }))
+        .handle(async (input: { title: string }) => input.title),
+    });
+    await mcp.replaceConsentAllowlist({
+      oauthClientId: CLIENT_CURSOR,
+      userId: USER_ID,
+      organizationIds: [ORG_A, ORG_C],
+    });
+    await mcp.replaceConsentAllowlist({
+      oauthClientId: CLIENT_CLAUDE,
+      userId: USER_ID,
+      organizationIds: [ORG_B],
+    });
+    const cursorList = await mcp.listOrganizations({
+      userId: USER_ID,
+      oauthClientId: CLIENT_CURSOR,
+    });
+    expect(cursorList.isOk()).toBe(true);
+    if (cursorList.isOk()) {
+      expect(cursorList.value).toEqual([{ id: ORG_A, name: "Acme", organizationRole: "owner" }]);
+    }
+    const cursorOnC = await mcp.invoke({
+      userId: USER_ID,
+      oauthClientId: CLIENT_CURSOR,
+      name: "announce",
+      arguments: { organizationId: ORG_C, title: "Nope" },
+    });
+    expect(cursorOnC.isErr()).toBe(true);
+    if (cursorOnC.isErr()) {
+      expect(cursorOnC.error.context?.reason).toBe("allowlist");
+    }
+
+    await mcp.replaceConsentAllowlist({
+      oauthClientId: CLIENT_CURSOR,
+      userId: USER_ID,
+      organizationIds: [],
+    });
+    const emptyList = await mcp.listOrganizations({
+      userId: USER_ID,
+      oauthClientId: CLIENT_CURSOR,
+    });
+    expect(emptyList.isOk()).toBe(true);
+    if (emptyList.isOk()) {
+      expect(emptyList.value).toEqual([]);
+    }
+    const claudeList = await mcp.listOrganizations({
+      userId: USER_ID,
+      oauthClientId: CLIENT_CLAUDE,
+    });
+    expect(claudeList.isOk()).toBe(true);
+    if (claudeList.isOk()) {
+      expect(claudeList.value).toEqual([{ id: ORG_B, name: "Beta", organizationRole: "member" }]);
+    }
+  });
 });

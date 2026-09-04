@@ -9,6 +9,7 @@ import {
   LIST_ORGANIZATIONS_MCP_CALL,
   type McpCallDefinition,
   type McpCatalogEntry,
+  type McpConsentOrganization,
   type McpInvokeInput,
   type McpListedOrganization,
 } from "./mcp.types";
@@ -110,6 +111,49 @@ export class McpService extends Base {
     organizationIds: readonly string[];
   }): ServerResultAsync<void> {
     return this.mcpRepository.replaceAllowlist(input);
+  }
+
+  async listConsentOrganizations({
+    userId,
+    oauthClientId,
+  }: {
+    userId: string;
+    oauthClientId: string;
+  }): ServerResultAsync<McpConsentOrganization[]> {
+    const userResult = await this.loadUser(userId);
+    if (userResult.isErr()) return err(userResult.error);
+    const liveResult = await this.organizationRepository.listUserOrganizations(userId);
+    if (liveResult.isErr()) return err(liveResult.error);
+    const allowlistedResult = await this.mcpRepository.listOrganizationIds({
+      oauthClientId,
+      userId,
+    });
+    if (allowlistedResult.isErr()) return err(allowlistedResult.error);
+    const allowlisted = new Set(allowlistedResult.value);
+    const listed = liveResult.value.map((organization) => ({
+      id: organization.id,
+      name: organization.name,
+      allowlisted: allowlisted.has(organization.id),
+    }));
+    listed.sort((a, b) => a.name.localeCompare(b.name));
+    return ok(listed);
+  }
+
+  async replaceConsentAllowlist(input: {
+    oauthClientId: string;
+    userId: string;
+    organizationIds: readonly string[];
+  }): ServerResultAsync<void> {
+    const liveResult = await this.organizationRepository.listUserOrganizations(input.userId);
+    if (liveResult.isErr()) return err(liveResult.error);
+    const liveIds = new Set(liveResult.value.map((organization) => organization.id));
+    return this.replaceAllowlist({
+      oauthClientId: input.oauthClientId,
+      userId: input.userId,
+      organizationIds: input.organizationIds.filter((organizationId) =>
+        liveIds.has(organizationId)
+      ),
+    });
   }
 
   async listOrganizations({

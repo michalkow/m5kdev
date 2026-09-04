@@ -1,14 +1,17 @@
+import { createBackendRouterMap } from "../../app";
 import type { AuthModule } from "../auth/auth.module";
 import {
   BaseModule,
   type ModuleExpressContext,
   type ModuleRepositoriesContext,
   type ModuleServicesContext,
+  type ModuleTRPCContext,
 } from "../base/base.module";
 import type * as mcpTables from "./mcp.db";
 import { mountMcpHttp } from "./mcp.http";
 import { McpRepository } from "./mcp.repository";
 import { McpService } from "./mcp.service";
+import { createMcpTRPC } from "./mcp.trpc";
 import { mcpResourceUrl } from "./mcp.types";
 
 type McpModuleDeps = { auth: AuthModule };
@@ -19,13 +22,16 @@ type McpModuleRepositories = {
 type McpModuleServices = {
   mcp: McpService;
 };
+type McpModuleRouters = {
+  mcp: ReturnType<typeof createMcpTRPC>;
+};
 
 export class McpModule extends BaseModule<
   McpModuleDeps,
   McpModuleTables,
   McpModuleRepositories,
   McpModuleServices,
-  never
+  McpModuleRouters
 > {
   readonly id = "mcp";
   override readonly dependsOn = ["auth"] as const;
@@ -51,6 +57,10 @@ export class McpModule extends BaseModule<
         deps.auth.repositories.user
       ),
     };
+  }
+
+  override trpc({ trpc, services }: ModuleTRPCContext<McpModuleDeps, McpModuleServices>) {
+    return createBackendRouterMap("mcp", createMcpTRPC(trpc, services.mcp));
   }
 
   override express({

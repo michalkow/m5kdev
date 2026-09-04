@@ -26,6 +26,12 @@ export interface McpListedOrganization {
   organizationRole: string;
 }
 
+export interface McpConsentOrganization {
+  id: string;
+  name: string;
+  allowlisted: boolean;
+}
+
 export interface McpCatalogEntry {
   name: string;
   description: string;

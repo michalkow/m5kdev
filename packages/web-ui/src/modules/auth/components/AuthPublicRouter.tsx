@@ -5,6 +5,7 @@ import {
   type AuthOrganizationAcceptInvitationRouteProps,
 } from "./AuthOrganizationAcceptInvitationRoute";
 import { AuthPublicClaimAccountRoute } from "./AuthPublicClaimAccountRoute";
+import { AuthPublicConsentRoute } from "./AuthPublicConsentRoute";
 import { AuthPublicErrorRoute } from "./AuthPublicErrorRoute";
 import { AuthPublicForgotPasswordRoute } from "./AuthPublicForgotPasswordRoute";
 import { AuthPublicLayout } from "./AuthPublicLayout";
@@ -41,6 +42,7 @@ export function AuthPublicRouter({
         <Route path="/forgot-password" element={<AuthPublicForgotPasswordRoute />} />
         <Route path="/reset-password" element={<AuthPublicResetPasswordRoute />} />
         <Route path="/claim-account" element={<AuthPublicClaimAccountRoute />} />
+        <Route path="/consent" element={<AuthPublicConsentRoute />} />
         <Route path="/error-auth" element={<AuthPublicErrorRoute />} />
       </Route>
     </>

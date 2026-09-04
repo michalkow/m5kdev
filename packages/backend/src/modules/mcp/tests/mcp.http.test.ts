@@ -228,5 +228,14 @@ describe("Starter MCP registration", () => {
     expect(schemaSource).toMatch(/mcpAllowlistEntries/);
     expect(postsSource).not.toMatch(/mcpCall/);
     expect(postsSource).not.toMatch(/\.mcp\./);
+    const consentRouter = readFileSync(
+      join(
+        __dirname,
+        "../../../../../../packages/web-ui/src/modules/auth/components/AuthPublicRouter.tsx"
+      ),
+      "utf8"
+    );
+    expect(consentRouter).toMatch(/path="\/consent"/);
+    expect(consentRouter).toMatch(/AuthPublicConsentRoute/);
   });
 });
