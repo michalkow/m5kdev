@@ -45,8 +45,20 @@ _Avoid_: Invitation, Waitlist, signup
 ### Identity and access
 
 **Actor**:
-Who a Service call is made on behalf of: `UserActor`, `OrganizationActor`, or `AdminActor`. Organization scope requires an active Membership (User attached, not soft-deleted). Invited Members are not Actors.
-_Avoid_: Session, Context, Principal, Request, TeamActor
+Who a Service call is made on behalf of: `UserActor`, `OrganizationActor`, or `AdminActor`. Organization scope requires an active Membership (User attached, not soft-deleted). Invited Members are not Actors. An MCP call’s OrganizationActor is built from the client’s organizationId plus a live Membership, not from webapp `setActive`.
+_Avoid_: Session, Context, Principal, Request, TeamActor; treating MCP allowlist as the Actor
+
+**MCP client**:
+A remote Model Context Protocol client (Cursor, Claude Desktop, and the like) that calls the app after Better Auth MCP OAuth, on behalf of a User.
+_Avoid_: Agent (that is Mastra), Connection (that is a linked third-party API account), treating the OAuth client as a User or Member
+
+**MCP call**:
+A request-bound Service entry declared through McpService (`description` / `input` / `handle`), discovered at boot like a Workflow job definition, and exposed to an MCP client as a protocol tool. App-declared MCP calls require organizationId from the client; McpModule strips it and supplies OrganizationActor; the handle sees only the declared input. McpModule does not enforce Grants. The builtin list-organizations MCP call is UserActor, owned by McpModule, and is not this app-service pattern.
+_Avoid_: Procedure (that includes Grant check), Action (that is a Grant verb), Tool (the protocol object, not our noun), Workflow, tRPC procedure, Agent, Endpoint
+
+**MCP allowlist**:
+The Organizations a given Better Auth OAuth client may pass as organizationId for a User. Chosen at that client’s consent. Per OAuth client, not one list for the User. Not Membership and not Grant; a live Membership is still required to build OrganizationActor. Changing it requires re-consent.
+_Avoid_: Scope, Connection, a User-global org list; treating allowlist as permission to write
 
 **ActorScope**:
 Auth requirement on a Procedure: `user` | `organization` | `admin`.
@@ -91,8 +103,8 @@ A Kernel-owned, one-way HTTP Server-Sent Event that a resource was created, upda
 _Avoid_: organization-addressed fan-out; WebSocket; Subscription (that is Billing); Notification (that may consume one); Action (that is Grant); Inbound callback; Backend Module
 
 **Core Module**:
-A Backend Module that ships in the Kernel package. Apps may omit it from `createBackendApp`. Core set: AI, Auth, Billing, Connection, EmailModule, File, Notification, Recurrence, Tag, Inbound callback, Workflow. `@m5kdev/email` is React Email chrome, not EmailModule. EmailPreviewModule is a Kernel-exported helper, not a Core Module.
-_Avoid_: Optional Backend Module; putting Core Auth/Billing/File into `module-*` packages; treating EmailPreviewModule as Core
+A Backend Module that ships in the Kernel package. Apps may omit it from `createBackendApp`. Core set: AI, Auth, Billing, Connection, EmailModule, File, McpModule, Notification, Recurrence, Tag, Inbound callback, Workflow. `@m5kdev/email` is React Email chrome, not EmailModule. EmailPreviewModule is a Kernel-exported helper, not a Core Module.
+_Avoid_: Optional Backend Module; putting Core Auth/Billing/File/McpModule into `module-*` packages; treating EmailPreviewModule as Core; a `trpc-mcp` package as the product surface
 
 **Optional Backend Module**:
 A Backend Module published as `@m5kdev/module-<name>`: Clay, Docx, Pdf, Social, Video. `create-m5kdev` never adds these packages. When an app depends on one, the pin belongs in `catalogs.m5kdev`. At 1.0 they are experimental: lockstep Semver with the Kernel, quality not guaranteed. Shared contracts/UI for those slices, if added, live in the Optional package — not commons/frontend/web-ui.
@@ -262,4 +274,8 @@ _Avoid_: using Thread for the UI surface; the `chats` table
 
 **Agent**:
 A named Mastra agent the app registers. A Conversation selects which Agent answers; Agent is not the Thread key.
-_Avoid_: Assistant, Bot, Model
+_Avoid_: Assistant, Bot, Model; MCP client
+
+**McpModule**:
+The Core Module that serves MCP to MCP clients, holds the MCP allowlist, discovers MCP calls on services at boot, and ships the builtin list-organizations MCP call. Apps omit it from `createBackendApp` to disable MCP. Better Auth MCP OAuth stays on Auth.
+_Avoid_: wrapping tRPC as the catalog; Optional `@m5kdev/trpc-mcp`; Kernel-owned MCP HTTP like tRPC; Plugin

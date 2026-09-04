@@ -36,6 +36,7 @@ import type { BetterAuth } from "./modules/auth/auth.lib";
 import type { AuthRequest } from "./modules/auth/auth.middleware";
 import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/auth.middleware";
 import type { BaseModule } from "./modules/base/base.module";
+import { McpService } from "./modules/mcp/mcp.service";
 import { WorkflowRegistry } from "./modules/workflow/workflow.registry";
 import { WorkflowService } from "./modules/workflow/workflow.service";
 import { logger as rootLogger } from "./utils/logger";
@@ -359,6 +360,10 @@ export function createBackendRouterMap<const Namespace extends string, Router ex
 
 function isWorkflowService(value: unknown): value is WorkflowService {
   return value instanceof WorkflowService;
+}
+
+function isMcpService(value: unknown): value is McpService {
+  return value instanceof McpService;
 }
 
 function normalizeEnv(env: BackendAppConfig["env"]): Record<string, string | undefined> {
@@ -764,6 +769,28 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       for (const service of Object.values(state.services)) {
         if (!service || typeof service !== "object") continue;
         workflowRuntime.registry.registerService(service as Record<string, unknown>);
+      }
+    }
+  }
+
+  let mcpService: McpService | undefined;
+  for (const module of orderedModules) {
+    const state = moduleStates.get(module.id)!;
+    for (const service of Object.values(state.services)) {
+      if (isMcpService(service)) {
+        if (mcpService) {
+          throw new Error("Multiple McpService instances detected; only one is supported");
+        }
+        mcpService = service;
+      }
+    }
+  }
+
+  if (mcpService) {
+    for (const state of moduleStates.values()) {
+      for (const service of Object.values(state.services)) {
+        if (!service || typeof service !== "object") continue;
+        mcpService.registerService(service as Record<string, unknown>);
       }
     }
   }

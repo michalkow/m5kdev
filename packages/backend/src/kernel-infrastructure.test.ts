@@ -56,6 +56,10 @@ describe("Kernel infrastructure package surface", () => {
     expect(pkg.exports["./modules/utils/*"]).toBeUndefined();
   });
 
+  it("exports McpModule from ./modules/mcp/*", () => {
+    expect(pkg.exports["./modules/mcp/*"]).toBeDefined();
+  });
+
   it("does not export AccessModule, CryptoModule, PdfModule, DocxModule, VideoModule, SocialModule, or ClayModule", () => {
     expect(pkg.exports["./modules/access/*"]).toBeUndefined();
     expect(pkg.exports["./modules/crypto/*"]).toBeUndefined();

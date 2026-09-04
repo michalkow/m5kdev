@@ -265,6 +265,16 @@
         "default": "./dist/src/modules/notification/*.cjs"
       }
     },
+    "./modules/mcp/*": {
+      "import": {
+        "types": "./dist/src/modules/mcp/*.d.mts",
+        "default": "./dist/src/modules/mcp/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/mcp/*.d.cts",
+        "default": "./dist/src/modules/mcp/*.cjs"
+      }
+    },
     "./lib/*": {
       "import": {
         "types": "./dist/src/lib/*.d.mts",
