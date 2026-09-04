@@ -58,6 +58,7 @@ describe("consumer catalog", () => {
     expect(catalog["@types/react"]).toBe("19.2.17");
     expect(catalog["drizzle-kit"]).toBe("0.31.10");
     expect(catalog["drizzle-orm"]).toBe("0.45.2");
+    expect(catalog["better-auth"]).toBe("1.7.2");
 
     const variantManifests = ["shared", "server", "email", "webapp", "expo", "e2e", "landing"]
       .map((name) => path.join(REPO_ROOT, "apps/starter", name, "package.json"))

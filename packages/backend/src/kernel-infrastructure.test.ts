@@ -32,6 +32,8 @@ jest.mock("openid-client", () => ({}));
 
 interface PackageExports {
   readonly exports: Record<string, unknown>;
+  readonly dependencies?: Record<string, string>;
+  readonly peerDependencies?: Record<string, string>;
 }
 
 class CoreFixtureModule extends BaseModule<never, TableMap, {}, {}, never> {
@@ -58,6 +60,22 @@ describe("Kernel infrastructure package surface", () => {
 
   it("exports McpModule from ./modules/mcp/*", () => {
     expect(pkg.exports["./modules/mcp/*"]).toBeDefined();
+  });
+
+  it("nests Better Auth MCP companions instead of treating them as boundary libraries", () => {
+    expect(pkg.dependencies?.["@better-auth/mcp"]).toBe("1.7.2");
+    expect(pkg.dependencies?.["@better-auth/cimd"]).toBe("1.7.2");
+    expect(pkg.dependencies?.["@modelcontextprotocol/server"]).toBe("2.0.0");
+    expect(pkg.peerDependencies?.["@better-auth/mcp"]).toBeUndefined();
+    expect(pkg.peerDependencies?.["@better-auth/cimd"]).toBeUndefined();
+    expect(pkg.peerDependencies?.["@modelcontextprotocol/server"]).toBeUndefined();
+  });
+
+  it("does not register MCP OAuth plugins until McpModule wiring lands", () => {
+    const authLib = readFileSync(join(__dirname, "modules/auth/auth.lib.ts"), "utf8");
+    expect(authLib).not.toMatch(/\bmcp\s*\(/);
+    expect(authLib).not.toMatch(/\bjwt\s*\(/);
+    expect(authLib).not.toMatch(/\boauthProvider\s*\(/);
   });
 
   it("does not export AccessModule, CryptoModule, PdfModule, DocxModule, VideoModule, SocialModule, or ClayModule", () => {

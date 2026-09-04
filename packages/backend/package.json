@@ -26,6 +26,9 @@
     "test:watch": "jest -c jest.config.ts --watch"
   },
   "dependencies": {
+    "@better-auth/cimd": "1.7.2",
+    "@better-auth/mcp": "1.7.2",
+    "@modelcontextprotocol/server": "2.0.0",
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/client-sts": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
