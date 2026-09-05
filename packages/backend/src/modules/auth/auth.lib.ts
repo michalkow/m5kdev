@@ -29,6 +29,7 @@ import { posthogCapture } from "../../utils/posthog";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
 import * as auth from "./auth.db";
+import { createAuthOrganizationHttpPolicy } from "./auth.organization-http-policy";
 import {
   acceptWaitlistCodeAfterUser,
   assertWaitlistCodeUsable,
@@ -476,11 +477,7 @@ export function createBetterAuth<
       admin(),
       lastLoginMethod(),
       organization({
-        organizationHooks: {
-          beforeCreateInvitation: async () => {
-            throw new APIError("FORBIDDEN", { message: "Use Auth inviteOrganizationMember" });
-          },
-        },
+        ...createAuthOrganizationHttpPolicy(),
         schema: {
           member: {
             modelName: "member",
