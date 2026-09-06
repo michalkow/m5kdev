@@ -5,7 +5,11 @@ sidebar_position: 1
 # File module
 
 The file module covers browser uploads, S3 presigned URLs, upload inventory, and
-download URL resolution.
+download URL resolution. `FileModule` boots without AWS: local uploads still
+work; the S3 client is constructed lazily on first S3 call.
+
+Org-scoped inventory stamps **MemberId**. `file.list` is an organization-scoped
+tRPC procedure.
 
 ## Package map
 
@@ -22,6 +26,8 @@ download URL resolution.
 - Request a presigned S3 URL, upload directly from the browser, and store the S3 key.
 - Use the inventory-backed S3 lifecycle when the app needs a DB row for ownership,
   status, metadata, and deletion.
+- Upload locally without AWS (`POST /upload/file/:type`); inventory `bucket` is
+  `local`.
 - Resolve an S3 key to a short-lived download URL.
 
 ## Pages

@@ -35,7 +35,8 @@ List endpoints: [List query and Match query](/guides/list-query-and-match-query)
 
 Keep data fetching and platform-neutral state in shared hooks when multiple apps
 need the same behavior. Keep browser URL state, visual composition, and web-only
-adapters in app code or `@m5kdev/web-ui`.
+adapters in app code or `@m5kdev/web-ui`. Native Device registration and the
+React Native inbox list live in [`@m5kdev/expo`](/packages/expo).
 
 See [Frontend and Web UI split migration](/guides/frontend-web-ui-split) for
 import changes after the `nuqs` split. Compose SSE:

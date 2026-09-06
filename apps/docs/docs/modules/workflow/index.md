@@ -52,16 +52,25 @@ new WorkflowModule({
 
 ## Defining jobs
 
-Modules and apps register jobs against the workflow service in their
-`workflows(...)` hook. A job config declares its `name`, target `queue`,
-`retries`, `timeout`, an optional deterministic `id(payload)`, and `meta(payload)`
-for attribution (`userId`, `tags`). Jobs can be `awaitable` when the caller needs
-the result. Cron schedules are declared with `workflow.cron(config)`, which
-upserts a BullMQ job scheduler.
+Define jobs as **service fields** with `.job().handle()` (or `.cron().handle()`).
+At boot the Kernel scans every registered service with
+`registry.registerService` and picks up those fields. Missing `.handle()` throws
+at registration (property name in the message). Duplicate job names throw.
+Registration after `start()` throws.
 
-Payload rules (from AGENTS.md): serializable and minimal — ids and typed input,
-never request/session objects. Business logic stays in services; job modules are
-thin glue.
+The Kernel still calls a module `workflows()` hook after that scan. First-party
+code does not use the hook; keep job definitions on the service that owns the
+work. Use the hook (or `registry.register`) only when the handler must live on
+a different service than the job field.
+
+A job config declares its `name`, target `queue`, `retries`, `timeout`, an
+optional deterministic `id(payload)`, and `meta(payload)` for attribution
+(`userId`, `tags`). Jobs can be `awaitable` when the caller needs the result.
+`workflow.cron(config)` upserts a BullMQ job scheduler.
+
+Payload rules: serializable and minimal — ids and typed input, never
+request/session objects. Business logic stays in services; job fields are thin
+glue.
 
 Example from the notification module (`notification.webPush` / `.mobilePush` /
 `.email`):
@@ -76,6 +85,9 @@ this.webPushJob = this.service.workflow
     /* deliver; throw on failure */
   });
 ```
+
+Redis (`REDIS_URL`) must be up before the server starts, or workers will not
+run. Notification delayed Channels use the same Redis.
 
 ## Notifying the UI
 

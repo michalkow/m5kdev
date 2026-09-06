@@ -124,6 +124,8 @@ code should live.
 - [Frontend package](/packages/frontend) owns shared React hooks and client-side
   module logic.
 - [Web UI package](/packages/web-ui) owns reusable HeroUI/Tailwind components.
+- [Expo package](/packages/expo) owns native push registration and the React
+  Native inbox list.
 - [Commons package](/packages/commons) owns shared constants, schemas, and types.
 - [CLI package](/packages/cli) scaffolds apps and runs `init` / `doctor` / `update`.
 

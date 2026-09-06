@@ -28,6 +28,7 @@ Start with these module pages:
 
 Prefer HeroUI components and shared UI primitives before adding local duplicates
 inside an app. Keep browser-only adapters here instead of `@m5kdev/frontend`.
+Expo Notification UI lives in [`@m5kdev/expo`](/packages/expo), not here.
 
 See [Frontend and Web UI split migration](/guides/frontend-web-ui-split) for
 the table hook import map.

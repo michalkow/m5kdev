@@ -12,6 +12,7 @@ Package docs explain ownership and imports. Detailed usage belongs in
 | [Backend](./backend) | Kernel infrastructure, Core Modules, and `createBackendApp`. Optional Backend Modules are `@m5kdev/module-*`. |
 | [Frontend](./frontend) | Shared React hooks and frontend logic. |
 | [Web UI](./web-ui) | Shared HeroUI/Tailwind component library. |
+| [Expo](./expo) | Native push hook and React Native Notification inbox. |
 | [Commons](./commons) | Shared schemas, constants, and utilities. |
 | [Email](./email) | Shared React Email chrome and template types (not `EmailModule`). |
 | [CLI](./cli) | Project creation, `init` / `doctor` / `update`, and 0.34.0 / 0.35.0 / 0.36.0 upgrade entry. |

@@ -43,9 +43,9 @@ import { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
 createBackendApp(config, [new AuthModule(customGrants, serviceHooks)]);
 ```
 
-Grants default to `defaultAuthGrants` (admin: all; user: own; org owner/admin:
-all). Pass `AuthServiceHooks` to react to lifecycle events such as organization
-creation.
+Grants default to `defaultAuthGrants` (user admin: `all`; user: `own`; org
+owner/admin: `org`, not `all`; org member: `own` read). Pass `AuthServiceHooks`
+to react to lifecycle events such as organization creation.
 
 ### Better Auth integration
 
