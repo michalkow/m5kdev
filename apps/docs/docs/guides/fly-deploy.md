@@ -85,3 +85,14 @@ Apps still shipping Starter `fly-*.mjs` copies: [Kernel Fly deploy commands in 0
 
 Production `VITE_APP_URL` and `VITE_SERVER_URL` are operator env (often the
 same public origin). The Kernel does not rewrite them.
+
+## Troubleshooting
+
+- **Redis** — Workflow workers and delayed Notification Channels need
+  `REDIS_URL` at runtime (`pnpm app:secrets`). A machine without Redis will
+  boot HTTP but jobs will not run.
+- **`file:` database on the volume** — `DATABASE_URL=file:/app/data/local.db`
+  must match the `libsql_data` mount. Database commands (`drizzle:reset`) are
+  for local/ops boxes, not a substitute for volume backups.
+- **Build vs runtime secrets** — `VITE_*` is baked at image build. Changing
+  `VITE_APP_URL` later requires a new deploy, not only `fly secrets import`.

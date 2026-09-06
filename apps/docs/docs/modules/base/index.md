@@ -28,7 +28,10 @@ and override lifecycle methods the kernel calls in order:
 - `trpc({ services, deps })` — return namespaced tRPC router fragments
   (via `createBackendRouterMap`).
 - `express({ services, infra })` — mount Express routes.
-- `workflows({ services })` — register queue jobs and cron schedules.
+- `workflows({ services, workflow })` — optional. The Kernel already discovers
+  `.job().handle()` / `.cron().handle()` fields via `registerService`. Override
+  this hook only for a handler that cannot live on the defining service. See
+  [Workflow](/modules/workflow).
 
 Modules declare `dependsOn` / `optionalDependsOn` by module id; the kernel
 resolves order and passes resolved dependencies through `deps`.
@@ -53,9 +56,11 @@ org-scoped `"own"` ownership — see
   `accessGuardAsync`.
 
 Grants are declared per module in `<module>.grants.ts` with
-`flattenNestedGrants({ module: { scope: { role: { action: "own" | "all" } } } })`.
-Canonical actions are `read`, `write`, `delete`, and `publish`; guard action
-names must match grant action names exactly.
+`flattenNestedGrants({ resource: { level: { role: { action: Access } } } })`.
+Access is `"all"` | `"own"` | `"org"` | `"none"`. Prefer `"org"` for
+organization owner/admin, not `"all"`. Canonical actions are `read`, `write`,
+`delete`, and `publish`; guard action names must match grant action names
+exactly.
 
 In organization context, user-level `"own"` compares `Entity.memberId` to the
 actor’s `memberId` when present (with legacy `userId` dual-read for
@@ -71,8 +76,8 @@ async functions:
 
 ```ts
 getPreferences = this.procedure("getPreferences")
-  .access({ scope: "user", action: "read" })
-  .handler(async ({ ctx }) => { /* ... */ });
+  .requireAuth()
+  .handle(async ({ ctx }) => { /* ... */ });
 ```
 
 Procedures bundle input mapping, access checks, and entity loading so tRPC

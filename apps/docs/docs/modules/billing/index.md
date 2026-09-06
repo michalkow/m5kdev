@@ -54,12 +54,32 @@ createBackendApp(config, [
 ]);
 ```
 
-Grants default to `defaultBillingGrants` (user: own; admin/org owner: all).
+Grants default to `defaultBillingGrants` (user: own; platform admin: all; org
+owner/admin: `org`; org member: own).
 
 `BillingModule` `dependsOn` Email. Register `EmailModule` in the same
 `createBackendApp` call or boot fails with
 `Backend module "billing" is missing required dependency "email"`. Auth already
 requires Email, so most apps only need to keep that registration.
+
+### Who is billed (1.0)
+
+The glossary names **Organization** as the billed party. The repository has not
+moved off User:
+
+| Store | Key |
+| --- | --- |
+| `subscriptions.referenceId` | UserId (`client_reference_id` on Checkout is the same) |
+| `users.stripeCustomerId` | Stripe customer id for that User |
+
+`getActiveSubscription` / checkout / portal look up by `ctx.actor.userId`. Do
+not re-key those columns to MemberId or Organization id to "match" the
+glossary — that would desync Stripe. Org-level grants still exist so an
+org owner/admin can read billing UI; they do not change the Stripe customer.
+
+Unused User payment columns (`paymentCustomerId`, plan tier / expiry) were
+dropped in 0.36.0. `users.stripeCustomerId` stayed. See
+[Team drop](/guides/v0.36.0-team-drop-migration).
 
 ### Service
 
@@ -114,4 +134,6 @@ constructed in app code with your secret key. Include
 ## Related docs
 
 - [Billing trial-ending email in 0.34.0](/guides/v0.34.0-billing-trial-ending-email-migration)
+- [Team drop (unused User payment columns)](/guides/v0.36.0-team-drop-migration)
+- [Organizations and members](/guides/organizations-and-members)
 - [Email Core Module](/modules/email)

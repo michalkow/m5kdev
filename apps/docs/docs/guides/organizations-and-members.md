@@ -96,7 +96,8 @@ an organization (it does not remap to `memberId`).
 
 Keep `userId` (and user-level grants) for resources that are not org tenancy:
 
-- Billing / Stripe customer linkage
+- Billing / Stripe customer linkage (1.0 still keys the Subscription row and
+  Stripe customer on UserId — see [Billing](/modules/billing))
 - Notification devices (UserId). Inbox instances and Channel preferences are Member-owned — see [Notification](/modules/notification)
 - OAuth accounts and sessions
 - User-global preferences that are intentionally cross-org

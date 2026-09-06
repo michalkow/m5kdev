@@ -9,14 +9,15 @@ uploads.
 
 ## 1. Register backend modules
 
-Register auth before file because `FileModule` depends on auth.
+Register Email, then Auth, then File (`FileModule` depends on Auth; Auth
+depends on Email).
 
 ```ts
 export const builtBackendApp = createBackendApp(
   {
     db: { url: process.env.DATABASE_URL! },
   },
-  [new AuthModule(), new FileModule()] as const
+  [new EmailModule(templates), new AuthModule(), new FileModule()] as const
 );
 ```
 

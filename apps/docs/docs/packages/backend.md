@@ -43,6 +43,27 @@ Catalog pins and boundary peers: [Catalog lockstep](/guides/v0.33.0-catalog-lock
 Keep persistence logic in repositories, business logic in services, and transport
 wiring in routers or tRPC files.
 
+## Database commands
+
+Kernel `runDb` from `@m5kdev/backend/db` runs **reset**, **sync**, and **seed**.
+The app owns Database config (`apps/server/db.ts`) that passes App schema and
+optional seed. Named scripts:
+
+```sh
+pnpm --filter ./apps/server drizzle:reset
+pnpm --filter ./apps/server drizzle:sync
+pnpm --filter ./apps/server drizzle:seed
+```
+
+These commands must **not** import `app.ts` (no HTTP, Redis, or queues). Stop
+the server first when `DATABASE_URL` is a `file:` database, unless
+`SKIP_DB_GUARD=true`. drizzle-kit `generate` / `migrate` / `studio` stay
+app-owned.
+
+Upgrade path:
+[Kernel Database commands in 0.34.0](/guides/v0.34.0-kernel-database-commands-migration).
+LibSQL pitfalls: [libSQL resilience](/guides/libsql-resilience-migration).
+
 ## Telemetry
 
 OpenTelemetry tracing and correlated Pino logging are opt-in via

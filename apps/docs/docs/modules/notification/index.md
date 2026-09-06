@@ -78,8 +78,10 @@ the email Channel). Pass `kinds` into the module; the service rejects unknown
 kind ids.
 
 Feature flag: CLI `notifications` (experimental). Starter gates table exports,
-`NotificationModule`, web Router, sidebar inbox chrome, prefs nav, and Shared
-kinds with `// m5k:notifications:` markers. CLI `paths` for this id stay empty.
+`NotificationModule`, web Router, sidebar inbox chrome, prefs nav, Shared
+kinds, and Expo `/notifications` with `// m5k:notifications:` markers. Keep
+lucide `BellIcon` (and Notification imports) inside those markers so a stripped
+`--yes` tree does not leave unused imports. CLI `paths` for this id stay empty.
 
 ### Tables
 
@@ -200,7 +202,8 @@ import { NotificationInbox } from "@m5kdev/expo/modules/notification/components/
 
 `useNativePush` registers an iOS/Android Device (UserId). The inbox list uses
 the same frontend hook as web. Expo has no Server event provider in this
-release — navigate away and back, or refetch, to pick up new rows.
+release — navigate away and back, or refetch, to pick up new rows. Package
+ownership: [`@m5kdev/expo`](/packages/expo).
 
 ## App-level flow
 
@@ -226,3 +229,4 @@ Upgrade from device-only Notification:
 - [Organizations and members](/guides/organizations-and-members)
 - [Notification inbox in 0.36.0](/guides/v0.36.0-notification-inbox-migration)
 - [Email preview gate in 0.36.0](/guides/v0.36.0-email-preview-gate-migration)
+- [Expo package](/packages/expo)
