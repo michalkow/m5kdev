@@ -1,0 +1,21 @@
+{
+  "name": "m5kdev monorepo",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "user": "node",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "server",
+      "command": "PORT=8080 pnpm --filter @starter-app/server dev"
+    },
+    {
+      "name": "webapp",
+      "command": "pnpm --filter @starter-app/webapp dev --port 5173"
+    }
+  ],
+  "ports": [5173, 8080]
+}
