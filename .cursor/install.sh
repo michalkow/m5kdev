@@ -20,6 +20,10 @@ fi
 corepack prepare pnpm@10.13.1 --activate >/dev/null 2>&1 || true
 pnpm install --frozen-lockfile
 
+# 2b. Download the Playwright Chromium browser for the e2e suite. System
+#     libraries are provided by the Dockerfile, so skip --with-deps here.
+pnpm --filter @starter-app/e2e exec playwright install chromium
+
 # 3. Build packages and apps (webapp consumes built @m5kdev/* packages).
 pnpm build
 
