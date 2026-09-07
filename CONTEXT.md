@@ -45,7 +45,7 @@ _Avoid_: Invitation, Waitlist, signup
 ### Identity and access
 
 **Actor**:
-Who a Service call is made on behalf of: `UserActor`, `OrganizationActor`, or `AdminActor`. Organization scope requires an active Membership (User attached, not soft-deleted). Invited Members are not Actors. An MCP call’s OrganizationActor is built from the client’s organizationId plus a live Membership, not from webapp `setActive`.
+Who a Service call is made on behalf of: `UserActor`, `OrganizationActor`, or `AdminActor`. Organization scope requires an active Membership (User attached, not soft-deleted). Invited Members are not Actors. An MCP call’s OrganizationActor is built from the client’s organizationId plus a live Membership, not from webapp `setActive`. User-scoped MCP calls use UserActor (organizationId unset) and do not consult the MCP allowlist.
 _Avoid_: Session, Context, Principal, Request, TeamActor; treating MCP allowlist as the Actor
 
 **MCP client**:
@@ -53,11 +53,11 @@ A remote Model Context Protocol client (Cursor, Claude Desktop, and the like) th
 _Avoid_: Agent (that is Mastra), Connection (that is a linked third-party API account), treating the OAuth client as a User or Member
 
 **MCP call**:
-A request-bound Service entry declared through McpService (`description` / `input` / `handle`), discovered at boot like a Workflow job definition, and exposed to an MCP client as a protocol tool. App-declared MCP calls require organizationId from the client; McpModule strips it and supplies OrganizationActor; the handle sees only the declared input. McpModule does not enforce Grants. The builtin list-organizations MCP call is UserActor, owned by McpModule, and is not this app-service pattern.
-_Avoid_: Procedure (that includes Grant check), Action (that is a Grant verb), Tool (the protocol object, not our noun), Workflow, tRPC procedure, Agent, Endpoint
+A catalog entry a Backend Module contributes that an MCP client invokes as a protocol tool. Organization-scoped calls take organizationId (MCP allowlist + live Membership → OrganizationActor; organizationId stripped from handle input); User-scoped calls use UserActor and skip the allowlist. A handle may delegate to a Procedure (Grant check runs) or call unguarded service methods.
+_Avoid_: treating the MCP call itself as a Procedure or tRPC procedure; Tool (the protocol object); Workflow job; scraping Service properties; wrapping a tRPC router; Agent, Endpoint
 
 **MCP allowlist**:
-The Organizations a given Better Auth OAuth client may pass as organizationId for a User. Chosen at that client’s consent. Per OAuth client, not one list for the User. Not Membership and not Grant; a live Membership is still required to build OrganizationActor. Changing it requires re-consent.
+The Organizations a given Better Auth OAuth client may pass as organizationId for a User. Chosen at that client’s consent. Per OAuth client, not one list for the User. Not Membership and not Grant; organization-scoped MCP calls still need a live Membership to build OrganizationActor. Changing it requires re-consent. User-scoped MCP calls do not consult it, except list-organizations which returns it.
 _Avoid_: Scope, Connection, a User-global org list; treating allowlist as permission to write
 
 **ActorScope**:
@@ -91,7 +91,7 @@ _Avoid_: multiple Owners as a product feature; inviting Owner; org members UI as
 _Avoid_: Framework (the stack is composable, not closed), App (that is the product), app-owned CORS as the default path; booting createBackendApp to reset or seed; ad-hoc `express.static` in starter `app.ts`
 
 **Backend Module**:
-A `BaseModule` subclass (or `defineBackendModule` object) that contributes tables, repositories, services, tRPC fragments, Express hooks, and workflows. Registered in `apps/*/server/src/app.ts` via `createBackendApp(config, [modules])`. Extra HTTP belongs on the module `express` hook, not ad hoc starter middleware. Baked SPA serving and Server events are Kernel shell, not a module hook ([ADR-0006](docs/adr/0006-kernel-owns-baked-spa.md), [ADR-0010](docs/adr/0010-kernel-owns-server-events.md)).
+A `BaseModule` subclass (or `defineBackendModule` object) that contributes tables, repositories, services, tRPC fragments, MCP calls, Express hooks, and workflows. Registered in `apps/*/server/src/app.ts` via `createBackendApp(config, [modules])`. Extra HTTP belongs on the module `express` hook, not ad hoc starter middleware. Baked SPA serving and Server events are Kernel shell, not a module hook ([ADR-0006](docs/adr/0006-kernel-owns-baked-spa.md), [ADR-0010](docs/adr/0010-kernel-owns-server-events.md)).
 _Avoid_: Package, Plugin, Feature (when you mean the server module), Model; `backendApp.use`
 
 **Kernel infrastructure**:
@@ -277,5 +277,5 @@ A named Mastra agent the app registers. A Conversation selects which Agent answe
 _Avoid_: Assistant, Bot, Model; MCP client
 
 **McpModule**:
-The Core Module that serves MCP to MCP clients, holds the MCP allowlist, discovers MCP calls on services at boot, and ships the builtin list-organizations MCP call. Apps omit it from `createBackendApp` to disable MCP. Better Auth MCP OAuth stays on Auth.
-_Avoid_: wrapping tRPC as the catalog; Optional `@m5kdev/trpc-mcp`; Kernel-owned MCP HTTP like tRPC; Plugin
+The Core Module that serves MCP to MCP clients, holds the MCP allowlist, and ships the builtin list-organizations MCP call. Apps omit it from `createBackendApp` to disable MCP (Kernel then does not merge module MCP catalogs). Better Auth MCP OAuth stays on Auth.
+_Avoid_: wrapping tRPC as the catalog; Optional `@m5kdev/trpc-mcp`; Kernel-owned MCP HTTP like tRPC; Plugin; scraping Service properties for the catalog

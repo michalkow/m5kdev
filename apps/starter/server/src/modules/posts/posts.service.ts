@@ -1,15 +1,21 @@
+import type { AuthenticatedActor } from "@m5kdev/backend/base/base.actor";
+import type { ServiceProcedureContext } from "@m5kdev/backend/base/base.procedure";
 import { BasePermissionService } from "@m5kdev/backend/modules/base/base.service";
 import { serializeSpanValue, withSpan } from "@m5kdev/backend/utils/telemetry";
-import type { Context } from "@m5kdev/backend/utils/trpc";
 import { err, ok } from "neverthrow";
 import { postSchemas } from "./posts.dto";
 import type { PostsRepository } from "./posts.repository";
 import { createExcerpt, slugify } from "./posts.utils";
 
+export interface PostsProcedureContext extends ServiceProcedureContext {
+  actor: AuthenticatedActor;
+  user: { id: string };
+}
+
 export class PostsService extends BasePermissionService<
   { posts: PostsRepository },
   Record<string, never>,
-  Context
+  PostsProcedureContext
 > {
   readonly list = this.procedure("list")
     .input(postSchemas.input.list)
@@ -47,9 +53,9 @@ export class PostsService extends BasePermissionService<
       }
 
       return this.repository.posts.create({
-        authorUserId: ctx.user.id,
+        authorUserId: ctx.actor.userId,
         memberId: ctx.actor.memberId ?? null,
-        organizationId: ctx.session.activeOrganizationId ?? null,
+        organizationId: ctx.actor.organizationId,
         teamId: null,
         title: input.title.trim(),
         slug: uniqueSlug.value,

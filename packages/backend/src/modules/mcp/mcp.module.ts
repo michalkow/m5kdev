@@ -3,16 +3,22 @@ import type { AuthModule } from "../auth/auth.module";
 import {
   BaseModule,
   type ModuleExpressContext,
+  type ModuleMcpContext,
   type ModuleRepositoriesContext,
   type ModuleServicesContext,
   type ModuleTRPCContext,
 } from "../base/base.module";
 import type * as mcpTables from "./mcp.db";
+import { defineUserMcpCall } from "./mcp.define";
 import { mountMcpHttp } from "./mcp.http";
 import { McpRepository } from "./mcp.repository";
 import { McpService } from "./mcp.service";
 import { createMcpTRPC } from "./mcp.trpc";
-import { mcpResourceUrl } from "./mcp.types";
+import {
+  LIST_ORGANIZATIONS_DESCRIPTION,
+  LIST_ORGANIZATIONS_MCP_CALL,
+  mcpResourceUrl,
+} from "./mcp.types";
 
 type McpModuleDeps = { auth: AuthModule };
 type McpModuleTables = typeof mcpTables;
@@ -61,6 +67,19 @@ export class McpModule extends BaseModule<
 
   override trpc({ trpc, services }: ModuleTRPCContext<McpModuleDeps, McpModuleServices>) {
     return createBackendRouterMap("mcp", createMcpTRPC(trpc, services.mcp));
+  }
+
+  override mcpUser({ services }: ModuleMcpContext<McpModuleDeps, McpModuleServices>) {
+    return {
+      [LIST_ORGANIZATIONS_MCP_CALL]: defineUserMcpCall()
+        .description(LIST_ORGANIZATIONS_DESCRIPTION)
+        .handle((_input, actor, request) =>
+          services.mcp.listOrganizations({
+            userId: actor.userId,
+            oauthClientId: request.oauthClientId,
+          })
+        ),
+    };
   }
 
   override express({

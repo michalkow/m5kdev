@@ -5,16 +5,17 @@ sidebar_position: 15
 # McpModule
 
 McpModule is the Core Module that serves **MCP clients** (Cursor, Claude Desktop,
-and the like) over HTTP. It discovers **MCP calls** declared on services, holds
-the per-client **MCP allowlist**, and ships the builtin `list-organizations`
-call. Apps **omit** `new McpModule()` from `createBackendApp` to disable MCP.
+and the like) over HTTP. It holds the per-client **MCP allowlist**, serves
+`POST /mcp`, and ships the builtin `list-organizations` call. Apps **omit**
+`new McpModule()` from `createBackendApp` to disable MCP; the Kernel then does
+not merge module MCP catalogs.
 
 `create-m5kdev` has an `mcp` template flag that defaults **off**. Starter
-registers McpModule so the kernel dogfoods the HTTP adapter; it does not declare
-example app MCP calls on Posts, File, Billing, or other Starter services.
+registers McpModule and contributes Posts `list-posts` / `create-post` via
+`posts.mcp.ts` (stripped when the flag is off). File, Billing, and other Core
+Modules do not ship MCP calls.
 
-1.0 catalogs only builtin `list-organizations` plus whatever the app declares.
-No other Core Module ships MCP calls.
+1.0 catalogs builtin `list-organizations` plus whatever Backend Modules declare.
 
 ## Package map
 
@@ -72,61 +73,68 @@ pass as `organizationId` for that User. It is per `(oauthClientId, userId)`, not
 one list for the User. Empty selection is valid. Changing the list requires
 **re-consent** for that client; two OAuth clients stay isolated.
 
-Allowlist is not Membership and not a Grant. Invoke still requires a live
-Membership (User attached, not soft-deleted). Leaving an Organization fails
-Membership even if the id remains on the allowlist.
+Allowlist is not Membership and not a Grant. Organization-scoped MCP calls still
+require a live Membership (User attached, not soft-deleted). Leaving an
+Organization fails Membership even if the id remains on the allowlist.
+User-scoped MCP calls do not consult the allowlist, except `list-organizations`
+which returns it.
 
 ## Builtin list-organizations
 
-`list-organizations` is UserActor, owned by McpModule, and reserved as an MCP
-call name. It does not take `organizationId`. MCP clients should call it before
-org-scoped MCP calls to learn which Organization ids they may use.
+`list-organizations` is User-scoped, owned by McpModule’s `mcpUser()` hook, and
+reserved as an MCP call name. It does not take `organizationId`. MCP clients
+should call it before organization-scoped MCP calls to learn which Organization
+ids they may use.
 
 ## Declaring MCP calls
 
-Declare MCP calls as service properties through `McpService` (`description` /
-`input` / `handle`). The Kernel discovers them at boot the same way it discovers
-Workflow job definitions. The property key is the protocol tool name.
+Contribute MCP calls from the Backend Module, the way tRPC fragments are
+contributed: `<module>.mcp.ts` plus `mcp()` (OrganizationActor) and optional
+`mcpUser()` (UserActor). The Kernel merges those maps at boot **only if**
+McpModule is registered. Map key is the tool name (flat, not `posts.list`).
+Duplicate names fail at boot. Do not scrape Service properties. Do not name a
+call `list-organizations`.
+
+Use a free `defineMcpCall()` builder (`description` / `input` / `handle`).
+`McpService` stores and invokes the merged catalog; it is not injected onto the
+declaring service.
 
 ```ts
-import type { OrganizationActor } from "@m5kdev/backend/base/base.actor";
-import { BaseService } from "@m5kdev/backend/base/base.service";
-import type { McpService } from "@m5kdev/backend/modules/mcp/mcp.service";
-import { z } from "zod";
-
-export class OrdersService extends BaseService<
-  Record<string, never>,
-  { mcp: McpService }
-> {
-  readonly listOpen = this.service.mcp
-    .description("List open orders in the selected Organization")
-    .input(z.object({ status: z.string().optional() }))
-    .handle(async (input, actor: OrganizationActor) => {
-      return this.listOpenOrders({ status: input.status, actor });
-    });
+export function createPostsMcp(posts: PostsService) {
+  return {
+    "list-posts": defineMcpCall()
+      .description("List posts in the selected Organization")
+      .input(postSchemas.input.list)
+      .handle(async (input, actor) =>
+        posts.list(input, { actor, user: { id: actor.userId } })
+      ),
+    "create-post": defineMcpCall()
+      .description("Create a draft post in the selected Organization")
+      .input(postSchemas.input.create)
+      .handle(async (input, actor) =>
+        posts.create(input, { actor, user: { id: actor.userId } })
+      ),
+  };
 }
 ```
 
-Inject `McpService` from `McpModule` in the app module `services()` hook, the
-same way Demo Workflow injects `WorkflowService`. Do not name a call
-`list-organizations`.
+`mcpUser()` handles receive `UserActor`. Any module may contribute User-scoped
+calls the same way.
 
 ## organizationId stripping
 
-App-declared MCP calls require `organizationId` from the MCP client. McpModule
-checks the MCP allowlist, resolves a live Membership, builds
+Organization-scoped MCP calls require `organizationId` from the MCP client.
+McpModule checks the MCP allowlist, resolves a live Membership, builds
 `OrganizationActor`, and **strips** `organizationId` from handle input. The
-handle sees only the declared Zod input plus `actor`.
+handle sees only the declared Zod input plus `actor`. Attribute org-scoped
+writes from `ctx.actor` (not `session.activeOrganizationId`).
 
-## Grants honor system
+## Grants
 
-McpModule does **not** enforce Grants. Membership plus MCP allowlist are the
-Actor gate, not `read` / `write` / `delete` / `publish`. Handle authors may call
-unguarded service or repository methods. Review is the control — the same rhyme
-as Workflow job handlers.
-
-Use a Procedure when the work must run a Grant check. An MCP call is a different
-noun.
+Grants are optional. Membership plus MCP allowlist only build OrganizationActor.
+A handle may delegate to a Procedure (Grant check runs) or call unguarded
+service methods. Starter Posts `list-posts` / `create-post` delegate to the
+existing Procedures. An MCP call is still not a Procedure.
 
 ## HTTP
 

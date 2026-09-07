@@ -1,5 +1,4 @@
 import { err, ok } from "neverthrow";
-import { type ZodType, z } from "zod";
 import { Base } from "../../base/base.abstract";
 import type { OrganizationActor, UserActor } from "../../base/base.actor";
 import type { ServerResultAsync } from "../../base/base.dto";
@@ -7,24 +6,15 @@ import type { AuthOrganizationRepository, AuthUserRepository } from "../auth/aut
 import type { McpRepository } from "./mcp.repository";
 import {
   LIST_ORGANIZATIONS_MCP_CALL,
-  type McpCallDefinition,
   type McpCatalogEntry,
   type McpConsentOrganization,
   type McpInvokeInput,
   type McpListedOrganization,
+  type McpOrganizationCallDefinition,
+  type McpRegisterCallsOptions,
+  type McpRegisteredCall,
+  type McpUserCallDefinition,
 } from "./mcp.types";
-
-const LIST_ORGANIZATIONS_DESCRIPTION =
-  "List Organizations this MCP client may use. Call this before org-scoped MCP calls to learn organizationId values.";
-
-function isMcpCallDefinition(value: unknown): value is McpCallDefinition {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "mcpCall" in value &&
-    (value as { mcpCall?: unknown }).mcpCall === true
-  );
-}
 
 function isNeverthrowResult(
   value: unknown
@@ -37,8 +27,25 @@ function isNeverthrowResult(
   );
 }
 
+function isUnfinishedCallBuilder(value: object): boolean {
+  return "input" in value && typeof (value as { input?: unknown }).input === "function";
+}
+
+function reservedNameError(name: string): Error {
+  return new Error(`MCP call name "${name}" is reserved for the builtin list-organizations call`);
+}
+
+function duplicateNameError(name: string): Error {
+  return new Error(`already registered for MCP call "${name}"`);
+}
+
+function missingHandleError(name: string): Error {
+  return new Error(`MCP call "${name}" (property "${name}") has no .handle() attached`);
+}
+
 export class McpService extends Base {
-  private readonly calls = new Map<string, McpCallDefinition>();
+  private readonly organizationCalls = new Map<string, McpOrganizationCallDefinition>();
+  private readonly userCalls = new Map<string, McpUserCallDefinition>();
 
   constructor(
     private readonly mcpRepository: McpRepository,
@@ -48,61 +55,44 @@ export class McpService extends Base {
     super("service");
   }
 
-  description(description: string): McpCallDefinition {
-    const definition = {
-      mcpCall: true as const,
-      description,
-      inputSchema: z.object({}) as ZodType,
-      _handler: undefined as McpCallDefinition["_handler"],
-      input<TInput>(schema: ZodType<TInput>): McpCallDefinition<TInput> {
-        const next = definition as unknown as McpCallDefinition<TInput>;
-        next.inputSchema = schema;
-        return next;
-      },
-      handle(handler: NonNullable<McpCallDefinition["_handler"]>): McpCallDefinition {
-        definition._handler = handler;
-        return definition;
-      },
-    };
-    return definition;
+  registerOrganizationCalls(calls: Record<string, unknown>): void {
+    for (const [name, value] of Object.entries(calls)) {
+      if (name === LIST_ORGANIZATIONS_MCP_CALL) {
+        throw reservedNameError(name);
+      }
+      this.assertAvailableName(name);
+      this.organizationCalls.set(name, this.readOrganizationCall(name, value));
+    }
   }
 
-  registerService(service: Record<string, unknown>): void {
-    for (const [key, value] of Object.entries(service)) {
-      if (!isMcpCallDefinition(value)) continue;
-      if (key === LIST_ORGANIZATIONS_MCP_CALL) {
-        throw new Error(
-          `MCP call name "${key}" is reserved for the builtin list-organizations call`
-        );
+  registerUserCalls(calls: Record<string, unknown>, options: McpRegisterCallsOptions = {}): void {
+    for (const [name, value] of Object.entries(calls)) {
+      if (name === LIST_ORGANIZATIONS_MCP_CALL && options.moduleId && options.moduleId !== "mcp") {
+        throw reservedNameError(name);
       }
-      if (!value._handler) {
-        throw new Error(`MCP call "${key}" (property "${key}") has no .handle() attached`);
-      }
-      if (this.calls.has(key)) {
-        throw new Error(`already registered for MCP call "${key}"`);
-      }
-      this.calls.set(key, value);
+      this.assertAvailableName(name);
+      this.userCalls.set(name, this.readUserCall(name, value));
     }
   }
 
   listCatalog(): McpCatalogEntry[] {
-    const appCalls = [...this.calls.entries()].map(([name, definition]) => ({
+    const userEntries = [...this.userCalls.entries()].map(([name, definition]) => ({
+      name,
+      description: definition.description,
+      requiresOrganizationId: false,
+    }));
+    const reserved = userEntries.filter((entry) => entry.name === LIST_ORGANIZATIONS_MCP_CALL);
+    const otherUser = userEntries.filter((entry) => entry.name !== LIST_ORGANIZATIONS_MCP_CALL);
+    const organizationEntries = [...this.organizationCalls.entries()].map(([name, definition]) => ({
       name,
       description: definition.description,
       requiresOrganizationId: true,
     }));
-    return [
-      {
-        name: LIST_ORGANIZATIONS_MCP_CALL,
-        description: LIST_ORGANIZATIONS_DESCRIPTION,
-        requiresOrganizationId: false,
-      },
-      ...appCalls,
-    ];
+    return [...reserved, ...otherUser, ...organizationEntries];
   }
 
-  getCall(name: string): McpCallDefinition | undefined {
-    return this.calls.get(name);
+  getCall(name: string): McpRegisteredCall | undefined {
+    return this.userCalls.get(name) ?? this.organizationCalls.get(name);
   }
 
   replaceAllowlist(input: {
@@ -189,18 +179,88 @@ export class McpService extends Base {
   }
 
   async invoke(input: McpInvokeInput): ServerResultAsync<unknown> {
-    if (input.name === LIST_ORGANIZATIONS_MCP_CALL) {
-      return this.listOrganizations({
-        userId: input.userId,
-        oauthClientId: input.oauthClientId,
-      });
+    const userDefinition = this.userCalls.get(input.name);
+    if (userDefinition) {
+      return this.invokeUserCall(userDefinition, input);
+    }
+    const organizationDefinition = this.organizationCalls.get(input.name);
+    if (organizationDefinition) {
+      return this.invokeOrganizationCall(organizationDefinition, input);
+    }
+    return this.error("NOT_FOUND", `Unknown MCP call "${input.name}"`);
+  }
+
+  private assertAvailableName(name: string): void {
+    if (this.organizationCalls.has(name) || this.userCalls.has(name)) {
+      throw duplicateNameError(name);
+    }
+  }
+
+  private readOrganizationCall(name: string, value: unknown): McpOrganizationCallDefinition {
+    if (typeof value !== "object" || value === null) {
+      throw new Error(`MCP call "${name}" is not a defineMcpCall() definition`);
+    }
+    if (isUnfinishedCallBuilder(value)) {
+      throw missingHandleError(name);
+    }
+    if (
+      (value as { scope?: unknown }).scope !== "organization" ||
+      typeof (value as { handle?: unknown }).handle !== "function" ||
+      typeof (value as { description?: unknown }).description !== "string"
+    ) {
+      throw new Error(`MCP call "${name}" is not a defineMcpCall() definition`);
+    }
+    return value as McpOrganizationCallDefinition;
+  }
+
+  private readUserCall(name: string, value: unknown): McpUserCallDefinition {
+    if (typeof value !== "object" || value === null) {
+      throw new Error(`MCP call "${name}" is not a defineUserMcpCall() definition`);
+    }
+    if (isUnfinishedCallBuilder(value)) {
+      throw missingHandleError(name);
+    }
+    if (
+      (value as { scope?: unknown }).scope !== "user" ||
+      typeof (value as { handle?: unknown }).handle !== "function" ||
+      typeof (value as { description?: unknown }).description !== "string"
+    ) {
+      throw new Error(`MCP call "${name}" is not a defineUserMcpCall() definition`);
+    }
+    return value as McpUserCallDefinition;
+  }
+
+  private async invokeUserCall(
+    definition: McpUserCallDefinition,
+    input: McpInvokeInput
+  ): ServerResultAsync<unknown> {
+    const userResult = await this.loadUser(input.userId);
+    if (userResult.isErr()) return err(userResult.error);
+
+    const parsed = definition.inputSchema.safeParse(input.arguments);
+    if (!parsed.success) {
+      return this.error("BAD_REQUEST", parsed.error.message);
     }
 
-    const definition = this.calls.get(input.name);
-    if (!definition?._handler) {
-      return this.error("NOT_FOUND", `Unknown MCP call "${input.name}"`);
-    }
+    const actor: UserActor = {
+      userId: input.userId,
+      userRole: userResult.value.userRole,
+      organizationId: null,
+      organizationRole: null,
+      memberId: null,
+      teamId: null,
+      teamRole: null,
+    };
 
+    return this.runHandle(() =>
+      definition.handle(parsed.data, actor, { oauthClientId: input.oauthClientId })
+    );
+  }
+
+  private async invokeOrganizationCall(
+    definition: McpOrganizationCallDefinition,
+    input: McpInvokeInput
+  ): ServerResultAsync<unknown> {
     const organizationId = input.arguments.organizationId;
     if (typeof organizationId !== "string" || organizationId.length === 0) {
       return this.error("BAD_REQUEST", "organizationId is required");
@@ -254,8 +314,12 @@ export class McpService extends Base {
       teamRole: null,
     };
 
+    return this.runHandle(() => definition.handle(parsed.data, actor));
+  }
+
+  private async runHandle(run: () => unknown): ServerResultAsync<unknown> {
     try {
-      const output = await definition._handler(parsed.data, actor);
+      const output = await run();
       if (isNeverthrowResult(output)) {
         if (output.isErr()) return err(output.error as never);
         return ok(output.value);

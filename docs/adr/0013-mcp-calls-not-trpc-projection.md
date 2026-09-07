@@ -1,6 +1,8 @@
-# MCP calls are a Core Module registry, not a tRPC projection
+# MCP calls are a Core Module catalog, not a tRPC projection
 
-m5kdev apps expose a User’s MCP client to selected Service work as **MCP calls**, declared on services (`mcp.description().input().handle()`) and discovered at boot the way Workflow jobs are — not by wrapping tRPC procedures or adopting community `trpc-mcp` / `trpc-to-mcp`. McpModule is Core (Starter registers it; `create-m5kdev` flag default off). 1.0 ships only the builtin list-organizations MCP call plus whatever the app declares; other Core modules do not ship MCP calls.
+Discovery-on-services is superseded by [ADR-0016](0016-mcp-calls-are-module-hooks.md). This ADR still stands: MCP calls are not selected tRPC procedures, not community `trpc-mcp` / `trpc-to-mcp`, and MCP HTTP is not Kernel-owned like tRPC.
+
+m5kdev apps expose a User’s MCP client to selected work as **MCP calls**. McpModule is Core (Starter registers it; `create-m5kdev` flag default off). 1.0 ships the builtin list-organizations MCP call plus whatever the app declares; other Core modules do not ship MCP calls.
 
 ## Considered Options
 

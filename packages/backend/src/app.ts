@@ -76,6 +76,8 @@ export type BackendAppModule = {
   services?(ctx: any): any;
   auth?(ctx: any): any;
   trpc?(ctx: any): any;
+  mcp?(ctx: any): any;
+  mcpUser?(ctx: any): any;
   express?(ctx: any): void;
   workflows?(ctx: any): void;
   startup?(ctx: any): Promise<void> | void;
@@ -233,6 +235,10 @@ export type BackendModuleTRPCContext = BackendModuleServicesContext & {
   auth?: BetterAuth;
 };
 
+export type BackendModuleMcpContext = BackendModuleServicesContext & {
+  services: AnyRecord;
+};
+
 export type BackendModuleExpressContext = BackendModuleServicesContext & {
   services: AnyRecord;
   auth?: BetterAuth;
@@ -276,6 +282,8 @@ export type BackendModuleDefinition<
   services?: (ctx: BackendModuleServicesContext) => Services | void;
   auth?: (ctx: BackendModuleAuthContext) => BetterAuth | void;
   trpc?: (ctx: BackendModuleTRPCContext) => TRouters | void;
+  mcp?: (ctx: BackendModuleMcpContext) => Record<string, unknown> | void;
+  mcpUser?: (ctx: BackendModuleMcpContext) => Record<string, unknown> | void;
   express?: (ctx: BackendModuleExpressContext) => void;
   workflows?: (ctx: BackendModuleWorkflowContext) => void;
   startup?: (ctx: BackendModuleLifecycleContext) => Promise<void> | void;
@@ -803,11 +811,23 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   }
 
   if (mcpService) {
-    for (const state of moduleStates.values()) {
-      for (const service of Object.values(state.services)) {
-        if (!service || typeof service !== "object") continue;
-        mcpService.registerService(service as Record<string, unknown>);
-      }
+    for (const module of orderedModules) {
+      const state = moduleStates.get(module.id)!;
+      const mcpCtx = {
+        env,
+        logger,
+        appConfig,
+        emailConfig,
+        i18n: appI18n,
+        deps: createDependencyMap(module, moduleStates),
+        repositories: state.repositories,
+        services: state.services,
+        modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
+        db,
+        infra,
+      };
+      mcpService.registerUserCalls(module.mcpUser?.(mcpCtx) ?? {}, { moduleId: module.id });
+      mcpService.registerOrganizationCalls(module.mcp?.(mcpCtx) ?? {});
     }
   }
 

@@ -1,6 +1,6 @@
 # MCP OrganizationActor comes from organizationId plus per-client allowlist
 
-An MCP client authenticates as a User via Better Auth MCP OAuth (1.7+ `@better-auth/mcp`, jwt, resource-bound tokens — not API keys and not the webapp cookie session). Consent records an **MCP allowlist** per OAuth client and User; changing it requires re-consent. App-declared MCP calls require organizationId from the client; McpModule checks the allowlist, resolves a live Membership, builds OrganizationActor, and strips organizationId from handle input. Builtin list-organizations is UserActor and does not take organizationId. The OAuth token is not bound to one Organization.
+An MCP client authenticates as a User via Better Auth MCP OAuth (1.7+ `@better-auth/mcp`, jwt, resource-bound tokens — not API keys and not the webapp cookie session). Consent records an **MCP allowlist** per OAuth client and User; changing it requires re-consent. App-declared organization-scoped MCP calls require organizationId from the client; McpModule checks the allowlist, resolves a live Membership, builds OrganizationActor, and strips organizationId from handle input. User-scoped MCP calls (including builtin list-organizations) do not take organizationId; list-organizations reads the allowlist as data, other User-scoped calls do not consult it. The OAuth token is not bound to one Organization.
 
 ## Considered Options
 

@@ -20,6 +20,9 @@ apps/server/src/modules/<module>/
 ├── <module>.repository.ts
 ├── <module>.service.ts
 ├── <module>.trpc.ts
+// m5k:mcp:start
+├── <module>.mcp.ts
+// m5k:mcp:end
 └── <module>.module.ts
 ```
 
@@ -28,6 +31,9 @@ apps/server/src/modules/<module>/
 - Repositories own persistence and query construction.
 - Services own business rules, orchestration, and context-aware defaults.
 - tRPC files own transport only and must delegate to services.
+// m5k:mcp:start
+- MCP call maps live in `<module>.mcp.ts` and are contributed from `mcp()` / `mcpUser()`. Delegate to Procedures or unguarded service methods; do not scrape Service properties.
+// m5k:mcp:end
 - Register Core Modules and app modules in `apps/server/src/app.ts` via `createBackendApp(config, [modules])`. Do not use `backendApp.use`. Optional Backend Modules (`@m5kdev/module-*`) are not scaffolded; add them only when the product needs Clay, Docx, Pdf, Social, or Video.
 // m5k:ai:start
 - `AIModule` is registered in `app.ts` with an app-owned Mastra Agent (`assistant`). Conversation HTTP lives on `/ai`. Set `OPENROUTER_API_KEY` for live replies. Do not add a Starter service wrapper around `AIService` chat.
@@ -51,7 +57,7 @@ apps/server/src/modules/<module>/
 - After changing Drizzle tables, run `pnpm --filter ./apps/server drizzle:generate` then `drizzle:migrate` — do not hand-edit SQL migrations in this repo.
 
 // m5k:mcp:start
-- `McpModule` is registered in `app.ts`. MCP clients authenticate with Better Auth MCP OAuth (not API keys). Compose `auth.oauth.db` plus `mcpAllowlistEntries`. Omit the module to disable MCP.
+- `McpModule` is registered in `app.ts`. MCP clients authenticate with Better Auth MCP OAuth (not API keys). Compose `auth.oauth.db` plus `mcpAllowlistEntries`. Contribute Organization-scoped calls from `posts.mcp.ts`. Omit the module to disable MCP.
 // m5k:mcp:end
 
 // m5k:notifications:start

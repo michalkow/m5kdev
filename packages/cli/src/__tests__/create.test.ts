@@ -336,6 +336,17 @@ describe("scaffoldProject", () => {
     expect(offSchema).not.toContain("mcpAllowlistEntries");
     expect(offSchema).not.toContain("auth.oauth.db");
 
+    await expect(
+      fs.stat(path.join(off.targetDirectory, "apps/server/src/modules/posts/posts.mcp.ts"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    const offPostsModule = await fs.readFile(
+      path.join(off.targetDirectory, "apps/server/src/modules/posts/posts.module.ts"),
+      "utf8"
+    );
+    expect(offPostsModule).not.toContain("createPostsMcp");
+    expect(offPostsModule).not.toContain("override mcp(");
+    expect(offPostsModule).not.toContain("m5k:");
+
     const on = await scaffoldProject({
       targetDirectory: "mcp-on-desk",
       appName: "Mcp On Desk",
@@ -370,6 +381,24 @@ describe("scaffoldProject", () => {
     );
     expect(postsSource).not.toContain("mcpCall");
     expect(postsSource).not.toMatch(/\.mcp\./);
+    expect(postsSource).toContain("ctx.actor.organizationId");
+    expect(postsSource).not.toContain("session.activeOrganizationId");
+
+    const onPostsModule = await fs.readFile(
+      path.join(on.targetDirectory, "apps/server/src/modules/posts/posts.module.ts"),
+      "utf8"
+    );
+    expect(onPostsModule).toContain("createPostsMcp");
+    expect(onPostsModule).toContain("override mcp(");
+    expect(onPostsModule).not.toContain("m5k:");
+
+    const onPostsMcp = await fs.readFile(
+      path.join(on.targetDirectory, "apps/server/src/modules/posts/posts.mcp.ts"),
+      "utf8"
+    );
+    expect(onPostsMcp).toContain('"list-posts"');
+    expect(onPostsMcp).toContain('"create-post"');
+    expect(onPostsMcp).toContain("defineMcpCall");
 
     const onAgents = await fs.readFile(
       path.join(on.targetDirectory, "apps/server/AGENTS.md"),

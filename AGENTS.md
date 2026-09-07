@@ -33,6 +33,7 @@ For server modules:
   - `<module>.repository.ts`
   - `<module>.service.ts`
   - `<module>.trpc.ts` and/or `<module>.router.ts`
+  - `<module>.mcp.ts` (if the module contributes MCP calls)
   - `<module>.grants.ts` (if permissioned)
   - `<module>.jobs.ts` (if queued workflows)
   - `<module>/tests/*.test.ts` (module tests)
@@ -41,7 +42,7 @@ For server modules:
 
 - Repository: persistence/query logic only.
 - Service: business logic + orchestration only.
-- Transport (`.trpc.ts`, `.router.ts`): input/auth/response wiring only; delegate to service.
+- Transport (`.trpc.ts`, `.router.ts`, `.mcp.ts`): input/auth/response wiring only; delegate to service.
 - Jobs: worker glue that calls services.
 
 Do not import services into repositories.
@@ -97,7 +98,7 @@ Do not import services into repositories.
 
 ## Do Not
 
-- Do not put business logic in `.trpc.ts` or `.router.ts`.
+- Do not put business logic in `.trpc.ts`, `.router.ts`, or `.mcp.ts`.
 - Do not perform cross-layer shortcuts (e.g., repository calling service).
 - Do not use action aliases not present in grants (example: checking `"update"` when grants define only `"write"`).
 - Do not hide module wiring in import-time side effects.

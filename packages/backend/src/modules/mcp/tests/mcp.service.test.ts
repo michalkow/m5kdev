@@ -4,9 +4,10 @@ import { z } from "zod";
 import * as authTables from "../../auth/auth.db";
 import { AuthOrganizationRepository, AuthUserRepository } from "../../auth/auth.repository";
 import { mcpAllowlistEntries } from "../mcp.db";
+import { defineMcpCall, defineUserMcpCall } from "../mcp.define";
 import { McpRepository } from "../mcp.repository";
 import { McpService } from "../mcp.service";
-import { LIST_ORGANIZATIONS_MCP_CALL } from "../mcp.types";
+import { LIST_ORGANIZATIONS_DESCRIPTION, LIST_ORGANIZATIONS_MCP_CALL } from "../mcp.types";
 
 const USER_ID = "user-1";
 const USER_ROLE = "user";
@@ -173,6 +174,40 @@ async function seed(client: Client): Promise<void> {
   ]);
 }
 
+function announceCall(
+  handle: (input: { title: string }, actor: unknown) => unknown = async (input) => input.title
+) {
+  return defineMcpCall()
+    .description("Announce")
+    .input(z.object({ title: z.string() }))
+    .handle(handle);
+}
+
+function registerAnnounce(
+  mcp: McpService,
+  handle?: (input: { title: string }, actor: unknown) => unknown
+): void {
+  mcp.registerOrganizationCalls({
+    announce: announceCall(handle),
+  });
+}
+
+function registerListOrganizations(mcp: McpService): void {
+  mcp.registerUserCalls(
+    {
+      [LIST_ORGANIZATIONS_MCP_CALL]: defineUserMcpCall()
+        .description(LIST_ORGANIZATIONS_DESCRIPTION)
+        .handle((_input, actor, request) =>
+          mcp.listOrganizations({
+            userId: actor.userId,
+            oauthClientId: request.oauthClientId,
+          })
+        ),
+    },
+    { moduleId: "mcp" }
+  );
+}
+
 describe("McpService", () => {
   let client: Client;
   let mcp: McpService;
@@ -188,75 +223,80 @@ describe("McpService", () => {
     await client.close?.();
   });
 
-  it("discovers MCP calls from two services and lists builtin list-organizations", () => {
-    const posts = {
-      announce: mcp
-        .description("Announce")
-        .input(z.object({ title: z.string() }))
-        .handle(async (input: { title: string }) => input.title),
-    };
-    const tags = {
-      echo: mcp
+  it("lists organization MCP calls from registered maps without scraping leftover properties", () => {
+    mcp.registerOrganizationCalls({
+      announce: announceCall(),
+    });
+    mcp.registerOrganizationCalls({
+      echo: defineMcpCall()
         .description("Echo")
         .input(z.object({ text: z.string() }))
         .handle(async (input: { text: string }) => input.text),
-    };
-    mcp.registerService(posts);
-    mcp.registerService(tags);
-    expect(mcp.listCatalog().map((entry) => entry.name)).toEqual([
-      LIST_ORGANIZATIONS_MCP_CALL,
-      "announce",
-      "echo",
+    });
+    expect(mcp.listCatalog().map((entry) => entry.name)).toEqual(["announce", "echo"]);
+  });
+
+  it("lists list-organizations first when registered as a user-scoped call", () => {
+    registerAnnounce(mcp);
+    registerListOrganizations(mcp);
+    expect(mcp.listCatalog()).toEqual([
+      {
+        name: LIST_ORGANIZATIONS_MCP_CALL,
+        description: LIST_ORGANIZATIONS_DESCRIPTION,
+        requiresOrganizationId: false,
+      },
+      {
+        name: "announce",
+        description: "Announce",
+        requiresOrganizationId: true,
+      },
     ]);
   });
 
-  it("rejects duplicate MCP call names", () => {
-    const def = () =>
-      mcp
-        .description("Announce")
-        .input(z.object({ title: z.string() }))
-        .handle(async (input: { title: string }) => input.title);
-    mcp.registerService({ announce: def() });
-    expect(() => mcp.registerService({ announce: def() })).toThrow(
+  it("rejects duplicate MCP call names across organization and user maps", () => {
+    mcp.registerOrganizationCalls({ announce: announceCall() });
+    expect(() => mcp.registerOrganizationCalls({ announce: announceCall() })).toThrow(
       'already registered for MCP call "announce"'
     );
+    expect(() =>
+      mcp.registerUserCalls({
+        announce: defineUserMcpCall()
+          .description("Announce")
+          .handle(async () => "nope"),
+      })
+    ).toThrow('already registered for MCP call "announce"');
   });
 
   it("rejects an MCP call without handle", () => {
-    const incomplete = mcp.description("Broken").input(z.object({}));
-    expect(() => mcp.registerService({ broken: incomplete })).toThrow(/no \.handle\(\) attached/);
+    const incomplete = defineMcpCall().description("Broken").input(z.object({}));
+    expect(() => mcp.registerOrganizationCalls({ broken: incomplete })).toThrow(
+      /no \.handle\(\) attached/
+    );
   });
 
-  it("registers MCP calls next to Workflow job definitions on the same service", () => {
-    const mixed = {
-      demoPingJob: {
-        jobName: "demo.ping",
-        queueName: "fast",
-        _config: {},
-        _handler: async () => undefined,
-      },
-      announce: mcp
-        .description("Announce")
-        .input(z.object({ title: z.string() }))
-        .handle(async (input: { title: string }) => input.title),
-    };
-    mcp.registerService(mixed);
-    expect(mcp.listCatalog().map((entry) => entry.name)).toEqual([
-      LIST_ORGANIZATIONS_MCP_CALL,
-      "announce",
-    ]);
+  it("rejects list-organizations on the organization map and from a non-mcp module", () => {
+    expect(() =>
+      mcp.registerOrganizationCalls({
+        [LIST_ORGANIZATIONS_MCP_CALL]: announceCall(),
+      })
+    ).toThrow(/reserved/);
+    expect(() =>
+      mcp.registerUserCalls(
+        {
+          [LIST_ORGANIZATIONS_MCP_CALL]: defineUserMcpCall()
+            .description(LIST_ORGANIZATIONS_DESCRIPTION)
+            .handle(async () => []),
+        },
+        { moduleId: "posts" }
+      )
+    ).toThrow(/reserved/);
   });
 
   it("strips organizationId and passes OrganizationActor with that Membership", async () => {
     let seen: { input: unknown; actor: unknown } | undefined;
-    mcp.registerService({
-      announce: mcp
-        .description("Announce")
-        .input(z.object({ title: z.string() }))
-        .handle(async (input, actor) => {
-          seen = { input, actor };
-          return "ok";
-        }),
+    registerAnnounce(mcp, async (input, actor) => {
+      seen = { input, actor };
+      return "ok";
     });
     await mcp.replaceAllowlist({
       oauthClientId: CLIENT_CURSOR,
@@ -283,12 +323,7 @@ describe("McpService", () => {
   });
 
   it("fails when organizationId is missing", async () => {
-    mcp.registerService({
-      announce: mcp
-        .description("Announce")
-        .input(z.object({ title: z.string() }))
-        .handle(async (input: { title: string }) => input.title),
-    });
+    registerAnnounce(mcp);
     await mcp.replaceAllowlist({
       oauthClientId: CLIENT_CURSOR,
       userId: USER_ID,
@@ -307,12 +342,7 @@ describe("McpService", () => {
   });
 
   it("fails allowlist miss distinctly from Membership miss", async () => {
-    mcp.registerService({
-      announce: mcp
-        .description("Announce")
-        .input(z.object({ title: z.string() }))
-        .handle(async (input: { title: string }) => input.title),
-    });
+    registerAnnounce(mcp);
     await mcp.replaceAllowlist({
       oauthClientId: CLIENT_CURSOR,
       userId: USER_ID,
@@ -363,14 +393,9 @@ describe("McpService", () => {
 
   it("does not run the handle when input fails Zod", async () => {
     let ran = false;
-    mcp.registerService({
-      announce: mcp
-        .description("Announce")
-        .input(z.object({ title: z.string() }))
-        .handle(async () => {
-          ran = true;
-          return "ok";
-        }),
+    registerAnnounce(mcp, async () => {
+      ran = true;
+      return "ok";
     });
     await mcp.replaceAllowlist({
       oauthClientId: CLIENT_CURSOR,
@@ -391,6 +416,7 @@ describe("McpService", () => {
   });
 
   it("lists only allowlisted Organizations with live Membership for that OAuth client", async () => {
+    registerListOrganizations(mcp);
     await mcp.replaceAllowlist({
       oauthClientId: CLIENT_CURSOR,
       userId: USER_ID,
@@ -422,12 +448,7 @@ describe("McpService", () => {
       expect(claudeList.value).toEqual([{ id: ORG_B, name: "Beta", organizationRole: "member" }]);
     }
 
-    mcp.registerService({
-      announce: mcp
-        .description("Announce")
-        .input(z.object({ title: z.string() }))
-        .handle(async (input: { title: string }) => input.title),
-    });
+    registerAnnounce(mcp);
     const cursorOnClaudeOrg = await mcp.invoke({
       userId: USER_ID,
       oauthClientId: CLIENT_CURSOR,
@@ -442,12 +463,7 @@ describe("McpService", () => {
   });
 
   it("returns none and fails app MCP calls when the allowlist is empty", async () => {
-    mcp.registerService({
-      announce: mcp
-        .description("Announce")
-        .input(z.object({ title: z.string() }))
-        .handle(async (input: { title: string }) => input.title),
-    });
+    registerAnnounce(mcp);
     await mcp.replaceAllowlist({
       oauthClientId: CLIENT_CURSOR,
       userId: USER_ID,
@@ -474,12 +490,7 @@ describe("McpService", () => {
   });
 
   it("does not treat an invited or soft-deleted Membership as an OrganizationActor", async () => {
-    mcp.registerService({
-      announce: mcp
-        .description("Announce")
-        .input(z.object({ title: z.string() }))
-        .handle(async () => "ok"),
-    });
+    registerAnnounce(mcp, async () => "ok");
     await mcp.replaceAllowlist({
       oauthClientId: CLIENT_CURSOR,
       userId: USER_ID,
@@ -518,12 +529,7 @@ describe("McpService", () => {
   });
 
   it("replaces a consent allowlist with live Memberships only, including empty", async () => {
-    mcp.registerService({
-      announce: mcp
-        .description("Announce")
-        .input(z.object({ title: z.string() }))
-        .handle(async (input: { title: string }) => input.title),
-    });
+    registerAnnounce(mcp);
     await mcp.replaceConsentAllowlist({
       oauthClientId: CLIENT_CURSOR,
       userId: USER_ID,
@@ -574,5 +580,44 @@ describe("McpService", () => {
     if (claudeList.isOk()) {
       expect(claudeList.value).toEqual([{ id: ORG_B, name: "Beta", organizationRole: "member" }]);
     }
+  });
+
+  it("invokes user-scoped MCP calls without an allowlist check", async () => {
+    let seen: { actor: unknown; oauthClientId: string } | undefined;
+    mcp.registerUserCalls({
+      ping: defineUserMcpCall()
+        .description("Ping")
+        .handle(async (_input, actor, request) => {
+          seen = { actor, oauthClientId: request.oauthClientId };
+          return actor.userId;
+        }),
+    });
+    await mcp.replaceAllowlist({
+      oauthClientId: CLIENT_CURSOR,
+      userId: USER_ID,
+      organizationIds: [],
+    });
+    const result = await mcp.invoke({
+      userId: USER_ID,
+      oauthClientId: CLIENT_CURSOR,
+      name: "ping",
+      arguments: {},
+    });
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toBe(USER_ID);
+    }
+    expect(seen).toEqual({
+      actor: {
+        userId: USER_ID,
+        userRole: USER_ROLE,
+        organizationId: null,
+        organizationRole: null,
+        memberId: null,
+        teamId: null,
+        teamRole: null,
+      },
+      oauthClientId: CLIENT_CURSOR,
+    });
   });
 });
