@@ -125,8 +125,12 @@ export function createAuthContext(auth: BetterAuth) {
   return async function createContext({
     req,
   }: CreateExpressContextOptions): Promise<RequestContext> {
+    // Soft-delete / leave clears activeOrganization* on the DB session row.
+    // Cookie cache would keep serving the pre-removal org Actor for up to
+    // session.cookieCache.maxAge — disable it so org Procedures re-read DB.
     const data = await auth.api.getSession({
       headers: fromNodeHeaders(req.headers),
+      query: { disableCookieCache: true },
     });
 
     const user = (data?.user as User) || null;
