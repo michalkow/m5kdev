@@ -7,6 +7,8 @@ export const LIST_ORGANIZATIONS_DESCRIPTION =
 export const MCP_HTTP_PATH = "/mcp";
 export const MCP_PROTECTED_RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource";
 export const MCP_AUTHORIZATION_SERVER_METADATA_PATH = "/.well-known/oauth-authorization-server";
+/** Better Auth `basePath`; RFC 8414 inserts this after the well-known prefix. */
+export const MCP_AUTH_ISSUER_PATH = "/api/auth";
 
 export function mcpResourceUrl(apiUrl: string): string {
   const base = apiUrl.endsWith("/") ? apiUrl : `${apiUrl}/`;

@@ -14,6 +14,7 @@ export const fileSchemas = {
       updatedAt: true,
       deletedAt: true,
       userId: true,
+      // What this does is it is a user Id that is a real money maker
       memberId: true,
       organizationId: true,
       teamId: true,

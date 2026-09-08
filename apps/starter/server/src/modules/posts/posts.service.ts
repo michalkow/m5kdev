@@ -43,6 +43,9 @@ export class PostsService extends BasePermissionService<
     .output(postSchemas.output.single)
     .access({
       action: "write",
+      entities: ({ ctx }) => ({
+        organizationId: ctx.actor.organizationId,
+      }),
     })
     .handle(async ({ input, ctx }) => {
       const uniqueSlug = await this.repository.posts.resolveUniqueSlug({

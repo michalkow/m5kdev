@@ -3,10 +3,7 @@ import type { McpOrganizationCallDefinition } from "@m5kdev/backend/modules/mcp/
 import { postSchemas } from "./posts.dto";
 import type { PostsService } from "./posts.service";
 
-export function createPostsMcp(posts: PostsService): {
-  "list-posts": McpOrganizationCallDefinition;
-  "create-post": McpOrganizationCallDefinition;
-} {
+export function createPostsMcp(posts: PostsService): Record<string, McpOrganizationCallDefinition> {
   return {
     "list-posts": defineMcpCall()
       .description("List posts in the selected Organization")

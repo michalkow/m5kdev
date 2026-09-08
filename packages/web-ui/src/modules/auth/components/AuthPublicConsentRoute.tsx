@@ -47,9 +47,12 @@ export function AuthPublicConsentRoute() {
   const [submitting, setSubmitting] = useState<"allow" | "deny" | null>(null);
 
   const finishOAuth = async (accept: boolean): Promise<void> => {
+    const oauthQuery = window.location.search.startsWith("?")
+      ? window.location.search.slice(1)
+      : window.location.search;
     const result = await authClient.$fetch("/oauth2/consent", {
       method: "POST",
-      body: { accept },
+      body: { accept, oauth_query: oauthQuery },
     });
     if (result.error) {
       toast.danger(t("web-ui:auth.errors.server"), {
@@ -124,7 +127,7 @@ export function AuthPublicConsentRoute() {
               {organizations.map((organization) => {
                 const isSelected = selectedIds.includes(organization.id);
                 return (
-                  <li key={organization.id}>
+                  <li key={organization.id} data-testid={`mcp-consent-org-${organization.id}`}>
                     <Checkbox
                       isSelected={isSelected}
                       onChange={(isSelectedValue) => {
@@ -146,6 +149,7 @@ export function AuthPublicConsentRoute() {
           )}
           <div className="flex flex-col gap-2">
             <Button
+              data-testid="mcp-consent-allow"
               isDisabled={
                 organizationsQuery.isLoading ||
                 organizationsQuery.isError ||

@@ -769,6 +769,57 @@ describe("scaffoldProject", () => {
     expect(harnessOnlyConfig).not.toContain("m5k:");
   });
 
+  it("keeps the MCP Playwright spec only when MCP and the test harness are both on", async () => {
+    const withBoth = await scaffoldProject({
+      targetDirectory: "mcp-harness-desk",
+      appName: "MCP Harness Desk",
+      appDescription: "MCP plus test harness fixture.",
+      yes: true,
+      testHarness: true,
+      modules: ["mcp"],
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    await expect(
+      fs.stat(path.join(withBoth.targetDirectory, "apps/e2e/tests/mcp.spec.ts"))
+    ).resolves.toBeTruthy();
+    await expect(
+      fs.stat(path.join(withBoth.targetDirectory, "apps/e2e/tests/mcp-helpers.ts"))
+    ).resolves.toBeTruthy();
+    const withBothConfig = await fs.readFile(
+      path.join(withBoth.targetDirectory, "apps/e2e/playwright.config.ts"),
+      "utf8"
+    );
+    expect(withBothConfig).toContain("mcp.spec.ts");
+    expect(withBothConfig).not.toContain("m5k:");
+
+    const harnessOnly = await scaffoldProject({
+      targetDirectory: "harness-no-mcp-desk",
+      appName: "Harness No MCP Desk",
+      appDescription: "Test harness without MCP fixture.",
+      yes: true,
+      testHarness: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    await expect(
+      fs.stat(path.join(harnessOnly.targetDirectory, "apps/e2e/tests/mcp.spec.ts"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      fs.stat(path.join(harnessOnly.targetDirectory, "apps/e2e/tests/mcp-helpers.ts"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    const harnessOnlyConfig = await fs.readFile(
+      path.join(harnessOnly.targetDirectory, "apps/e2e/playwright.config.ts"),
+      "utf8"
+    );
+    expect(harnessOnlyConfig).not.toContain("mcp.spec.ts");
+    expect(harnessOnlyConfig).not.toContain("m5k:");
+  });
+
   it.each([
     ["expo", false, ["expo"]],
     ["both", false, ["expo", "webapp"]],

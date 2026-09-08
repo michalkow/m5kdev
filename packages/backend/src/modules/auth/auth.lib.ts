@@ -8,6 +8,7 @@ import {
   resolveAppLocale,
   toCanonicalLocale,
 } from "@m5kdev/commons/modules/auth/auth.locale";
+import { apiKey as createApiKeyPlugin } from "@better-auth/api-key";
 import { type BetterAuthOptions, type BetterAuthPlugin, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import {
@@ -16,7 +17,7 @@ import {
   getOAuthState,
   sensitiveSessionMiddleware,
 } from "better-auth/api";
-import { admin, apiKey, lastLoginMethod, magicLink, organization } from "better-auth/plugins";
+import { admin, lastLoginMethod, magicLink, organization } from "better-auth/plugins";
 import { and, desc, eq, gte, type InferSelectModel } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import type { TFunction } from "i18next";
@@ -157,6 +158,7 @@ function setPasswordEndpointPlugin(): BetterAuthPlugin {
             userId: session.user.id,
             providerId: "credential",
             accountId: session.user.id,
+            issuer: "local:credential",
             password: await ctx.context.password.hash(newPassword),
           });
 
@@ -589,7 +591,7 @@ export function createBetterAuth<
           },
         },
       }),
-      apiKey(),
+      createApiKeyPlugin(),
       ...createMcpOAuthPlugins(
         mcp
           ? {

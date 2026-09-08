@@ -43,6 +43,27 @@
       "when": 1788253467922,
       "tag": "0005_wonderful_the_professor",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788787832546,
+      "tag": "0006_lazy_blue_marvel",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788788533642,
+      "tag": "0007_abnormal_ultimo",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788789159968,
+      "tag": "0008_steady_nekra",
+      "breakpoints": true
     }
   ]
 }

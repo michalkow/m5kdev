@@ -33,6 +33,9 @@ export default defineConfig({
         // m5k:workflows:start
         "workflow.spec.ts",
         // m5k:workflows:end
+        // m5k:mcp:start
+        "mcp.spec.ts",
+        // m5k:mcp:end
       ],
       use: {
         ...devices["Desktop Chrome"],

@@ -58,6 +58,7 @@ function serverEnv(profile: E2EProfile, expo: boolean): Record<string, string> {
     REDIS_URL: `redis://127.0.0.1:6379/${expo ? PORTS[profile].expoRedisDb : PORTS[profile].redisDb}`,
     VITE_ENABLE_WAITLIST: profile === "waitlist" ? "true" : "false",
     AUTH_E2E_PROFILE: profile,
+    M5K_MCP_E2E_CIMD: "1",
     BETTER_AUTH_SECRET: "auth-e2e-local-secret-auth-e2e-local-secret",
     SYSTEM_NOTIFICATION_EMAIL: "ops@auth-e2e.local",
     NODE_ENV: "development",

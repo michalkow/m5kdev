@@ -17,6 +17,7 @@ import { McpModule } from "../mcp.module";
 import type { McpService } from "../mcp.service";
 import {
   LIST_ORGANIZATIONS_MCP_CALL,
+  MCP_AUTH_ISSUER_PATH,
   MCP_AUTHORIZATION_SERVER_METADATA_PATH,
   MCP_HTTP_PATH,
   MCP_PROTECTED_RESOURCE_METADATA_PATH,
@@ -218,7 +219,7 @@ describe("McpModule HTTP", () => {
       expect(protectedResource.status).toBe(200);
 
       const authorizationServer = await fetch(
-        `${baseUrl}${MCP_AUTHORIZATION_SERVER_METADATA_PATH}`
+        `${baseUrl}${MCP_AUTHORIZATION_SERVER_METADATA_PATH}${MCP_AUTH_ISSUER_PATH}`
       );
       expect(authorizationServer.status).toBe(200);
     });
@@ -428,5 +429,13 @@ describe("Starter MCP registration", () => {
     );
     expect(consentRouter).toMatch(/path="\/consent"/);
     expect(consentRouter).toMatch(/AuthPublicConsentRoute/);
+    const consentRoute = readFileSync(
+      join(
+        __dirname,
+        "../../../../../../packages/web-ui/src/modules/auth/components/AuthPublicConsentRoute.tsx"
+      ),
+      "utf8"
+    );
+    expect(consentRoute).toMatch(/oauth_query/);
   });
 });

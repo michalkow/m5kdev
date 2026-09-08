@@ -82,6 +82,7 @@ async function ensureUser(input: {
     await orm.insert(schema.accounts).values({
       id: uuidv4(),
       accountId: user.id,
+      issuer: "local:credential",
       providerId: "credential",
       userId: user.id,
       password: await hashPassword(password),

@@ -52,6 +52,7 @@ async function ensureDemoUser(orm: SeedOrm): Promise<typeof schema.users.$inferS
   await orm.insert(schema.accounts).values({
     id: uuidv4(),
     accountId: user.id,
+    issuer: "local:credential",
     providerId: "credential",
     userId: user.id,
     password: await hashPassword(DEMO_PASSWORD),

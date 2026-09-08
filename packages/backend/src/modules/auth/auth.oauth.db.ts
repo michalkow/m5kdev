@@ -81,10 +81,10 @@ export const oauthClientResources = sqliteTable(
     id: text("id").primaryKey().$default(uuidv4),
     clientId: text("client_id")
       .notNull()
-      .references(() => oauthClients.id, { onDelete: "cascade" }),
+      .references(() => oauthClients.clientId, { onDelete: "cascade" }),
     resourceId: text("resource_id")
       .notNull()
-      .references(() => oauthResources.id, { onDelete: "cascade" }),
+      .references(() => oauthResources.identifier, { onDelete: "cascade" }),
     metadata: jsonText("metadata").$type<Record<string, unknown>>(),
     createdAt: timestamp("created_at").$default(() => new Date()),
   },
@@ -96,7 +96,7 @@ export const oauthRefreshTokens = sqliteTable("oauth_refresh_tokens", {
   token: text("token").notNull().unique(),
   clientId: text("client_id")
     .notNull()
-    .references(() => oauthClients.id),
+    .references(() => oauthClients.clientId),
   sessionId: text("session_id").references(() => sessions.id, { onDelete: "set null" }),
   userId: text("user_id")
     .notNull()
@@ -123,7 +123,7 @@ export const oauthAccessTokens = sqliteTable("oauth_access_tokens", {
   token: text("token").unique(),
   clientId: text("client_id")
     .notNull()
-    .references(() => oauthClients.id),
+    .references(() => oauthClients.clientId),
   sessionId: text("session_id").references(() => sessions.id, { onDelete: "set null" }),
   userId: text("user_id").references(() => users.id),
   referenceId: text("reference_id"),
@@ -144,7 +144,7 @@ export const oauthConsents = sqliteTable("oauth_consents", {
   id: text("id").primaryKey().$default(uuidv4),
   clientId: text("client_id")
     .notNull()
-    .references(() => oauthClients.id),
+    .references(() => oauthClients.clientId),
   userId: text("user_id").references(() => users.id),
   referenceId: text("reference_id"),
   resources: jsonText("resources").$type<string[]>(),
