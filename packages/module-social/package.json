@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/module-social",
-  "version": "0.37.0",
+  "version": "0.37.1",
   "description": "Optional Backend Module for posting to social networks through linked Connection accounts.",
   "license": "GPL-3.0-only",
   "repository": {
