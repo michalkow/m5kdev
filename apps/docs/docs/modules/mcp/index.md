@@ -141,4 +141,11 @@ existing Procedures. An MCP call is still not a Procedure.
 McpModule mounts `POST /mcp` only (MCP protocol `2026-07-28`, legacy rejected)
 and origin `/.well-known/oauth-protected-resource` /
 `/.well-known/oauth-authorization-server` so MCP clients can discover Auth
-mounted at `/api/auth/*`.
+mounted at `/api/auth/*`. Authorization-server metadata is at the issuer-suffixed
+path `/.well-known/oauth-authorization-server/api/auth`.
+
+## Related
+
+- [Better Auth 1.7.2 in 0.37.0](/guides/v0.37.0-better-auth-1.7.2-migration)
+- [McpModule and MCP OAuth in 0.37.0](/guides/v0.37.0-mcp-oauth-migration)
+- [Auth](/modules/auth)

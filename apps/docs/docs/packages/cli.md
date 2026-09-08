@@ -80,9 +80,9 @@ from a fresh scaffold if you want Fly. See
 Root deploy scripts call Kernel bins; see
 [Kernel Fly deploy commands](/guides/v0.35.0-kernel-fly-commands-migration).
 
-The production migration registry is empty for 0.34.0, 0.35.0, and 0.36.0.
-Structural upgrades are documented as Manual / Conditional steps in the guides
-below.
+The production migration registry is empty for 0.34.0, 0.35.0, 0.36.0, and
+0.37.0. Structural upgrades are documented as Manual / Conditional steps in the
+guides below.
 
 ## 0.34.0 upgrades
 
@@ -110,6 +110,20 @@ guides (1–3) can share one Drizzle generate after the catalog bump.
 3. [Team drop and unused User payment columns](/guides/v0.36.0-team-drop-migration)
 4. [Email preview gate](/guides/v0.36.0-email-preview-gate-migration)
 5. [Notification inbox](/guides/v0.36.0-notification-inbox-migration)
+
+## 0.37.0 upgrades
+
+Run these on existing apps, in this order when they apply. Better Auth `issuer`
+and Inbound callback `name` / `secret` can share one Drizzle generate after the
+catalog bump. McpModule is opt-in; complete Better Auth 1.7.2 first if you enable
+it.
+
+1. [Better Auth 1.7.2](/guides/v0.37.0-better-auth-1.7.2-migration)
+2. [McpModule and MCP OAuth](/guides/v0.37.0-mcp-oauth-migration)
+3. [Inbound callback secrets](/guides/v0.37.0-inbound-callback-secrets-migration)
+
+Root `.dockerignore` now ignores SQLite `*.db` / wal / shm files (see the Fly
+runbook). There is no registry `id` for these upgrades.
 
 Operational Fly runbook: [Deploy with Docker and Fly.io](/guides/fly-deploy).
 

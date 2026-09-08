@@ -24,6 +24,8 @@ paths. The `fly` CLI must be on PATH.
 
 There is **one** root `.dockerignore`. Do not add a dockerignore next to a
 Dockerfile — Docker only reads the ignore file at the build context root.
+From 0.37.0 it also ignores SQLite `*.db`, `*.db-wal`, `*.db-shm`, and
+`*.db-info`.
 
 The Kernel serves the baked SPA when `createBackendApp` is given
 `spa: { root: "./client" }` and that directory exists. Local Vite on port 5173

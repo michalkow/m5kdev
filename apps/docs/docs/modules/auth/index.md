@@ -166,6 +166,8 @@ team on the session.
 ## Migration guides
 
 - [Organizations and members](/guides/organizations-and-members) (intended usage)
+- [Better Auth 1.7.2 in 0.37.0](/guides/v0.37.0-better-auth-1.7.2-migration)
+- [McpModule and MCP OAuth in 0.37.0](/guides/v0.37.0-mcp-oauth-migration)
 - [Member ownership migration](/guides/v0.32.0-memberid-ownership-migration)
 - [Membership at invite in 0.36.0](/guides/v0.36.0-membership-at-invite-migration)
 - [Account claim and Waitlist in 0.36.0](/guides/v0.36.0-account-claim-waitlist-migration)

@@ -1,5 +1,11 @@
 # @m5kdev/commons
 
+## 0.37.0
+
+### Minor Changes
+
+- 0.37.0
+
 ## 0.36.0
 
 ### Minor Changes

@@ -41,3 +41,4 @@ See [Frontend and Web UI split migration](/guides/frontend-web-ui-split) for
 import changes after the `nuqs` split. Compose SSE:
 [Kernel Server events in 0.35.0](/guides/v0.35.0-kernel-server-events-migration).
 Inbox hooks: [Notification inbox in 0.36.0](/guides/v0.36.0-notification-inbox-migration).
+Better Auth client lockstep: [Better Auth 1.7.2 in 0.37.0](/guides/v0.37.0-better-auth-1.7.2-migration).

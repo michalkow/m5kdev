@@ -67,3 +67,8 @@ returns 409. A missing row or wrong token returns 401. In-process
 | `waitForRequest<T>(callback, timeoutSec?, opts?)` | Create an Inbound callback, trigger the caller-provided side effect, await the payload as a Result |
 | `completed(id, payload)` | Mark a waiting Inbound callback completed with its payload |
 | `receive({ id, token, payload })` | HTTP path: verify the exclusive token, then complete |
+
+## Related
+
+- [Inbound callback secrets in 0.37.0](/guides/v0.37.0-inbound-callback-secrets-migration)
+- [Clay](/modules/clay)

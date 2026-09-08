@@ -105,6 +105,19 @@ one Drizzle generate after the catalog bump.
 - [Email preview gate](/guides/v0.36.0-email-preview-gate-migration)
 - [Notification inbox](/guides/v0.36.0-notification-inbox-migration)
 
+## Upgrading to 0.37.0 {#upgrade-0-37-0}
+
+Complete 0.36.0 first. `accounts.issuer` and Inbound callback `name` / `secret`
+can share one Drizzle generate after the catalog bump. Generate OAuth, JWKS, and
+MCP allowlist tables only if you register McpModule.
+
+- [Better Auth 1.7.2](/guides/v0.37.0-better-auth-1.7.2-migration)
+- [McpModule and MCP OAuth](/guides/v0.37.0-mcp-oauth-migration)
+- [Inbound callback secrets](/guides/v0.37.0-inbound-callback-secrets-migration)
+
+Root `.dockerignore` now ignores SQLite `*.db` / wal / shm files. Copy those
+lines from a fresh scaffold if you already customized the file.
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module

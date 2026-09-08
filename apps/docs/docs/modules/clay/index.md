@@ -49,3 +49,8 @@ secret map on `WebhookModule` only when you call `waitForRequest` with `name`.
 | --- | --- |
 | `sendToTable(table, row)` | POST a row to the table's Clay webhook |
 | `waitForResponse<T>(...)` | Send and await Clay's callback via `WebhookService.waitForRequest`, validated against the table schema |
+
+## Related
+
+- [Inbound callback](/modules/webhook)
+- [Inbound callback secrets in 0.37.0](/guides/v0.37.0-inbound-callback-secrets-migration)

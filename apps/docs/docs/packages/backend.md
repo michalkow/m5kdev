@@ -34,6 +34,9 @@ Membership at invite: [0.36.0 Membership](/guides/v0.36.0-membership-at-invite-m
 Account claim / Waitlist: [0.36.0 Waitlist](/guides/v0.36.0-account-claim-waitlist-migration).
 Team drop: [0.36.0 Team drop](/guides/v0.36.0-team-drop-migration).
 Email preview gate: [0.36.0 Email](/guides/v0.36.0-email-preview-gate-migration).
+Better Auth 1.7.2 (`accounts.issuer`): [0.37.0 Better Auth](/guides/v0.37.0-better-auth-1.7.2-migration).
+McpModule and MCP OAuth: [0.37.0 MCP OAuth](/guides/v0.37.0-mcp-oauth-migration).
+Inbound callback secrets: [0.37.0 Inbound callback](/guides/v0.37.0-inbound-callback-secrets-migration).
 Mastra helpers and Conversation: [0.34.0 agents](/guides/v0.34.0-mastra-app-owned-agents-migration).
 Billing trial warning: [0.34.0 trial email](/guides/v0.34.0-billing-trial-ending-email-migration).
 Catalog pins and boundary peers: [Catalog lockstep](/guides/v0.33.0-catalog-lockstep-migration).
