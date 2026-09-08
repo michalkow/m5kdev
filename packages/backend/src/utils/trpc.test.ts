@@ -109,6 +109,10 @@ describe("trpc auth helpers", () => {
       req: { headers: {} },
     } as never);
 
+    expect(auth.api.getSession).toHaveBeenCalledWith({
+      headers: {},
+      query: { disableCookieCache: true },
+    });
     expect(ctx.actor).toEqual({
       userId: "user-1",
       userRole: "member",
@@ -119,6 +123,39 @@ describe("trpc auth helpers", () => {
       teamRole: null,
     });
     expect(ctx.req).toEqual({ headers: {} });
+  });
+
+  it("bypasses cookie cache so soft-deleted Members lose org session fields immediately", async () => {
+    const user = createUser();
+    const session = createSession({
+      activeOrganizationId: null,
+      activeOrganizationRole: null,
+      activeOrganizationMemberId: null,
+    });
+    const getSession = jest.fn().mockResolvedValue({ user, session });
+    const auth = { api: { getSession } } as unknown as BetterAuth;
+
+    const createContext = createAuthContext(auth);
+    const ctx = await createContext({ req: { headers: { cookie: "session=1" } } } as never);
+
+    expect(getSession).toHaveBeenCalledWith({
+      headers: { cookie: "session=1" },
+      query: { disableCookieCache: true },
+    });
+    expect(ctx.session?.activeOrganizationId).toBeNull();
+    expect(ctx.session?.activeOrganizationMemberId).toBeNull();
+    expectTRPCCode(
+      () =>
+        requireRequestActor(
+          {
+            user: ctx.user!,
+            session: ctx.session!,
+            actor: ctx.actor!,
+          },
+          "organization"
+        ),
+      "FORBIDDEN"
+    );
   });
 
   it("throws FORBIDDEN when a broader actor scope is required than the session allows", () => {
