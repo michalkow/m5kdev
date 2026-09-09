@@ -1,5 +1,6 @@
 import { cimd } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
+import { mcp as mcpPlugin } from "@better-auth/mcp";
 import { jwt } from "better-auth/plugins";
 import { fetchE2eMcpClientMetadata } from "../auth.mcp-e2e";
 import { createMcpOAuthPlugins } from "../auth.mcp-plugins";
@@ -9,7 +10,7 @@ jest.mock("better-auth/plugins", () => ({
 }));
 
 jest.mock("@better-auth/mcp", () => ({
-  mcp: () => ({ id: "oauth-provider" }),
+  mcp: jest.fn(() => ({ id: "oauth-provider" })),
 }));
 
 jest.mock("@better-auth/cimd", () => ({
@@ -39,6 +40,7 @@ describe("createMcpOAuthPlugins", () => {
     process.env.NODE_ENV = previousNodeEnv;
     jest.mocked(cimd).mockClear();
     jest.mocked(jwt).mockClear();
+    jest.mocked(mcpPlugin).mockClear();
   });
 
   it("omits jwt, mcp, and cimd when MCP is not configured", () => {
@@ -52,6 +54,13 @@ describe("createMcpOAuthPlugins", () => {
     expect(jwt).toHaveBeenCalledWith({
       disableSettingJwtHeader: true,
       schema: { jwks: { modelName: "jwk" } },
+    });
+    expect(mcpPlugin).toHaveBeenCalledWith({
+      loginPage: mcpConfig.loginPage,
+      consentPage: mcpConfig.consentPage,
+      resource: mcpConfig.resource,
+      allowDynamicClientRegistration: true,
+      allowUnauthenticatedClientRegistration: true,
     });
     expect(cimd).toHaveBeenCalledWith({
       fetchClientMetadataResource,

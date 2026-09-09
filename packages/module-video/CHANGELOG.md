@@ -1,5 +1,29 @@
 # @m5kdev/module-video
 
+## 0.37.4
+
+### Patch Changes
+
+- mcp d
+- Updated dependencies
+  - @m5kdev/backend@0.37.4
+
+## 0.37.3
+
+### Patch Changes
+
+- mcp dynamic
+- Updated dependencies
+  - @m5kdev/backend@0.37.3
+
+## 0.37.2
+
+### Patch Changes
+
+- 0.37.2
+- Updated dependencies
+  - @m5kdev/backend@0.37.2
+
 ## 0.37.1
 
 ### Patch Changes

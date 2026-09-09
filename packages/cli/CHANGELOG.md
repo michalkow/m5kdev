@@ -1,5 +1,23 @@
 # create-m5kdev
 
+## 0.37.4
+
+### Patch Changes
+
+- mcp d
+
+## 0.37.3
+
+### Patch Changes
+
+- mcp dynamic
+
+## 0.37.2
+
+### Patch Changes
+
+- 0.37.2
+
 ## 0.37.1
 
 ### Patch Changes

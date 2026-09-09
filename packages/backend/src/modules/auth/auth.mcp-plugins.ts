@@ -22,6 +22,11 @@ export function createMcpOAuthPlugins(mcp: McpOAuthPluginConfig | undefined): Be
       loginPage: mcp.loginPage,
       consentPage: mcp.consentPage,
       resource: mcp.resource,
+      // MCP 2026-07-28 prefers CIMD; Cursor still requires RFC 7591 DCR
+      // (`registration_endpoint` in AS metadata). Better Auth leaves DCR off
+      // unless both flags are set.
+      allowDynamicClientRegistration: true,
+      allowUnauthenticatedClientRegistration: true,
     }),
     cimd({
       fetchClientMetadataResource: isE2eMcpCimdEnabled()

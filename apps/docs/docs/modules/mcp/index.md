@@ -142,7 +142,10 @@ McpModule mounts `POST /mcp` only (MCP protocol `2026-07-28`, legacy rejected)
 and origin `/.well-known/oauth-protected-resource` /
 `/.well-known/oauth-authorization-server` so MCP clients can discover Auth
 mounted at `/api/auth/*`. Authorization-server metadata is at the issuer-suffixed
-path `/.well-known/oauth-authorization-server/api/auth`.
+path `/.well-known/oauth-authorization-server/api/auth`. That document advertises
+CIMD (`client_id_metadata_document_supported`) and, for clients such as Cursor
+that still require RFC 7591, DCR (`registration_endpoint` →
+`/api/auth/oauth2/register`).
 
 ## Related
 

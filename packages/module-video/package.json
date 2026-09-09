@@ -1,6 +1,6 @@
 {
   "name": "@m5kdev/module-video",
-  "version": "0.37.1",
+  "version": "0.37.4",
   "description": "Optional Backend Module for ffmpeg trimming and audio extraction.",
   "license": "GPL-3.0-only",
   "repository": {
