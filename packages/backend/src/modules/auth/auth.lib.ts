@@ -386,12 +386,6 @@ export function createBetterAuth<
           required: false,
           defaultValue: null,
         },
-        stripeCustomerId: {
-          type: "string",
-          required: false,
-          defaultValue: null,
-          input: false,
-        },
         locale: {
           type: "string",
           required: false,
@@ -494,6 +488,22 @@ export function createBetterAuth<
           beforeCreateInvitation: async () => {
             throw new APIError("FORBIDDEN", { message: "Use Auth inviteOrganizationMember" });
           },
+          beforeDeleteOrganization: async (data) => {
+            if (!billingService) return;
+            const canceled = await billingService.cancelOrganizationSubscription({
+              organizationId: data.organization.id,
+            });
+            if (canceled.isErr()) {
+              logger.error({
+                step: "cancelOrganizationSubscription",
+                organizationId: data.organization.id,
+                error: canceled.error,
+              });
+              throw new APIError("INTERNAL_SERVER_ERROR", {
+                message: "Failed to cancel the Organization Subscription",
+              });
+            }
+          },
         },
         schema: {
           member: {
@@ -586,6 +596,12 @@ export function createBetterAuth<
                 required: false,
                 defaultValue: null,
                 input: true,
+              },
+              stripeCustomerId: {
+                type: "string",
+                required: false,
+                defaultValue: null,
+                input: false,
               },
             },
           },
@@ -798,10 +814,14 @@ export function createBetterAuth<
                 const i18nCtx = createUserHookI18nContext(user, i18n);
                 await hooks.afterCreateUser(user, membership, i18nCtx);
               }
-            }
-
-            if (!isProvisionedAccountEmail(user.email)) {
-              await billingService?.createUserHook({ user });
+              if (!isProvisionedAccountEmail(user.email)) {
+                await billingService?.createOrganizationHook({
+                  organizationId: membership.organizationId,
+                  memberId: membership.memberId,
+                  email: user.email,
+                  name: typeof user.name === "string" ? user.name : undefined,
+                });
+              }
             }
             posthogCapture({
               distinctId: user.id,

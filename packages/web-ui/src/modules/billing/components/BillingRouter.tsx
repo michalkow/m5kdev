@@ -4,6 +4,7 @@ import { BillingInvoicePage } from "./BillingInvoicePage";
 
 interface BillingRouterProps {
   plans: StripePlan[];
+  currency: string;
 }
 
 export function BillingRouter(_props: BillingRouterProps) {

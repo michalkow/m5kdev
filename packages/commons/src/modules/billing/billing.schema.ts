@@ -13,6 +13,7 @@ export const billingSchema = z.object({
   cancelAt: z.date().nullish(),
   canceledAt: z.date().nullish(),
   seats: z.number().nullish(),
+  memberId: z.string().nullish(),
   trialStart: z.date().nullish(),
   trialEnd: z.date().nullish(),
   priceId: z.string().nullish(),

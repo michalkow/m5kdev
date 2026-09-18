@@ -6,13 +6,23 @@ export type StripePlan = {
   annualPriceUnitAmount?: number;
   freeTrial?: {
     days: number;
+    seats?: number;
   };
-  limits?: Record<string, number>;
-  group?: string;
 };
 
 export type StripePlansConfig = {
+  currency: string;
+  seatBilling?: boolean;
+  nonBillableRoleKeys?: readonly string[];
   production: StripePlan[];
   sandbox: StripePlan[];
   trialPlanName?: string;
+};
+
+export type ResolvedStripePlans = {
+  plans: StripePlan[];
+  trial?: StripePlan;
+  currency: string;
+  seatBilling: boolean;
+  nonBillableRoleKeys: readonly string[];
 };

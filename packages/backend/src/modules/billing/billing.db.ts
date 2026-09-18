@@ -22,6 +22,7 @@ export const subscriptions = sqliteTable("subscriptions", {
   cancelAt: integer("cancel_at", { mode: "timestamp" }),
   canceledAt: integer("canceled_at", { mode: "timestamp" }),
   seats: integer("seats", { mode: "number" }),
+  memberId: text("member_id"),
   trialStart: integer("trial_start", { mode: "timestamp" }),
   trialEnd: integer("trial_end", { mode: "timestamp" }),
 });

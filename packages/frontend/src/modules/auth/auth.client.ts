@@ -157,10 +157,6 @@ export function createM5KAuthClient(baseURL?: string): M5KAuthClient {
             type: "string",
             required: false,
           },
-          stripeCustomerId: {
-            type: "string",
-            required: false,
-          },
         },
       }),
     ],

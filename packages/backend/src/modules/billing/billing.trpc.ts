@@ -3,15 +3,17 @@ import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 import type { BillingService } from "./billing.service";
 
 export function createBillingTRPC(
-  { router, privateProcedure: procedure }: TRPCMethods,
+  { router, organizationProcedure }: TRPCMethods,
   billingService: BillingService
 ) {
   return router({
-    getActiveSubscription: procedure.output(billingSchema.nullable()).query(async ({ ctx }) => {
-      return handleTRPCResult(await billingService.getActiveSubscription(ctx));
-    }),
+    getActiveSubscription: organizationProcedure
+      .output(billingSchema.nullable())
+      .query(async ({ ctx }) => {
+        return handleTRPCResult(await billingService.getActiveSubscription(ctx));
+      }),
 
-    listInvoices: procedure.query(async ({ ctx }) => {
+    listInvoices: organizationProcedure.query(async ({ ctx }) => {
       return handleTRPCResult(await billingService.listInvoices(ctx));
     }),
   });

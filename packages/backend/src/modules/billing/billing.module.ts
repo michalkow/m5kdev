@@ -1,9 +1,10 @@
-import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
+import type { ResolvedStripePlans } from "@m5kdev/commons/modules/billing/billing.types";
 import type Stripe from "stripe";
 import { createBackendRouterMap } from "../../app";
 import type { Grant } from "../base/base.grants";
 import {
   BaseModule,
+  type ModuleExpressContext,
   type ModuleRepositoriesContext,
   type ModuleServicesContext,
   type ModuleTRPCContext,
@@ -12,6 +13,7 @@ import type { EmailModule } from "../email/email.module";
 import type * as billingTables from "./billing.db";
 import { defaultBillingGrants } from "./billing.grants";
 import { BillingRepository } from "./billing.repository";
+import { createBillingRouter } from "./billing.router";
 import { BillingService } from "./billing.service";
 import { createBillingTRPC } from "./billing.trpc";
 
@@ -40,7 +42,7 @@ export class BillingModule extends BaseModule<
 
   constructor(
     private readonly libs: { stripe: Stripe },
-    private readonly config: { plans: StripePlan[]; trial?: StripePlan },
+    private readonly config: ResolvedStripePlans,
     grants?: Grant[]
   ) {
     super();
@@ -74,5 +76,14 @@ export class BillingModule extends BaseModule<
 
   override trpc({ trpc, services }: ModuleTRPCContext<BillingModuleDeps, BillingServices>) {
     return createBackendRouterMap("billing", createBillingTRPC(trpc, services.billing));
+  }
+
+  override express({
+    infra,
+    services,
+    authMiddleware,
+  }: ModuleExpressContext<BillingModuleDeps, BillingServices>) {
+    if (!authMiddleware) return;
+    infra.express.use("/stripe", createBillingRouter(authMiddleware, services.billing));
   }
 }

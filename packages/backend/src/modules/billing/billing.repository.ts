@@ -1,6 +1,7 @@
 import type { BillingSchema } from "@m5kdev/commons/modules/billing/billing.schema";
-import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
-import { and, desc, eq, type InferSelectModel, inArray } from "drizzle-orm";
+import type { ResolvedStripePlans, StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import type { InferSelectModel } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import type { Stripe } from "stripe";
@@ -14,6 +15,16 @@ const schema = { ...auth, ...billing };
 type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;
 
+const ACCESS_STATUSES = ["active", "trialing", "past_due"] as const;
+const OPEN_STATUSES = [
+  "active",
+  "trialing",
+  "past_due",
+  "unpaid",
+  "paused",
+  "incomplete",
+] as const;
+
 export class BillingRepository extends BaseTableRepository<
   Orm,
   Schema,
@@ -23,25 +34,41 @@ export class BillingRepository extends BaseTableRepository<
   public stripe: Stripe;
   public plans: StripePlan[];
   public trial?: StripePlan;
+  public currency: string;
+  public seatBilling: boolean;
+  public nonBillableRoleKeys: readonly string[];
 
   constructor(options: {
     orm: Orm;
     schema: Schema;
     table: Schema["subscriptions"];
     libs: { stripe: Stripe };
-    config: {
-      trial?: StripePlan;
-      plans: StripePlan[];
-    };
+    config: ResolvedStripePlans;
   }) {
     const { libs, config, ...rest } = options;
     super(rest);
     this.stripe = libs.stripe;
     this.plans = config.plans;
     this.trial = config.trial;
+    this.currency = config.currency;
+    this.seatBilling = config.seatBilling;
+    this.nonBillableRoleKeys = config.nonBillableRoleKeys;
+    if (this.seatBilling && this.trial && (this.trial.freeTrial?.seats == null || this.trial.freeTrial.seats < 1)) {
+      throw new Error("Seat billing Trial requires freeTrial.seats");
+    }
   }
+
   hasTrial(): boolean {
     return !!this.trial;
+  }
+
+  isBillableRole(role: string): boolean {
+    if (role === "owner") return true;
+    return !this.nonBillableRoleKeys.includes(role);
+  }
+
+  trialSeatCap(): number | undefined {
+    return this.trial?.freeTrial?.seats;
   }
 
   getPlanByPriceId(priceId: string): StripePlan | undefined {
@@ -50,56 +77,73 @@ export class BillingRepository extends BaseTableRepository<
     );
   }
 
-  getCustomerByEmail(email: string): ServerResultAsync<Stripe.Customer | null> {
-    return this.throwablePromise(async () => {
-      const customers = await this.stripe.customers.list({
-        email,
-        limit: 1,
-      });
-      return customers.data[0] ?? null;
+  getOrganizationByCustomerId(
+    customerId: string
+  ): ServerResultAsync<InferSelectModel<Schema["organizations"]> | null> {
+    return this.throwableQuery(async () => {
+      const [organization] = await this.orm
+        .select()
+        .from(this.schema.organizations)
+        .where(eq(this.schema.organizations.stripeCustomerId, customerId))
+        .limit(1);
+      return organization ?? null;
     });
   }
 
-  getUserByCustomerId(
-    customerId: string
-  ): ServerResultAsync<InferSelectModel<Schema["users"]> | null> {
+  getOrganizationById(
+    organizationId: string
+  ): ServerResultAsync<InferSelectModel<Schema["organizations"]> | null> {
     return this.throwableQuery(async () => {
-      const [user] = await this.orm
+      const [organization] = await this.orm
         .select()
-        .from(this.schema.users)
-        .where(eq(this.schema.users.stripeCustomerId, customerId))
+        .from(this.schema.organizations)
+        .where(eq(this.schema.organizations.id, organizationId))
         .limit(1);
-      return user ?? null;
+      return organization ?? null;
     });
   }
 
   createCustomer({
     email,
     name,
-    userId,
+    organizationId,
+    memberId,
   }: {
     email: string;
     name?: string;
-    userId: string;
+    organizationId: string;
+    memberId: string;
   }): ServerResultAsync<Stripe.Customer> {
     return this.throwablePromise(() =>
       this.stripe.customers.create({
         email,
         name,
         metadata: {
-          userId,
+          organizationId,
+          memberId,
         },
       })
     );
   }
 
-  async createTrialSubscription(customerId: string): ServerResultAsync<Stripe.Subscription> {
-    // reaching the trial flow without a configured trial plan is a module-config fault
+  async createTrialSubscription({
+    customerId,
+    organizationId,
+    memberId,
+  }: {
+    customerId: string;
+    organizationId: string;
+    memberId: string;
+  }): ServerResultAsync<Stripe.Subscription> {
     if (!this.trial) return this.error("INTERNAL_SERVER_ERROR", "Trial plan not found");
+    const quantity = this.seatBilling ? (this.trial.freeTrial?.seats ?? 1) : 1;
     const stripeSubscription = await this.createSubscription({
       customerId,
       priceId: this.trial.priceId,
       trialDays: this.trial.freeTrial?.days ?? 7,
+      quantity,
+      organizationId,
+      memberId,
     });
     if (stripeSubscription.isErr()) return err(stripeSubscription.error);
     if (!stripeSubscription.value)
@@ -112,16 +156,28 @@ export class BillingRepository extends BaseTableRepository<
     priceId,
     quantity = 1,
     trialDays,
+    organizationId,
+    memberId,
   }: {
     customerId: string;
     priceId: string;
     quantity?: number;
     trialDays?: number;
+    organizationId?: string;
+    memberId?: string;
   }): ServerResultAsync<Stripe.Subscription> {
     return this.throwablePromise(() =>
       this.stripe.subscriptions.create({
         customer: customerId,
-        items: [{ price: priceId, quantity }], // quantity = seats if you want
+        items: [{ price: priceId, quantity }],
+        ...(organizationId || memberId
+          ? {
+              metadata: {
+                ...(organizationId ? { organizationId } : {}),
+                ...(memberId ? { memberId } : {}),
+              },
+            }
+          : {}),
         ...(trialDays
           ? {
               trial_period_days: trialDays,
@@ -136,24 +192,45 @@ export class BillingRepository extends BaseTableRepository<
     );
   }
 
-  async updateUserCustomerId({
-    userId,
+  updateSubscriptionQuantity({
+    subscriptionId,
+    itemId,
+    quantity,
+  }: {
+    subscriptionId: string;
+    itemId: string;
+    quantity: number;
+  }): ServerResultAsync<Stripe.Subscription> {
+    return this.throwablePromise(() =>
+      this.stripe.subscriptions.update(subscriptionId, {
+        items: [{ id: itemId, quantity }],
+        proration_behavior: "create_prorations",
+      })
+    );
+  }
+
+  cancelStripeSubscription(subscriptionId: string): ServerResultAsync<Stripe.Subscription> {
+    return this.throwablePromise(() => this.stripe.subscriptions.cancel(subscriptionId));
+  }
+
+  async updateOrganizationCustomerId({
+    organizationId,
     customerId,
   }: {
-    userId: string;
+    organizationId: string;
     customerId: string;
-  }): ServerResultAsync<InferSelectModel<Schema["users"]>> {
-    const userResult = await this.throwableQuery(() =>
+  }): ServerResultAsync<InferSelectModel<Schema["organizations"]>> {
+    const organizationResult = await this.throwableQuery(() =>
       this.orm
-        .update(this.schema.users)
+        .update(this.schema.organizations)
         .set({ stripeCustomerId: customerId })
-        .where(eq(this.schema.users.id, userId))
+        .where(eq(this.schema.organizations.id, organizationId))
         .returning()
     );
-    if (userResult.isErr()) return err(userResult.error);
-    const [user] = userResult.value;
-    if (!user) return this.error("NOT_FOUND", "User not found");
-    return ok(user);
+    if (organizationResult.isErr()) return err(organizationResult.error);
+    const [organization] = organizationResult.value;
+    if (!organization) return this.error("NOT_FOUND", "Organization not found");
+    return ok(organization);
   }
 
   async getLatestSubscription(referenceId: string): ServerResultAsync<BillingSchema | null> {
@@ -169,7 +246,7 @@ export class BillingRepository extends BaseTableRepository<
     return ok(subscriptionsResult.value[0] ?? null);
   }
 
-  async getActiveSubscription(referenceId: string): ServerResultAsync<BillingSchema | null> {
+  async getAccessibleSubscription(referenceId: string): ServerResultAsync<BillingSchema | null> {
     const subscriptionResult = await this.throwableQuery(() =>
       this.orm
         .select()
@@ -177,15 +254,59 @@ export class BillingRepository extends BaseTableRepository<
         .where(
           and(
             eq(this.schema.subscriptions.referenceId, referenceId),
-            inArray(this.schema.subscriptions.status, ["active", "trialing"])
+            inArray(this.schema.subscriptions.status, [...ACCESS_STATUSES])
           )
         )
         .orderBy(desc(this.schema.subscriptions.createdAt))
         .limit(1)
     );
     if (subscriptionResult.isErr()) return err(subscriptionResult.error);
-    const [subscription] = subscriptionResult.value;
-    return ok(subscription ?? null);
+    return ok(subscriptionResult.value[0] ?? null);
+  }
+
+  async getOpenSubscription(referenceId: string): ServerResultAsync<BillingSchema | null> {
+    const subscriptionResult = await this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(this.schema.subscriptions)
+        .where(
+          and(
+            eq(this.schema.subscriptions.referenceId, referenceId),
+            inArray(this.schema.subscriptions.status, [...OPEN_STATUSES])
+          )
+        )
+        .orderBy(desc(this.schema.subscriptions.createdAt))
+        .limit(1)
+    );
+    if (subscriptionResult.isErr()) return err(subscriptionResult.error);
+    return ok(subscriptionResult.value[0] ?? null);
+  }
+
+  async findSubscriptionByStripeId(
+    stripeSubscriptionId: string
+  ): ServerResultAsync<BillingSchema | null> {
+    const result = await this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(this.schema.subscriptions)
+        .where(eq(this.schema.subscriptions.stripeSubscriptionId, stripeSubscriptionId))
+        .limit(1)
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value[0] ?? null);
+  }
+
+  async countBillableMembers(organizationId: string): ServerResultAsync<number> {
+    const membersResult = await this.throwableQuery(() =>
+      this.orm
+        .select({ role: this.schema.members.role })
+        .from(this.schema.members)
+        .where(
+          and(eq(this.schema.members.organizationId, organizationId), isNull(this.schema.members.deletedAt))
+        )
+    );
+    if (membersResult.isErr()) return err(membersResult.error);
+    return ok(membersResult.value.filter((row) => this.isBillableRole(row.role)).length);
   }
 
   listInvoices(customerId: string): ServerResultAsync<Stripe.Invoice[]> {
@@ -200,23 +321,31 @@ export class BillingRepository extends BaseTableRepository<
   createCheckoutSession({
     customerId,
     priceId,
-    userId,
+    organizationId,
+    memberId,
+    quantity,
   }: {
     customerId: string;
     priceId: string;
-    userId: string;
+    organizationId: string;
+    memberId: string;
+    quantity: number;
   }): ServerResultAsync<Stripe.Checkout.Session> {
     return this.throwablePromise(() =>
       this.stripe.checkout.sessions.create({
-        client_reference_id: userId,
+        client_reference_id: organizationId,
         customer: customerId,
         success_url: `${process.env.VITE_SERVER_URL}/stripe/success`,
         cancel_url: `${process.env.VITE_APP_URL}/billing`,
         mode: "subscription",
+        metadata: { organizationId, memberId },
+        subscription_data: {
+          metadata: { organizationId, memberId },
+        },
         line_items: [
           {
             price: priceId,
-            quantity: 1,
+            quantity,
           },
         ],
       })
@@ -238,24 +367,31 @@ export class BillingRepository extends BaseTableRepository<
     return this.throwablePromise(() => this.stripe.customers.retrieve(customerId));
   }
 
-  async syncStripeData({
-    customerId,
-    userId,
-  }: {
-    customerId: string;
-    userId: string;
-  }): ServerResultAsync<boolean> {
-    const stripeSubscriptionsResult = await this.throwablePromise(() =>
-      this.stripe.subscriptions.list({
+  listStripeSubscriptions(customerId: string): ServerResultAsync<Stripe.Subscription[]> {
+    return this.throwablePromise(async () => {
+      const result = await this.stripe.subscriptions.list({
         customer: customerId,
         limit: 1,
         status: "all",
         expand: ["data.default_payment_method"],
-      })
-    );
+      });
+      return result.data;
+    });
+  }
+
+  async syncStripeData({
+    customerId,
+    organizationId,
+    memberId,
+  }: {
+    customerId: string;
+    organizationId: string;
+    memberId?: string | null;
+  }): ServerResultAsync<boolean> {
+    const stripeSubscriptionsResult = await this.listStripeSubscriptions(customerId);
     if (stripeSubscriptionsResult.isErr()) return err(stripeSubscriptionsResult.error);
 
-    const [stripeSubscription] = stripeSubscriptionsResult.value.data;
+    const [stripeSubscription] = stripeSubscriptionsResult.value;
     if (!stripeSubscription) return this.error("NOT_FOUND", "Subscription not found");
 
     const [subscriptionItem] = stripeSubscription.items.data;
@@ -267,7 +403,8 @@ export class BillingRepository extends BaseTableRepository<
 
     const values = {
       stripeCustomerId: customerId,
-      referenceId: userId,
+      referenceId: organizationId,
+      ...(memberId ? { memberId } : {}),
       plan: plan.name,
       status: stripeSubscription.status,
       seats: subscriptionItem.quantity || 1,
@@ -293,11 +430,37 @@ export class BillingRepository extends BaseTableRepository<
         : {}),
     };
 
-    const existingSubscription = await this.getActiveSubscription(userId);
-    if (existingSubscription.isErr()) return err(existingSubscription.error);
+    const existingByStripeId = await this.findSubscriptionByStripeId(stripeSubscription.id);
+    if (existingByStripeId.isErr()) return err(existingByStripeId.error);
 
-    const existing = existingSubscription.value;
-    if (!existing) {
+    if (existingByStripeId.value) {
+      const existing = existingByStripeId.value;
+      const updateResult = await this.throwableQuery(() =>
+        this.orm
+          .update(this.schema.subscriptions)
+          .set({ ...values, updatedAt: new Date() })
+          .where(eq(this.schema.subscriptions.id, existing.id))
+      );
+      if (updateResult.isErr()) return err(updateResult.error);
+
+      const captureResult = this.throwable(() =>
+        ok(
+          posthogCapture({
+            distinctId: organizationId,
+            event: "stripe.subscription_updated",
+            properties: values,
+          })
+        )
+      );
+      if (captureResult.isErr()) return err(captureResult.error);
+      return ok(false);
+    }
+
+    const latest = await this.getLatestSubscription(organizationId);
+    if (latest.isErr()) return err(latest.error);
+
+    const latestRow = latest.value;
+    if (!latestRow) {
       const insertResult = await this.throwableQuery(() =>
         this.orm.insert(this.schema.subscriptions).values(values)
       );
@@ -306,36 +469,23 @@ export class BillingRepository extends BaseTableRepository<
       const captureResult = this.throwable(() =>
         ok(
           posthogCapture({
-            distinctId: userId,
+            distinctId: organizationId,
             event: "stripe.subscription_created",
             properties: values,
           })
         )
       );
       if (captureResult.isErr()) return err(captureResult.error);
-
       return ok(true);
     }
 
-    const updateResult = await this.throwableQuery(() =>
+    const updateLatest = await this.throwableQuery(() =>
       this.orm
         .update(this.schema.subscriptions)
         .set({ ...values, updatedAt: new Date() })
-        .where(eq(this.schema.subscriptions.id, existing.id))
+        .where(eq(this.schema.subscriptions.id, latestRow.id))
     );
-    if (updateResult.isErr()) return err(updateResult.error);
-
-    const captureResult = this.throwable(() =>
-      ok(
-        posthogCapture({
-          distinctId: userId,
-          event: "stripe.subscription_updated",
-          properties: values,
-        })
-      )
-    );
-    if (captureResult.isErr()) return err(captureResult.error);
-
+    if (updateLatest.isErr()) return err(updateLatest.error);
     return ok(false);
   }
 

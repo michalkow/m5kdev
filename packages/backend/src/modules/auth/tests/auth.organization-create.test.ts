@@ -21,7 +21,6 @@ async function createTables(client: Client): Promise<void> {
       banned INTEGER,
       ban_reason TEXT,
       ban_expires INTEGER,
-      stripe_customer_id TEXT UNIQUE,
       preferences TEXT DEFAULT '{}',
       metadata TEXT DEFAULT '{}',
       onboarding INTEGER,
@@ -42,7 +41,8 @@ async function createTables(client: Client): Promise<void> {
       preferences TEXT DEFAULT '{}',
       metadata TEXT DEFAULT '{}',
       flags TEXT DEFAULT '[]',
-      locale TEXT
+      locale TEXT,
+      stripe_customer_id TEXT UNIQUE
     );
   `);
   await client.execute(`
@@ -114,7 +114,7 @@ describe("createOrganizationWithOwner", () => {
       image: null,
     });
 
-    expect(result).toEqual({ organizationId: expect.any(String) });
+    expect(result).toEqual({ organizationId: expect.any(String), memberId: expect.any(String) });
     expect(result).not.toHaveProperty("teamId");
 
     const organizations = await orm.select().from(auth.organizations);

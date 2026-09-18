@@ -1,4 +1,5 @@
 import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
+import { formatPlanAmount } from "@m5kdev/commons/modules/billing/billing.utils";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { Check, LogOut } from "lucide-react";
@@ -19,6 +20,7 @@ import { cn } from "../../../lib/utils";
 
 export interface BillingSinglePlanSelectProps {
   plan: StripePlan;
+  currency: string;
   features?: string[];
   /** URL for the Terms of Service link. Override for your app's legal page. */
   termsOfServiceUrl?: string;
@@ -26,6 +28,7 @@ export interface BillingSinglePlanSelectProps {
 
 export function BillingSinglePlanSelect({
   plan,
+  currency,
   termsOfServiceUrl,
   features = [
     "Unlimited access to all features",
@@ -56,12 +59,18 @@ export function BillingSinglePlanSelect({
 
   const priceDisplay = {
     monthly: {
-      amount: `$${priceUnitAmount / 100}`,
+      amount: Number.isNaN(priceUnitAmount)
+        ? ""
+        : formatPlanAmount({ unitAmount: priceUnitAmount, currency }),
       label: "/ month",
     },
     annually: {
-      amount: `$${annualPriceUnitAmount / 100 / 12}`,
-      originalAmount: `$${priceUnitAmount / 100}`,
+      amount: Number.isNaN(annualPriceUnitAmount)
+        ? ""
+        : formatPlanAmount({ unitAmount: annualPriceUnitAmount / 12, currency }),
+      originalAmount: Number.isNaN(priceUnitAmount)
+        ? ""
+        : formatPlanAmount({ unitAmount: priceUnitAmount, currency }),
       label: "/ month, billed annually",
       discountLabel: plan.annualPriceUnitAmount
         ? `Save ${Math.floor(((priceUnitAmount - annualPriceUnitAmount / 12) / priceUnitAmount) * 100).toFixed(0)}%`

@@ -18,7 +18,6 @@ export const users = sqliteTable("users", {
   banned: integer("banned", { mode: "boolean" }),
   banReason: text("ban_reason"),
   banExpires: integer("ban_expires", { mode: "timestamp" }),
-  stripeCustomerId: text("stripe_customer_id").unique(),
   preferences: text("preferences", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
   metadata: text("metadata", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
   onboarding: integer("onboarding"),
@@ -105,6 +104,7 @@ export const organizations = sqliteTable("organizations", {
   metadata: text("metadata", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
   flags: text("flags", { mode: "json" }).default([]).$type<string[]>(),
   locale: text("locale"),
+  stripeCustomerId: text("stripe_customer_id").unique(),
 });
 
 export const members = sqliteTable(

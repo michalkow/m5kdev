@@ -157,12 +157,45 @@ export class AuthService extends BasePermissionService<
     return this.service.billing;
   }
 
+  private async billingAdjustSeat({
+    organizationId,
+    role,
+    delta,
+  }: {
+    organizationId: string;
+    role: string;
+    delta: 1 | -1;
+  }): ServerResultAsync<void> {
+    const billing = this.getBillingService();
+    if (!billing) return ok();
+    const result = await billing.adjustBillableSeats({ organizationId, role, delta });
+    if (result.isErr()) return err(result.error);
+    return ok();
+  }
+
   private async cancelInvitationSeat(invitation: {
     id: string;
     organizationId: string;
     memberId: string | null;
+    role?: string | null;
   }): ServerResultAsync<{ invitationId: string; memberId: string | null }> {
     if (invitation.memberId) {
+      const billing = this.getBillingService();
+      if (billing) {
+        const live = await this.repository.organization.findLiveOrganizationMember({
+          organizationId: invitation.organizationId,
+          memberId: invitation.memberId,
+        });
+        if (live.isErr() && live.error.code !== "NOT_FOUND") return err(live.error);
+        if (live.isOk()) {
+          const billed = await this.billingAdjustSeat({
+            organizationId: invitation.organizationId,
+            role: live.value.role,
+            delta: -1,
+          });
+          if (billed.isErr()) return err(billed.error);
+        }
+      }
       const removed = await this.repository.organization.removeOrganizationMember({
         organizationId: invitation.organizationId,
         memberId: invitation.memberId,
@@ -538,6 +571,15 @@ export class AuthService extends BasePermissionService<
         locale,
       });
       if (onCreateOrganizationResult.isErr()) return err(onCreateOrganizationResult.error);
+      const billing = this.getBillingService();
+      if (billing && userResult.value && result.value.member) {
+        await billing.createOrganizationHook({
+          organizationId: result.value.organization.id,
+          memberId: result.value.member.id,
+          email: userResult.value.email,
+          name: userResult.value.name,
+        });
+      }
       return ok(result.value.organization);
     });
 
@@ -1304,7 +1346,24 @@ export class AuthService extends BasePermissionService<
       if (pendingClaim.value) {
         const billingService = this.getBillingService();
         if (billingService) {
-          await billingService.createUserHook({ user: ctx.user });
+          const orgs = await this.repository.organization.listUserOrganizations(ctx.user.id);
+          if (orgs.isErr()) return err(orgs.error);
+          const organization = orgs.value[0];
+          if (organization) {
+            const members = await this.repository.organization.listOrganizationMembers(
+              organization.id
+            );
+            if (members.isErr()) return err(members.error);
+            const membership = members.value.find((row) => row.userId === ctx.user.id);
+            if (membership) {
+              await billingService.createOrganizationHook({
+                organizationId: organization.id,
+                memberId: membership.id,
+                email: ctx.user.email,
+                name: ctx.user.name,
+              });
+            }
+          }
         }
       }
 
@@ -1442,6 +1501,16 @@ export class AuthService extends BasePermissionService<
         return this.error("BAD_REQUEST", "Cannot change the Owner role");
       }
 
+      const billing = this.getBillingService();
+      if (billing) {
+        const billed = await billing.adjustBillableSeatsForRoleChange({
+          organizationId: ctx.actor.organizationId,
+          fromRole: existing.value.role,
+          toRole: input.role,
+        });
+        if (billed.isErr()) return err(billed.error);
+      }
+
       const member = await this.repository.organization.updateOrganizationMemberRole({
         organizationId: ctx.actor.organizationId,
         memberId: input.memberId,
@@ -1556,6 +1625,12 @@ export class AuthService extends BasePermissionService<
       });
       if (left.isErr()) return err(left.error);
       if (left.value) {
+        const billed = await this.billingAdjustSeat({
+          organizationId: ctx.actor.organizationId,
+          role: input.role,
+          delta: 1,
+        });
+        if (billed.isErr()) return err(billed.error);
         const revived = await this.repository.organization.reviveInvitedMember({
           memberId: left.value.id,
           organizationId: ctx.actor.organizationId,
@@ -1565,6 +1640,12 @@ export class AuthService extends BasePermissionService<
         if (revived.isErr()) return err(revived.error);
         member = revived.value;
       } else {
+        const billed = await this.billingAdjustSeat({
+          organizationId: ctx.actor.organizationId,
+          role: input.role,
+          delta: 1,
+        });
+        if (billed.isErr()) return err(billed.error);
         const created = await this.repository.organization.createInvitedMember({
           organizationId: ctx.actor.organizationId,
           email,
@@ -1738,6 +1819,12 @@ export class AuthService extends BasePermissionService<
       if (member.value.role === "owner") {
         return this.error("BAD_REQUEST", "Cannot remove the Owner");
       }
+      const billed = await this.billingAdjustSeat({
+        organizationId: ctx.actor.organizationId,
+        role: member.value.role,
+        delta: -1,
+      });
+      if (billed.isErr()) return err(billed.error);
       return this.repository.organization.removeOrganizationMember({
         organizationId: ctx.actor.organizationId,
         memberId: input.memberId,
@@ -1751,6 +1838,12 @@ export class AuthService extends BasePermissionService<
       if (ctx.actor.organizationRole === "owner") {
         return this.error("BAD_REQUEST", "The Owner cannot leave");
       }
+      const billed = await this.billingAdjustSeat({
+        organizationId: ctx.actor.organizationId,
+        role: ctx.actor.organizationRole,
+        delta: -1,
+      });
+      if (billed.isErr()) return err(billed.error);
       return this.repository.organization.removeOrganizationMember({
         organizationId: ctx.actor.organizationId,
         memberId: ctx.actor.memberId,

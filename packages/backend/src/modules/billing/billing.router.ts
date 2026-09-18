@@ -3,6 +3,27 @@ import { Router } from "express";
 import type { AuthMiddleware, AuthRequest } from "../auth/auth.middleware";
 import type { BillingService } from "./billing.service";
 
+function organizationFields(req: AuthRequest): {
+  organizationId: string;
+  memberId: string;
+  organizationRole: string;
+  email: string;
+  name?: string;
+} | null {
+  const user = req.user;
+  const session = req.session;
+  if (!user || !session?.activeOrganizationId || !session.activeOrganizationMemberId) {
+    return null;
+  }
+  return {
+    organizationId: session.activeOrganizationId,
+    memberId: session.activeOrganizationMemberId,
+    organizationRole: session.activeOrganizationRole ?? "",
+    email: user.email,
+    name: user.name,
+  };
+}
+
 export function createBillingRouter(
   authMiddleware: AuthMiddleware,
   service: BillingService
@@ -10,11 +31,20 @@ export function createBillingRouter(
   const billingRouter = Router();
 
   billingRouter.get("/checkout/:priceId", authMiddleware, async (req: AuthRequest, res) => {
-    const user = req.user!;
+    const fields = organizationFields(req);
+    if (!fields) {
+      return res.status(403).json({ message: "Organization is required" });
+    }
 
-    const session = await service.createCheckoutSession({ priceId: req.params.priceId }, { user });
+    const session = await service.createCheckoutSession({ priceId: req.params.priceId }, fields);
     if (session.isErr()) {
-      return res.status(500).json({ message: session.error.message });
+      const status =
+        session.error.code === "FORBIDDEN"
+          ? 403
+          : session.error.code === "CONFLICT"
+            ? 409
+            : 500;
+      return res.status(status).json({ message: session.error.message });
     }
 
     if (!session.value.url) {
@@ -25,25 +55,28 @@ export function createBillingRouter(
   });
 
   billingRouter.get("/portal", authMiddleware, async (req: AuthRequest, res) => {
-    const user = req.user!;
-
-    const session = await service.createBillingPortalSession({ user });
-
-    if (session.isErr()) {
-      return res.status(500).json({ message: session.error.message });
+    const fields = organizationFields(req);
+    if (!fields) {
+      return res.status(403).json({ message: "Organization is required" });
     }
 
-    return res.redirect(session.value.url);
+    const portal = await service.createBillingPortalSession(fields);
+
+    if (portal.isErr()) {
+      const status = portal.error.code === "FORBIDDEN" ? 403 : 500;
+      return res.status(status).json({ message: portal.error.message });
+    }
+
+    return res.redirect(portal.value.url);
   });
 
   billingRouter.get("/success", authMiddleware, async (req: AuthRequest, res) => {
-    const user = req.user!;
-
-    if (!user.stripeCustomerId) {
+    const fields = organizationFields(req);
+    if (!fields) {
       return res.redirect(`${process.env.VITE_APP_URL}/billing`);
     }
 
-    const result = await service.syncStripeData(user.stripeCustomerId);
+    const result = await service.syncOrganizationSubscription(fields.organizationId);
 
     if (result.isErr()) {
       return res.redirect(`${process.env.VITE_APP_URL}/billing?error=SYNC_FAILED`);

@@ -154,7 +154,7 @@ export async function createOrganizationWithOwner<O extends Orm, S extends Schem
     locale?: string | null;
   },
   locale?: string | null
-): Promise<{ organizationId: string }> {
+): Promise<{ organizationId: string; memberId: string }> {
   const organizationId = uuidv4();
   const organizationLocale = locale ?? user.locale ?? undefined;
   return await orm.transaction(async (tx) => {
@@ -184,7 +184,7 @@ export async function createOrganizationWithOwner<O extends Orm, S extends Schem
 
     if (!member) throw new Error("createOrganizationWithOwner: Failed to create member");
 
-    return { organizationId };
+    return { organizationId, memberId: member.id };
   });
 }
 

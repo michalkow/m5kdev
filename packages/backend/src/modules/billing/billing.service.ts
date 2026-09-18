@@ -3,7 +3,6 @@ import { err, ok } from "neverthrow";
 import type Stripe from "stripe";
 import { posthogCapture } from "../../utils/posthog";
 import type { Context } from "../../utils/trpc";
-import type { User } from "../auth/auth.lib";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import { BasePermissionService } from "../base/base.service";
 import type { EmailService } from "../email/email.service";
@@ -38,107 +37,318 @@ export class BillingService extends BasePermissionService<
 > {
   private readonly processedTrialWillEndEventIds = new Set<string>();
 
-  async createUserCustomer({
-    user,
+  async createOrganizationCustomer({
+    organizationId,
+    memberId,
+    email,
+    name,
   }: {
-    user: { id: string; email: string; name?: string };
+    organizationId: string;
+    memberId: string;
+    email: string;
+    name?: string;
   }): ServerResultAsync<Stripe.Customer> {
-    let stripeCustomer: Stripe.Customer | null = null;
-    const existingCustomer = await this.repository.billing.getCustomerByEmail(user.email);
-    if (existingCustomer.isErr()) return err(existingCustomer.error);
-    stripeCustomer = existingCustomer.value;
-    if (!stripeCustomer) {
-      const newCustomer = await this.repository.billing.createCustomer({
-        email: user.email,
-        name: user.name,
-        userId: user.id,
-      });
-      if (newCustomer.isErr()) return err(newCustomer.error);
-      stripeCustomer = newCustomer.value;
+    const existing = await this.repository.billing.getOrganizationById(organizationId);
+    if (existing.isErr()) return err(existing.error);
+    if (existing.value?.stripeCustomerId) {
+      const customer = await this.repository.billing.getStripeCustomer(
+        existing.value.stripeCustomerId
+      );
+      if (customer.isErr()) return err(customer.error);
+      if (!customer.value.deleted) return ok(customer.value);
     }
 
-    if (!stripeCustomer)
-      return this.error("INTERNAL_SERVER_ERROR", "Failed to create or get stripe customer");
-    const updatedUser = await this.repository.billing.updateUserCustomerId({
-      userId: user.id,
-      customerId: stripeCustomer.id,
+    const created = await this.repository.billing.createCustomer({
+      email,
+      name,
+      organizationId,
+      memberId,
     });
-    if (updatedUser.isErr()) return err(updatedUser.error);
-    return ok(stripeCustomer);
+    if (created.isErr()) return err(created.error);
+
+    const updated = await this.repository.billing.updateOrganizationCustomerId({
+      organizationId,
+      customerId: created.value.id,
+    });
+    if (updated.isErr()) return err(updated.error);
+    return ok(created.value);
   }
 
-  async createUserHook({
-    user,
+  async createOrganizationHook({
+    organizationId,
+    memberId,
+    email,
+    name,
   }: {
-    user: { id: string; email: string; name?: string };
+    organizationId: string;
+    memberId: string;
+    email: string;
+    name?: string;
   }): ServerResultAsync<boolean> {
-    const stripeCustomer = await this.createUserCustomer({ user });
-    if (stripeCustomer.isErr()) return err(stripeCustomer.error);
+    const stripeCustomer = await this.createOrganizationCustomer({
+      organizationId,
+      memberId,
+      email,
+      name,
+    });
+    if (stripeCustomer.isErr()) {
+      this.logger.warn(
+        { err: stripeCustomer.error, organizationId },
+        "Stripe Customer create failed; Organization remains without a Subscription"
+      );
+      return ok(false);
+    }
 
     if (this.repository.billing.hasTrial()) {
-      const existingSubscription = await this.repository.billing.getLatestSubscription(user.id);
-      if (existingSubscription.isErr()) return err(existingSubscription.error);
+      const existingSubscription = await this.repository.billing.getLatestSubscription(
+        organizationId
+      );
+      if (existingSubscription.isErr()) return ok(false);
       if (!existingSubscription.value) {
-        const subscription = await this.repository.billing.createTrialSubscription(
-          stripeCustomer.value.id
-        );
-        if (subscription.isErr()) return err(subscription.error);
+        const subscription = await this.repository.billing.createTrialSubscription({
+          customerId: stripeCustomer.value.id,
+          organizationId,
+          memberId,
+        });
+        if (subscription.isErr()) {
+          this.logger.warn(
+            { err: subscription.error, organizationId },
+            "Stripe Trial create failed; Organization remains without a Subscription"
+          );
+          return ok(false);
+        }
       }
-      const syncResult = await this.syncStripeData(stripeCustomer.value.id);
-      if (syncResult.isErr()) return err(syncResult.error);
-      if (syncResult.value === false)
-        return this.error("INTERNAL_SERVER_ERROR", "Sync did not create new subscription");
+      const syncResult = await this.syncStripeData({
+        customerId: stripeCustomer.value.id,
+        memberId,
+      });
+      if (syncResult.isErr()) return ok(false);
     }
 
     return ok(true);
   }
 
   async getActiveSubscription(ctx: Context): ServerResultAsync<BillingSchema | null> {
-    const readGuard = this.accessGuard(ctx.actor, "read", { userId: ctx.actor.userId });
+    const organizationId = ctx.actor.organizationId;
+    if (!organizationId) return this.error("FORBIDDEN", "Organization is required");
+
+    const readGuard = this.accessGuard(ctx.actor, "read", { organizationId });
     if (readGuard.isErr()) return err(readGuard.error);
 
-    return this.repository.billing.getActiveSubscription(ctx.actor.userId);
+    return this.repository.billing.getAccessibleSubscription(organizationId);
   }
 
   async listInvoices(ctx: Context): ServerResultAsync<Stripe.Invoice[]> {
-    const readGuard = this.accessGuard(ctx.actor, "read", { userId: ctx.actor.userId });
+    const organizationId = ctx.actor.organizationId;
+    if (!organizationId) return this.error("FORBIDDEN", "Organization is required");
+
+    const readGuard = this.accessGuard(ctx.actor, "read", { organizationId });
     if (readGuard.isErr()) return err(readGuard.error);
 
-    if (!ctx.user.stripeCustomerId)
-      // the signup hook should have created the customer — its absence means that hook failed
-      return this.error("INTERNAL_SERVER_ERROR", "User has no stripe customer id");
-    return this.repository.billing.listInvoices(ctx.user.stripeCustomerId);
+    const organization = await this.repository.billing.getOrganizationById(organizationId);
+    if (organization.isErr()) return err(organization.error);
+    if (!organization.value?.stripeCustomerId) {
+      return this.error("INTERNAL_SERVER_ERROR", "Organization has no stripe customer id");
+    }
+    return this.repository.billing.listInvoices(organization.value.stripeCustomerId);
   }
 
   async createCheckoutSession(
     { priceId }: { priceId: string },
-    { user }: { user: User }
-  ): ServerResultAsync<Stripe.Checkout.Session> {
-    let stripeCustomerId = user.stripeCustomerId;
-    if (!stripeCustomerId) {
-      const stripeCustomer = await this.createUserCustomer({ user });
-      if (stripeCustomer.isErr()) return err(stripeCustomer.error);
-      stripeCustomerId = stripeCustomer.value.id;
+    {
+      organizationId,
+      memberId,
+      organizationRole,
+      email,
+      name,
+    }: {
+      organizationId: string;
+      memberId: string;
+      organizationRole: string;
+      email: string;
+      name?: string;
     }
+  ): ServerResultAsync<Stripe.Checkout.Session> {
+    if (organizationRole !== "owner") return this.error("FORBIDDEN", "Only the Owner can checkout");
+
+    const open = await this.repository.billing.getOpenSubscription(organizationId);
+    if (open.isErr()) return err(open.error);
+    if (open.value) {
+      return this.error("CONFLICT", "Organization already has a Subscription");
+    }
+
+    const stripeCustomer = await this.createOrganizationCustomer({
+      organizationId,
+      memberId,
+      email,
+      name,
+    });
+    if (stripeCustomer.isErr()) return err(stripeCustomer.error);
+
+    const stripeSubscriptions = await this.repository.billing.listStripeSubscriptions(
+      stripeCustomer.value.id
+    );
+    if (stripeSubscriptions.isErr()) return err(stripeSubscriptions.error);
+    const openOnStripe = stripeSubscriptions.value.some((subscription) =>
+      ["active", "trialing", "past_due", "unpaid", "paused", "incomplete"].includes(
+        subscription.status
+      )
+    );
+    if (openOnStripe) {
+      return this.error("CONFLICT", "Organization already has a Subscription");
+    }
+
+    let quantity = 1;
+    if (this.repository.billing.seatBilling) {
+      const count = await this.repository.billing.countBillableMembers(organizationId);
+      if (count.isErr()) return err(count.error);
+      quantity = Math.max(count.value, 1);
+    }
+
     return this.repository.billing.createCheckoutSession({
-      customerId: stripeCustomerId,
+      customerId: stripeCustomer.value.id,
       priceId,
-      userId: user.id,
+      organizationId,
+      memberId,
+      quantity,
     });
   }
 
   async createBillingPortalSession({
-    user,
+    organizationId,
+    memberId,
+    organizationRole,
+    email,
+    name,
   }: {
-    user: User;
+    organizationId: string;
+    memberId: string;
+    organizationRole: string;
+    email: string;
+    name?: string;
   }): ServerResultAsync<Stripe.BillingPortal.Session> {
-    let stripeCustomerId = user.stripeCustomerId;
-    if (!stripeCustomerId) {
-      const stripeCustomer = await this.createUserCustomer({ user });
-      if (stripeCustomer.isErr()) return err(stripeCustomer.error);
-      stripeCustomerId = stripeCustomer.value.id;
+    if (organizationRole !== "owner") {
+      return this.error("FORBIDDEN", "Only the Owner can open the Billing Portal");
     }
-    return this.repository.billing.createBillingPortalSession(stripeCustomerId);
+
+    const stripeCustomer = await this.createOrganizationCustomer({
+      organizationId,
+      memberId,
+      email,
+      name,
+    });
+    if (stripeCustomer.isErr()) return err(stripeCustomer.error);
+    return this.repository.billing.createBillingPortalSession(stripeCustomer.value.id);
+  }
+
+  async adjustBillableSeats({
+    organizationId,
+    role,
+    delta,
+  }: {
+    organizationId: string;
+    role: string;
+    delta: 1 | -1;
+  }): ServerResultAsync<boolean> {
+    if (!this.repository.billing.seatBilling) return ok(false);
+    if (!this.repository.billing.isBillableRole(role)) return ok(false);
+
+    const subscription = await this.repository.billing.getAccessibleSubscription(organizationId);
+    if (subscription.isErr()) return err(subscription.error);
+    if (!subscription.value?.stripeSubscriptionId) {
+      return ok(false);
+    }
+
+    if (delta > 0 && subscription.value.status === "past_due") {
+      return this.error("FORBIDDEN", "Cannot add billed Memberships while past_due");
+    }
+
+    const current = await this.repository.billing.countBillableMembers(organizationId);
+    if (current.isErr()) return err(current.error);
+    const target = current.value + delta;
+
+    if (subscription.value.status === "trialing") {
+      if (delta > 0) {
+        const cap = this.repository.billing.trialSeatCap();
+        if (cap != null && target > cap) {
+          return this.error("FORBIDDEN", "Trial seat cap reached");
+        }
+      }
+      return ok(true);
+    }
+
+    const stripeSubscriptions = await this.repository.billing.listStripeSubscriptions(
+      subscription.value.stripeCustomerId ?? ""
+    );
+    if (stripeSubscriptions.isErr()) return err(stripeSubscriptions.error);
+    const [stripeSubscription] = stripeSubscriptions.value;
+    const item = stripeSubscription?.items.data[0];
+    if (!stripeSubscription || !item) {
+      return this.error("NOT_FOUND", "Subscription item not found");
+    }
+
+    const updated = await this.repository.billing.updateSubscriptionQuantity({
+      subscriptionId: stripeSubscription.id,
+      itemId: item.id,
+      quantity: Math.max(target, 1),
+    });
+    if (updated.isErr()) return err(updated.error);
+
+    const synced = await this.syncStripeData({
+      customerId: subscription.value.stripeCustomerId ?? "",
+    });
+    if (synced.isErr()) return err(synced.error);
+    return ok(true);
+  }
+
+  async adjustBillableSeatsForRoleChange({
+    organizationId,
+    fromRole,
+    toRole,
+  }: {
+    organizationId: string;
+    fromRole: string;
+    toRole: string;
+  }): ServerResultAsync<boolean> {
+    if (!this.repository.billing.seatBilling) return ok(false);
+    const fromBillable = this.repository.billing.isBillableRole(fromRole);
+    const toBillable = this.repository.billing.isBillableRole(toRole);
+    if (fromBillable === toBillable) return ok(false);
+    return this.adjustBillableSeats({
+      organizationId,
+      role: toBillable ? toRole : fromRole,
+      delta: toBillable ? 1 : -1,
+    });
+  }
+
+  async cancelOrganizationSubscription({
+    organizationId,
+  }: {
+    organizationId: string;
+  }): ServerResultAsync<boolean> {
+    const latest = await this.repository.billing.getLatestSubscription(organizationId);
+    if (latest.isErr()) return err(latest.error);
+    if (!latest.value?.stripeSubscriptionId) return ok(false);
+    if (latest.value.status === "canceled") return ok(false);
+
+    const canceled = await this.repository.billing.cancelStripeSubscription(
+      latest.value.stripeSubscriptionId
+    );
+    if (canceled.isErr()) return err(canceled.error);
+    if (latest.value.stripeCustomerId) {
+      const synced = await this.syncStripeData({ customerId: latest.value.stripeCustomerId });
+      if (synced.isErr()) return err(synced.error);
+    }
+    return ok(true);
+  }
+
+  async syncOrganizationSubscription(organizationId: string): ServerResultAsync<boolean> {
+    const organization = await this.repository.billing.getOrganizationById(organizationId);
+    if (organization.isErr()) return err(organization.error);
+    if (!organization.value?.stripeCustomerId) {
+      return this.error("NOT_FOUND", "Organization has no stripe customer id");
+    }
+    return this.syncStripeData({ customerId: organization.value.stripeCustomerId });
   }
 
   constructEvent(body: Buffer | string, signature: string): ServerResult<Stripe.Event> {
@@ -147,37 +357,46 @@ export class BillingService extends BasePermissionService<
     return this.repository.billing.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      process.env.STRIPE_WEBHOOK_SECRET
     );
   }
 
-  async syncStripeData(customerId: string, eventType?: string): ServerResultAsync<boolean> {
-    const user = await this.repository.billing.getUserByCustomerId(customerId);
-    if (user.isErr()) return err(user.error);
-    if (!user.value) return this.error("NOT_FOUND", "User not found");
+  async syncStripeData({
+    customerId,
+    eventType,
+    memberId,
+  }: {
+    customerId: string;
+    eventType?: string;
+    memberId?: string;
+  }): ServerResultAsync<boolean> {
+    const organization = await this.repository.billing.getOrganizationByCustomerId(customerId);
+    if (organization.isErr()) return err(organization.error);
+    if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
 
     if (eventType) {
       posthogCapture({
-        distinctId: user.value.id,
+        distinctId: organization.value.id,
         event: `stripe.${eventType}`,
         properties: {
           customerId,
         },
       });
     }
-    return this.repository.billing.syncStripeData({ customerId, userId: user.value.id });
+    return this.repository.billing.syncStripeData({
+      customerId,
+      organizationId: organization.value.id,
+      memberId,
+    });
   }
 
   async processEvent(event: Stripe.Event): ServerResultAsync<boolean> {
-    // Skip processing if the event isn't one I'm tracking (list of all events below)
     if (!allowedEvents.includes(event.type)) return ok(false);
 
-    // All the events I track have a customerId
     const { customer: customerId } = event.data.object as {
-      customer: string; // Sadly TypeScript does not know this
+      customer: string;
     };
 
-    // This helps make it typesafe and also lets me know if my assumption is wrong
     if (typeof customerId !== "string") {
       return this.error(
         "INTERNAL_SERVER_ERROR",
@@ -185,7 +404,7 @@ export class BillingService extends BasePermissionService<
       );
     }
 
-    const result = await this.syncStripeData(customerId, event.type);
+    const result = await this.syncStripeData({ customerId, eventType: event.type });
     if (result.isErr()) return err(result.error);
 
     if (event.type === "customer.subscription.trial_will_end") {
@@ -197,7 +416,46 @@ export class BillingService extends BasePermissionService<
       if (trialEnding.isErr()) return err(trialEnding.error);
     }
 
+    if (event.type === "customer.subscription.updated") {
+      const snapped = await this.snapQuantityAfterTrialConvert(
+        event.data as Stripe.CustomerSubscriptionUpdatedEvent.Data
+      );
+      if (snapped.isErr()) return err(snapped.error);
+    }
+
     return ok(true);
+  }
+
+  private async snapQuantityAfterTrialConvert(
+    data: Stripe.CustomerSubscriptionUpdatedEvent.Data
+  ): ServerResultAsync<void> {
+    if (!this.repository.billing.seatBilling) return ok();
+    const previousStatus = (data.previous_attributes as { status?: string } | undefined)?.status;
+    const subscription = data.object;
+    if (previousStatus !== "trialing" || subscription.status !== "active") return ok();
+
+    const customerId = typeof subscription.customer === "string" ? subscription.customer : undefined;
+    if (!customerId) return ok();
+
+    const organization = await this.repository.billing.getOrganizationByCustomerId(customerId);
+    if (organization.isErr()) return err(organization.error);
+    if (!organization.value) return ok();
+
+    const count = await this.repository.billing.countBillableMembers(organization.value.id);
+    if (count.isErr()) return err(count.error);
+
+    const item = subscription.items.data[0];
+    if (!item) return ok();
+
+    const updated = await this.repository.billing.updateSubscriptionQuantity({
+      subscriptionId: subscription.id,
+      itemId: item.id,
+      quantity: Math.max(count.value, 1),
+    });
+    if (updated.isErr()) return err(updated.error);
+    const synced = await this.syncStripeData({ customerId });
+    if (synced.isErr()) return err(synced.error);
+    return ok();
   }
 
   private defaultPaymentMethodId(
@@ -246,16 +504,9 @@ export class BillingService extends BasePermissionService<
       return ok();
     }
 
-    const user = await this.repository.billing.getUserByCustomerId(customerId);
-    if (user.isErr()) return err(user.error);
-    if (!user.value) return this.error("NOT_FOUND", "User not found");
-    if (!user.value.email) {
-      this.logger.info(
-        { userId: user.value.id, customerId },
-        "Skipping trial-ending email because the User has no email"
-      );
-      return ok();
-    }
+    const organization = await this.repository.billing.getOrganizationByCustomerId(customerId);
+    if (organization.isErr()) return err(organization.error);
+    if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
 
     const portal = await this.repository.billing.createBillingPortalSession(customerId);
     if (portal.isErr()) return err(portal.error);
@@ -265,11 +516,21 @@ export class BillingService extends BasePermissionService<
         ? new Date(subscription.trial_end * 1000).toISOString().slice(0, 10)
         : undefined;
 
+    const email =
+      !customer.value.deleted && "email" in customer.value ? customer.value.email : null;
+    if (!email) {
+      this.logger.info(
+        { organizationId: organization.value.id, customerId },
+        "Skipping trial-ending email because the Customer has no email"
+      );
+      return ok();
+    }
+
     const sent = await this.service.email.sendBrandTemplate(
-      user.value.email,
+      email,
       TRIAL_ENDING_TEMPLATE_KEY,
       { url: portal.value.url, trialEnd },
-      { locale: user.value.locale ?? undefined }
+      { locale: organization.value.locale ?? undefined }
     );
     if (sent.isErr()) return err(sent.error);
     this.processedTrialWillEndEventIds.add(eventId);

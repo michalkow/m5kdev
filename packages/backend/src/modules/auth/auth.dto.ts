@@ -48,7 +48,9 @@ export const adminUserSummarySchema = createSelectSchema(users).pick({
   emailVerified: true,
 });
 
-export const organizationSchema = createSelectSchema(organizations);
+export const organizationSchema = createSelectSchema(organizations).omit({
+  stripeCustomerId: true,
+});
 const organizationMemberSchema = createSelectSchema(members).extend({
   user: adminUserSummarySchema.nullable(),
   invitationId: z.string().nullable(),

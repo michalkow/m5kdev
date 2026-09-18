@@ -4,8 +4,8 @@ export const defaultBillingGrants = flattenNestedGrants({
   billing: {
     user: {
       user: {
-        read: "own",
-        write: "own",
+        read: "none",
+        write: "none",
       },
       admin: {
         read: "all",
@@ -20,11 +20,11 @@ export const defaultBillingGrants = flattenNestedGrants({
       },
       admin: {
         read: "org",
-        write: "org",
+        write: "none",
       },
       member: {
-        read: "own",
-        write: "own",
+        read: "org",
+        write: "none",
       },
     },
   },

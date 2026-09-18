@@ -11,11 +11,11 @@ The default tenancy unit. Every authenticated User belongs to at least one, incl
 _Avoid_: Workspace, tenant, account, company, Team (not a 1.0 tenancy unit; [ADR-0011](docs/adr/0011-no-team-at-1.0.md))
 
 **Membership**:
-A durable `members` row: one seat in an Organization. Invite creates it before a User exists (`userId` unset; email and name snapshots). Accept attaches that User to the same row. Leave, invite cancel, and invite expiry soft-delete it; rejoin or re-invite revives it so MemberId stays stable. An Organization has exactly one Owner. The Owner cannot leave; they delete the Organization, or a User-role `admin` transfers Owner first.
-_Avoid_: OrgUser, OrganizationUser; a second live row for the same person in the same Organization; using "member" to mean only the default role name; treating Invitation as the seat; a second Owner; org self-service granting or transferring Owner
+A durable `members` row in an Organization. Invite creates it before a User exists (`userId` unset; email and name snapshots). Accept attaches that User to the same row. Leave, invite cancel, and invite expiry soft-delete it; rejoin or re-invite revives it so MemberId stays stable. An Organization has exactly one Owner. The Owner cannot leave; they delete the Organization, or a User-role `admin` transfers Owner first.
+_Avoid_: OrgUser, OrganizationUser; a second live row for the same person in the same Organization; using "member" to mean only the default role name; treating Invitation as the Membership; a second Owner; org self-service granting or transferring Owner; Seat (that is Seat billing)
 
 **Member**:
-The Membership principal used to attribute and authorize org-scoped assets, including invited seats that do not yet have a User.
+The Membership principal used to attribute and authorize org-scoped assets, including invited Memberships that do not yet have a User.
 _Avoid_: User (when you mean the membership), author, owner (when you mean the membership row), Invitation
 
 **MemberId**:
@@ -249,16 +249,28 @@ An S3 or local object, optionally inventoried as a `files` row. Upload status: `
 _Avoid_: Upload (the action), Asset, Attachment, Blob
 
 **Plan**:
-Stripe product/price configuration in app code (`StripePlan` / `StripePlansConfig`). Not a database row.
-_Avoid_: Product, Tier, Subscription (that is the synced row)
+Stripe product/price configuration in app code (`StripePlan` / `StripePlansConfig`). Not a database row. The catalog is 1..N named Plans with optional annual Price and one currency. Seat billing is a catalog switch, not a per-Plan field. See [ADR-0017](docs/adr/0017-billing-org-paywall-seat-billing-opt-in.md).
+_Avoid_: Product, Tier, Subscription (that is the synced row); `limits` / `group` on a Plan
+
+**Seat billing**:
+An app-level switch on `StripePlansConfig`. On: Stripe quantity is the count of billable Memberships, and Trial requires `freeTrial.seats` as that cap. Off (the default): quantity is one, Trial has no seat count, Membership count is not a billing check.
+_Avoid_: usage/metered billing; mixing on and off across Plans; billed Memberships when the switch is off; Seat as a synonym for Membership
 
 **Subscription**:
-Local row re-synced from Stripe; Stripe is the source of truth. The billed party is the Organization, not a User. Stamp MemberId for attribution; do not key billing by UserId.
+Local row re-synced from Stripe; Stripe is the source of truth. The billed party is the Organization, not a User. Stamp MemberId for attribution; do not key billing by UserId. Access while status is `active`, `trialing`, or `past_due`. See [ADR-0017](docs/adr/0017-billing-org-paywall-seat-billing-opt-in.md).
 _Avoid_: Plan, personal User subscription; Stripe customer linkage on the User
 
 **Trial**:
-The unpaid `trialing` period of a Subscription. Length comes from the Plan's `freeTrial.days`. Stripe owns start and end; the local row stores trialStart / trialEnd.
-_Avoid_: Plan, beta, Customer
+The unpaid `trialing` period of a Subscription. Length comes from the Plan's `freeTrial.days`. Stripe owns start and end; the local row stores trialStart / trialEnd. `freeTrial.seats` exists only when Seat billing is on.
+_Avoid_: Plan, beta, Customer; requiring seats when Seat billing is off
+
+**Checkout**:
+Stripe-hosted start of a Subscription when the Organization has none. Kernel Plan pages are acquisition only.
+_Avoid_: Billing Portal; a second Subscription on an already-trialing Organization
+
+**Billing Portal**:
+Stripe-hosted management of an existing Subscription (Plan, interval, payment method, invoices). Conversion from Trial is this, not Checkout.
+_Avoid_: Checkout; in-app Plan switch in Kernel
 
 **Tag**:
 A polymorphic label attached to any resource type via taggings. Ownership is UserId (personal), MemberId (Member-owned), or organizationId (org-shared).
