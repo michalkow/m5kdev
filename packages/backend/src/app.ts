@@ -33,8 +33,11 @@ import { type AppI18n, type BackendAppI18nResources, createAppI18n } from "./i18
 import { withLibsqlRetry } from "./lib/libsql";
 import type * as authTables from "./modules/auth/auth.db";
 import type { BetterAuth } from "./modules/auth/auth.lib";
+import { mountMcpDcrNativeClientInterop } from "./modules/auth/auth.mcp-dcr";
+import { McpDcrOauthClientRepository } from "./modules/auth/auth.mcp-dcr.repository";
 import type { AuthRequest } from "./modules/auth/auth.middleware";
 import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/auth.middleware";
+import { oauthClients } from "./modules/auth/auth.oauth.db";
 import type { BaseModule } from "./modules/base/base.module";
 import { McpService } from "./modules/mcp/mcp.service";
 import { mcpResourceUrl } from "./modules/mcp/mcp.types";
@@ -439,6 +442,15 @@ function createDbClient(
     owned: true,
     url: config.url,
   };
+}
+
+function dbConfigHasSyncUrl(config: BackendAppConfig["db"]): boolean {
+  return (
+    !("client" in config && config.client) &&
+    "syncUrl" in config &&
+    typeof config.syncUrl === "string" &&
+    config.syncUrl.length > 0
+  );
 }
 
 function createRedisClient(config: BackendAppConfig["redis"]): { redis?: IORedis; owned: boolean } {
@@ -885,6 +897,13 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   }
 
   if (auth) {
+    if (orderedModules.some((module) => module.id === "mcp")) {
+      const dcrStore =
+        schema.oauthClients === oauthClients
+          ? new McpDcrOauthClientRepository({ orm, oauthClients })
+          : null;
+      mountMcpDcrNativeClientInterop({ app: expressApp, store: dcrStore });
+    }
     expressApp.all("/api/auth/*", toNodeHandler(auth));
   }
 
@@ -1063,6 +1082,13 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       const shouldListen = options?.listen !== false;
       if (shouldListen && httpServer) {
         throw new Error("already listening");
+      }
+      // Embedded replicas must see primary oauth_resources before Better Auth
+      // seedResources (first $context / POST /mcp). Stale UNIQUE inserts get
+      // wrapped by Drizzle and break oauth-provider's unique catch.
+      if (dbConfigHasSyncUrl(config.db)) {
+        logger.info("Syncing embedded libsql replica before start");
+        await dbClientState.client.sync();
       }
       if (workflowRuntime) {
         await workflowRuntime.registry.start();

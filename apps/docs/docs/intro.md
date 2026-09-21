@@ -60,8 +60,8 @@ tool — that is by design.
 Every user belongs to at least one **organization**. That is the tenancy model,
 not an optional multi-tenant feature. Single-user products still get an org at
 signup (it can stay invisible in the UI). Org-scoped assets should attribute and
-authorize with **`memberId`**; personal resources (billing, devices, OAuth) stay
-on **`userId`**.
+authorize with **`memberId`**; personal resources (devices, OAuth) stay
+on **`userId`**. Billing keys the Stripe Customer on the Organization.
 
 See [Organizations and members](/guides/organizations-and-members) for intended
 usage, and the
@@ -114,6 +114,14 @@ MCP allowlist tables only if you register McpModule.
 - [Better Auth 1.7.2](/guides/v0.37.0-better-auth-1.7.2-migration)
 - [McpModule and MCP OAuth](/guides/v0.37.0-mcp-oauth-migration)
 - [Inbound callback secrets](/guides/v0.37.0-inbound-callback-secrets-migration)
+
+## Upgrading to 0.38.0 {#upgrade-0-38-0}
+
+Complete 0.37.0 first. Auth Organization / User columns and Billing
+`subscriptions.member_id` share one Drizzle generate after the catalog bump.
+Existing User-keyed Stripe Customers are not mapped.
+
+- [Organization Stripe paywall and opt-in Seat billing](/guides/v0.38.0-billing-org-paywall-migration)
 
 Root `.dockerignore` now ignores SQLite `*.db` / wal / shm files. Copy those
 lines from a fresh scaffold if you already customized the file.

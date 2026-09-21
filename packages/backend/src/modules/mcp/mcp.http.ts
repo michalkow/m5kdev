@@ -128,7 +128,9 @@ export function createMcpExpressHandler(input: {
       }
       return server;
     },
-    { legacy: "reject" }
+    // Cursor still initializes with MCP 2025-11-25. Stateless legacy keeps
+    // 2026-07-28 clients working while accepting that negotiate.
+    { legacy: "stateless" }
   );
 
   return (req: Request, res: Response, next: NextFunction): void => {

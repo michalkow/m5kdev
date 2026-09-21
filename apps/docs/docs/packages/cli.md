@@ -80,8 +80,8 @@ from a fresh scaffold if you want Fly. See
 Root deploy scripts call Kernel bins; see
 [Kernel Fly deploy commands](/guides/v0.35.0-kernel-fly-commands-migration).
 
-The production migration registry is empty for 0.34.0, 0.35.0, 0.36.0, and
-0.37.0. Structural upgrades are documented as Manual / Conditional steps in the
+The production migration registry is empty for 0.34.0, 0.35.0, 0.36.0, 0.37.0,
+and 0.38.0. Structural upgrades are documented as Manual / Conditional steps in the
 guides below.
 
 ## 0.34.0 upgrades
@@ -121,6 +121,10 @@ it.
 1. [Better Auth 1.7.2](/guides/v0.37.0-better-auth-1.7.2-migration)
 2. [McpModule and MCP OAuth](/guides/v0.37.0-mcp-oauth-migration)
 3. [Inbound callback secrets](/guides/v0.37.0-inbound-callback-secrets-migration)
+
+## 0.38.0 upgrades
+
+1. [Organization Stripe paywall and opt-in Seat billing](/guides/v0.38.0-billing-org-paywall-migration)
 
 Root `.dockerignore` now ignores SQLite `*.db` / wal / shm files (see the Fly
 runbook). There is no registry `id` for these upgrades.

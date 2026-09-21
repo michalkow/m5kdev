@@ -21,7 +21,7 @@ described below. Existing apps follow the migration steps in this guide.
 
 | Layer | Change |
 | --- | --- |
-| `@m5kdev/backend` | `withLibsqlRetry` / `isRetryableLibsqlError` in `lib/libsql.ts`. The app kernel wraps the libsql client it creates so top-level calls (`execute`, `batch`, `migrate`, `executeMultiple`, `sync`, and the `transaction()` open) reconnect and retry on dead hrana streams. Caller-provided clients are used as-is. |
+| `@m5kdev/backend` | `withLibsqlRetry` / `isRetryableLibsqlError` in `lib/libsql.ts`. The app kernel wraps the libsql client it creates so top-level calls (`execute`, `batch`, `migrate`, `executeMultiple`, `sync`, and the `transaction()` open) reconnect and retry on dead hrana streams. Caller-provided clients are used as-is. Kernel `start()` also calls `client.sync()` when `db.syncUrl` is set so Auth OAuth seed (`seedResources` on first MCP/auth context) sees current `oauth_resources` on the embedded replica. |
 | `@m5kdev/backend` | `AIModule` accepts `vectorStore` as either a preconfigured `LibSQLVector` or a config object resolved via `createAiVectorStore` (`modules/ai/ai.vector.ts`). Remote URLs are always direct connections; a local file is a dev-only fallback. Module shutdown closes stores it created. |
 | `@m5kdev/backend` | Database commands (`runDb`) own the local-file guard, sidecar reset, replica sync, and script client retry wrapping. See [Kernel Database commands](./v0.34.0-kernel-database-commands-migration.md). |
 | App server | Prefer Kernel `runDb` via Database config (`db.ts`) instead of copying `drizzle/guard.ts` / `reset.ts` / `sync.ts`. |

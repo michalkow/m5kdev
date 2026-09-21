@@ -189,6 +189,15 @@ describe("createBackendApp listen", () => {
     }
   });
 
+  it("does not sync when an injected client has no syncUrl", async () => {
+    const sync = jest.fn(async () => undefined);
+    const injected: Client = Object.assign(client, { sync });
+    const built = createBackendApp({ db: { client: injected } });
+    await built.start({ listen: false });
+    expect(sync).not.toHaveBeenCalled();
+    await built.shutdown();
+  });
+
   it("listens on PORT so the Express app accepts TCP connections", async () => {
     const port = await getFreePort();
     process.env.PORT = String(port);

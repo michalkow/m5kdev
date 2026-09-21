@@ -18,15 +18,18 @@ export function createMcpOAuthPlugins(mcp: McpOAuthPluginConfig | undefined): Be
       disableSettingJwtHeader: true,
       schema: { jwks: { modelName: "jwk" } },
     }),
-    mcpPlugin({
-      loginPage: mcp.loginPage,
-      consentPage: mcp.consentPage,
-      resource: mcp.resource,
-      // MCP 2026-07-28 prefers CIMD; Cursor still requires RFC 7591 DCR
-      // (`registration_endpoint` in AS metadata). Better Auth leaves DCR off
-      // unless both flags are set.
-      allowDynamicClientRegistration: true,
-      allowUnauthenticatedClientRegistration: true,
+    betterAuthPlugin({
+      plugin: mcpPlugin({
+        loginPage: mcp.loginPage,
+        consentPage: mcp.consentPage,
+        resource: mcp.resource,
+        // MCP 2026-07-28 prefers CIMD; Cursor still requires RFC 7591 DCR
+        // (`registration_endpoint` in AS metadata). Better Auth leaves DCR off
+        // unless both flags are set.
+        allowDynamicClientRegistration: true,
+        allowUnauthenticatedClientRegistration: true,
+      }),
+      name: "mcp",
     }),
     cimd({
       fetchClientMetadataResource: isE2eMcpCimdEnabled()
@@ -35,4 +38,17 @@ export function createMcpOAuthPlugins(mcp: McpOAuthPluginConfig | undefined): Be
       metadataProfile: "mcp-2026-07-28",
     }),
   ];
+}
+
+function isBetterAuthPlugin(value: unknown): value is BetterAuthPlugin {
+  return (
+    typeof value === "object" && value !== null && "id" in value && typeof value.id === "string"
+  );
+}
+
+function betterAuthPlugin(input: { plugin: unknown; name: string }): BetterAuthPlugin {
+  if (!isBetterAuthPlugin(input.plugin)) {
+    throw new Error(`${input.name} is not a Better Auth plugin`);
+  }
+  return input.plugin;
 }

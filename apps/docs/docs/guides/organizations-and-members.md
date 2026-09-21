@@ -96,10 +96,13 @@ an organization (it does not remap to `memberId`).
 
 Keep `userId` (and user-level grants) for resources that are not org tenancy:
 
-- Billing / Stripe customer linkage
 - Notification devices (UserId). Inbox instances and Channel preferences are Member-owned — see [Notification](/modules/notification)
 - OAuth accounts and sessions
 - User-global preferences that are intentionally cross-org
+
+Billing keys the Stripe Customer on the **Organization**. Checkout and Billing
+Portal are Owner-only. `memberId` on a Subscription is attribution, not the
+Customer. See [Billing](/modules/billing).
 
 Do not put those on `memberId` unless the product truly wants them to reset or
 fork per organization.
@@ -136,5 +139,7 @@ See [Kernel infrastructure (Base)](/modules/base) for actors and grants, and the
   leftover tokens are not backfilled.
 - [Team drop in 0.36.0](/guides/v0.36.0-team-drop-migration) — Auth no longer
   creates Teams; leftover `team_id` columns are not a tenancy unit.
+- [Organization Stripe paywall in 0.38.0](/guides/v0.38.0-billing-org-paywall-migration) —
+  Billing Customer is the Organization; Seat billing is opt-in.
 - [Custom app roles migration](/guides/custom-app-roles-migration) — configuring
   organization role keys. Owner is not an org-assignable role.

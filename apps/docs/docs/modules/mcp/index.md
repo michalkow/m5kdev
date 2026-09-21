@@ -138,9 +138,12 @@ existing Procedures. An MCP call is still not a Procedure.
 
 ## HTTP
 
-McpModule mounts `POST /mcp` only (MCP protocol `2026-07-28`, legacy rejected)
-and origin `/.well-known/oauth-protected-resource` /
-`/.well-known/oauth-authorization-server` so MCP clients can discover Auth
+McpModule mounts `POST /mcp` only (streamable HTTP). The MCP TypeScript SDK
+serves `2025-11-25` in **stateless** legacy mode so Cursor can initialize, and
+still accepts `2026-07-28`. `GET /mcp` is the baked SPA when configured, not an
+MCP transport — do not add SSE. Origin
+`/.well-known/oauth-protected-resource` /
+`/.well-known/oauth-authorization-server` let MCP clients discover Auth
 mounted at `/api/auth/*`. Authorization-server metadata is at the issuer-suffixed
 path `/.well-known/oauth-authorization-server/api/auth`. That document advertises
 CIMD (`client_id_metadata_document_supported`) and, for clients such as Cursor

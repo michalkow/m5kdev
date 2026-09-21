@@ -56,11 +56,15 @@ jest.mock("@better-auth/mcp", () => ({
   mcp: () => ({ id: "oauth-provider" }),
 }));
 
-jest.mock("@modelcontextprotocol/server", () => ({
-  createMcpHandler: () => ({
+const createMcpHandlerMock = jest.fn(
+  (..._args: unknown[]): { fetch: () => Promise<Response>; close: () => Promise<void> } => ({
     fetch: async () => new Response("ok"),
     close: async () => undefined,
-  }),
+  })
+);
+
+jest.mock("@modelcontextprotocol/server", () => ({
+  createMcpHandler: (...args: unknown[]) => createMcpHandlerMock(...args),
   McpServer: class {
     registerTool(): void {}
   },
@@ -146,6 +150,7 @@ describe("McpModule HTTP", () => {
 
   beforeEach(() => {
     client = createClient({ url: ":memory:" });
+    createMcpHandlerMock.mockClear();
   });
 
   afterEach(async () => {
@@ -199,6 +204,10 @@ describe("McpModule HTTP", () => {
       (route) => route.path === MCP_HTTP_PATH
     );
     expect(mcpRoutes).toEqual([{ path: MCP_HTTP_PATH, methods: ["post"] }]);
+    expect(createMcpHandlerMock).toHaveBeenCalledWith(
+      expect.any(Function),
+      { legacy: "stateless" }
+    );
     const mcpService = built.modules.mcp.services.mcp as McpService;
     expect(mcpService.listCatalog().map((entry) => entry.name)).toEqual([
       LIST_ORGANIZATIONS_MCP_CALL,

@@ -63,8 +63,8 @@ describe("Kernel infrastructure package surface", () => {
   });
 
   it("nests Better Auth MCP companions instead of treating them as boundary libraries", () => {
-    expect(pkg.dependencies?.["@better-auth/mcp"]).toBe("1.7.2");
-    expect(pkg.dependencies?.["@better-auth/cimd"]).toBe("1.7.2");
+    expect(pkg.dependencies?.["@better-auth/mcp"]).toBe("1.7.3");
+    expect(pkg.dependencies?.["@better-auth/cimd"]).toBe("1.7.3");
     expect(pkg.dependencies?.["@modelcontextprotocol/server"]).toBe("2.0.0");
     expect(pkg.peerDependencies?.["@better-auth/mcp"]).toBeUndefined();
     expect(pkg.peerDependencies?.["@better-auth/cimd"]).toBeUndefined();
