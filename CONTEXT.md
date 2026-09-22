@@ -174,6 +174,10 @@ _Avoid_: Filter document, Mongo filter, Filter object, QueryFilter
 `apps/starter` — the reference product: `server`, `webapp`, `landing`, `expo`, `email`, `e2e`, `shared`.
 _Avoid_: Example, Template (CLI templates live in `packages/cli`)
 
+**Release**:
+One Semver version shared by every publishable `@m5kdev/*` package and `create-m5kdev`. Starter apps and the docs site are not part of a Release. See [ADR-0018](docs/adr/0018-one-release-for-publishable-packages.md).
+_Avoid_: Project; independent package versions; Managed catalog (that is the third-party pins for a Release)
+
 **Managed catalog**:
 The named pnpm catalog `catalogs.m5kdev` a scaffolded app shares with a framework release ([ADR-0004](docs/adr/0004-catalog-lockstep-and-boundary-peers.md)). Those pins move with the release. App-owned pins live in the default `catalog:`. The version promise is lockstep, not a newer compatible minor of drizzle or React than the Kernel.
 _Avoid_: lockfile-only pins; Consumer catalog (that is the derived pin set)
