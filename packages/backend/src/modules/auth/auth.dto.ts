@@ -223,6 +223,10 @@ export const invitationSchemas = {
       id: z.string(),
       role: z.string(),
     }),
+    name: z.object({
+      id: z.string(),
+      name: z.string(),
+    }),
     invite: z.object({
       member: z.object({
         id: z.string(),
@@ -266,6 +270,10 @@ export const invitationSchemas = {
     updateMemberRole: z.object({
       memberId: z.string(),
       role: z.string(),
+    }),
+    updateMemberName: z.object({
+      memberId: z.string(),
+      name: z.string().trim().min(1),
     }),
     accept: z.object({
       id: z.string(),

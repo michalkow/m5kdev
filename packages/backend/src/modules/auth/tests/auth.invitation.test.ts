@@ -323,6 +323,145 @@ describe("AuthService.updateMemberRole", () => {
   });
 });
 
+describe("AuthService.updateMemberName", () => {
+  function createUpdateMemberNameAuth(fakes: {
+    updateOrganizationMemberName: AuthOrganizationRepository["updateOrganizationMemberName"];
+    findLiveOrganizationMember?: AuthOrganizationRepository["findLiveOrganizationMember"];
+  }): AuthService {
+    return new AuthService(
+      {
+        accountClaim: {} as AuthAccountClaimRepository,
+        user: {} as AuthUserRepository,
+        invitation: {} as AuthInvitationRepository,
+        waitlist: {} as AuthWaitlistRepository,
+        organization: {
+          findLiveOrganizationMember:
+            fakes.findLiveOrganizationMember ??
+            jest.fn().mockResolvedValue(
+              ok({
+                id: MEMBER_ID,
+                organizationId: ORG_ID,
+                userId: "user-2",
+                name: "Old name",
+                role: "member",
+              })
+            ),
+          updateOrganizationMemberName: fakes.updateOrganizationMemberName,
+        } as unknown as AuthOrganizationRepository,
+      },
+      { email: {} as EmailService },
+      defaultAuthGrants,
+      createFakeBus()
+    );
+  }
+
+  it("updates an attached Membership name", async () => {
+    const updateOrganizationMemberName = jest.fn().mockResolvedValue(
+      ok({
+        id: MEMBER_ID,
+        organizationId: ORG_ID,
+        userId: "user-2",
+        name: "Lukas",
+        role: "member",
+      })
+    );
+    const auth = createUpdateMemberNameAuth({ updateOrganizationMemberName });
+
+    const result = await auth.updateMemberName(
+      { memberId: MEMBER_ID, name: "Lukas" },
+      organizationCtx("owner")
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toEqual({ id: MEMBER_ID, name: "Lukas" });
+    }
+    expect(updateOrganizationMemberName).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      name: "Lukas",
+    });
+  });
+
+  it("updates an invited Membership name", async () => {
+    const updateOrganizationMemberName = jest.fn().mockResolvedValue(
+      ok({
+        id: MEMBER_ID,
+        organizationId: ORG_ID,
+        userId: null,
+        name: "Kitchen lead",
+        role: "member",
+      })
+    );
+    const auth = createUpdateMemberNameAuth({
+      updateOrganizationMemberName,
+      findLiveOrganizationMember: jest.fn().mockResolvedValue(
+        ok({
+          id: MEMBER_ID,
+          organizationId: ORG_ID,
+          userId: null,
+          name: "invitee@example.com",
+          role: "member",
+        })
+      ),
+    });
+
+    const result = await auth.updateMemberName(
+      { memberId: MEMBER_ID, name: "Kitchen lead" },
+      organizationCtx("admin")
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toEqual({ id: MEMBER_ID, name: "Kitchen lead" });
+    }
+  });
+
+  it("refuses a left Membership", async () => {
+    const updateOrganizationMemberName = jest.fn();
+    const auth = createUpdateMemberNameAuth({
+      updateOrganizationMemberName,
+      findLiveOrganizationMember: jest.fn().mockResolvedValue(
+        err(
+          new ServerError({
+            code: "NOT_FOUND",
+            layer: "repository",
+            layerName: "organization",
+            message: "Member not found",
+          })
+        )
+      ),
+    });
+
+    const result = await auth.updateMemberName(
+      { memberId: MEMBER_ID, name: "Lukas" },
+      organizationCtx("owner")
+    );
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("NOT_FOUND");
+    }
+    expect(updateOrganizationMemberName).not.toHaveBeenCalled();
+  });
+
+  it("forbids organization members who cannot manage Members", async () => {
+    const updateOrganizationMemberName = jest.fn();
+    const auth = createUpdateMemberNameAuth({ updateOrganizationMemberName });
+
+    const result = await auth.updateMemberName(
+      { memberId: MEMBER_ID, name: "Lukas" },
+      organizationCtx("member")
+    );
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("FORBIDDEN");
+    }
+    expect(updateOrganizationMemberName).not.toHaveBeenCalled();
+  });
+});
+
 describe("AuthService.inviteOrganizationMember", () => {
   function createInviteAuthService(fakes: {
     findLiveMemberByEmail: AuthOrganizationRepository["findLiveMemberByEmail"];

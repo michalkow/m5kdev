@@ -253,9 +253,16 @@ test("invited membership role change applies before accept", async ({ page, requ
   });
   expect(updated).toEqual({ id: invited.member.id, role: "admin" });
 
+  const renamed = await trpc.auth.updateMemberName.mutate({
+    memberId: invited.member.id,
+    name: "Kitchen lead",
+  });
+  expect(renamed).toEqual({ id: invited.member.id, name: "Kitchen lead" });
+
   const afterRole = findMemberByEmail(await listOrganizationMembers(page), invitee);
   expect(afterRole?.id).toBe(invited.member.id);
   expect(afterRole?.role).toBe("admin");
+  expect(afterRole?.name).toBe("Kitchen lead");
   expect(afterRole?.userId).toBeNull();
   expect(afterRole?.invitationId).toBe(invited.invitation.id);
 

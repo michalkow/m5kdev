@@ -34,6 +34,13 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.readInvitation(input, ctx));
       }),
 
+    updateMemberName: organizationProcedure
+      .input(invitationSchemas.input.updateMemberName)
+      .output(invitationSchemas.output.name)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.updateMemberName(input, ctx));
+      }),
+
     updateMemberRole: organizationProcedure
       .input(invitationSchemas.input.updateMemberRole)
       .output(invitationSchemas.output.role)

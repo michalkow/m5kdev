@@ -1475,6 +1475,33 @@ export class AuthService extends BasePermissionService<
       });
     });
 
+  updateMemberName = this.procedure("updateMemberName")
+    .input(invitationSchemas.input.updateMemberName)
+    .output(invitationSchemas.output.name)
+    .requireAuth("organization")
+    .access({
+      action: "write",
+      entities: ({ ctx }) => ({
+        organizationId: ctx.actor.organizationId,
+      }),
+    })
+    .handle(async ({ input, ctx }) => {
+      const existing = await this.repository.organization.findLiveOrganizationMember({
+        organizationId: ctx.actor.organizationId,
+        memberId: input.memberId,
+      });
+      if (existing.isErr()) return err(existing.error);
+
+      const member = await this.repository.organization.updateOrganizationMemberName({
+        organizationId: ctx.actor.organizationId,
+        memberId: input.memberId,
+        name: input.name,
+      });
+      if (member.isErr()) return err(member.error);
+
+      return ok({ id: member.value.id, name: member.value.name });
+    });
+
   updateMemberRole = this.procedure("updateMemberRole")
     .input(invitationSchemas.input.updateMemberRole)
     .output(invitationSchemas.output.role)

@@ -1,5 +1,9 @@
 # @m5kdev/expo
 
+## Unreleased
+
+- Organization owners and admins can edit member names from the members page.
+
 ## 0.38.0
 
 ### Minor Changes

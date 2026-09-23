@@ -1,4 +1,15 @@
-import { Button, Card, Chip, Input, Label, ListBox, Select, Spinner, Table } from "@heroui/react";
+import {
+  Button,
+  Card,
+  Chip,
+  Input,
+  Label,
+  ListBox,
+  Select,
+  Spinner,
+  Table,
+  TextField,
+} from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useRoleLabel } from "@m5kdev/frontend/modules/app/hooks/useRoleLabel";
@@ -31,6 +42,9 @@ export interface AuthOrganizationMembersRouteLabels {
   loadInvitationsError: string;
   roleUpdateSuccess: string;
   roleUpdateError: string;
+  nameUpdateSuccess: string;
+  nameUpdateError: string;
+  nameRequired: string;
   removeMemberSuccess: string;
   removeMemberError: string;
   emailRequired: string;
@@ -54,6 +68,7 @@ export interface AuthOrganizationMembersRouteLabels {
   columnActions: string;
   tableEmpty: string;
   roleFor: (name: string) => string;
+  nameFor: (name: string) => string;
   statusActive: string;
   statusInvited: string;
   removeMember: string;
@@ -77,6 +92,56 @@ function OrganizationStateCard({ title, message }: { title: string; message: str
         <Card.Content>{message}</Card.Content>
       </Card>
     </div>
+  );
+}
+
+function OrganizationMemberNameField({
+  ariaLabel,
+  value,
+  isDisabled,
+  onNameChange,
+}: {
+  ariaLabel: string;
+  value: string;
+  isDisabled: boolean;
+  onNameChange: (name: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  const commit = (): void => {
+    const next = draft.trim();
+    if (!next || next === value) {
+      setDraft(value);
+      return;
+    }
+    onNameChange(next);
+  };
+
+  return (
+    <TextField
+      aria-label={ariaLabel}
+      value={draft}
+      isDisabled={isDisabled}
+      onChange={setDraft}
+      variant="secondary"
+    >
+      <Input
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+          if (e.key === "Escape") {
+            setDraft(value);
+            e.currentTarget.blur();
+          }
+        }}
+      />
+    </TextField>
   );
 }
 
@@ -141,6 +206,9 @@ function useOrganizationConfig() {
       loadInvitationsError: t("web-ui:organization.members.loadInvitationsError"),
       roleUpdateSuccess: t("web-ui:organization.members.roleUpdateSuccess"),
       roleUpdateError: t("web-ui:organization.members.roleUpdateError"),
+      nameUpdateSuccess: t("web-ui:organization.members.nameUpdateSuccess"),
+      nameUpdateError: t("web-ui:organization.members.nameUpdateError"),
+      nameRequired: t("web-ui:organization.members.nameRequired"),
       removeMemberSuccess: t("web-ui:organization.members.removeMemberSuccess"),
       removeMemberError: t("web-ui:organization.members.removeMemberError"),
       emailRequired: t("web-ui:organization.members.emailRequired"),
@@ -164,6 +232,7 @@ function useOrganizationConfig() {
       columnActions: t("web-ui:organization.members.columnActions"),
       tableEmpty: t("web-ui:organization.members.tableEmpty"),
       roleFor: (name: string) => t("web-ui:organization.members.roleFor", { name }),
+      nameFor: (name: string) => t("web-ui:organization.members.nameFor", { name }),
       statusActive: t("web-ui:organization.members.statusActive"),
       statusInvited: t("web-ui:organization.members.statusInvited"),
       removeMember: t("web-ui:organization.members.removeMember"),
@@ -218,6 +287,21 @@ export function AuthOrganizationMembersRoute({
   const refreshOrganizationQueriesStable = useCallback(
     () => refreshOrganizationQueries(),
     [refreshOrganizationQueries]
+  );
+
+  const updateNameMutation = useMutation(
+    trpc.auth.updateMemberName.mutationOptions({
+      onSuccess: async () => {
+        await refreshOrganizationQueriesStable();
+        await queryClient.invalidateQueries({
+          queryKey: trpc.auth.listOrganizationMembers.queryKey(),
+        });
+        toast.success(resolvedLabels.nameUpdateSuccess);
+      },
+      onError: (error) => {
+        toast.error(error instanceof Error ? error.message : resolvedLabels.nameUpdateError);
+      },
+    })
   );
 
   const updateRoleMutation = useMutation(
@@ -278,6 +362,10 @@ export function AuthOrganizationMembersRoute({
     })
   );
 
+  const updatingNameMemberId =
+    updateNameMutation.isPending && updateNameMutation.variables
+      ? updateNameMutation.variables.memberId
+      : null;
   const updatingMemberId =
     updateRoleMutation.isPending && updateRoleMutation.variables
       ? updateRoleMutation.variables.memberId
@@ -318,6 +406,18 @@ export function AuthOrganizationMembersRoute({
         resolvedLabels.invitedUser
       ),
     [membersQuery.data, resolvedLabels.invitedUser, resolvedLabels.unknownName]
+  );
+
+  const onUpdateMemberName = useCallback(
+    (memberId: string, name: string) => {
+      if (!canManageOrganization) return;
+      if (!name.trim()) {
+        toast.error(resolvedLabels.nameRequired);
+        return;
+      }
+      updateNameMutation.mutate({ memberId, name });
+    },
+    [canManageOrganization, resolvedLabels.nameRequired, updateNameMutation]
   );
 
   const onUpdateMemberRole = useCallback(
@@ -490,7 +590,16 @@ export function AuthOrganizationMembersRoute({
                 <Table.Body items={rows}>
                   {(row) => (
                     <Table.Row id={row.id}>
-                      <Table.Cell>{row.displayName}</Table.Cell>
+                      <Table.Cell>
+                        <OrganizationMemberNameField
+                          ariaLabel={resolvedLabels.nameFor(row.displayName)}
+                          value={row.displayName}
+                          isDisabled={updatingNameMemberId === row.memberId}
+                          onNameChange={(name) => {
+                            void onUpdateMemberName(row.memberId, name);
+                          }}
+                        />
+                      </Table.Cell>
                       <Table.Cell>{row.email}</Table.Cell>
                       <Table.Cell>
                         {row.role === "owner" ? (

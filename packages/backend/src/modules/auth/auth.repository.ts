@@ -494,6 +494,53 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     return ok(member);
   }
 
+  async updateOrganizationMemberName({
+    organizationId,
+    memberId,
+    name,
+  }: {
+    organizationId: string;
+    memberId: string;
+    name: string;
+  }): ServerResultAsync<OrganizationMemberRow> {
+    const existingResult = await this.throwableQuery(() =>
+      this.selectMemberRows(organizationId, { memberId, limit: 1 })
+    );
+    if (existingResult.isErr()) return err(existingResult.error);
+    const [existing] = existingResult.value;
+    if (!existing) return this.error("NOT_FOUND", "Member not found");
+
+    const updateResult = await this.throwableQuery(() =>
+      this.orm.transaction(async (tx) => {
+        await tx
+          .update(this.schema.members)
+          .set({ name })
+          .where(
+            and(
+              eq(this.schema.members.id, memberId),
+              eq(this.schema.members.organizationId, organizationId)
+            )
+          );
+
+        if (existing.userId) {
+          await tx
+            .update(this.schema.users)
+            .set({ name, updatedAt: new Date() })
+            .where(eq(this.schema.users.id, existing.userId));
+        }
+      })
+    );
+    if (updateResult.isErr()) return err(updateResult.error);
+
+    const memberResult = await this.throwableQuery(() =>
+      this.selectMemberRows(organizationId, { memberId, limit: 1 })
+    );
+    if (memberResult.isErr()) return err(memberResult.error);
+    const [member] = memberResult.value;
+    if (!member) return this.error("NOT_FOUND", "Member not found");
+    return ok(member);
+  }
+
   async updateOrganizationMemberRole({
     organizationId,
     memberId,

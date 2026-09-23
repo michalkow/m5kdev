@@ -312,6 +312,39 @@ test("organization members page changes an invited member role before they accep
   ]);
 });
 
+test("organization members page lets an admin edit a member name", async ({ page }) => {
+  const invitee = `invite-name.${Date.now()}@auth-e2e.local`;
+
+  await login(page, profiles.standard.adminEmail, profiles.standard.adminPassword);
+  await inviteFromMembersPage(page, invitee);
+  const invited = findMemberByEmail(await listOrganizationMembers(page), invitee);
+  const invitedMemberId = invited?.id;
+  expect(invitedMemberId).toBeTruthy();
+  expect(invited?.name).toBe(invitee);
+
+  const invitedRow = page.getByRole("row").filter({ hasText: invitee });
+  const nameField = invitedRow.getByRole("textbox", { name: `Name for ${invitee}` });
+  await nameField.fill("Kitchen lead");
+  const nameResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" && response.url().includes("updateMemberName")
+  );
+  await nameField.blur();
+  const nameResponse = await nameResponsePromise;
+  expect(
+    nameResponse.ok(),
+    `${nameResponse.status()} ${nameResponse.statusText()}: ${await nameResponse.text()}`
+  ).toBe(true);
+
+  const afterName = findMemberByEmail(await listOrganizationMembers(page), invitee);
+  expect(afterName?.id).toBe(invitedMemberId);
+  expect(afterName?.name).toBe("Kitchen lead");
+  expect(afterName?.userId).toBeNull();
+  await expect(invitedRow.getByRole("textbox", { name: "Name for Kitchen lead" })).toHaveValue(
+    "Kitchen lead"
+  );
+});
+
 test("organization members page resends, updates, cancels, and revives an invited seat", async ({
   page,
 }) => {
