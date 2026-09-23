@@ -1,5 +1,11 @@
 # create-m5kdev
 
+## 0.38.0
+
+### Minor Changes
+
+- Every publishable package and create-m5kdev share one Semver version.
+
 ## 0.37.4
 
 ### Patch Changes

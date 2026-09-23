@@ -1,5 +1,17 @@
 # @m5kdev/expo
 
+## 0.38.0
+
+### Minor Changes
+
+- Every publishable package and create-m5kdev share one Semver version.
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/commons@0.38.0
+  - @m5kdev/frontend@0.38.0
+
 ## 0.37.4
 
 ### Patch Changes
