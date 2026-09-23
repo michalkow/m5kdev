@@ -1,8 +1,13 @@
 # @m5kdev/backend
 
-## Unreleased
+## 0.38.1
 
-- Organization owners and admins can edit member names from the members page.
+### Patch Changes
+
+- - Organization owners and admins can edit member names from the members page.
+- Updated dependencies
+  - @m5kdev/commons@0.38.1
+  - @m5kdev/config@0.38.1
 
 ## 0.38.0
 

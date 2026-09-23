@@ -1,8 +1,10 @@
 # @m5kdev/commons
 
-## Unreleased
+## 0.38.1
 
-- Organization owners and admins can edit member names from the members page.
+### Patch Changes
+
+- - Organization owners and admins can edit member names from the members page.
 
 ## 0.38.0
 
