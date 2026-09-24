@@ -110,6 +110,7 @@ export const organizations = sqliteTable("organizations", {
   metadata: text("metadata", { mode: "json" }).default({}).$type<Record<string, unknown>>(),
   flags: text("flags", { mode: "json" }).default([]).$type<string[]>(),
   locale: text("locale"),
+  currency: text("currency"),
   stripeCustomerId: text("stripe_customer_id").unique(),
 });
 

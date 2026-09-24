@@ -61,6 +61,7 @@ async function createTables(client: Client): Promise<void> {
       metadata TEXT DEFAULT '{}',
       flags TEXT DEFAULT '[]',
       locale TEXT,
+      currency TEXT,
       stripe_customer_id TEXT UNIQUE
     );
   `);

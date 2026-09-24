@@ -253,8 +253,20 @@ An S3 or local object, optionally inventoried as a `files` row. Upload status: `
 _Avoid_: Upload (the action), Asset, Attachment, Blob
 
 **Plan**:
-Stripe product/price configuration in app code (`StripePlan` / `StripePlansConfig`). Not a database row. The catalog is 1..N named Plans with optional annual Price and one currency. Seat billing is a catalog switch, not a per-Plan field. See [ADR-0017](docs/adr/0017-billing-org-paywall-seat-billing-opt-in.md).
-_Avoid_: Product, Tier, Subscription (that is the synced row); `limits` / `group` on a Plan
+Named commercial offering in app code (`StripePlan` / `StripePlansConfig`). Not a database row. Not a Stripe Product. A Plan cites one Stripe Product id per currency and 1..N Prices under each Product. Seat billing is a catalog switch, not a per-Plan field. See [ADR-0017](docs/adr/0017-billing-org-paywall-seat-billing-opt-in.md) and [ADR-0019](docs/adr/0019-billing-prices-per-currency-product.md).
+_Avoid_: Product (that is the per-currency Stripe Product); Tier; Subscription; `limits` / `group`; treating monthly/quarterly/yearly as separate Plans; `annualDiscountPriceId` as a unique field
+
+**Price**:
+One recurring option on a Plan: Stripe Price id, currency, interval, interval_count, and unit amount. Monthly, quarterly, and yearly are Prices on the same Plan.
+_Avoid_: Plan; Product; Subscription (that is the synced row)
+
+**Organization currency**:
+Frozen ISO code on the Organization, set at create the same way locale is (payload or catalog default). Stripe Customer and Trial Prices use this currency's Product. Never switched on that Organization. A User may only own live Organizations in one currency: omit copies the owned currency; an explicit mismatch is rejected; after those Organizations are deleted, a new one may pick again.
+_Avoid_: deriving currency from locale on every read; a User-keyed currency column; switching USD↔PLN in Billing Portal; lookup of Stripe Customer by email to share currency
+
+**Interval pick**:
+The Owner's explicit choice of a Price during Trial on the Kernel Plan page, including the monthly stand-in. Last pick wins; it updates the Trial item. Without a pick, Trial cancels at end and access ends. Checkout stays refused while Trial exists.
+_Avoid_: silent convert on the stand-in; a second Checkout Subscription; in-app interval switch after paid (that is Billing Portal)
 
 **Seat billing**:
 An app-level switch on `StripePlansConfig`. On: Stripe quantity is the count of billable Memberships, and Trial requires `freeTrial.seats` as that cap. Off (the default): quantity is one, Trial has no seat count, Membership count is not a billing check.
@@ -265,16 +277,16 @@ Local row re-synced from Stripe; Stripe is the source of truth. The billed party
 _Avoid_: Plan, personal User subscription; Stripe customer linkage on the User
 
 **Trial**:
-The unpaid `trialing` period of a Subscription. Length comes from the Plan's `freeTrial.days`. Stripe owns start and end; the local row stores trialStart / trialEnd. `freeTrial.seats` exists only when Seat billing is on.
-_Avoid_: Plan, beta, Customer; requiring seats when Seat billing is off
+The unpaid `trialing` period of a Subscription. Length comes from the Plan's `freeTrial.days`. It starts on the Organization currency's Product monthly Price (stand-in). Stripe owns start and end; the local row stores trialStart / trialEnd. `freeTrial.seats` exists only when Seat billing is on. Trial still grants access; the Owner must make an Interval pick before it ends.
+_Avoid_: Plan, beta, Customer; requiring seats when Seat billing is off; treating the stand-in as the chosen Price
 
 **Checkout**:
-Stripe-hosted start of a Subscription when the Organization has none. Kernel Plan pages are acquisition only.
-_Avoid_: Billing Portal; a second Subscription on an already-trialing Organization
+Stripe-hosted start of a Subscription when the Organization has none. Kernel Plan pages are acquisition; during Trial they record an Interval pick instead. Checkout is refused while Trial exists.
+_Avoid_: Billing Portal; a second Subscription on an already-trialing Organization; using Checkout to pick interval during Trial
 
 **Billing Portal**:
-Stripe-hosted management of an existing Subscription (Plan, interval, payment method, invoices). Conversion from Trial is this, not Checkout.
-_Avoid_: Checkout; in-app Plan switch in Kernel
+Stripe-hosted management of an existing paid Subscription (Plan, interval, payment method, invoices). After convert, interval change is this, not the Kernel Plan page.
+_Avoid_: Checkout; in-app Plan switch after paid; Interval pick (that is Trial-only)
 
 **Tag**:
 A polymorphic label attached to any resource type via taggings. Ownership is UserId (personal), MemberId (Member-owned), or organizationId (org-shared).

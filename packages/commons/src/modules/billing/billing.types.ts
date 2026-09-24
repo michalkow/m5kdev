@@ -1,9 +1,18 @@
+export type StripePlanPrice = {
+  priceId: string;
+  interval: "day" | "week" | "month" | "year";
+  intervalCount: number;
+  unitAmount?: number;
+};
+
+export type StripePlanProduct = {
+  id: string;
+  prices: StripePlanPrice[];
+};
+
 export type StripePlan = {
   name: string;
-  priceId: string;
-  priceUnitAmount?: number;
-  annualDiscountPriceId?: string;
-  annualPriceUnitAmount?: number;
+  products: Record<string, StripePlanProduct>;
   freeTrial?: {
     days: number;
     seats?: number;
@@ -11,7 +20,7 @@ export type StripePlan = {
 };
 
 export type StripePlansConfig = {
-  currency: string;
+  defaultCurrency: string;
   seatBilling?: boolean;
   nonBillableRoleKeys?: readonly string[];
   production: StripePlan[];
@@ -22,7 +31,7 @@ export type StripePlansConfig = {
 export type ResolvedStripePlans = {
   plans: StripePlan[];
   trial?: StripePlan;
-  currency: string;
+  defaultCurrency: string;
   seatBilling: boolean;
   nonBillableRoleKeys: readonly string[];
 };

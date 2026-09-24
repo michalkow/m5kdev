@@ -301,12 +301,14 @@ export class AuthOrganizationRepository extends BaseTableRepository<
       userId,
       role,
       locale,
+      currency,
     }: {
       name: string;
       parentId: string | null;
       userId: string;
       role: string;
       locale?: string | null;
+      currency?: string | null;
     },
     tx?: Orm
   ): ServerResultAsync<{ organization: OrganizationRow; member: MemberRow }> {
@@ -321,6 +323,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
             type: "organization",
             parentId,
             ...(locale ? { locale } : {}),
+            ...(currency ? { currency } : {}),
           })
           .returning();
 
@@ -354,6 +357,26 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     );
   }
 
+  listOwnedOwnerCurrencies(userId: string): ServerResultAsync<(string | null)[]> {
+    return this.throwableQuery(async () => {
+      const rows = await this.orm
+        .select({ currency: this.schema.organizations.currency })
+        .from(this.schema.members)
+        .innerJoin(
+          this.schema.organizations,
+          eq(this.schema.members.organizationId, this.schema.organizations.id)
+        )
+        .where(
+          and(
+            eq(this.schema.members.userId, userId),
+            eq(this.schema.members.role, "owner"),
+            isNull(this.schema.members.deletedAt)
+          )
+        );
+      return rows.map((row) => row.currency);
+    });
+  }
+
   listUserOrganizations = this.query<string>("listUserOrganizations")
     .output(z.array(organizationSchemas.output.simple))
     .handle(async (userId) => {
@@ -368,6 +391,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
             parentId: this.schema.organizations.parentId,
             onboarding: this.schema.organizations.onboarding,
             locale: this.schema.organizations.locale,
+            currency: this.schema.organizations.currency,
             createdAt: this.schema.organizations.createdAt,
           })
           .from(this.schema.organizations)

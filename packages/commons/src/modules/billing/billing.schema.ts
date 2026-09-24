@@ -18,6 +18,8 @@ export const billingSchema = z.object({
   trialEnd: z.date().nullish(),
   priceId: z.string().nullish(),
   interval: z.string().nullish(),
+  intervalCount: z.number().nullish(),
+  intervalPicked: z.boolean().nullish(),
   unitAmount: z.number().nullish(),
   discounts: z.array(z.string()).nullish(),
 });

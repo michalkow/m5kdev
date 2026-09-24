@@ -1,6 +1,7 @@
 import {
   ADMIN_CREATE_VERIFIED_USER_HEADER,
   ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE,
+  USER_CURRENCY_HEADER,
   USER_LOCALE_HEADER,
 } from "@m5kdev/commons/modules/auth/auth.constants";
 import {
@@ -38,6 +39,7 @@ import {
   attachUserToInvitedMember,
   createOrganizationWithOwner,
   getActiveOrganization,
+  OrganizationCurrencyError,
   getNewOrganization,
   syncActiveMemberProfiles,
   WaitlistCodeNotFound,
@@ -597,6 +599,12 @@ export function createBetterAuth<
                 defaultValue: null,
                 input: true,
               },
+              currency: {
+                type: "string",
+                required: false,
+                defaultValue: null,
+                input: false,
+              },
               stripeCustomerId: {
                 type: "string",
                 required: false,
@@ -809,7 +817,29 @@ export function createBetterAuth<
               }
             } else {
               const userLocale = typeof user.locale === "string" ? user.locale : undefined;
-              const membership = await createOrganizationWithOwner(orm, schema, user, userLocale);
+              const requestedCurrency = ctx?.headers?.get(USER_CURRENCY_HEADER.toLowerCase());
+              const catalog = billingService?.catalogCurrencies();
+              let membership: { organizationId: string; memberId: string };
+              try {
+                membership = await createOrganizationWithOwner(
+                  orm,
+                  schema,
+                  user,
+                  userLocale,
+                  catalog
+                    ? {
+                        requested: requestedCurrency,
+                        defaultCurrency: catalog.defaultCurrency,
+                        allowedCurrencies: catalog.currencies,
+                      }
+                    : undefined
+                );
+              } catch (error) {
+                if (error instanceof OrganizationCurrencyError) {
+                  throw new APIError("BAD_REQUEST", { message: error.message });
+                }
+                throw error;
+              }
               if (hooks?.afterCreateUser) {
                 const i18nCtx = createUserHookI18nContext(user, i18n);
                 await hooks.afterCreateUser(user, membership, i18nCtx);

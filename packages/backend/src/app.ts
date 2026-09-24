@@ -4,6 +4,7 @@ import path from "node:path";
 import { type Client, createClient, type Config as LibSQLClientConfig } from "@libsql/client";
 import {
   ADMIN_CREATE_VERIFIED_USER_HEADER,
+  USER_CURRENCY_HEADER,
   USER_LOCALE_HEADER,
 } from "@m5kdev/commons/modules/auth/auth.constants";
 import type { AuthLocaleConfig } from "@m5kdev/commons/modules/auth/auth.locale";
@@ -626,6 +627,7 @@ function applyHttpShell({
       "Organization-Invitation-Code",
       ADMIN_CREATE_VERIFIED_USER_HEADER,
       USER_LOCALE_HEADER,
+      USER_CURRENCY_HEADER,
     ],
   };
   const corsOptions = config.cors ? config.cors(corsDefaults) : corsDefaults;

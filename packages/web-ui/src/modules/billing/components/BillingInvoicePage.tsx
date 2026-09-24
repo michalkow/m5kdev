@@ -1,5 +1,6 @@
 import { Button, Card, Chip, Spinner, Table } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
+import { formatBillingInterval } from "@m5kdev/commons/modules/billing/billing.utils";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useSubscription } from "@m5kdev/frontend/modules/billing/hooks/useSubscription";
@@ -99,9 +100,21 @@ export function BillingInvoicePage() {
                         : "N/A"}
                     </span>
                     <span className="text-small text-default-500">
-                      {`(${activeSubscription.interval === "month" ? "Monthly" : "Annually"})`}
+                      {`(${formatBillingInterval({
+                        interval: activeSubscription.interval,
+                        intervalCount: activeSubscription.intervalCount,
+                      })})`}
                     </span>
                   </p>
+                  {activeSubscription.status === "trialing" && !activeSubscription.intervalPicked ? (
+                    <p className="text-small text-warning">
+                      Choose a billing interval before Trial ends.{" "}
+                      <Link to="/pricing" className="underline">
+                        Open the Plan page
+                      </Link>{" "}
+                      to record that pick; Checkout is not used while Trial exists.
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex gap-3">
                   <Button

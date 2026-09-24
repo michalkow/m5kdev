@@ -1,7 +1,12 @@
 import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
-import { formatPlanAmount } from "@m5kdev/commons/modules/billing/billing.utils";
+import {
+  findMonthlyStandInPrice,
+  formatBillingInterval,
+  formatPlanAmount,
+} from "@m5kdev/commons/modules/billing/billing.utils";
 import { BillingSinglePlanSelect } from "./BillingSinglePlanSelect";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
+import { useSubscription } from "@m5kdev/frontend/modules/billing/hooks/useSubscription";
 import { Check } from "lucide-react";
 import { buttonVariants } from "../../../components/ui/button";
 import {
@@ -28,7 +33,7 @@ export function BillingPlanSelect({ plans, currency }: BillingPlanSelectProps) {
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-6 px-4 py-8 md:grid-cols-2 lg:grid-cols-3">
       {plans.map((plan) => (
-        <PlanCard key={plan.priceId} plan={plan} currency={currency} />
+        <PlanCard key={plan.name} plan={plan} currency={currency} />
       ))}
     </div>
   );
@@ -36,10 +41,16 @@ export function BillingPlanSelect({ plans, currency }: BillingPlanSelectProps) {
 
 function PlanCard({ plan, currency }: { plan: StripePlan; currency: string }) {
   const { serverUrl } = useAppConfig();
+  const { data: subscription } = useSubscription();
+  const isTrialing = subscription?.status === "trialing";
+  const prices = plan.products[currency]?.prices ?? [];
+  const standIn = findMonthlyStandInPrice(plan, currency);
   const amount =
-    plan.priceUnitAmount != null
-      ? formatPlanAmount({ unitAmount: plan.priceUnitAmount, currency })
-      : "";
+    standIn?.unitAmount != null
+      ? formatPlanAmount({ unitAmount: standIn.unitAmount, currency })
+      : prices[0]?.unitAmount != null
+        ? formatPlanAmount({ unitAmount: prices[0].unitAmount, currency })
+        : "";
 
   return (
     <Card className="flex flex-col">
@@ -56,20 +67,22 @@ function PlanCard({ plan, currency }: { plan: StripePlan; currency: string }) {
         ) : null}
       </CardContent>
       <CardFooter className="flex flex-col gap-2">
-        <a
-          className={cn(buttonVariants({ variant: "default" }), "w-full")}
-          href={`${serverUrl}/stripe/checkout/${plan.priceId}`}
-        >
-          Subscribe monthly
-        </a>
-        {plan.annualDiscountPriceId ? (
+        {prices.map((price) => (
           <a
-            className={cn(buttonVariants({ variant: "outline" }), "w-full")}
-            href={`${serverUrl}/stripe/checkout/${plan.annualDiscountPriceId}`}
+            key={price.priceId}
+            className={cn(
+              buttonVariants({ variant: price.priceId === standIn?.priceId ? "default" : "outline" }),
+              "w-full"
+            )}
+            href={`${serverUrl}/stripe/${isTrialing ? "pick" : "checkout"}/${price.priceId}`}
           >
-            Subscribe annually
+            {isTrialing ? "Choose " : "Subscribe "}
+            {formatBillingInterval({
+              interval: price.interval,
+              intervalCount: price.intervalCount,
+            }).toLowerCase()}
           </a>
-        ) : null}
+        ))}
       </CardFooter>
     </Card>
   );

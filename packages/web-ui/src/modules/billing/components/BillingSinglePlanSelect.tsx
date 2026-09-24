@@ -1,7 +1,12 @@
 import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
-import { formatPlanAmount } from "@m5kdev/commons/modules/billing/billing.utils";
+import {
+  findMonthlyStandInPrice,
+  formatBillingInterval,
+  formatPlanAmount,
+} from "@m5kdev/commons/modules/billing/billing.utils";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
+import { useSubscription } from "@m5kdev/frontend/modules/billing/hooks/useSubscription";
 import { Check, LogOut } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -41,42 +46,25 @@ export function BillingSinglePlanSelect({
   const { t } = useTranslation("web-ui");
   const { serverUrl } = useAppConfig();
   const navigate = useNavigate();
-  const [billingInterval, setBillingInterval] = useState<"monthly" | "annually">("annually");
+  const { data: subscription } = useSubscription();
+  const isTrialing = subscription?.status === "trialing";
+  const prices = plan.products[currency]?.prices ?? [];
+  const standIn = findMonthlyStandInPrice(plan, currency);
+  const [priceId, setPriceId] = useState(standIn?.priceId ?? prices[0]?.priceId ?? "");
+  const selected = prices.find((price) => price.priceId === priceId) ?? prices[0];
 
   const handleLogout = async () => {
     await authClient.signOut();
     navigate("/login");
   };
 
-  const isAnnual = billingInterval === "annually";
-  const currentPriceId = isAnnual ? plan.annualDiscountPriceId : plan.priceId;
-
-  // Fallback if no annual price ID exists
-  const hasAnnualOption = !!plan.annualDiscountPriceId;
-
-  const priceUnitAmount = plan.priceUnitAmount ?? Number.NaN;
-  const annualPriceUnitAmount = plan.annualPriceUnitAmount ?? Number.NaN;
-
-  const priceDisplay = {
-    monthly: {
-      amount: Number.isNaN(priceUnitAmount)
-        ? ""
-        : formatPlanAmount({ unitAmount: priceUnitAmount, currency }),
-      label: "/ month",
-    },
-    annually: {
-      amount: Number.isNaN(annualPriceUnitAmount)
-        ? ""
-        : formatPlanAmount({ unitAmount: annualPriceUnitAmount / 12, currency }),
-      originalAmount: Number.isNaN(priceUnitAmount)
-        ? ""
-        : formatPlanAmount({ unitAmount: priceUnitAmount, currency }),
-      label: "/ month, billed annually",
-      discountLabel: plan.annualPriceUnitAmount
-        ? `Save ${Math.floor(((priceUnitAmount - annualPriceUnitAmount / 12) / priceUnitAmount) * 100).toFixed(0)}%`
-        : "",
-    },
-  };
+  const href = selected
+    ? `${serverUrl}/stripe/${isTrialing ? "pick" : "checkout"}/${selected.priceId}`
+    : undefined;
+  const amount =
+    selected?.unitAmount != null
+      ? formatPlanAmount({ unitAmount: selected.unitAmount, currency })
+      : "";
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4 py-8">
@@ -90,26 +78,24 @@ export function BillingSinglePlanSelect({
           </p>
         </div>
 
-        {hasAnnualOption && (
+        {prices.length > 1 ? (
           <Tabs
-            defaultValue="annually"
-            value={billingInterval}
-            onValueChange={(v) => setBillingInterval(v as "monthly" | "annually")}
-            className="w-full max-w-xs"
+            value={selected?.priceId}
+            onValueChange={setPriceId}
+            className="w-full max-w-xl"
           >
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="monthly">Monthly</TabsTrigger>
-              <TabsTrigger value="annually" className="relative">
-                Annually
-                {priceDisplay.annually.discountLabel && (
-                  <span className="absolute -top-3 -right-3 px-1.5 py-0.5 rounded-full bg-green-500 text-[10px] text-white font-medium transform rotate-12">
-                    {priceDisplay.annually.discountLabel}
-                  </span>
-                )}
-              </TabsTrigger>
+            <TabsList className="flex w-full flex-wrap">
+              {prices.map((price) => (
+                <TabsTrigger key={price.priceId} value={price.priceId}>
+                  {formatBillingInterval({
+                    interval: price.interval,
+                    intervalCount: price.intervalCount,
+                  })}
+                </TabsTrigger>
+              ))}
             </TabsList>
           </Tabs>
-        )}
+        ) : null}
 
         <Card className={cn("w-full max-w-md border-2 border-primary")}>
           <CardHeader>
@@ -117,26 +103,19 @@ export function BillingSinglePlanSelect({
               <span className="text-xl font-bold">{plan.name}</span>
             </CardTitle>
             <CardDescription>
-              {isAnnual ? "Perfect for long-term commitment" : "Flexible monthly billing"}
+              {isTrialing
+                ? "Choose an interval before Trial ends"
+                : formatBillingInterval({
+                    interval: selected?.interval,
+                    intervalCount: selected?.intervalCount,
+                  })}
             </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-6">
             <div className="flex items-baseline gap-1">
-              <span className="text-4xl font-bold">
-                {isAnnual ? priceDisplay.annually.amount : priceDisplay.monthly.amount}
-              </span>
-              <span className="text-muted-foreground">
-                {isAnnual ? priceDisplay.annually.label : priceDisplay.monthly.label}
-              </span>
+              <span className="text-4xl font-bold">{amount}</span>
             </div>
-
-            {isAnnual && priceDisplay.annually.originalAmount && (
-              <p className="text-sm text-green-500 line-through">
-                {" "}
-                {priceDisplay.annually.originalAmount} / month
-              </p>
-            )}
 
             <div className="space-y-3">
               {features.map((feature) => (
@@ -151,12 +130,11 @@ export function BillingSinglePlanSelect({
           </CardContent>
 
           <CardFooter>
-            <a
-              className={cn(buttonVariants({ variant: "default", size: "lg" }), "w-full")}
-              href={`${serverUrl}/stripe/checkout/${currentPriceId}`}
-            >
-              {isAnnual ? "Subscribe Annually" : "Subscribe Monthly"}
-            </a>
+            {href ? (
+              <a className={cn(buttonVariants({ variant: "default", size: "lg" }), "w-full")} href={href}>
+                {isTrialing ? "Choose this interval" : "Subscribe"}
+              </a>
+            ) : null}
           </CardFooter>
         </Card>
 

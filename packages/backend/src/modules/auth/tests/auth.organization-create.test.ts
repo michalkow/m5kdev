@@ -5,7 +5,7 @@ import { type Client, createClient } from "@libsql/client";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import * as auth from "../auth.db";
-import { createOrganizationWithOwner, getActiveOrganization } from "../auth.utils";
+import { createOrganizationWithOwner, getActiveOrganization, OrganizationCurrencyError } from "../auth.utils";
 
 async function createTables(client: Client): Promise<void> {
   await client.execute(`
@@ -42,6 +42,7 @@ async function createTables(client: Client): Promise<void> {
       metadata TEXT DEFAULT '{}',
       flags TEXT DEFAULT '[]',
       locale TEXT,
+      currency TEXT,
       stripe_customer_id TEXT UNIQUE
     );
   `);
@@ -125,6 +126,165 @@ describe("createOrganizationWithOwner", () => {
     expect(members).toHaveLength(1);
     expect(members[0]?.role).toBe("owner");
     expect(members[0]?.organizationId).toBe(result.organizationId);
+  });
+
+  it("persists Organization currency from the create payload", async () => {
+    const orm = drizzle(client, { schema: auth });
+    await orm.insert(auth.users).values({
+      id: "user-1",
+      name: "Pat",
+      email: "pat@example.com",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const result = await createOrganizationWithOwner(
+      orm,
+      auth,
+      { id: "user-1", email: "pat@example.com", name: "Pat", image: null },
+      undefined,
+      { requested: "pln", defaultCurrency: "usd", allowedCurrencies: ["usd", "pln"] }
+    );
+    const organizations = await orm.select().from(auth.organizations);
+    expect(organizations[0]?.id).toBe(result.organizationId);
+    expect(organizations[0]?.currency).toBe("pln");
+  });
+
+  it("uses defaultCurrency when none is requested", async () => {
+    const orm = drizzle(client, { schema: auth });
+    await orm.insert(auth.users).values({
+      id: "user-1",
+      name: "Pat",
+      email: "pat@example.com",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await createOrganizationWithOwner(
+      orm,
+      auth,
+      { id: "user-1", email: "pat@example.com", name: "Pat", image: null },
+      undefined,
+      { defaultCurrency: "usd", allowedCurrencies: ["usd", "pln"] }
+    );
+    const organizations = await orm.select().from(auth.organizations);
+    expect(organizations[0]?.currency).toBe("usd");
+  });
+
+  it("copies currency from a live owned Organization when omitted", async () => {
+    const orm = drizzle(client, { schema: auth });
+    await orm.insert(auth.users).values({
+      id: "user-1",
+      name: "Pat",
+      email: "pat@example.com",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await createOrganizationWithOwner(
+      orm,
+      auth,
+      { id: "user-1", email: "pat@example.com", name: "Pat", image: null },
+      undefined,
+      { requested: "pln", defaultCurrency: "usd", allowedCurrencies: ["usd", "pln"] }
+    );
+    await createOrganizationWithOwner(
+      orm,
+      auth,
+      { id: "user-1", email: "pat@example.com", name: "Pat", image: null },
+      undefined,
+      { defaultCurrency: "usd", allowedCurrencies: ["usd", "pln"] }
+    );
+    const organizations = await orm.select().from(auth.organizations);
+    expect(organizations).toHaveLength(2);
+    expect(organizations.every((row) => row.currency === "pln")).toBe(true);
+  });
+
+  it("rejects a different currency while the User owns a live Organization", async () => {
+    const orm = drizzle(client, { schema: auth });
+    await orm.insert(auth.users).values({
+      id: "user-1",
+      name: "Pat",
+      email: "pat@example.com",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await createOrganizationWithOwner(
+      orm,
+      auth,
+      { id: "user-1", email: "pat@example.com", name: "Pat", image: null },
+      undefined,
+      { requested: "usd", defaultCurrency: "usd", allowedCurrencies: ["usd", "pln"] }
+    );
+    await expect(
+      createOrganizationWithOwner(
+        orm,
+        auth,
+        { id: "user-1", email: "pat@example.com", name: "Pat", image: null },
+        undefined,
+        { requested: "pln", defaultCurrency: "usd", allowedCurrencies: ["usd", "pln"] }
+      )
+    ).rejects.toBeInstanceOf(OrganizationCurrencyError);
+  });
+
+  it("allows a new currency after owned Organizations are deleted", async () => {
+    const orm = drizzle(client, { schema: auth });
+    await orm.insert(auth.users).values({
+      id: "user-1",
+      name: "Pat",
+      email: "pat@example.com",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const first = await createOrganizationWithOwner(
+      orm,
+      auth,
+      { id: "user-1", email: "pat@example.com", name: "Pat", image: null },
+      undefined,
+      { requested: "usd", defaultCurrency: "usd", allowedCurrencies: ["usd", "pln"] }
+    );
+    await orm.delete(auth.members).where(eq(auth.members.organizationId, first.organizationId));
+    await orm.delete(auth.organizations).where(eq(auth.organizations.id, first.organizationId));
+
+    await createOrganizationWithOwner(
+      orm,
+      auth,
+      { id: "user-1", email: "pat@example.com", name: "Pat", image: null },
+      undefined,
+      { requested: "pln", defaultCurrency: "usd", allowedCurrencies: ["usd", "pln"] }
+    );
+    const organizations = await orm.select().from(auth.organizations);
+    expect(organizations).toHaveLength(1);
+    expect(organizations[0]?.currency).toBe("pln");
+  });
+
+  it("rejects an unknown catalog currency", async () => {
+    const orm = drizzle(client, { schema: auth });
+    await orm.insert(auth.users).values({
+      id: "user-1",
+      name: "Pat",
+      email: "pat@example.com",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await expect(
+      createOrganizationWithOwner(
+        orm,
+        auth,
+        { id: "user-1", email: "pat@example.com", name: "Pat", image: null },
+        undefined,
+        { requested: "eur", defaultCurrency: "usd", allowedCurrencies: ["usd", "pln"] }
+      )
+    ).rejects.toMatchObject({ reason: "unknown" });
   });
 });
 

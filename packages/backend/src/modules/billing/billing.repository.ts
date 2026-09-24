@@ -1,5 +1,10 @@
 import type { BillingSchema } from "@m5kdev/commons/modules/billing/billing.schema";
 import type { ResolvedStripePlans, StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
+import {
+  findMonthlyStandInPrice,
+  findPlanByPriceId,
+  findPriceCurrency,
+} from "@m5kdev/commons/modules/billing/billing.utils";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
@@ -34,7 +39,7 @@ export class BillingRepository extends BaseTableRepository<
   public stripe: Stripe;
   public plans: StripePlan[];
   public trial?: StripePlan;
-  public currency: string;
+  public defaultCurrency: string;
   public seatBilling: boolean;
   public nonBillableRoleKeys: readonly string[];
 
@@ -50,9 +55,20 @@ export class BillingRepository extends BaseTableRepository<
     this.stripe = libs.stripe;
     this.plans = config.plans;
     this.trial = config.trial;
-    this.currency = config.currency;
+    this.defaultCurrency = config.defaultCurrency;
     this.seatBilling = config.seatBilling;
     this.nonBillableRoleKeys = config.nonBillableRoleKeys;
+    if (!this.defaultCurrency) {
+      throw new Error("Billing catalog requires defaultCurrency");
+    }
+    for (const plan of this.plans) {
+      if (!plan.products[this.defaultCurrency]) {
+        throw new Error(`Plan ${plan.name} is missing Product for defaultCurrency`);
+      }
+    }
+    if (this.trial && !findMonthlyStandInPrice(this.trial, this.defaultCurrency)) {
+      throw new Error("Trial Plan requires a monthly Price for defaultCurrency");
+    }
     if (this.seatBilling && this.trial && (this.trial.freeTrial?.seats == null || this.trial.freeTrial.seats < 1)) {
       throw new Error("Seat billing Trial requires freeTrial.seats");
     }
@@ -72,9 +88,18 @@ export class BillingRepository extends BaseTableRepository<
   }
 
   getPlanByPriceId(priceId: string): StripePlan | undefined {
-    return this.plans.find(
-      (plan) => plan.priceId === priceId || plan.annualDiscountPriceId === priceId
-    );
+    return findPlanByPriceId(this.plans, priceId);
+  }
+
+  monthlyStandInPriceId(currency: string): string | undefined {
+    if (!this.trial) return undefined;
+    return findMonthlyStandInPrice(this.trial, currency)?.priceId;
+  }
+
+  priceBelongsToCurrency(priceId: string, currency: string): boolean {
+    const plan = this.getPlanByPriceId(priceId);
+    if (!plan) return false;
+    return findPriceCurrency(plan, priceId) === currency;
   }
 
   getOrganizationByCustomerId(
@@ -130,16 +155,18 @@ export class BillingRepository extends BaseTableRepository<
     customerId,
     organizationId,
     memberId,
+    priceId,
   }: {
     customerId: string;
     organizationId: string;
     memberId: string;
+    priceId: string;
   }): ServerResultAsync<Stripe.Subscription> {
     if (!this.trial) return this.error("INTERNAL_SERVER_ERROR", "Trial plan not found");
     const quantity = this.seatBilling ? (this.trial.freeTrial?.seats ?? 1) : 1;
     const stripeSubscription = await this.createSubscription({
       customerId,
-      priceId: this.trial.priceId,
+      priceId,
       trialDays: this.trial.freeTrial?.days ?? 7,
       quantity,
       organizationId,
@@ -175,6 +202,7 @@ export class BillingRepository extends BaseTableRepository<
               metadata: {
                 ...(organizationId ? { organizationId } : {}),
                 ...(memberId ? { memberId } : {}),
+                intervalPicked: "false",
               },
             }
           : {}),
@@ -205,6 +233,26 @@ export class BillingRepository extends BaseTableRepository<
       this.stripe.subscriptions.update(subscriptionId, {
         items: [{ id: itemId, quantity }],
         proration_behavior: "create_prorations",
+      })
+    );
+  }
+
+  updateTrialSubscriptionPrice({
+    subscriptionId,
+    itemId,
+    priceId,
+    metadata,
+  }: {
+    subscriptionId: string;
+    itemId: string;
+    priceId: string;
+    metadata: Record<string, string>;
+  }): ServerResultAsync<Stripe.Subscription> {
+    return this.throwablePromise(() =>
+      this.stripe.subscriptions.update(subscriptionId, {
+        items: [{ id: itemId, price: priceId }],
+        metadata,
+        proration_behavior: "none",
       })
     );
   }
@@ -412,6 +460,8 @@ export class BillingRepository extends BaseTableRepository<
       periodStart: new Date(subscriptionItem.current_period_start * 1000),
       priceId: subscriptionItem.price.id,
       interval: subscriptionItem.price.recurring?.interval,
+      intervalCount: subscriptionItem.price.recurring?.interval_count ?? 1,
+      intervalPicked: stripeSubscription.metadata?.intervalPicked === "true",
       unitAmount: subscriptionItem.price.unit_amount,
       discounts: stripeSubscription.discounts.map((discount) =>
         typeof discount === "string" ? discount : discount.id
@@ -438,7 +488,11 @@ export class BillingRepository extends BaseTableRepository<
       const updateResult = await this.throwableQuery(() =>
         this.orm
           .update(this.schema.subscriptions)
-          .set({ ...values, updatedAt: new Date() })
+          .set({
+            ...values,
+            intervalPicked: values.intervalPicked || existing.intervalPicked === true,
+            updatedAt: new Date(),
+          })
           .where(eq(this.schema.subscriptions.id, existing.id))
       );
       if (updateResult.isErr()) return err(updateResult.error);

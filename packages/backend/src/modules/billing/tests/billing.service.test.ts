@@ -28,7 +28,11 @@ jest.mock("better-auth/node", () => ({
   fromNodeHeaders: (headers: unknown) => headers,
 }));
 
-const PRICE_ID = "price_trial";
+const PRICE_ID = "price_usd_month";
+const PRICE_USD_QUARTER = "price_usd_quarter";
+const PRICE_PLN_MONTH = "price_pln_month";
+const PRICE_TEAM_MONTH = "price_team_usd_month";
+const PRICE_CAD_YEAR = "price_cad_year";
 const CUSTOMER_ID = "cus_trial";
 const ORG_ID = "org_trial";
 const MEMBER_ID = "member_owner";
@@ -63,7 +67,23 @@ const trialEndingTemplates: EmailTemplates = {
 
 const plan: StripePlan = {
   name: "pro",
-  priceId: PRICE_ID,
+  products: {
+    usd: {
+      id: "prod_usd",
+      prices: [
+        { priceId: PRICE_ID, interval: "month", intervalCount: 1, unitAmount: 3900 },
+        { priceId: PRICE_USD_QUARTER, interval: "month", intervalCount: 3, unitAmount: 9900 },
+      ],
+    },
+    pln: {
+      id: "prod_pln",
+      prices: [{ priceId: PRICE_PLN_MONTH, interval: "month", intervalCount: 1, unitAmount: 14900 }],
+    },
+    cad: {
+      id: "prod_cad",
+      prices: [{ priceId: PRICE_CAD_YEAR, interval: "year", intervalCount: 1, unitAmount: 39000 }],
+    },
+  },
   freeTrial: { days: 7 },
 };
 
@@ -71,7 +91,7 @@ function catalog(overrides: Partial<ResolvedStripePlans> = {}): ResolvedStripePl
   return {
     plans: [plan],
     trial: plan,
-    currency: "usd",
+    defaultCurrency: "usd",
     seatBilling: false,
     nonBillableRoleKeys: [],
     ...overrides,
@@ -91,12 +111,16 @@ function createStripeStub(options: {
   failCustomerCreate?: boolean;
   subscriptionStatus?: Stripe.Subscription.Status;
   quantity?: number;
-}): Stripe & { state: { quantity: number; status: string; created: boolean } } {
+}): Stripe & {
+  state: { quantity: number; status: string; created: boolean; priceId: string; intervalPicked: boolean };
+} {
   const now = Math.floor(Date.now() / 1000);
   const state = {
     quantity: options.quantity ?? 1,
     status: options.subscriptionStatus ?? "trialing",
     created: false,
+    priceId: PRICE_ID,
+    intervalPicked: false,
   };
 
   const subscriptionItem = () => ({
@@ -104,9 +128,9 @@ function createStripeStub(options: {
     quantity: state.quantity,
     ...periodFields(now),
     price: {
-      id: PRICE_ID,
+      id: state.priceId,
       unit_amount: 3900,
-      recurring: { interval: "month" },
+      recurring: { interval: "month" as const, interval_count: state.priceId === PRICE_USD_QUARTER ? 3 : 1 },
     },
   });
 
@@ -120,6 +144,10 @@ function createStripeStub(options: {
     cancel_at_period_end: false,
     cancel_at: null,
     canceled_at: state.status === "canceled" ? now : null,
+    metadata: {
+      organizationId: ORG_ID,
+      intervalPicked: state.intervalPicked ? "true" : "false",
+    },
     trial_start: now - 60 * 60 * 24 * 4,
     trial_end: now + 60 * 60 * 24 * 3,
     trial_settings: {
@@ -134,17 +162,29 @@ function createStripeStub(options: {
       list: jest.fn().mockImplementation(async () => ({
         data: state.created ? [subscription()] : [],
       })),
-      create: jest.fn().mockImplementation(async (params: { items: Array<{ quantity?: number }> }) => {
+      create: jest.fn().mockImplementation(async (params: { items: Array<{ price?: string; quantity?: number }> }) => {
         if (options.failCustomerCreate) throw new Error("stripe down");
         state.created = true;
         state.quantity = params.items[0]?.quantity ?? 1;
+        state.priceId = params.items[0]?.price ?? PRICE_ID;
         state.status = "trialing";
+        state.intervalPicked = false;
         return subscription();
       }),
-      update: jest.fn().mockImplementation(async (_id: string, params: { items: Array<{ quantity?: number }> }) => {
-        state.quantity = params.items[0]?.quantity ?? state.quantity;
-        return subscription();
-      }),
+      update: jest.fn().mockImplementation(
+        async (
+          _id: string,
+          params: {
+            items?: Array<{ price?: string; quantity?: number }>;
+            metadata?: Record<string, string>;
+          }
+        ) => {
+          state.quantity = params.items?.[0]?.quantity ?? state.quantity;
+          if (params.items?.[0]?.price) state.priceId = params.items[0].price;
+          if (params.metadata?.intervalPicked === "true") state.intervalPicked = true;
+          return subscription();
+        }
+      ),
       cancel: jest.fn().mockImplementation(async () => {
         state.status = "canceled";
         return subscription();
@@ -236,6 +276,7 @@ function trialConvertedEvent(): Stripe.Event {
         },
         discounts: [],
         cancel_at_period_end: false,
+        metadata: {},
       },
     },
   } as unknown as Stripe.Event;
@@ -276,6 +317,7 @@ async function createTables(client: Client): Promise<void> {
       metadata TEXT DEFAULT '{}',
       flags TEXT DEFAULT '[]',
       locale TEXT,
+      currency TEXT,
       stripe_customer_id TEXT UNIQUE
     );
   `);
@@ -310,6 +352,8 @@ async function createTables(client: Client): Promise<void> {
       period_end INTEGER,
       price_id TEXT,
       interval TEXT,
+      interval_count INTEGER,
+      interval_picked INTEGER DEFAULT 0,
       unit_amount INTEGER,
       discounts TEXT,
       cancel_at_period_end INTEGER,
@@ -336,6 +380,7 @@ async function seedOrg(client: Client, memberCount = 1): Promise<void> {
   await orm.insert(authTables.organizations).values({
     id: ORG_ID,
     name: "Acme",
+    currency: "usd",
   });
   for (let i = 0; i < memberCount; i += 1) {
     await orm.insert(authTables.members).values({
@@ -514,6 +559,60 @@ describe("BillingService Organization paywall", () => {
   afterEach(async () => {
     await client.close?.();
     await fs.rm(outputDirectory, { recursive: true, force: true });
+  });
+
+  it("throws when a Plan is missing the defaultCurrency Product", async () => {
+    const stripe = createStripeStub({});
+    const broken: StripePlan = {
+      name: "pro",
+      products: {
+        pln: {
+          id: "prod_pln",
+          prices: [
+            { priceId: PRICE_PLN_MONTH, interval: "month", intervalCount: 1, unitAmount: 14900 },
+          ],
+        },
+      },
+    };
+    expect(() =>
+      createBackendApp(
+        {
+          db: { client },
+          schema: { ...authTables, ...billingTables },
+          email: { mode: "store", from: "no-reply@example.com", outputDirectory },
+        },
+        [
+          new EmailModule(requiredTemplates),
+          new BillingModule({ stripe }, catalog({ plans: [broken], trial: undefined })),
+        ] as const
+      )
+    ).toThrow("Plan pro is missing Product for defaultCurrency");
+  });
+
+  it("throws when the Trial Plan has no monthly Price for defaultCurrency", async () => {
+    const stripe = createStripeStub({});
+    const yearlyOnly: StripePlan = {
+      name: "pro",
+      products: {
+        usd: {
+          id: "prod_usd",
+          prices: [{ priceId: PRICE_ID, interval: "year", intervalCount: 1, unitAmount: 34800 }],
+        },
+      },
+    };
+    expect(() =>
+      createBackendApp(
+        {
+          db: { client },
+          schema: { ...authTables, ...billingTables },
+          email: { mode: "store", from: "no-reply@example.com", outputDirectory },
+        },
+        [
+          new EmailModule(requiredTemplates),
+          new BillingModule({ stripe }, catalog({ plans: [yearlyOnly], trial: yearlyOnly })),
+        ] as const
+      )
+    ).toThrow("Trial Plan requires a monthly Price for defaultCurrency");
   });
 
   it("creates an Organization-keyed Trial Subscription", async () => {
@@ -728,6 +827,7 @@ describe("BillingService Organization paywall", () => {
     const seatedPlan: StripePlan = { ...plan, freeTrial: { days: 14, seats: 5 } };
     const stripe = createStripeStub({ quantity: 5, subscriptionStatus: "active" });
     stripe.state.created = true;
+    stripe.state.intervalPicked = true;
     const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
     await orm
       .update(authTables.organizations)
@@ -1026,5 +1126,250 @@ describe("BillingService Organization paywall", () => {
     expect(adjusted.isOk()).toBe(true);
     expect(adjusted._unsafeUnwrap()).toBe(false);
     expect(stripe.subscriptions.update).not.toHaveBeenCalled();
+  });
+
+  it("starts Trial on the monthly Price of the Organization currency", async () => {
+    const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
+    await orm
+      .update(authTables.organizations)
+      .set({ currency: "pln" })
+      .where(eq(authTables.organizations.id, ORG_ID));
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+    });
+
+    const result = await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+    expect(result.isOk()).toBe(true);
+    expect(stripe.subscriptions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: [expect.objectContaining({ price: PRICE_PLN_MONTH })],
+      })
+    );
+  });
+
+  it("skips Trial when the Organization currency has no monthly Price", async () => {
+    const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
+    await orm
+      .update(authTables.organizations)
+      .set({ currency: "cad" })
+      .where(eq(authTables.organizations.id, ORG_ID));
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+    });
+
+    const result = await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBe(false);
+    expect(stripe.subscriptions.create).not.toHaveBeenCalled();
+  });
+
+  it("lets the Owner pick a Trial Price including the monthly stand-in", async () => {
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+    });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+
+    const picked = await billing.pickTrialPrice(
+      { priceId: PRICE_USD_QUARTER },
+      { organizationId: ORG_ID, organizationRole: "owner" }
+    );
+    expect(picked.isOk()).toBe(true);
+    expect(stripe.subscriptions.update).toHaveBeenCalledWith(
+      "sub_trial",
+      expect.objectContaining({
+        items: [expect.objectContaining({ price: PRICE_USD_QUARTER })],
+        metadata: expect.objectContaining({ intervalPicked: "true" }),
+      })
+    );
+
+    const accessible = await billing.getActiveSubscription(memberCtx());
+    expect(accessible._unsafeUnwrap()?.intervalPicked).toBe(true);
+    expect(accessible._unsafeUnwrap()?.priceId).toBe(PRICE_USD_QUARTER);
+    expect(accessible._unsafeUnwrap()?.intervalCount).toBe(3);
+  });
+
+  it("refuses Interval pick of a Price from a different Plan", async () => {
+    const otherPlan: StripePlan = {
+      name: "team",
+      products: {
+        usd: {
+          id: "prod_team_usd",
+          prices: [
+            { priceId: PRICE_TEAM_MONTH, interval: "month", intervalCount: 1, unitAmount: 9900 },
+          ],
+        },
+      },
+    };
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+      catalog: catalog({ plans: [plan, otherPlan], trial: plan }),
+    });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+
+    const picked = await billing.pickTrialPrice(
+      { priceId: PRICE_TEAM_MONTH },
+      { organizationId: ORG_ID, organizationRole: "owner" }
+    );
+    expect(picked.isErr()).toBe(true);
+    if (picked.isErr()) expect(picked.error.code).toBe("NOT_FOUND");
+    expect(stripe.subscriptions.update).not.toHaveBeenCalled();
+  });
+
+  it("forbids Interval pick for non-Owners and refuses Checkout while Trial exists", async () => {
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+    });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+
+    const memberPick = await billing.pickTrialPrice(
+      { priceId: PRICE_ID },
+      { organizationId: ORG_ID, organizationRole: "member" }
+    );
+    expect(memberPick.isErr()).toBe(true);
+    if (memberPick.isErr()) expect(memberPick.error.code).toBe("FORBIDDEN");
+
+    const checkout = await billing.createCheckoutSession(
+      { priceId: PRICE_ID },
+      {
+        organizationId: ORG_ID,
+        memberId: MEMBER_ID,
+        organizationRole: "owner",
+        email: USER_EMAIL,
+      }
+    );
+    expect(checkout.isErr()).toBe(true);
+    if (checkout.isErr()) expect(checkout.error.code).toBe("CONFLICT");
+  });
+
+  it("cancels an unpicked Trial that converts to paid", async () => {
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+    });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+
+    const converted = await billing.processEvent(trialConvertedEvent());
+    expect(converted.isOk()).toBe(true);
+    expect(stripe.subscriptions.cancel).toHaveBeenCalled();
+
+    const accessible = await billing.getActiveSubscription(memberCtx());
+    expect(accessible._unsafeUnwrap()).toBeNull();
+  });
+
+  it("keeps a picked Trial that converts to paid", async () => {
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+    });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+    await billing.pickTrialPrice(
+      { priceId: PRICE_ID },
+      { organizationId: ORG_ID, organizationRole: "owner" }
+    );
+
+    const converted = await billing.processEvent(trialConvertedEvent());
+    expect(converted.isOk()).toBe(true);
+    expect(stripe.subscriptions.cancel).not.toHaveBeenCalled();
+  });
+
+  it("resolves a Plan from a quarterly Price on webhook sync", async () => {
+    const stripe = createStripeStub({});
+    stripe.state.created = true;
+    stripe.state.priceId = PRICE_USD_QUARTER;
+    const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
+    await orm
+      .update(authTables.organizations)
+      .set({ stripeCustomerId: CUSTOMER_ID })
+      .where(eq(authTables.organizations.id, ORG_ID));
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+    });
+
+    const synced = await billing.syncStripeData({ customerId: CUSTOMER_ID });
+    expect(synced.isOk()).toBe(true);
+    const accessible = await billing.getActiveSubscription(memberCtx());
+    expect(accessible._unsafeUnwrap()?.plan).toBe("pro");
+    expect(accessible._unsafeUnwrap()?.priceId).toBe(PRICE_USD_QUARTER);
+    expect(accessible._unsafeUnwrap()?.intervalCount).toBe(3);
+  });
+
+  it("resolves a Plan from a Price on a second Product", async () => {
+    const stripe = createStripeStub({});
+    stripe.state.created = true;
+    stripe.state.priceId = PRICE_PLN_MONTH;
+    const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
+    await orm
+      .update(authTables.organizations)
+      .set({ stripeCustomerId: CUSTOMER_ID, currency: "pln" })
+      .where(eq(authTables.organizations.id, ORG_ID));
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+    });
+
+    const synced = await billing.syncStripeData({ customerId: CUSTOMER_ID });
+    expect(synced.isOk()).toBe(true);
+    const accessible = await billing.getActiveSubscription(memberCtx());
+    expect(accessible._unsafeUnwrap()?.plan).toBe("pro");
+    expect(accessible._unsafeUnwrap()?.priceId).toBe(PRICE_PLN_MONTH);
   });
 });

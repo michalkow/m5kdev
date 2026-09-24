@@ -7,12 +7,12 @@ Billing is an opinionated Stripe paywall (Plan catalog, Checkout, Billing Portal
 - **Always bill per Membership** — rejected: a flat Organization price is a common SaaS paywall; Seat billing is opt-in so TypeOrb-shaped catalogs stay days-only Trials.
 - **User as Customer** — rejected: glossary already forbids personal User subscriptions and `users.stripeCustomerId`.
 - **SaaS billing platform** (usage, add-ons, coupons UX, enterprise quotes) — rejected: Portal and Stripe Dashboard own those; Kernel does not.
-- **In-app Plan switch** — rejected: Kernel Plan pages are acquisition (no Subscription); change Plan/interval/card in Billing Portal. Auto-Trial starts on the trial Plan's monthly Price; Checkout must not run while a Trial exists.
-- **Kernel-built Portal Configuration from Plan annual Price ids** — rejected: dual config. `annualDiscountPriceId` is Checkout-only; Portal products live in the Stripe Dashboard.
+- **In-app Plan switch after paid** — rejected: change Plan/interval/card in Billing Portal. Auto-Trial starts on the trial Plan's monthly Price; Checkout must not run while a Trial exists. Interval pick *during* Trial is [ADR-0019](0019-billing-prices-per-currency-product.md).
+- **Kernel-built Portal Configuration from Plan Price ids** — rejected: dual config. Portal products live in the Stripe Dashboard. Catalog Prices must still include every id Portal might attach so webhook sync can resolve the Plan.
 - **Owner-only Stripe quantity writes** — rejected: Owner-only is Checkout and Billing Portal. Quantity updates on invite are a system call for anyone who may invite.
 - **`plan.limits` / `plan.group` as Kernel contract** — rejected: unused; Seat billing does not revive a feature matrix.
 
 ## Consequences
 
-- One currency on `StripePlansConfig`. Organization delete cancels the Stripe Subscription and keeps the Customer. Stripe Customer email is the creating Member's, then Stripe owns it. Organization create succeeds if Stripe is down; no Subscription means the paywall page.
+- Catalog currency is per Organization ([ADR-0019](0019-billing-prices-per-currency-product.md)), not a single `StripePlansConfig.currency`. Organization delete cancels the Stripe Subscription and keeps the Customer. Stripe Customer email is the creating Member's, then Stripe owns it. Organization create succeeds if Stripe is down; no Subscription means the paywall page.
 - Billing keys the Stripe Customer on the Organization. Existing User-keyed Customers are a breaking cutover, not a supported mode.

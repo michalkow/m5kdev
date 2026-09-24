@@ -143,6 +143,42 @@ export async function getActiveOrganization<O extends Orm, S extends Schema>(
   };
 }
 
+export function resolveOrganizationCurrency({
+  requested,
+  ownedCurrencies,
+  defaultCurrency,
+  allowedCurrencies,
+}: {
+  requested?: string | null;
+  ownedCurrencies: readonly (string | null | undefined)[];
+  defaultCurrency: string;
+  allowedCurrencies: readonly string[];
+}): { ok: true; currency: string } | { ok: false; reason: "mismatch" | "unknown" } {
+  const liveOwned = ownedCurrencies.filter((value): value is string => Boolean(value));
+  const locked = liveOwned[0];
+  if (locked) {
+    if (requested && requested !== locked) return { ok: false, reason: "mismatch" };
+    return { ok: true, currency: locked };
+  }
+  const currency = requested || defaultCurrency;
+  if (!allowedCurrencies.includes(currency)) return { ok: false, reason: "unknown" };
+  return { ok: true, currency };
+}
+
+export class OrganizationCurrencyError extends Error {
+  readonly reason: "mismatch" | "unknown";
+
+  constructor(reason: "mismatch" | "unknown") {
+    super(
+      reason === "mismatch"
+        ? "Organization currency does not match owned Organizations"
+        : "Unknown organization currency"
+    );
+    this.reason = reason;
+    this.name = "OrganizationCurrencyError";
+  }
+}
+
 export async function createOrganizationWithOwner<O extends Orm, S extends Schema>(
   orm: O,
   schema: S,
@@ -153,11 +189,42 @@ export async function createOrganizationWithOwner<O extends Orm, S extends Schem
     image?: string | null;
     locale?: string | null;
   },
-  locale?: string | null
+  locale?: string | null,
+  currency?: {
+    requested?: string | null;
+    defaultCurrency: string;
+    allowedCurrencies: readonly string[];
+  }
 ): Promise<{ organizationId: string; memberId: string }> {
   const organizationId = uuidv4();
   const organizationLocale = locale ?? user.locale ?? undefined;
   return await orm.transaction(async (tx) => {
+    let organizationCurrency: string | undefined;
+    if (currency) {
+      const owned = await tx
+        .select({ currency: schema.organizations.currency })
+        .from(schema.members)
+        .innerJoin(
+          schema.organizations,
+          eq(schema.members.organizationId, schema.organizations.id)
+        )
+        .where(
+          and(
+            eq(schema.members.userId, user.id),
+            eq(schema.members.role, "owner"),
+            isNull(schema.members.deletedAt)
+          )
+        );
+      const resolved = resolveOrganizationCurrency({
+        requested: currency.requested,
+        ownedCurrencies: owned.map((row) => row.currency),
+        defaultCurrency: currency.defaultCurrency,
+        allowedCurrencies: currency.allowedCurrencies,
+      });
+      if (!resolved.ok) throw new OrganizationCurrencyError(resolved.reason);
+      organizationCurrency = resolved.currency;
+    }
+
     const [organization] = await tx
       .insert(schema.organizations)
       .values({
@@ -165,6 +232,7 @@ export async function createOrganizationWithOwner<O extends Orm, S extends Schem
         name: organizationId,
         slug: organizationId,
         ...(organizationLocale ? { locale: organizationLocale } : {}),
+        ...(organizationCurrency ? { currency: organizationCurrency } : {}),
       })
       .returning();
 

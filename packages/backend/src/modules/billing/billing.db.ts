@@ -16,6 +16,8 @@ export const subscriptions = sqliteTable("subscriptions", {
   periodEnd: integer("period_end", { mode: "timestamp" }),
   priceId: text("price_id"),
   interval: text("interval"),
+  intervalCount: integer("interval_count", { mode: "number" }),
+  intervalPicked: integer("interval_picked", { mode: "boolean" }).default(false),
   unitAmount: integer("unit_amount", { mode: "number" }),
   discounts: text("discounts", { mode: "json" }).$type<string[]>(),
   cancelAtPeriodEnd: integer("cancel_at_period_end", { mode: "boolean" }),

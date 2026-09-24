@@ -111,6 +111,7 @@ export function createOrganizationSchemas(roles: AuthRolesConfig | NormalizedAut
       }),
       create: z.object({
         name: z.string(),
+        currency: z.string().optional(),
       }),
       updateChild: z.object({
         id: z.string(),

@@ -1,4 +1,5 @@
 import type { BillingSchema } from "@m5kdev/commons/modules/billing/billing.schema";
+import { catalogCurrencyKeys } from "@m5kdev/commons/modules/billing/billing.utils";
 import { err, ok } from "neverthrow";
 import type Stripe from "stripe";
 import { posthogCapture } from "../../utils/posthog";
@@ -74,6 +75,13 @@ export class BillingService extends BasePermissionService<
     return ok(created.value);
   }
 
+  catalogCurrencies(): { defaultCurrency: string; currencies: string[] } {
+    return {
+      defaultCurrency: this.repository.billing.defaultCurrency,
+      currencies: catalogCurrencyKeys(this.repository.billing.plans),
+    };
+  }
+
   async createOrganizationHook({
     organizationId,
     memberId,
@@ -100,6 +108,13 @@ export class BillingService extends BasePermissionService<
     }
 
     if (this.repository.billing.hasTrial()) {
+      const organization = await this.repository.billing.getOrganizationById(organizationId);
+      if (organization.isErr()) return ok(false);
+      const currency =
+        organization.value?.currency ?? this.repository.billing.defaultCurrency;
+      const standInPriceId = this.repository.billing.monthlyStandInPriceId(currency);
+      if (!standInPriceId) return ok(false);
+
       const existingSubscription = await this.repository.billing.getLatestSubscription(
         organizationId
       );
@@ -109,6 +124,7 @@ export class BillingService extends BasePermissionService<
           customerId: stripeCustomer.value.id,
           organizationId,
           memberId,
+          priceId: standInPriceId,
         });
         if (subscription.isErr()) {
           this.logger.warn(
@@ -171,6 +187,13 @@ export class BillingService extends BasePermissionService<
   ): ServerResultAsync<Stripe.Checkout.Session> {
     if (organizationRole !== "owner") return this.error("FORBIDDEN", "Only the Owner can checkout");
 
+    const organization = await this.repository.billing.getOrganizationById(organizationId);
+    if (organization.isErr()) return err(organization.error);
+    const currency = organization.value?.currency ?? this.repository.billing.defaultCurrency;
+    if (!this.repository.billing.priceBelongsToCurrency(priceId, currency)) {
+      return this.error("NOT_FOUND", "Price not found for Organization currency");
+    }
+
     const open = await this.repository.billing.getOpenSubscription(organizationId);
     if (open.isErr()) return err(open.error);
     if (open.value) {
@@ -212,6 +235,67 @@ export class BillingService extends BasePermissionService<
       memberId,
       quantity,
     });
+  }
+
+  async pickTrialPrice(
+    { priceId }: { priceId: string },
+    {
+      organizationId,
+      organizationRole,
+    }: {
+      organizationId: string;
+      organizationRole: string;
+    }
+  ): ServerResultAsync<boolean> {
+    if (organizationRole !== "owner") {
+      return this.error("FORBIDDEN", "Only the Owner can pick a Trial Price");
+    }
+
+    const organization = await this.repository.billing.getOrganizationById(organizationId);
+    if (organization.isErr()) return err(organization.error);
+    const currency = organization.value?.currency ?? this.repository.billing.defaultCurrency;
+    if (!this.repository.billing.priceBelongsToCurrency(priceId, currency)) {
+      return this.error("NOT_FOUND", "Price not found for Organization currency");
+    }
+
+    const subscription = await this.repository.billing.getLatestSubscription(organizationId);
+    if (subscription.isErr()) return err(subscription.error);
+    if (!subscription.value?.stripeSubscriptionId || subscription.value.status !== "trialing") {
+      return this.error("CONFLICT", "Interval pick requires a Trial Subscription");
+    }
+
+    const targetPlan = this.repository.billing.getPlanByPriceId(priceId);
+    if (!targetPlan || targetPlan.name !== subscription.value.plan) {
+      return this.error("NOT_FOUND", "Price not found for this Trial Plan");
+    }
+
+    const stripeSubscriptions = await this.repository.billing.listStripeSubscriptions(
+      subscription.value.stripeCustomerId ?? ""
+    );
+    if (stripeSubscriptions.isErr()) return err(stripeSubscriptions.error);
+    const [stripeSubscription] = stripeSubscriptions.value;
+    const item = stripeSubscription?.items.data[0];
+    if (!stripeSubscription || !item) {
+      return this.error("NOT_FOUND", "Subscription item not found");
+    }
+
+    const updated = await this.repository.billing.updateTrialSubscriptionPrice({
+      subscriptionId: stripeSubscription.id,
+      itemId: item.id,
+      priceId,
+      metadata: {
+        ...(typeof stripeSubscription.metadata === "object" ? stripeSubscription.metadata : {}),
+        organizationId,
+        intervalPicked: "true",
+      },
+    });
+    if (updated.isErr()) return err(updated.error);
+
+    const synced = await this.syncStripeData({
+      customerId: subscription.value.stripeCustomerId ?? "",
+    });
+    if (synced.isErr()) return err(synced.error);
+    return ok(true);
   }
 
   async createBillingPortalSession({
@@ -417,12 +501,44 @@ export class BillingService extends BasePermissionService<
     }
 
     if (event.type === "customer.subscription.updated") {
-      const snapped = await this.snapQuantityAfterTrialConvert(
-        event.data as Stripe.CustomerSubscriptionUpdatedEvent.Data
-      );
+      const data = event.data as Stripe.CustomerSubscriptionUpdatedEvent.Data;
+      const canceledUnpicked = await this.cancelUnpickedTrialConvert(data);
+      if (canceledUnpicked.isErr()) return err(canceledUnpicked.error);
+      if (canceledUnpicked.value) return ok(true);
+
+      const snapped = await this.snapQuantityAfterTrialConvert(data);
       if (snapped.isErr()) return err(snapped.error);
     }
 
+    return ok(true);
+  }
+
+  private async cancelUnpickedTrialConvert(
+    data: Stripe.CustomerSubscriptionUpdatedEvent.Data
+  ): ServerResultAsync<boolean> {
+    const previousStatus = (data.previous_attributes as { status?: string } | undefined)?.status;
+    const subscription = data.object;
+    if (previousStatus !== "trialing" || subscription.status !== "active") return ok(false);
+
+    const customerId = typeof subscription.customer === "string" ? subscription.customer : undefined;
+    if (!customerId) return ok(false);
+
+    const organization = await this.repository.billing.getOrganizationByCustomerId(customerId);
+    if (organization.isErr()) return err(organization.error);
+    if (!organization.value) return ok(false);
+
+    const latest = await this.repository.billing.getLatestSubscription(organization.value.id);
+    if (latest.isErr()) return err(latest.error);
+    if (!latest.value?.stripeSubscriptionId) return ok(false);
+    const pickedOnStripe = subscription.metadata?.intervalPicked === "true";
+    if (latest.value.intervalPicked || pickedOnStripe) return ok(false);
+
+    const canceled = await this.repository.billing.cancelStripeSubscription(
+      latest.value.stripeSubscriptionId
+    );
+    if (canceled.isErr()) return err(canceled.error);
+    const synced = await this.syncStripeData({ customerId });
+    if (synced.isErr()) return err(synced.error);
     return ok(true);
   }
 

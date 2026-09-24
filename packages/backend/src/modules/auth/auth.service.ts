@@ -45,6 +45,7 @@ import type {
   AuthUserRepository,
   AuthWaitlistRepository,
 } from "./auth.repository";
+import { resolveOrganizationCurrency } from "./auth.utils";
 
 const schema = { ...auth };
 type Schema = typeof schema;
@@ -556,12 +557,35 @@ export class AuthService extends BasePermissionService<
       const userResult = await this.repository.user.findById(ctx.actor.userId);
       if (userResult.isErr()) return err(userResult.error);
       const locale = userResult.value?.locale ?? this.resolveDefaultLocale();
+      const billing = this.getBillingService();
+      const catalog = billing?.catalogCurrencies();
+      let organizationCurrency: string | undefined;
+      if (catalog) {
+        const owned = await this.repository.organization.listOwnedOwnerCurrencies(ctx.actor.userId);
+        if (owned.isErr()) return err(owned.error);
+        const resolved = resolveOrganizationCurrency({
+          requested: input.currency,
+          ownedCurrencies: owned.value,
+          defaultCurrency: catalog.defaultCurrency,
+          allowedCurrencies: catalog.currencies,
+        });
+        if (!resolved.ok) {
+          return this.error(
+            "BAD_REQUEST",
+            resolved.reason === "mismatch"
+              ? "Organization currency does not match owned Organizations"
+              : "Unknown organization currency"
+          );
+        }
+        organizationCurrency = resolved.currency;
+      }
       const result = await this.repository.organization.createOrganization({
         name: input.name,
         parentId: access.value.parentId,
         userId: ctx.actor.userId,
         role: access.value.organizationType === "agency" ? "admin" : "owner",
         locale,
+        currency: organizationCurrency,
       });
       if (result.isErr()) return err(result.error);
       const onCreateOrganizationResult = await this.onCreateOrganization({
@@ -571,7 +595,6 @@ export class AuthService extends BasePermissionService<
         locale,
       });
       if (onCreateOrganizationResult.isErr()) return err(onCreateOrganizationResult.error);
-      const billing = this.getBillingService();
       if (billing && userResult.value && result.value.member) {
         await billing.createOrganizationHook({
           organizationId: result.value.organization.id,
@@ -612,6 +635,7 @@ export class AuthService extends BasePermissionService<
             "metadata",
             "onboarding",
             "locale",
+            "currency",
           ],
         }
       );
@@ -721,7 +745,18 @@ export class AuthService extends BasePermissionService<
       const organization = await this.repository.organization.findById(
         input.organizationId,
         undefined,
-        ["id", "name", "slug", "logo", "type", "parentId", "createdAt", "onboarding", "locale"]
+        [
+          "id",
+          "name",
+          "slug",
+          "logo",
+          "type",
+          "parentId",
+          "createdAt",
+          "onboarding",
+          "locale",
+          "currency",
+        ]
       );
       if (organization.isErr()) return err(organization.error);
       if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
