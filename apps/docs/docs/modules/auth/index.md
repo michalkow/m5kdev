@@ -32,6 +32,12 @@ that membership — see
 `teams` / `teammembers` tables. OAuth/JWKS tables live in `auth.oauth.db` and
 are composed into App schema only when [McpModule](/modules/mcp) is registered.
 
+`createBetterAuth` always registers Better Auth's `apiKey` plugin, so `apikeys`
+must match that plugin schema even if the app never mints keys:
+`configId` (required, default `"default"`), `referenceId` (required owner id;
+User by default), and nullable `userId` (Better Auth never writes it). Existing
+rows keep `user_id` and copy it onto `reference_id` when migrating.
+
 ## Backend
 
 ### Registration
@@ -62,7 +68,7 @@ preconfigured with the `admin`, `organization`, `apiKey`, `magicLink`, and
 - **MCP OAuth** — when [McpModule](/modules/mcp) is registered, Auth also
   registers jwt + MCP + CIMD. MCP clients (Cursor, Claude Desktop) use Better
   Auth MCP OAuth, not API keys and not the webapp cookie session. API keys
-  remain User-keyed Better Auth HTTP credentials for other clients.
+  remain Better Auth HTTP credentials keyed by `referenceId` (User by default).
 
 Express middleware: `createAuthMiddleware(auth)` populates `req.user` /
 `req.session`; `createRoleAuthMiddleware(auth)` adds role checks.

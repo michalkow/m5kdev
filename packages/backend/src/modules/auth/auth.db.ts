@@ -1,5 +1,11 @@
 import { sql } from "drizzle-orm";
-import { type AnySQLiteColumn, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  type AnySQLiteColumn,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
 
 export const users = sqliteTable("users", {
@@ -165,9 +171,9 @@ export const apikeys = sqliteTable("apikeys", {
   start: text("start"),
   prefix: text("prefix"),
   key: text("key").notNull(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id),
+  configId: text("config_id").notNull().default("default"),
+  referenceId: text("reference_id").notNull(),
+  userId: text("user_id").references(() => users.id),
   refillInterval: integer("refill_interval", { mode: "number" }),
   refillAmount: integer("refill_amount", { mode: "number" }),
   lastRefillAt: integer("last_refill_at", { mode: "timestamp" }),

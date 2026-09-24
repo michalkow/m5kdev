@@ -1,5 +1,15 @@
 # create-m5kdev
 
+## Unreleased
+
+- Better Auth 1.7 boots without SCHEMA_MISMATCH: apikeys has configId (default "default"), required referenceId, and nullable userId.
+
+## 0.38.2
+
+### Patch Changes
+
+- Better Auth 1.7 boots without SCHEMA_MISMATCH: apikeys has configId (default "default"), required referenceId, and nullable userId.
+
 ## 0.38.1
 
 ### Patch Changes
