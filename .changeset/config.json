@@ -31,7 +31,6 @@
     "@starter-app/server",
     "@starter-app/shared",
     "@starter-app/webapp",
-    "m5kdev-docs",
-    "m5kdev-release-tool"
+    "m5kdev-docs"
   ]
 }
