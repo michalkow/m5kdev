@@ -301,7 +301,7 @@ export const transformFiltersFromHeroUI = (filters: HeroUIFilter[]): QueryFilter
           const range = filter.value as RangeValue<DateValue>;
           if (range?.start && range?.end) {
             value = calendarDateToUTC(range.start as unknown as CalendarDate);
-            valueTo = calendarDateToUTC(range.end as unknown as CalendarDate);
+            valueTo = calendarDateToEndOfDayUTC(range.end as unknown as CalendarDate);
           }
         } else {
           const dateValue = filter.value as unknown as CalendarDate;

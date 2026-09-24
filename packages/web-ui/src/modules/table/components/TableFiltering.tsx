@@ -373,19 +373,23 @@ export const TableFiltering = ({
   );
 
   useEffect(() => {
-    // Transform initialFilters from FiltersToApply format to HeroUIFilter format
     const transformedFilters = transformFiltersToHeroUI(
       initialFilters,
       columnsMap,
       effectiveFilterMethods
     );
+    // Drop filters that cannot be shown (unknown / empty column). Keying by
+    // columnId also collapsed those into leftover empty rows on reopen.
+    const visibleFilters = transformedFilters.filter(
+      (filter) => filter.columnId !== "" && columnsMap.has(filter.columnId)
+    );
 
     if (!singleFilter) {
-      setFilters(Object.fromEntries(transformedFilters.map((filter) => [filter.columnId, filter])));
+      setFilters(Object.fromEntries(visibleFilters.map((filter) => [crypto.randomUUID(), filter])));
       return;
     }
 
-    const firstFilter = transformedFilters[0];
+    const firstFilter = visibleFilters[0];
     setFilters({
       [SINGLE_FILTER_KEY]: firstFilter ?? createEmptyFilter(),
     });

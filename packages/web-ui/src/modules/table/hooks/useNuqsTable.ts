@@ -66,10 +66,13 @@ const useNuqsTable = <TInput, TData>({
     });
   }, []);
 
-  const displayFilters = useMemo<QueryFilters>(() => {
-    if (!additionalFilters?.length) return queryState.filters ?? [];
-    return [...additionalFilters, ...(queryState.filters ?? [])];
-  }, [additionalFilters, queryState.filters]);
+  // Keep additionalFilters on the query only. Showing them in the popover
+  // re-injects rows the user cannot persist (they are not in `f`), which looks
+  // like empty filters that return after Apply.
+  const displayFilters = useMemo<QueryFilters>(
+    () => queryState.filters ?? [],
+    [queryState.filters]
+  );
 
   const additionalColumnIds = useMemo(
     () => new Set(additionalFilters?.map((f) => f.columnId) ?? []),
