@@ -604,13 +604,16 @@ export const NuqsTable = <T,>({
                 <Popover.Trigger>
                   <Button variant="tertiary" size="sm">
                     <div className="flex items-center gap-2">
-                      Filters
+                      {t("web-ui:table.filters")}
                       <ChevronDown className="h-4 w-4" />
                     </div>
                   </Button>
                 </Popover.Trigger>
                 <Popover.Content placement="bottom" className="overflow-visible">
-                  <Popover.Dialog aria-label="Filters" className="overflow-visible">
+                  <Popover.Dialog
+                    aria-label={t("web-ui:table.filters")}
+                    className="overflow-visible"
+                  >
                     <TableFiltering
                       columns={filterableColumns}
                       onFiltersChange={onFiltersChange}
@@ -629,14 +632,18 @@ export const NuqsTable = <T,>({
                   <Button variant={hasGrouping ? "secondary" : "tertiary"} size="sm">
                     <div className="flex items-center gap-2">
                       {hasGrouping
-                        ? `Grouped by: ${grouping.map((id) => groupableColumns.find((c) => c.id === id)?.label ?? id).join(" → ")}`
-                        : "Group by"}
+                        ? t("web-ui:table.groupedBy", {
+                            columns: grouping
+                              .map((id) => groupableColumns.find((c) => c.id === id)?.label ?? id)
+                              .join(" → "),
+                          })
+                        : t("web-ui:table.groupBy")}
                       <ChevronDown className="h-4 w-4" />
                     </div>
                   </Button>
                 </Popover.Trigger>
                 <Popover.Content placement="bottom">
-                  <Popover.Dialog aria-label="Group by">
+                  <Popover.Dialog aria-label={t("web-ui:table.groupBy")}>
                     <TableGroupBy
                       columns={groupableColumns}
                       activeGrouping={grouping}
@@ -656,13 +663,13 @@ export const NuqsTable = <T,>({
                 <Popover.Trigger>
                   <Button variant="tertiary" size="sm">
                     <div className="flex items-center gap-2">
-                      Columns
+                      {t("web-ui:table.columns")}
                       <ChevronDown className="h-4 w-4" />
                     </div>
                   </Button>
                 </Popover.Trigger>
                 <Popover.Content placement="bottom">
-                  <Popover.Dialog aria-label="Columns">
+                  <Popover.Dialog aria-label={t("web-ui:table.columns")}>
                     <ColumnOrderAndVisibility
                       layout={layout}
                       onChangeOrder={onChangeOrder}

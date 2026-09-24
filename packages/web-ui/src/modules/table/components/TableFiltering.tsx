@@ -22,6 +22,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   type FilterValue,
@@ -532,6 +533,7 @@ const TableFilteringItem = ({
   removeFilter: (filterId: string) => void;
   filterMethods: FilterMethods;
 }) => {
+  const { t } = useTranslation();
   const handleColumnChange = useCallback(
     (key: Key | null) => {
       if (key === null) return;
@@ -598,22 +600,27 @@ const TableFilteringItem = ({
         </Select.Trigger>
         <FilterSelectPopover className="w-auto min-w-max">
           <ListBox>
-            {methodsForType.map((method: FilterMethod) => (
-              <ListBox.Item
-                key={method.value}
-                className="text-sm"
-                id={method.value}
-                textValue={method.label}
-              >
-                {method.label}
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
-            ))}
+            {methodsForType.map((method: FilterMethod) => {
+              const label = t(`web-ui:table.filter.method.${method.value}`, {
+                defaultValue: method.label,
+              });
+              return (
+                <ListBox.Item
+                  key={method.value}
+                  className="text-sm"
+                  id={method.value}
+                  textValue={label}
+                >
+                  {label}
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              );
+            })}
           </ListBox>
         </FilterSelectPopover>
       </Select>
     );
-  }, [filter.type, filter.method?.value, methodsForType, handleMethodChange]);
+  }, [filter.type, filter.method?.value, methodsForType, handleMethodChange, t]);
 
   const filterValueComponent = useMemo(() => {
     if (!filter.method?.component) {

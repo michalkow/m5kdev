@@ -54,16 +54,17 @@ export function AuthUtilityLocalePicker({ onLocaleChange }: AuthUtilityLocalePic
         </Select.Trigger>
         <Select.Popover>
           <ListBox>
-            {locales.locales.map((localeOption: AuthLocaleDefinition) => (
-              <ListBox.Item
-                key={localeOption.code}
-                id={localeOption.code}
-                textValue={localeOption.displayName}
-              >
-                <Label>{localeOption.displayName}</Label>
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
-            ))}
+            {locales.locales.map((localeOption: AuthLocaleDefinition) => {
+              const label = t(`web-ui:locale.name.${localeOption.code}`, {
+                defaultValue: localeOption.displayName,
+              });
+              return (
+                <ListBox.Item key={localeOption.code} id={localeOption.code} textValue={label}>
+                  <Label>{label}</Label>
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              );
+            })}
           </ListBox>
         </Select.Popover>
       </Select>

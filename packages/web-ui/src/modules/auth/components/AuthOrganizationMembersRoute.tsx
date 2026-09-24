@@ -5,6 +5,7 @@ import {
   Input,
   Label,
   ListBox,
+  Modal,
   Select,
   Spinner,
   Table,
@@ -21,7 +22,7 @@ import {
 import { useUserOrganizations } from "@m5kdev/frontend/modules/auth/hooks/useUserOrganizations";
 import type { Key } from "@react-types/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Trash2, UserPlus } from "lucide-react";
+import { Copy, Pencil, Trash2, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -40,11 +41,13 @@ export interface AuthOrganizationMembersRouteLabels {
   defaultOrganizationName: string;
   loadMembersError: string;
   loadInvitationsError: string;
-  roleUpdateSuccess: string;
-  roleUpdateError: string;
-  nameUpdateSuccess: string;
-  nameUpdateError: string;
   nameRequired: string;
+  editMember: string;
+  editTitle: string;
+  editSuccess: string;
+  editError: string;
+  cancelButton: string;
+  saveButton: string;
   removeMemberSuccess: string;
   removeMemberError: string;
   emailRequired: string;
@@ -67,14 +70,11 @@ export interface AuthOrganizationMembersRouteLabels {
   columnStatus: string;
   columnActions: string;
   tableEmpty: string;
-  roleFor: (name: string) => string;
-  nameFor: (name: string) => string;
   statusActive: string;
   statusInvited: string;
   removeMember: string;
   copyInviteLink: string;
   cancelInvitation: string;
-  roleUnknown: string;
 }
 
 export interface AuthOrganizationMembersRouteProps {
@@ -92,56 +92,6 @@ function OrganizationStateCard({ title, message }: { title: string; message: str
         <Card.Content>{message}</Card.Content>
       </Card>
     </div>
-  );
-}
-
-function OrganizationMemberNameField({
-  ariaLabel,
-  value,
-  isDisabled,
-  onNameChange,
-}: {
-  ariaLabel: string;
-  value: string;
-  isDisabled: boolean;
-  onNameChange: (name: string) => void;
-}) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => {
-    setDraft(value);
-  }, [value]);
-
-  const commit = (): void => {
-    const next = draft.trim();
-    if (!next || next === value) {
-      setDraft(value);
-      return;
-    }
-    onNameChange(next);
-  };
-
-  return (
-    <TextField
-      aria-label={ariaLabel}
-      value={draft}
-      isDisabled={isDisabled}
-      onChange={setDraft}
-      variant="secondary"
-    >
-      <Input
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            e.currentTarget.blur();
-          }
-          if (e.key === "Escape") {
-            setDraft(value);
-            e.currentTarget.blur();
-          }
-        }}
-      />
-    </TextField>
   );
 }
 
@@ -204,11 +154,13 @@ function useOrganizationConfig() {
       defaultOrganizationName: t("web-ui:organization.members.defaultName"),
       loadMembersError: t("web-ui:organization.members.loadMembersError"),
       loadInvitationsError: t("web-ui:organization.members.loadInvitationsError"),
-      roleUpdateSuccess: t("web-ui:organization.members.roleUpdateSuccess"),
-      roleUpdateError: t("web-ui:organization.members.roleUpdateError"),
-      nameUpdateSuccess: t("web-ui:organization.members.nameUpdateSuccess"),
-      nameUpdateError: t("web-ui:organization.members.nameUpdateError"),
       nameRequired: t("web-ui:organization.members.nameRequired"),
+      editMember: t("web-ui:organization.members.editMember"),
+      editTitle: t("web-ui:organization.members.editTitle"),
+      editSuccess: t("web-ui:organization.members.editSuccess"),
+      editError: t("web-ui:organization.members.editError"),
+      cancelButton: t("web-ui:common.cancel"),
+      saveButton: t("web-ui:common.save"),
       removeMemberSuccess: t("web-ui:organization.members.removeMemberSuccess"),
       removeMemberError: t("web-ui:organization.members.removeMemberError"),
       emailRequired: t("web-ui:organization.members.emailRequired"),
@@ -231,14 +183,11 @@ function useOrganizationConfig() {
       columnStatus: t("web-ui:organization.members.columnStatus"),
       columnActions: t("web-ui:organization.members.columnActions"),
       tableEmpty: t("web-ui:organization.members.tableEmpty"),
-      roleFor: (name: string) => t("web-ui:organization.members.roleFor", { name }),
-      nameFor: (name: string) => t("web-ui:organization.members.nameFor", { name }),
       statusActive: t("web-ui:organization.members.statusActive"),
       statusInvited: t("web-ui:organization.members.statusInvited"),
       removeMember: t("web-ui:organization.members.removeMember"),
       copyInviteLink: t("web-ui:organization.members.copyInviteLink"),
       cancelInvitation: t("web-ui:organization.members.cancelInvitation"),
-      roleUnknown: t("web-ui:organization.members.roleUnknown"),
     }),
     [t]
   );
@@ -277,6 +226,9 @@ export function AuthOrganizationMembersRoute({
   const [inviteRole, setInviteRole] = useState<AuthOrganizationRole>(
     resolvedAssignableRoles[0] ?? ORGANIZATION_ROLE_FALLBACK
   );
+  const [editingRow, setEditingRow] = useState<CombinedMemberRow | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editRole, setEditRole] = useState<AuthOrganizationRole>(ORGANIZATION_ROLE_FALLBACK);
   const isMountedRef = useRef(true);
   useEffect(() => {
     return () => {
@@ -296,10 +248,6 @@ export function AuthOrganizationMembersRoute({
         await queryClient.invalidateQueries({
           queryKey: trpc.auth.listOrganizationMembers.queryKey(),
         });
-        toast.success(resolvedLabels.nameUpdateSuccess);
-      },
-      onError: (error) => {
-        toast.error(error instanceof Error ? error.message : resolvedLabels.nameUpdateError);
       },
     })
   );
@@ -311,10 +259,6 @@ export function AuthOrganizationMembersRoute({
         await queryClient.invalidateQueries({
           queryKey: trpc.auth.listOrganizationMembers.queryKey(),
         });
-        toast.success(resolvedLabels.roleUpdateSuccess);
-      },
-      onError: (error) => {
-        toast.error(error instanceof Error ? error.message : resolvedLabels.roleUpdateError);
       },
     })
   );
@@ -362,14 +306,7 @@ export function AuthOrganizationMembersRoute({
     })
   );
 
-  const updatingNameMemberId =
-    updateNameMutation.isPending && updateNameMutation.variables
-      ? updateNameMutation.variables.memberId
-      : null;
-  const updatingMemberId =
-    updateRoleMutation.isPending && updateRoleMutation.variables
-      ? updateRoleMutation.variables.memberId
-      : null;
+  const isSavingEdit = updateNameMutation.isPending || updateRoleMutation.isPending;
   const removingMemberId =
     removeMemberMutation.isPending && removeMemberMutation.variables
       ? removeMemberMutation.variables.memberId
@@ -408,25 +345,53 @@ export function AuthOrganizationMembersRoute({
     [membersQuery.data, resolvedLabels.invitedUser, resolvedLabels.unknownName]
   );
 
-  const onUpdateMemberName = useCallback(
-    (memberId: string, name: string) => {
-      if (!canManageOrganization) return;
-      if (!name.trim()) {
-        toast.error(resolvedLabels.nameRequired);
-        return;
-      }
-      updateNameMutation.mutate({ memberId, name });
-    },
-    [canManageOrganization, resolvedLabels.nameRequired, updateNameMutation]
-  );
+  const onOpenEdit = useCallback((row: CombinedMemberRow) => {
+    setEditingRow(row);
+    setEditName(row.displayName);
+    setEditRole(row.role);
+  }, []);
 
-  const onUpdateMemberRole = useCallback(
-    (memberId: string, role: AuthOrganizationRole) => {
-      if (!canManageOrganization) return;
-      updateRoleMutation.mutate({ memberId, role });
-    },
-    [canManageOrganization, updateRoleMutation]
-  );
+  const onCloseEdit = useCallback(() => {
+    setEditingRow(null);
+  }, []);
+
+  const onSubmitEdit = useCallback(async () => {
+    if (!canManageOrganization || !editingRow) return;
+    const name = editName.trim();
+    if (!name) {
+      toast.error(resolvedLabels.nameRequired);
+      return;
+    }
+
+    const nameChanged = name !== editingRow.displayName;
+    const canEditRole = editingRow.role !== "owner";
+    const roleChanged = canEditRole && editRole !== editingRow.role;
+
+    try {
+      if (nameChanged) {
+        await updateNameMutation.mutateAsync({ memberId: editingRow.memberId, name });
+      }
+      if (roleChanged) {
+        await updateRoleMutation.mutateAsync({ memberId: editingRow.memberId, role: editRole });
+      }
+      if (nameChanged || roleChanged) {
+        toast.success(resolvedLabels.editSuccess);
+      }
+      setEditingRow(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : resolvedLabels.editError);
+    }
+  }, [
+    canManageOrganization,
+    editName,
+    editRole,
+    editingRow,
+    resolvedLabels.editError,
+    resolvedLabels.editSuccess,
+    resolvedLabels.nameRequired,
+    updateNameMutation,
+    updateRoleMutation,
+  ]);
 
   const onRemoveMember = useCallback(
     (memberId: string) => {
@@ -512,9 +477,7 @@ export function AuthOrganizationMembersRoute({
     <div className="p-6 space-y-6">
       <div className="flex flex-col gap-1 mb-4">
         <p className="text-xl font-semibold">{resolvedLabels.membersTitle}</p>
-        <p className="text-sm text-muted">
-          {resolvedLabels.membersDescription(organizationName)}
-        </p>
+        <p className="text-sm text-muted">{resolvedLabels.membersDescription(organizationName)}</p>
       </div>
 
       <div className="flex flex-col gap-4">
@@ -590,33 +553,9 @@ export function AuthOrganizationMembersRoute({
                 <Table.Body items={rows}>
                   {(row) => (
                     <Table.Row id={row.id}>
-                      <Table.Cell>
-                        <OrganizationMemberNameField
-                          ariaLabel={resolvedLabels.nameFor(row.displayName)}
-                          value={row.displayName}
-                          isDisabled={updatingNameMemberId === row.memberId}
-                          onNameChange={(name) => {
-                            void onUpdateMemberName(row.memberId, name);
-                          }}
-                        />
-                      </Table.Cell>
+                      <Table.Cell>{row.displayName}</Table.Cell>
                       <Table.Cell>{row.email}</Table.Cell>
-                      <Table.Cell>
-                        {row.role === "owner" ? (
-                          <span>{getRoleLabel(row.role)}</span>
-                        ) : (
-                          <OrganizationRoleSelect
-                            ariaLabel={resolvedLabels.roleFor(row.displayName)}
-                            selectedKey={row.role}
-                            isDisabled={updatingMemberId === row.memberId}
-                            roles={resolvedAssignableRoles}
-                            getRoleLabel={getRoleLabel}
-                            onRoleChange={(role) => {
-                              void onUpdateMemberRole(row.memberId, role);
-                            }}
-                          />
-                        )}
-                      </Table.Cell>
+                      <Table.Cell>{getRoleLabel(row.role)}</Table.Cell>
                       <Table.Cell>
                         <Chip
                           size="sm"
@@ -629,48 +568,59 @@ export function AuthOrganizationMembersRoute({
                         </Chip>
                       </Table.Cell>
                       <Table.Cell className="text-right">
-                        {row.role === "owner" ? null : row.status === "active" ? (
+                        <div className="flex justify-end gap-2">
                           <Button
                             size="sm"
                             variant="ghost"
                             isIconOnly
-                            onPress={() => void onRemoveMember(row.memberId)}
-                            isDisabled={removingMemberId === row.memberId}
-                            aria-label={resolvedLabels.removeMember}
-                            className="text-danger"
+                            onPress={() => onOpenEdit(row)}
+                            aria-label={resolvedLabels.editMember}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Pencil className="h-4 w-4" />
                           </Button>
-                        ) : row.invitationId ? (
-                          <div className="flex justify-end gap-2">
+                          {row.role === "owner" ? null : row.status === "active" ? (
                             <Button
                               size="sm"
                               variant="ghost"
                               isIconOnly
-                              onPress={() => {
-                                const invitationId = row.invitationId;
-                                if (invitationId) void onCopyInvitationLink(invitationId);
-                              }}
-                              aria-label={resolvedLabels.copyInviteLink}
-                            >
-                              <Copy className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              isIconOnly
-                              onPress={() => {
-                                const invitationId = row.invitationId;
-                                if (invitationId) void onCancelInvitation(invitationId);
-                              }}
-                              isDisabled={cancelingInvitationId === row.invitationId}
-                              aria-label={resolvedLabels.cancelInvitation}
+                              onPress={() => void onRemoveMember(row.memberId)}
+                              isDisabled={removingMemberId === row.memberId}
+                              aria-label={resolvedLabels.removeMember}
                               className="text-danger"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
-                          </div>
-                        ) : null}
+                          ) : row.invitationId ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                isIconOnly
+                                onPress={() => {
+                                  const invitationId = row.invitationId;
+                                  if (invitationId) void onCopyInvitationLink(invitationId);
+                                }}
+                                aria-label={resolvedLabels.copyInviteLink}
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                isIconOnly
+                                onPress={() => {
+                                  const invitationId = row.invitationId;
+                                  if (invitationId) void onCancelInvitation(invitationId);
+                                }}
+                                isDisabled={cancelingInvitationId === row.invitationId}
+                                aria-label={resolvedLabels.cancelInvitation}
+                                className="text-danger"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          ) : null}
+                        </div>
                       </Table.Cell>
                     </Table.Row>
                   )}
@@ -680,6 +630,58 @@ export function AuthOrganizationMembersRoute({
           </Table>
         )}
       </div>
+
+      <Modal isOpen={editingRow !== null} onOpenChange={(isOpen) => !isOpen && onCloseEdit()}>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading className="text-lg font-semibold">
+                  {resolvedLabels.editTitle}
+                </Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="grid gap-3">
+                <TextField
+                  value={editName}
+                  onChange={setEditName}
+                  variant="secondary"
+                  isDisabled={isSavingEdit}
+                >
+                  <Label>{resolvedLabels.columnName}</Label>
+                  <Input />
+                </TextField>
+                <div className="grid gap-2">
+                  <Label className="text-sm font-medium">{resolvedLabels.roleLabel}</Label>
+                  {editingRow?.role === "owner" ? (
+                    <p className="text-sm">{getRoleLabel("owner")}</p>
+                  ) : (
+                    <OrganizationRoleSelect
+                      ariaLabel={resolvedLabels.roleLabel}
+                      selectedKey={editRole}
+                      isDisabled={isSavingEdit}
+                      roles={resolvedAssignableRoles}
+                      getRoleLabel={getRoleLabel}
+                      onRoleChange={setEditRole}
+                    />
+                  )}
+                </div>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="secondary" onPress={onCloseEdit}>
+                  {resolvedLabels.cancelButton}
+                </Button>
+                <Button
+                  variant="primary"
+                  isPending={isSavingEdit}
+                  onPress={() => void onSubmitEdit()}
+                >
+                  {resolvedLabels.saveButton}
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
     </div>
   );
 }

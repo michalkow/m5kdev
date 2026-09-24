@@ -1,4 +1,4 @@
-import { type APIRequestContext, expect, type Page, test } from "@playwright/test";
+import { type APIRequestContext, expect, type Locator, type Page, test } from "@playwright/test";
 import {
   authFetch,
   clearEmails,
@@ -48,6 +48,44 @@ async function inviteFromMembersPage(page: Page, email: string) {
   const invitedRow = page.getByRole("row").filter({ hasText: email });
   await expect(invitedRow.getByText(/^invited$/i)).toBeVisible();
   return invitedRow;
+}
+
+async function saveMemberEdit(page: Page, row: Locator, changes: { name?: string; role?: string }) {
+  await row.getByRole("button", { name: /^edit member$/i }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("heading", { name: /^edit member$/i })).toBeVisible();
+  if (changes.name !== undefined) {
+    await dialog.getByLabel(/^name$/i).fill(changes.name);
+  }
+  if (changes.role !== undefined) {
+    await dialog.getByRole("button", { name: /^role$/i }).click();
+    await page.getByRole("option", { name: new RegExp(`^${changes.role}$`) }).click();
+  }
+
+  const mutationNames = [
+    ...(changes.name !== undefined ? ["updateMemberName"] : []),
+    ...(changes.role !== undefined ? ["updateMemberRole"] : []),
+  ];
+  const responsePromise =
+    mutationNames.length === 0
+      ? Promise.resolve(null)
+      : page.waitForResponse(
+          (response) =>
+            response.request().method() === "POST" &&
+            mutationNames.some((name) => response.url().includes(name))
+        );
+  await dialog.getByRole("button", { name: /^save$/i }).click();
+  if (mutationNames.length > 0) {
+    const response = await responsePromise;
+    expect(response).not.toBeNull();
+    if (response) {
+      expect(
+        response.ok(),
+        `${response.status()} ${response.statusText()}: ${await response.text()}`
+      ).toBe(true);
+    }
+  }
+  await expect(dialog).toBeHidden();
 }
 
 async function listOrganizationMembers(page: Page) {
@@ -273,17 +311,7 @@ test("organization members page changes an invited member role before they accep
   expect(invitedMemberId).toBeTruthy();
 
   const invitedRow = page.getByRole("row").filter({ hasText: invitee });
-  await invitedRow.getByRole("button", { name: `Role for ${invitee}` }).click();
-  const roleResponsePromise = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" && response.url().includes("updateMemberRole")
-  );
-  await page.getByRole("option", { name: /^Admin$/ }).click();
-  const roleResponse = await roleResponsePromise;
-  expect(
-    roleResponse.ok(),
-    `${roleResponse.status()} ${roleResponse.statusText()}: ${await roleResponse.text()}`
-  ).toBe(true);
+  await saveMemberEdit(page, invitedRow, { role: "Admin" });
 
   const afterRole = findMemberByEmail(await listOrganizationMembers(page), invitee);
   expect(afterRole?.id).toBe(invitedMemberId);
@@ -323,26 +351,13 @@ test("organization members page lets an admin edit a member name", async ({ page
   expect(invited?.name).toBe(invitee);
 
   const invitedRow = page.getByRole("row").filter({ hasText: invitee });
-  const nameField = invitedRow.getByRole("textbox", { name: `Name for ${invitee}` });
-  await nameField.fill("Kitchen lead");
-  const nameResponsePromise = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" && response.url().includes("updateMemberName")
-  );
-  await nameField.blur();
-  const nameResponse = await nameResponsePromise;
-  expect(
-    nameResponse.ok(),
-    `${nameResponse.status()} ${nameResponse.statusText()}: ${await nameResponse.text()}`
-  ).toBe(true);
+  await saveMemberEdit(page, invitedRow, { name: "Kitchen lead" });
 
   const afterName = findMemberByEmail(await listOrganizationMembers(page), invitee);
   expect(afterName?.id).toBe(invitedMemberId);
   expect(afterName?.name).toBe("Kitchen lead");
   expect(afterName?.userId).toBeNull();
-  await expect(invitedRow.getByRole("textbox", { name: "Name for Kitchen lead" })).toHaveValue(
-    "Kitchen lead"
-  );
+  await expect(invitedRow.getByRole("cell").first()).toHaveText("Kitchen lead");
 });
 
 test("organization members page resends, updates, cancels, and revives an invited seat", async ({
@@ -362,9 +377,8 @@ test("organization members page resends, updates, cancels, and revives an invite
   expect(resent?.userId).toBeNull();
 
   const invitedRow = page.getByRole("row").filter({ hasText: invitee });
-  await invitedRow.getByRole("button", { name: `Role for ${invitee}` }).click();
-  await page.getByRole("option", { name: /^Admin$/ }).click();
-  await expect(page.getByText(/member role updated/i)).toBeVisible();
+  await saveMemberEdit(page, invitedRow, { role: "Admin" });
+  await expect(page.getByText(/member updated/i)).toBeVisible();
   await expect
     .poll(async () => findMemberByEmail(await listOrganizationMembers(page), invitee)?.role)
     .toBe("admin");
