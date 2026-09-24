@@ -319,6 +319,7 @@ export const TableFiltering = ({
   singleFilter = false,
   filterMethods,
 }: TableFilteringProps) => {
+  const { t } = useTranslation();
   const [filters, setFilters] = useState<Record<string, HeroUIFilter>>({});
   const effectiveFilterMethods = useMemo(() => mergeFilterMethods(filterMethods), [filterMethods]);
 
@@ -495,11 +496,11 @@ export const TableFiltering = ({
         {!singleFilter && (
           <Button fullWidth variant="ghost" size="sm" onPress={addFilter}>
             <PlusIcon className="h-4 w-4" />
-            Add Filter
+            {t("web-ui:table.filter.add")}
           </Button>
         )}
         <Button fullWidth size="sm" onPress={applyFilters}>
-          {singleFilter ? "Apply Filter" : "Apply Filters"}
+          {singleFilter ? t("web-ui:table.filter.applyOne") : t("web-ui:table.filter.apply")}
         </Button>
       </div>
     </FilterOverlayPortalContext.Provider>

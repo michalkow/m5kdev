@@ -11,6 +11,7 @@ import { Button } from "@heroui/react";
 import type { ColumnOrderState, VisibilityState } from "@tanstack/react-table";
 import { EyeIcon, EyeOffIcon, GripVertical } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ColumnItem } from "./table.types";
 
 interface ColumnOrderAndVisibilityItemProps {
@@ -66,6 +67,7 @@ export const ColumnOrderAndVisibility = ({
   onChangeVisibility,
   onClose,
 }: ColumnOrderAndVisibilityProps) => {
+  const { t } = useTranslation();
   const [activeLayout, setActiveLayout] = useState<ColumnItem[]>([...layout]);
 
   useEffect(() => {
@@ -126,7 +128,7 @@ export const ColumnOrderAndVisibility = ({
         </SortableContext>
       </DndContext>
       <Button fullWidth size="sm" onPress={onSubmit}>
-        Apply
+        {t("web-ui:table.apply")}
       </Button>
     </div>
   );

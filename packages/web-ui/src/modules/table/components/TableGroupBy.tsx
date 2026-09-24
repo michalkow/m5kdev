@@ -1,5 +1,6 @@
 import { Button, Label, Radio, RadioGroup } from "@heroui/react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 interface TableGroupByColumn {
   id: string;
@@ -19,6 +20,7 @@ export const TableGroupBy = ({
   onGroupingChange,
   onClose,
 }: TableGroupByProps) => {
+  const { t } = useTranslation();
   const [selected, setSelected] = useState<string>(activeGrouping[0] ?? "");
 
   const onApply = () => {
@@ -46,10 +48,10 @@ export const TableGroupBy = ({
       </RadioGroup>
       <div className="flex gap-2">
         <Button size="sm" variant="tertiary" onPress={onClear} className="flex-1">
-          Clear
+          {t("web-ui:table.clear")}
         </Button>
         <Button size="sm" onPress={onApply} className="flex-1">
-          Apply
+          {t("web-ui:table.apply")}
         </Button>
       </div>
     </div>
