@@ -7,6 +7,14 @@
 - Table filter operators such as Equals, One Of, and Is Empty follow the active locale.
 - Language pickers show each language in its native name, so Polish stays Polski regardless of the UI language.
 
+## 0.38.9
+
+### Patch Changes
+
+- Start Trial on the Trial Plan's default Price at Organization create, or at Checkout when the catalog requires a payment method.
+  Remove Interval pick; convert bills the Price chosen at start.
+  The Trial Plan catalog is a per-currency map; card-off Trial Products must set `defaultPriceId`.
+
 ## 0.38.8
 
 ### Patch Changes

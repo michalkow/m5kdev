@@ -123,6 +123,14 @@ Existing User-keyed Stripe Customers are not mapped.
 
 - [Organization Stripe paywall and opt-in Seat billing](/guides/v0.38.0-billing-org-paywall-migration)
 
+## Upgrading to 0.38.9 {#upgrade-0-38-9}
+
+Complete 0.38.0 first. Plan catalog types, frozen Organization currency, and
+Trial start share one Drizzle generate after the catalog bump
+(`organizations.currency`, `subscriptions.interval_count`).
+
+- [N Prices, frozen Organization currency, and Trial Price at start](/guides/v0.38.9-billing-trial-price-catalog-migration)
+
 Root `.dockerignore` now ignores SQLite `*.db` / wal / shm files. Copy those
 lines from a fresh scaffold if you already customized the file.
 
