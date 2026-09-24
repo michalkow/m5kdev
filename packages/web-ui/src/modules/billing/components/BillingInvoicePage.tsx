@@ -106,15 +106,6 @@ export function BillingInvoicePage() {
                       })})`}
                     </span>
                   </p>
-                  {activeSubscription.status === "trialing" && !activeSubscription.intervalPicked ? (
-                    <p className="text-small text-warning">
-                      Choose a billing interval before Trial ends.{" "}
-                      <Link to="/pricing" className="underline">
-                        Open the Plan page
-                      </Link>{" "}
-                      to record that pick; Checkout is not used while Trial exists.
-                    </p>
-                  ) : null}
                 </div>
                 <div className="flex gap-3">
                   <Button

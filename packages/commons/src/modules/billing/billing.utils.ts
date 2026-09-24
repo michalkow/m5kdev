@@ -11,12 +11,10 @@ export const getEnvironmentPlans = (
 ): ResolvedStripePlans => {
   const isProduction = environment === "production";
   const plans = isProduction ? plansConfig.production : plansConfig.sandbox;
-  const trial = plansConfig.trialPlanName
-    ? plans.find((plan) => plan.name === plansConfig.trialPlanName)
-    : undefined;
   return {
     plans,
-    trial,
+    trialPlanName: plansConfig.trialPlanName ?? {},
+    trialRequiresPaymentMethod: plansConfig.trialRequiresPaymentMethod ?? false,
     defaultCurrency: plansConfig.defaultCurrency,
     seatBilling: plansConfig.seatBilling ?? false,
     nonBillableRoleKeys: plansConfig.nonBillableRoleKeys ?? [],
@@ -66,13 +64,47 @@ export function findPriceCurrency(plan: StripePlan, priceId: string): string | u
   return undefined;
 }
 
-export function findMonthlyStandInPrice(
-  plan: StripePlan,
-  currency: string
-): StripePlanPrice | undefined {
-  return plan.products[currency]?.prices.find(
-    (price) => price.interval === "month" && price.intervalCount === 1
-  );
+export function findTrialPlan({
+  plans,
+  trialPlanName,
+  currency,
+}: {
+  plans: readonly StripePlan[];
+  trialPlanName: Record<string, string>;
+  currency: string;
+}): StripePlan | undefined {
+  const name = trialPlanName[currency];
+  if (!name) return undefined;
+  return plans.find((plan) => plan.name === name);
+}
+
+export function findDefaultTrialPrice({
+  plan,
+  currency,
+}: {
+  plan: StripePlan;
+  currency: string;
+}): StripePlanPrice | undefined {
+  const product = plan.products[currency];
+  if (!product?.defaultPriceId) return undefined;
+  return product.prices.find((price) => price.priceId === product.defaultPriceId);
+}
+
+export function listPlanSelectPrices({
+  plan,
+  currency,
+  trialRequiresPaymentMethod,
+}: {
+  plan: StripePlan;
+  currency: string;
+  trialRequiresPaymentMethod?: boolean;
+}): StripePlanPrice[] {
+  const product = plan.products[currency];
+  if (!product) return [];
+  if (trialRequiresPaymentMethod && product.defaultPriceId) {
+    return product.prices.filter((price) => price.priceId === product.defaultPriceId);
+  }
+  return product.prices;
 }
 
 export function formatBillingInterval({

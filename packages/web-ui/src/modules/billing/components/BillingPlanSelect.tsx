@@ -1,56 +1,79 @@
 import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
 import {
-  findMonthlyStandInPrice,
   formatBillingInterval,
   formatPlanAmount,
+  listPlanSelectPrices,
 } from "@m5kdev/commons/modules/billing/billing.utils";
-import { BillingSinglePlanSelect } from "./BillingSinglePlanSelect";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
-import { useSubscription } from "@m5kdev/frontend/modules/billing/hooks/useSubscription";
 import { Check } from "lucide-react";
 import { buttonVariants } from "../../../components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "../../../components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../../components/ui/card";
 import { cn } from "../../../lib/utils";
+import { BillingSinglePlanSelect } from "./BillingSinglePlanSelect";
 
 interface BillingPlanSelectProps {
   plans: StripePlan[];
   currency: string;
+  trialRequiresPaymentMethod?: boolean;
+  trialPlanName?: string;
 }
 
-export function BillingPlanSelect({ plans, currency }: BillingPlanSelectProps) {
+function listedPlans({
+  plans,
+  trialRequiresPaymentMethod,
+  trialPlanName,
+}: BillingPlanSelectProps): StripePlan[] {
+  if (trialRequiresPaymentMethod && trialPlanName) {
+    return plans.filter((plan) => plan.name === trialPlanName);
+  }
+  return plans;
+}
+
+export function BillingPlanSelect(props: BillingPlanSelectProps) {
+  const plans = listedPlans(props);
+  const { currency, trialRequiresPaymentMethod } = props;
   if (plans.length === 1) {
     const [plan] = plans;
     if (!plan) return null;
-    return <BillingSinglePlanSelect plan={plan} currency={currency} />;
+    return (
+      <BillingSinglePlanSelect
+        plan={plan}
+        currency={currency}
+        trialRequiresPaymentMethod={trialRequiresPaymentMethod}
+      />
+    );
   }
 
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-6 px-4 py-8 md:grid-cols-2 lg:grid-cols-3">
       {plans.map((plan) => (
-        <PlanCard key={plan.name} plan={plan} currency={currency} />
+        <PlanCard
+          key={plan.name}
+          plan={plan}
+          currency={currency}
+          trialRequiresPaymentMethod={trialRequiresPaymentMethod}
+        />
       ))}
     </div>
   );
 }
 
-function PlanCard({ plan, currency }: { plan: StripePlan; currency: string }) {
+function PlanCard({
+  plan,
+  currency,
+  trialRequiresPaymentMethod,
+}: {
+  plan: StripePlan;
+  currency: string;
+  trialRequiresPaymentMethod?: boolean;
+}) {
   const { serverUrl } = useAppConfig();
-  const { data: subscription } = useSubscription();
-  const isTrialing = subscription?.status === "trialing";
-  const prices = plan.products[currency]?.prices ?? [];
-  const standIn = findMonthlyStandInPrice(plan, currency);
+  const prices = listPlanSelectPrices({ plan, currency, trialRequiresPaymentMethod });
+  const displayPrice = prices[0];
   const amount =
-    standIn?.unitAmount != null
-      ? formatPlanAmount({ unitAmount: standIn.unitAmount, currency })
-      : prices[0]?.unitAmount != null
-        ? formatPlanAmount({ unitAmount: prices[0].unitAmount, currency })
-        : "";
+    displayPrice?.unitAmount != null
+      ? formatPlanAmount({ unitAmount: displayPrice.unitAmount, currency })
+      : "";
 
   return (
     <Card className="flex flex-col">
@@ -70,13 +93,10 @@ function PlanCard({ plan, currency }: { plan: StripePlan; currency: string }) {
         {prices.map((price) => (
           <a
             key={price.priceId}
-            className={cn(
-              buttonVariants({ variant: price.priceId === standIn?.priceId ? "default" : "outline" }),
-              "w-full"
-            )}
-            href={`${serverUrl}/stripe/${isTrialing ? "pick" : "checkout"}/${price.priceId}`}
+            className={cn(buttonVariants({ variant: "default" }), "w-full")}
+            href={`${serverUrl}/stripe/checkout/${price.priceId}`}
           >
-            {isTrialing ? "Choose " : "Subscribe "}
+            {trialRequiresPaymentMethod ? "Start Trial " : "Subscribe "}
             {formatBillingInterval({
               interval: price.interval,
               intervalCount: price.intervalCount,

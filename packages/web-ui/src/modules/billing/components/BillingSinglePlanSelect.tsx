@@ -1,12 +1,11 @@
 import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
 import {
-  findMonthlyStandInPrice,
   formatBillingInterval,
   formatPlanAmount,
+  listPlanSelectPrices,
 } from "@m5kdev/commons/modules/billing/billing.utils";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
-import { useSubscription } from "@m5kdev/frontend/modules/billing/hooks/useSubscription";
 import { Check, LogOut } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -26,6 +25,7 @@ import { cn } from "../../../lib/utils";
 export interface BillingSinglePlanSelectProps {
   plan: StripePlan;
   currency: string;
+  trialRequiresPaymentMethod?: boolean;
   features?: string[];
   /** URL for the Terms of Service link. Override for your app's legal page. */
   termsOfServiceUrl?: string;
@@ -34,6 +34,7 @@ export interface BillingSinglePlanSelectProps {
 export function BillingSinglePlanSelect({
   plan,
   currency,
+  trialRequiresPaymentMethod,
   termsOfServiceUrl,
   features = [
     "Unlimited access to all features",
@@ -46,11 +47,8 @@ export function BillingSinglePlanSelect({
   const { t } = useTranslation("web-ui");
   const { serverUrl } = useAppConfig();
   const navigate = useNavigate();
-  const { data: subscription } = useSubscription();
-  const isTrialing = subscription?.status === "trialing";
-  const prices = plan.products[currency]?.prices ?? [];
-  const standIn = findMonthlyStandInPrice(plan, currency);
-  const [priceId, setPriceId] = useState(standIn?.priceId ?? prices[0]?.priceId ?? "");
+  const prices = listPlanSelectPrices({ plan, currency, trialRequiresPaymentMethod });
+  const [priceId, setPriceId] = useState(prices[0]?.priceId ?? "");
   const selected = prices.find((price) => price.priceId === priceId) ?? prices[0];
 
   const handleLogout = async () => {
@@ -58,9 +56,7 @@ export function BillingSinglePlanSelect({
     navigate("/login");
   };
 
-  const href = selected
-    ? `${serverUrl}/stripe/${isTrialing ? "pick" : "checkout"}/${selected.priceId}`
-    : undefined;
+  const href = selected ? `${serverUrl}/stripe/checkout/${selected.priceId}` : undefined;
   const amount =
     selected?.unitAmount != null
       ? formatPlanAmount({ unitAmount: selected.unitAmount, currency })
@@ -79,11 +75,7 @@ export function BillingSinglePlanSelect({
         </div>
 
         {prices.length > 1 ? (
-          <Tabs
-            value={selected?.priceId}
-            onValueChange={setPriceId}
-            className="w-full max-w-xl"
-          >
+          <Tabs value={selected?.priceId} onValueChange={setPriceId} className="w-full max-w-xl">
             <TabsList className="flex w-full flex-wrap">
               {prices.map((price) => (
                 <TabsTrigger key={price.priceId} value={price.priceId}>
@@ -103,12 +95,10 @@ export function BillingSinglePlanSelect({
               <span className="text-xl font-bold">{plan.name}</span>
             </CardTitle>
             <CardDescription>
-              {isTrialing
-                ? "Choose an interval before Trial ends"
-                : formatBillingInterval({
-                    interval: selected?.interval,
-                    intervalCount: selected?.intervalCount,
-                  })}
+              {formatBillingInterval({
+                interval: selected?.interval,
+                intervalCount: selected?.intervalCount,
+              })}
             </CardDescription>
           </CardHeader>
 
@@ -131,8 +121,11 @@ export function BillingSinglePlanSelect({
 
           <CardFooter>
             {href ? (
-              <a className={cn(buttonVariants({ variant: "default", size: "lg" }), "w-full")} href={href}>
-                {isTrialing ? "Choose this interval" : "Subscribe"}
+              <a
+                className={cn(buttonVariants({ variant: "default", size: "lg" }), "w-full")}
+                href={href}
+              >
+                {trialRequiresPaymentMethod ? "Start Trial" : "Subscribe"}
               </a>
             ) : null}
           </CardFooter>

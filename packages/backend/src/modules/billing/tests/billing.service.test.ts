@@ -2,13 +2,16 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { type Client, createClient } from "@libsql/client";
-import type { ResolvedStripePlans, StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
+import type {
+  ResolvedStripePlans,
+  StripePlan,
+} from "@m5kdev/commons/modules/billing/billing.types";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import type { FunctionComponent } from "react";
 import type Stripe from "stripe";
-import { createServiceActor } from "../../../base/base.actor";
 import { createBackendApp } from "../../../app";
+import { createServiceActor } from "../../../base/base.actor";
 import * as authTables from "../../auth/auth.db";
 import { EmailModule } from "../../email/email.module";
 import type { EmailTemplates } from "../../email/email.service";
@@ -70,6 +73,7 @@ const plan: StripePlan = {
   products: {
     usd: {
       id: "prod_usd",
+      defaultPriceId: PRICE_ID,
       prices: [
         { priceId: PRICE_ID, interval: "month", intervalCount: 1, unitAmount: 3900 },
         { priceId: PRICE_USD_QUARTER, interval: "month", intervalCount: 3, unitAmount: 9900 },
@@ -77,7 +81,10 @@ const plan: StripePlan = {
     },
     pln: {
       id: "prod_pln",
-      prices: [{ priceId: PRICE_PLN_MONTH, interval: "month", intervalCount: 1, unitAmount: 14900 }],
+      defaultPriceId: PRICE_PLN_MONTH,
+      prices: [
+        { priceId: PRICE_PLN_MONTH, interval: "month", intervalCount: 1, unitAmount: 14900 },
+      ],
     },
     cad: {
       id: "prod_cad",
@@ -90,7 +97,8 @@ const plan: StripePlan = {
 function catalog(overrides: Partial<ResolvedStripePlans> = {}): ResolvedStripePlans {
   return {
     plans: [plan],
-    trial: plan,
+    trialPlanName: { usd: "pro", pln: "pro" },
+    trialRequiresPaymentMethod: false,
     defaultCurrency: "usd",
     seatBilling: false,
     nonBillableRoleKeys: [],
@@ -112,7 +120,13 @@ function createStripeStub(options: {
   subscriptionStatus?: Stripe.Subscription.Status;
   quantity?: number;
 }): Stripe & {
-  state: { quantity: number; status: string; created: boolean; priceId: string; intervalPicked: boolean };
+  state: {
+    quantity: number;
+    status: string;
+    created: boolean;
+    priceId: string;
+    intervalPicked: boolean;
+  };
 } {
   const now = Math.floor(Date.now() / 1000);
   const state = {
@@ -130,7 +144,10 @@ function createStripeStub(options: {
     price: {
       id: state.priceId,
       unit_amount: 3900,
-      recurring: { interval: "month" as const, interval_count: state.priceId === PRICE_USD_QUARTER ? 3 : 1 },
+      recurring: {
+        interval: "month" as const,
+        interval_count: state.priceId === PRICE_USD_QUARTER ? 3 : 1,
+      },
     },
   });
 
@@ -162,15 +179,19 @@ function createStripeStub(options: {
       list: jest.fn().mockImplementation(async () => ({
         data: state.created ? [subscription()] : [],
       })),
-      create: jest.fn().mockImplementation(async (params: { items: Array<{ price?: string; quantity?: number }> }) => {
-        if (options.failCustomerCreate) throw new Error("stripe down");
-        state.created = true;
-        state.quantity = params.items[0]?.quantity ?? 1;
-        state.priceId = params.items[0]?.price ?? PRICE_ID;
-        state.status = "trialing";
-        state.intervalPicked = false;
-        return subscription();
-      }),
+      create: jest
+        .fn()
+        .mockImplementation(
+          async (params: { items: Array<{ price?: string; quantity?: number }> }) => {
+            if (options.failCustomerCreate) throw new Error("stripe down");
+            state.created = true;
+            state.quantity = params.items[0]?.quantity ?? 1;
+            state.priceId = params.items[0]?.price ?? PRICE_ID;
+            state.status = "trialing";
+            state.intervalPicked = false;
+            return subscription();
+          }
+        ),
       update: jest.fn().mockImplementation(
         async (
           _id: string,
@@ -369,7 +390,11 @@ async function createTables(client: Client): Promise<void> {
 
 async function seedOrg(client: Client, memberCount = 1): Promise<void> {
   const orm = drizzle(client, {
-    schema: { users: authTables.users, organizations: authTables.organizations, members: authTables.members },
+    schema: {
+      users: authTables.users,
+      organizations: authTables.organizations,
+      members: authTables.members,
+    },
   });
   await orm.insert(authTables.users).values({
     id: USER_ID,
@@ -450,7 +475,9 @@ describe("BillingService.processEvent trial_will_end", () => {
     await fs.rm(outputDirectory, { recursive: true, force: true });
   });
 
-  async function linkCustomer(stripe: ReturnType<typeof createStripeStub>): Promise<BillingService> {
+  async function linkCustomer(
+    stripe: ReturnType<typeof createStripeStub>
+  ): Promise<BillingService> {
     stripe.state.created = true;
     const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
     await orm
@@ -583,13 +610,13 @@ describe("BillingService Organization paywall", () => {
         },
         [
           new EmailModule(requiredTemplates),
-          new BillingModule({ stripe }, catalog({ plans: [broken], trial: undefined })),
+          new BillingModule({ stripe }, catalog({ plans: [broken], trialPlanName: {} })),
         ] as const
       )
     ).toThrow("Plan pro is missing Product for defaultCurrency");
   });
 
-  it("throws when the Trial Plan has no monthly Price for defaultCurrency", async () => {
+  it("throws when card-off Trial Plan has no default Price", async () => {
     const stripe = createStripeStub({});
     const yearlyOnly: StripePlan = {
       name: "pro",
@@ -609,10 +636,64 @@ describe("BillingService Organization paywall", () => {
         },
         [
           new EmailModule(requiredTemplates),
-          new BillingModule({ stripe }, catalog({ plans: [yearlyOnly], trial: yearlyOnly })),
+          new BillingModule(
+            { stripe },
+            catalog({ plans: [yearlyOnly], trialPlanName: { usd: "pro" } })
+          ),
         ] as const
       )
-    ).toThrow("Trial Plan requires a monthly Price for defaultCurrency");
+    ).toThrow("Trial Plan pro requires a default Price for usd");
+  });
+
+  it("throws when the Trial Plan name is missing from the catalog", async () => {
+    const stripe = createStripeStub({});
+    expect(() =>
+      createBackendApp(
+        {
+          db: { client },
+          schema: { ...authTables, ...billingTables },
+          email: { mode: "store", from: "no-reply@example.com", outputDirectory },
+        },
+        [
+          new EmailModule(requiredTemplates),
+          new BillingModule({ stripe }, catalog({ trialPlanName: { usd: "enterprise" } })),
+        ] as const
+      )
+    ).toThrow("Trial Plan enterprise not found");
+  });
+
+  it("boots card-required Trial without a default Price", async () => {
+    const stripe = createStripeStub({});
+    const noDefault: StripePlan = {
+      name: "pro",
+      products: {
+        usd: {
+          id: "prod_usd",
+          prices: [{ priceId: PRICE_ID, interval: "year", intervalCount: 1, unitAmount: 34800 }],
+        },
+      },
+      freeTrial: { days: 7 },
+    };
+    expect(() =>
+      createBackendApp(
+        {
+          db: { client },
+          schema: { ...authTables, ...billingTables },
+          email: { mode: "store", from: "no-reply@example.com", outputDirectory },
+        },
+        [
+          new EmailModule(requiredTemplates),
+          new BillingModule(
+            { stripe },
+            catalog({
+              plans: [noDefault],
+              trialPlanName: { usd: "pro" },
+              trialRequiresPaymentMethod: true,
+            })
+          ),
+        ] as const
+      )
+    ).not.toThrow();
   });
 
   it("creates an Organization-keyed Trial Subscription", async () => {
@@ -641,6 +722,7 @@ describe("BillingService Organization paywall", () => {
     expect(stripe.subscriptions.create).toHaveBeenCalledWith(
       expect.objectContaining({
         items: [{ price: PRICE_ID, quantity: 1 }],
+        trial_period_days: 7,
       })
     );
   });
@@ -772,7 +854,6 @@ describe("BillingService Organization paywall", () => {
       stripe,
       catalog: catalog({
         plans: [seatedPlan],
-        trial: seatedPlan,
         seatBilling: true,
       }),
     });
@@ -808,7 +889,6 @@ describe("BillingService Organization paywall", () => {
       stripe,
       catalog: catalog({
         plans: [seatedPlan],
-        trial: seatedPlan,
         seatBilling: true,
       }),
     });
@@ -827,7 +907,6 @@ describe("BillingService Organization paywall", () => {
     const seatedPlan: StripePlan = { ...plan, freeTrial: { days: 14, seats: 5 } };
     const stripe = createStripeStub({ quantity: 5, subscriptionStatus: "active" });
     stripe.state.created = true;
-    stripe.state.intervalPicked = true;
     const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
     await orm
       .update(authTables.organizations)
@@ -840,7 +919,6 @@ describe("BillingService Organization paywall", () => {
       stripe,
       catalog: catalog({
         plans: [seatedPlan],
-        trial: seatedPlan,
         seatBilling: true,
       }),
     });
@@ -884,7 +962,6 @@ describe("BillingService Organization paywall", () => {
       stripe,
       catalog: catalog({
         plans: [seatedPlan],
-        trial: seatedPlan,
         seatBilling: true,
       }),
     });
@@ -912,7 +989,6 @@ describe("BillingService Organization paywall", () => {
       stripe,
       catalog: catalog({
         plans: [seatedPlan],
-        trial: seatedPlan,
         seatBilling: true,
       }),
     });
@@ -947,7 +1023,6 @@ describe("BillingService Organization paywall", () => {
       stripe,
       catalog: catalog({
         plans: [seatedPlan],
-        trial: seatedPlan,
         seatBilling: true,
       }),
     });
@@ -974,7 +1049,7 @@ describe("BillingService Organization paywall", () => {
       templates: requiredTemplates,
       outputDirectory,
       stripe,
-      catalog: catalog({ trial: undefined }),
+      catalog: catalog({ trialPlanName: {} }),
     });
     await billing.createOrganizationHook({
       organizationId: ORG_ID,
@@ -1044,7 +1119,7 @@ describe("BillingService Organization paywall", () => {
       templates: requiredTemplates,
       outputDirectory,
       stripe,
-      catalog: catalog({ trial: undefined }),
+      catalog: catalog({ trialPlanName: {} }),
     });
 
     await billing.createOrganizationHook({
@@ -1072,7 +1147,6 @@ describe("BillingService Organization paywall", () => {
       stripe,
       catalog: catalog({
         plans: [seatedPlan],
-        trial: seatedPlan,
         seatBilling: true,
       }),
     });
@@ -1112,7 +1186,6 @@ describe("BillingService Organization paywall", () => {
       stripe,
       catalog: catalog({
         plans: [seatedPlan],
-        trial: seatedPlan,
         seatBilling: true,
       }),
     });
@@ -1128,7 +1201,7 @@ describe("BillingService Organization paywall", () => {
     expect(stripe.subscriptions.update).not.toHaveBeenCalled();
   });
 
-  it("starts Trial on the monthly Price of the Organization currency", async () => {
+  it("starts Trial on the default Price of the Organization currency", async () => {
     const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
     await orm
       .update(authTables.organizations)
@@ -1151,11 +1224,47 @@ describe("BillingService Organization paywall", () => {
     expect(stripe.subscriptions.create).toHaveBeenCalledWith(
       expect.objectContaining({
         items: [expect.objectContaining({ price: PRICE_PLN_MONTH })],
+        trial_period_days: 7,
       })
     );
   });
 
-  it("skips Trial when the Organization currency has no monthly Price", async () => {
+  it("creates Trial on a yearly default Price", async () => {
+    const yearlyPlan: StripePlan = {
+      name: "pro",
+      products: {
+        usd: {
+          id: "prod_usd",
+          defaultPriceId: PRICE_ID,
+          prices: [{ priceId: PRICE_ID, interval: "year", intervalCount: 1, unitAmount: 34800 }],
+        },
+      },
+      freeTrial: { days: 15 },
+    };
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+      catalog: catalog({ plans: [yearlyPlan], trialPlanName: { usd: "pro" } }),
+    });
+
+    const result = await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+    expect(result.isOk()).toBe(true);
+    expect(stripe.subscriptions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: [{ price: PRICE_ID, quantity: 1 }],
+        trial_period_days: 15,
+      })
+    );
+  });
+
+  it("skips Trial when the Organization currency has no Trial Plan", async () => {
     const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
     await orm
       .update(authTables.organizations)
@@ -1175,17 +1284,42 @@ describe("BillingService Organization paywall", () => {
       email: USER_EMAIL,
     });
     expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap()).toBe(false);
+    expect(result._unsafeUnwrap()).toBe(true);
     expect(stripe.subscriptions.create).not.toHaveBeenCalled();
   });
 
-  it("lets the Owner pick a Trial Price including the monthly stand-in", async () => {
+  it("does not create Trial at Organization create when Trial requires a payment method", async () => {
     const stripe = createStripeStub({});
     const billing = await bootBilling({
       client,
       templates: requiredTemplates,
       outputDirectory,
       stripe,
+      catalog: catalog({ trialRequiresPaymentMethod: true }),
+    });
+
+    const result = await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toBe(true);
+    expect(stripe.customers.create).toHaveBeenCalled();
+    expect(stripe.subscriptions.create).not.toHaveBeenCalled();
+
+    const accessible = await billing.getActiveSubscription(memberCtx());
+    expect(accessible._unsafeUnwrap()).toBeNull();
+  });
+
+  it("Checkouts the default Trial Price with a card when Trial requires a payment method", async () => {
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+      catalog: catalog({ trialRequiresPaymentMethod: true }),
     });
     await billing.createOrganizationHook({
       organizationId: ORG_ID,
@@ -1193,26 +1327,82 @@ describe("BillingService Organization paywall", () => {
       email: USER_EMAIL,
     });
 
-    const picked = await billing.pickTrialPrice(
+    const checkout = await billing.createCheckoutSession(
       { priceId: PRICE_USD_QUARTER },
-      { organizationId: ORG_ID, organizationRole: "owner" }
+      {
+        organizationId: ORG_ID,
+        memberId: MEMBER_ID,
+        organizationRole: "owner",
+        email: USER_EMAIL,
+      }
     );
-    expect(picked.isOk()).toBe(true);
-    expect(stripe.subscriptions.update).toHaveBeenCalledWith(
-      "sub_trial",
+    expect(checkout.isOk()).toBe(true);
+    expect(stripe.checkout.sessions.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        items: [expect.objectContaining({ price: PRICE_USD_QUARTER })],
-        metadata: expect.objectContaining({ intervalPicked: "true" }),
+        payment_method_collection: "always",
+        line_items: [{ price: PRICE_ID, quantity: 1 }],
+        subscription_data: expect.objectContaining({
+          trial_period_days: 7,
+          metadata: { organizationId: ORG_ID, memberId: MEMBER_ID },
+        }),
       })
     );
-
-    const accessible = await billing.getActiveSubscription(memberCtx());
-    expect(accessible._unsafeUnwrap()?.intervalPicked).toBe(true);
-    expect(accessible._unsafeUnwrap()?.priceId).toBe(PRICE_USD_QUARTER);
-    expect(accessible._unsafeUnwrap()?.intervalCount).toBe(3);
   });
 
-  it("refuses Interval pick of a Price from a different Plan", async () => {
+  it("Checkouts the requested Trial Price with a card when no default Price is set", async () => {
+    const noDefault: StripePlan = {
+      name: "pro",
+      products: {
+        usd: {
+          id: "prod_usd",
+          prices: [
+            { priceId: PRICE_ID, interval: "month", intervalCount: 1, unitAmount: 3900 },
+            { priceId: PRICE_USD_QUARTER, interval: "month", intervalCount: 3, unitAmount: 9900 },
+          ],
+        },
+      },
+      freeTrial: { days: 7 },
+    };
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+      catalog: catalog({
+        plans: [noDefault],
+        trialPlanName: { usd: "pro" },
+        trialRequiresPaymentMethod: true,
+      }),
+    });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+
+    const checkout = await billing.createCheckoutSession(
+      { priceId: PRICE_USD_QUARTER },
+      {
+        organizationId: ORG_ID,
+        memberId: MEMBER_ID,
+        organizationRole: "owner",
+        email: USER_EMAIL,
+      }
+    );
+    expect(checkout.isOk()).toBe(true);
+    expect(stripe.checkout.sessions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payment_method_collection: "always",
+        line_items: [{ price: PRICE_USD_QUARTER, quantity: 1 }],
+        subscription_data: expect.objectContaining({
+          trial_period_days: 7,
+        }),
+      })
+    );
+  });
+
+  it("refuses card-required Checkout of a Price from a different Plan", async () => {
     const otherPlan: StripePlan = {
       name: "team",
       products: {
@@ -1224,52 +1414,36 @@ describe("BillingService Organization paywall", () => {
         },
       },
     };
+    const noDefault: StripePlan = {
+      name: "pro",
+      products: {
+        usd: {
+          id: "prod_usd",
+          prices: [{ priceId: PRICE_ID, interval: "month", intervalCount: 1, unitAmount: 3900 }],
+        },
+      },
+      freeTrial: { days: 7 },
+    };
     const stripe = createStripeStub({});
     const billing = await bootBilling({
       client,
       templates: requiredTemplates,
       outputDirectory,
       stripe,
-      catalog: catalog({ plans: [plan, otherPlan], trial: plan }),
+      catalog: catalog({
+        plans: [noDefault, otherPlan],
+        trialPlanName: { usd: "pro" },
+        trialRequiresPaymentMethod: true,
+      }),
     });
     await billing.createOrganizationHook({
       organizationId: ORG_ID,
       memberId: MEMBER_ID,
       email: USER_EMAIL,
     });
-
-    const picked = await billing.pickTrialPrice(
-      { priceId: PRICE_TEAM_MONTH },
-      { organizationId: ORG_ID, organizationRole: "owner" }
-    );
-    expect(picked.isErr()).toBe(true);
-    if (picked.isErr()) expect(picked.error.code).toBe("NOT_FOUND");
-    expect(stripe.subscriptions.update).not.toHaveBeenCalled();
-  });
-
-  it("forbids Interval pick for non-Owners and refuses Checkout while Trial exists", async () => {
-    const stripe = createStripeStub({});
-    const billing = await bootBilling({
-      client,
-      templates: requiredTemplates,
-      outputDirectory,
-      stripe,
-    });
-    await billing.createOrganizationHook({
-      organizationId: ORG_ID,
-      memberId: MEMBER_ID,
-      email: USER_EMAIL,
-    });
-
-    const memberPick = await billing.pickTrialPrice(
-      { priceId: PRICE_ID },
-      { organizationId: ORG_ID, organizationRole: "member" }
-    );
-    expect(memberPick.isErr()).toBe(true);
-    if (memberPick.isErr()) expect(memberPick.error.code).toBe("FORBIDDEN");
 
     const checkout = await billing.createCheckoutSession(
-      { priceId: PRICE_ID },
+      { priceId: PRICE_TEAM_MONTH },
       {
         organizationId: ORG_ID,
         memberId: MEMBER_ID,
@@ -1278,10 +1452,11 @@ describe("BillingService Organization paywall", () => {
       }
     );
     expect(checkout.isErr()).toBe(true);
-    if (checkout.isErr()) expect(checkout.error.code).toBe("CONFLICT");
+    if (checkout.isErr()) expect(checkout.error.code).toBe("NOT_FOUND");
+    expect(stripe.checkout.sessions.create).not.toHaveBeenCalled();
   });
 
-  it("cancels an unpicked Trial that converts to paid", async () => {
+  it("keeps a Trial that converts to paid", async () => {
     const stripe = createStripeStub({});
     const billing = await bootBilling({
       client,
@@ -1294,32 +1469,6 @@ describe("BillingService Organization paywall", () => {
       memberId: MEMBER_ID,
       email: USER_EMAIL,
     });
-
-    const converted = await billing.processEvent(trialConvertedEvent());
-    expect(converted.isOk()).toBe(true);
-    expect(stripe.subscriptions.cancel).toHaveBeenCalled();
-
-    const accessible = await billing.getActiveSubscription(memberCtx());
-    expect(accessible._unsafeUnwrap()).toBeNull();
-  });
-
-  it("keeps a picked Trial that converts to paid", async () => {
-    const stripe = createStripeStub({});
-    const billing = await bootBilling({
-      client,
-      templates: requiredTemplates,
-      outputDirectory,
-      stripe,
-    });
-    await billing.createOrganizationHook({
-      organizationId: ORG_ID,
-      memberId: MEMBER_ID,
-      email: USER_EMAIL,
-    });
-    await billing.pickTrialPrice(
-      { priceId: PRICE_ID },
-      { organizationId: ORG_ID, organizationRole: "owner" }
-    );
 
     const converted = await billing.processEvent(trialConvertedEvent());
     expect(converted.isOk()).toBe(true);

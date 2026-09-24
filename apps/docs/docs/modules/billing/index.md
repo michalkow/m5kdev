@@ -30,13 +30,15 @@ import { getEnvironmentPlans } from "@m5kdev/commons/modules/billing/billing.uti
 
 const plansConfig: StripePlansConfig = {
   defaultCurrency: "usd",
-  trialPlanName: "pro",
+  trialPlanName: { usd: "pro", pln: "pro" },
+  trialRequiresPaymentMethod: false,
   production: [
     {
       name: "pro",
       products: {
         usd: {
           id: "prod_usd",
+          defaultPriceId: "price_usd_month",
           prices: [
             { priceId: "price_usd_month", interval: "month", intervalCount: 1, unitAmount: 14900 },
             { priceId: "price_usd_quarter", interval: "month", intervalCount: 3, unitAmount: 29800 },
@@ -45,6 +47,7 @@ const plansConfig: StripePlansConfig = {
         },
         pln: {
           id: "prod_pln",
+          defaultPriceId: "price_pln_month",
           prices: [
             { priceId: "price_pln_month", interval: "month", intervalCount: 1, unitAmount: 59900 },
           ],
@@ -59,13 +62,16 @@ const plansConfig: StripePlansConfig = {
 const resolved = getEnvironmentPlans(plansConfig, process.env.NODE_ENV);
 ```
 
-When `seatBilling: true`, the trial Plan must set `freeTrial.seats`. Optional
+When `seatBilling: true`, each Trial Plan must set `freeTrial.seats`. Optional
 `nonBillableRoleKeys` lists Roles that do not consume Stripe quantity (Owner is
 always billable).
 
-Annual, quarterly, and other Prices after convert are Billing Portal
-switches configured in the Stripe Dashboard. During Trial, Kernel Plan pages
-record an Interval pick instead of Checkout.
+`trialPlanName` is a currency → Plan name map. Omit it for Checkout-only
+catalogs. When `trialRequiresPaymentMethod` is false (the default), each Trial
+Plan Product must set `defaultPriceId`; Kernel starts Trial on that Price at
+Organization create. When it is true, there is no Trial until Checkout:
+`defaultPriceId` skips the Plan page; otherwise the Owner picks a Price id then
+Checkouts. After convert, interval change is Billing Portal.
 
 ## Backend
 
@@ -84,8 +90,8 @@ createBackendApp(config, [
 ]);
 ```
 
-`BillingModule` mounts Checkout, pick, success, Billing Portal, and the Stripe webhook
-at `/stripe`. Owner-only for Checkout, Interval pick, and Billing Portal. Members may read the
+`BillingModule` mounts Checkout, success, Billing Portal, and the Stripe webhook
+at `/stripe`. Owner-only for Checkout and Billing Portal. Members may read the
 Subscription and invoices.
 
 This is a breaking cutover from User-keyed Stripe Customers. The Customer lives
@@ -99,18 +105,20 @@ the dropped User column — do not hand-write them.
 `Backend module "billing" is missing required dependency "email"`. Auth already
 requires Email, so most apps only need to keep that registration.
 
-Auth starts Trial on Organization create (`createOrganizationHook`), not User
-signup. Organization create succeeds if Stripe is down; the paywall shows until
-a Subscription exists.
+Auth starts Trial on Organization create (`createOrganizationHook`) when a
+card is not required. When Trial requires a payment method, Organization create
+still may create the Customer; access waits on Checkout. Organization create
+succeeds if Stripe is down; the paywall shows until a Subscription exists.
 
 ### Service
 
 `BillingService` implements the sync-from-Stripe pattern:
 
-- `createOrganizationHook` — Stripe Customer on the Organization, optional Trial on the monthly stand-in Price for Organization currency.
-- `createCheckoutSession` / `pickTrialPrice` / `createBillingPortalSession` — Stripe-hosted Checkout and Portal, plus Owner Interval pick during Trial.
+- `createOrganizationHook` — Stripe Customer on the Organization; optional Trial on the default Price for Organization currency when a card is not required.
 - `createCheckoutSession` / `createBillingPortalSession` — Stripe-hosted flows
-  (Owner only; Checkout refused while an open Subscription exists).
+  (Owner only; Checkout refused while an open Subscription exists). When Trial
+  requires a payment method, Checkout sets `trial_period_days` and
+  `payment_method_collection: always`.
 - `getActiveSubscription`, `listInvoices` — Organization-scoped reads. Access
   includes `active`, `trialing`, and `past_due`.
 - `adjustBillableSeats` — Seat billing quantity (no-op when Seat billing is off).
@@ -129,7 +137,6 @@ Mounted under `/stripe` by `BillingModule`.
 | Route | Purpose |
 | --- | --- |
 | `GET /stripe/checkout/:priceId` | Redirect to a Stripe Checkout session (Owner) |
-| `GET /stripe/pick/:priceId` | Interval pick during Trial (Owner); updates the Trial item |
 | `GET /stripe/portal` | Redirect to the Stripe Billing Portal (Owner) |
 | `GET /stripe/success` | Post-checkout landing that triggers a sync |
 | `POST /stripe/webhook` | Stripe Subscription webhook (raw body, verified with `STRIPE_WEBHOOK_SECRET`). This is Billing, not [Inbound callback](/modules/webhook). |
@@ -142,15 +149,16 @@ Organization-scoped.
 | --- | --- |
 | `billing.getActiveSubscription` | Current accessible Subscription or `null` |
 | `billing.listInvoices` | Stripe invoices for the Organization Customer |
-| `billing.pickTrialPrice` | Owner Interval pick during Trial |
 
 ## Frontend and UI
 
 Wrap billing-aware routes in `BillingProvider` and read state with
 `useSubscription`. `@m5kdev/web-ui` provides `BillingRouter` with
 `BillingPlanSelect` (1..N Plans), `BillingSinglePlanSelect`, `BillingInvoicePage`,
-and `BillingBetaPage`. Pass Organization currency (frozen at create). `skipPlanCheck` still
-bypasses the paywall. During Trial, Plan actions call `/stripe/pick/:priceId` instead of Checkout.
+and `BillingBetaPage`. Pass Organization currency (frozen at create). When Trial
+requires a payment method, pass `trialRequiresPaymentMethod` and the resolved
+Trial Plan name so the Plan page Checkouts that Plan (default Price skips the
+interval picker). `skipPlanCheck` still bypasses the paywall.
 
 ## Environment
 

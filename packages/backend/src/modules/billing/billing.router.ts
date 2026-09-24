@@ -43,7 +43,9 @@ export function createBillingRouter(
           ? 403
           : session.error.code === "CONFLICT"
             ? 409
-            : 500;
+            : session.error.code === "NOT_FOUND"
+              ? 404
+              : 500;
       return res.status(status).json({ message: session.error.message });
     }
 
@@ -52,28 +54,6 @@ export function createBillingRouter(
     }
 
     return res.redirect(session.value.url);
-  });
-
-  billingRouter.get("/pick/:priceId", authMiddleware, async (req: AuthRequest, res) => {
-    const fields = organizationFields(req);
-    if (!fields) {
-      return res.status(403).json({ message: "Organization is required" });
-    }
-
-    const picked = await service.pickTrialPrice({ priceId: req.params.priceId }, fields);
-    if (picked.isErr()) {
-      const status =
-        picked.error.code === "FORBIDDEN"
-          ? 403
-          : picked.error.code === "CONFLICT"
-            ? 409
-            : picked.error.code === "NOT_FOUND"
-              ? 404
-              : 500;
-      return res.status(status).json({ message: picked.error.message });
-    }
-
-    return res.redirect(`${process.env.VITE_APP_URL}/billing`);
   });
 
   billingRouter.get("/portal", authMiddleware, async (req: AuthRequest, res) => {

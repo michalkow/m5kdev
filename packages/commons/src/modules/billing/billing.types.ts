@@ -8,6 +8,7 @@ export type StripePlanPrice = {
 export type StripePlanProduct = {
   id: string;
   prices: StripePlanPrice[];
+  defaultPriceId?: string;
 };
 
 export type StripePlan = {
@@ -21,16 +22,18 @@ export type StripePlan = {
 
 export type StripePlansConfig = {
   defaultCurrency: string;
+  trialRequiresPaymentMethod?: boolean;
+  trialPlanName?: Record<string, string>;
   seatBilling?: boolean;
   nonBillableRoleKeys?: readonly string[];
   production: StripePlan[];
   sandbox: StripePlan[];
-  trialPlanName?: string;
 };
 
 export type ResolvedStripePlans = {
   plans: StripePlan[];
-  trial?: StripePlan;
+  trialPlanName: Record<string, string>;
+  trialRequiresPaymentMethod: boolean;
   defaultCurrency: string;
   seatBilling: boolean;
   nonBillableRoleKeys: readonly string[];
