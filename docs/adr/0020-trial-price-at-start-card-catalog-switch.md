@@ -1,6 +1,6 @@
 # Trial Price is chosen at start; card-upfront is a catalog switch
 
-Trial no longer uses a monthly stand-in plus Interval pick. The catalog names a Trial Plan per currency and, when Trial does not require a card, a default Price on that Product — Kernel creates Trial at Organization create and convert bills that Price. When Trial requires a card, there is no access until Checkout: default Price skips the Plan page; otherwise the Owner picks a Price id (interval) on the Trial Plan, then Checkout starts Trial (`trial_period_days`) and collects the payment method. Billing Portal is not used for the first card. This supersedes Interval pick and unpicked-cancel in [ADR-0019](0019-billing-prices-per-currency-product.md).
+Trial no longer uses a monthly stand-in plus Interval pick. The catalog names a Trial Plan per currency and, when Trial does not require a card, a default Price on that Product — Kernel creates Trial at Organization create and convert bills that Price. When Trial requires a card, there is no access until Checkout: default Price skips the Plan page; otherwise the Owner picks a Price id (interval) on the Trial Plan, then Checkout starts Trial (`trial_period_days`) and collects the payment method. Billing Portal is not used for the first card. This supersedes Interval pick and unpicked-cancel in [ADR-0019](0019-billing-prices-per-currency-product.md). An AdminActor may also start a Trial from Billing Module admin on any catalog Price with Admin-entered days ([ADR-0022](0022-complimentary-billing-admin.md)).
 
 ## Considered Options
 

@@ -1,3 +1,6 @@
+import type { z } from "zod";
+import type { stripeEnvironmentSchema } from "./billing.schema";
+
 export type StripePlanPrice = {
   priceId: string;
   interval: "day" | "week" | "month" | "year";
@@ -30,7 +33,7 @@ export type StripePlansConfig = {
   sandbox: StripePlan[];
 };
 
-export type StripeEnvironment = "production" | "sandbox";
+export type StripeEnvironment = z.infer<typeof stripeEnvironmentSchema>;
 
 export type ResolvedStripePlans = {
   environment: StripeEnvironment;

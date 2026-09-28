@@ -277,8 +277,8 @@ Frozen ISO code on the Organization, set at create the same way locale is (paylo
 _Avoid_: deriving currency from locale on every read; a User-keyed currency column; switching USD↔PLN in Billing Portal; lookup of Stripe Customer by email to share currency; Admin changing a currency that is already set
 
 **Trial**:
-The unpaid `trialing` period of a Subscription. Length comes from the Trial Plan's `freeTrial.days`. The Trial Price is the catalog default Price on that Plan's Product for Organization currency, or the Price the Owner Checkouts. Stripe owns start and end; the local row stores trialStart / trialEnd. `freeTrial.seats` exists only when Seat billing is on.
-_Avoid_: Plan, beta, Stripe Customer; requiring seats when Seat billing is off; Interval pick mid-Trial; treating a stand-in as unchosen; Coupon (that is an Admin discount on a paid Price)
+The unpaid `trialing` period of a Subscription. Length comes from the Trial Plan's `freeTrial.days`, or from the days an AdminActor enters when starting one from Billing Module admin. The Trial Price is the catalog default Price on that Plan's Product for Organization currency, the Price the Owner Checkouts, or any catalog Price the AdminActor picks. Stripe owns start and end and cancels at end when there is no payment method; the local row stores trialStart / trialEnd. `freeTrial.seats` exists only when Seat billing is on.
+_Avoid_: Plan, beta, Stripe Customer; requiring seats when Seat billing is off; Interval pick mid-Trial; treating a stand-in as unchosen; Coupon (that is an Admin discount on a paid Price); Admin editing `trial_end` on an existing Subscription
 
 **Stripe Customer**:
 The Stripe Customer for an Organization (not a User). Two ids: production and sandbox, the same split as Plan catalogs. Kernel uses the NODE_ENV switch as Plans; create writes only the current env’s id so sandbox never overwrites production.

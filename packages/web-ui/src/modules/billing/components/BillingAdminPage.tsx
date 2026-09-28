@@ -1,6 +1,6 @@
-import { Button, Label, ListBox, Modal, Select } from "@heroui/react";
+import { Button, Chip, Input, Label, ListBox, Modal, Select, TextField } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
-import type { BillingCoupon } from "@m5kdev/commons/modules/billing/billing.schema";
+import { type BillingCoupon, MAX_TRIAL_DAYS } from "@m5kdev/commons/modules/billing/billing.schema";
 import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
 import {
   catalogCurrencyKeys,
@@ -37,7 +37,13 @@ interface AdminMutationOptions {
   onError: (error: unknown) => void;
 }
 
-const NO_COUPON = "__none__";
+type SubscriptionStart = "none" | "trial" | "coupon";
+
+const SUBSCRIPTION_STARTS: readonly SubscriptionStart[] = ["none", "trial", "coupon"];
+
+function isSubscriptionStart(value: unknown): value is SubscriptionStart {
+  return SUBSCRIPTION_STARTS.some((start) => start === value);
+}
 
 function pricesForCurrency({
   plans,
@@ -89,7 +95,9 @@ export function BillingAdminPage({ plans }: { plans: readonly StripePlan[] }): R
   const [dialog, setDialog] = useState<BillingAdminDialog | null>(null);
   const [currency, setCurrency] = useState("");
   const [priceId, setPriceId] = useState("");
-  const [couponId, setCouponId] = useState(NO_COUPON);
+  const [couponId, setCouponId] = useState("");
+  const [start, setStart] = useState<SubscriptionStart>("none");
+  const [trialDays, setTrialDays] = useState("");
 
   const currencies = useMemo(() => catalogCurrencyKeys(plans), [plans]);
 
@@ -157,7 +165,9 @@ export function BillingAdminPage({ plans }: { plans: readonly StripePlan[] }): R
       ? pricesForCurrency({ plans, currency: next.row.currency })[0]
       : undefined;
     setPriceId(firstPrice?.priceId ?? "");
-    setCouponId(NO_COUPON);
+    setCouponId("");
+    setStart("none");
+    setTrialDays(next.row.defaultTrialDays ? String(next.row.defaultTrialDays) : "");
     setDialog(next);
   };
 
@@ -291,7 +301,10 @@ export function BillingAdminPage({ plans }: { plans: readonly StripePlan[] }): R
   const dialogPrices = dialog?.row.currency
     ? pricesForCurrency({ plans, currency: dialog.row.currency })
     : [];
-  const selectedCouponId = couponId === NO_COUPON ? undefined : couponId;
+  const parsedTrialDays = Number.parseInt(trialDays, 10);
+  const trialDaysValid = parsedTrialDays >= 1 && parsedTrialDays <= MAX_TRIAL_DAYS;
+  const showCouponSelect =
+    dialog?.kind === "coupon" || (dialog?.kind === "subscription" && start === "coupon");
 
   const handleConfirm = (): void => {
     if (!dialog) return;
@@ -301,30 +314,45 @@ export function BillingAdminPage({ plans }: { plans: readonly StripePlan[] }): R
       return;
     }
     if (dialog.kind === "subscription") {
-      if (priceId)
-        createSubscription.mutate({ organizationId, priceId, couponId: selectedCouponId });
+      if (!priceId) return;
+      createSubscription.mutate({
+        organizationId,
+        priceId,
+        ...(start === "trial" ? { trialDays: parsedTrialDays } : {}),
+        ...(start === "coupon" ? { couponId } : {}),
+      });
       return;
     }
-    if (selectedCouponId) applyCoupon.mutate({ organizationId, couponId: selectedCouponId });
+    if (couponId) applyCoupon.mutate({ organizationId, couponId });
   };
 
   const isConfirmDisabled =
     dialog?.kind === "currency"
       ? !currency || setCurrencyMutation.isPending
       : dialog?.kind === "subscription"
-        ? !priceId || createSubscription.isPending
-        : !selectedCouponId || applyCoupon.isPending;
+        ? !priceId ||
+          createSubscription.isPending ||
+          (start === "trial" && !trialDaysValid) ||
+          (start === "coupon" && !couponId)
+        : !couponId || applyCoupon.isPending;
 
-  const couponOptions = [
-    ...(dialog?.kind === "subscription"
-      ? [{ id: NO_COUPON, label: t("web-ui:billing.admin.noCoupon") }]
-      : []),
-    ...coupons.map((coupon) => ({ id: coupon.id, label: couponLabel({ coupon, t }) })),
-  ];
+  const couponOptions = coupons.map((coupon) => ({
+    id: coupon.id,
+    label: couponLabel({ coupon, t }),
+  }));
+
+  const environment = query.data?.environment;
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">{t("web-ui:billing.admin.title")}</h1>
+      <div className="flex items-center gap-3">
+        <h1 className="text-xl font-semibold">{t("web-ui:billing.admin.title")}</h1>
+        {environment ? (
+          <Chip color={environment === "production" ? "success" : "warning"} variant="soft">
+            {t(`web-ui:billing.admin.environment.${environment}`)}
+          </Chip>
+        ) : null}
+      </div>
       <NuqsTable<BillingAdminRow>
         data={query.data?.rows ?? []}
         total={query.data?.total ?? 0}
@@ -407,10 +435,52 @@ export function BillingAdminPage({ plans }: { plans: readonly StripePlan[] }): R
                     </Select.Popover>
                   </Select>
                 ) : null}
-                {dialog?.kind === "subscription" || dialog?.kind === "coupon" ? (
+                {dialog?.kind === "subscription" ? (
+                  <div className="space-y-2">
+                    <Select
+                      aria-label={t("web-ui:billing.admin.startWith")}
+                      selectedKey={start}
+                      onSelectionChange={(key) => {
+                        if (isSubscriptionStart(key)) setStart(key);
+                      }}
+                      variant="secondary"
+                      className="w-full"
+                    >
+                      <Label>{t("web-ui:billing.admin.startWith")}</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {SUBSCRIPTION_STARTS.map((option) => (
+                            <ListBox.Item
+                              key={option}
+                              id={option}
+                              textValue={t(`web-ui:billing.admin.start.${option}`)}
+                            >
+                              {t(`web-ui:billing.admin.start.${option}`)}
+                              <ListBox.ItemIndicator />
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {t("web-ui:billing.admin.noCardHint")}
+                    </p>
+                  </div>
+                ) : null}
+                {dialog?.kind === "subscription" && start === "trial" ? (
+                  <TextField value={trialDays} onChange={setTrialDays} variant="secondary">
+                    <Label>{t("web-ui:billing.admin.trialDays")}</Label>
+                    <Input type="number" min={1} max={MAX_TRIAL_DAYS} />
+                  </TextField>
+                ) : null}
+                {showCouponSelect ? (
                   <Select
                     aria-label={t("web-ui:billing.admin.coupon")}
-                    selectedKey={couponId}
+                    selectedKey={couponId || null}
                     onSelectionChange={(key) => {
                       if (key !== null) setCouponId(String(key));
                     }}

@@ -128,8 +128,13 @@ succeeds if Stripe is down; the paywall shows until a Subscription exists.
 - `cancelOrganizationSubscription` — cancel in Stripe, keep the Customer.
 - AdminActor Billing Module admin (ADR-0022): list Organizations and Coupons,
   create a Stripe Customer, set Organization currency when it is null, create a
-  Subscription on a catalog Price with an optional Coupon, apply / replace /
-  remove one Coupon on an existing Subscription (Price unchanged), and cancel.
+  Subscription on a catalog Price with either a Trial (Admin-entered days,
+  pre-filled from the Trial Plan's `freeTrial.days`) or a Coupon, apply /
+  replace / remove one Coupon on an existing Subscription (Price unchanged),
+  and cancel. Without a payment method on the Customer, create requires a Trial
+  or a 100%-off Coupon (Stripe cannot charge a first invoice without one). An
+  Admin Trial ends like catalog Trial: Stripe cancels without a card. The page
+  shows the catalog environment (Production / Sandbox).
   Coupons are listed from the Stripe account; create them in the Dashboard.
   Removing a Coupon never cancels.
 - `constructEvent`, `processEvent`, `syncStripeData` — webhook verify and re-sync.
@@ -166,11 +171,11 @@ AdminActor is not in that Organization.
 
 | Procedure | Description |
 | --- | --- |
-| `billing.listAdminOrganizationBilling` | Organizations with Stripe Customer, currency, Subscription, and Coupon |
+| `billing.listAdminOrganizationBilling` | Catalog `environment` plus Organizations with Stripe Customer, currency, default Trial days, Subscription, and Coupon |
 | `billing.listAdminCoupons` | Valid Coupons in the Stripe account |
 | `billing.createAdminCustomer` | Create the Stripe Customer when missing (Owner email) |
 | `billing.setAdminOrganizationCurrency` | Set currency only when it is null (owned-Organization lock applies) |
-| `billing.createAdminSubscription` | Catalog Price plus optional Coupon when there is no Subscription |
+| `billing.createAdminSubscription` | Catalog Price plus a Trial (`trialDays`) or a Coupon (`couponId`) when there is no Subscription; no card requires one of them (Coupon at 100%) |
 | `billing.applyAdminCoupon` | Apply or replace the single Coupon on the Subscription |
 | `billing.removeAdminCoupon` | Clear the Coupon (never cancels) |
 | `billing.cancelAdminSubscription` | Cancel immediately or at period end |

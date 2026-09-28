@@ -44,6 +44,15 @@ type OrganizationRow = InferSelectModel<Schema["organizations"]>;
 type CustomerIdField = "stripeCustomerId" | "stripeSandboxCustomerId";
 type OrganizationBillingListRow = Omit<AdminOrganizationBillingRow, "coupon">;
 
+function isStripeResourceMissing(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "resource_missing"
+  );
+}
+
 function couponIdOfDiscount(discount: string | Stripe.Discount): string {
   if (typeof discount === "string") return discount;
   const coupon = discount.source.coupon;
@@ -489,6 +498,17 @@ export class BillingRepository extends BaseTableRepository<
     });
   }
 
+  getCoupon(couponId: string): ServerResultAsync<BillingCoupon | null> {
+    return this.throwablePromise(async () => {
+      try {
+        return toBillingCoupon(await this.stripe.coupons.retrieve(couponId));
+      } catch (error) {
+        if (isStripeResourceMissing(error)) return null;
+        throw error;
+      }
+    });
+  }
+
   listCoupons(): ServerResultAsync<BillingCoupon[]> {
     return this.throwablePromise(async () => {
       const coupons = await this.stripe.coupons.list({ limit: 100 }).autoPagingToArray({
@@ -565,6 +585,9 @@ export class BillingRepository extends BaseTableRepository<
         organizationName: organization.name,
         currency: organization.currency ?? null,
         stripeCustomerId: this.customerIdOf(organization),
+        defaultTrialDays: organization.currency
+          ? (this.trialPlanFor(organization.currency)?.freeTrial?.days ?? null)
+          : null,
         openSubscription: Boolean(
           subscription.value && OPEN_STATUSES.includes(subscription.value.status)
         ),

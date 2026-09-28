@@ -44,10 +44,15 @@ export const organizationIdInputSchema = z.object({
   organizationId: z.string(),
 });
 
+export const MAX_TRIAL_DAYS = 730;
+
+export const stripeEnvironmentSchema = z.enum(["production", "sandbox"]);
+
 export const createAdminSubscriptionInputSchema = z.object({
   organizationId: z.string(),
   priceId: z.string(),
   couponId: z.string().optional(),
+  trialDays: z.number().int().min(1).max(MAX_TRIAL_DAYS).optional(),
 });
 
 export const applyAdminCouponInputSchema = z.object({
@@ -71,13 +76,18 @@ export const adminOrganizationBillingRowSchema = z.object({
   organizationName: z.string(),
   currency: z.string().nullable(),
   stripeCustomerId: z.string().nullable(),
+  defaultTrialDays: z.number().nullable(),
   openSubscription: z.boolean(),
   subscription: billingSchema.nullable(),
   coupon: billingCouponSchema.nullable(),
 });
 
 export const billingAdminListInputSchema = querySchema;
-export const billingAdminListOutputSchema = queryListOutput(adminOrganizationBillingRowSchema);
+export const billingAdminListOutputSchema = queryListOutput(
+  adminOrganizationBillingRowSchema
+).extend({
+  environment: stripeEnvironmentSchema,
+});
 
 export type BillingCoupon = z.infer<typeof billingCouponSchema>;
 export type CreateAdminSubscriptionInput = z.infer<typeof createAdminSubscriptionInputSchema>;

@@ -25,6 +25,8 @@ import type { EmailService } from "../email/email.service";
 import type { BillingRepository } from "./billing.repository";
 
 const TRIAL_ENDING_TEMPLATE_KEY = "trialEnding";
+const NO_PAYMENT_METHOD_MESSAGE =
+  "The Customer has no payment method: pick a Trial or a 100% Coupon";
 
 type OwnerMember = InferSelectModel<typeof authTables.members> & { email: string };
 
@@ -442,6 +444,7 @@ export class BillingService extends BasePermissionService<
         coupons = listedCoupons.value;
       }
       return ok({
+        environment: this.repository.billing.environment,
         total: listed.value.total,
         rows: listed.value.rows.map((row) => ({
           ...row,
@@ -665,7 +668,11 @@ export class BillingService extends BasePermissionService<
     organizationId,
     priceId,
     couponId,
+    trialDays,
   }: CreateAdminSubscriptionInput): ServerResultAsync<boolean> {
+    if (trialDays && couponId) {
+      return this.error("BAD_REQUEST", "Pick either a Trial or a Coupon, not both");
+    }
     const organization = await this.repository.billing.getOrganizationById(organizationId);
     if (organization.isErr()) return err(organization.error);
     if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
@@ -681,6 +688,22 @@ export class BillingService extends BasePermissionService<
     if (open.isErr()) return err(open.error);
     if (open.value) return this.error("CONFLICT", "Organization already has a Subscription");
 
+    let fullyDiscounted = false;
+    if (couponId) {
+      const coupon = await this.repository.billing.getCoupon(couponId);
+      if (coupon.isErr()) return err(coupon.error);
+      if (!coupon.value) return this.error("NOT_FOUND", "Coupon not found");
+      fullyDiscounted = coupon.value.percentOff === 100;
+    }
+
+    const needsPaymentMethod = !trialDays && !fullyDiscounted;
+    if (needsPaymentMethod) {
+      const existingCustomerId =
+        await this.repository.billing.getOrganizationCustomerId(organizationId);
+      if (existingCustomerId.isErr()) return err(existingCustomerId.error);
+      if (!existingCustomerId.value) return this.error("BAD_REQUEST", NO_PAYMENT_METHOD_MESSAGE);
+    }
+
     const owner = await this.requireOwner(organizationId);
     if (owner.isErr()) return err(owner.error);
 
@@ -691,6 +714,13 @@ export class BillingService extends BasePermissionService<
       name: owner.value.name || undefined,
     });
     if (stripeCustomer.isErr()) return err(stripeCustomer.error);
+
+    if (
+      needsPaymentMethod &&
+      !this.defaultPaymentMethodId(stripeCustomer.value.invoice_settings?.default_payment_method)
+    ) {
+      return this.error("BAD_REQUEST", NO_PAYMENT_METHOD_MESSAGE);
+    }
 
     let quantity = 1;
     if (this.repository.billing.seatBilling) {
@@ -705,6 +735,7 @@ export class BillingService extends BasePermissionService<
       quantity,
       organizationId,
       memberId: owner.value.id,
+      trialDays,
       ...(couponId ? { discounts: [{ coupon: couponId }] } : {}),
     });
     if (created.isErr()) return err(created.error);

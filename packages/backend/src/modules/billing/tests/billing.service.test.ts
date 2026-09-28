@@ -43,6 +43,8 @@ const USER_ID = "user_trial";
 const USER_EMAIL = "pat@example.com";
 const PORTAL_URL = "https://billing.stripe.com/p/session/test_portal";
 const CHECKOUT_URL = "https://checkout.stripe.com/c/pay/test";
+const FREE_FOREVER_COUPON = { id: "free_forever", name: "Free", percent_off: 100 };
+const HALF_OFF_COUPON = { id: "half_off", name: "Half off", percent_off: 50 };
 
 const Template: FunctionComponent<Record<string, unknown>> = ({ previewText }) =>
   previewText as never;
@@ -181,6 +183,17 @@ function createStripeStub(options: {
     },
   });
 
+  const couponData = (options.coupons ?? [FREE_FOREVER_COUPON]).map((coupon) => ({
+    name: null,
+    percent_off: null,
+    amount_off: null,
+    currency: null,
+    duration: "forever",
+    duration_in_months: null,
+    valid: true,
+    ...coupon,
+  }));
+
   let createdCustomers = 0;
   const stripe = {
     state,
@@ -273,18 +286,13 @@ function createStripeStub(options: {
       list: jest.fn().mockResolvedValue({ data: [] }),
     },
     coupons: {
-      list: jest.fn().mockImplementation(() => {
-        const data = (options.coupons ?? []).map((coupon) => ({
-          name: null,
-          percent_off: null,
-          amount_off: null,
-          currency: null,
-          duration: "forever",
-          duration_in_months: null,
-          valid: true,
-          ...coupon,
-        }));
-        return { autoPagingToArray: async () => data };
+      list: jest.fn().mockImplementation(() => ({ autoPagingToArray: async () => couponData })),
+      retrieve: jest.fn().mockImplementation(async (id: string) => {
+        const coupon = couponData.find((item) => item.id === id);
+        if (coupon) return coupon;
+        const error = new Error(`No such coupon: '${id}'`) as Error & { code: string };
+        error.code = "resource_missing";
+        throw error;
       }),
     },
   };
@@ -1620,6 +1628,14 @@ describe("BillingService Billing Module admin", () => {
     await fs.rm(outputDirectory, { recursive: true, force: true });
   });
 
+  async function linkCustomer(): Promise<void> {
+    const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
+    await orm
+      .update(authTables.organizations)
+      .set({ stripeCustomerId: CUSTOMER_ID })
+      .where(eq(authTables.organizations.id, ORG_ID));
+  }
+
   function boot(stripe: Stripe, overrides: Partial<ResolvedStripePlans> = {}) {
     return bootBilling({
       client,
@@ -1630,8 +1646,72 @@ describe("BillingService Billing Module admin", () => {
     });
   }
 
-  it("creates a Subscription on a catalog Price for an Organization with no Customer", async () => {
+  it("refuses a full-price Subscription when the Customer has no payment method", async () => {
     const stripe = createStripeStub({});
+    const billing = await boot(stripe);
+
+    const refused = await billing.createAdminSubscription(
+      { organizationId: ORG_ID, priceId: PRICE_USD_QUARTER },
+      adminCtx()
+    );
+    expect(refused._unsafeUnwrapErr().code).toBe("BAD_REQUEST");
+    expect(stripe.customers.create).not.toHaveBeenCalled();
+    expect(stripe.subscriptions.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses a full-price Subscription when the linked Customer has no card", async () => {
+    await linkCustomer();
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe);
+
+    const refused = await billing.createAdminSubscription(
+      { organizationId: ORG_ID, priceId: PRICE_ID },
+      adminCtx()
+    );
+    expect(refused._unsafeUnwrapErr().code).toBe("BAD_REQUEST");
+    expect(stripe.subscriptions.create).not.toHaveBeenCalled();
+  });
+
+  it("starts an Admin Trial with billable Membership quantity when Seat billing is on", async () => {
+    const orm = drizzle(client, { schema: { members: authTables.members } });
+    await orm.insert(authTables.members).values([
+      { id: "member_a", organizationId: ORG_ID, email: "a@example.com", name: "A", role: "member" },
+      { id: "member_b", organizationId: ORG_ID, email: "b@example.com", name: "B", role: "member" },
+    ]);
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe, {
+      plans: [{ ...plan, freeTrial: { days: 7, seats: 5 } }],
+      seatBilling: true,
+    });
+
+    const created = await billing.createAdminSubscription(
+      { organizationId: ORG_ID, priceId: PRICE_USD_QUARTER, trialDays: 21 },
+      adminCtx()
+    );
+    expect(created.isOk()).toBe(true);
+    expect(stripe.subscriptions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: [{ price: PRICE_USD_QUARTER, quantity: 3 }],
+        trial_period_days: 21,
+      })
+    );
+  });
+
+  it("refuses a partial Coupon when the Customer has no payment method", async () => {
+    const stripe = createStripeStub({ coupons: [HALF_OFF_COUPON] });
+    const billing = await boot(stripe);
+
+    const refused = await billing.createAdminSubscription(
+      { organizationId: ORG_ID, priceId: PRICE_ID, couponId: "half_off" },
+      adminCtx()
+    );
+    expect(refused._unsafeUnwrapErr().code).toBe("BAD_REQUEST");
+    expect(stripe.subscriptions.create).not.toHaveBeenCalled();
+  });
+
+  it("creates a full-price Subscription when the Customer has a card", async () => {
+    await linkCustomer();
+    const stripe = createStripeStub({ customerDefaultPaymentMethod: "pm_card" });
     const billing = await boot(stripe);
 
     const created = await billing.createAdminSubscription(
@@ -1640,10 +1720,7 @@ describe("BillingService Billing Module admin", () => {
     );
     expect(created.isOk()).toBe(true);
 
-    expect(stripe.customers.create).toHaveBeenCalled();
-    expect(stripe.subscriptions.create).toHaveBeenCalledWith(
-      expect.not.objectContaining({ trial_period_days: expect.anything() })
-    );
+    expect(stripe.customers.create).not.toHaveBeenCalled();
     const accessible = (await billing.getActiveSubscription(memberCtx()))._unsafeUnwrap();
     expect(accessible?.status).toBe("active");
     expect(accessible?.priceId).toBe(PRICE_USD_QUARTER);
@@ -1651,8 +1728,74 @@ describe("BillingService Billing Module admin", () => {
     expect(accessible?.discounts ?? []).toHaveLength(0);
   });
 
+  it("creates a 100% Coupon Subscription when the Customer has no payment method", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe);
+
+    const created = await billing.createAdminSubscription(
+      { organizationId: ORG_ID, priceId: PRICE_ID, couponId: "free_forever" },
+      adminCtx()
+    );
+    expect(created.isOk()).toBe(true);
+    expect(stripe.subscriptions.create).toHaveBeenCalledWith(
+      expect.not.objectContaining({ trial_period_days: expect.anything() })
+    );
+    const accessible = (await billing.getActiveSubscription(memberCtx()))._unsafeUnwrap();
+    expect(accessible?.status).toBe("active");
+    expect(accessible?.discounts).toEqual(["free_forever"]);
+  });
+
+  it("starts an Admin Trial with entered days on any catalog Price without a card", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe);
+
+    const created = await billing.createAdminSubscription(
+      { organizationId: ORG_ID, priceId: PRICE_USD_QUARTER, trialDays: 30 },
+      adminCtx()
+    );
+    expect(created.isOk()).toBe(true);
+    expect(stripe.subscriptions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trial_period_days: 30,
+        trial_settings: { end_behavior: { missing_payment_method: "cancel" } },
+      })
+    );
+    const accessible = (await billing.getActiveSubscription(memberCtx()))._unsafeUnwrap();
+    expect(accessible?.status).toBe("trialing");
+    expect(accessible?.priceId).toBe(PRICE_USD_QUARTER);
+  });
+
+  it("refuses a Trial and a Coupon together", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe);
+
+    const refused = await billing.createAdminSubscription(
+      { organizationId: ORG_ID, priceId: PRICE_ID, trialDays: 14, couponId: "free_forever" },
+      adminCtx()
+    );
+    expect(refused._unsafeUnwrapErr().code).toBe("BAD_REQUEST");
+    expect(stripe.subscriptions.create).not.toHaveBeenCalled();
+  });
+
+  it("lists the catalog environment and the Trial Plan days for each Organization", async () => {
+    const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
+    await orm
+      .insert(authTables.organizations)
+      .values({ id: "org_cad", name: "Maple", currency: "cad" });
+    const billing = await boot(createStripeStub({}), { environment: "sandbox" });
+
+    const listed = (await billing.listAdminOrganizationBilling({}, adminCtx()))._unsafeUnwrap();
+    expect(listed.environment).toBe("sandbox");
+    expect(listed.rows.find((row) => row.organizationId === ORG_ID)?.defaultTrialDays).toBe(7);
+    expect(
+      listed.rows.find((row) => row.organizationId === "org_cad")?.defaultTrialDays
+    ).toBeNull();
+  });
+
   it("creates a Subscription with a Coupon and lists that Coupon on the Organization", async () => {
+    await linkCustomer();
     const stripe = createStripeStub({
+      customerDefaultPaymentMethod: "pm_card",
       coupons: [
         {
           id: "half_off",
@@ -1689,7 +1832,9 @@ describe("BillingService Billing Module admin", () => {
   });
 
   it("shows an attached Coupon that Stripe no longer marks valid", async () => {
+    await linkCustomer();
     const stripe = createStripeStub({
+      customerDefaultPaymentMethod: "pm_card",
       coupons: [{ id: "launch", name: "Launch", percent_off: 20, valid: false }],
     });
     const billing = await boot(stripe);
@@ -1738,7 +1883,7 @@ describe("BillingService Billing Module admin", () => {
     expect(set.isOk()).toBe(true);
 
     const created = await billing.createAdminSubscription(
-      { organizationId: ORG_ID, priceId: PRICE_PLN_MONTH },
+      { organizationId: ORG_ID, priceId: PRICE_PLN_MONTH, trialDays: 14 },
       adminCtx()
     );
     expect(created.isOk()).toBe(true);
@@ -1883,7 +2028,7 @@ describe("BillingService Billing Module admin", () => {
     const stripe = createStripeStub({});
     const billing = await boot(stripe);
     await billing.createAdminSubscription(
-      { organizationId: ORG_ID, priceId: PRICE_ID },
+      { organizationId: ORG_ID, priceId: PRICE_ID, couponId: "free_forever" },
       adminCtx()
     );
 
