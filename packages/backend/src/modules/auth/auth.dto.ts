@@ -50,6 +50,7 @@ export const adminUserSummarySchema = createSelectSchema(users).pick({
 
 export const organizationSchema = createSelectSchema(organizations).omit({
   stripeCustomerId: true,
+  stripeSandboxCustomerId: true,
 });
 const organizationMemberSchema = createSelectSchema(members).extend({
   user: adminUserSummarySchema.nullable(),

@@ -1,3 +1,4 @@
+import { apiKey as createApiKeyPlugin } from "@better-auth/api-key";
 import {
   ADMIN_CREATE_VERIFIED_USER_HEADER,
   ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE,
@@ -9,7 +10,6 @@ import {
   resolveAppLocale,
   toCanonicalLocale,
 } from "@m5kdev/commons/modules/auth/auth.locale";
-import { apiKey as createApiKeyPlugin } from "@better-auth/api-key";
 import { type BetterAuthOptions, type BetterAuthPlugin, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import {
@@ -39,8 +39,8 @@ import {
   attachUserToInvitedMember,
   createOrganizationWithOwner,
   getActiveOrganization,
-  OrganizationCurrencyError,
   getNewOrganization,
+  OrganizationCurrencyError,
   syncActiveMemberProfiles,
   WaitlistCodeNotFound,
 } from "./auth.utils";
@@ -606,6 +606,12 @@ export function createBetterAuth<
                 input: false,
               },
               stripeCustomerId: {
+                type: "string",
+                required: false,
+                defaultValue: null,
+                input: false,
+              },
+              stripeSandboxCustomerId: {
                 type: "string",
                 required: false,
                 defaultValue: null,

@@ -27,20 +27,37 @@ export const billingSchema = z.object({
 
 export type BillingSchema = z.infer<typeof billingSchema>;
 
-export const complimentaryDurationSchema = z.union([
-  z.literal("forever"),
-  z.literal("once"),
-  z.object({ months: z.number().int().positive() }),
-]);
-
-export const enrollComplimentaryInputSchema = z.object({
-  organizationId: z.string(),
-  priceId: z.string(),
-  duration: complimentaryDurationSchema,
+export const billingCouponSchema = z.object({
+  id: z.string(),
+  name: z.string().nullable(),
+  percentOff: z.number().nullable(),
+  amountOff: z.number().nullable(),
+  currency: z.string().nullable(),
+  duration: z.enum(["forever", "once", "repeating"]).nullable(),
+  durationInMonths: z.number().nullable(),
+  valid: z.boolean(),
 });
+
+export const billingCouponListOutputSchema = z.array(billingCouponSchema);
 
 export const organizationIdInputSchema = z.object({
   organizationId: z.string(),
+});
+
+export const createAdminSubscriptionInputSchema = z.object({
+  organizationId: z.string(),
+  priceId: z.string(),
+  couponId: z.string().optional(),
+});
+
+export const applyAdminCouponInputSchema = z.object({
+  organizationId: z.string(),
+  couponId: z.string(),
+});
+
+export const setOrganizationCurrencyInputSchema = z.object({
+  organizationId: z.string(),
+  currency: z.string(),
 });
 
 export const cancelAdminSubscriptionInputSchema = z.object({
@@ -53,12 +70,15 @@ export const adminOrganizationBillingRowSchema = z.object({
   organizationId: z.string(),
   organizationName: z.string(),
   currency: z.string().nullable(),
+  stripeCustomerId: z.string().nullable(),
+  openSubscription: z.boolean(),
   subscription: billingSchema.nullable(),
+  coupon: billingCouponSchema.nullable(),
 });
 
 export const billingAdminListInputSchema = querySchema;
 export const billingAdminListOutputSchema = queryListOutput(adminOrganizationBillingRowSchema);
 
-export type ComplimentaryDuration = z.infer<typeof complimentaryDurationSchema>;
-export type EnrollComplimentaryInput = z.infer<typeof enrollComplimentaryInputSchema>;
+export type BillingCoupon = z.infer<typeof billingCouponSchema>;
+export type CreateAdminSubscriptionInput = z.infer<typeof createAdminSubscriptionInputSchema>;
 export type AdminOrganizationBillingRow = z.infer<typeof adminOrganizationBillingRowSchema>;

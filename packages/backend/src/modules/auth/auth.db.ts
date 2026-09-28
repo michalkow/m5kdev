@@ -112,6 +112,7 @@ export const organizations = sqliteTable("organizations", {
   locale: text("locale"),
   currency: text("currency"),
   stripeCustomerId: text("stripe_customer_id").unique(),
+  stripeSandboxCustomerId: text("stripe_sandbox_customer_id").unique(),
 });
 
 export const members = sqliteTable(

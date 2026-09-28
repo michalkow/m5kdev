@@ -1,17 +1,19 @@
-# Complimentary is an AdminActor 100% Stripe Coupon, not Trial
+# AdminActor applies existing Stripe Coupons; Complimentary is not a Kernel noun
 
-Platform Admin enrolls an Organization into Complimentary by applying a 100% Stripe Coupon to a Subscription on a catalog Price (any Plan in Organization currency). Duration is forever, repeating N months, or once. That is not Trial: status is `active` with $0 invoices. ADR-0017 still forbids customer-facing coupon UX and Kernel Portal Configuration; this is AdminActor-only and amends that coupons clause. Enroll is explicit (a User-role admin's Organization is not auto-free). Billing Module admin at `/admin/billing` lists Organizations and can enroll, remove Complimentary, or cancel the Subscription (immediate or at period end, chosen per action).
+Billing Module admin lists Organizations with the current-env Stripe Customer, currency, Subscription, and Coupon (name and percent/amount). AdminActor may create a Customer, set currency only when it is null, create a Subscription (catalog Price, optional Coupon) when none exists, attach/replace/remove one Coupon on an existing Subscription without changing Price, or cancel (immediate or period end). Coupons are listed from the Stripe account and created in Dashboard; Kernel does not find-or-create `m5k_comp_*` Coupons and does not name Complimentary. This supersedes the 0.38.10 Complimentary enroll action. Customer-facing promo codes stay Dashboard/Portal ([ADR-0017](0017-billing-org-paywall-seat-billing-opt-in.md)).
 
 ## Considered Options
 
-- **Kernel paywall grant / no Stripe Subscription** — rejected: Stripe stays source of truth.
-- **$0 catalog Price as complimentary** — rejected: “then they start paying” is removing a Coupon, not switching Price; Price changes stay Billing Portal.
-- **Admin-set `trial_end` / calling it Trial** — rejected: Trial is catalog-only (`freeTrial.days`, Organization create or Checkout).
-- **Dashboard-only coupons** — rejected: Admin must enroll from the Admin panel without leaving the app.
-- **Variable percent** — rejected: 100% keeps enroll possible with no payment method.
+- **Complimentary as a named 100% Kernel action** — rejected: any Stripe Coupon (including 100%) is the same apply/replace path.
+- **Variable-percent refused so enroll works with no card** — rejected: Admin may create a Subscription with any Coupon or none; a failed invoice with no payment method stays `past_due` with access until Admin cancels.
+- **Kernel find-or-create 100% Coupon ids** — rejected: Coupon definitions live in Stripe Dashboard; the panel only lists and applies.
+- **One `stripeCustomerId`** — rejected: sandbox would overwrite production. Production and sandbox Customer ids are separate; Kernel uses the same NODE_ENV switch as Plans; create writes only the current env’s field.
+- **Admin picks production vs sandbox slot regardless of keys** — rejected: one Stripe key pair per process; create must write the field that matches those keys.
+- **Stacking Coupons** — rejected: at most one Coupon; apply replaces; remove clears and never cancels.
 
 ## Consequences
 
-- No Customer → create Customer then Subscription. No Subscription → create on the chosen Price (MemberId is the Owner). `trialing` → cancel that Trial first, then create. Paid or already Complimentary → attach or replace the Coupon; Price unchanged. Seat billing quantity is unchanged.
-- Remove Complimentary or Coupon end: payment method present → the Price bills; none → cancel. A later invoice that fails with no payment method is canceled (not left `past_due`). A card that is present and fails stays `past_due` with access.
-- Owner Checkout/Portal stay as today. Portal might still let an Owner remove a Coupon if Stripe Dashboard Portal Configuration allows it.
+- No Subscription → create on the chosen Price (Owner MemberId; Seat quantity unchanged) with optional Coupon. Existing Subscription (including Trial) → Coupon only; Price stays. Remove Coupon does not cancel. Cutoff is Admin cancel; Organization and Customer remain.
+- `invoice.payment_failed` without a payment method no longer cancels (including after a 100% Coupon ends).
+- Currency: Admin may fill null, then freeze; owned-Organization currency lock still applies. Price pick requires currency. Customer create is allowed while currency is null. The list shows only the current env’s Customer id.
+- Owner Checkout / Billing Portal / sidecar `extraLinks` unchanged. Starter still omits BillingModule.

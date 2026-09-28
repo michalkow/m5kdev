@@ -30,7 +30,10 @@ export type StripePlansConfig = {
   sandbox: StripePlan[];
 };
 
+export type StripeEnvironment = "production" | "sandbox";
+
 export type ResolvedStripePlans = {
+  environment: StripeEnvironment;
   plans: StripePlan[];
   trialPlanName: Record<string, string>;
   trialRequiresPaymentMethod: boolean;

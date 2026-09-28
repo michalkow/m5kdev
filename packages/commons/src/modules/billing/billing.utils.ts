@@ -12,6 +12,7 @@ export const getEnvironmentPlans = (
   const isProduction = environment === "production";
   const plans = isProduction ? plansConfig.production : plansConfig.sandbox;
   return {
+    environment: isProduction ? "production" : "sandbox",
     plans,
     trialPlanName: plansConfig.trialPlanName ?? {},
     trialRequiresPaymentMethod: plansConfig.trialRequiresPaymentMethod ?? false,

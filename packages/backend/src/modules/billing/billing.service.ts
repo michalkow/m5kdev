@@ -1,23 +1,55 @@
 import {
+  applyAdminCouponInputSchema,
+  type BillingCoupon,
   type BillingSchema,
   billingAdminListInputSchema,
   billingAdminListOutputSchema,
+  billingCouponListOutputSchema,
+  type CreateAdminSubscriptionInput,
   cancelAdminSubscriptionInputSchema,
-  type EnrollComplimentaryInput,
-  enrollComplimentaryInputSchema,
+  createAdminSubscriptionInputSchema,
   organizationIdInputSchema,
+  setOrganizationCurrencyInputSchema,
 } from "@m5kdev/commons/modules/billing/billing.schema";
 import { catalogCurrencyKeys } from "@m5kdev/commons/modules/billing/billing.utils";
+import type { InferSelectModel } from "drizzle-orm";
 import { err, ok } from "neverthrow";
 import type Stripe from "stripe";
 import { posthogCapture } from "../../utils/posthog";
 import type { Context } from "../../utils/trpc";
+import type * as authTables from "../auth/auth.db";
+import { resolveOrganizationCurrency } from "../auth/auth.utils";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import { BasePermissionService } from "../base/base.service";
 import type { EmailService } from "../email/email.service";
 import type { BillingRepository } from "./billing.repository";
 
 const TRIAL_ENDING_TEMPLATE_KEY = "trialEnding";
+
+type OwnerMember = InferSelectModel<typeof authTables.members> & { email: string };
+
+function couponOfSubscription({
+  subscription,
+  coupons,
+}: {
+  subscription: BillingSchema | null;
+  coupons: readonly BillingCoupon[];
+}): BillingCoupon | null {
+  const couponId = subscription?.discounts?.[0];
+  if (!couponId) return null;
+  return (
+    coupons.find((coupon) => coupon.id === couponId) ?? {
+      id: couponId,
+      name: null,
+      percentOff: null,
+      amountOff: null,
+      currency: null,
+      duration: null,
+      durationInMonths: null,
+      valid: false,
+    }
+  );
+}
 
 const allowedEvents: Stripe.Event.Type[] = [
   "checkout.session.completed",
@@ -57,12 +89,11 @@ export class BillingService extends BasePermissionService<
     email: string;
     name?: string;
   }): ServerResultAsync<Stripe.Customer> {
-    const existing = await this.repository.billing.getOrganizationById(organizationId);
-    if (existing.isErr()) return err(existing.error);
-    if (existing.value?.stripeCustomerId) {
-      const customer = await this.repository.billing.getStripeCustomer(
-        existing.value.stripeCustomerId
-      );
+    const existingCustomerId =
+      await this.repository.billing.getOrganizationCustomerId(organizationId);
+    if (existingCustomerId.isErr()) return err(existingCustomerId.error);
+    if (existingCustomerId.value) {
+      const customer = await this.repository.billing.getStripeCustomer(existingCustomerId.value);
       if (customer.isErr()) return err(customer.error);
       if (!customer.value.deleted) return ok(customer.value);
     }
@@ -171,12 +202,12 @@ export class BillingService extends BasePermissionService<
     const readGuard = this.accessGuard(ctx.actor, "read", { organizationId });
     if (readGuard.isErr()) return err(readGuard.error);
 
-    const organization = await this.repository.billing.getOrganizationById(organizationId);
-    if (organization.isErr()) return err(organization.error);
-    if (!organization.value?.stripeCustomerId) {
+    const customerId = await this.repository.billing.getOrganizationCustomerId(organizationId);
+    if (customerId.isErr()) return err(customerId.error);
+    if (!customerId.value) {
       return this.error("INTERNAL_SERVER_ERROR", "Organization has no stripe customer id");
     }
-    return this.repository.billing.listInvoices(organization.value.stripeCustomerId);
+    return this.repository.billing.listInvoices(customerId.value);
   }
 
   async createCheckoutSession(
@@ -399,23 +430,83 @@ export class BillingService extends BasePermissionService<
     .requireAuth("admin")
     .access({ action: "read" })
     .handle(async ({ input }) => {
-      return this.repository.billing.listOrganizationBilling(input);
+      const listed = await this.repository.billing.listOrganizationBilling(input);
+      if (listed.isErr()) return err(listed.error);
+      const hasCoupons = listed.value.rows.some(
+        (row) => (row.subscription?.discounts?.length ?? 0) > 0
+      );
+      let coupons: BillingCoupon[] = [];
+      if (hasCoupons) {
+        const listedCoupons = await this.repository.billing.listCoupons();
+        if (listedCoupons.isErr()) return err(listedCoupons.error);
+        coupons = listedCoupons.value;
+      }
+      return ok({
+        total: listed.value.total,
+        rows: listed.value.rows.map((row) => ({
+          ...row,
+          coupon: couponOfSubscription({ subscription: row.subscription, coupons }),
+        })),
+      });
     });
 
-  enrollComplimentary = this.procedure("enrollComplimentary")
-    .input(enrollComplimentaryInputSchema)
+  listAdminCoupons = this.procedure("listAdminCoupons")
+    .output(billingCouponListOutputSchema)
     .requireAuth("admin")
-    .access({ action: "write" })
-    .handle(async ({ input }) => {
-      return this.enrollComplimentaryForOrganization(input);
+    .access({ action: "read" })
+    .handle(async () => {
+      const coupons = await this.repository.billing.listCoupons();
+      if (coupons.isErr()) return err(coupons.error);
+      return ok(coupons.value.filter((coupon) => coupon.valid));
     });
 
-  removeComplimentary = this.procedure("removeComplimentary")
+  createAdminCustomer = this.procedure("createAdminCustomer")
     .input(organizationIdInputSchema)
     .requireAuth("admin")
     .access({ action: "write" })
     .handle(async ({ input }) => {
-      return this.removeComplimentaryForOrganization(input.organizationId);
+      const owner = await this.requireOwner(input.organizationId);
+      if (owner.isErr()) return err(owner.error);
+      const customer = await this.createOrganizationCustomer({
+        organizationId: input.organizationId,
+        memberId: owner.value.id,
+        email: owner.value.email,
+        name: owner.value.name || undefined,
+      });
+      if (customer.isErr()) return err(customer.error);
+      return ok(true);
+    });
+
+  setAdminOrganizationCurrency = this.procedure("setAdminOrganizationCurrency")
+    .input(setOrganizationCurrencyInputSchema)
+    .requireAuth("admin")
+    .access({ action: "write" })
+    .handle(async ({ input }) => {
+      return this.setOrganizationCurrency(input);
+    });
+
+  createAdminSubscription = this.procedure("createAdminSubscription")
+    .input(createAdminSubscriptionInputSchema)
+    .requireAuth("admin")
+    .access({ action: "write" })
+    .handle(async ({ input }) => {
+      return this.createSubscriptionForOrganization(input);
+    });
+
+  applyAdminCoupon = this.procedure("applyAdminCoupon")
+    .input(applyAdminCouponInputSchema)
+    .requireAuth("admin")
+    .access({ action: "write" })
+    .handle(async ({ input }) => {
+      return this.setSubscriptionCoupon(input);
+    });
+
+  removeAdminCoupon = this.procedure("removeAdminCoupon")
+    .input(organizationIdInputSchema)
+    .requireAuth("admin")
+    .access({ action: "write" })
+    .handle(async ({ input }) => {
+      return this.setSubscriptionCoupon({ organizationId: input.organizationId, couponId: null });
     });
 
   cancelAdminSubscription = this.procedure("cancelAdminSubscription")
@@ -427,12 +518,12 @@ export class BillingService extends BasePermissionService<
     });
 
   async syncOrganizationSubscription(organizationId: string): ServerResultAsync<boolean> {
-    const organization = await this.repository.billing.getOrganizationById(organizationId);
-    if (organization.isErr()) return err(organization.error);
-    if (!organization.value?.stripeCustomerId) {
+    const customerId = await this.repository.billing.getOrganizationCustomerId(organizationId);
+    if (customerId.isErr()) return err(customerId.error);
+    if (!customerId.value) {
       return this.error("NOT_FOUND", "Organization has no stripe customer id");
     }
-    return this.syncStripeData({ customerId: organization.value.stripeCustomerId });
+    return this.syncStripeData({ customerId: customerId.value });
   }
 
   constructEvent(body: Buffer | string, signature: string): ServerResult<Stripe.Event> {
@@ -506,77 +597,115 @@ export class BillingService extends BasePermissionService<
       if (snapped.isErr()) return err(snapped.error);
     }
 
-    if (event.type === "invoice.payment_failed") {
-      const canceled = await this.cancelIfInvoiceFailedWithoutPaymentMethod(customerId);
-      if (canceled.isErr()) return err(canceled.error);
-    }
-
     return ok(true);
   }
 
-  private async enrollComplimentaryForOrganization(
-    input: EnrollComplimentaryInput
-  ): ServerResultAsync<boolean> {
-    const organization = await this.repository.billing.getOrganizationById(input.organizationId);
+  private async requireOwner(organizationId: string): ServerResultAsync<OwnerMember> {
+    const organization = await this.repository.billing.getOrganizationById(organizationId);
     if (organization.isErr()) return err(organization.error);
     if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
 
-    const currency = organization.value.currency ?? this.repository.billing.defaultCurrency;
-    if (!this.repository.billing.priceBelongsToCurrency(input.priceId, currency)) {
+    const owner = await this.repository.billing.getOwnerMember(organizationId);
+    if (owner.isErr()) return err(owner.error);
+    if (!owner.value?.email) return this.error("NOT_FOUND", "Organization Owner not found");
+    return ok({ ...owner.value, email: owner.value.email });
+  }
+
+  private async setOrganizationCurrency({
+    organizationId,
+    currency,
+  }: {
+    organizationId: string;
+    currency: string;
+  }): ServerResultAsync<boolean> {
+    const organization = await this.repository.billing.getOrganizationById(organizationId);
+    if (organization.isErr()) return err(organization.error);
+    if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
+    if (organization.value.currency) {
+      return this.error("CONFLICT", "Organization currency is already set");
+    }
+
+    const owner = await this.repository.billing.getOwnerMember(organizationId);
+    if (owner.isErr()) return err(owner.error);
+    let ownedCurrencies: (string | null)[] = [];
+    if (owner.value?.userId) {
+      const owned = await this.repository.billing.listOtherOwnedCurrencies({
+        userId: owner.value.userId,
+        organizationId,
+      });
+      if (owned.isErr()) return err(owned.error);
+      ownedCurrencies = owned.value;
+    }
+
+    const resolved = resolveOrganizationCurrency({
+      requested: currency,
+      ownedCurrencies,
+      defaultCurrency: this.repository.billing.defaultCurrency,
+      allowedCurrencies: catalogCurrencyKeys(this.repository.billing.plans),
+    });
+    if (!resolved.ok) {
+      return this.error(
+        "BAD_REQUEST",
+        resolved.reason === "mismatch"
+          ? "Organization currency does not match owned Organizations"
+          : "Unknown organization currency"
+      );
+    }
+
+    const updated = await this.repository.billing.setOrganizationCurrencyIfUnset({
+      organizationId,
+      currency: resolved.currency,
+    });
+    if (updated.isErr()) return err(updated.error);
+    if (!updated.value) return this.error("CONFLICT", "Organization currency is already set");
+    return ok(true);
+  }
+
+  private async createSubscriptionForOrganization({
+    organizationId,
+    priceId,
+    couponId,
+  }: CreateAdminSubscriptionInput): ServerResultAsync<boolean> {
+    const organization = await this.repository.billing.getOrganizationById(organizationId);
+    if (organization.isErr()) return err(organization.error);
+    if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
+    const currency = organization.value.currency;
+    if (!currency) {
+      return this.error("BAD_REQUEST", "Set Organization currency before picking a Price");
+    }
+    if (!this.repository.billing.priceBelongsToCurrency(priceId, currency)) {
       return this.error("NOT_FOUND", "Price not found for Organization currency");
     }
 
-    const owner = await this.repository.billing.getOwnerMember(input.organizationId);
+    const open = await this.repository.billing.getOpenSubscription(organizationId);
+    if (open.isErr()) return err(open.error);
+    if (open.value) return this.error("CONFLICT", "Organization already has a Subscription");
+
+    const owner = await this.requireOwner(organizationId);
     if (owner.isErr()) return err(owner.error);
-    if (!owner.value?.email) return this.error("NOT_FOUND", "Organization Owner not found");
 
     const stripeCustomer = await this.createOrganizationCustomer({
-      organizationId: input.organizationId,
+      organizationId,
       memberId: owner.value.id,
       email: owner.value.email,
-      name: owner.value.name ?? undefined,
+      name: owner.value.name || undefined,
     });
     if (stripeCustomer.isErr()) return err(stripeCustomer.error);
 
-    const couponId = await this.repository.billing.findOrCreateComplimentaryCoupon(input.duration);
-    if (couponId.isErr()) return err(couponId.error);
-
-    const open = await this.repository.billing.getOpenSubscription(input.organizationId);
-    if (open.isErr()) return err(open.error);
-
-    if (open.value?.status === "trialing" && open.value.stripeSubscriptionId) {
-      const canceled = await this.repository.billing.cancelStripeSubscription(
-        open.value.stripeSubscriptionId
-      );
-      if (canceled.isErr()) return err(canceled.error);
-    } else if (open.value?.stripeSubscriptionId && open.value.status !== "trialing") {
-      const attached = await this.repository.billing.updateSubscriptionDiscounts({
-        subscriptionId: open.value.stripeSubscriptionId,
-        discounts: [{ coupon: couponId.value }],
-      });
-      if (attached.isErr()) return err(attached.error);
-      const synced = await this.syncStripeData({
-        customerId: stripeCustomer.value.id,
-        memberId: owner.value.id,
-      });
-      if (synced.isErr()) return err(synced.error);
-      return ok(true);
-    }
-
     let quantity = 1;
     if (this.repository.billing.seatBilling) {
-      const count = await this.repository.billing.countBillableMembers(input.organizationId);
+      const count = await this.repository.billing.countBillableMembers(organizationId);
       if (count.isErr()) return err(count.error);
       quantity = Math.max(count.value, 1);
     }
 
     const created = await this.repository.billing.createSubscription({
       customerId: stripeCustomer.value.id,
-      priceId: input.priceId,
+      priceId,
       quantity,
-      organizationId: input.organizationId,
+      organizationId,
       memberId: owner.value.id,
-      discounts: [{ coupon: couponId.value }],
+      ...(couponId ? { discounts: [{ coupon: couponId }] } : {}),
     });
     if (created.isErr()) return err(created.error);
 
@@ -588,44 +717,26 @@ export class BillingService extends BasePermissionService<
     return ok(true);
   }
 
-  private async removeComplimentaryForOrganization(
-    organizationId: string
-  ): ServerResultAsync<boolean> {
-    const latest = await this.repository.billing.getLatestSubscription(organizationId);
-    if (latest.isErr()) return err(latest.error);
-    if (!latest.value?.stripeSubscriptionId) {
+  private async setSubscriptionCoupon({
+    organizationId,
+    couponId,
+  }: {
+    organizationId: string;
+    couponId: string | null;
+  }): ServerResultAsync<boolean> {
+    const open = await this.repository.billing.getOpenSubscription(organizationId);
+    if (open.isErr()) return err(open.error);
+    if (!open.value?.stripeSubscriptionId || !open.value.stripeCustomerId) {
       return this.error("NOT_FOUND", "Subscription not found");
     }
 
-    const organization = await this.repository.billing.getOrganizationById(organizationId);
-    if (organization.isErr()) return err(organization.error);
-    const customerId = organization.value?.stripeCustomerId ?? latest.value.stripeCustomerId;
-    if (!customerId) return this.error("NOT_FOUND", "Organization has no stripe customer id");
-
-    const stripeSubscriptions = await this.repository.billing.listStripeSubscriptions(customerId);
-    if (stripeSubscriptions.isErr()) return err(stripeSubscriptions.error);
-    const [stripeSubscription] = stripeSubscriptions.value;
-
-    const hasCard = await this.customerHasPaymentMethod({
-      customerId,
-      subscriptionDefaultPaymentMethod: stripeSubscription?.default_payment_method,
+    const updated = await this.repository.billing.updateSubscriptionDiscounts({
+      subscriptionId: open.value.stripeSubscriptionId,
+      discounts: couponId ? [{ coupon: couponId }] : "",
     });
-    if (hasCard.isErr()) return err(hasCard.error);
+    if (updated.isErr()) return err(updated.error);
 
-    if (!hasCard.value) {
-      const canceled = await this.repository.billing.cancelStripeSubscription(
-        latest.value.stripeSubscriptionId
-      );
-      if (canceled.isErr()) return err(canceled.error);
-    } else {
-      const cleared = await this.repository.billing.updateSubscriptionDiscounts({
-        subscriptionId: latest.value.stripeSubscriptionId,
-        discounts: "",
-      });
-      if (cleared.isErr()) return err(cleared.error);
-    }
-
-    const synced = await this.syncStripeData({ customerId });
+    const synced = await this.syncStripeData({ customerId: open.value.stripeCustomerId });
     if (synced.isErr()) return err(synced.error);
     return ok(true);
   }
@@ -662,53 +773,6 @@ export class BillingService extends BasePermissionService<
       if (synced.isErr()) return err(synced.error);
     }
     return ok(true);
-  }
-
-  private async customerHasPaymentMethod({
-    customerId,
-    subscriptionDefaultPaymentMethod,
-  }: {
-    customerId: string;
-    subscriptionDefaultPaymentMethod?: string | Stripe.PaymentMethod | null;
-  }): ServerResultAsync<boolean> {
-    if (this.defaultPaymentMethodId(subscriptionDefaultPaymentMethod)) return ok(true);
-    const customer = await this.repository.billing.getStripeCustomer(customerId);
-    if (customer.isErr()) return err(customer.error);
-    if (customer.value.deleted) return ok(false);
-    return ok(
-      Boolean(this.defaultPaymentMethodId(customer.value.invoice_settings?.default_payment_method))
-    );
-  }
-
-  private async cancelIfInvoiceFailedWithoutPaymentMethod(
-    customerId: string
-  ): ServerResultAsync<void> {
-    const stripeSubscriptions = await this.repository.billing.listStripeSubscriptions(customerId);
-    if (stripeSubscriptions.isErr()) return err(stripeSubscriptions.error);
-    const [stripeSubscription] = stripeSubscriptions.value;
-
-    const hasCard = await this.customerHasPaymentMethod({
-      customerId,
-      subscriptionDefaultPaymentMethod: stripeSubscription?.default_payment_method,
-    });
-    if (hasCard.isErr()) return err(hasCard.error);
-    if (hasCard.value) return ok();
-
-    const organization = await this.repository.billing.getOrganizationByCustomerId(customerId);
-    if (organization.isErr()) return err(organization.error);
-    if (!organization.value) return ok();
-
-    const latest = await this.repository.billing.getLatestSubscription(organization.value.id);
-    if (latest.isErr()) return err(latest.error);
-    if (!latest.value?.stripeSubscriptionId || latest.value.status === "canceled") return ok();
-
-    const canceled = await this.repository.billing.cancelStripeSubscription(
-      latest.value.stripeSubscriptionId
-    );
-    if (canceled.isErr()) return err(canceled.error);
-    const synced = await this.syncStripeData({ customerId });
-    if (synced.isErr()) return err(synced.error);
-    return ok();
   }
 
   private async snapQuantityAfterTrialConvert(

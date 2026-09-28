@@ -5,7 +5,11 @@ import { type Client, createClient } from "@libsql/client";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import * as auth from "../auth.db";
-import { createOrganizationWithOwner, getActiveOrganization, OrganizationCurrencyError } from "../auth.utils";
+import {
+  createOrganizationWithOwner,
+  getActiveOrganization,
+  OrganizationCurrencyError,
+} from "../auth.utils";
 
 async function createTables(client: Client): Promise<void> {
   await client.execute(`
@@ -43,7 +47,8 @@ async function createTables(client: Client): Promise<void> {
       flags TEXT DEFAULT '[]',
       locale TEXT,
       currency TEXT,
-      stripe_customer_id TEXT UNIQUE
+      stripe_customer_id TEXT UNIQUE,
+      stripe_sandbox_customer_id TEXT UNIQUE
     );
   `);
   await client.execute(`

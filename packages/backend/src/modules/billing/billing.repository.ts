@@ -1,10 +1,11 @@
 import type {
   AdminOrganizationBillingRow,
+  BillingCoupon,
   BillingSchema,
-  ComplimentaryDuration,
 } from "@m5kdev/commons/modules/billing/billing.schema";
 import type {
   ResolvedStripePlans,
+  StripeEnvironment,
   StripePlan,
 } from "@m5kdev/commons/modules/billing/billing.types";
 import {
@@ -15,7 +16,7 @@ import {
 } from "@m5kdev/commons/modules/billing/billing.utils";
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { InferSelectModel } from "drizzle-orm";
-import { and, count, desc, eq, inArray, isNull, like } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, like, ne } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import type { Stripe } from "stripe";
@@ -30,12 +31,37 @@ type Schema = typeof schema;
 type Orm = LibSQLDatabase<Schema>;
 
 const ACCESS_STATUSES = ["active", "trialing", "past_due"] as const;
-const OPEN_STATUSES = ["active", "trialing", "past_due", "unpaid", "paused", "incomplete"] as const;
+const OPEN_STATUSES: readonly string[] = [
+  "active",
+  "trialing",
+  "past_due",
+  "unpaid",
+  "paused",
+  "incomplete",
+];
 
-function stripeErrorCode(error: unknown): string | undefined {
-  if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
-  const code = error.code;
-  return typeof code === "string" ? code : undefined;
+type OrganizationRow = InferSelectModel<Schema["organizations"]>;
+type CustomerIdField = "stripeCustomerId" | "stripeSandboxCustomerId";
+type OrganizationBillingListRow = Omit<AdminOrganizationBillingRow, "coupon">;
+
+function couponIdOfDiscount(discount: string | Stripe.Discount): string {
+  if (typeof discount === "string") return discount;
+  const coupon = discount.source.coupon;
+  if (!coupon) return discount.id;
+  return typeof coupon === "string" ? coupon : coupon.id;
+}
+
+function toBillingCoupon(coupon: Stripe.Coupon): BillingCoupon {
+  return {
+    id: coupon.id,
+    name: coupon.name,
+    percentOff: coupon.percent_off,
+    amountOff: coupon.amount_off,
+    currency: coupon.currency,
+    duration: coupon.duration,
+    durationInMonths: coupon.duration_in_months,
+    valid: coupon.valid,
+  };
 }
 
 export class BillingRepository extends BaseTableRepository<
@@ -45,6 +71,7 @@ export class BillingRepository extends BaseTableRepository<
   Schema["subscriptions"]
 > {
   public stripe: Stripe;
+  public environment: StripeEnvironment;
   public plans: StripePlan[];
   public trialPlanName: Record<string, string>;
   public trialRequiresPaymentMethod: boolean;
@@ -62,6 +89,7 @@ export class BillingRepository extends BaseTableRepository<
     const { libs, config, ...rest } = options;
     super(rest);
     this.stripe = libs.stripe;
+    this.environment = config.environment;
     this.plans = config.plans;
     this.trialPlanName = config.trialPlanName;
     this.trialRequiresPaymentMethod = config.trialRequiresPaymentMethod;
@@ -139,22 +167,32 @@ export class BillingRepository extends BaseTableRepository<
     return findPriceCurrency(plan, priceId) === currency;
   }
 
-  getOrganizationByCustomerId(
-    customerId: string
-  ): ServerResultAsync<InferSelectModel<Schema["organizations"]> | null> {
+  private get customerIdField(): CustomerIdField {
+    return this.environment === "production" ? "stripeCustomerId" : "stripeSandboxCustomerId";
+  }
+
+  customerIdOf(organization: Pick<OrganizationRow, CustomerIdField>): string | null {
+    return organization[this.customerIdField];
+  }
+
+  async getOrganizationCustomerId(organizationId: string): ServerResultAsync<string | null> {
+    const organization = await this.getOrganizationById(organizationId);
+    if (organization.isErr()) return err(organization.error);
+    return ok(organization.value ? this.customerIdOf(organization.value) : null);
+  }
+
+  getOrganizationByCustomerId(customerId: string): ServerResultAsync<OrganizationRow | null> {
     return this.throwableQuery(async () => {
       const [organization] = await this.orm
         .select()
         .from(this.schema.organizations)
-        .where(eq(this.schema.organizations.stripeCustomerId, customerId))
+        .where(eq(this.schema.organizations[this.customerIdField], customerId))
         .limit(1);
       return organization ?? null;
     });
   }
 
-  getOrganizationById(
-    organizationId: string
-  ): ServerResultAsync<InferSelectModel<Schema["organizations"]> | null> {
+  getOrganizationById(organizationId: string): ServerResultAsync<OrganizationRow | null> {
     return this.throwableQuery(async () => {
       const [organization] = await this.orm
         .select()
@@ -289,11 +327,11 @@ export class BillingRepository extends BaseTableRepository<
   }: {
     organizationId: string;
     customerId: string;
-  }): ServerResultAsync<InferSelectModel<Schema["organizations"]>> {
+  }): ServerResultAsync<OrganizationRow> {
     const organizationResult = await this.throwableQuery(() =>
       this.orm
         .update(this.schema.organizations)
-        .set({ stripeCustomerId: customerId })
+        .set({ [this.customerIdField]: customerId })
         .where(eq(this.schema.organizations.id, organizationId))
         .returning()
     );
@@ -301,6 +339,56 @@ export class BillingRepository extends BaseTableRepository<
     const [organization] = organizationResult.value;
     if (!organization) return this.error("NOT_FOUND", "Organization not found");
     return ok(organization);
+  }
+
+  async setOrganizationCurrencyIfUnset({
+    organizationId,
+    currency,
+  }: {
+    organizationId: string;
+    currency: string;
+  }): ServerResultAsync<boolean> {
+    const updated = await this.throwableQuery(() =>
+      this.orm
+        .update(this.schema.organizations)
+        .set({ currency })
+        .where(
+          and(
+            eq(this.schema.organizations.id, organizationId),
+            isNull(this.schema.organizations.currency)
+          )
+        )
+        .returning({ id: this.schema.organizations.id })
+    );
+    if (updated.isErr()) return err(updated.error);
+    return ok(updated.value.length > 0);
+  }
+
+  listOtherOwnedCurrencies({
+    userId,
+    organizationId,
+  }: {
+    userId: string;
+    organizationId: string;
+  }): ServerResultAsync<(string | null)[]> {
+    return this.throwableQuery(async () => {
+      const rows = await this.orm
+        .select({ currency: this.schema.organizations.currency })
+        .from(this.schema.members)
+        .innerJoin(
+          this.schema.organizations,
+          eq(this.schema.members.organizationId, this.schema.organizations.id)
+        )
+        .where(
+          and(
+            eq(this.schema.members.userId, userId),
+            eq(this.schema.members.role, "owner"),
+            isNull(this.schema.members.deletedAt),
+            ne(this.schema.organizations.id, organizationId)
+          )
+        );
+      return rows.map((row) => row.currency);
+    });
   }
 
   async getLatestSubscription(referenceId: string): ServerResultAsync<BillingSchema | null> {
@@ -401,37 +489,13 @@ export class BillingRepository extends BaseTableRepository<
     });
   }
 
-  private complimentaryCouponId(duration: ComplimentaryDuration): string {
-    if (duration === "forever") return "m5k_comp_forever";
-    if (duration === "once") return "m5k_comp_once";
-    return `m5k_comp_repeating_${duration.months}`;
-  }
-
-  async findOrCreateComplimentaryCoupon(
-    duration: ComplimentaryDuration
-  ): ServerResultAsync<string> {
-    const id = this.complimentaryCouponId(duration);
-    try {
-      const existing = await this.stripe.coupons.retrieve(id);
-      if (!("deleted" in existing && existing.deleted)) {
-        return ok(existing.id);
-      }
-    } catch (error) {
-      if (stripeErrorCode(error) !== "resource_missing") {
-        return this.throwablePromise(() => Promise.reject(error));
-      }
-    }
-
-    const created = await this.throwablePromise(() =>
-      this.stripe.coupons.create({
-        id,
-        percent_off: 100,
-        duration: duration === "forever" ? "forever" : duration === "once" ? "once" : "repeating",
-        ...(typeof duration === "object" ? { duration_in_months: duration.months } : {}),
-      })
-    );
-    if (created.isErr()) return err(created.error);
-    return ok(created.value.id);
+  listCoupons(): ServerResultAsync<BillingCoupon[]> {
+    return this.throwablePromise(async () => {
+      const coupons = await this.stripe.coupons.list({ limit: 100 }).autoPagingToArray({
+        limit: 10_000,
+      });
+      return coupons.map(toBillingCoupon);
+    });
   }
 
   updateSubscriptionDiscounts({
@@ -461,7 +525,7 @@ export class BillingRepository extends BaseTableRepository<
   }
 
   async listOrganizationBilling(query?: QueryInput): ServerResultAsync<{
-    rows: AdminOrganizationBillingRow[];
+    rows: OrganizationBillingListRow[];
     total: number;
   }> {
     const page = query?.page ?? 1;
@@ -479,6 +543,8 @@ export class BillingRepository extends BaseTableRepository<
           id: this.schema.organizations.id,
           name: this.schema.organizations.name,
           currency: this.schema.organizations.currency,
+          stripeCustomerId: this.schema.organizations.stripeCustomerId,
+          stripeSandboxCustomerId: this.schema.organizations.stripeSandboxCustomerId,
         })
         .from(this.schema.organizations)
         .where(where)
@@ -489,7 +555,7 @@ export class BillingRepository extends BaseTableRepository<
     });
     if (listed.isErr()) return err(listed.error);
 
-    const rows = [];
+    const rows: OrganizationBillingListRow[] = [];
     for (const organization of listed.value.organizations) {
       const subscription = await this.getLatestSubscription(organization.id);
       if (subscription.isErr()) return err(subscription.error);
@@ -498,6 +564,10 @@ export class BillingRepository extends BaseTableRepository<
         organizationId: organization.id,
         organizationName: organization.name,
         currency: organization.currency ?? null,
+        stripeCustomerId: this.customerIdOf(organization),
+        openSubscription: Boolean(
+          subscription.value && OPEN_STATUSES.includes(subscription.value.status)
+        ),
         subscription: subscription.value,
       });
     }
@@ -574,7 +644,7 @@ export class BillingRepository extends BaseTableRepository<
         customer: customerId,
         limit: 1,
         status: "all",
-        expand: ["data.default_payment_method"],
+        expand: ["data.default_payment_method", "data.discounts"],
       });
       return result.data;
     });
@@ -615,9 +685,7 @@ export class BillingRepository extends BaseTableRepository<
       interval: subscriptionItem.price.recurring?.interval,
       intervalCount: subscriptionItem.price.recurring?.interval_count ?? 1,
       unitAmount: subscriptionItem.price.unit_amount,
-      discounts: stripeSubscription.discounts.map((discount) =>
-        typeof discount === "string" ? discount : discount.id
-      ),
+      discounts: stripeSubscription.discounts.map(couponIdOfDiscount),
       stripeSubscriptionId: stripeSubscription.id,
       cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
       cancelAt: stripeSubscription.cancel_at ? new Date(stripeSubscription.cancel_at * 1000) : null,

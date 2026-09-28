@@ -95,7 +95,10 @@ at `/stripe`. Owner-only for Checkout and Billing Portal. Members may read the
 Subscription and invoices.
 
 This is a breaking cutover from User-keyed Stripe Customers. The Customer lives
-on `organizations.stripe_customer_id`. `users.stripe_customer_id` is removed.
+on the Organization: `organizations.stripe_customer_id` in production and
+`organizations.stripe_sandbox_customer_id` otherwise, chosen by the same
+`getEnvironmentPlans` environment as the Plan catalog, so a sandbox Customer
+never overwrites the live one. `users.stripe_customer_id` is removed.
 Existing User Customers are not mapped; Billing is Organization-only. Generate
 Drizzle migrations for the Organization column, Subscription `memberId`, and
 the dropped User column — do not hand-write them.
@@ -123,13 +126,15 @@ succeeds if Stripe is down; the paywall shows until a Subscription exists.
   includes `active`, `trialing`, and `past_due`.
 - `adjustBillableSeats` — Seat billing quantity (no-op when Seat billing is off).
 - `cancelOrganizationSubscription` — cancel in Stripe, keep the Customer.
-- `listAdminOrganizationBilling`, `enrollComplimentary`, `removeComplimentary`,
-  `cancelAdminSubscription` — AdminActor Billing Module admin (ADR-0022).
-  Complimentary is a 100% Stripe Coupon on a catalog Price (forever, once, or
-  repeating N months), not Trial. Enroll is Organization-only and explicit.
+- AdminActor Billing Module admin (ADR-0022): list Organizations and Coupons,
+  create a Stripe Customer, set Organization currency when it is null, create a
+  Subscription on a catalog Price with an optional Coupon, apply / replace /
+  remove one Coupon on an existing Subscription (Price unchanged), and cancel.
+  Coupons are listed from the Stripe account; create them in the Dashboard.
+  Removing a Coupon never cancels.
 - `constructEvent`, `processEvent`, `syncStripeData` — webhook verify and re-sync.
-  `invoice.payment_failed` cancels the Subscription when the Customer has no
-  payment method; a present card that fails stays `past_due` with access.
+  A failed invoice stays `past_due` with access, with or without a payment
+  method; AdminActor cancel is the cutoff.
 - Trial cancel warning — on `customer.subscription.trial_will_end`, after sync,
   Billing emails a Billing Portal CTA when Stripe would cancel for a missing
   payment method. Requires a `trialEnding` template on `EmailModule`. Stripe
@@ -161,9 +166,13 @@ AdminActor is not in that Organization.
 
 | Procedure | Description |
 | --- | --- |
-| `billing.listAdminOrganizationBilling` | List Organizations with Subscription / Trial / Complimentary |
-| `billing.enrollComplimentary` | Apply a 100% Coupon (create or attach) |
-| `billing.removeComplimentary` | Remove Complimentary (bill if a card exists, else cancel) |
+| `billing.listAdminOrganizationBilling` | Organizations with Stripe Customer, currency, Subscription, and Coupon |
+| `billing.listAdminCoupons` | Valid Coupons in the Stripe account |
+| `billing.createAdminCustomer` | Create the Stripe Customer when missing (Owner email) |
+| `billing.setAdminOrganizationCurrency` | Set currency only when it is null (owned-Organization lock applies) |
+| `billing.createAdminSubscription` | Catalog Price plus optional Coupon when there is no Subscription |
+| `billing.applyAdminCoupon` | Apply or replace the single Coupon on the Subscription |
+| `billing.removeAdminCoupon` | Clear the Coupon (never cancels) |
 | `billing.cancelAdminSubscription` | Cancel immediately or at period end |
 
 ## Frontend and UI

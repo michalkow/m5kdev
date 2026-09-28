@@ -1,10 +1,13 @@
 import {
+  applyAdminCouponInputSchema,
   billingAdminListInputSchema,
   billingAdminListOutputSchema,
+  billingCouponListOutputSchema,
   billingSchema,
   cancelAdminSubscriptionInputSchema,
-  enrollComplimentaryInputSchema,
+  createAdminSubscriptionInputSchema,
   organizationIdInputSchema,
+  setOrganizationCurrencyInputSchema,
 } from "@m5kdev/commons/modules/billing/billing.schema";
 import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 import type { BillingService } from "./billing.service";
@@ -31,16 +34,40 @@ export function createBillingTRPC(
         return handleTRPCResult(await billingService.listAdminOrganizationBilling(input, ctx));
       }),
 
-    enrollComplimentary: adminProcedure
-      .input(enrollComplimentaryInputSchema)
-      .mutation(async ({ input, ctx }) => {
-        return handleTRPCResult(await billingService.enrollComplimentary(input, ctx));
+    listAdminCoupons: adminProcedure
+      .output(billingCouponListOutputSchema)
+      .query(async ({ ctx }) => {
+        return handleTRPCResult(await billingService.listAdminCoupons(undefined, ctx));
       }),
 
-    removeComplimentary: adminProcedure
+    createAdminCustomer: adminProcedure
       .input(organizationIdInputSchema)
       .mutation(async ({ input, ctx }) => {
-        return handleTRPCResult(await billingService.removeComplimentary(input, ctx));
+        return handleTRPCResult(await billingService.createAdminCustomer(input, ctx));
+      }),
+
+    setAdminOrganizationCurrency: adminProcedure
+      .input(setOrganizationCurrencyInputSchema)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await billingService.setAdminOrganizationCurrency(input, ctx));
+      }),
+
+    createAdminSubscription: adminProcedure
+      .input(createAdminSubscriptionInputSchema)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await billingService.createAdminSubscription(input, ctx));
+      }),
+
+    applyAdminCoupon: adminProcedure
+      .input(applyAdminCouponInputSchema)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await billingService.applyAdminCoupon(input, ctx));
+      }),
+
+    removeAdminCoupon: adminProcedure
+      .input(organizationIdInputSchema)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await billingService.removeAdminCoupon(input, ctx));
       }),
 
     cancelAdminSubscription: adminProcedure

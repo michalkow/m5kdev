@@ -6,7 +6,7 @@ Billing is an opinionated Stripe paywall (Plan catalog, Checkout, Billing Portal
 
 - **Always bill per Membership** — rejected: a flat Organization price is a common SaaS paywall; Seat billing is opt-in so TypeOrb-shaped catalogs stay days-only Trials.
 - **User as Customer** — rejected: glossary already forbids personal User subscriptions and `users.stripeCustomerId`.
-- **SaaS billing platform** (usage, add-ons, customer-facing coupons UX, enterprise quotes) — rejected: Portal and Stripe Dashboard own those; Kernel does not. AdminActor Complimentary Coupons are [ADR-0022](0022-complimentary-billing-admin.md), not a Plan-page promo.
+- **SaaS billing platform** (usage, add-ons, customer-facing coupons UX, enterprise quotes) — rejected: Portal and Stripe Dashboard own those; Kernel does not. AdminActor applying existing Stripe Coupons is [ADR-0022](0022-complimentary-billing-admin.md), not a Plan-page promo.
 - **In-app Plan switch after paid** — rejected: change Plan/interval/card in Billing Portal. How Trial starts (default Price vs Checkout, card catalog switch) is [ADR-0020](0020-trial-price-at-start-card-catalog-switch.md). N Prices per Plan and frozen Organization currency are [ADR-0019](0019-billing-prices-per-currency-product.md).
 - **Kernel-built Portal Configuration from Plan Price ids** — rejected: dual config. Portal products live in the Stripe Dashboard. Catalog Prices must still include every id Portal might attach so webhook sync can resolve the Plan.
 - **Owner-only Stripe quantity writes** — rejected: Owner-only is Checkout and Billing Portal. Quantity updates on invite are a system call for anyone who may invite.

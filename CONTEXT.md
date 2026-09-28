@@ -273,16 +273,20 @@ The Plan the catalog names for Organization currency (a map, not one global name
 _Avoid_: a different trial Plan per Price interval; treating Trial Plan as a Stripe Product
 
 **Organization currency**:
-Frozen ISO code on the Organization, set at create the same way locale is (payload or catalog default). Stripe Customer and Trial Prices use this currency's Product. Never switched on that Organization. A User may only own live Organizations in one currency: omit copies the owned currency; an explicit mismatch is rejected; after those Organizations are deleted, a new one may pick again.
-_Avoid_: deriving currency from locale on every read; a User-keyed currency column; switching USD↔PLN in Billing Portal; lookup of Stripe Customer by email to share currency
+Frozen ISO code on the Organization, set at create the same way locale is (payload or catalog default). An AdminActor may set it only when it is null; then it freezes. Stripe Customer and Prices use this currency's Product. Never switched once set. A User may only own live Organizations in one currency: omit copies the owned currency; an explicit mismatch is rejected; after those Organizations are deleted, a new one may pick again.
+_Avoid_: deriving currency from locale on every read; a User-keyed currency column; switching USD↔PLN in Billing Portal; lookup of Stripe Customer by email to share currency; Admin changing a currency that is already set
 
 **Trial**:
 The unpaid `trialing` period of a Subscription. Length comes from the Trial Plan's `freeTrial.days`. The Trial Price is the catalog default Price on that Plan's Product for Organization currency, or the Price the Owner Checkouts. Stripe owns start and end; the local row stores trialStart / trialEnd. `freeTrial.seats` exists only when Seat billing is on.
-_Avoid_: Plan, beta, Customer; requiring seats when Seat billing is off; Interval pick mid-Trial; treating a stand-in as unchosen; Complimentary (that is an Admin Coupon on a paid Price)
+_Avoid_: Plan, beta, Stripe Customer; requiring seats when Seat billing is off; Interval pick mid-Trial; treating a stand-in as unchosen; Coupon (that is an Admin discount on a paid Price)
 
-**Complimentary**:
-A 100% Stripe Coupon an AdminActor applies to an Organization Subscription on a catalog Price. Not Trial. See [ADR-0022](docs/adr/0022-complimentary-billing-admin.md).
-_Avoid_: Trial; free Subscription as a Kernel grant; $0 Price as the complimentary mechanism; paywall bypass; auto-free for a User-role admin's Organization
+**Stripe Customer**:
+The Stripe Customer for an Organization (not a User). Two ids: production and sandbox, the same split as Plan catalogs. Kernel uses the NODE_ENV switch as Plans; create writes only the current env’s id so sandbox never overwrites production.
+_Avoid_: User as Customer; `users.stripeCustomerId`; one id shared across live and test Stripe accounts; Promotion Code
+
+**Coupon**:
+A Stripe Coupon already in the Stripe account (percent or amount off, duration). AdminActor applies at most one onto an Organization Subscription. Not Trial. Not a $0 Price. Not a Promotion Code. See [ADR-0022](docs/adr/0022-complimentary-billing-admin.md).
+_Avoid_: Complimentary; Trial; free Subscription as a Kernel grant; paywall bypass; customer-facing promo on the Plan page; Kernel-created Coupon catalog
 
 **Checkout**:
 Stripe-hosted start of a Subscription when the Organization has none. When Trial requires a payment method, Checkout starts Trial on the Trial Price (default or picked) and collects the card; there is no access until it completes. When Trial does not require a card, Checkout is not used to start Trial.

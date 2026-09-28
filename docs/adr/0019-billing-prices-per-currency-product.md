@@ -1,6 +1,6 @@
 # N Prices per Plan; currency is frozen on the Organization
 
-A Plan is one commercial offering, not one Stripe Product: it cites a Product id per currency and lists Prices (interval + interval_count) under each. One app serves many currencies. `organizations.currency` is set at create like locale (payload or catalog default) and never switched. Trial Price at start (default or Checkout) is [ADR-0020](0020-trial-price-at-start-card-catalog-switch.md). After convert, interval change is Billing Portal. A User may only own live Organizations in one currency (omit copies; mismatch rejects); the Customer remains the Organization.
+A Plan is one commercial offering, not one Stripe Product: it cites a Product id per currency and lists Prices (interval + interval_count) under each. One app serves many currencies. `organizations.currency` is set at create like locale (payload or catalog default) and never switched once set. An AdminActor may set it only when it is null ([ADR-0022](0022-complimentary-billing-admin.md)). Trial Price at start (default or Checkout) is [ADR-0020](0020-trial-price-at-start-card-catalog-switch.md). After convert, interval change is Billing Portal. A User may only own live Organizations in one currency (omit copies; mismatch rejects); the Customer remains the Organization.
 
 ## Considered Options
 
