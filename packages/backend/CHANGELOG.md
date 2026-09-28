@@ -7,6 +7,18 @@
 - Table filter operators such as Equals, One Of, and Is Empty follow the active locale.
 - Language pickers show each language in its native name, so Polish stays Polski regardless of the UI language.
 
+## 0.38.11
+
+### Patch Changes
+
+- Billing Module admin applies, replaces, or removes one existing Stripe Coupon and creates a Subscription on a catalog Price with an optional Coupon; the Complimentary enroll and remove Procedures are removed.
+  AdminActor can create a missing Stripe Customer and set Organization currency when it is null, under the owned-Organization currency lock.
+  Organizations store a separate sandbox Stripe Customer id (`stripe_sandbox_customer_id`) selected by the now-required `ResolvedStripePlans.environment`, so a sandbox Customer never overwrites the production one.
+  A failed invoice without a payment method now stays `past_due` instead of canceling, and removing a Coupon never cancels.
+- Updated dependencies
+  - @m5kdev/commons@0.38.11
+  - @m5kdev/config@0.38.11
+
 ## 0.38.10
 
 ### Patch Changes

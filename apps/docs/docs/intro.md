@@ -134,6 +134,14 @@ Trial start share one Drizzle generate after the catalog bump
 Root `.dockerignore` now ignores SQLite `*.db` / wal / shm files. Copy those
 lines from a fresh scaffold if you already customized the file.
 
+## Upgrading to 0.38.11 {#upgrade-0-38-11}
+
+Complete 0.38.9 first. Every app generates
+`organizations.stripe_sandbox_customer_id`. Billing apps move sandbox Customer
+ids and replace Complimentary admin calls with Coupon Procedures.
+
+- [Billing Coupons, sandbox Stripe Customer, and required catalog environment](/guides/v0.38.11-billing-coupon-sandbox-customer-migration)
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module
