@@ -9,6 +9,16 @@
 - Table filter operators such as Equals, One Of, and Is Empty follow the active locale.
 - Language pickers show each language in its native name, so Polish stays Polski regardless of the UI language.
 
+## 0.38.10
+
+### Patch Changes
+
+- Auth Admin panel accepts optional sidecar `extraLinks` and `extraRoutes` so Module admin hangs beside Users / Organizations / Waitlist.
+  AdminActor can enroll, replace, or remove Complimentary (a 100% Stripe Coupon) and cancel Organization Subscriptions from Billing Module admin.
+- Updated dependencies
+  - @m5kdev/commons@0.38.10
+  - @m5kdev/frontend@0.38.10
+
 ## 0.38.9
 
 ### Patch Changes
