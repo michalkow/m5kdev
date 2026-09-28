@@ -15,6 +15,7 @@ interface AuthAdminRouterStoryProps {
   readonly enableWaitlist: boolean;
   readonly enableAccountClaimActions: boolean;
   readonly enableAiUsage: boolean;
+  readonly extraLinks?: readonly { label: string; to: string }[];
 }
 
 function AuthAdminRouterStory({
@@ -22,6 +23,7 @@ function AuthAdminRouterStory({
   enableWaitlist,
   enableAccountClaimActions,
   enableAiUsage,
+  extraLinks = [],
 }: AuthAdminRouterStoryProps): ReactElement {
   return (
     <div className="bg-background text-foreground">
@@ -37,7 +39,11 @@ function AuthAdminRouterStory({
           <MemoryRouter initialEntries={[initialPath]}>
             <NuqsAdapter>
               <Routes>
-                <Route element={<AuthAdminLayout enableWaitlist={enableWaitlist} />}>
+                <Route
+                  element={
+                    <AuthAdminLayout enableWaitlist={enableWaitlist} extraLinks={extraLinks} />
+                  }
+                >
                   {/* Same route tree as AuthAdminRouter in AuthRouter.tsx */}
                   <Route
                     path="/admin/users"
@@ -104,5 +110,11 @@ export const WithoutAccountClaimActions: Story = {
 export const WithAiUsage: Story = {
   args: {
     enableAiUsage: true,
+  },
+};
+
+export const WithSidecarLinks: Story = {
+  args: {
+    extraLinks: [{ label: "Billing", to: "/admin/billing" }],
   },
 };

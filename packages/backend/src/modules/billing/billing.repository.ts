@@ -1,4 +1,8 @@
-import type { BillingSchema } from "@m5kdev/commons/modules/billing/billing.schema";
+import type {
+  AdminOrganizationBillingRow,
+  BillingSchema,
+  ComplimentaryDuration,
+} from "@m5kdev/commons/modules/billing/billing.schema";
 import type {
   ResolvedStripePlans,
   StripePlan,
@@ -9,8 +13,9 @@ import {
   findPriceCurrency,
   findTrialPlan,
 } from "@m5kdev/commons/modules/billing/billing.utils";
+import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { InferSelectModel } from "drizzle-orm";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, like } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import type { Stripe } from "stripe";
@@ -26,6 +31,12 @@ type Orm = LibSQLDatabase<Schema>;
 
 const ACCESS_STATUSES = ["active", "trialing", "past_due"] as const;
 const OPEN_STATUSES = ["active", "trialing", "past_due", "unpaid", "paused", "incomplete"] as const;
+
+function stripeErrorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
+  const code = error.code;
+  return typeof code === "string" ? code : undefined;
+}
 
 export class BillingRepository extends BaseTableRepository<
   Orm,
@@ -214,6 +225,7 @@ export class BillingRepository extends BaseTableRepository<
     trialDays,
     organizationId,
     memberId,
+    discounts,
   }: {
     customerId: string;
     priceId: string;
@@ -221,6 +233,7 @@ export class BillingRepository extends BaseTableRepository<
     trialDays?: number;
     organizationId?: string;
     memberId?: string;
+    discounts?: Stripe.SubscriptionCreateParams.Discount[];
   }): ServerResultAsync<Stripe.Subscription> {
     return this.throwablePromise(() =>
       this.stripe.subscriptions.create({
@@ -234,6 +247,7 @@ export class BillingRepository extends BaseTableRepository<
               },
             }
           : {}),
+        ...(discounts ? { discounts } : {}),
         ...(trialDays != null
           ? {
               trial_period_days: trialDays,
@@ -366,6 +380,128 @@ export class BillingRepository extends BaseTableRepository<
     );
     if (membersResult.isErr()) return err(membersResult.error);
     return ok(membersResult.value.filter((row) => this.isBillableRole(row.role)).length);
+  }
+
+  getOwnerMember(
+    organizationId: string
+  ): ServerResultAsync<InferSelectModel<Schema["members"]> | null> {
+    return this.throwableQuery(async () => {
+      const [owner] = await this.orm
+        .select()
+        .from(this.schema.members)
+        .where(
+          and(
+            eq(this.schema.members.organizationId, organizationId),
+            eq(this.schema.members.role, "owner"),
+            isNull(this.schema.members.deletedAt)
+          )
+        )
+        .limit(1);
+      return owner ?? null;
+    });
+  }
+
+  private complimentaryCouponId(duration: ComplimentaryDuration): string {
+    if (duration === "forever") return "m5k_comp_forever";
+    if (duration === "once") return "m5k_comp_once";
+    return `m5k_comp_repeating_${duration.months}`;
+  }
+
+  async findOrCreateComplimentaryCoupon(
+    duration: ComplimentaryDuration
+  ): ServerResultAsync<string> {
+    const id = this.complimentaryCouponId(duration);
+    try {
+      const existing = await this.stripe.coupons.retrieve(id);
+      if (!("deleted" in existing && existing.deleted)) {
+        return ok(existing.id);
+      }
+    } catch (error) {
+      if (stripeErrorCode(error) !== "resource_missing") {
+        return this.throwablePromise(() => Promise.reject(error));
+      }
+    }
+
+    const created = await this.throwablePromise(() =>
+      this.stripe.coupons.create({
+        id,
+        percent_off: 100,
+        duration: duration === "forever" ? "forever" : duration === "once" ? "once" : "repeating",
+        ...(typeof duration === "object" ? { duration_in_months: duration.months } : {}),
+      })
+    );
+    if (created.isErr()) return err(created.error);
+    return ok(created.value.id);
+  }
+
+  updateSubscriptionDiscounts({
+    subscriptionId,
+    discounts,
+  }: {
+    subscriptionId: string;
+    discounts: Stripe.SubscriptionUpdateParams.Discount[] | "";
+  }): ServerResultAsync<Stripe.Subscription> {
+    return this.throwablePromise(() =>
+      this.stripe.subscriptions.update(subscriptionId, { discounts })
+    );
+  }
+
+  updateSubscriptionCancelAtPeriodEnd({
+    subscriptionId,
+    cancelAtPeriodEnd,
+  }: {
+    subscriptionId: string;
+    cancelAtPeriodEnd: boolean;
+  }): ServerResultAsync<Stripe.Subscription> {
+    return this.throwablePromise(() =>
+      this.stripe.subscriptions.update(subscriptionId, {
+        cancel_at_period_end: cancelAtPeriodEnd,
+      })
+    );
+  }
+
+  async listOrganizationBilling(query?: QueryInput): ServerResultAsync<{
+    rows: AdminOrganizationBillingRow[];
+    total: number;
+  }> {
+    const page = query?.page ?? 1;
+    const limit = query?.limit ?? 20;
+    const q = query?.q?.trim();
+
+    const listed = await this.throwableQuery(async () => {
+      const where = q ? like(this.schema.organizations.name, `%${q}%`) : undefined;
+      const [{ count: total } = { count: 0 }] = await this.orm
+        .select({ count: count() })
+        .from(this.schema.organizations)
+        .where(where);
+      const organizations = await this.orm
+        .select({
+          id: this.schema.organizations.id,
+          name: this.schema.organizations.name,
+          currency: this.schema.organizations.currency,
+        })
+        .from(this.schema.organizations)
+        .where(where)
+        .orderBy(desc(this.schema.organizations.createdAt))
+        .limit(limit)
+        .offset((page - 1) * limit);
+      return { organizations, total };
+    });
+    if (listed.isErr()) return err(listed.error);
+
+    const rows = [];
+    for (const organization of listed.value.organizations) {
+      const subscription = await this.getLatestSubscription(organization.id);
+      if (subscription.isErr()) return err(subscription.error);
+      rows.push({
+        id: organization.id,
+        organizationId: organization.id,
+        organizationName: organization.name,
+        currency: organization.currency ?? null,
+        subscription: subscription.value,
+      });
+    }
+    return ok({ rows, total: listed.value.total });
   }
 
   listInvoices(customerId: string): ServerResultAsync<Stripe.Invoice[]> {

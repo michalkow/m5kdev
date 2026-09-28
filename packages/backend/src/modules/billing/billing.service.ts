@@ -1,4 +1,12 @@
-import type { BillingSchema } from "@m5kdev/commons/modules/billing/billing.schema";
+import {
+  type BillingSchema,
+  billingAdminListInputSchema,
+  billingAdminListOutputSchema,
+  cancelAdminSubscriptionInputSchema,
+  type EnrollComplimentaryInput,
+  enrollComplimentaryInputSchema,
+  organizationIdInputSchema,
+} from "@m5kdev/commons/modules/billing/billing.schema";
 import { catalogCurrencyKeys } from "@m5kdev/commons/modules/billing/billing.utils";
 import { err, ok } from "neverthrow";
 import type Stripe from "stripe";
@@ -385,6 +393,39 @@ export class BillingService extends BasePermissionService<
     return ok(true);
   }
 
+  listAdminOrganizationBilling = this.procedure("listAdminOrganizationBilling")
+    .input(billingAdminListInputSchema)
+    .output(billingAdminListOutputSchema)
+    .requireAuth("admin")
+    .access({ action: "read" })
+    .handle(async ({ input }) => {
+      return this.repository.billing.listOrganizationBilling(input);
+    });
+
+  enrollComplimentary = this.procedure("enrollComplimentary")
+    .input(enrollComplimentaryInputSchema)
+    .requireAuth("admin")
+    .access({ action: "write" })
+    .handle(async ({ input }) => {
+      return this.enrollComplimentaryForOrganization(input);
+    });
+
+  removeComplimentary = this.procedure("removeComplimentary")
+    .input(organizationIdInputSchema)
+    .requireAuth("admin")
+    .access({ action: "write" })
+    .handle(async ({ input }) => {
+      return this.removeComplimentaryForOrganization(input.organizationId);
+    });
+
+  cancelAdminSubscription = this.procedure("cancelAdminSubscription")
+    .input(cancelAdminSubscriptionInputSchema)
+    .requireAuth("admin")
+    .access({ action: "delete" })
+    .handle(async ({ input }) => {
+      return this.cancelAdminSubscriptionForOrganization(input);
+    });
+
   async syncOrganizationSubscription(organizationId: string): ServerResultAsync<boolean> {
     const organization = await this.repository.billing.getOrganizationById(organizationId);
     if (organization.isErr()) return err(organization.error);
@@ -465,7 +506,209 @@ export class BillingService extends BasePermissionService<
       if (snapped.isErr()) return err(snapped.error);
     }
 
+    if (event.type === "invoice.payment_failed") {
+      const canceled = await this.cancelIfInvoiceFailedWithoutPaymentMethod(customerId);
+      if (canceled.isErr()) return err(canceled.error);
+    }
+
     return ok(true);
+  }
+
+  private async enrollComplimentaryForOrganization(
+    input: EnrollComplimentaryInput
+  ): ServerResultAsync<boolean> {
+    const organization = await this.repository.billing.getOrganizationById(input.organizationId);
+    if (organization.isErr()) return err(organization.error);
+    if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
+
+    const currency = organization.value.currency ?? this.repository.billing.defaultCurrency;
+    if (!this.repository.billing.priceBelongsToCurrency(input.priceId, currency)) {
+      return this.error("NOT_FOUND", "Price not found for Organization currency");
+    }
+
+    const owner = await this.repository.billing.getOwnerMember(input.organizationId);
+    if (owner.isErr()) return err(owner.error);
+    if (!owner.value?.email) return this.error("NOT_FOUND", "Organization Owner not found");
+
+    const stripeCustomer = await this.createOrganizationCustomer({
+      organizationId: input.organizationId,
+      memberId: owner.value.id,
+      email: owner.value.email,
+      name: owner.value.name ?? undefined,
+    });
+    if (stripeCustomer.isErr()) return err(stripeCustomer.error);
+
+    const couponId = await this.repository.billing.findOrCreateComplimentaryCoupon(input.duration);
+    if (couponId.isErr()) return err(couponId.error);
+
+    const open = await this.repository.billing.getOpenSubscription(input.organizationId);
+    if (open.isErr()) return err(open.error);
+
+    if (open.value?.status === "trialing" && open.value.stripeSubscriptionId) {
+      const canceled = await this.repository.billing.cancelStripeSubscription(
+        open.value.stripeSubscriptionId
+      );
+      if (canceled.isErr()) return err(canceled.error);
+    } else if (open.value?.stripeSubscriptionId && open.value.status !== "trialing") {
+      const attached = await this.repository.billing.updateSubscriptionDiscounts({
+        subscriptionId: open.value.stripeSubscriptionId,
+        discounts: [{ coupon: couponId.value }],
+      });
+      if (attached.isErr()) return err(attached.error);
+      const synced = await this.syncStripeData({
+        customerId: stripeCustomer.value.id,
+        memberId: owner.value.id,
+      });
+      if (synced.isErr()) return err(synced.error);
+      return ok(true);
+    }
+
+    let quantity = 1;
+    if (this.repository.billing.seatBilling) {
+      const count = await this.repository.billing.countBillableMembers(input.organizationId);
+      if (count.isErr()) return err(count.error);
+      quantity = Math.max(count.value, 1);
+    }
+
+    const created = await this.repository.billing.createSubscription({
+      customerId: stripeCustomer.value.id,
+      priceId: input.priceId,
+      quantity,
+      organizationId: input.organizationId,
+      memberId: owner.value.id,
+      discounts: [{ coupon: couponId.value }],
+    });
+    if (created.isErr()) return err(created.error);
+
+    const synced = await this.syncStripeData({
+      customerId: stripeCustomer.value.id,
+      memberId: owner.value.id,
+    });
+    if (synced.isErr()) return err(synced.error);
+    return ok(true);
+  }
+
+  private async removeComplimentaryForOrganization(
+    organizationId: string
+  ): ServerResultAsync<boolean> {
+    const latest = await this.repository.billing.getLatestSubscription(organizationId);
+    if (latest.isErr()) return err(latest.error);
+    if (!latest.value?.stripeSubscriptionId) {
+      return this.error("NOT_FOUND", "Subscription not found");
+    }
+
+    const organization = await this.repository.billing.getOrganizationById(organizationId);
+    if (organization.isErr()) return err(organization.error);
+    const customerId = organization.value?.stripeCustomerId ?? latest.value.stripeCustomerId;
+    if (!customerId) return this.error("NOT_FOUND", "Organization has no stripe customer id");
+
+    const stripeSubscriptions = await this.repository.billing.listStripeSubscriptions(customerId);
+    if (stripeSubscriptions.isErr()) return err(stripeSubscriptions.error);
+    const [stripeSubscription] = stripeSubscriptions.value;
+
+    const hasCard = await this.customerHasPaymentMethod({
+      customerId,
+      subscriptionDefaultPaymentMethod: stripeSubscription?.default_payment_method,
+    });
+    if (hasCard.isErr()) return err(hasCard.error);
+
+    if (!hasCard.value) {
+      const canceled = await this.repository.billing.cancelStripeSubscription(
+        latest.value.stripeSubscriptionId
+      );
+      if (canceled.isErr()) return err(canceled.error);
+    } else {
+      const cleared = await this.repository.billing.updateSubscriptionDiscounts({
+        subscriptionId: latest.value.stripeSubscriptionId,
+        discounts: "",
+      });
+      if (cleared.isErr()) return err(cleared.error);
+    }
+
+    const synced = await this.syncStripeData({ customerId });
+    if (synced.isErr()) return err(synced.error);
+    return ok(true);
+  }
+
+  private async cancelAdminSubscriptionForOrganization({
+    organizationId,
+    when,
+  }: {
+    organizationId: string;
+    when: "immediate" | "period_end";
+  }): ServerResultAsync<boolean> {
+    const latest = await this.repository.billing.getLatestSubscription(organizationId);
+    if (latest.isErr()) return err(latest.error);
+    if (!latest.value?.stripeSubscriptionId) {
+      return this.error("NOT_FOUND", "Subscription not found");
+    }
+    if (latest.value.status === "canceled") return ok(false);
+
+    if (when === "period_end") {
+      const updated = await this.repository.billing.updateSubscriptionCancelAtPeriodEnd({
+        subscriptionId: latest.value.stripeSubscriptionId,
+        cancelAtPeriodEnd: true,
+      });
+      if (updated.isErr()) return err(updated.error);
+    } else {
+      const canceled = await this.repository.billing.cancelStripeSubscription(
+        latest.value.stripeSubscriptionId
+      );
+      if (canceled.isErr()) return err(canceled.error);
+    }
+
+    if (latest.value.stripeCustomerId) {
+      const synced = await this.syncStripeData({ customerId: latest.value.stripeCustomerId });
+      if (synced.isErr()) return err(synced.error);
+    }
+    return ok(true);
+  }
+
+  private async customerHasPaymentMethod({
+    customerId,
+    subscriptionDefaultPaymentMethod,
+  }: {
+    customerId: string;
+    subscriptionDefaultPaymentMethod?: string | Stripe.PaymentMethod | null;
+  }): ServerResultAsync<boolean> {
+    if (this.defaultPaymentMethodId(subscriptionDefaultPaymentMethod)) return ok(true);
+    const customer = await this.repository.billing.getStripeCustomer(customerId);
+    if (customer.isErr()) return err(customer.error);
+    if (customer.value.deleted) return ok(false);
+    return ok(
+      Boolean(this.defaultPaymentMethodId(customer.value.invoice_settings?.default_payment_method))
+    );
+  }
+
+  private async cancelIfInvoiceFailedWithoutPaymentMethod(
+    customerId: string
+  ): ServerResultAsync<void> {
+    const stripeSubscriptions = await this.repository.billing.listStripeSubscriptions(customerId);
+    if (stripeSubscriptions.isErr()) return err(stripeSubscriptions.error);
+    const [stripeSubscription] = stripeSubscriptions.value;
+
+    const hasCard = await this.customerHasPaymentMethod({
+      customerId,
+      subscriptionDefaultPaymentMethod: stripeSubscription?.default_payment_method,
+    });
+    if (hasCard.isErr()) return err(hasCard.error);
+    if (hasCard.value) return ok();
+
+    const organization = await this.repository.billing.getOrganizationByCustomerId(customerId);
+    if (organization.isErr()) return err(organization.error);
+    if (!organization.value) return ok();
+
+    const latest = await this.repository.billing.getLatestSubscription(organization.value.id);
+    if (latest.isErr()) return err(latest.error);
+    if (!latest.value?.stripeSubscriptionId || latest.value.status === "canceled") return ok();
+
+    const canceled = await this.repository.billing.cancelStripeSubscription(
+      latest.value.stripeSubscriptionId
+    );
+    if (canceled.isErr()) return err(canceled.error);
+    const synced = await this.syncStripeData({ customerId });
+    if (synced.isErr()) return err(synced.error);
+    return ok();
   }
 
   private async snapQuantityAfterTrialConvert(

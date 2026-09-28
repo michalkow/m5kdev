@@ -15,7 +15,7 @@ Organization (ADR-0017).
 | `@m5kdev/commons` | `StripePlan` / `StripePlansConfig` types, billing schema, plan utilities. |
 | `@m5kdev/backend` | `BillingModule`: `subscriptions` table, repository, `BillingService`, Stripe HTTP, tRPC procedures. |
 | `@m5kdev/frontend` | `BillingProvider` and `useSubscription`. |
-| `@m5kdev/web-ui` | `BillingRouter`, plan select pages, invoice page, beta page. |
+| `@m5kdev/web-ui` | `BillingRouter`, plan select pages, invoice page, beta page, `BillingAdminRouter`. |
 
 ## Plan configuration
 
@@ -123,7 +123,13 @@ succeeds if Stripe is down; the paywall shows until a Subscription exists.
   includes `active`, `trialing`, and `past_due`.
 - `adjustBillableSeats` — Seat billing quantity (no-op when Seat billing is off).
 - `cancelOrganizationSubscription` — cancel in Stripe, keep the Customer.
+- `listAdminOrganizationBilling`, `enrollComplimentary`, `removeComplimentary`,
+  `cancelAdminSubscription` — AdminActor Billing Module admin (ADR-0022).
+  Complimentary is a 100% Stripe Coupon on a catalog Price (forever, once, or
+  repeating N months), not Trial. Enroll is Organization-only and explicit.
 - `constructEvent`, `processEvent`, `syncStripeData` — webhook verify and re-sync.
+  `invoice.payment_failed` cancels the Subscription when the Customer has no
+  payment method; a present card that fails stays `past_due` with access.
 - Trial cancel warning — on `customer.subscription.trial_will_end`, after sync,
   Billing emails a Billing Portal CTA when Stripe would cancel for a missing
   payment method. Requires a `trialEnding` template on `EmailModule`. Stripe
@@ -150,6 +156,16 @@ Organization-scoped.
 | `billing.getActiveSubscription` | Current accessible Subscription or `null` |
 | `billing.listInvoices` | Stripe invoices for the Organization Customer |
 
+AdminActor (`adminProcedure`). Input includes `organizationId` because the
+AdminActor is not in that Organization.
+
+| Procedure | Description |
+| --- | --- |
+| `billing.listAdminOrganizationBilling` | List Organizations with Subscription / Trial / Complimentary |
+| `billing.enrollComplimentary` | Apply a 100% Coupon (create or attach) |
+| `billing.removeComplimentary` | Remove Complimentary (bill if a card exists, else cancel) |
+| `billing.cancelAdminSubscription` | Cancel immediately or at period end |
+
 ## Frontend and UI
 
 Wrap billing-aware routes in `BillingProvider` and read state with
@@ -159,6 +175,21 @@ and `BillingBetaPage`. Pass Organization currency (frozen at create). When Trial
 requires a payment method, pass `trialRequiresPaymentMethod` and the resolved
 Trial Plan name so the Plan page Checkouts that Plan (default Price skips the
 interval picker). `skipPlanCheck` still bypasses the paywall.
+
+The Admin panel keeps Users / Organizations / Waitlist. Pass optional
+`extraLinks` and `extraRoutes` on `AuthAdminRouter` so Module admin hangs off
+sidecar links (ADR-0021). Apps that register Billing compose:
+
+```tsx
+AuthAdminRouter({
+  enableWaitlist: true,
+  extraLinks: [{ label: "Billing", to: "/admin/billing" }],
+  extraRoutes: BillingAdminRouter({ plans: resolved.plans }),
+})
+```
+
+Starter does not register BillingModule; omit those props unless the app does.
+Do not register admin links at import time.
 
 ## Environment
 
@@ -173,3 +204,5 @@ constructed in app code with your secret key. Include
 - [N Prices, frozen Organization currency, and Trial Price at start in 0.38.9](/guides/v0.38.9-billing-trial-price-catalog-migration)
 - [Billing trial-ending email in 0.34.0](/guides/v0.34.0-billing-trial-ending-email-migration)
 - [Email Core Module](/modules/email)
+- ADR-0021 (`docs/adr/0021-admin-panel-sidecar-module-admin.md`)
+- ADR-0022 (`docs/adr/0022-complimentary-billing-admin.md`)

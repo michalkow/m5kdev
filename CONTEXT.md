@@ -204,6 +204,14 @@ _Avoid_: the Starter Expo app (`apps/*/expo`); putting Expo APIs in Frontend or 
 
 ### Product surfaces
 
+**Admin panel**:
+The User-role admin UI at `/admin`: Users, Organizations, and optional Waitlist. Organization Role `admin` does not see it. Sidecar links beside those tabs open Module admin routes the app composes on `AuthAdminRouter`. See [ADR-0021](docs/adr/0021-admin-panel-sidecar-module-admin.md).
+_Avoid_: Admin browser; org Role admin; Billing Portal; import-time module self-registration of admin links
+
+**Module admin**:
+A Backend Module's admin routes (for example Billing at `/admin/billing`), linked from the Admin panel sidecar, not extra Auth tabs. See [ADR-0021](docs/adr/0021-admin-panel-sidecar-module-admin.md).
+_Avoid_: stuffing module screens into the Users/Organizations/Waitlist segment; a second admin shell
+
 **Landing**:
 The public marketing site package (`apps/landing`). A separate Fly app from the product image; Starter ships one page (name, pitch, CTA) on React Router + HeroUI v3 + Tailwind v4.
 _Avoid_: Webapp (the authenticated SPA baked into the product image)
@@ -270,7 +278,11 @@ _Avoid_: deriving currency from locale on every read; a User-keyed currency colu
 
 **Trial**:
 The unpaid `trialing` period of a Subscription. Length comes from the Trial Plan's `freeTrial.days`. The Trial Price is the catalog default Price on that Plan's Product for Organization currency, or the Price the Owner Checkouts. Stripe owns start and end; the local row stores trialStart / trialEnd. `freeTrial.seats` exists only when Seat billing is on.
-_Avoid_: Plan, beta, Customer; requiring seats when Seat billing is off; Interval pick mid-Trial; treating a stand-in as unchosen
+_Avoid_: Plan, beta, Customer; requiring seats when Seat billing is off; Interval pick mid-Trial; treating a stand-in as unchosen; Complimentary (that is an Admin Coupon on a paid Price)
+
+**Complimentary**:
+A 100% Stripe Coupon an AdminActor applies to an Organization Subscription on a catalog Price. Not Trial. See [ADR-0022](docs/adr/0022-complimentary-billing-admin.md).
+_Avoid_: Trial; free Subscription as a Kernel grant; $0 Price as the complimentary mechanism; paywall bypass; auto-free for a User-role admin's Organization
 
 **Checkout**:
 Stripe-hosted start of a Subscription when the Organization has none. When Trial requires a payment method, Checkout starts Trial on the Trial Price (default or picked) and collects the card; there is no access until it completes. When Trial does not require a card, Checkout is not used to start Trial.

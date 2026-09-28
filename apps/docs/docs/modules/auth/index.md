@@ -140,6 +140,8 @@ and [Workflow](/modules/workflow). Upgrade:
 - `AuthOrganizationRouter` — org profile, preferences, members,
   child organizations, org select.
 - `AuthAdminRouter` — user management, organization management, waitlist.
+  Optional `extraLinks` / `extraRoutes` hang Module admin (for example Billing)
+  off sidecar links beside those tabs. Omit them for none.
 - Utilities — `AuthUtilityProtectedRoutes`, impersonation banner, locale and
   theme pickers.
 
