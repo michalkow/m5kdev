@@ -7,6 +7,14 @@
 - Table filter operators such as Equals, One Of, and Is Empty follow the active locale.
 - Language pickers show each language in its native name, so Polish stays Polski regardless of the UI language.
 
+## 0.38.12
+
+### Patch Changes
+
+- Billing Module admin Create Subscription can start a Trial with Admin-entered days (pre-filled from the Trial Plan's `freeTrial.days`) on any catalog Price, as an alternative to a Coupon; an Admin Trial ends like catalog Trial.
+  Without a payment method on the Customer, Create Subscription now requires a Trial or a 100%-off Coupon and is refused with a clear message instead of a Stripe error; an unknown Coupon id is refused as not found.
+  Billing Module admin shows the catalog environment (Production / Sandbox), and `listAdminOrganizationBilling` returns `environment` plus each row's `defaultTrialDays`.
+
 ## 0.38.11
 
 ### Patch Changes
