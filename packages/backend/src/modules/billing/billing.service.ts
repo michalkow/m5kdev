@@ -9,6 +9,7 @@ import {
   cancelAdminSubscriptionInputSchema,
   createAdminSubscriptionInputSchema,
   organizationIdInputSchema,
+  setAdminBillingExemptInputSchema,
   setOrganizationCurrencyInputSchema,
 } from "@m5kdev/commons/modules/billing/billing.schema";
 import { catalogCurrencyKeys } from "@m5kdev/commons/modules/billing/billing.utils";
@@ -337,6 +338,10 @@ export class BillingService extends BasePermissionService<
     if (!this.repository.billing.seatBilling) return ok(false);
     if (!this.repository.billing.isBillableRole(role)) return ok(false);
 
+    const organization = await this.repository.billing.getOrganizationById(organizationId);
+    if (organization.isErr()) return err(organization.error);
+    if (organization.value?.billingExempt) return ok(false);
+
     const subscription = await this.repository.billing.getAccessibleSubscription(organizationId);
     if (subscription.isErr()) return err(subscription.error);
     if (!subscription.value?.stripeSubscriptionId) {
@@ -486,6 +491,17 @@ export class BillingService extends BasePermissionService<
     .access({ action: "write" })
     .handle(async ({ input }) => {
       return this.setOrganizationCurrency(input);
+    });
+
+  setAdminBillingExempt = this.procedure("setAdminBillingExempt")
+    .input(setAdminBillingExemptInputSchema)
+    .requireAuth("admin")
+    .access({ action: "write" })
+    .handle(async ({ input }) => {
+      const organization = await this.repository.billing.getOrganizationById(input.organizationId);
+      if (organization.isErr()) return err(organization.error);
+      if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
+      return this.repository.billing.setBillingExempt(input);
     });
 
   createAdminSubscription = this.procedure("createAdminSubscription")
@@ -821,6 +837,7 @@ export class BillingService extends BasePermissionService<
     const organization = await this.repository.billing.getOrganizationByCustomerId(customerId);
     if (organization.isErr()) return err(organization.error);
     if (!organization.value) return ok();
+    if (organization.value.billingExempt) return ok();
 
     const count = await this.repository.billing.countBillableMembers(organization.value.id);
     if (count.isErr()) return err(count.error);

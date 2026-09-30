@@ -391,7 +391,8 @@ async function createTables(client: Client): Promise<void> {
       locale TEXT,
       currency TEXT,
       stripe_customer_id TEXT UNIQUE,
-      stripe_sandbox_customer_id TEXT UNIQUE
+      stripe_sandbox_customer_id TEXT UNIQUE,
+      billing_exempt INTEGER NOT NULL DEFAULT 0
     );
   `);
   await client.execute(`
@@ -2115,6 +2116,177 @@ describe("BillingService Billing Module admin", () => {
     expect(listed.rows[0]?.stripeCustomerId).toBe(CUSTOMER_ID);
   });
 
+  it("lists billingExempt false for a new Organization", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe);
+
+    const listed = (await billing.listAdminOrganizationBilling({}, adminCtx()))._unsafeUnwrap();
+    expect(listed.rows[0]?.billingExempt).toBe(false);
+    expect((await billing.getActiveSubscription(memberCtx()))._unsafeUnwrap()).toBeNull();
+  });
+
+  it("lets AdminActor set and clear billingExempt without a Subscription", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe);
+
+    const set = await billing.setAdminBillingExempt(
+      { organizationId: ORG_ID, billingExempt: true },
+      adminCtx()
+    );
+    expect(set.isOk()).toBe(true);
+
+    const listedExempt = (
+      await billing.listAdminOrganizationBilling({}, adminCtx())
+    )._unsafeUnwrap();
+    expect(listedExempt.rows[0]?.billingExempt).toBe(true);
+    expect((await billing.getActiveSubscription(memberCtx()))._unsafeUnwrap()).toBeNull();
+
+    const cleared = await billing.setAdminBillingExempt(
+      { organizationId: ORG_ID, billingExempt: false },
+      adminCtx()
+    );
+    expect(cleared.isOk()).toBe(true);
+    const listedCleared = (
+      await billing.listAdminOrganizationBilling({}, adminCtx())
+    )._unsafeUnwrap();
+    expect(listedCleared.rows[0]?.billingExempt).toBe(false);
+  });
+
+  it("lets AdminActor set billingExempt on an ACCESS_STATUS Organization", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe);
+    await billing.createAdminSubscription(
+      { organizationId: ORG_ID, priceId: PRICE_ID, couponId: "free_forever" },
+      adminCtx()
+    );
+
+    const set = await billing.setAdminBillingExempt(
+      { organizationId: ORG_ID, billingExempt: true },
+      adminCtx()
+    );
+    expect(set.isOk()).toBe(true);
+    const listed = (await billing.listAdminOrganizationBilling({}, adminCtx()))._unsafeUnwrap();
+    expect(listed.rows[0]?.billingExempt).toBe(true);
+    expect(listed.rows[0]?.subscription?.status).toBe("active");
+  });
+
+  it("does not refuse Trial seat caps or update Stripe quantity while billingExempt", async () => {
+    const seatedPlan: StripePlan = { ...plan, freeTrial: { days: 14, seats: 1 } };
+    const stripe = createStripeStub({ quantity: 1 });
+    const billing = await boot(stripe, {
+      plans: [seatedPlan],
+      seatBilling: true,
+    });
+    await billing.setAdminBillingExempt(
+      { organizationId: ORG_ID, billingExempt: true },
+      adminCtx()
+    );
+
+    const withoutSub = await billing.adjustBillableSeats({
+      organizationId: ORG_ID,
+      role: "member",
+      delta: 1,
+    });
+    expect(withoutSub.isOk()).toBe(true);
+    expect(stripe.subscriptions.update).not.toHaveBeenCalled();
+
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+    const overTrialCap = await billing.adjustBillableSeats({
+      organizationId: ORG_ID,
+      role: "member",
+      delta: 1,
+    });
+    expect(overTrialCap.isOk()).toBe(true);
+    expect(stripe.subscriptions.update).not.toHaveBeenCalled();
+  });
+
+  it("does not update Stripe quantity on a paid Subscription while billingExempt", async () => {
+    const stripe = createStripeStub({
+      customerDefaultPaymentMethod: "pm_card",
+      subscriptionStatus: "active",
+    });
+    const billing = await boot(stripe, {
+      plans: [{ ...plan, freeTrial: { days: 7, seats: 5 } }],
+      seatBilling: true,
+    });
+    await linkCustomer();
+    await billing.createAdminSubscription(
+      { organizationId: ORG_ID, priceId: PRICE_ID },
+      adminCtx()
+    );
+    await billing.setAdminBillingExempt(
+      { organizationId: ORG_ID, billingExempt: true },
+      adminCtx()
+    );
+
+    const adjusted = await billing.adjustBillableSeats({
+      organizationId: ORG_ID,
+      role: "member",
+      delta: 1,
+    });
+    expect(adjusted.isOk()).toBe(true);
+    expect(stripe.subscriptions.update).not.toHaveBeenCalled();
+  });
+
+  it("does not snap Stripe quantity on Trial convert while billingExempt", async () => {
+    const seatedPlan: StripePlan = { ...plan, freeTrial: { days: 14, seats: 5 } };
+    const stripe = createStripeStub({ quantity: 5, subscriptionStatus: "active" });
+    stripe.state.created = true;
+    await linkCustomer();
+    const billing = await boot(stripe, {
+      plans: [seatedPlan],
+      seatBilling: true,
+    });
+    await billing.setAdminBillingExempt(
+      { organizationId: ORG_ID, billingExempt: true },
+      adminCtx()
+    );
+
+    const result = await billing.processEvent(trialConvertedEvent());
+    expect(result.isOk()).toBe(true);
+    expect(stripe.subscriptions.update).not.toHaveBeenCalled();
+  });
+
+  it("does not snap Stripe quantity on Trial convert while billingExempt", async () => {
+    const seatedPlan: StripePlan = { ...plan, freeTrial: { days: 14, seats: 5 } };
+    const stripe = createStripeStub({ quantity: 5, subscriptionStatus: "active" });
+    stripe.state.created = true;
+    await linkCustomer();
+    const billing = await boot(stripe, {
+      plans: [seatedPlan],
+      seatBilling: true,
+    });
+    await billing.setAdminBillingExempt(
+      { organizationId: ORG_ID, billingExempt: true },
+      adminCtx()
+    );
+
+    const result = await billing.processEvent(trialConvertedEvent());
+    expect(result.isOk()).toBe(true);
+    expect(stripe.subscriptions.update).not.toHaveBeenCalled();
+  });
+
+  it("creates an Admin Subscription while the Organization is billingExempt", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe);
+    await billing.setAdminBillingExempt(
+      { organizationId: ORG_ID, billingExempt: true },
+      adminCtx()
+    );
+
+    const created = await billing.createAdminSubscription(
+      { organizationId: ORG_ID, priceId: PRICE_ID, couponId: "free_forever" },
+      adminCtx()
+    );
+    expect(created.isOk()).toBe(true);
+    const accessible = (await billing.getActiveSubscription(memberCtx()))._unsafeUnwrap();
+    expect(accessible?.status).toBe("active");
+  });
+
   it("refuses AdminActor Procedures for Owner and Member Actors", async () => {
     const stripe = createStripeStub({});
     const billing = await boot(stripe);
@@ -2127,6 +2299,11 @@ describe("BillingService Billing Module admin", () => {
       expect(created._unsafeUnwrapErr().code).toBe("FORBIDDEN");
       const listed = await billing.listAdminCoupons(undefined, ctx);
       expect(listed._unsafeUnwrapErr().code).toBe("FORBIDDEN");
+      const exempt = await billing.setAdminBillingExempt(
+        { organizationId: ORG_ID, billingExempt: true },
+        ctx
+      );
+      expect(exempt._unsafeUnwrapErr().code).toBe("FORBIDDEN");
     }
     expect(stripe.subscriptions.create).not.toHaveBeenCalled();
   });

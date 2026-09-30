@@ -373,6 +373,22 @@ export class BillingRepository extends BaseTableRepository<
     return ok(updated.value.length > 0);
   }
 
+  setBillingExempt({
+    organizationId,
+    billingExempt,
+  }: {
+    organizationId: string;
+    billingExempt: boolean;
+  }): ServerResultAsync<boolean> {
+    return this.throwableQuery(async () => {
+      await this.orm
+        .update(this.schema.organizations)
+        .set({ billingExempt })
+        .where(eq(this.schema.organizations.id, organizationId));
+      return true;
+    });
+  }
+
   listOtherOwnedCurrencies({
     userId,
     organizationId,
@@ -565,6 +581,7 @@ export class BillingRepository extends BaseTableRepository<
           currency: this.schema.organizations.currency,
           stripeCustomerId: this.schema.organizations.stripeCustomerId,
           stripeSandboxCustomerId: this.schema.organizations.stripeSandboxCustomerId,
+          billingExempt: this.schema.organizations.billingExempt,
         })
         .from(this.schema.organizations)
         .where(where)
@@ -588,6 +605,7 @@ export class BillingRepository extends BaseTableRepository<
         defaultTrialDays: organization.currency
           ? (this.trialPlanFor(organization.currency)?.freeTrial?.days ?? null)
           : null,
+        billingExempt: organization.billingExempt,
         openSubscription: Boolean(
           subscription.value && OPEN_STATUSES.includes(subscription.value.status)
         ),

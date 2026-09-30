@@ -1,4 +1,14 @@
-import { Button, Chip, Input, Label, ListBox, Modal, Select, TextField } from "@heroui/react";
+import {
+  Button,
+  Chip,
+  Input,
+  Label,
+  ListBox,
+  Modal,
+  Select,
+  Switch,
+  TextField,
+} from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { type BillingCoupon, MAX_TRIAL_DAYS } from "@m5kdev/commons/modules/billing/billing.schema";
 import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
@@ -25,7 +35,15 @@ type ListBillingAdminOutput =
 type BillingAdminDialog =
   | { kind: "currency"; row: BillingAdminRow }
   | { kind: "subscription"; row: BillingAdminRow }
-  | { kind: "coupon"; row: BillingAdminRow };
+  | { kind: "coupon"; row: BillingAdminRow }
+  | { kind: "clearExempt"; row: BillingAdminRow };
+
+const ACCESS_STATUSES = new Set(["active", "trialing", "past_due"]);
+
+function hasAccessStatus(row: BillingAdminRow): boolean {
+  const status = row.subscription?.status;
+  return Boolean(status && ACCESS_STATUSES.has(status));
+}
 
 interface PriceOption {
   readonly priceId: string;
@@ -158,6 +176,11 @@ export function BillingAdminPage({ plans }: { plans: readonly StripePlan[] }): R
       mutationOptions("web-ui:billing.admin.cancelSuccess")
     )
   );
+  const setExempt = useMutation(
+    trpc.billing.setAdminBillingExempt.mutationOptions(
+      mutationOptions("web-ui:billing.admin.skipCheckSuccess")
+    )
+  );
 
   const openDialog = (next: BillingAdminDialog): void => {
     setCurrency(currencies[0] ?? "");
@@ -176,6 +199,33 @@ export function BillingAdminPage({ plans }: { plans: readonly StripePlan[] }): R
       id: "organizationName",
       accessorKey: "organizationName",
       header: t("web-ui:billing.admin.organization"),
+    },
+    {
+      id: "billingExempt",
+      header: t("web-ui:billing.admin.skipCheck"),
+      cell: ({ row }) => {
+        const item = row.original;
+        return (
+          <Switch
+            isSelected={item.billingExempt}
+            isDisabled={setExempt.isPending}
+            onChange={(next) => {
+              if (!next && !hasAccessStatus(item)) {
+                openDialog({ kind: "clearExempt", row: item });
+                return;
+              }
+              setExempt.mutate({
+                organizationId: item.organizationId,
+                billingExempt: next,
+              });
+            }}
+          >
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+          </Switch>
+        );
+      },
     },
     {
       id: "stripeCustomerId",
@@ -313,6 +363,10 @@ export function BillingAdminPage({ plans }: { plans: readonly StripePlan[] }): R
       if (currency) setCurrencyMutation.mutate({ organizationId, currency });
       return;
     }
+    if (dialog.kind === "clearExempt") {
+      setExempt.mutate({ organizationId, billingExempt: false });
+      return;
+    }
     if (dialog.kind === "subscription") {
       if (!priceId) return;
       createSubscription.mutate({
@@ -329,12 +383,14 @@ export function BillingAdminPage({ plans }: { plans: readonly StripePlan[] }): R
   const isConfirmDisabled =
     dialog?.kind === "currency"
       ? !currency || setCurrencyMutation.isPending
-      : dialog?.kind === "subscription"
-        ? !priceId ||
-          createSubscription.isPending ||
-          (start === "trial" && !trialDaysValid) ||
-          (start === "coupon" && !couponId)
-        : !couponId || applyCoupon.isPending;
+      : dialog?.kind === "clearExempt"
+        ? setExempt.isPending
+        : dialog?.kind === "subscription"
+          ? !priceId ||
+            createSubscription.isPending ||
+            (start === "trial" && !trialDaysValid) ||
+            (start === "coupon" && !couponId)
+          : !couponId || applyCoupon.isPending;
 
   const couponOptions = coupons.map((coupon) => ({
     id: coupon.id,
@@ -373,10 +429,15 @@ export function BillingAdminPage({ plans }: { plans: readonly StripePlan[] }): R
                     ? t("web-ui:billing.admin.setCurrency")
                     : dialog?.kind === "subscription"
                       ? t("web-ui:billing.admin.createSubscription")
-                      : t("web-ui:billing.admin.applyCoupon")}
+                      : dialog?.kind === "clearExempt"
+                        ? t("web-ui:billing.admin.skipCheckOffTitle")
+                        : t("web-ui:billing.admin.applyCoupon")}
                 </Modal.Heading>
               </Modal.Header>
               <Modal.Body className="space-y-4">
+                {dialog?.kind === "clearExempt" ? (
+                  <p className="text-sm">{t("web-ui:billing.admin.skipCheckOffWarn")}</p>
+                ) : null}
                 {dialog?.kind === "currency" ? (
                   <Select
                     aria-label={t("web-ui:billing.admin.currency")}

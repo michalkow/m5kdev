@@ -617,6 +617,12 @@ export function createBetterAuth<
                 defaultValue: null,
                 input: false,
               },
+              billingExempt: {
+                type: "boolean",
+                required: false,
+                defaultValue: false,
+                input: false,
+              },
             },
           },
         },

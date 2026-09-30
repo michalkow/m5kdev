@@ -3,6 +3,8 @@ import type { BillingSchema } from "@m5kdev/commons/modules/billing/billing.sche
 import { useQuery } from "@tanstack/react-query";
 import { createContext } from "react";
 import { useAppTRPC } from "../../app/hooks/useAppTrpc";
+import { useSession } from "../../auth/hooks/useSession";
+import { useUserOrganizations } from "../../auth/hooks/useUserOrganizations";
 
 export const billingProviderContext = createContext<{
   isLoading: boolean;
@@ -22,13 +24,22 @@ export function BillingProvider({
   loader?: React.ReactNode;
   planPage: React.ReactNode;
   skipPlanCheck?: boolean;
-}) {
+}): React.ReactNode {
   const trpc = useAppTRPC<BackendTRPCRouter>();
+  const { data: session } = useSession();
+  const organizations = useUserOrganizations();
+  const billingExempt = Boolean(
+    organizations.data?.find(
+      (organization) => organization.id === session?.session.activeOrganizationId
+    )?.billingExempt
+  );
+  const skipSubscriptionQuery =
+    skipPlanCheck || organizations.isLoading || billingExempt;
 
   const { data: activeSubscription, isLoading } = useQuery(
     trpc.billing.getActiveSubscription.queryOptions(undefined, {
       staleTime: 1000 * 60 * 60 * 4, // 4 hours
-      enabled: !skipPlanCheck,
+      enabled: !skipSubscriptionQuery,
     })
   );
 
@@ -40,7 +51,18 @@ export function BillingProvider({
     );
   }
 
-  // Show loading screen while checking subscription status
+  if (organizations.isLoading) {
+    return loader ? loader : "Loading...";
+  }
+
+  if (billingExempt) {
+    return (
+      <billingProviderContext.Provider value={{ isLoading: false, data: null }}>
+        {children}
+      </billingProviderContext.Provider>
+    );
+  }
+
   if (isLoading) {
     return loader ? loader : "Loading...";
   }

@@ -286,7 +286,7 @@ _Avoid_: User as Customer; `users.stripeCustomerId`; one id shared across live a
 
 **Coupon**:
 A Stripe Coupon already in the Stripe account (percent or amount off, duration). AdminActor applies at most one onto an Organization Subscription. Not Trial. Not a $0 Price. Not a Promotion Code. See [ADR-0022](docs/adr/0022-complimentary-billing-admin.md).
-_Avoid_: Complimentary; Trial; free Subscription as a Kernel grant; paywall bypass; customer-facing promo on the Plan page; Kernel-created Coupon catalog
+_Avoid_: Complimentary; Trial; free Subscription as a Kernel grant; paywall bypass (that is billingExempt); customer-facing promo on the Plan page; Kernel-created Coupon catalog
 
 **Checkout**:
 Stripe-hosted start of a Subscription when the Organization has none. When Trial requires a payment method, Checkout starts Trial on the Trial Price (default or picked) and collects the card; there is no access until it completes. When Trial does not require a card, Checkout is not used to start Trial.
@@ -297,11 +297,15 @@ Stripe-hosted management of an existing paid Subscription (Plan, interval, payme
 _Avoid_: Checkout; in-app Plan switch after paid; collecting the first card when no Subscription exists (that is Checkout)
 
 **Seat billing**:
-An app-level switch on `StripePlansConfig`. On: Stripe quantity is the count of billable Memberships, and Trial requires `freeTrial.seats` as that cap. Off (the default): quantity is one, Trial has no seat count, Membership count is not a billing check.
+An app-level switch on `StripePlansConfig`. On: Stripe quantity is the count of billable Memberships, and Trial requires `freeTrial.seats` as that cap. Off (the default): quantity is one, Trial has no seat count, Membership count is not a billing check. A billingExempt Organization skips Seat billing entirely.
 _Avoid_: usage/metered billing; mixing on and off across Plans; billed Memberships when the switch is off; Seat as a synonym for Membership
 
+**billingExempt**:
+An Organization boolean. When true, that Organization is exempt from the paywall and from Seat billing. AdminActor sets it on Billing Module admin; new Organizations start false; children do not inherit. See [ADR-0023](docs/adr/0023-organization-billing-exempt.md).
+_Avoid_: skipPlanCheck (that is the app-wide BillingProvider override); skip subscription check as the Kernel noun; grandfathered; Coupon as the bypass; stuffing this into Organization flags
+
 **Subscription**:
-Local row re-synced from Stripe; Stripe is the source of truth. The billed party is the Organization, not a User. Stamp MemberId for attribution; do not key billing by UserId. Access while status is `active`, `trialing`, or `past_due`. See [ADR-0017](docs/adr/0017-billing-org-paywall-seat-billing-opt-in.md).
+Local row re-synced from Stripe; Stripe is the source of truth. The billed party is the Organization, not a User. Stamp MemberId for attribution; do not key billing by UserId. Access while status is `active`, `trialing`, or `past_due`, or while the Organization is billingExempt. See [ADR-0017](docs/adr/0017-billing-org-paywall-seat-billing-opt-in.md) and [ADR-0023](docs/adr/0023-organization-billing-exempt.md).
 _Avoid_: Plan, personal User subscription; Stripe customer linkage on the User
 
 **Tag**:

@@ -7,6 +7,7 @@ import {
   cancelAdminSubscriptionInputSchema,
   createAdminSubscriptionInputSchema,
   organizationIdInputSchema,
+  setAdminBillingExemptInputSchema,
   setOrganizationCurrencyInputSchema,
 } from "@m5kdev/commons/modules/billing/billing.schema";
 import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
@@ -50,6 +51,12 @@ export function createBillingTRPC(
       .input(setOrganizationCurrencyInputSchema)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await billingService.setAdminOrganizationCurrency(input, ctx));
+      }),
+
+    setAdminBillingExempt: adminProcedure
+      .input(setAdminBillingExemptInputSchema)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await billingService.setAdminBillingExempt(input, ctx));
       }),
 
     createAdminSubscription: adminProcedure

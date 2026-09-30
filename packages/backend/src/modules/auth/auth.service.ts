@@ -636,6 +636,7 @@ export class AuthService extends BasePermissionService<
             "onboarding",
             "locale",
             "currency",
+            "billingExempt",
           ],
         }
       );
@@ -756,6 +757,7 @@ export class AuthService extends BasePermissionService<
           "onboarding",
           "locale",
           "currency",
+          "billingExempt",
         ]
       );
       if (organization.isErr()) return err(organization.error);

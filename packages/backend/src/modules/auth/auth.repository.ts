@@ -392,6 +392,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
             onboarding: this.schema.organizations.onboarding,
             locale: this.schema.organizations.locale,
             currency: this.schema.organizations.currency,
+            billingExempt: this.schema.organizations.billingExempt,
             createdAt: this.schema.organizations.createdAt,
           })
           .from(this.schema.organizations)

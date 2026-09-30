@@ -142,6 +142,14 @@ ids and replace Complimentary admin calls with Coupon Procedures.
 
 - [Billing Coupons, sandbox Stripe Customer, and required catalog environment](/guides/v0.38.11-billing-coupon-sandbox-customer-migration)
 
+## Upgrading to 0.38.13 {#upgrade-0-38-13}
+
+Complete 0.38.11 first. Every app generates `organizations.billing_exempt`.
+Apps turning on paid billing for existing Organizations may run optional
+grandfather SQL; products already charging must not.
+
+- [Organization billingExempt overlay](/guides/v0.38.13-organization-billing-exempt-migration)
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module

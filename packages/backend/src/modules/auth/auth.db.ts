@@ -113,6 +113,7 @@ export const organizations = sqliteTable("organizations", {
   currency: text("currency"),
   stripeCustomerId: text("stripe_customer_id").unique(),
   stripeSandboxCustomerId: text("stripe_sandbox_customer_id").unique(),
+  billingExempt: integer("billing_exempt", { mode: "boolean" }).notNull().default(false),
 });
 
 export const members = sqliteTable(

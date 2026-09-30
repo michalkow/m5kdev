@@ -126,17 +126,22 @@ succeeds if Stripe is down; the paywall shows until a Subscription exists.
   includes `active`, `trialing`, and `past_due`.
 - `adjustBillableSeats` — Seat billing quantity (no-op when Seat billing is off).
 - `cancelOrganizationSubscription` — cancel in Stripe, keep the Customer.
-- AdminActor Billing Module admin (ADR-0022): list Organizations and Coupons,
+- AdminActor Billing Module admin (ADR-0022, ADR-0023): list Organizations and Coupons,
   create a Stripe Customer, set Organization currency when it is null, create a
   Subscription on a catalog Price with either a Trial (Admin-entered days,
   pre-filled from the Trial Plan's `freeTrial.days`) or a Coupon, apply /
   replace / remove one Coupon on an existing Subscription (Price unchanged),
-  and cancel. Without a payment method on the Customer, create requires a Trial
+  cancel, and toggle `billingExempt` (UI copy: Skip subscription check).
+  Without a payment method on the Customer, create requires a Trial
   or a 100%-off Coupon (Stripe cannot charge a first invoice without one). An
   Admin Trial ends like catalog Trial: Stripe cancels without a card. The page
   shows the catalog environment (Production / Sandbox).
   Coupons are listed from the Stripe account; create them in the Dashboard.
-  Removing a Coupon never cancels.
+  Removing a Coupon never cancels. `billingExempt` skips the paywall and Seat
+  billing for that Organization; new Organizations start false. Kernel does not
+  backfill. `BillingProvider` skips `getActiveSubscription` when
+  `skipPlanCheck` is true (whole app) or the active Organization is
+  `billingExempt`.
 - `constructEvent`, `processEvent`, `syncStripeData` — webhook verify and re-sync.
   A failed invoice stays `past_due` with access, with or without a payment
   method; AdminActor cancel is the cutoff.
@@ -171,10 +176,11 @@ AdminActor is not in that Organization.
 
 | Procedure | Description |
 | --- | --- |
-| `billing.listAdminOrganizationBilling` | Catalog `environment` plus Organizations with Stripe Customer, currency, default Trial days, Subscription, and Coupon |
+| `billing.listAdminOrganizationBilling` | Catalog `environment` plus Organizations with Stripe Customer, currency, default Trial days, `billingExempt`, Subscription, and Coupon |
 | `billing.listAdminCoupons` | Valid Coupons in the Stripe account |
 | `billing.createAdminCustomer` | Create the Stripe Customer when missing (Owner email) |
 | `billing.setAdminOrganizationCurrency` | Set currency only when it is null (owned-Organization lock applies) |
+| `billing.setAdminBillingExempt` | Set `billingExempt` (Skip subscription check). Does not require a Subscription |
 | `billing.createAdminSubscription` | Catalog Price plus a Trial (`trialDays`) or a Coupon (`couponId`) when there is no Subscription; no card requires one of them (Coupon at 100%) |
 | `billing.applyAdminCoupon` | Apply or replace the single Coupon on the Subscription |
 | `billing.removeAdminCoupon` | Clear the Coupon (never cancels) |
@@ -188,7 +194,9 @@ Wrap billing-aware routes in `BillingProvider` and read state with
 and `BillingBetaPage`. Pass Organization currency (frozen at create). When Trial
 requires a payment method, pass `trialRequiresPaymentMethod` and the resolved
 Trial Plan name so the Plan page Checkouts that Plan (default Price skips the
-interval picker). `skipPlanCheck` still bypasses the paywall.
+interval picker). `skipPlanCheck` still bypasses the paywall for the whole app
+and ignores `billingExempt`. An exempt Organization also skips the subscription
+query.
 
 The Admin panel keeps Users / Organizations / Waitlist. Pass optional
 `extraLinks` and `extraRoutes` on `AuthAdminRouter` so Module admin hangs off
@@ -216,8 +224,10 @@ constructed in app code with your secret key. Include
 
 - [Organization Stripe paywall and opt-in Seat billing in 0.38.0](/guides/v0.38.0-billing-org-paywall-migration)
 - [Billing Coupons, sandbox Stripe Customer, and required catalog environment in 0.38.11](/guides/v0.38.11-billing-coupon-sandbox-customer-migration)
+- [Organization billingExempt overlay in 0.38.13](/guides/v0.38.13-organization-billing-exempt-migration)
 - [N Prices, frozen Organization currency, and Trial Price at start in 0.38.9](/guides/v0.38.9-billing-trial-price-catalog-migration)
 - [Billing trial-ending email in 0.34.0](/guides/v0.34.0-billing-trial-ending-email-migration)
 - [Email Core Module](/modules/email)
 - ADR-0021 (`docs/adr/0021-admin-panel-sidecar-module-admin.md`)
 - ADR-0022 (`docs/adr/0022-complimentary-billing-admin.md`)
+- ADR-0023 (`docs/adr/0023-organization-billing-exempt.md`)

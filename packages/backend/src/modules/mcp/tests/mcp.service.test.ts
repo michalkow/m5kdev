@@ -63,7 +63,8 @@ async function createTables(client: Client): Promise<void> {
       locale TEXT,
       currency TEXT,
       stripe_customer_id TEXT UNIQUE,
-      stripe_sandbox_customer_id TEXT UNIQUE
+      stripe_sandbox_customer_id TEXT UNIQUE,
+      billing_exempt INTEGER NOT NULL DEFAULT 0
     );
   `);
   await client.execute(`

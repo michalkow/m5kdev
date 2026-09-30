@@ -65,6 +65,11 @@ export const setOrganizationCurrencyInputSchema = z.object({
   currency: z.string(),
 });
 
+export const setAdminBillingExemptInputSchema = z.object({
+  organizationId: z.string(),
+  billingExempt: z.boolean(),
+});
+
 export const cancelAdminSubscriptionInputSchema = z.object({
   organizationId: z.string(),
   when: z.enum(["immediate", "period_end"]),
@@ -77,6 +82,7 @@ export const adminOrganizationBillingRowSchema = z.object({
   currency: z.string().nullable(),
   stripeCustomerId: z.string().nullable(),
   defaultTrialDays: z.number().nullable(),
+  billingExempt: z.boolean(),
   openSubscription: z.boolean(),
   subscription: billingSchema.nullable(),
   coupon: billingCouponSchema.nullable(),
@@ -91,4 +97,5 @@ export const billingAdminListOutputSchema = queryListOutput(
 
 export type BillingCoupon = z.infer<typeof billingCouponSchema>;
 export type CreateAdminSubscriptionInput = z.infer<typeof createAdminSubscriptionInputSchema>;
+export type SetAdminBillingExemptInput = z.infer<typeof setAdminBillingExemptInputSchema>;
 export type AdminOrganizationBillingRow = z.infer<typeof adminOrganizationBillingRowSchema>;
