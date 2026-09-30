@@ -9,6 +9,16 @@
 - Table filter operators such as Equals, One Of, and Is Empty follow the active locale.
 - Language pickers show each language in its native name, so Polish stays Polski regardless of the UI language.
 
+## 0.38.13
+
+### Patch Changes
+
+- AdminActor can set Organization `billingExempt` (Skip subscription check) so that Organization skips the paywall and Seat billing while it migrates onto paid billing; new Organizations start false and Kernel does not backfill.
+  BillingProvider skips `getActiveSubscription` when the active Organization is exempt; `skipPlanCheck` still skips the whole app.
+- Updated dependencies
+  - @m5kdev/commons@0.38.13
+  - @m5kdev/frontend@0.38.13
+
 ## 0.38.12
 
 ### Patch Changes
