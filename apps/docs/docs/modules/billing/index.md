@@ -119,7 +119,8 @@ succeeds if Stripe is down; the paywall shows until a Subscription exists.
 
 - `createOrganizationHook` — Stripe Customer on the Organization; optional Trial on the default Price for Organization currency when a card is not required.
 - `createCheckoutSession` / `createBillingPortalSession` — Stripe-hosted flows
-  (Owner only; Checkout refused while an open Subscription exists). When Trial
+  (Owner only; Checkout refused while an open Subscription exists in this
+  environment). When Trial
   requires a payment method, Checkout sets `trial_period_days` and
   `payment_method_collection: always`.
 - `getActiveSubscription`, `listInvoices` — Organization-scoped reads. Access

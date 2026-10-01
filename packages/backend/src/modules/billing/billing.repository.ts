@@ -16,7 +16,7 @@ import {
 } from "@m5kdev/commons/modules/billing/billing.utils";
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { InferSelectModel } from "drizzle-orm";
-import { and, count, desc, eq, inArray, isNull, like, ne } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, like, ne, type SQL } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import type { Stripe } from "stripe";
@@ -416,17 +416,19 @@ export class BillingRepository extends BaseTableRepository<
     });
   }
 
+  private currentEnvironmentWhere(referenceId: string): SQL | undefined {
+    return and(
+      eq(this.schema.subscriptions.referenceId, referenceId),
+      eq(this.schema.subscriptions.environment, this.environment)
+    );
+  }
+
   async getLatestSubscription(referenceId: string): ServerResultAsync<BillingSchema | null> {
     const subscriptionsResult = await this.throwableQuery(() =>
       this.orm
         .select()
         .from(this.schema.subscriptions)
-        .where(
-          and(
-            eq(this.schema.subscriptions.referenceId, referenceId),
-            eq(this.schema.subscriptions.environment, this.environment)
-          )
-        )
+        .where(this.currentEnvironmentWhere(referenceId))
         .orderBy(desc(this.schema.subscriptions.createdAt))
         .limit(1)
     );
@@ -441,8 +443,7 @@ export class BillingRepository extends BaseTableRepository<
         .from(this.schema.subscriptions)
         .where(
           and(
-            eq(this.schema.subscriptions.referenceId, referenceId),
-            eq(this.schema.subscriptions.environment, this.environment),
+            this.currentEnvironmentWhere(referenceId),
             inArray(this.schema.subscriptions.status, [...ACCESS_STATUSES])
           )
         )
@@ -460,8 +461,7 @@ export class BillingRepository extends BaseTableRepository<
         .from(this.schema.subscriptions)
         .where(
           and(
-            eq(this.schema.subscriptions.referenceId, referenceId),
-            eq(this.schema.subscriptions.environment, this.environment),
+            this.currentEnvironmentWhere(referenceId),
             inArray(this.schema.subscriptions.status, [...OPEN_STATUSES])
           )
         )
@@ -754,9 +754,9 @@ export class BillingRepository extends BaseTableRepository<
 
     if (existingByStripeId.value) {
       const existing = existingByStripeId.value;
-      const otherEnvironment =
-        existing.environment != null && existing.environment !== this.environment;
-      if (!otherEnvironment) {
+      const canClaimForThisEnvironment =
+        existing.environment == null || existing.environment === this.environment;
+      if (canClaimForThisEnvironment) {
         const updateResult = await this.throwableQuery(() =>
           this.orm
             .update(this.schema.subscriptions)

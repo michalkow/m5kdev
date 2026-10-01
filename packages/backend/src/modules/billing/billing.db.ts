@@ -1,3 +1,4 @@
+import type { StripeEnvironment } from "@m5kdev/commons/modules/billing/billing.types";
 import { sql } from "drizzle-orm";
 import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
@@ -12,7 +13,7 @@ export const subscriptions = sqliteTable(
     updatedAt: integer("updated_at", { mode: "timestamp" }),
     plan: text("plan").notNull(),
     referenceId: text("reference_id").notNull(),
-    environment: text("environment"),
+    environment: text("environment").$type<StripeEnvironment>(),
     stripeCustomerId: text("stripe_customer_id"),
     stripeSubscriptionId: text("stripe_subscription_id"),
     status: text("status").notNull(),

@@ -437,9 +437,13 @@ async function createTables(client: Client): Promise<void> {
       member_id TEXT,
       trial_start INTEGER,
       trial_end INTEGER,
-      environment TEXT,
-      UNIQUE (reference_id, environment)
+      environment TEXT
     );
+  `);
+  await client.execute(`
+    CREATE UNIQUE INDEX subscriptions_reference_environment_unique
+    ON subscriptions (reference_id, environment)
+    WHERE environment IS NOT NULL;
   `);
 }
 
@@ -2384,6 +2388,13 @@ describe("BillingService Billing Module admin", () => {
     expect((await production.getActiveSubscription(memberCtx()))._unsafeUnwrap()?.status).toBe(
       "active"
     );
+
+    const sandboxListed = (
+      await sandbox.listAdminOrganizationBilling({}, adminCtx())
+    )._unsafeUnwrap();
+    expect(sandboxListed.rows[0]?.subscription?.id).not.toBe("sub_row_live");
+    expect(sandboxListed.rows[0]?.subscription?.environment).toBe("sandbox");
+    expect(sandboxListed.rows[0]?.subscription?.priceId).toBe(PRICE_ID);
   });
 
   it("allows production Checkout and Admin create while a sandbox Subscription is open", async () => {
@@ -2463,7 +2474,43 @@ describe("BillingService Billing Module admin", () => {
     const synced = await sandbox.syncStripeData({ customerId: CUSTOMER_ID });
     expect(synced.isOk()).toBe(true);
     const listed = (await sandbox.listAdminOrganizationBilling({}, adminCtx()))._unsafeUnwrap();
+    expect(listed.rows[0]?.subscription?.id).toBe("sub_row_orphan");
     expect(listed.rows[0]?.subscription?.environment).toBe("sandbox");
     expect(listed.rows[0]?.subscription?.stripeSubscriptionId).toBe("sub_trial");
+  });
+
+  it("does not overwrite a production Subscription when sandbox syncs Stripe", async () => {
+    await insertOrgSubscription(client, {
+      id: "sub_row_live",
+      environment: "production",
+      stripeCustomerId: CUSTOMER_ID,
+      stripeSubscriptionId: "sub_live",
+      status: "active",
+      priceId: PRICE_USD_QUARTER,
+    });
+    const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
+    await orm
+      .update(authTables.organizations)
+      .set({ stripeSandboxCustomerId: CUSTOMER_ID })
+      .where(eq(authTables.organizations.id, ORG_ID));
+    const stripe = createStripeStub({});
+    stripe.state.created = true;
+    const sandbox = await boot(stripe, { environment: "sandbox" });
+
+    const synced = await sandbox.syncStripeData({ customerId: CUSTOMER_ID });
+    expect(synced.isOk()).toBe(true);
+
+    const production = await boot(createStripeStub({}), { environment: "production" });
+    const listed = (await production.listAdminOrganizationBilling({}, adminCtx()))._unsafeUnwrap();
+    expect(listed.rows[0]?.subscription?.id).toBe("sub_row_live");
+    expect(listed.rows[0]?.subscription?.stripeSubscriptionId).toBe("sub_live");
+    expect(listed.rows[0]?.subscription?.status).toBe("active");
+    expect(listed.rows[0]?.subscription?.priceId).toBe(PRICE_USD_QUARTER);
+
+    const sandboxListed = (
+      await sandbox.listAdminOrganizationBilling({}, adminCtx())
+    )._unsafeUnwrap();
+    expect(sandboxListed.rows[0]?.subscription?.stripeSubscriptionId).toBe("sub_trial");
+    expect(sandboxListed.rows[0]?.subscription?.environment).toBe("sandbox");
   });
 });
