@@ -7,7 +7,12 @@ import { mergeManagedCatalog } from "./catalog";
 import { ChangeSet, findRepositorySymlink } from "./changes";
 import { collectTemplateFiles } from "./fs";
 import { createManagedState, type ManagedState, sha256 } from "./state";
-import { getExcludedFeaturePaths, getTemplateFilePolicy, loadTemplateManifest } from "./template";
+import {
+  getExcludedFeaturePaths,
+  getTemplateFilePolicy,
+  loadTemplateManifest,
+  withImpliedFeatures,
+} from "./template";
 import type { RenderedTemplateFile, TemplateContext } from "./types";
 
 const execFileAsync = promisify(execFile);
@@ -44,7 +49,7 @@ async function renderForState(
   manifest: ReturnType<typeof loadTemplateManifest>;
 }> {
   const manifest = loadTemplateManifest(templateRoot);
-  const enabledFeatures = new Set(state.template.features);
+  const enabledFeatures = withImpliedFeatures(new Set(state.template.features));
   return {
     manifest,
     files: await collectTemplateFiles(templateRoot, toTemplateContext(state), {
@@ -103,10 +108,9 @@ export async function reconcileTemplates(options: {
 }): Promise<ReconcileResult> {
   const changes = new ChangeSet(options.repoRoot);
   const target = await renderForState(options.targetTemplateRoot, options.state);
-  const enabledFeatures = new Set(options.state.template.features);
   const targetState = createManagedState({
     templateVersion: options.targetVersion,
-    enabledFeatures,
+    enabledFeatures: new Set(options.state.template.features),
     context: toTemplateContext(options.state),
     renderedFiles: target.files,
     manifest: target.manifest,

@@ -12,7 +12,12 @@ import { getTemplateRoot } from "./paths";
 import { resolveCreateCommandOptions } from "./prompts";
 import { createManagedState, getCliVersion, writeManagedState } from "./state";
 import { createBetterAuthSecret, derivePackageScope, slugifyAppName } from "./strings";
-import { getEnabledFeatures, getExcludedFeaturePaths, loadTemplateManifest } from "./template";
+import {
+  getEnabledFeatures,
+  getExcludedFeaturePaths,
+  loadTemplateManifest,
+  withImpliedFeatures,
+} from "./template";
 import type { CreateCommandOptions, TemplateContext } from "./types";
 
 export interface ScaffoldResult {
@@ -41,23 +46,30 @@ export async function scaffoldProject(
     betterAuthSecret: createBetterAuthSecret(),
   };
 
+  const platform = options.platform ?? "web";
+  if (platform === "landing" && options.testHarness) {
+    throw new Error(
+      "The e2e test harness requires a Webapp. Do not pass --with-test-harness with --platform landing."
+    );
+  }
   const enabledFeatures = getEnabledFeatures({
-    platform: options.platform ?? "web",
+    platform,
     testHarness: Boolean(options.testHarness),
     modules: options.modules ?? [],
   });
   const manifest = loadTemplateManifest(templateDirectory);
+  const templateFeatures = withImpliedFeatures(enabledFeatures);
   const excludePrefixes = getExcludedFeaturePaths(manifest, enabledFeatures);
 
   const createdTargetDirectory = await ensureDirectoryState(targetDirectory, options.force);
   try {
     await copyTemplateDirectory(templateDirectory, targetDirectory, context, {
       excludePrefixes,
-      enabledFeatures,
+      enabledFeatures: templateFeatures,
     });
     const renderedFiles = await collectTemplateFiles(templateDirectory, context, {
       excludePrefixes,
-      enabledFeatures,
+      enabledFeatures: templateFeatures,
     });
     await writeManagedState(
       targetDirectory,

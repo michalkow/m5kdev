@@ -16,7 +16,7 @@ import { createDiagnosticReport, type Diagnostic, type DiagnosticReport } from "
 import { getPendingMigrations, runMigrationValidators } from "./migrations/registry";
 import { getTemplateRoot } from "./paths";
 import { getCliVersion, type ManagedState, readManagedState, sha256 } from "./state";
-import { loadTemplateManifest } from "./template";
+import { hasProductStack, loadTemplateManifest } from "./template";
 
 const execFileAsync = promisify(execFile);
 const FULL_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
@@ -105,6 +105,11 @@ export async function diagnoseManagedRepo(options: DoctorOptions): Promise<Diagn
     seenFeatures.add(feature);
   }
   const requiredPaths = new Set(manifest.requiredPaths);
+  if (hasProductStack(state.template.features)) {
+    requiredPaths.add("apps/shared/package.json");
+    requiredPaths.add("apps/server/package.json");
+    requiredPaths.add("apps/email/package.json");
+  }
   if (state.template.features.includes("webapp")) requiredPaths.add("apps/webapp/package.json");
   if (state.template.features.includes("expo")) requiredPaths.add("apps/expo/package.json");
   if (state.template.features.includes("test-harness")) requiredPaths.add("apps/e2e/package.json");

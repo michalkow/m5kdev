@@ -27,9 +27,14 @@ async function promptValue(question: string, fallback?: string): Promise<string>
   }
 }
 
-function parsePlatform(value: string): AppPlatform | undefined {
+export function parsePlatform(value: string): AppPlatform | undefined {
   const normalized = value.trim().toLowerCase();
-  if (normalized === "web" || normalized === "expo" || normalized === "both") {
+  if (
+    normalized === "web" ||
+    normalized === "expo" ||
+    normalized === "both" ||
+    normalized === "landing"
+  ) {
     return normalized;
   }
   return undefined;
@@ -103,15 +108,45 @@ export async function resolveCreateCommandOptions(
     if (resolved.yes) {
       resolved.platform = "web";
     } else {
-      const answer = await promptValue("App platform — web, expo, or both", "web");
+      const answer = await promptValue("App platform — web, expo, both, or landing", "web");
       const platform = parsePlatform(answer);
       if (!platform) {
-        throw new Error(`Invalid platform "${answer}". Use web, expo, or both.`);
+        throw new Error(`Invalid platform "${answer}". Use web, expo, both, or landing.`);
       }
       resolved.platform = platform;
     }
   }
 
+  if (resolved.platform === "landing") {
+    if (resolved.testHarness) {
+      throw new Error(
+        "The e2e test harness requires a Webapp. Do not pass --with-test-harness with --platform landing."
+      );
+    }
+    resolved.testHarness = false;
+    resolved.modules = resolved.modules ?? [];
+    return resolved;
+  }
+
+  if (resolved.testHarness === undefined || resolved.modules === undefined) {
+    const extras = await resolveHarnessAndModuleOptions({
+      yes: Boolean(resolved.yes),
+      testHarness: resolved.testHarness,
+      modules: resolved.modules,
+    });
+    resolved.testHarness = extras.testHarness;
+    resolved.modules = extras.modules;
+  }
+
+  return resolved;
+}
+
+export async function resolveHarnessAndModuleOptions(options: {
+  yes: boolean;
+  testHarness?: boolean;
+  modules?: string[];
+}): Promise<{ testHarness: boolean; modules: string[] }> {
+  const resolved = { ...options };
   if (resolved.testHarness === undefined) {
     requireInteractive(resolved.yes);
     if (resolved.yes) {
@@ -121,7 +156,6 @@ export async function resolveCreateCommandOptions(
       resolved.testHarness = /^y(es)?$/i.test(answer.trim());
     }
   }
-
   if (resolved.modules === undefined) {
     requireInteractive(resolved.yes);
     if (resolved.yes) {
@@ -132,8 +166,7 @@ export async function resolveCreateCommandOptions(
       resolved.modules = parseBackendModulesAnswer({ answer, choices });
     }
   }
-
-  return resolved;
+  return { testHarness: Boolean(resolved.testHarness), modules: resolved.modules ?? [] };
 }
 
 function pathBaseName(value: string): string {

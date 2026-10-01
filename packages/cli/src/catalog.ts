@@ -32,8 +32,19 @@ export function walkPackageJsonFiles(directory: string, out: string[] = []): str
   return out;
 }
 
+export function stripFeatureMarkerLines(source: string): string {
+  return source
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .filter((line) => !/^[ \t]*(?:\/\/|#)[ \t]*m5k:[a-z-]+:(start|end)[ \t]*$/.test(line))
+    .join("\n");
+}
+
 function readJson(filePath: string): Record<string, unknown> {
-  return JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>;
+  return JSON.parse(stripFeatureMarkerLines(fs.readFileSync(filePath, "utf8"))) as Record<
+    string,
+    unknown
+  >;
 }
 
 function asCatalog(value: Record<string, string | number> | undefined): ConsumerCatalog {

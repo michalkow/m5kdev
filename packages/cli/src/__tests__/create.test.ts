@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { scaffoldProject } from "../create";
+import { diagnoseManagedRepo } from "../doctor";
 import * as fsHelpers from "../fs";
 
 describe("scaffoldProject", () => {
@@ -978,6 +979,11 @@ describe("scaffoldProject", () => {
       );
       expect(landingPackage).toContain(`"name": "${result.context.packageScope}/landing"`);
       await expect(
+        fs.stat(path.join(result.targetDirectory, "apps/landing/.env"))
+      ).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+      await expect(
         fs.stat(path.join(result.targetDirectory, "apps/landing/.dockerignore"))
       ).rejects.toMatchObject({ code: "ENOENT" });
 
@@ -1029,7 +1035,8 @@ describe("scaffoldProject", () => {
         path.join(result.targetDirectory, "apps/landing/src/LandingPage.tsx"),
         "utf8"
       );
-      expect(landingPage).toContain("VITE_APP_URL");
+      expect(landingPage).not.toContain("VITE_APP_URL");
+      expect(landingPage).not.toContain("Open app");
       expect(landingPage).toContain('from "@heroui/react"');
     }
 
@@ -1053,6 +1060,97 @@ describe("scaffoldProject", () => {
     expect(expoAppTs).not.toContain("WorkflowModule");
     expect(expoAppTs).not.toContain("AIModule");
     expect(expoAppTs).not.toContain("m5k:");
+  });
+
+  it("scaffolds landing-only without a Kernel, Webapp, or Expo", async () => {
+    const result = await scaffoldProject({
+      targetDirectory: "landing-only",
+      appName: "Landing Only",
+      appDescription: "Public site fixture.",
+      platform: "landing",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "apps/landing/package.json"))
+    ).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(result.targetDirectory, "apps/server"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(fs.stat(path.join(result.targetDirectory, "apps/webapp"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(fs.stat(path.join(result.targetDirectory, "apps/expo"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(fs.stat(path.join(result.targetDirectory, "apps/email"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(fs.stat(path.join(result.targetDirectory, "apps/shared"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+
+    const rootPackage = JSON.parse(
+      await fs.readFile(path.join(result.targetDirectory, "package.json"), "utf8")
+    ) as { scripts?: Record<string, string>; devDependencies?: Record<string, string> };
+    expect(rootPackage.scripts?.["landing:deploy"]).toContain("apps/landing/fly.toml");
+    expect(rootPackage.scripts?.["app:deploy"]).toBeUndefined();
+    expect(rootPackage.scripts?.["app:secrets"]).toBeUndefined();
+    expect(rootPackage.devDependencies?.["@m5kdev/backend"]).toBe("catalog:m5kdev");
+
+    const landingEnv = await fs.readFile(
+      path.join(result.targetDirectory, "apps/landing/.env"),
+      "utf8"
+    );
+    expect(landingEnv).toContain("VITE_APP_NAME=Landing Only");
+
+    const landingVite = await fs.readFile(
+      path.join(result.targetDirectory, "apps/landing/vite.config.ts"),
+      "utf8"
+    );
+    expect(landingVite).not.toContain("envDir");
+    expect(landingVite).not.toContain("m5k:");
+
+    const landingPage = await fs.readFile(
+      path.join(result.targetDirectory, "apps/landing/src/LandingPage.tsx"),
+      "utf8"
+    );
+    expect(landingPage).not.toContain("VITE_APP_URL");
+    expect(landingPage).not.toContain("Open app");
+    expect(landingPage).toContain("Landing Only");
+
+    const readme = await fs.readFile(path.join(result.targetDirectory, "README.md"), "utf8");
+    expect(readme).not.toContain("apps/webapp");
+    expect(readme).not.toContain("apps/server");
+    expect(readme).not.toContain("app:deploy");
+    expect(readme).toContain("apps/landing");
+
+    const source = await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8");
+    const state = JSON.parse(source) as {
+      template: { features: string[] };
+      catalog: Record<string, string>;
+    };
+    expect(state.template.features).toEqual([]);
+    expect(state.catalog).not.toHaveProperty("react-native-web");
+  });
+
+  it("refuses a test harness on landing-only create", async () => {
+    await expect(
+      scaffoldProject({
+        targetDirectory: "landing-harness",
+        appName: "Landing Harness",
+        appDescription: "Harness should be refused.",
+        platform: "landing",
+        testHarness: true,
+        yes: true,
+        force: false,
+        skipInstall: true,
+        skipGit: true,
+      })
+    ).rejects.toThrow(/test harness/i);
   });
 
   it("refuses to overwrite a non-empty directory without force", async () => {
@@ -1116,5 +1214,235 @@ describe("scaffoldProject", () => {
     ).rejects.toThrow("scaffold failed");
 
     await expect(fs.readFile(path.join(occupied, "keep-me.txt"), "utf8")).resolves.toBe("precious");
+  });
+});
+
+describe("landing-only platform upgrade", () => {
+  let tempRoot = "";
+  let initialCwd = "";
+
+  beforeEach(async () => {
+    initialCwd = process.cwd();
+    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "m5kdev-cli-upgrade-"));
+    process.chdir(tempRoot);
+  });
+
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    process.chdir(initialCwd);
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  });
+
+  async function scaffoldLanding(directory: string) {
+    return scaffoldProject({
+      targetDirectory: directory,
+      appName: "Upgrade Desk",
+      appDescription: "Landing upgrade fixture.",
+      platform: "landing",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+  }
+
+  it("upgrades landing-only to web without replacing customized Landing sources", async () => {
+    const { updateManagedRepo } = await import("../update");
+    const result = await scaffoldLanding("upgrade-web");
+    const landingPagePath = path.join(result.targetDirectory, "apps/landing/src/LandingPage.tsx");
+    await fs.writeFile(
+      landingPagePath,
+      "export function LandingPage() { return <p>Custom pitch</p>; }\n"
+    );
+
+    const update = await updateManagedRepo({
+      repoRoot: result.targetDirectory,
+      dryRun: false,
+      skipInstall: true,
+      yes: true,
+      platform: "web",
+      assertClean: async () => undefined,
+      install: async () => undefined,
+    });
+    expect(update.applied).toBe(true);
+    expect(update.conflicts).toEqual([]);
+
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "apps/server/package.json"))
+    ).resolves.toBeTruthy();
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "apps/shared/package.json"))
+    ).resolves.toBeTruthy();
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "apps/email/package.json"))
+    ).resolves.toBeTruthy();
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "apps/webapp/package.json"))
+    ).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(result.targetDirectory, "apps/expo"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+
+    expect(await fs.readFile(landingPagePath, "utf8")).toContain("Custom pitch");
+
+    const sharedEnv = await fs.readFile(
+      path.join(result.targetDirectory, "apps/shared/.env"),
+      "utf8"
+    );
+    expect(sharedEnv).toContain("VITE_APP_NAME=Upgrade Desk");
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "apps/landing/.env"))
+    ).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+
+    const landingVite = await fs.readFile(
+      path.join(result.targetDirectory, "apps/landing/vite.config.ts"),
+      "utf8"
+    );
+    expect(landingVite).toContain('envDir: "../shared"');
+
+    const state = JSON.parse(
+      await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8")
+    ) as { template: { features: string[] } };
+    expect(state.template.features).toEqual(["webapp"]);
+
+    const report = await diagnoseManagedRepo({ repoRoot: result.targetDirectory });
+    expect(report.ok).toBe(true);
+  });
+
+  it("plans a landing-only to web upgrade without writing", async () => {
+    const { updateManagedRepo } = await import("../update");
+    const result = await scaffoldLanding("upgrade-dry-run");
+    const update = await updateManagedRepo({
+      repoRoot: result.targetDirectory,
+      dryRun: true,
+      skipInstall: true,
+      yes: true,
+      platform: "web",
+      assertClean: async () => undefined,
+    });
+    expect(update.applied).toBe(false);
+    expect(update.dryRun).toBe(true);
+    expect(update.changes.map((change) => `${change.kind}:${change.path}`)).toEqual(
+      expect.arrayContaining([
+        "add:apps/server/package.json",
+        "add:apps/shared/package.json",
+        "add:apps/email/package.json",
+        "add:apps/webapp/package.json",
+        "add:apps/shared/.env",
+      ])
+    );
+    await expect(fs.stat(path.join(result.targetDirectory, "apps/server"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("upgrades landing-only to expo without a Webapp", async () => {
+    const { updateManagedRepo } = await import("../update");
+    const result = await scaffoldLanding("upgrade-expo");
+    const update = await updateManagedRepo({
+      repoRoot: result.targetDirectory,
+      dryRun: false,
+      skipInstall: true,
+      yes: true,
+      platform: "expo",
+      assertClean: async () => undefined,
+      install: async () => undefined,
+    });
+    expect(update.applied).toBe(true);
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "apps/expo/package.json"))
+    ).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(result.targetDirectory, "apps/webapp"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "apps/server/package.json"))
+    ).resolves.toBeTruthy();
+  });
+
+  it("upgrades landing-only to both clients", async () => {
+    const { updateManagedRepo } = await import("../update");
+    const result = await scaffoldLanding("upgrade-both");
+    const update = await updateManagedRepo({
+      repoRoot: result.targetDirectory,
+      dryRun: false,
+      skipInstall: true,
+      yes: true,
+      platform: "both",
+      assertClean: async () => undefined,
+      install: async () => undefined,
+    });
+    expect(update.applied).toBe(true);
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "apps/webapp/package.json"))
+    ).resolves.toBeTruthy();
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "apps/expo/package.json"))
+    ).resolves.toBeTruthy();
+  });
+
+  it("refuses update --platform on an app that already has a Webapp", async () => {
+    const { updateManagedRepo } = await import("../update");
+    const web = await scaffoldProject({
+      targetDirectory: "already-web",
+      appName: "Already Web",
+      appDescription: "Already has a Webapp.",
+      platform: "web",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+    await expect(
+      updateManagedRepo({
+        repoRoot: web.targetDirectory,
+        dryRun: true,
+        skipInstall: true,
+        yes: true,
+        platform: "expo",
+        assertClean: async () => undefined,
+      })
+    ).rejects.toThrow(/landing-only/i);
+  });
+
+  it("refuses update --platform landing", async () => {
+    const { updateManagedRepo } = await import("../update");
+    const result = await scaffoldLanding("no-downgrade");
+    await expect(
+      updateManagedRepo({
+        repoRoot: result.targetDirectory,
+        dryRun: true,
+        skipInstall: true,
+        yes: true,
+        platform: "landing",
+        assertClean: async () => undefined,
+      })
+    ).rejects.toThrow(/landing/i);
+  });
+
+  it("refuses update --platform web on expo-only", async () => {
+    const { updateManagedRepo } = await import("../update");
+    const expo = await scaffoldProject({
+      targetDirectory: "already-expo",
+      appName: "Already Expo",
+      appDescription: "Expo-only fixture.",
+      platform: "expo",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+    await expect(
+      updateManagedRepo({
+        repoRoot: expo.targetDirectory,
+        dryRun: true,
+        skipInstall: true,
+        yes: true,
+        platform: "web",
+        assertClean: async () => undefined,
+      })
+    ).rejects.toThrow(/landing-only/i);
   });
 });

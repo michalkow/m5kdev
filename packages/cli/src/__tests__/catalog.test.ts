@@ -9,6 +9,7 @@ import {
   mergeManagedCatalog,
   readCatalog,
   renderConsumerWorkspace,
+  stripFeatureMarkerLines,
   walkPackageJsonFiles,
 } from "../catalog";
 
@@ -156,7 +157,10 @@ const DEPENDENCY_FIELDS = [
 ] as const;
 
 function readJson(filePath: string): Record<string, unknown> {
-  return JSON.parse(fs.readFileSync(filePath, "utf8")) as Record<string, unknown>;
+  return JSON.parse(stripFeatureMarkerLines(fs.readFileSync(filePath, "utf8"))) as Record<
+    string,
+    unknown
+  >;
 }
 
 function catalogSpecifierNames(files: readonly string[]): Set<string> {

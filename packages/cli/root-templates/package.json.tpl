@@ -8,8 +8,10 @@
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "check-types": "turbo run check-types",
+    // m5k:server:start
     "app:deploy": "m5kdev-fly-deploy --config apps/shared/fly.toml --dockerfile apps/shared/Dockerfile --env apps/shared/.env.production",
     "app:secrets": "m5kdev-fly-secrets --config apps/shared/fly.toml --env apps/shared/.env.production",
+    // m5k:server:end
     "landing:deploy": "m5kdev-fly-deploy --config apps/landing/fly.toml --dockerfile apps/landing/Dockerfile --env apps/landing/.env.production",
     "landing:secrets": "m5kdev-fly-secrets --config apps/landing/fly.toml --env apps/landing/.env.production"
   },

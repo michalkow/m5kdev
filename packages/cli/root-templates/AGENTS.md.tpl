@@ -8,12 +8,20 @@
 
 ## Repository Structure
 
+- `apps/landing` holds the public one-page site and its Fly adapter.
+// m5k:server:start
 - `apps/shared` holds shared Zod schemas, constants, and the product Deploy home.
 - `apps/server` holds the backend composition root, modules, auth wiring, and database scripts.
-- `apps/webapp` holds the React app shell, routes, providers, and the `posts` feature.
-- `apps/landing` holds the public one-page site and its Fly adapter.
 - `apps/email` holds the email templates used by auth flows and local email delivery.
+// m5k:server:end
+// m5k:webapp:start
+- `apps/webapp` holds the React app shell, routes, providers, and the `posts` feature.
+// m5k:webapp:end
+// m5k:expo:start
+- `apps/expo` holds the Expo (React Native) client.
+// m5k:expo:end
 
+// m5k:server:start
 ## Backend Conventions
 
 - Keep repository, service, and transport layers separate inside each module.
@@ -26,7 +34,9 @@
 - Renaming a dependency method, repackaging arguments, constructing a prompt, or forwarding actor/context data alone does not justify a service wrapper.
 - Do not create Drizzle migrations by hand. Use the scaffolded config and your project migration workflow later if you need generated migrations.
 - Server event: emit through Auth from Workflow job handlers (and similar background work) when the UI must refresh a change the triggering mutation did not return. See `.cursor/rules/server-event-emit.mdc`.
+// m5k:server:end
 
+// m5k:webapp:start
 ## Frontend Conventions
 
 - Keep the app shell shape: `NuqsAdapter` + `BrowserRouter` + `Providers`.
@@ -45,3 +55,5 @@
 - Forms are uncontrolled HeroUI `Form` + `TextField`/`TextArea` with native HTML validation (`isRequired`, `type`, `minLength`) and `FieldError`; read values from `FormData` on submit. Never add form libraries (react-hook-form, formik). Validation that HTML cannot express (e.g. confirm-password) happens in the submit handler.
 - All user-facing copy goes through i18next (`useTranslation`); keys live in `apps/webapp/translations/`.
 - The `posts` feature (`apps/webapp/src/modules/posts/`) is the reference implementation for these conventions; see `.cursor/rules/frontend-*.mdc` for the detailed guides.
+// m5k:webapp:end
+

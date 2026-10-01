@@ -11,7 +11,9 @@ This is a pnpm + Turborepo monorepo built on the **m5kdev framework**:
 - `@m5kdev/backend` — backend kernel: Express, Better Auth, Drizzle (LibSQL), and tRPC. Apps compose it via `createBackendApp(config, [modules])`.
 - `@m5kdev/commons` — shared runtime utilities and contracts.
 - `@m5kdev/config` — configuration loading and validation.
+// m5k:server:start
 - `@m5kdev/email` — email rendering and local delivery used by auth flows.
+// m5k:server:end
 // m5k:webapp:start
 - `@m5kdev/frontend` — framework-level React providers (`AppConfigProvider`, `AppTrpcQueryProvider`) and hooks.
 - `@m5kdev/web-ui` — web UI components built on HeroUI v3.
@@ -21,16 +23,20 @@ The framework owns the plumbing (auth, database wiring, tRPC composition, permis
 
 ## Workspace
 
+// m5k:server:start
 - `apps/shared` — shared Zod schemas, constants, and the `.env` file every app reads.
 - `apps/server` — backend composition root (`src/app.ts`), app modules (`src/modules/`), hand-registered table list (`src/schema.ts`), and Drizzle scripts.
+// m5k:server:end
 // m5k:webapp:start
 - `apps/webapp` — Vite + React 19 frontend: app shell, routes, providers, and feature modules.
 // m5k:webapp:end
 // m5k:expo:start
 - `apps/expo` — Expo (React Native) app sharing the same server and shared contracts.
 // m5k:expo:end
-- `apps/landing` — public one-page site (app name, pitch, CTA) with its own Dockerfile and `fly.toml`.
+- `apps/landing` — public one-page site (app name, pitch) with its own Dockerfile and `fly.toml`.
+// m5k:server:start
 - `apps/email` — email templates and the local delivery registry.
+// m5k:server:end
 // m5k:test-harness:start
 - `apps/e2e` — Playwright end-to-end tests; the server exposes a test-harness module for them.
 // m5k:test-harness:end
@@ -44,6 +50,7 @@ pnpm lint         # biome check
 pnpm lint:fix     # biome check --write
 pnpm check-types  # tsc --noEmit everywhere
 ```
+// m5k:server:start
 
 Database (Drizzle, run from the repo root):
 
@@ -62,7 +69,9 @@ End-to-end tests: `pnpm --filter ./apps/e2e test:e2e` (Playwright).
 // m5k:test-harness:end
 
 The local database is a LibSQL file; local auth emails are written to `apps/server/.emails`. Demo login: `admin@{{APP_SLUG}}.local` / `password1234`.
+// m5k:server:end
 
+// m5k:server:start
 ## Framework Architecture
 
 ### Backend: kernel + modules
@@ -131,3 +140,5 @@ The framework's detailed conventions live in `.cursor/rules/*.mdc`. Cursor appli
 // m5k:webapp:end
 
 `AGENTS.md` (repo root and per-app) carries a compact summary of the same conventions for other agents; this file plus the guides above are the authoritative version for Claude.
+// m5k:server:end
+

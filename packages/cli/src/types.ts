@@ -1,4 +1,4 @@
-export type AppPlatform = "web" | "expo" | "both";
+export type AppPlatform = "web" | "expo" | "both" | "landing";
 
 export interface PromptValues {
   targetDirectory?: string;

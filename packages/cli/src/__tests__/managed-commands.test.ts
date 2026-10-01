@@ -102,3 +102,46 @@ describe("managed repository commands", () => {
     );
   });
 });
+
+describe("landing-only managed repository commands", () => {
+  let tempRoot: string;
+  let initialCwd: string;
+  let repoRoot: string;
+
+  beforeEach(async () => {
+    initialCwd = process.cwd();
+    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "m5kdev-landing-managed-"));
+    process.chdir(tempRoot);
+    repoRoot = (
+      await scaffoldProject({
+        targetDirectory: "fixture",
+        appName: "Landing Fixture",
+        appDescription: "Landing-only managed fixture.",
+        platform: "landing",
+        yes: true,
+        force: false,
+        skipInstall: true,
+        skipGit: true,
+      })
+    ).targetDirectory;
+  });
+
+  afterEach(async () => {
+    process.chdir(initialCwd);
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  });
+
+  it("reports a landing-only scaffold as healthy without a server", async () => {
+    const report = await diagnoseManagedRepo({ repoRoot });
+    expect(report.ok).toBe(true);
+    expect(report.diagnostics.filter(({ severity }) => severity === "error")).toEqual([]);
+  });
+
+  it("initializes a landing-only tree without Deploy home constants", async () => {
+    await fs.rm(path.join(repoRoot, ".m5kdev.json"));
+    const result = await initializeManagedRepo({ repoRoot, yes: true, force: false });
+    expect(result.initialized).toBe(true);
+    expect(result.state.template.features).toEqual([]);
+    expect(result.state.template.context.appName.length).toBeGreaterThan(0);
+  });
+});

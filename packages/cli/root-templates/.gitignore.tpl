@@ -6,5 +6,6 @@ coverage
 *.db
 *.db-*
 apps/server/.emails
+apps/landing/.env
 apps/shared/.env
 **/.env.production

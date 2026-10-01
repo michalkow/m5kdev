@@ -88,6 +88,10 @@ const FEATURE_MANIFEST = {
       kind: "platform",
       paths: ["apps/expo/"],
     },
+    server: {
+      kind: "platform",
+      paths: ["apps/server/", "apps/email/", "apps/shared/"],
+    },
     billing: { kind: "module", label: "Billing", paths: [] },
     files: {
       kind: "module",
@@ -134,14 +138,7 @@ const FEATURE_MANIFEST = {
     recurrence: { kind: "module", label: "Recurrence", experimental: true, paths: [] },
     webhook: { kind: "module", label: "Webhook", experimental: true, paths: [] },
   },
-  requiredPaths: [
-    "package.json",
-    "pnpm-workspace.yaml",
-    "apps/shared/package.json",
-    "apps/server/package.json",
-    "apps/email/package.json",
-    "apps/landing/package.json",
-  ],
+  requiredPaths: ["package.json", "pnpm-workspace.yaml", "apps/landing/package.json"],
   sync: {
     defaultPolicy: "merge",
     rules: [

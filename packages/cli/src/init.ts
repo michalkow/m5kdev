@@ -7,7 +7,7 @@ import { collectTemplateFiles } from "./fs";
 import { getTemplateRoot } from "./paths";
 import { createManagedState, getCliVersion, STATE_FILE_NAME, writeManagedState } from "./state";
 import { derivePackageScope, toDisplayName } from "./strings";
-import { getExcludedFeaturePaths, loadTemplateManifest } from "./template";
+import { getExcludedFeaturePaths, loadTemplateManifest, withImpliedFeatures } from "./template";
 import type { TemplateContext } from "./types";
 
 export interface InitCommandOptions {
@@ -111,10 +111,11 @@ export async function initializeManagedRepo(options: InitCommandOptions) {
   const enabledFeatures = await inferFeatures(options.repoRoot);
   const templateRoot = getTemplateRoot();
   const manifest = loadTemplateManifest(templateRoot);
+  const templateFeatures = withImpliedFeatures(enabledFeatures);
   const excludePrefixes = getExcludedFeaturePaths(manifest, enabledFeatures);
   const renderedFiles = await collectTemplateFiles(templateRoot, context, {
     excludePrefixes,
-    enabledFeatures,
+    enabledFeatures: templateFeatures,
   });
   const version = getCliVersion();
   const state = createManagedState({

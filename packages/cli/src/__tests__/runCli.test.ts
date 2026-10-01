@@ -53,12 +53,26 @@ describe("parseCli", () => {
     });
   });
 
-  it("parses update dry-run flags", () => {
-    expect(parseCli(["update", "--dry-run", "--skip-install"])).toEqual({
+  it("parses create platform landing", () => {
+    expect(parseCli(["create", "--platform", "landing"])).toEqual({
+      command: "create",
+      directory: undefined,
+      help: false,
+      options: {
+        platform: "landing",
+      },
+    });
+  });
+
+  it("parses update platform and yes flags", () => {
+    expect(parseCli(["update", "--platform", "web", "--yes"])).toEqual({
       command: "update",
       directory: undefined,
       help: false,
-      options: { "dry-run": true, "skip-install": true },
+      options: {
+        platform: "web",
+        yes: true,
+      },
     });
   });
 

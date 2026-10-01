@@ -17,7 +17,9 @@ export default defineConfig({
   resolve: {
     dedupe: ["react", "react-dom", "react-router"],
   },
+  // m5k:server:start
   envDir: "../shared",
+  // m5k:server:end
   server: {
     port: 5174,
   },

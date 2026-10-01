@@ -143,8 +143,8 @@ Zod schemas and constants in `apps/*/shared` or `@m5kdev/commons` that server an
 _Avoid_: DTO (server select/output helpers), types package, API spec; calling this package the Fly app
 
 **Deploy home**:
-Where the product image’s Docker and Fly files live: `apps/shared` (Dockerfile, fly.toml, production env example). The image runs server plus a baked webapp. Repo-root `.dockerignore` is the build-context ignore file. Root `app:deploy` / `app:secrets` call Kernel bins (`m5kdev-fly-deploy` / `m5kdev-fly-secrets`); the wrappers are not Starter copies ([ADR-0009](docs/adr/0009-kernel-owns-fly-commands.md)).
-_Avoid_: Shared contract (that is Zod/constants); treating `apps/shared` as a runnable Node service; a top-level `deploy/` folder; dockerignore copies beside the Dockerfile; app-owned `fly-deploy.mjs` duplicates
+Where the product image’s Docker and Fly files live: `apps/shared` (Dockerfile, fly.toml, production env example). The image runs server plus a baked webapp. Repo-root `.dockerignore` is the build-context ignore file. Root `app:deploy` / `app:secrets` call Kernel bins (`m5kdev-fly-deploy` / `m5kdev-fly-secrets`); the wrappers are not Starter copies ([ADR-0009](docs/adr/0009-kernel-owns-fly-commands.md)). A Landing-only scaffolded app has no Deploy home.
+_Avoid_: Shared contract (that is Zod/constants); treating `apps/shared` as a runnable Node service; a top-level `deploy/` folder; dockerignore copies beside the Dockerfile; app-owned `fly-deploy.mjs` duplicates; requiring Deploy home for Landing to exist
 
 **Procedure**:
 A request-bound Service method built with `this.procedure("name")`: input, auth, resource load, Grant check, then handler.
@@ -217,8 +217,8 @@ A Backend Module's admin routes (for example Billing at `/admin/billing`), linke
 _Avoid_: stuffing module screens into the Users/Organizations/Waitlist segment; a second admin shell
 
 **Landing**:
-The public marketing site package (`apps/landing`). A separate Fly app from the product image; Starter ships one page (name, pitch, CTA) on React Router + HeroUI v3 + Tailwind v4.
-_Avoid_: Webapp (the authenticated SPA baked into the product image)
+The public marketing site package (`apps/landing`). Own Fly app, separate from the product image when one exists. Starter ships one page (name, pitch) on React Router + HeroUI v3 + Tailwind v4. It does not link to the Webapp. A scaffolded app may be Landing alone — no Kernel, Webapp, or Expo ([ADR-0025](docs/adr/0025-landing-only-create-has-no-kernel.md)).
+_Avoid_: Webapp (the authenticated SPA baked into the product image); treating Landing as requiring a server or Deploy home
 
 **Workflow**:
 A persisted background run (optional cron). Status: `queued` | `running` | `completed` | `failed`. Payload is serializable ids and typed input, not a request. Org-scoped runs stamp MemberId.

@@ -68,13 +68,7 @@ export async function collectTemplateFiles(
 
     if (relativePath === "template.manifest.json") continue;
 
-    const asDirPrefix = `${relativePath}/`;
-    if (
-      excludePrefixes.some(
-        (prefix) =>
-          relativePath === prefix || asDirPrefix === prefix || relativePath.startsWith(prefix)
-      )
-    ) {
+    if (excludePrefixes.some((prefix) => matchesExcludedPrefix(relativePath, prefix))) {
       continue;
     }
 
@@ -152,6 +146,13 @@ function isTextFile(fileName: string): boolean {
   const withoutTpl = fileName.endsWith(".tpl") ? fileName.slice(0, -4) : fileName;
   if (TEXT_BASENAMES.has(withoutTpl)) return true;
   return TEXT_EXTENSIONS.has(path.extname(withoutTpl));
+}
+
+function matchesExcludedPrefix(relativePath: string, prefix: string): boolean {
+  if (prefix.endsWith("/")) {
+    return relativePath === prefix.slice(0, -1) || relativePath.startsWith(prefix);
+  }
+  return relativePath === prefix || relativePath.startsWith(`${prefix}/`);
 }
 
 /**

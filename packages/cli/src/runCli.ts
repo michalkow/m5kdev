@@ -2,6 +2,7 @@ import { scaffoldProject } from "./create";
 import { printDiagnosticReport } from "./diagnostics";
 import { diagnoseManagedRepo } from "./doctor";
 import { initializeManagedRepo } from "./init";
+import { parsePlatform } from "./prompts";
 import type { CreateCommandOptions } from "./types";
 import { updateManagedRepo } from "./update";
 
@@ -80,8 +81,12 @@ async function runCreate(parsed: ParsedCli): Promise<void> {
   console.log("Next steps:");
   console.log(`  cd ${result.targetDirectory}`);
   if (options.skipInstall) console.log("  pnpm install");
-  console.log("  pnpm --filter ./apps/server drizzle:migrate");
-  console.log("  pnpm dev");
+  if (options.platform === "landing") {
+    console.log("  pnpm dev");
+  } else {
+    console.log("  pnpm --filter ./apps/server drizzle:migrate");
+    console.log("  pnpm dev");
+  }
 }
 
 async function runInit(parsed: ParsedCli): Promise<void> {
@@ -117,11 +122,18 @@ async function runDoctor(parsed: ParsedCli): Promise<void> {
 }
 
 async function runUpdate(parsed: ParsedCli): Promise<void> {
-  validateRepositoryCommand(parsed, ["dry-run", "skip-install", "json"]);
+  validateRepositoryCommand(parsed, ["dry-run", "skip-install", "json", "platform", "yes"]);
+  const platformOption = getStringOption(parsed.options, "platform");
+  const platform = platformOption ? parsePlatform(platformOption) : undefined;
+  if (platformOption && !platform) {
+    throw new Error(`Invalid --platform "${platformOption}". Use web, expo, or both.`);
+  }
   const result = await updateManagedRepo({
     repoRoot: process.cwd(),
     dryRun: Boolean(parsed.options["dry-run"]),
     skipInstall: Boolean(parsed.options["skip-install"]),
+    yes: Boolean(parsed.options.yes),
+    platform,
   });
   if (parsed.options.json) {
     console.log(JSON.stringify(result, null, 2));
@@ -202,15 +214,16 @@ function validateOptions(parsed: ParsedCli, allowedOptions: readonly string[]): 
 }
 
 function toCreateCommandOptions(parsed: ParsedCli): CreateCommandOptions {
-  const platform = getStringOption(parsed.options, "platform");
-  if (platform && !["web", "expo", "both"].includes(platform)) {
-    throw new Error(`Invalid --platform "${platform}". Use web, expo, or both.`);
+  const platformOption = getStringOption(parsed.options, "platform");
+  const platform = platformOption ? parsePlatform(platformOption) : undefined;
+  if (platformOption && !platform) {
+    throw new Error(`Invalid --platform "${platformOption}". Use web, expo, both, or landing.`);
   }
   return {
     targetDirectory: parsed.directory,
     appName: getStringOption(parsed.options, "name"),
     appDescription: getStringOption(parsed.options, "description"),
-    platform: platform as CreateCommandOptions["platform"],
+    platform,
     testHarness: parsed.options["with-test-harness"] ? true : undefined,
     yes: Boolean(parsed.options.yes),
     force: Boolean(parsed.options.force),
@@ -245,7 +258,7 @@ function printHelp(command?: string): void {
   if (command === "create") {
     console.log("  --name <value>           Set the app name");
     console.log("  --description <value>    Set the app description");
-    console.log("  --platform <value>       web (default), expo, or both");
+    console.log("  --platform <value>       web (default), expo, both, or landing");
     console.log("  --with-test-harness      Include the e2e test harness");
     console.log("  --yes                    Accept defaults for missing prompts");
     console.log("  --force                  Allow a non-empty directory");
@@ -260,6 +273,8 @@ function printHelp(command?: string): void {
     console.log("  --json                   Emit machine-readable output");
   } else if (command === "update") {
     console.log("  --dry-run                Build the complete plan without writes");
+    console.log("  --platform <value>       landing-only escape hatch: web, expo, or both");
+    console.log("  --yes                    Skip module and e2e prompts for --platform");
     console.log("  --skip-install           Apply sources without pnpm install");
     console.log("  --json                   Emit machine-readable output");
   }

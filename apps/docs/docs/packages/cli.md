@@ -21,7 +21,7 @@ are **Node.js >= 24**.
 pnpm dlx create-m5kdev@0.34.0 [directory] [create options]
 pnpm dlx create-m5kdev@0.34.0 init [--yes] [--force] [--json]
 pnpm dlx create-m5kdev@0.34.0 doctor [--full] [--json]
-pnpm dlx create-m5kdev@0.34.0 update [--dry-run] [--skip-install] [--json]
+pnpm dlx create-m5kdev@0.34.0 update [--dry-run] [--skip-install] [--json] [--platform web|expo|both] [--yes]
 ```
 
 A first positional argument that is not a command is treated as `create`.
@@ -31,19 +31,25 @@ A first positional argument that is not a command is treated as `create`.
 | Flag | Effect |
 | --- | --- |
 | `--name` / `--description` | App name and description |
-| `--platform` | `web` (default), `expo`, or `both` |
-| `--with-test-harness` | Include the e2e harness |
+| `--platform` | `web` (default), `expo`, `both`, or `landing` |
+| `--with-test-harness` | Include the e2e harness (not valid with `--platform landing`) |
 | `--yes` | Accept defaults for missing prompts |
 | `--force` | Allow a non-empty directory |
 | `--skip-install` / `--skip-git` | Skip `pnpm install` / `git init` |
 
+`--platform landing` is Landing only: no Kernel (server, Email), no Webapp, no
+Expo, and no Deploy home. Env lives in `apps/landing`. That shape has no
+Waitlist. `--yes` without `--platform` stays `web`. `--with-test-harness` with
+landing is refused. Decision record: `docs/adr/0025-landing-only-create-has-no-kernel.md`.
+
 `--yes` is web + always-on only: no test harness and **no** optional Backend
 Modules. There is no `--modules` flag. Interactive create prompts
 comma-separated module ids (or `none`). Experimental choices are labeled in
-that prompt.
+that prompt. Landing-only create skips those prompts.
 
-Always-on in Starter: Auth, Email, Posts, Email preview, Landing, Deploy home.
-Kernel infrastructure is not a selectable module.
+Always-on for `web` / `expo` / `both` in Starter: Auth, Email, Posts, Email
+preview, Landing, Deploy home. Kernel infrastructure is not a selectable
+module. Expo-only still includes a server.
 
 | Id | What selecting it does |
 | --- | --- |
@@ -73,6 +79,13 @@ snapshot, file policies). Bootstrap:
   lockstep with the Kernel (`CATALOG_VERSION_MISMATCH`).
 - `update --dry-run` plans without writes. Write mode needs a clean Git tree
   and applies only conflict-free plans.
+- `update --platform web|expo|both` is the landing-only escape hatch onto the
+  always-on product stack for that platform. It keeps existing Landing sources,
+  copies Landing env into Deploy home, then asks optional Backend Modules and
+  e2e the same way create does. `--yes` skips those extras (no harness, no
+  optional modules) and does not skip the clean Git check. The flag is refused
+  on repos that already have a Webapp or Expo, and `--platform landing` cannot
+  downgrade.
 
 `update` **ignores** `**/fly.toml` and `**/.env.production`. Copy those once
 from a fresh scaffold if you want Fly. See
