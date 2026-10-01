@@ -130,20 +130,24 @@ export function parsePinoLogArgs(args: unknown[]): {
 
 /** Ensures object-only logs get a readable `body` field and pino `msg` string. */
 export function enrichPinoLogArgs(args: unknown[]): unknown[] {
-  if (args.length === 0) return args;
-  if (typeof args[0] === "string") return args;
+  const mixin = getOtelLogMixin();
+  if (args.length === 0) return Object.keys(mixin).length > 0 ? [mixin] : args;
+  if (typeof args[0] === "string") {
+    return Object.keys(mixin).length > 0 ? [mixin, ...args] : args;
+  }
 
   const mergeObject =
     typeof args[0] === "object" && args[0] !== null
       ? (args[0] as Record<string, unknown>)
       : { value: args[0] };
   const message = typeof args[1] === "string" ? args[1] : undefined;
-  const body = formatLogBody(mergeObject, message);
+  const withMixin = { ...mergeObject, ...mixin };
+  const body = formatLogBody(withMixin, message);
 
   const enrichedObject =
-    typeof mergeObject.body === "string" && mergeObject.body.length > 0
-      ? mergeObject
-      : { ...mergeObject, body };
+    typeof withMixin.body === "string" && withMixin.body.length > 0
+      ? withMixin
+      : { ...withMixin, body };
 
   if (message) return [enrichedObject, message, ...args.slice(2)];
   return [enrichedObject, body, ...args.slice(1)];

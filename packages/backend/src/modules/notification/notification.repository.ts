@@ -540,9 +540,11 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
     {
       id: string;
       batchId: string;
+      notificationId: string;
       userId: string;
-      deviceId: string;
-      provider: NotificationProvider;
+      deviceId: string | null;
+      channel: NotificationChannel;
+      provider: NotificationProvider | null;
       title: string;
       body: string;
       data: Record<string, unknown> | null;

@@ -33,11 +33,7 @@ export function pickSchema<
   Shape extends z.ZodRawShape,
   const Keys extends readonly StringKeys<Shape>[],
 >(schema: z.ZodObject<Shape>, keys: Keys): z.ZodObject<Pick<Shape, Keys[number]>> {
-  const mask: Record<keyof Shape, true> = {} as Record<keyof Shape, true>;
-  for (const k of keys) {
-    mask[k] = true;
-  }
-  return schema.pick(mask) as z.ZodObject<Pick<Shape, Keys[number]>>;
+  return schema.pick(Object.fromEntries(keys.map((key) => [key, true])) as never);
 }
 
 export function pickTableSchema<T extends Table, K extends keyof InferSelectModel<T>>(
@@ -51,11 +47,9 @@ export function omitSchema<
   Shape extends z.ZodRawShape,
   const Keys extends readonly StringKeys<Shape>[],
 >(schema: z.ZodObject<Shape>, keys: Keys): z.ZodObject<Omit<Shape, Keys[number]>> {
-  const mask: Record<keyof Shape, true> = {} as Record<keyof Shape, true>;
-  for (const k of keys) {
-    mask[k] = true;
-  }
-  return schema.omit(mask) as z.ZodObject<Omit<Shape, Keys[number]>>;
+  return schema.omit(Object.fromEntries(keys.map((key) => [key, true])) as never) as z.ZodObject<
+    Omit<Shape, Keys[number]>
+  >;
 }
 
 export function omitTableSchema<T extends Table, K extends keyof InferSelectModel<T>>(
@@ -209,7 +203,7 @@ export const deleteManyOutput = uuidManyOutput;
 
 export const createListOutputSchema = <T extends z.ZodTypeAny>(schema: T) =>
   z.object({
-    rows: z.array(schema),
+    rows: z.array(schema).readonly(),
     total: z.number(),
   });
 

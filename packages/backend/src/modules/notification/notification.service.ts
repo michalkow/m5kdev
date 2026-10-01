@@ -77,26 +77,28 @@ export class NotificationService extends BasePermissionService<
   { notification: NotificationRepository },
   {
     workflow: WorkflowService;
-    auth: Pick<AuthService, "userEmit">;
-    email?: NotificationEmailSender;
+    auth: AuthService;
   }
 > {
   readonly webPushJob: FireAndForgetJobDefinition<NotificationServiceJobPayload>;
   readonly mobilePushJob: FireAndForgetJobDefinition<NotificationServiceJobPayload>;
   readonly emailJob: FireAndForgetJobDefinition<NotificationServiceJobPayload>;
   private readonly kindsById: ReadonlyMap<string, NotificationKind>;
+  private readonly emailSender?: NotificationEmailSender;
 
   constructor(
     repositories: { notification: NotificationRepository },
     services: {
       workflow: WorkflowService;
-      auth: Pick<AuthService, "userEmit">;
+      auth: AuthService;
       email?: NotificationEmailSender;
     },
     grants: ResourceGrant[],
     options?: NotificationServiceOptions
   ) {
-    super(repositories, services, grants);
+    const { email, ...baseServices } = services;
+    super(repositories, baseServices, grants);
+    this.emailSender = email;
 
     this.kindsById = new Map((options?.kinds ?? []).map((kind) => [kind.id, kind]));
 
@@ -465,9 +467,10 @@ export class NotificationService extends BasePermissionService<
   async deliverEmail(notificationId: string): ServerResultAsync<void> {
     const instance = await this.repository.notification.findNotificationById(notificationId);
     if (instance.isErr()) return err(instance.error);
-    if (!instance.value) return ok();
-    if (instance.value.readAt) return ok();
-    if (!instance.value.armedChannels.includes("email")) return ok();
+    const notification = instance.value;
+    if (!notification) return ok();
+    if (notification.readAt) return ok();
+    if (!notification.armedChannels.includes("email")) return ok();
 
     const existing = await this.repository.notification.listSendLogsForNotificationChannel({
       notificationId,
@@ -476,19 +479,19 @@ export class NotificationService extends BasePermissionService<
     if (existing.isErr()) return err(existing.error);
     if (existing.value.length > 0) return ok();
 
-    const kind = this.kindsById.get(instance.value.kind);
+    const kind = this.kindsById.get(notification.kind);
     const fail = async (error: string): ServerResultAsync<void> => {
       const logged = await this.repository.notification.insertSendLogs([
         {
           batchId: uuidv4(),
-          notificationId: instance.value.id,
-          userId: instance.value.userId,
+          notificationId: notification.id,
+          userId: notification.userId,
           deviceId: null,
           channel: "email",
           provider: null,
-          title: instance.value.title,
-          body: instance.value.body,
-          data: instance.value.data,
+          title: notification.title,
+          body: notification.body,
+          data: notification.data,
           status: "failed",
           error,
         },
@@ -497,23 +500,23 @@ export class NotificationService extends BasePermissionService<
       return ok();
     };
 
-    if (!this.service.email) {
+    if (!this.emailSender) {
       return fail("EmailModule is not registered");
     }
     if (!kind?.emailTemplate) {
       return fail("Email template is not configured on this Notification kind");
     }
-    const to = await this.repository.notification.findUserEmail(instance.value.userId);
+    const to = await this.repository.notification.findUserEmail(notification.userId);
     if (to.isErr()) return err(to.error);
     if (!to.value) {
       return fail("User email is missing");
     }
 
     try {
-      const sent = await this.service.email.sendTemplate(to.value, kind.emailTemplate, {
-        title: instance.value.title,
-        body: instance.value.body,
-        data: instance.value.data,
+      const sent = await this.emailSender.sendTemplate(to.value, kind.emailTemplate, {
+        title: notification.title,
+        body: notification.body,
+        data: notification.data,
       });
       if (sent.isErr()) {
         return fail(sent.error.message);
@@ -525,20 +528,20 @@ export class NotificationService extends BasePermissionService<
     const logged = await this.repository.notification.insertSendLogs([
       {
         batchId: uuidv4(),
-        notificationId: instance.value.id,
-        userId: instance.value.userId,
+        notificationId: notification.id,
+        userId: notification.userId,
         deviceId: null,
         channel: "email",
         provider: null,
-        title: instance.value.title,
-        body: instance.value.body,
-        data: instance.value.data,
+        title: notification.title,
+        body: notification.body,
+        data: notification.data,
         status: "sent",
         error: null,
       },
     ]);
     if (logged.isErr()) return err(logged.error);
-    return this.repository.notification.stampEmailedAt(instance.value.id);
+    return this.repository.notification.stampEmailedAt(notification.id);
   }
 
   private async enqueueArmedOutboundJobs(

@@ -11,14 +11,14 @@ export function isE2eMcpCimdEnabled(): boolean {
   return process.env.M5K_MCP_E2E_CIMD === "1" && process.env.NODE_ENV !== "production";
 }
 
-function requestUrl(input: RequestInfo | URL): string {
+function requestUrl(input: string | URL | Request): string {
   if (typeof input === "string") return input;
   if (input instanceof URL) return input.href;
   return input.url;
 }
 
 export async function fetchE2eMcpClientMetadata(
-  input: RequestInfo | URL,
+  input: string | URL | Request,
   init?: RequestInit
 ): Promise<Response> {
   if (requestUrl(input) === E2E_MCP_CIMD_CLIENT_ID) {

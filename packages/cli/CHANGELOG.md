@@ -7,6 +7,14 @@
 - Table filter operators such as Equals, One Of, and Is Empty follow the active locale.
 - Language pickers show each language in its native name, so Polish stays Polski regardless of the UI language.
 
+## 0.38.16
+
+### Patch Changes
+
+- Allow `create-m5kdev --platform landing` to scaffold a Landing-only app with no Kernel; its Landing is name and pitch only.
+  Let a landing-only app upgrade onto the product stack with `m5kdev update --platform web|expo|both`.
+  Attach OpenTelemetry `trace_id` and `span_id` to pino logs when a span is active.
+
 ## 0.38.15
 
 No changes in this release.

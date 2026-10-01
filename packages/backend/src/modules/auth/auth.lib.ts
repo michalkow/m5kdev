@@ -160,7 +160,6 @@ function setPasswordEndpointPlugin(): BetterAuthPlugin {
             userId: session.user.id,
             providerId: "credential",
             accountId: session.user.id,
-            issuer: "local:credential",
             password: await ctx.context.password.hash(newPassword),
           });
 
@@ -627,7 +626,7 @@ export function createBetterAuth<
           },
         },
       }),
-      createApiKeyPlugin(),
+      createApiKeyPlugin() as BetterAuthPlugin,
       ...createMcpOAuthPlugins(
         mcp
           ? {
@@ -928,5 +927,5 @@ export function createBetterAuth<
         },
       },
     },
-  });
+  }) as unknown as BetterAuth;
 }
