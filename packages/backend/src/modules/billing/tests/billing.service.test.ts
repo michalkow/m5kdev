@@ -436,7 +436,9 @@ async function createTables(client: Client): Promise<void> {
       seats INTEGER,
       member_id TEXT,
       trial_start INTEGER,
-      trial_end INTEGER
+      trial_end INTEGER,
+      environment TEXT,
+      UNIQUE (reference_id, environment)
     );
   `);
 }
@@ -470,6 +472,30 @@ async function seedOrg(client: Client, memberCount = 1): Promise<void> {
       role: i === 0 ? "owner" : "member",
     });
   }
+}
+
+async function insertOrgSubscription(
+  client: Client,
+  values: {
+    id: string;
+    environment?: "production" | "sandbox" | null;
+    stripeCustomerId?: string | null;
+    stripeSubscriptionId?: string;
+    status?: string;
+    priceId?: string;
+  }
+): Promise<void> {
+  const orm = drizzle(client, { schema: { subscriptions: billingTables.subscriptions } });
+  await orm.insert(billingTables.subscriptions).values({
+    id: values.id,
+    plan: "pro",
+    referenceId: ORG_ID,
+    environment: values.environment === undefined ? "sandbox" : values.environment,
+    stripeCustomerId: values.stripeCustomerId ?? "cus_sandbox",
+    stripeSubscriptionId: values.stripeSubscriptionId ?? "sub_sandbox",
+    status: values.status ?? "trialing",
+    priceId: values.priceId ?? PRICE_ID,
+  });
 }
 
 async function bootBilling(options: {
@@ -2306,5 +2332,138 @@ describe("BillingService Billing Module admin", () => {
       expect(exempt._unsafeUnwrapErr().code).toBe("FORBIDDEN");
     }
     expect(stripe.subscriptions.create).not.toHaveBeenCalled();
+  });
+
+  it("hides a sandbox Subscription on production admin list and paywall", async () => {
+    await insertOrgSubscription(client, { id: "sub_row_sandbox" });
+    const billing = await boot(createStripeStub({}));
+
+    const listed = (await billing.listAdminOrganizationBilling({}, adminCtx()))._unsafeUnwrap();
+    expect(listed.environment).toBe("production");
+    expect(listed.rows[0]?.subscription).toBeNull();
+    expect(listed.rows[0]?.openSubscription).toBe(false);
+    expect((await billing.getActiveSubscription(memberCtx()))._unsafeUnwrap()).toBeNull();
+  });
+
+  it("shows the sandbox Subscription on sandbox admin list and paywall", async () => {
+    await insertOrgSubscription(client, { id: "sub_row_sandbox" });
+    const billing = await boot(createStripeStub({}), { environment: "sandbox" });
+
+    const listed = (await billing.listAdminOrganizationBilling({}, adminCtx()))._unsafeUnwrap();
+    expect(listed.environment).toBe("sandbox");
+    expect(listed.rows[0]?.subscription?.stripeSubscriptionId).toBe("sub_sandbox");
+    expect(listed.rows[0]?.subscription?.environment).toBe("sandbox");
+    expect((await billing.getActiveSubscription(memberCtx()))._unsafeUnwrap()?.status).toBe(
+      "trialing"
+    );
+  });
+
+  it("keeps production and sandbox Subscriptions as separate rows", async () => {
+    await insertOrgSubscription(client, {
+      id: "sub_row_live",
+      environment: "production",
+      stripeCustomerId: CUSTOMER_ID,
+      stripeSubscriptionId: "sub_live",
+      status: "active",
+    });
+    const stripe = createStripeStub({
+      subscriptionStatus: "trialing",
+      customerDefaultPaymentMethod: "pm_card",
+    });
+    const sandbox = await boot(stripe, { environment: "sandbox" });
+    const created = await sandbox.createAdminSubscription(
+      { organizationId: ORG_ID, priceId: PRICE_ID, trialDays: 7 },
+      adminCtx()
+    );
+    expect(created.isOk()).toBe(true);
+
+    const production = await boot(createStripeStub({}), { environment: "production" });
+    const listed = (await production.listAdminOrganizationBilling({}, adminCtx()))._unsafeUnwrap();
+    expect(listed.rows[0]?.subscription?.stripeSubscriptionId).toBe("sub_live");
+    expect(listed.rows[0]?.subscription?.status).toBe("active");
+    expect((await production.getActiveSubscription(memberCtx()))._unsafeUnwrap()?.status).toBe(
+      "active"
+    );
+  });
+
+  it("allows production Checkout and Admin create while a sandbox Subscription is open", async () => {
+    await insertOrgSubscription(client, { id: "sub_row_sandbox", status: "trialing" });
+    const stripe = createStripeStub({ customerDefaultPaymentMethod: "pm_card" });
+    const billing = await boot(stripe);
+
+    const checkout = await billing.createCheckoutSession(
+      { priceId: PRICE_ID },
+      {
+        organizationId: ORG_ID,
+        memberId: MEMBER_ID,
+        organizationRole: "owner",
+        email: USER_EMAIL,
+      }
+    );
+    expect(checkout.isOk()).toBe(true);
+
+    const created = await billing.createAdminSubscription(
+      { organizationId: ORG_ID, priceId: PRICE_ID, trialDays: 7 },
+      adminCtx()
+    );
+    expect(created.isOk()).toBe(true);
+    expect(
+      (await billing.listAdminOrganizationBilling({}, adminCtx()))._unsafeUnwrap().rows[0]
+        ?.subscription?.environment
+    ).toBe("production");
+  });
+
+  it("cancels only the current-environment Stripe Subscription", async () => {
+    await insertOrgSubscription(client, { id: "sub_row_sandbox", status: "trialing" });
+    await insertOrgSubscription(client, {
+      id: "sub_row_live",
+      environment: "production",
+      stripeCustomerId: CUSTOMER_ID,
+      stripeSubscriptionId: "sub_live",
+      status: "active",
+    });
+    const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
+    await orm
+      .update(authTables.organizations)
+      .set({ stripeCustomerId: CUSTOMER_ID })
+      .where(eq(authTables.organizations.id, ORG_ID));
+    const stripe = createStripeStub({});
+    stripe.state.created = true;
+    const billing = await boot(stripe);
+
+    const canceled = await billing.cancelOrganizationSubscription({ organizationId: ORG_ID });
+    expect(canceled.isOk()).toBe(true);
+    expect(stripe.subscriptions.cancel).toHaveBeenCalledWith("sub_live");
+    expect(stripe.subscriptions.cancel).not.toHaveBeenCalledWith("sub_sandbox");
+  });
+
+  it("leaves a null-environment Subscription unreadable until the current env claims it", async () => {
+    await insertOrgSubscription(client, {
+      id: "sub_row_orphan",
+      environment: null,
+      stripeCustomerId: CUSTOMER_ID,
+      stripeSubscriptionId: "sub_trial",
+      status: "trialing",
+    });
+    const production = await boot(createStripeStub({}));
+    expect(
+      (await production.listAdminOrganizationBilling({}, adminCtx()))._unsafeUnwrap().rows[0]
+        ?.subscription
+    ).toBeNull();
+
+    const stripe = createStripeStub({});
+    stripe.state.created = true;
+    const sandbox = await boot(stripe, { environment: "sandbox" });
+    const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
+    await orm
+      .update(authTables.organizations)
+      .set({ stripeSandboxCustomerId: CUSTOMER_ID })
+      .where(eq(authTables.organizations.id, ORG_ID));
+
+    const synced = await sandbox.syncStripeData({ customerId: CUSTOMER_ID });
+    expect(synced.isOk()).toBe(true);
+    const listed = (await sandbox.listAdminOrganizationBilling({}, adminCtx()))._unsafeUnwrap();
+    expect(listed.rows[0]?.subscription?.environment).toBe("sandbox");
+    expect(listed.rows[0]?.subscription?.stripeSubscriptionId).toBe("sub_trial");
   });
 });

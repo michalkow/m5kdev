@@ -123,7 +123,8 @@ succeeds if Stripe is down; the paywall shows until a Subscription exists.
   requires a payment method, Checkout sets `trial_period_days` and
   `payment_method_collection: always`.
 - `getActiveSubscription`, `listInvoices` — Organization-scoped reads. Access
-  includes `active`, `trialing`, and `past_due`.
+  includes current-environment `active`, `trialing`, and `past_due`. A sandbox
+  ACCESS_STATUS does not grant production (ADR-0024).
 - `adjustBillableSeats` — Seat billing quantity (no-op when Seat billing is off).
 - `cancelOrganizationSubscription` — cancel in Stripe, keep the Customer.
 - AdminActor Billing Module admin (ADR-0022, ADR-0023): list Organizations and Coupons,
@@ -135,7 +136,8 @@ succeeds if Stripe is down; the paywall shows until a Subscription exists.
   Without a payment method on the Customer, create requires a Trial
   or a 100%-off Coupon (Stripe cannot charge a first invoice without one). An
   Admin Trial ends like catalog Trial: Stripe cancels without a card. The page
-  shows the catalog environment (Production / Sandbox).
+  shows the catalog environment (Production / Sandbox). The listed Subscription
+  is that environment's row only; Customer ids were already split in 0.38.11.
   Coupons are listed from the Stripe account; create them in the Dashboard.
   Removing a Coupon never cancels. `billingExempt` skips the paywall and Seat
   billing for that Organization; new Organizations start false. Kernel does not
@@ -225,9 +227,11 @@ constructed in app code with your secret key. Include
 - [Organization Stripe paywall and opt-in Seat billing in 0.38.0](/guides/v0.38.0-billing-org-paywall-migration)
 - [Billing Coupons, sandbox Stripe Customer, and required catalog environment in 0.38.11](/guides/v0.38.11-billing-coupon-sandbox-customer-migration)
 - [Organization billingExempt overlay in 0.38.13](/guides/v0.38.13-organization-billing-exempt-migration)
+- [Subscription per Stripe environment in 0.38.15](/guides/v0.38.15-subscription-per-stripe-environment-migration)
 - [N Prices, frozen Organization currency, and Trial Price at start in 0.38.9](/guides/v0.38.9-billing-trial-price-catalog-migration)
 - [Billing trial-ending email in 0.34.0](/guides/v0.34.0-billing-trial-ending-email-migration)
 - [Email Core Module](/modules/email)
 - ADR-0021 (`docs/adr/0021-admin-panel-sidecar-module-admin.md`)
 - ADR-0022 (`docs/adr/0022-complimentary-billing-admin.md`)
 - ADR-0023 (`docs/adr/0023-organization-billing-exempt.md`)
+- ADR-0024 (`docs/adr/0024-subscription-per-stripe-environment.md`)

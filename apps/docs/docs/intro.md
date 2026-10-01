@@ -150,6 +150,14 @@ grandfather SQL; products already charging must not.
 
 - [Organization billingExempt overlay](/guides/v0.38.13-organization-billing-exempt-migration)
 
+## Upgrading to 0.38.15 {#upgrade-0-38-15}
+
+Complete 0.38.13 first. Apps with a `subscriptions` table generate
+`subscriptions.environment` and stamp existing rows from the Organization
+Customer ids so production does not show sandbox Plan/Price/Trial.
+
+- [Subscription per Stripe environment](/guides/v0.38.15-subscription-per-stripe-environment-migration)
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module

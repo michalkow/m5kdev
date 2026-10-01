@@ -285,7 +285,7 @@ The unpaid `trialing` period of a Subscription. Length comes from the Trial Plan
 _Avoid_: Plan, beta, Stripe Customer; requiring seats when Seat billing is off; Interval pick mid-Trial; treating a stand-in as unchosen; Coupon (that is an Admin discount on a paid Price); Admin editing `trial_end` on an existing Subscription
 
 **Stripe Customer**:
-The Stripe Customer for an Organization (not a User). Two ids: production and sandbox, the same split as Plan catalogs. Kernel uses the NODE_ENV switch as Plans; create writes only the current env’s id so sandbox never overwrites production.
+The Stripe Customer for an Organization (not a User). Two ids: production and sandbox, the same split as Plan catalogs and Subscription. Kernel uses the NODE_ENV switch as Plans; create writes only the current env’s id so sandbox never overwrites production.
 _Avoid_: User as Customer; `users.stripeCustomerId`; one id shared across live and test Stripe accounts; Promotion Code
 
 **Coupon**:
@@ -293,8 +293,8 @@ A Stripe Coupon already in the Stripe account (percent or amount off, duration).
 _Avoid_: Complimentary; Trial; free Subscription as a Kernel grant; paywall bypass (that is billingExempt); customer-facing promo on the Plan page; Kernel-created Coupon catalog
 
 **Checkout**:
-Stripe-hosted start of a Subscription when the Organization has none. When Trial requires a payment method, Checkout starts Trial on the Trial Price (default or picked) and collects the card; there is no access until it completes. When Trial does not require a card, Checkout is not used to start Trial.
-_Avoid_: Billing Portal; a second Subscription on an already-trialing Organization; using Checkout to change interval after convert
+Stripe-hosted start of a Subscription when the Organization has none in this Stripe environment. When Trial requires a payment method, Checkout starts Trial on the Trial Price (default or picked) and collects the card; there is no access until it completes. When Trial does not require a card, Checkout is not used to start Trial.
+_Avoid_: Billing Portal; a second Subscription on an already-trialing Organization in this environment; using Checkout to change interval after convert; treating a sandbox Subscription as blocking production Checkout
 
 **Billing Portal**:
 Stripe-hosted management of an existing paid Subscription (Plan, interval, payment method, invoices). After convert, interval change is this, not the Kernel Plan page.
@@ -309,8 +309,8 @@ An Organization boolean. When true, that Organization is exempt from the paywall
 _Avoid_: skipPlanCheck (that is the app-wide BillingProvider override); skip subscription check as the Kernel noun; grandfathered; Coupon as the bypass; stuffing this into Organization flags
 
 **Subscription**:
-Local row re-synced from Stripe; Stripe is the source of truth. The billed party is the Organization, not a User. Stamp MemberId for attribution; do not key billing by UserId. Access while status is `active`, `trialing`, or `past_due`, or while the Organization is billingExempt. See [ADR-0017](docs/adr/0017-billing-org-paywall-seat-billing-opt-in.md) and [ADR-0023](docs/adr/0023-organization-billing-exempt.md).
-_Avoid_: Plan, personal User subscription; Stripe customer linkage on the User
+Local row re-synced from Stripe; Stripe is the source of truth. The billed party is the Organization, not a User. One mutable row per Organization per Stripe environment (`production` | `sandbox`), the same split as Customer and Plan catalogs. Paywall, admin, Checkout, and Seat billing use this process environment's row only. Stamp MemberId for attribution; do not key billing by UserId. Access while the current-environment status is `active`, `trialing`, or `past_due`, or while the Organization is billingExempt. See [ADR-0017](docs/adr/0017-billing-org-paywall-seat-billing-opt-in.md), [ADR-0023](docs/adr/0023-organization-billing-exempt.md), and [ADR-0024](docs/adr/0024-subscription-per-stripe-environment.md).
+_Avoid_: Plan, personal User subscription; Stripe customer linkage on the User; one row shared across live and test Stripe; a sandbox ACCESS_STATUS granting production access
 
 **Tag**:
 A polymorphic label attached to any resource type via taggings. Ownership is UserId (personal), MemberId (Member-owned), or organizationId (org-shared).

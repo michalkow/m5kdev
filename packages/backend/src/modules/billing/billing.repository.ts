@@ -421,7 +421,12 @@ export class BillingRepository extends BaseTableRepository<
       this.orm
         .select()
         .from(this.schema.subscriptions)
-        .where(eq(this.schema.subscriptions.referenceId, referenceId))
+        .where(
+          and(
+            eq(this.schema.subscriptions.referenceId, referenceId),
+            eq(this.schema.subscriptions.environment, this.environment)
+          )
+        )
         .orderBy(desc(this.schema.subscriptions.createdAt))
         .limit(1)
     );
@@ -437,6 +442,7 @@ export class BillingRepository extends BaseTableRepository<
         .where(
           and(
             eq(this.schema.subscriptions.referenceId, referenceId),
+            eq(this.schema.subscriptions.environment, this.environment),
             inArray(this.schema.subscriptions.status, [...ACCESS_STATUSES])
           )
         )
@@ -455,6 +461,7 @@ export class BillingRepository extends BaseTableRepository<
         .where(
           and(
             eq(this.schema.subscriptions.referenceId, referenceId),
+            eq(this.schema.subscriptions.environment, this.environment),
             inArray(this.schema.subscriptions.status, [...OPEN_STATUSES])
           )
         )
@@ -714,6 +721,7 @@ export class BillingRepository extends BaseTableRepository<
       return this.error("NOT_FOUND", `Plan not found for price ID: ${subscriptionItem.price.id}`);
 
     const values = {
+      environment: this.environment,
       stripeCustomerId: customerId,
       referenceId: organizationId,
       ...(memberId ? { memberId } : {}),
@@ -746,28 +754,32 @@ export class BillingRepository extends BaseTableRepository<
 
     if (existingByStripeId.value) {
       const existing = existingByStripeId.value;
-      const updateResult = await this.throwableQuery(() =>
-        this.orm
-          .update(this.schema.subscriptions)
-          .set({
-            ...values,
-            updatedAt: new Date(),
-          })
-          .where(eq(this.schema.subscriptions.id, existing.id))
-      );
-      if (updateResult.isErr()) return err(updateResult.error);
+      const otherEnvironment =
+        existing.environment != null && existing.environment !== this.environment;
+      if (!otherEnvironment) {
+        const updateResult = await this.throwableQuery(() =>
+          this.orm
+            .update(this.schema.subscriptions)
+            .set({
+              ...values,
+              updatedAt: new Date(),
+            })
+            .where(eq(this.schema.subscriptions.id, existing.id))
+        );
+        if (updateResult.isErr()) return err(updateResult.error);
 
-      const captureResult = this.throwable(() =>
-        ok(
-          posthogCapture({
-            distinctId: organizationId,
-            event: "stripe.subscription_updated",
-            properties: values,
-          })
-        )
-      );
-      if (captureResult.isErr()) return err(captureResult.error);
-      return ok(false);
+        const captureResult = this.throwable(() =>
+          ok(
+            posthogCapture({
+              distinctId: organizationId,
+              event: "stripe.subscription_updated",
+              properties: values,
+            })
+          )
+        );
+        if (captureResult.isErr()) return err(captureResult.error);
+        return ok(false);
+      }
     }
 
     const latest = await this.getLatestSubscription(organizationId);

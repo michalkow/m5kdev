@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { queryListOutput, querySchema } from "../schemas/query.schema";
 
+export const stripeEnvironmentSchema = z.enum(["production", "sandbox"]);
+
 export const billingSchema = z.object({
   id: z.string(),
   plan: z.string(),
@@ -23,6 +25,7 @@ export const billingSchema = z.object({
   intervalPicked: z.boolean().nullish(),
   unitAmount: z.number().nullish(),
   discounts: z.array(z.string()).nullish(),
+  environment: stripeEnvironmentSchema.nullish(),
 });
 
 export type BillingSchema = z.infer<typeof billingSchema>;
@@ -45,8 +48,6 @@ export const organizationIdInputSchema = z.object({
 });
 
 export const MAX_TRIAL_DAYS = 730;
-
-export const stripeEnvironmentSchema = z.enum(["production", "sandbox"]);
 
 export const createAdminSubscriptionInputSchema = z.object({
   organizationId: z.string(),
