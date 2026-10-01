@@ -133,7 +133,11 @@ import { syncI18nLocale } from "@m5kdev/frontend/modules/app/utils/locale";
 })}
 ```
 
-`useAuthLocale` already persists the locale server-side and calls `syncI18nLocale` on success. Pass `onLocaleChange` when you need additional client-side handling beyond the default sync.
+`useAuthLocale` already persists the locale server-side and calls
+`syncAuthenticatedLocale` on success (i18n plus a session refresh with cookie
+cache disabled). `AuthProvider` remounts children when the language changes.
+Pass `onLocaleChange` when you need additional client-side handling beyond the
+default sync.
 
 ### Email templates
 

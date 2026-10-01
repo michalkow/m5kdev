@@ -125,7 +125,9 @@ and [Workflow](/modules/workflow). Upgrade:
 `useAuthClient`, `useAuthAdmin`, `useAuthLocale`, `useAuthMemberInvite`,
 `useOrganizationAccess`, `useUserOrganizations`, `useUpdateUser`, and
 `useUpdateUserPreferences`. Wrap the app in `AuthProvider` (composed in
-`Providers.tsx` alongside `AppConfigProvider`).
+`Providers.tsx` alongside `AppConfigProvider`). `useAuthLocale` persists
+locale then refreshes the session with cookie cache disabled;
+`AuthProvider` remounts children when the language changes.
 
 ## Web UI
 
@@ -139,9 +141,11 @@ and [Workflow](/modules/workflow). Upgrade:
 - `AuthUserRouter` — profile editor, preferences, logout, invite friends.
 - `AuthOrganizationRouter` — org profile, preferences, members,
   child organizations, org select.
-- `AuthAdminRouter` — user management, organization management, waitlist.
-  Optional `extraLinks` / `extraRoutes` hang Module admin (for example Billing)
-  off sidecar links beside those tabs. Omit them for none.
+- `AuthAdminRouter` — user management (change User Role, mark Email verified,
+  set password), organization management, waitlist. Role change is blocked
+  for the signed-in User and for the last Active User-role admin. Optional
+  `extraLinks` / `extraRoutes` hang Module admin (for example Billing) off
+  sidecar links beside those tabs. Omit them for none.
 - Utilities — `AuthUtilityProtectedRoutes`, impersonation banner, locale and
   theme pickers.
 

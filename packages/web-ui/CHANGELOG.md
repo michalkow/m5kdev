@@ -9,6 +9,16 @@
 - Table filter operators such as Equals, One Of, and Is Empty follow the active locale.
 - Language pickers show each language in its native name, so Polish stays Polski regardless of the UI language.
 
+## 0.38.14
+
+### Patch Changes
+
+- Auth Admin User Management lets an AdminActor change User Role (not self, not the last Active User-role admin), mark Email verified, and set a password.
+  Changing locale remounts the Auth tree and refreshes the session without cookie cache so the UI and session follow the new language.
+- Updated dependencies
+  - @m5kdev/frontend@0.38.14
+  - @m5kdev/commons@0.38.14
+
 ## 0.38.13
 
 ### Patch Changes
