@@ -17,3 +17,11 @@ export async function syncI18nLocale(locale: string): Promise<void> {
   if (i18n.language === languageTag) return;
   await i18n.changeLanguage(languageTag);
 }
+
+export async function syncAuthenticatedLocale(
+  locale: string,
+  refreshSession: () => Promise<unknown>
+): Promise<void> {
+  await syncI18nLocale(locale);
+  await refreshSession();
+}

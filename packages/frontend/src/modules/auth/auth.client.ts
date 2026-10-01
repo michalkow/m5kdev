@@ -29,6 +29,7 @@ export interface M5KAdminListUser {
   id: string;
   name: string;
   email: string;
+  emailVerified?: boolean | null;
   role?: string | null;
   banned?: boolean | null;
   banReason?: string | null;
@@ -67,6 +68,11 @@ interface M5KAuthAdminApi {
   impersonateUser: (...args: unknown[]) => Promise<AuthPluginResult<unknown>>;
   stopImpersonating: (...args: unknown[]) => Promise<AuthPluginResult<unknown>>;
   createUser: (...args: unknown[]) => Promise<AuthPluginResult<unknown>>;
+  setRole: (opts: { userId: string; role: string }) => Promise<AuthPluginResult<unknown>>;
+  setUserPassword: (opts: {
+    userId: string;
+    newPassword: string;
+  }) => Promise<AuthPluginResult<unknown>>;
 }
 
 interface M5KAuthOrganizationApi {

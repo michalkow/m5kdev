@@ -26,6 +26,10 @@ _Avoid_: authorMemberId, createdBy; UserId as the org ownership key
 The global Better Auth identity. Owns personal resources that are not org tenancy.
 _Avoid_: Account, Customer, Client, Member
 
+**Email verified**:
+Whether a User's email address has been confirmed. An AdminActor may mark it true without sending a verification Email.
+_Avoid_: treating a verification Email as the only confirmation; Organization Role admin marking this
+
 **UserId**:
 The User id. Correct key for personal resources (devices, OAuth, sessions) and optional audit dual-write. Not the org-scoped ownership key. Billing is not a personal User resource.
 _Avoid_: MemberId (they are different principals)

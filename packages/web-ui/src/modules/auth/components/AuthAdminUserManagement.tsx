@@ -28,6 +28,7 @@ import {
   useRemoveUser,
   useUpdateUser,
 } from "@m5kdev/frontend/modules/auth/hooks/useAuthAdmin";
+import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import type { Key } from "@react-types/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -49,6 +50,32 @@ import { AuthLocaleSelect } from "./AuthLocaleSelect";
 
 type AdminUserRow = NonNullable<ListUsersQueryData["users"]>[number];
 
+const USER_ROLE_ADMIN = "admin";
+
+function isUserRoleAdmin(role: string | null | undefined): boolean {
+  return role === USER_ROLE_ADMIN;
+}
+
+function getUserRoleChangeBlockReason(input: {
+  user: Pick<AdminUserRow, "id" | "role" | "banned">;
+  currentUserId: string | undefined;
+  activeAdminCount: number;
+}): string | null {
+  if (input.currentUserId !== undefined && input.user.id === input.currentUserId) {
+    return "You cannot change your own User Role";
+  }
+  if (isUserRoleAdmin(input.user.role) && !input.user.banned && input.activeAdminCount <= 1) {
+    return "Cannot demote the last Active User-role admin";
+  }
+  return null;
+}
+
+function throwIfAuthClientError(error: { message?: string } | null): void {
+  if (error) {
+    throw new Error(error.message ?? "Request failed");
+  }
+}
+
 interface UserAiUsage {
   inputTokens: number | null;
   outputTokens: number | null;
@@ -66,6 +93,8 @@ export function AuthAdminUserManagement({
   enableAiUsage = false,
 }: AuthAdminUserManagementProps) {
   const { locales } = useAppConfig();
+  const { data: session } = useSession();
+  const currentUserId = session?.user?.id;
   const userRoles = useAppRoles("user");
   const getUserRoleLabel = useRoleLabel("user");
   const userRoleOptions = useMemo(
@@ -81,6 +110,7 @@ export function AuthAdminUserManagement({
   const nameInputId = useId();
   const emailInputId = useId();
   const passwordInputId = useId();
+  const setPasswordInputId = useId();
   const roleSelectId = useId();
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
   const [userToBan, setUserToBan] = useState<{ id: string; name: string } | null>(null);
@@ -108,6 +138,13 @@ export function AuthAdminUserManagement({
   const [claimEmail, setClaimEmail] = useState("");
   const [generatedMagicLink, setGeneratedMagicLink] = useState<string | null>(null);
   const [isGeneratingMagicLink, setIsGeneratingMagicLink] = useState(false);
+  const [userToSetPassword, setUserToSetPassword] = useState<{ id: string; name: string } | null>(
+    null
+  );
+  const [newPassword, setNewPassword] = useState("");
+  const [isSettingPassword, setIsSettingPassword] = useState(false);
+  const [isVerifyingEmail, setIsVerifyingEmail] = useState<Record<string, boolean>>({});
+  const [isSettingRole, setIsSettingRole] = useState<Record<string, boolean>>({});
 
   const magicLinkEmailInputId = useId();
   const generatedMagicLinkInputId = useId();
@@ -148,6 +185,9 @@ export function AuthAdminUserManagement({
   const listUsers = listQuery.data;
   const users = listUsers?.users;
   const totalUsers = listUsers?.total ?? 0;
+  const activeAdminCount = (users ?? []).filter(
+    (user) => isUserRoleAdmin(user.role) && !user.banned
+  ).length;
 
   const { mutate: deleteUser, isPending: isDeleting } = useRemoveUser({
     onSuccess: () => {
@@ -263,6 +303,72 @@ export function AuthAdminUserManagement({
       );
     } finally {
       setIsUnbanningUser((prev) => ({ ...prev, [userId]: false }));
+    }
+  };
+
+  const handleSetUserRole = async (userId: string, role: string): Promise<void> => {
+    try {
+      setIsSettingRole((prev) => ({ ...prev, [userId]: true }));
+      const { error } = await authClient.admin.setRole({ userId, role });
+      throwIfAuthClientError(error);
+      toast.success("User Role updated");
+      await invalidateListUsersQuery(queryClient);
+    } catch (error) {
+      toast.error(
+        `Failed to change User Role: ${error instanceof Error ? error.message : String(error)}`
+      );
+    } finally {
+      setIsSettingRole((prev) => ({ ...prev, [userId]: false }));
+    }
+  };
+
+  const handleVerifyEmail = async (userId: string): Promise<void> => {
+    try {
+      setIsVerifyingEmail((prev) => ({ ...prev, [userId]: true }));
+      const { error } = await authClient.admin.updateUser({
+        userId,
+        data: { emailVerified: true },
+      });
+      throwIfAuthClientError(error);
+      toast.success("Email marked as verified");
+      await invalidateListUsersQuery(queryClient);
+    } catch (error) {
+      toast.error(
+        `Failed to verify email: ${error instanceof Error ? error.message : String(error)}`
+      );
+    } finally {
+      setIsVerifyingEmail((prev) => ({ ...prev, [userId]: false }));
+    }
+  };
+
+  const openSetPasswordModal = (userId: string, userName: string): void => {
+    setUserToSetPassword({ id: userId, name: userName });
+    setNewPassword("");
+  };
+
+  const handleSetPassword = async (): Promise<void> => {
+    if (!userToSetPassword) return;
+    if (!newPassword) {
+      toast.error("Please enter a password");
+      return;
+    }
+
+    try {
+      setIsSettingPassword(true);
+      const { error } = await authClient.admin.setUserPassword({
+        userId: userToSetPassword.id,
+        newPassword,
+      });
+      throwIfAuthClientError(error);
+      toast.success(`Password updated for ${userToSetPassword.name}`);
+      setUserToSetPassword(null);
+      setNewPassword("");
+    } catch (error) {
+      toast.error(
+        `Failed to set password: ${error instanceof Error ? error.message : String(error)}`
+      );
+    } finally {
+      setIsSettingPassword(false);
     }
   };
 
@@ -461,10 +567,69 @@ export function AuthAdminUserManagement({
       enableSorting: true,
     },
     {
+      id: "emailVerified",
+      accessorKey: "emailVerified",
+      header: "Email verified",
+      cell: ({ row }) => (row.original.emailVerified ? "Verified" : "Unverified"),
+      enableSorting: false,
+    },
+    {
       id: "role",
       accessorKey: "role",
       header: "Role",
-      cell: ({ row }) => getUserRoleLabel(row.original.role || userRoles.defaultRole),
+      cell: ({ row }) => {
+        const user = row.original;
+        const selectedRole = user.role || userRoles.defaultRole;
+        const roleChangeBlockReason = getUserRoleChangeBlockReason({
+          user,
+          currentUserId,
+          activeAdminCount,
+        });
+        const roleSelect = (
+          <Select
+            aria-label={`Role for ${user.email}`}
+            selectedKey={selectedRole}
+            isDisabled={Boolean(roleChangeBlockReason) || Boolean(isSettingRole[user.id])}
+            onSelectionChange={(key) => {
+              if (key === null || key === selectedRole) return;
+              void handleSetUserRole(user.id, String(key));
+            }}
+          >
+            <Select.Trigger className="min-h-9">
+              <Select.Value>{getUserRoleLabel(selectedRole)}</Select.Value>
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {userRoleOptions.map((roleOption) => (
+                  <ListBox.Item
+                    className="text-sm"
+                    key={roleOption.value}
+                    id={roleOption.value}
+                    textValue={roleOption.label}
+                  >
+                    {roleOption.label}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        );
+
+        if (!roleChangeBlockReason) {
+          return roleSelect;
+        }
+
+        return (
+          <Tooltip>
+            <Tooltip.Trigger>
+              <span className="inline-flex">{roleSelect}</span>
+            </Tooltip.Trigger>
+            <Tooltip.Content>{roleChangeBlockReason}</Tooltip.Content>
+          </Tooltip>
+        );
+      },
       enableSorting: true,
     },
     {
@@ -545,6 +710,28 @@ export function AuthAdminUserManagement({
                 <Dropdown.Menu aria-label="User actions">
                   <Dropdown.Item key="onboarding" onPress={() => handleSetOnboardingUser(user.id)}>
                     Set Onboarding
+                  </Dropdown.Item>
+                  {user.emailVerified ? null : (
+                    <Dropdown.Item
+                      key="verify-email"
+                      onPress={() => void handleVerifyEmail(user.id)}
+                      isDisabled={isVerifyingEmail[user.id]}
+                    >
+                      {isVerifyingEmail[user.id] ? (
+                        <>
+                          <Spinner className="mr-2 h-3 w-3" />
+                          Verifying...
+                        </>
+                      ) : (
+                        "Verify Email"
+                      )}
+                    </Dropdown.Item>
+                  )}
+                  <Dropdown.Item
+                    key="set-password"
+                    onPress={() => openSetPasswordModal(user.id, user.name)}
+                  >
+                    Set Password
                   </Dropdown.Item>
                   <Dropdown.Item
                     key="usage"
@@ -1059,6 +1246,69 @@ export function AuthAdminUserManagement({
                   <Button variant="primary" type="submit" isDisabled={isGeneratingMagicLink}>
                     {isGeneratingMagicLink ? <Spinner className="mr-2 h-4 w-4" /> : null}
                     {isGeneratingMagicLink ? "Generating..." : "Generate Link"}
+                  </Button>
+                </Modal.Footer>
+              </form>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      {/* Set password modal */}
+      <Modal
+        isOpen={!!userToSetPassword}
+        onOpenChange={(open) => {
+          if (!open) {
+            setUserToSetPassword(null);
+            setNewPassword("");
+          }
+        }}
+      >
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleSetPassword();
+                }}
+                className="contents"
+              >
+                <Modal.Header>
+                  <Modal.Heading className="text-lg font-semibold">Set Password</Modal.Heading>
+                </Modal.Header>
+
+                <Modal.Body className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    {userToSetPassword ? `Set a new password for ${userToSetPassword.name}.` : null}
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor={setPasswordInputId}>Password *</Label>
+                    <Input
+                      id={setPasswordInputId}
+                      type="password"
+                      placeholder="Enter password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      variant="secondary"
+                    />
+                  </div>
+                </Modal.Body>
+
+                <Modal.Footer>
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onPress={() => {
+                      setUserToSetPassword(null);
+                      setNewPassword("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" variant="primary" isDisabled={isSettingPassword}>
+                    {isSettingPassword ? <Spinner className="mr-2 h-4 w-4" /> : null}
+                    {isSettingPassword ? "Saving..." : "Set Password"}
                   </Button>
                 </Modal.Footer>
               </form>

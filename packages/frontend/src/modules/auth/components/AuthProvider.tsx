@@ -1,10 +1,24 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import i18n from "i18next";
+import { Fragment, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { AppConfigContext } from "../../app/components/AppConfigProvider";
 import { syncI18nLocale } from "../../app/utils/locale";
-import { type AuthSession, authProviderContext } from "../auth.context";
+import {
+  type AuthSession,
+  authProviderContext,
+  type RegisterSessionOptions,
+} from "../auth.context";
 import { type AuthClient, configureAuthClient } from "../auth.lib";
 
 type Session = AuthSession;
+
+function sessionQuery(options?: RegisterSessionOptions):
+  | {
+      query: { disableCookieCache: true };
+    }
+  | undefined {
+  if (!options?.disableCookieCache) return undefined;
+  return { query: { disableCookieCache: true } };
+}
 
 export function AuthProvider({
   authClient,
@@ -26,11 +40,12 @@ export function AuthProvider({
   );
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
+  const [i18nLanguage, setI18nLanguage] = useState(() => i18n.language);
 
   const registerSession = useCallback(
-    (onSuccess?: () => void) => {
-      resolvedAuthClient
-        .getSession()
+    (onSuccess?: () => void, options?: RegisterSessionOptions) => {
+      return resolvedAuthClient
+        .getSession(sessionQuery(options))
         .then(({ data: nextSession }) => {
           setIsLoading(false);
           setSession(nextSession);
@@ -44,7 +59,7 @@ export function AuthProvider({
         .catch((error) => {
           console.error("Failed to get session:", error);
           setIsLoading(false);
-          setSession(null);
+          setSession((current) => current);
         });
     },
     [onSession, resolvedAuthClient]
@@ -53,6 +68,19 @@ export function AuthProvider({
   useEffect(() => {
     registerSession();
   }, [registerSession]);
+
+  useEffect(() => {
+    const onLanguageChanged = (language: string): void => {
+      // Defer remount so mutate onSuccess (toast) can finish first.
+      setTimeout(() => {
+        setI18nLanguage(language);
+      }, 0);
+    };
+    i18n.on("languageChanged", onLanguageChanged);
+    return () => {
+      i18n.off("languageChanged", onLanguageChanged);
+    };
+  }, []);
 
   const signOut = useCallback(() => {
     resolvedAuthClient.signOut().then(() => {
@@ -69,7 +97,7 @@ export function AuthProvider({
     <authProviderContext.Provider
       value={{ authClient: resolvedAuthClient, isLoading, data: session, signOut, registerSession }}
     >
-      {children}
+      <Fragment key={i18nLanguage}>{children}</Fragment>
     </authProviderContext.Provider>
   );
 }

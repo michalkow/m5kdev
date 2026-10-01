@@ -494,6 +494,7 @@ test("admin creates, bans, unbans, and authenticates a user", async ({ page, req
 
   const createdRow = page.getByRole("row").filter({ hasText: email });
   await expect(createdRow).toBeVisible();
+  await expect(createdRow.getByText(/^verified$/i)).toBeVisible();
   await createdRow.getByLabel("User actions").click();
   await page.getByRole("menuitem", { name: /^ban$/i }).click();
 
@@ -549,6 +550,65 @@ test("admin creates, bans, unbans, and authenticates a user", async ({ page, req
     adminListResponse.ok,
     `${adminListResponse.status} ${adminListResponse.statusText}: ${adminListResponse.text}`
   ).toBe(true);
+});
+
+test("admin verifies email, changes user role, and sets password from users list", async ({
+  page,
+  request,
+}) => {
+  const email = `admin-user-actions.${Date.now()}@auth-e2e.local`;
+  const password = "password1234";
+  const newPassword = "password5678";
+
+  await signUp(page, email, password);
+  const before = await getUserState(request, profile, email);
+  expect(before.user.emailVerified).toBe(false);
+  expect(before.user.role).toBe("user");
+
+  await login(page, profiles.standard.adminEmail, profiles.standard.adminPassword);
+  await page.goto("/admin/users");
+  await page.locator('input[name="search"]').fill(email);
+
+  const row = page.getByRole("row").filter({ hasText: email });
+  await expect(row).toBeVisible();
+  await expect(row.getByText(/^unverified$/i)).toBeVisible();
+
+  await row.getByLabel("User actions").click();
+  await page.getByRole("menuitem", { name: /^verify email$/i }).click();
+  await expect(row.getByText(/^verified$/i)).toBeVisible();
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, email);
+      return state.user.emailVerified;
+    })
+    .toBe(true);
+
+  await row.getByRole("button", { name: `Role for ${email}` }).click();
+  await page.getByRole("option", { name: /^admin$/i }).click();
+  await expect
+    .poll(async () => {
+      const state = await getUserState(request, profile, email);
+      return state.user.role;
+    })
+    .toBe("admin");
+
+  await row.getByLabel("User actions").click();
+  await expect(page.getByRole("menuitem", { name: /^verify email$/i })).toHaveCount(0);
+  await page.getByRole("menuitem", { name: /^set password$/i }).click();
+  const passwordDialog = page.getByRole("dialog");
+  await passwordDialog.getByPlaceholder(/enter password/i).fill(newPassword);
+  await passwordDialog.getByRole("button", { name: /^set password$/i }).click();
+  await expect(passwordDialog).toBeHidden();
+
+  await page.locator('input[name="search"]').fill(profiles.standard.adminEmail);
+  const adminRow = page.getByRole("row").filter({ hasText: profiles.standard.adminEmail });
+  await expect(adminRow).toBeVisible();
+  await expect(
+    adminRow.getByRole("button", { name: `Role for ${profiles.standard.adminEmail}` })
+  ).toBeDisabled();
+
+  await logout(page);
+  await login(page, email, newPassword);
 });
 
 test("admin manages organization members from organization admin", async ({ page, request }) => {
