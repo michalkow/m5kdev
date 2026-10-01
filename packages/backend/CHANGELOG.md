@@ -7,6 +7,16 @@
 - Table filter operators such as Equals, One Of, and Is Empty follow the active locale.
 - Language pickers show each language in its native name, so Polish stays Polski regardless of the UI language.
 
+## 0.38.15
+
+### Patch Changes
+
+- Keep a local Subscription per Stripe environment so production admin and paywall ignore sandbox Plan, Price, and Trial.
+  Kernel does not stamp existing rows; apps generate Drizzle for `subscriptions.environment` and run the documented stamp/collapse SQL.
+- Updated dependencies
+  - @m5kdev/commons@0.38.15
+  - @m5kdev/config@0.38.15
+
 ## 0.38.14
 
 ### Patch Changes
