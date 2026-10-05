@@ -352,7 +352,7 @@ export const RangeNuqsDatePicker = ({
               })}
           </span>
           <Select
-            aria-label="Quick range"
+            aria-label={t("web-ui:table.quickRange", { defaultValue: "Quick range" })}
             className="w-[300px]"
             selectedKey={quickRange ?? undefined}
             onSelectionChange={(key) =>

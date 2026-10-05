@@ -8,6 +8,7 @@ import {
 } from "@heroui/react";
 import type { DateValue } from "@react-types/calendar";
 import type { RangeValue } from "@react-types/shared";
+import { useTranslation } from "react-i18next";
 
 export function FilterHeroDatePicker({
   value,
@@ -22,6 +23,7 @@ export function FilterHeroDatePicker({
   className?: string;
   portalContainer?: Element;
 }) {
+  const { t } = useTranslation();
   return (
     <DatePicker
       className={className}
@@ -30,7 +32,7 @@ export function FilterHeroDatePicker({
       value={value ?? null}
       onChange={onChange}
     >
-      <Label className="sr-only">Date</Label>
+      <Label className="sr-only">{t("web-ui:table.filter.date", { defaultValue: "Date" })}</Label>
       <DateField.Group fullWidth variant="secondary">
         <DateField.Input>{(segment) => <DateField.Segment segment={segment} />}</DateField.Input>
         <DateField.Suffix>
@@ -40,7 +42,7 @@ export function FilterHeroDatePicker({
         </DateField.Suffix>
       </DateField.Group>
       <DatePicker.Popover UNSTABLE_portalContainer={portalContainer}>
-        <Calendar aria-label="Filter date">
+        <Calendar aria-label={t("web-ui:table.filter.filterDate", { defaultValue: "Filter date" })}>
           <Calendar.Header>
             <Calendar.YearPickerTrigger>
               <Calendar.YearPickerTriggerHeading />
@@ -81,6 +83,7 @@ export function FilterHeroDateRangePicker({
   onBlur?: () => void;
   portalContainer?: Element;
 }) {
+  const { t } = useTranslation();
   return (
     <DateRangePicker
       className={className}
@@ -91,7 +94,9 @@ export function FilterHeroDateRangePicker({
       onChange={onChange}
       onBlur={onBlur}
     >
-      <Label className="sr-only">Date range</Label>
+      <Label className="sr-only">
+        {t("web-ui:table.filter.dateRange", { defaultValue: "Date range" })}
+      </Label>
       <DateField.Group fullWidth variant="secondary">
         <DateField.Input slot="start">
           {(segment) => <DateField.Segment segment={segment} />}
@@ -107,7 +112,11 @@ export function FilterHeroDateRangePicker({
         </DateField.Suffix>
       </DateField.Group>
       <DateRangePicker.Popover UNSTABLE_portalContainer={portalContainer}>
-        <RangeCalendar aria-label="Filter date range">
+        <RangeCalendar
+          aria-label={t("web-ui:table.filter.filterDateRange", {
+            defaultValue: "Filter date range",
+          })}
+        >
           <RangeCalendar.Header>
             <RangeCalendar.YearPickerTrigger>
               <RangeCalendar.YearPickerTriggerHeading />

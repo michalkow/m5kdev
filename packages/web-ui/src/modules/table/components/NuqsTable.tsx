@@ -334,7 +334,7 @@ export const NuqsTable = <T,>({
       .filter((column) => column.type === "date" && column.endColumnId)
       .map((column) => ({
         id: `${String(column.id)}__period`,
-        label: "Period",
+        label: t("web-ui:table.period", { defaultValue: "Period" }),
         type: "date" as ColumnDataType,
         options: [],
         endColumnId: null,
@@ -343,7 +343,7 @@ export const NuqsTable = <T,>({
       }));
 
     return [...baseColumns, ...periodColumns];
-  }, [columns]);
+  }, [columns, t]);
 
   const groupableColumns = useMemo(
     () =>
@@ -492,7 +492,7 @@ export const NuqsTable = <T,>({
               <span className="flex items-center gap-1.5">
                 <Button
                   isIconOnly
-                  aria-label="Toggle group"
+                  aria-label={t("web-ui:table.toggleGroup", { defaultValue: "Toggle group" })}
                   size="sm"
                   variant="ghost"
                   onPress={() => toggleExpanded(groupRow.id)}
@@ -526,7 +526,11 @@ export const NuqsTable = <T,>({
     >
       {isRowSelectionEnabled ? (
         <Table.Cell className="pr-0">
-          <Checkbox aria-label="Select row" slot="selection" variant="secondary">
+          <Checkbox
+            aria-label={t("web-ui:table.selectRow", { defaultValue: "Select row" })}
+            slot="selection"
+            variant="secondary"
+          >
             <Checkbox.Control>
               <Checkbox.Indicator />
             </Checkbox.Control>
@@ -686,7 +690,7 @@ export const NuqsTable = <T,>({
       <Table variant="primary">
         <Table.ScrollContainer>
           <Table.Content
-            aria-label="Table"
+            aria-label={t("web-ui:table.label", { defaultValue: "Table" })}
             className="min-w-[600px]"
             sortDescriptor={sortDescriptor}
             onSortChange={(descriptor) => {
@@ -699,7 +703,10 @@ export const NuqsTable = <T,>({
             <Table.Header>
               {isRowSelectionEnabled ? (
                 <Table.Column className="pr-0">
-                  <Checkbox aria-label="Select all" slot="selection">
+                  <Checkbox
+                    aria-label={t("web-ui:table.selectAll", { defaultValue: "Select all" })}
+                    slot="selection"
+                  >
                     <Checkbox.Control>
                       <Checkbox.Indicator />
                     </Checkbox.Control>
