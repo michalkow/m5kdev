@@ -7,6 +7,13 @@
 - Table filter operators such as Equals, One Of, and Is Empty follow the active locale.
 - Language pickers show each language in its native name, so Polish stays Polski regardless of the UI language.
 
+## 0.38.17
+
+### Patch Changes
+
+- @m5kdev/commons@0.38.17
+  - @m5kdev/config@0.38.17
+
 ## 0.38.16
 
 ### Patch Changes

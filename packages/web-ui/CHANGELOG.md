@@ -9,6 +9,15 @@
 - Table filter operators such as Equals, One Of, and Is Empty follow the active locale.
 - Language pickers show each language in its native name, so Polish stays Polski regardless of the UI language.
 
+## 0.38.17
+
+### Patch Changes
+
+- BillingPaywallProvider wraps BillingProvider and shows Organization Select, the impersonation banner, and an Admin panel link on the unpaid Plan page for User-role admin on their own session.
+  Billing Module admin row actions are a 3-dot menu; Skip subscription check stays a Switch.
+- @m5kdev/commons@0.38.17
+  - @m5kdev/frontend@0.38.17
+
 ## 0.38.16
 
 ### Patch Changes
