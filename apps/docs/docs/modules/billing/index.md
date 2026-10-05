@@ -15,7 +15,7 @@ Organization (ADR-0017).
 | `@m5kdev/commons` | `StripePlan` / `StripePlansConfig` types, billing schema, plan utilities. |
 | `@m5kdev/backend` | `BillingModule`: `subscriptions` table, repository, `BillingService`, Stripe HTTP, tRPC procedures. |
 | `@m5kdev/frontend` | `BillingProvider` and `useSubscription`. |
-| `@m5kdev/web-ui` | `BillingRouter`, plan select pages, invoice page, beta page, `BillingAdminRouter`. |
+| `@m5kdev/web-ui` | `BillingPaywallProvider`, `BillingRouter`, plan select pages, invoice page, beta page, `BillingAdminRouter`. |
 
 ## Plan configuration
 
@@ -191,15 +191,21 @@ AdminActor is not in that Organization.
 
 ## Frontend and UI
 
-Wrap billing-aware routes in `BillingProvider` and read state with
-`useSubscription`. `@m5kdev/web-ui` provides `BillingRouter` with
+Wrap billing-aware product routes in `BillingPaywallProvider` (it wraps
+`BillingProvider`) and read state with `useSubscription`. When the Plan page
+shows, the wrap adds Organization Select, the impersonation banner, and a link
+to Admin panel (`/admin`) for User-role admin on their own session. Do not put
+`AuthAdminRouter` inside that wrap. There is no session skip of the paywall;
+`skipPlanCheck` still bypasses it for the whole app and ignores `billingExempt`.
+An exempt Organization also skips the subscription query.
+
+`@m5kdev/web-ui` provides `BillingRouter` with
 `BillingPlanSelect` (1..N Plans), `BillingSinglePlanSelect`, `BillingInvoicePage`,
 and `BillingBetaPage`. Pass Organization currency (frozen at create). When Trial
 requires a payment method, pass `trialRequiresPaymentMethod` and the resolved
 Trial Plan name so the Plan page Checkouts that Plan (default Price skips the
-interval picker). `skipPlanCheck` still bypasses the paywall for the whole app
-and ignores `billingExempt`. An exempt Organization also skips the subscription
-query.
+interval picker). Billing Module admin row actions are a 3-dot menu; Skip
+subscription check stays a Switch.
 
 The Admin panel keeps Users / Organizations / Waitlist. Pass optional
 `extraLinks` and `extraRoutes` on `AuthAdminRouter` so Module admin hangs off
@@ -214,7 +220,9 @@ AuthAdminRouter({
 ```
 
 Starter does not register BillingModule; omit those props unless the app does.
-Do not register admin links at import time.
+Do not register admin links at import time. Compose `AuthAdminRouter` at the
+router level, outside `BillingPaywallProvider`, so Admin panel is reachable
+without an ACCESS_STATUS Subscription.
 
 ## Environment
 

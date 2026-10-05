@@ -1,6 +1,7 @@
 import {
   Button,
   Chip,
+  Dropdown,
   Input,
   Label,
   ListBox,
@@ -19,6 +20,7 @@ import {
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
+import { MoreHorizontal } from "lucide-react";
 import { type ReactElement, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -269,80 +271,90 @@ export function BillingAdminPage({ plans }: { plans: readonly StripePlan[] }): R
       cell: ({ row }) => {
         const item = row.original;
         return (
-          <div className="flex flex-wrap gap-2">
-            {item.currency ? null : (
+          <Dropdown>
+            <Dropdown.Trigger>
               <Button
                 size="sm"
-                variant="secondary"
-                onPress={() => openDialog({ kind: "currency", row: item })}
+                variant="ghost"
+                isIconOnly
+                aria-label={t("web-ui:billing.admin.rowActions")}
               >
-                {t("web-ui:billing.admin.setCurrency")}
+                <MoreHorizontal className="h-4 w-4" />
               </Button>
-            )}
-            {item.stripeCustomerId ? null : (
-              <Button
-                size="sm"
-                variant="secondary"
-                isPending={createCustomer.isPending}
-                onPress={() => createCustomer.mutate({ organizationId: item.organizationId })}
-              >
-                {t("web-ui:billing.admin.createCustomer")}
-              </Button>
-            )}
-            {!item.openSubscription && item.currency ? (
-              <Button
-                size="sm"
-                variant="secondary"
-                onPress={() => openDialog({ kind: "subscription", row: item })}
-              >
-                {t("web-ui:billing.admin.createSubscription")}
-              </Button>
-            ) : null}
-            {item.openSubscription ? (
-              <>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onPress={() => openDialog({ kind: "coupon", row: item })}
-                >
-                  {t("web-ui:billing.admin.applyCoupon")}
-                </Button>
-                {item.coupon ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
+            </Dropdown.Trigger>
+            <Dropdown.Popover placement="bottom end">
+              <Dropdown.Menu aria-label={t("web-ui:billing.admin.rowActions")}>
+                {item.currency ? null : (
+                  <Dropdown.Item
+                    key="currency"
+                    onPress={() => openDialog({ kind: "currency", row: item })}
+                  >
+                    {t("web-ui:billing.admin.setCurrency")}
+                  </Dropdown.Item>
+                )}
+                {item.stripeCustomerId ? null : (
+                  <Dropdown.Item
+                    key="customer"
+                    onPress={() => createCustomer.mutate({ organizationId: item.organizationId })}
+                    isDisabled={createCustomer.isPending}
+                  >
+                    {t("web-ui:billing.admin.createCustomer")}
+                  </Dropdown.Item>
+                )}
+                {!item.openSubscription && item.currency ? (
+                  <Dropdown.Item
+                    key="subscription"
+                    onPress={() => openDialog({ kind: "subscription", row: item })}
+                  >
+                    {t("web-ui:billing.admin.createSubscription")}
+                  </Dropdown.Item>
+                ) : null}
+                {item.openSubscription ? (
+                  <Dropdown.Item
+                    key="coupon"
+                    onPress={() => openDialog({ kind: "coupon", row: item })}
+                  >
+                    {t("web-ui:billing.admin.applyCoupon")}
+                  </Dropdown.Item>
+                ) : null}
+                {item.openSubscription && item.coupon ? (
+                  <Dropdown.Item
+                    key="removeCoupon"
                     onPress={() => removeCoupon.mutate({ organizationId: item.organizationId })}
                   >
                     {t("web-ui:billing.admin.removeCoupon")}
-                  </Button>
+                  </Dropdown.Item>
                 ) : null}
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onPress={() =>
-                    cancelSubscription.mutate({
-                      organizationId: item.organizationId,
-                      when: "period_end",
-                    })
-                  }
-                >
-                  {t("web-ui:billing.admin.cancelPeriodEnd")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="danger"
-                  onPress={() =>
-                    cancelSubscription.mutate({
-                      organizationId: item.organizationId,
-                      when: "immediate",
-                    })
-                  }
-                >
-                  {t("web-ui:billing.admin.cancelNow")}
-                </Button>
-              </>
-            ) : null}
-          </div>
+                {item.openSubscription ? (
+                  <Dropdown.Item
+                    key="cancelPeriodEnd"
+                    onPress={() =>
+                      cancelSubscription.mutate({
+                        organizationId: item.organizationId,
+                        when: "period_end",
+                      })
+                    }
+                  >
+                    {t("web-ui:billing.admin.cancelPeriodEnd")}
+                  </Dropdown.Item>
+                ) : null}
+                {item.openSubscription ? (
+                  <Dropdown.Item
+                    key="cancelNow"
+                    className="text-danger"
+                    onPress={() =>
+                      cancelSubscription.mutate({
+                        organizationId: item.organizationId,
+                        when: "immediate",
+                      })
+                    }
+                  >
+                    {t("web-ui:billing.admin.cancelNow")}
+                  </Dropdown.Item>
+                ) : null}
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
         );
       },
     },
