@@ -6,6 +6,8 @@ export type StripePlanPrice = {
   interval: "day" | "week" | "month" | "year";
   intervalCount: number;
   unitAmount?: number;
+  /** 0 means no trial for this Price. Omit to fall back to plan `freeTrial.days`. */
+  freeTrialDays?: number;
 };
 
 export type StripePlanProduct = {

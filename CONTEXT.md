@@ -269,7 +269,7 @@ Named commercial offering in app code (`StripePlan` / `StripePlansConfig`). Not 
 _Avoid_: Product (that is the per-currency Stripe Product); Tier; Subscription; `limits` / `group`; treating monthly/quarterly/yearly as separate Plans; `annualDiscountPriceId` as a unique field; a single global trial Plan name when currencies disagree
 
 **Price**:
-One recurring option on a Plan: Stripe Price id, currency, interval, interval_count, and unit amount. Monthly, quarterly, and yearly are Prices on the same Plan. The Trial Plan's Product may name one default Price for Trial.
+One recurring option on a Plan: Stripe Price id, currency, interval, interval_count, unit amount, and optional `freeTrialDays`. Monthly, quarterly, and yearly are Prices on the same Plan. The Trial Plan's Product may name one default Price for Trial.
 _Avoid_: Plan; Product; Subscription (that is the synced row)
 
 **Trial Plan**:
@@ -281,7 +281,7 @@ Frozen ISO code on the Organization, set at create the same way locale is (paylo
 _Avoid_: deriving currency from locale on every read; a User-keyed currency column; switching USD↔PLN in Billing Portal; lookup of Stripe Customer by email to share currency; Admin changing a currency that is already set
 
 **Trial**:
-The unpaid `trialing` period of a Subscription. Length comes from the Trial Plan's `freeTrial.days`, or from the days an AdminActor enters when starting one from Billing Module admin. The Trial Price is the catalog default Price on that Plan's Product for Organization currency, the Price the Owner Checkouts, or any catalog Price the AdminActor picks. Stripe owns start and end and cancels at end when there is no payment method; the local row stores trialStart / trialEnd. `freeTrial.seats` exists only when Seat billing is on.
+The unpaid `trialing` period of a Subscription. Length comes from the billed Price's `freeTrialDays`, else the Trial Plan's `freeTrial.days`, or from the days an AdminActor enters when starting one from Billing Module admin. `freeTrialDays: 0` on a Price means no Trial for that Price. The Trial Price is the catalog default Price on that Plan's Product for Organization currency, the Price the Owner Checkouts, or any catalog Price the AdminActor picks. Stripe owns start and end and cancels at end when there is no payment method; the local row stores trialStart / trialEnd. `freeTrial.seats` exists only when Seat billing is on.
 _Avoid_: Plan, beta, Stripe Customer; requiring seats when Seat billing is off; Interval pick mid-Trial; treating a stand-in as unchosen; Coupon (that is an Admin discount on a paid Price); Admin editing `trial_end` on an existing Subscription
 
 **Stripe Customer**:

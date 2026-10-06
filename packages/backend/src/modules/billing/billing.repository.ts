@@ -42,7 +42,7 @@ const OPEN_STATUSES: readonly string[] = [
 
 type OrganizationRow = InferSelectModel<Schema["organizations"]>;
 type CustomerIdField = "stripeCustomerId" | "stripeSandboxCustomerId";
-type OrganizationBillingListRow = Omit<AdminOrganizationBillingRow, "coupon">;
+type OrganizationBillingListRow = Omit<AdminOrganizationBillingRow, "coupon" | "defaultTrialDays">;
 
 function isStripeResourceMissing(error: unknown): boolean {
   return (
@@ -244,12 +244,14 @@ export class BillingRepository extends BaseTableRepository<
     memberId,
     priceId,
     currency,
+    trialDays,
   }: {
     customerId: string;
     organizationId: string;
     memberId: string;
     priceId: string;
     currency: string;
+    trialDays?: number;
   }): ServerResultAsync<Stripe.Subscription> {
     const trialPlan = this.trialPlanFor(currency);
     if (!trialPlan) return this.error("INTERNAL_SERVER_ERROR", "Trial plan not found");
@@ -257,7 +259,7 @@ export class BillingRepository extends BaseTableRepository<
     const stripeSubscription = await this.createSubscription({
       customerId,
       priceId,
-      trialDays: trialPlan.freeTrial?.days ?? 7,
+      trialDays,
       quantity,
       organizationId,
       memberId,
@@ -612,9 +614,6 @@ export class BillingRepository extends BaseTableRepository<
         organizationName: organization.name,
         currency: organization.currency ?? null,
         stripeCustomerId: this.customerIdOf(organization),
-        defaultTrialDays: organization.currency
-          ? (this.trialPlanFor(organization.currency)?.freeTrial?.days ?? null)
-          : null,
         billingExempt: organization.billingExempt,
         openSubscription: Boolean(
           subscription.value && OPEN_STATUSES.includes(subscription.value.status)

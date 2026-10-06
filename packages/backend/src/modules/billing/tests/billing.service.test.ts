@@ -33,6 +33,7 @@ jest.mock("better-auth/node", () => ({
 
 const PRICE_ID = "price_usd_month";
 const PRICE_USD_QUARTER = "price_usd_quarter";
+const PRICE_USD_YEAR = "price_usd_year";
 const PRICE_PLN_MONTH = "price_pln_month";
 const PRICE_TEAM_MONTH = "price_team_usd_month";
 const PRICE_CAD_YEAR = "price_cad_year";
@@ -106,6 +107,52 @@ function catalog(overrides: Partial<ResolvedStripePlans> = {}): ResolvedStripePl
     seatBilling: false,
     nonBillableRoleKeys: [],
     ...overrides,
+  };
+}
+
+function perPriceTrialPlan({
+  monthDays = 14,
+  quarterDays = 0,
+  yearDays = 0,
+  planDays = 14,
+}: {
+  monthDays?: number;
+  quarterDays?: number;
+  yearDays?: number;
+  planDays?: number;
+} = {}): StripePlan {
+  return {
+    name: "pro",
+    products: {
+      usd: {
+        id: "prod_usd",
+        defaultPriceId: PRICE_ID,
+        prices: [
+          {
+            priceId: PRICE_ID,
+            interval: "month",
+            intervalCount: 1,
+            unitAmount: 3900,
+            freeTrialDays: monthDays,
+          },
+          {
+            priceId: PRICE_USD_QUARTER,
+            interval: "month",
+            intervalCount: 3,
+            unitAmount: 9900,
+            freeTrialDays: quarterDays,
+          },
+          {
+            priceId: PRICE_USD_YEAR,
+            interval: "year",
+            intervalCount: 1,
+            unitAmount: 34800,
+            freeTrialDays: yearDays,
+          },
+        ],
+      },
+    },
+    freeTrial: { days: planDays },
   };
 }
 
@@ -1546,6 +1593,216 @@ describe("BillingService Organization paywall", () => {
     );
   });
 
+  it("omits trial_period_days for a quarterly Price with freeTrialDays 0", async () => {
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+      catalog: catalog({
+        plans: [perPriceTrialPlan()],
+        trialPlanName: { usd: "pro" },
+      }),
+    });
+
+    const result = await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+      trialPriceId: PRICE_USD_QUARTER,
+    });
+    expect(result._unsafeUnwrap()).toBe(true);
+    expect(stripe.subscriptions.create).not.toHaveBeenCalled();
+  });
+
+  it("starts card-off Trial with plan days on the monthly default Price of a mixed catalog", async () => {
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+      catalog: catalog({
+        plans: [perPriceTrialPlan()],
+        trialPlanName: { usd: "pro" },
+      }),
+    });
+
+    const result = await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+    expect(result._unsafeUnwrap()).toBe(true);
+    expect(stripe.subscriptions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: [{ price: PRICE_ID, quantity: 1 }],
+        trial_period_days: 14,
+      })
+    );
+  });
+
+  it("lets Price freeTrialDays win over plan freeTrial.days on Trial start", async () => {
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+      catalog: catalog({
+        plans: [perPriceTrialPlan({ monthDays: 30, planDays: 14 })],
+        trialPlanName: { usd: "pro" },
+      }),
+    });
+
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+    expect(stripe.subscriptions.create).toHaveBeenCalledWith(
+      expect.objectContaining({ trial_period_days: 30 })
+    );
+  });
+
+  it("lets Price freeTrialDays win over plan freeTrial.days on Checkout", async () => {
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+      catalog: catalog({
+        plans: [perPriceTrialPlan({ monthDays: 30, planDays: 14 })],
+        trialPlanName: { usd: "pro" },
+        trialRequiresPaymentMethod: true,
+      }),
+    });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+
+    const checkout = await billing.createCheckoutSession(
+      { priceId: PRICE_ID },
+      {
+        organizationId: ORG_ID,
+        memberId: MEMBER_ID,
+        organizationRole: "owner",
+        email: USER_EMAIL,
+      }
+    );
+    expect(checkout.isOk()).toBe(true);
+    expect(stripe.checkout.sessions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        line_items: [{ price: PRICE_ID, quantity: 1 }],
+        subscription_data: expect.objectContaining({ trial_period_days: 30 }),
+      })
+    );
+  });
+
+  it("still sends plan-level trial days for every Price when the catalog omits per-Price days", async () => {
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+    });
+
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+      trialPriceId: PRICE_USD_QUARTER,
+    });
+    expect(stripe.subscriptions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: [expect.objectContaining({ price: PRICE_USD_QUARTER })],
+        trial_period_days: 7,
+      })
+    );
+  });
+
+  it("Checkouts monthly default with trial days from a mixed catalog", async () => {
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+      catalog: catalog({
+        plans: [perPriceTrialPlan()],
+        trialPlanName: { usd: "pro" },
+        trialRequiresPaymentMethod: true,
+      }),
+    });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+
+    const monthly = await billing.createCheckoutSession(
+      { priceId: PRICE_USD_QUARTER },
+      {
+        organizationId: ORG_ID,
+        memberId: MEMBER_ID,
+        organizationRole: "owner",
+        email: USER_EMAIL,
+      }
+    );
+    expect(monthly.isOk()).toBe(true);
+    expect(stripe.checkout.sessions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        line_items: [{ price: PRICE_ID, quantity: 1 }],
+        subscription_data: expect.objectContaining({ trial_period_days: 14 }),
+      })
+    );
+  });
+
+  it("Checkouts the picked sign-up Price without trial_period_days when that Price sets 0", async () => {
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+      catalog: catalog({
+        plans: [perPriceTrialPlan()],
+        trialPlanName: { usd: "pro" },
+        trialRequiresPaymentMethod: true,
+      }),
+    });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+      trialPriceId: PRICE_USD_QUARTER,
+    });
+
+    const checkout = await billing.createCheckoutSession(
+      { priceId: PRICE_ID },
+      {
+        organizationId: ORG_ID,
+        memberId: MEMBER_ID,
+        organizationRole: "owner",
+        email: USER_EMAIL,
+      }
+    );
+    expect(checkout.isOk()).toBe(true);
+    expect(stripe.checkout.sessions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        line_items: [{ price: PRICE_USD_QUARTER, quantity: 1 }],
+        subscription_data: expect.not.objectContaining({
+          trial_period_days: expect.anything(),
+        }),
+      })
+    );
+  });
+
   it("ignores a sign-up Price outside the Trial Plan of Organization currency", async () => {
     const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
     await orm
@@ -1945,6 +2202,52 @@ describe("BillingService Billing Module admin", () => {
     expect(
       listed.rows.find((row) => row.organizationId === "org_cad")?.defaultTrialDays
     ).toBeNull();
+  });
+
+  it("lists defaultTrialDays from the Trial Plan default Price, not a sibling Price", async () => {
+    const billing = await boot(createStripeStub({}), {
+      plans: [perPriceTrialPlan({ monthDays: 14, quarterDays: 0, planDays: 14 })],
+      trialPlanName: { usd: "pro" },
+    });
+
+    const listed = (await billing.listAdminOrganizationBilling({}, adminCtx()))._unsafeUnwrap();
+    expect(listed.rows.find((row) => row.organizationId === ORG_ID)?.defaultTrialDays).toBe(14);
+  });
+
+  it("lists defaultTrialDays as null when the Trial Plan default Price sets freeTrialDays 0", async () => {
+    const noDefaultTrial: StripePlan = {
+      name: "pro",
+      products: {
+        usd: {
+          id: "prod_usd",
+          defaultPriceId: PRICE_USD_QUARTER,
+          prices: [
+            {
+              priceId: PRICE_ID,
+              interval: "month",
+              intervalCount: 1,
+              unitAmount: 3900,
+              freeTrialDays: 14,
+            },
+            {
+              priceId: PRICE_USD_QUARTER,
+              interval: "month",
+              intervalCount: 3,
+              unitAmount: 9900,
+              freeTrialDays: 0,
+            },
+          ],
+        },
+      },
+      freeTrial: { days: 14 },
+    };
+    const billing = await boot(createStripeStub({}), {
+      plans: [noDefaultTrial],
+      trialPlanName: { usd: "pro" },
+    });
+
+    const listed = (await billing.listAdminOrganizationBilling({}, adminCtx()))._unsafeUnwrap();
+    expect(listed.rows.find((row) => row.organizationId === ORG_ID)?.defaultTrialDays).toBeNull();
   });
 
   it("creates a Subscription with a Coupon and lists that Coupon on the Organization", async () => {

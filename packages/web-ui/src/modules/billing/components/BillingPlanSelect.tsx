@@ -4,15 +4,17 @@ import {
   formatBillingInterval,
   formatPlanAmount,
   listPlanSelectPrices,
+  resolveTrialDays,
 } from "@m5kdev/commons/modules/billing/billing.utils";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useQuery } from "@tanstack/react-query";
-import { Check } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { buttonVariants } from "../../../components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../../components/ui/card";
 import { cn } from "../../../lib/utils";
 import { BillingSinglePlanSelect } from "./BillingSinglePlanSelect";
+import { BillingTrialBadge, billingPlanCtaLabel } from "./billingPlanTrial";
 
 interface BillingPlanSelectProps {
   plans: StripePlan[];
@@ -80,6 +82,7 @@ function PlanCard({
   trialRequiresPaymentMethod?: boolean;
   trialPriceId?: string | null;
 }) {
+  const { t } = useTranslation("web-ui");
   const { serverUrl } = useAppConfig();
   const prices = listPlanSelectPrices({
     plan,
@@ -92,6 +95,9 @@ function PlanCard({
     displayPrice?.unitAmount != null
       ? formatPlanAmount({ unitAmount: displayPrice.unitAmount, currency })
       : "";
+  const displayTrialDays = displayPrice
+    ? resolveTrialDays({ plan, price: displayPrice })
+    : undefined;
 
   return (
     <Card className="flex flex-col">
@@ -100,27 +106,25 @@ function PlanCard({
       </CardHeader>
       <CardContent className="flex-1 space-y-4">
         {amount ? <p className="text-3xl font-bold">{amount}</p> : null}
-        {plan.freeTrial?.days ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Check className="h-3 w-3" />
-            {plan.freeTrial.days}-day Trial
-          </p>
-        ) : null}
+        <BillingTrialBadge days={displayTrialDays} />
       </CardContent>
       <CardFooter className="flex flex-col gap-2">
-        {prices.map((price) => (
-          <a
-            key={price.priceId}
-            className={cn(buttonVariants({ variant: "default" }), "w-full")}
-            href={`${serverUrl}/stripe/checkout/${price.priceId}`}
-          >
-            {trialRequiresPaymentMethod ? "Start Trial " : "Subscribe "}
-            {formatBillingInterval({
-              interval: price.interval,
-              intervalCount: price.intervalCount,
-            }).toLowerCase()}
-          </a>
-        ))}
+        {prices.map((price) => {
+          const trialDays = resolveTrialDays({ plan, price });
+          return (
+            <a
+              key={price.priceId}
+              className={cn(buttonVariants({ variant: "default" }), "w-full")}
+              href={`${serverUrl}/stripe/checkout/${price.priceId}`}
+            >
+              {billingPlanCtaLabel({ trialRequiresPaymentMethod, trialDays, t })}{" "}
+              {formatBillingInterval({
+                interval: price.interval,
+                intervalCount: price.intervalCount,
+              }).toLowerCase()}
+            </a>
+          );
+        })}
       </CardFooter>
     </Card>
   );

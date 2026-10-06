@@ -158,6 +158,14 @@ Customer ids so production does not show sandbox Plan/Price/Trial.
 
 - [Subscription per Stripe environment](/guides/v0.38.15-subscription-per-stripe-environment-migration)
 
+## Upgrading to 0.38.20 {#upgrade-0-38-20}
+
+Complete 0.38.15 first. Billing catalogs that set plan-level `freeTrial.days`
+and have more than one Price can set `freeTrialDays` per Price so quarterly
+and yearly skip Trial. No Drizzle generate.
+
+- [Trial days per Price](/guides/v0.38.20-billing-trial-days-per-price-migration)
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module

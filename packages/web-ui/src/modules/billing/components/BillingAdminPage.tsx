@@ -15,7 +15,9 @@ import { type BillingCoupon, MAX_TRIAL_DAYS } from "@m5kdev/commons/modules/bill
 import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
 import {
   catalogCurrencyKeys,
+  findPlanByPriceId,
   formatPlanAmount,
+  resolveTrialDays,
 } from "@m5kdev/commons/modules/billing/billing.utils";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -63,6 +65,19 @@ const SUBSCRIPTION_STARTS: readonly SubscriptionStart[] = ["none", "trial", "cou
 
 function isSubscriptionStart(value: unknown): value is SubscriptionStart {
   return SUBSCRIPTION_STARTS.some((start) => start === value);
+}
+
+function trialDaysInputValue({
+  plans,
+  priceId,
+}: {
+  plans: readonly StripePlan[];
+  priceId: string;
+}): string {
+  const plan = findPlanByPriceId(plans, priceId);
+  if (!plan) return "";
+  const days = resolveTrialDays({ plan, priceId });
+  return days ? String(days) : "";
 }
 
 function pricesForCurrency({
@@ -189,10 +204,11 @@ export function BillingAdminPage({ plans }: { plans: readonly StripePlan[] }): R
     const firstPrice = next.row.currency
       ? pricesForCurrency({ plans, currency: next.row.currency })[0]
       : undefined;
-    setPriceId(firstPrice?.priceId ?? "");
+    const nextPriceId = firstPrice?.priceId ?? "";
+    setPriceId(nextPriceId);
     setCouponId("");
     setStart("none");
-    setTrialDays(next.row.defaultTrialDays ? String(next.row.defaultTrialDays) : "");
+    setTrialDays(nextPriceId ? trialDaysInputValue({ plans, priceId: nextPriceId }) : "");
     setDialog(next);
   };
 
@@ -482,7 +498,11 @@ export function BillingAdminPage({ plans }: { plans: readonly StripePlan[] }): R
                     aria-label={t("web-ui:billing.admin.price")}
                     selectedKey={priceId || null}
                     onSelectionChange={(key) => {
-                      if (key !== null) setPriceId(String(key));
+                      if (key !== null) {
+                        const nextPriceId = String(key);
+                        setPriceId(nextPriceId);
+                        setTrialDays(trialDaysInputValue({ plans, priceId: nextPriceId }));
+                      }
                     }}
                     variant="secondary"
                     className="w-full"

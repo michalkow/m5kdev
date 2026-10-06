@@ -14,7 +14,9 @@ import {
 } from "@m5kdev/commons/modules/billing/billing.schema";
 import {
   catalogCurrencyKeys,
+  findDefaultTrialPrice,
   findPriceCurrency,
+  resolveTrialDays,
 } from "@m5kdev/commons/modules/billing/billing.utils";
 import type { InferSelectModel } from "drizzle-orm";
 import { err, ok } from "neverthrow";
@@ -30,6 +32,7 @@ import type { BillingRepository } from "./billing.repository";
 
 const TRIAL_ENDING_TEMPLATE_KEY = "trialEnding";
 const TRIAL_PRICE_ID_METADATA_KEY = "trialPriceId";
+const TRIAL_START_FALLBACK_DAYS = 7;
 const NO_PAYMENT_METHOD_MESSAGE =
   "The Customer has no payment method: pick a Trial or a 100% Coupon";
 
@@ -193,30 +196,38 @@ export class BillingService extends BasePermissionService<
       if (trialPlan && !trialPriceId) return ok(false);
 
       if (trialPlan && trialPriceId) {
-        const existingSubscription =
-          await this.repository.billing.getLatestSubscription(organizationId);
-        if (existingSubscription.isErr()) return ok(false);
-        if (!existingSubscription.value) {
-          const subscription = await this.repository.billing.createTrialSubscription({
-            customerId: stripeCustomer.value.id,
-            organizationId,
-            memberId,
-            priceId: trialPriceId,
-            currency,
-          });
-          if (subscription.isErr()) {
-            this.logger.warn(
-              { err: subscription.error, organizationId },
-              "Stripe Trial create failed; Organization remains without a Subscription"
-            );
-            return ok(false);
-          }
-        }
-        const syncResult = await this.syncStripeData({
-          customerId: stripeCustomer.value.id,
-          memberId,
+        const trialDays = resolveTrialDays({
+          plan: trialPlan,
+          priceId: trialPriceId,
+          fallbackDays: TRIAL_START_FALLBACK_DAYS,
         });
-        if (syncResult.isErr()) return ok(false);
+        if (trialDays != null) {
+          const existingSubscription =
+            await this.repository.billing.getLatestSubscription(organizationId);
+          if (existingSubscription.isErr()) return ok(false);
+          if (!existingSubscription.value) {
+            const subscription = await this.repository.billing.createTrialSubscription({
+              customerId: stripeCustomer.value.id,
+              organizationId,
+              memberId,
+              priceId: trialPriceId,
+              currency,
+              trialDays,
+            });
+            if (subscription.isErr()) {
+              this.logger.warn(
+                { err: subscription.error, organizationId },
+                "Stripe Trial create failed; Organization remains without a Subscription"
+              );
+              return ok(false);
+            }
+          }
+          const syncResult = await this.syncStripeData({
+            customerId: stripeCustomer.value.id,
+            memberId,
+          });
+          if (syncResult.isErr()) return ok(false);
+        }
       }
     }
 
@@ -303,7 +314,6 @@ export class BillingService extends BasePermissionService<
       } else if (!this.repository.billing.priceBelongsToTrialPlan(priceId, currency)) {
         return this.error("NOT_FOUND", "Price not found for this Trial Plan");
       }
-      trialDays = trialPlan.freeTrial?.days ?? 7;
       collectPaymentMethod = true;
     }
 
@@ -327,6 +337,14 @@ export class BillingService extends BasePermissionService<
     if (usePickedTrialPrice) {
       checkoutPriceId =
         this.pickedTrialPriceId({ customer: stripeCustomer.value, currency }) ?? checkoutPriceId;
+    }
+
+    if (collectPaymentMethod && trialPlan) {
+      trialDays = resolveTrialDays({
+        plan: trialPlan,
+        priceId: checkoutPriceId,
+        fallbackDays: TRIAL_START_FALLBACK_DAYS,
+      });
     }
 
     const stripeSubscriptions = await this.repository.billing.listStripeSubscriptions(
@@ -514,6 +532,7 @@ export class BillingService extends BasePermissionService<
         total: listed.value.total,
         rows: listed.value.rows.map((row) => ({
           ...row,
+          defaultTrialDays: this.defaultTrialDaysFor(row.currency),
           coupon: couponOfSubscription({ subscription: row.subscription, coupons }),
         })),
       });
@@ -915,6 +934,18 @@ export class BillingService extends BasePermissionService<
     const synced = await this.syncStripeData({ customerId });
     if (synced.isErr()) return err(synced.error);
     return ok();
+  }
+
+  private defaultTrialDaysFor(currency: string | null): number | null {
+    if (!currency) return null;
+    const trialPlan = this.repository.billing.trialPlanFor(currency);
+    if (!trialPlan) return null;
+    return (
+      resolveTrialDays({
+        plan: trialPlan,
+        price: findDefaultTrialPrice({ plan: trialPlan, currency }),
+      }) ?? null
+    );
   }
 
   private pickedTrialPriceId({

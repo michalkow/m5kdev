@@ -41,6 +41,37 @@ export function listPlanPrices(plan: StripePlan): StripePlanPrice[] {
   return Object.values(plan.products).flatMap((product) => product.prices);
 }
 
+export function findPlanPrice({
+  plan,
+  priceId,
+}: {
+  plan: StripePlan;
+  priceId: string;
+}): StripePlanPrice | undefined {
+  return listPlanPrices(plan).find((price) => price.priceId === priceId);
+}
+
+export function resolveTrialDays({
+  plan,
+  price,
+  priceId,
+  fallbackDays,
+}: {
+  plan: StripePlan;
+  price?: StripePlanPrice;
+  priceId?: string;
+  fallbackDays?: number;
+}): number | undefined {
+  const resolvedPrice = price ?? (priceId != null ? findPlanPrice({ plan, priceId }) : undefined);
+  if (resolvedPrice?.freeTrialDays != null) {
+    return resolvedPrice.freeTrialDays > 0 ? resolvedPrice.freeTrialDays : undefined;
+  }
+  if (plan.freeTrial?.days != null) {
+    return plan.freeTrial.days > 0 ? plan.freeTrial.days : undefined;
+  }
+  return fallbackDays != null && fallbackDays > 0 ? fallbackDays : undefined;
+}
+
 export function catalogCurrencyKeys(plans: readonly StripePlan[]): string[] {
   const keys = new Set<string>();
   for (const plan of plans) {

@@ -3,6 +3,7 @@ import {
   formatBillingInterval,
   formatPlanAmount,
   listPlanSelectPrices,
+  resolveTrialDays,
 } from "@m5kdev/commons/modules/billing/billing.utils";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
@@ -21,6 +22,7 @@ import {
 } from "../../../components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "../../../components/ui/tabs";
 import { cn } from "../../../lib/utils";
+import { BillingTrialBadge, billingPlanCtaLabel } from "./billingPlanTrial";
 
 export interface BillingSinglePlanSelectProps {
   plan: StripePlan;
@@ -69,6 +71,7 @@ export function BillingSinglePlanSelect({
     selected?.unitAmount != null
       ? formatPlanAmount({ unitAmount: selected.unitAmount, currency })
       : "";
+  const trialDays = selected ? resolveTrialDays({ plan, price: selected }) : undefined;
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4 py-8">
@@ -115,6 +118,8 @@ export function BillingSinglePlanSelect({
               <span className="text-4xl font-bold">{amount}</span>
             </div>
 
+            <BillingTrialBadge days={trialDays} />
+
             <div className="space-y-3">
               {features.map((feature) => (
                 <div key={feature} className="flex items-center gap-2">
@@ -133,7 +138,7 @@ export function BillingSinglePlanSelect({
                 className={cn(buttonVariants({ variant: "default", size: "lg" }), "w-full")}
                 href={href}
               >
-                {trialRequiresPaymentMethod ? "Start Trial" : "Subscribe"}
+                {billingPlanCtaLabel({ trialRequiresPaymentMethod, trialDays, t })}
               </a>
             ) : null}
           </CardFooter>

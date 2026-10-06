@@ -40,9 +40,9 @@ const plansConfig: StripePlansConfig = {
           id: "prod_usd",
           defaultPriceId: "price_usd_month",
           prices: [
-            { priceId: "price_usd_month", interval: "month", intervalCount: 1, unitAmount: 14900 },
-            { priceId: "price_usd_quarter", interval: "month", intervalCount: 3, unitAmount: 29800 },
-            { priceId: "price_usd_year", interval: "year", intervalCount: 1, unitAmount: 89400 },
+            { priceId: "price_usd_month", interval: "month", intervalCount: 1, unitAmount: 14900, freeTrialDays: 14 },
+            { priceId: "price_usd_quarter", interval: "month", intervalCount: 3, unitAmount: 29800, freeTrialDays: 0 },
+            { priceId: "price_usd_year", interval: "year", intervalCount: 1, unitAmount: 89400, freeTrialDays: 0 },
           ],
         },
         pln: {
@@ -65,6 +65,15 @@ const resolved = getEnvironmentPlans(plansConfig, process.env.NODE_ENV);
 When `seatBilling: true`, each Trial Plan must set `freeTrial.seats`. Optional
 `nonBillableRoleKeys` lists Roles that do not consume Stripe quantity (Owner is
 always billable).
+
+Trial length is `resolveTrialDays` in `@m5kdev/commons/modules/billing/billing.utils`:
+optional `freeTrialDays` on the Price being billed, else plan `freeTrial.days`.
+A Price `freeTrialDays: 0` means no Trial for that Price (omit Stripe
+`trial_period_days`); it does not fall through to the Plan or to 7. Catalogs
+that only set plan-level `freeTrial.days` keep that length for every Price.
+`freeTrial.seats` stays plan-level. Checkout, card-off Trial start, Admin Create
+Subscription prefill, and Plan UI all use the billed Price. Identity is Price
+id; quarter is `{ interval: "month", intervalCount: 3 }`.
 
 `trialPlanName` is a currency → Plan name map. Omit it for Checkout-only
 catalogs. When `trialRequiresPaymentMethod` is false (the default), each Trial
@@ -134,13 +143,14 @@ succeeds if Stripe is down; the paywall shows until a Subscription exists.
 
 `BillingService` implements the sync-from-Stripe pattern:
 
-- `createOrganizationHook` — Stripe Customer on the Organization; optional Trial on the sign-up Trial Price, or the default Price for Organization currency, when a card is not required.
+- `createOrganizationHook` — Stripe Customer on the Organization; optional Trial on the sign-up Trial Price, or the default Price for Organization currency, when a card is not required and `resolveTrialDays` for that Price is defined. If that Price has no trial days, Kernel skips Trial start (same fail-open as no Trial Plan) instead of creating a paid Subscription without a card.
 - `trialPriceCurrency` — currency of a Trial Plan Price, or `undefined`; Auth uses it to set Organization currency from `User-Price-Id` ahead of `User-Currency`.
 - `createCheckoutSession` / `createBillingPortalSession` — Stripe-hosted flows
   (Owner only; Checkout refused while an open Subscription exists in this
   environment). When Trial
-  requires a payment method, Checkout sets `trial_period_days` and
-  `payment_method_collection: always`.
+  requires a payment method, Checkout sets `trial_period_days` from
+  `resolveTrialDays` for the Checkout Price (omit when that Price has no trial
+  days) and `payment_method_collection: always`.
 - `getActiveSubscription`, `listInvoices` — Organization-scoped reads. Access
   includes current-environment `active`, `trialing`, and `past_due`. A sandbox
   ACCESS_STATUS does not grant production (ADR-0024).
@@ -149,7 +159,7 @@ succeeds if Stripe is down; the paywall shows until a Subscription exists.
 - AdminActor Billing Module admin (ADR-0022, ADR-0023): list Organizations and Coupons,
   create a Stripe Customer, set Organization currency when it is null, create a
   Subscription on a catalog Price with either a Trial (Admin-entered days,
-  pre-filled from the Trial Plan's `freeTrial.days`) or a Coupon, apply /
+  pre-filled from `resolveTrialDays` for the selected Price) or a Coupon, apply /
   replace / remove one Coupon on an existing Subscription (Price unchanged),
   cancel, and toggle `billingExempt` (UI copy: Skip subscription check).
   Without a payment method on the Customer, create requires a Trial
@@ -225,7 +235,9 @@ requires a payment method, pass `trialRequiresPaymentMethod` and the resolved
 Trial Plan name so the Plan page Checkouts that Plan (default Price skips the
 interval picker). `BillingPlanSelect` reads `billing.getTrialPriceId` and shows
 the Price picked at sign-up instead of the default; `BillingSinglePlanSelect`
-takes it as `trialPriceId`. `AuthPublicSignupRoute` reads `?price=`; pass
+takes it as `trialPriceId`. Badge and CTA follow the displayed/selected Price:
+no trial days means no “N-day Trial” / “Start Trial”; the CTA is Subscribe and
+Checkout omits `trial_period_days`. `AuthPublicSignupRoute` reads `?price=`; pass
 `trialPriceId` when rendering `AuthPublicSignupForm` or `AuthPublicProviders`
 yourself. Billing Module admin row actions are a 3-dot menu; Skip
 subscription check stays a Switch.
@@ -260,6 +272,7 @@ constructed in app code with your secret key. Include
 - [Billing Coupons, sandbox Stripe Customer, and required catalog environment in 0.38.11](/guides/v0.38.11-billing-coupon-sandbox-customer-migration)
 - [Organization billingExempt overlay in 0.38.13](/guides/v0.38.13-organization-billing-exempt-migration)
 - [Subscription per Stripe environment in 0.38.15](/guides/v0.38.15-subscription-per-stripe-environment-migration)
+- [Trial days per Price in 0.38.20](/guides/v0.38.20-billing-trial-days-per-price-migration)
 - [N Prices, frozen Organization currency, and Trial Price at start in 0.38.9](/guides/v0.38.9-billing-trial-price-catalog-migration)
 - [Billing trial-ending email in 0.34.0](/guides/v0.34.0-billing-trial-ending-email-migration)
 - [Email Core Module](/modules/email)
