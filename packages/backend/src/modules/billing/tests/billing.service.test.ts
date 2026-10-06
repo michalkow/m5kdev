@@ -569,6 +569,8 @@ async function bootBilling(options: {
   outputDirectory: string;
   stripe: Stripe;
   catalog?: ResolvedStripePlans;
+  checkoutSessionCreate?: Partial<Stripe.Checkout.SessionCreateParams>;
+  billingPortalSessionCreate?: Partial<Stripe.BillingPortal.SessionCreateParams>;
 }): Promise<BillingService> {
   const built = createBackendApp(
     {
@@ -582,7 +584,14 @@ async function bootBilling(options: {
     },
     [
       new EmailModule(options.templates),
-      new BillingModule({ stripe: options.stripe }, options.catalog ?? catalog()),
+      new BillingModule(
+        {
+          stripe: options.stripe,
+          checkoutSessionCreate: options.checkoutSessionCreate,
+          billingPortalSessionCreate: options.billingPortalSessionCreate,
+        },
+        options.catalog ?? catalog()
+      ),
     ] as const
   );
 
@@ -1258,6 +1267,112 @@ describe("BillingService Organization paywall", () => {
         subscription_data: {
           metadata: { organizationId: ORG_ID, memberId: MEMBER_ID },
         },
+      })
+    );
+  });
+
+  it("overlays checkoutSessionCreate onto Kernel Checkout params", async () => {
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+      catalog: catalog({ trialPlanName: {} }),
+      checkoutSessionCreate: {
+        tax_id_collection: { enabled: true, required: "if_supported" },
+        metadata: { campaign: "spring" },
+      },
+    });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+
+    const checkout = await billing.createCheckoutSession(
+      { priceId: PRICE_ID },
+      {
+        organizationId: ORG_ID,
+        memberId: MEMBER_ID,
+        organizationRole: "owner",
+        email: USER_EMAIL,
+      }
+    );
+    expect(checkout.isOk()).toBe(true);
+    expect(stripe.checkout.sessions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tax_id_collection: { enabled: true, required: "if_supported" },
+        line_items: [{ price: PRICE_ID, quantity: 1 }],
+        metadata: { organizationId: ORG_ID, memberId: MEMBER_ID, campaign: "spring" },
+        subscription_data: {
+          metadata: { organizationId: ORG_ID, memberId: MEMBER_ID },
+        },
+      })
+    );
+  });
+
+  it("lets checkoutSessionCreate replace Kernel line_items", async () => {
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+      catalog: catalog({ trialPlanName: {} }),
+      checkoutSessionCreate: {
+        line_items: [{ price: PRICE_USD_YEAR, quantity: 3 }],
+      },
+    });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+
+    const checkout = await billing.createCheckoutSession(
+      { priceId: PRICE_ID },
+      {
+        organizationId: ORG_ID,
+        memberId: MEMBER_ID,
+        organizationRole: "owner",
+        email: USER_EMAIL,
+      }
+    );
+    expect(checkout.isOk()).toBe(true);
+    expect(stripe.checkout.sessions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        line_items: [{ price: PRICE_USD_YEAR, quantity: 3 }],
+      })
+    );
+  });
+
+  it("overlays billingPortalSessionCreate onto Kernel Portal params", async () => {
+    const stripe = createStripeStub({});
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe,
+      billingPortalSessionCreate: { locale: "auto" },
+    });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+
+    const portal = await billing.createBillingPortalSession({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      organizationRole: "owner",
+      email: USER_EMAIL,
+    });
+    expect(portal.isOk()).toBe(true);
+    expect(stripe.billingPortal.sessions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer: CUSTOMER_ID,
+        locale: "auto",
       })
     );
   });

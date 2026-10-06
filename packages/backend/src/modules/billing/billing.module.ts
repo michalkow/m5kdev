@@ -29,6 +29,12 @@ type BillingRouters = {
   billing: ReturnType<typeof createBillingTRPC>;
 };
 
+export interface BillingModuleLibs {
+  stripe: Stripe;
+  checkoutSessionCreate?: Partial<Stripe.Checkout.SessionCreateParams>;
+  billingPortalSessionCreate?: Partial<Stripe.BillingPortal.SessionCreateParams>;
+}
+
 export class BillingModule extends BaseModule<
   BillingModuleDeps,
   BillingModuleTables,
@@ -41,7 +47,7 @@ export class BillingModule extends BaseModule<
   private readonly grants: Grant[];
 
   constructor(
-    private readonly libs: { stripe: Stripe },
+    private readonly libs: BillingModuleLibs,
     private readonly config: ResolvedStripePlans,
     grants?: Grant[]
   ) {
@@ -55,8 +61,10 @@ export class BillingModule extends BaseModule<
         orm: db.orm,
         schema: db.schema,
         table: db.schema.subscriptions,
-        libs: this.libs,
+        libs: { stripe: this.libs.stripe },
         config: this.config,
+        checkoutSessionCreate: this.libs.checkoutSessionCreate,
+        billingPortalSessionCreate: this.libs.billingPortalSessionCreate,
       }),
     };
   }

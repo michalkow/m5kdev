@@ -25,6 +25,7 @@ import * as auth from "../auth/auth.db";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import { BaseTableRepository } from "../base/base.repository";
 import * as billing from "./billing.db";
+import { mergeSessionCreateParams } from "./billing.merge";
 
 const schema = { ...auth, ...billing };
 type Schema = typeof schema;
@@ -87,6 +88,8 @@ export class BillingRepository extends BaseTableRepository<
   public defaultCurrency: string;
   public seatBilling: boolean;
   public nonBillableRoleKeys: readonly string[];
+  private readonly checkoutSessionCreate?: Partial<Stripe.Checkout.SessionCreateParams>;
+  private readonly billingPortalSessionCreate?: Partial<Stripe.BillingPortal.SessionCreateParams>;
 
   constructor(options: {
     orm: Orm;
@@ -94,10 +97,14 @@ export class BillingRepository extends BaseTableRepository<
     table: Schema["subscriptions"];
     libs: { stripe: Stripe };
     config: ResolvedStripePlans;
+    checkoutSessionCreate?: Partial<Stripe.Checkout.SessionCreateParams>;
+    billingPortalSessionCreate?: Partial<Stripe.BillingPortal.SessionCreateParams>;
   }) {
-    const { libs, config, ...rest } = options;
+    const { libs, config, checkoutSessionCreate, billingPortalSessionCreate, ...rest } = options;
     super(rest);
     this.stripe = libs.stripe;
+    this.checkoutSessionCreate = checkoutSessionCreate;
+    this.billingPortalSessionCreate = billingPortalSessionCreate;
     this.environment = config.environment;
     this.plans = config.plans;
     this.trialPlanName = config.trialPlanName;
@@ -689,34 +696,44 @@ export class BillingRepository extends BaseTableRepository<
     collectPaymentMethod?: boolean;
   }): ServerResultAsync<Stripe.Checkout.Session> {
     return this.throwablePromise(() =>
-      this.stripe.checkout.sessions.create({
-        client_reference_id: organizationId,
-        customer: customerId,
-        success_url: `${process.env.VITE_SERVER_URL}/stripe/success`,
-        cancel_url: `${process.env.VITE_APP_URL}/billing`,
-        mode: "subscription",
-        ...(collectPaymentMethod ? { payment_method_collection: "always" } : {}),
-        metadata: { organizationId, memberId },
-        subscription_data: {
-          metadata: { organizationId, memberId },
-          ...(trialDays != null ? { trial_period_days: trialDays } : {}),
-        },
-        line_items: [
+      this.stripe.checkout.sessions.create(
+        mergeSessionCreateParams(
           {
-            price: priceId,
-            quantity,
-          },
-        ],
-      })
+            client_reference_id: organizationId,
+            customer: customerId,
+            success_url: `${process.env.VITE_SERVER_URL}/stripe/success`,
+            cancel_url: `${process.env.VITE_APP_URL}/billing`,
+            mode: "subscription",
+            ...(collectPaymentMethod ? { payment_method_collection: "always" as const } : {}),
+            metadata: { organizationId, memberId },
+            subscription_data: {
+              metadata: { organizationId, memberId },
+              ...(trialDays != null ? { trial_period_days: trialDays } : {}),
+            },
+            line_items: [
+              {
+                price: priceId,
+                quantity,
+              },
+            ],
+          } satisfies Stripe.Checkout.SessionCreateParams,
+          this.checkoutSessionCreate
+        )
+      )
     );
   }
 
   createBillingPortalSession(customerId: string): ServerResultAsync<Stripe.BillingPortal.Session> {
     return this.throwablePromise(() =>
-      this.stripe.billingPortal.sessions.create({
-        customer: customerId,
-        return_url: `${process.env.VITE_SERVER_URL}/stripe/success`,
-      })
+      this.stripe.billingPortal.sessions.create(
+        mergeSessionCreateParams(
+          {
+            customer: customerId,
+            return_url: `${process.env.VITE_SERVER_URL}/stripe/success`,
+          } satisfies Stripe.BillingPortal.SessionCreateParams,
+          this.billingPortalSessionCreate
+        )
+      )
     );
   }
 

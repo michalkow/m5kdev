@@ -16,3 +16,4 @@ Billing is an opinionated Stripe paywall (Plan catalog, Checkout, Billing Portal
 
 - Catalog currency is per Organization ([ADR-0019](0019-billing-prices-per-currency-product.md)), not a single `StripePlansConfig.currency`. Organization delete cancels the Stripe Subscription and keeps the Customer. Stripe Customer email is the creating Member's, then Stripe owns it. Organization create succeeds if Stripe is down; no Subscription means the paywall page, unless the Organization is billingExempt ([ADR-0023](0023-organization-billing-exempt.md)).
 - Billing keys the Stripe Customer on the Organization. Existing User-keyed Customers are a breaking cutover, not a supported mode.
+- Apps may overlay Stripe Checkout and Billing Portal session create params at `BillingModule` construction ([ADR-0027](0027-billing-checkout-portal-session-create-overlay.md)); that is Checkout chrome, not a general Stripe SDK.

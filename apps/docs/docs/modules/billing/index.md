@@ -120,6 +120,34 @@ createBackendApp(config, [
 at `/stripe`. Owner-only for Checkout and Billing Portal. Members may read the
 Subscription and invoices.
 
+Pass extra Stripe session create fields on the constructor. Kernel builds the
+per-request params first, then deep-merges the bag: plain objects recurse,
+arrays replace, `undefined` is skipped, `null` assigns, and the app wins leaf
+collisions (ADR-0027). Kernel does not reserve `mode`, `customer`, `line_items`,
+or metadata.
+
+```ts
+new BillingModule(
+  {
+    stripe: new Stripe(process.env.STRIPE_SECRET_KEY!),
+    checkoutSessionCreate: {
+      tax_id_collection: {
+        enabled: true,
+        required: "if_supported",
+      },
+    },
+    billingPortalSessionCreate: {
+      locale: "auto",
+    },
+  },
+  resolved
+);
+```
+
+`billingPortalSessionCreate` is the same overlay for Billing Portal sessions.
+Overriding `success_url` skips Kernel `/stripe/success` (webhook sync still
+runs). GET `/stripe/checkout` still redirects to `session.url`.
+
 This is a breaking cutover from User-keyed Stripe Customers. The Customer lives
 on the Organization: `organizations.stripe_customer_id` in production and
 `organizations.stripe_sandbox_customer_id` otherwise, chosen by the same
@@ -293,3 +321,4 @@ constructed in app code with your secret key. Include
 - ADR-0023 (`docs/adr/0023-organization-billing-exempt.md`)
 - ADR-0024 (`docs/adr/0024-subscription-per-stripe-environment.md`)
 - ADR-0026 (`docs/adr/0026-organization-allow-cardless-trial.md`)
+- ADR-0027 (`docs/adr/0027-billing-checkout-portal-session-create-overlay.md`)
