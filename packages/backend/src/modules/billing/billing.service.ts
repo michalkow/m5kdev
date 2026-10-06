@@ -770,6 +770,14 @@ export class BillingService extends BasePermissionService<
     }
 
     if (organization.value.cardlessTrialConsumed?.[this.repository.billing.environment]) {
+      const recovered = await this.recoverConsumedCardlessTrial(organizationId);
+      if (recovered.isErr()) return err(recovered.error);
+      if (recovered.value) {
+        return this.repository.billing.setAllowCardlessTrial({
+          organizationId,
+          allowCardlessTrial: true,
+        });
+      }
       return this.error("CONFLICT", CARDLESS_TRIAL_CONSUMED_MESSAGE);
     }
 
@@ -839,12 +847,28 @@ export class BillingService extends BasePermissionService<
     });
     if (subscription.isErr()) return err(subscription.error);
 
+    const consumed = await this.repository.billing.markCardlessTrialConsumed(organizationId);
+    if (consumed.isErr()) return err(consumed.error);
+
     const syncResult = await this.syncStripeData({
       customerId,
       memberId,
     });
     if (syncResult.isErr()) return err(syncResult.error);
     return ok(true);
+  }
+
+  private async recoverConsumedCardlessTrial(organizationId: string): ServerResultAsync<boolean> {
+    const customerId = await this.repository.billing.getOrganizationCustomerId(organizationId);
+    if (customerId.isErr()) return err(customerId.error);
+    if (!customerId.value) return ok(false);
+
+    const synced = await this.syncStripeData({ customerId: customerId.value });
+    if (synced.isErr()) return err(synced.error);
+
+    const open = await this.repository.billing.getOpenSubscription(organizationId);
+    if (open.isErr()) return err(open.error);
+    return ok(Boolean(open.value));
   }
 
   private async ownerMustAddPaymentMethod({
@@ -857,17 +881,21 @@ export class BillingService extends BasePermissionService<
     subscription: BillingSchema;
   }): ServerResultAsync<boolean> {
     if (organizationRole !== "owner" || subscription.status !== "trialing") return ok(false);
+    if (!this.repository.billing.trialRequiresPaymentMethod) return ok(false);
 
     const organization = await this.repository.billing.getOrganizationById(organizationId);
     if (organization.isErr()) return err(organization.error);
     if (!organization.value || organization.value.allowCardlessTrial) return ok(false);
+    if (!organization.value.cardlessTrialConsumed?.[this.repository.billing.environment]) {
+      return ok(false);
+    }
 
     const customerId = this.repository.billing.customerIdOf(organization.value);
-    if (!customerId) return ok(true);
+    if (!customerId) return ok(false);
 
     const customer = await this.repository.billing.getStripeCustomer(customerId);
-    if (customer.isErr()) return err(customer.error);
-    if (customer.value.deleted) return ok(true);
+    if (customer.isErr()) return ok(false);
+    if (customer.value.deleted) return ok(false);
     return ok(
       !this.defaultPaymentMethodId(customer.value.invoice_settings?.default_payment_method)
     );

@@ -167,6 +167,7 @@ function createStripeStub(options: {
   subscriptionDefaultPaymentMethod?: string | null;
   customerDefaultPaymentMethod?: string | null;
   failCustomerCreate?: boolean;
+  failSubscriptionListTimes?: number;
   subscriptionStatus?: Stripe.Subscription.Status;
   quantity?: number;
   coupons?: Array<Partial<Stripe.Coupon> & { id: string }>;
@@ -243,12 +244,17 @@ function createStripeStub(options: {
 
   let createdCustomers = 0;
   let customerMetadata: Record<string, string> = {};
+  let subscriptionListFailsLeft = options.failSubscriptionListTimes ?? 0;
   const stripe = {
     state,
     subscriptions: {
-      list: jest.fn().mockImplementation(async () => ({
-        data: state.created ? [subscription()] : [],
-      })),
+      list: jest.fn().mockImplementation(async () => {
+        if (subscriptionListFailsLeft > 0) {
+          subscriptionListFailsLeft -= 1;
+          throw new Error("stripe list down");
+        }
+        return { data: state.created ? [subscription()] : [] };
+      }),
       create: jest
         .fn()
         .mockImplementation(
@@ -894,6 +900,9 @@ describe("BillingService Organization paywall", () => {
     expect(accessible._unsafeUnwrap()?.referenceId).toBe(ORG_ID);
     expect(accessible._unsafeUnwrap()?.status).toBe("trialing");
     expect(accessible._unsafeUnwrap()?.seats).toBe(1);
+    expect(
+      (await billing.getActiveSubscription(ownerCtx()))._unsafeUnwrap()?.ownerMustAddPaymentMethod
+    ).toBe(false);
     expect(stripe.subscriptions.create).toHaveBeenCalledWith(
       expect.objectContaining({
         items: [{ price: PRICE_ID, quantity: 1 }],
@@ -2739,6 +2748,69 @@ describe("BillingService Billing Module admin", () => {
     expect((await billing.getActiveSubscription(ownerCtx()))._unsafeUnwrap()).toEqual(
       expect.objectContaining({ status: "trialing", ownerMustAddPaymentMethod: false })
     );
+  });
+
+  it("does not gate the Owner after an Admin Trial when allowCardlessTrial was never set", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe, { trialRequiresPaymentMethod: true });
+    await billing.createAdminSubscription(
+      { organizationId: ORG_ID, priceId: PRICE_ID, trialDays: 14 },
+      adminCtx()
+    );
+
+    expect((await billing.getActiveSubscription(ownerCtx()))._unsafeUnwrap()).toEqual(
+      expect.objectContaining({ status: "trialing", ownerMustAddPaymentMethod: false })
+    );
+  });
+
+  it("does not create a second Stripe Trial when sync fails then Admin retries", async () => {
+    const stripe = createStripeStub({ failSubscriptionListTimes: 1 });
+    const billing = await boot(stripe, { trialRequiresPaymentMethod: true });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+
+    const first = await billing.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: true },
+      adminCtx()
+    );
+    expect(first.isErr()).toBe(true);
+    expect(stripe.subscriptions.create).toHaveBeenCalledTimes(1);
+
+    const retried = await billing.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: true },
+      adminCtx()
+    );
+    expect(retried.isOk()).toBe(true);
+    expect(stripe.subscriptions.create).toHaveBeenCalledTimes(1);
+    expect((await billing.getActiveSubscription(memberCtx()))._unsafeUnwrap()?.status).toBe(
+      "trialing"
+    );
+  });
+
+  it("keeps Trial access when Stripe Customer retrieve fails", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe, { trialRequiresPaymentMethod: true });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+    await billing.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: true },
+      adminCtx()
+    );
+    await billing.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: false },
+      adminCtx()
+    );
+    (stripe.customers.retrieve as jest.Mock).mockRejectedValueOnce(new Error("stripe down"));
+
+    const accessible = (await billing.getActiveSubscription(ownerCtx()))._unsafeUnwrap();
+    expect(accessible?.status).toBe("trialing");
+    expect(accessible?.ownerMustAddPaymentMethod).toBe(false);
   });
 
   it("does not start a second cardless Trial after the first is canceled", async () => {

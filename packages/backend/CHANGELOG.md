@@ -2,11 +2,20 @@
 
 ## Unreleased
 
-- Organization `allowCardlessTrial` (AdminActor, card-on catalogs) starts at most one cardless Trial per Stripe environment. Consume is per environment; clearing the switch keeps Trial and sets `ownerMustAddPaymentMethod` for the Owner until they add a card in Billing Portal or the switch is turned on again.
 - Better Auth 1.7 boots without SCHEMA_MISMATCH: apikeys has configId (default "default"), required referenceId, and nullable userId.
 - NuqsTable Filters, Group by, and Columns labels follow the active locale.
 - Table filter operators such as Equals, One Of, and Is Empty follow the active locale.
 - Language pickers show each language in its native name, so Polish stays Polski regardless of the UI language.
+
+## 0.38.21
+
+### Patch Changes
+
+- AdminActor can waive a card-on Trial with allowCardlessTrial, starting at most one cardless Trial per Stripe environment.
+  Clearing the switch keeps Trial and sets ownerMustAddPaymentMethod so the Owner is gated to Billing Portal until they add a card.
+- Updated dependencies
+  - @m5kdev/commons@0.38.21
+  - @m5kdev/config@0.38.21
 
 ## 0.38.20
 

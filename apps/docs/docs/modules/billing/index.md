@@ -164,8 +164,8 @@ succeeds if Stripe is down; the paywall shows until a Subscription exists.
   cancel, toggle `billingExempt` (UI copy: Skip subscription check), and on a
   card-on catalog toggle `allowCardlessTrial` (UI copy: Disable credit card check).
   Turning `allowCardlessTrial` on starts at most one cardless Trial in this Stripe
-  environment. Clearing it keeps Trial; the Owner is gated to Billing Portal until
-  a default payment method exists. Without a payment method on the Customer, create requires a Trial
+  environment. Clearing it keeps Trial; after consume, the Owner is gated to Billing
+  Portal until a default payment method exists. Without a payment method on the Customer, create requires a Trial
   or a 100%-off Coupon (Stripe cannot charge a first invoice without one). An
   Admin Trial ends like catalog Trial: Stripe cancels without a card. The page
   shows the catalog environment (Production / Sandbox). The listed Subscription
@@ -202,7 +202,7 @@ Organization-scoped.
 
 | Procedure | Description |
 | --- | --- |
-| `billing.getActiveSubscription` | Current accessible Subscription or `null`. Includes `ownerMustAddPaymentMethod` for the Owner when Trial is open, the cardless switch is off, and there is no default payment method |
+| `billing.getActiveSubscription` | Current accessible Subscription or `null`. Includes `ownerMustAddPaymentMethod` for the Owner after a consumed cardless Trial when the catalog requires a card, the switch is off, status is `trialing`, and there is no default payment method |
 | `billing.getTrialPriceId` | Trial Price picked at sign-up (from Stripe Customer metadata) or `null` |
 | `billing.listInvoices` | Stripe invoices for the Organization Customer |
 
