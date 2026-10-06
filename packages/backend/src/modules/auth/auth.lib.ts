@@ -4,6 +4,7 @@ import {
   ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE,
   USER_CURRENCY_HEADER,
   USER_LOCALE_HEADER,
+  USER_PRICE_ID_HEADER,
 } from "@m5kdev/commons/modules/auth/auth.constants";
 import {
   getAllowedLocaleCodes,
@@ -239,6 +240,13 @@ export function createBetterAuth<
       locale = oauthState.userLocale;
     }
     return locale ?? null;
+  };
+
+  const getTrialPriceIdFromContext = async (ctx?: { headers?: Headers | null } | null) => {
+    const priceId = ctx?.headers?.get(USER_PRICE_ID_HEADER.toLowerCase());
+    if (priceId) return priceId;
+    const oauthPriceId = (await getOAuthState())?.userPriceId;
+    return typeof oauthPriceId === "string" && oauthPriceId ? oauthPriceId : null;
   };
 
   const getOrganizationLocaleForInvitation = async (organizationId: string) => {
@@ -828,7 +836,10 @@ export function createBetterAuth<
               }
             } else {
               const userLocale = typeof user.locale === "string" ? user.locale : undefined;
-              const requestedCurrency = ctx?.headers?.get(USER_CURRENCY_HEADER.toLowerCase());
+              const trialPriceId = await getTrialPriceIdFromContext(ctx);
+              const requestedCurrency =
+                (trialPriceId ? billingService?.trialPriceCurrency(trialPriceId) : undefined) ??
+                ctx?.headers?.get(USER_CURRENCY_HEADER.toLowerCase());
               const catalog = billingService?.catalogCurrencies();
               let membership: { organizationId: string; memberId: string };
               try {
@@ -861,6 +872,7 @@ export function createBetterAuth<
                   memberId: membership.memberId,
                   email: user.email,
                   name: typeof user.name === "string" ? user.name : undefined,
+                  trialPriceId,
                 });
               }
             }

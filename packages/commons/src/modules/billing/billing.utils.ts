@@ -95,15 +95,19 @@ export function listPlanSelectPrices({
   plan,
   currency,
   trialRequiresPaymentMethod,
+  trialPriceId,
 }: {
   plan: StripePlan;
   currency: string;
   trialRequiresPaymentMethod?: boolean;
+  trialPriceId?: string | null;
 }): StripePlanPrice[] {
   const product = plan.products[currency];
   if (!product) return [];
   if (trialRequiresPaymentMethod && product.defaultPriceId) {
-    return product.prices.filter((price) => price.priceId === product.defaultPriceId);
+    const picked = product.prices.find((price) => price.priceId === trialPriceId);
+    const shownPriceId = picked?.priceId ?? product.defaultPriceId;
+    return product.prices.filter((price) => price.priceId === shownPriceId);
   }
   return product.prices;
 }

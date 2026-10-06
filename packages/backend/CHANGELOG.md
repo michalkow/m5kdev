@@ -7,6 +7,17 @@
 - Table filter operators such as Equals, One Of, and Is Empty follow the active locale.
 - Language pickers show each language in its native name, so Polish stays Polski regardless of the UI language.
 
+## 0.38.18
+
+### Patch Changes
+
+- Sign-up can pass a Trial Price (`?price=`, `User-Price-Id`, OAuth `userPriceId`) so Trial and Checkout use that Price instead of the catalog default.
+  A Trial Plan Price at sign-up sets Organization currency and takes precedence over `User-Currency`.
+  The Plan page shows the Price picked at sign-up when Trial requires a payment method.
+- Updated dependencies
+  - @m5kdev/commons@0.38.18
+  - @m5kdev/config@0.38.18
+
 ## 0.38.17
 
 ### Patch Changes

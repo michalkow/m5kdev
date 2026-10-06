@@ -73,6 +73,23 @@ Organization create. When it is true, there is no Trial until Checkout:
 `defaultPriceId` skips the Plan page; otherwise the Owner picks a Price id then
 Checkouts. After convert, interval change is Billing Portal.
 
+### Trial Price at sign-up
+
+A landing page can pick the Trial Price (for example quarterly or yearly
+instead of the monthly default) by linking to sign-up with `?price=<priceId>`.
+The sign-up form sends it as the `User-Price-Id` header; social sign-up keeps it
+in OAuth state (`userPriceId`). The Price id also carries its currency: a Trial
+Plan Price sets Organization currency and wins over the `User-Currency` header.
+The header applies only when no Price is sent or the Price is not on a Trial Plan.
+
+At Organization create, Billing keeps the Price only when it belongs to the
+Trial Plan for Organization currency, and stores it as `trialPriceId` in the
+Stripe Customer metadata. There is no database column. When a card is not
+required, Trial starts on that Price. When a card is required, Checkout uses it
+in place of `defaultPriceId`, so the Owner can Checkout later from any device.
+Without a stored Price (none picked, not on the Trial Plan, or Stripe was down at
+sign-up), Billing falls back to the default Price.
+
 ## Backend
 
 ### Registration
@@ -117,7 +134,8 @@ succeeds if Stripe is down; the paywall shows until a Subscription exists.
 
 `BillingService` implements the sync-from-Stripe pattern:
 
-- `createOrganizationHook` — Stripe Customer on the Organization; optional Trial on the default Price for Organization currency when a card is not required.
+- `createOrganizationHook` — Stripe Customer on the Organization; optional Trial on the sign-up Trial Price, or the default Price for Organization currency, when a card is not required.
+- `trialPriceCurrency` — currency of a Trial Plan Price, or `undefined`; Auth uses it to set Organization currency from `User-Price-Id` ahead of `User-Currency`.
 - `createCheckoutSession` / `createBillingPortalSession` — Stripe-hosted flows
   (Owner only; Checkout refused while an open Subscription exists in this
   environment). When Trial
@@ -172,6 +190,7 @@ Organization-scoped.
 | Procedure | Description |
 | --- | --- |
 | `billing.getActiveSubscription` | Current accessible Subscription or `null` |
+| `billing.getTrialPriceId` | Trial Price picked at sign-up (from Stripe Customer metadata) or `null` |
 | `billing.listInvoices` | Stripe invoices for the Organization Customer |
 
 AdminActor (`adminProcedure`). Input includes `organizationId` because the
@@ -204,7 +223,11 @@ An exempt Organization also skips the subscription query.
 and `BillingBetaPage`. Pass Organization currency (frozen at create). When Trial
 requires a payment method, pass `trialRequiresPaymentMethod` and the resolved
 Trial Plan name so the Plan page Checkouts that Plan (default Price skips the
-interval picker). Billing Module admin row actions are a 3-dot menu; Skip
+interval picker). `BillingPlanSelect` reads `billing.getTrialPriceId` and shows
+the Price picked at sign-up instead of the default; `BillingSinglePlanSelect`
+takes it as `trialPriceId`. `AuthPublicSignupRoute` reads `?price=`; pass
+`trialPriceId` when rendering `AuthPublicSignupForm` or `AuthPublicProviders`
+yourself. Billing Module admin row actions are a 3-dot menu; Skip
 subscription check stays a Switch.
 
 The Admin panel keeps Users / Organizations / Waitlist. Pass optional

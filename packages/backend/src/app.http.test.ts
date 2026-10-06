@@ -87,7 +87,7 @@ describe("createBackendApp HTTP shell", () => {
           Origin: WEB_ORIGIN,
           "Access-Control-Request-Method": "POST",
           "Access-Control-Request-Headers":
-            "content-type,authorization,waitlist-invitation-code,organization-invitation-code,admin-create-verified-user,user-locale,x-not-a-library-header",
+            "content-type,authorization,waitlist-invitation-code,organization-invitation-code,admin-create-verified-user,user-locale,user-price-id,x-not-a-library-header",
         },
       });
       expect(response.status).toBe(204);
@@ -99,6 +99,7 @@ describe("createBackendApp HTTP shell", () => {
       expect(allowed).toContain("organization-invitation-code");
       expect(allowed).toContain("admin-create-verified-user");
       expect(allowed).toContain("user-locale");
+      expect(allowed).toContain("user-price-id");
       expect(allowed).not.toContain("x-not-a-library-header");
     });
   });

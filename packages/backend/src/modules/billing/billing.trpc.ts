@@ -10,6 +10,7 @@ import {
   setAdminBillingExemptInputSchema,
   setOrganizationCurrencyInputSchema,
 } from "@m5kdev/commons/modules/billing/billing.schema";
+import { z } from "zod";
 import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 import type { BillingService } from "./billing.service";
 
@@ -23,6 +24,10 @@ export function createBillingTRPC(
       .query(async ({ ctx }) => {
         return handleTRPCResult(await billingService.getActiveSubscription(ctx));
       }),
+
+    getTrialPriceId: organizationProcedure.output(z.string().nullable()).query(async ({ ctx }) => {
+      return handleTRPCResult(await billingService.getTrialPriceId(ctx));
+    }),
 
     listInvoices: organizationProcedure.query(async ({ ctx }) => {
       return handleTRPCResult(await billingService.listInvoices(ctx));

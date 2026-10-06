@@ -1,3 +1,4 @@
+import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
 import {
   formatBillingInterval,
@@ -5,6 +6,8 @@ import {
   listPlanSelectPrices,
 } from "@m5kdev/commons/modules/billing/billing.utils";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
+import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
+import { useQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { buttonVariants } from "../../../components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../../components/ui/card";
@@ -32,6 +35,12 @@ function listedPlans({
 export function BillingPlanSelect(props: BillingPlanSelectProps) {
   const plans = listedPlans(props);
   const { currency, trialRequiresPaymentMethod } = props;
+  const trpc = useAppTRPC<BackendTRPCRouter>();
+  const { data: trialPriceId } = useQuery(
+    trpc.billing.getTrialPriceId.queryOptions(undefined, {
+      enabled: Boolean(trialRequiresPaymentMethod),
+    })
+  );
   if (plans.length === 1) {
     const [plan] = plans;
     if (!plan) return null;
@@ -40,6 +49,7 @@ export function BillingPlanSelect(props: BillingPlanSelectProps) {
         plan={plan}
         currency={currency}
         trialRequiresPaymentMethod={trialRequiresPaymentMethod}
+        trialPriceId={trialPriceId}
       />
     );
   }
@@ -52,6 +62,7 @@ export function BillingPlanSelect(props: BillingPlanSelectProps) {
           plan={plan}
           currency={currency}
           trialRequiresPaymentMethod={trialRequiresPaymentMethod}
+          trialPriceId={trialPriceId}
         />
       ))}
     </div>
@@ -62,13 +73,20 @@ function PlanCard({
   plan,
   currency,
   trialRequiresPaymentMethod,
+  trialPriceId,
 }: {
   plan: StripePlan;
   currency: string;
   trialRequiresPaymentMethod?: boolean;
+  trialPriceId?: string | null;
 }) {
   const { serverUrl } = useAppConfig();
-  const prices = listPlanSelectPrices({ plan, currency, trialRequiresPaymentMethod });
+  const prices = listPlanSelectPrices({
+    plan,
+    currency,
+    trialRequiresPaymentMethod,
+    trialPriceId,
+  });
   const displayPrice = prices[0];
   const amount =
     displayPrice?.unitAmount != null

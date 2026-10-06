@@ -15,6 +15,7 @@ export function AuthPublicProviders({
   invitation,
   requestSignUp = false,
   returnTo = "/",
+  trialPriceId,
 }: {
   providers?: string[];
   code?: string | null;
@@ -22,6 +23,7 @@ export function AuthPublicProviders({
   lastMethod?: string | null;
   returnTo?: string;
   invitation?: string | null;
+  trialPriceId?: string | null;
 }) {
   const { t } = useTranslation();
   const { appUrl, locales } = useAppConfig();
@@ -30,6 +32,7 @@ export function AuthPublicProviders({
     ...(code ? { waitlistInvitationCode: code } : {}),
     ...(invitation ? { organizationInvitationCode: invitation } : {}),
     ...(locales ? { userLocale: resolvePublicLocale(locales) } : {}),
+    ...(trialPriceId ? { userPriceId: trialPriceId } : {}),
   };
 
   const callbackURL = `${appUrl}${returnTo}`;

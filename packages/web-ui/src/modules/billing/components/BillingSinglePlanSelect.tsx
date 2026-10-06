@@ -26,6 +26,8 @@ export interface BillingSinglePlanSelectProps {
   plan: StripePlan;
   currency: string;
   trialRequiresPaymentMethod?: boolean;
+  /** Trial Price picked at sign-up; shown instead of the default Price when a card is required. */
+  trialPriceId?: string | null;
   features?: string[];
   /** URL for the Terms of Service link. Override for your app's legal page. */
   termsOfServiceUrl?: string;
@@ -35,6 +37,7 @@ export function BillingSinglePlanSelect({
   plan,
   currency,
   trialRequiresPaymentMethod,
+  trialPriceId,
   termsOfServiceUrl,
   features = [
     "Unlimited access to all features",
@@ -47,7 +50,12 @@ export function BillingSinglePlanSelect({
   const { t } = useTranslation("web-ui");
   const { serverUrl } = useAppConfig();
   const navigate = useNavigate();
-  const prices = listPlanSelectPrices({ plan, currency, trialRequiresPaymentMethod });
+  const prices = listPlanSelectPrices({
+    plan,
+    currency,
+    trialRequiresPaymentMethod,
+    trialPriceId,
+  });
   const [priceId, setPriceId] = useState(prices[0]?.priceId ?? "");
   const selected = prices.find((price) => price.priceId === priceId) ?? prices[0];
 

@@ -6,6 +6,7 @@ import {
   ADMIN_CREATE_VERIFIED_USER_HEADER,
   USER_CURRENCY_HEADER,
   USER_LOCALE_HEADER,
+  USER_PRICE_ID_HEADER,
 } from "@m5kdev/commons/modules/auth/auth.constants";
 import type { AuthLocaleConfig } from "@m5kdev/commons/modules/auth/auth.locale";
 import {
@@ -628,6 +629,7 @@ function applyHttpShell({
       ADMIN_CREATE_VERIFIED_USER_HEADER,
       USER_LOCALE_HEADER,
       USER_CURRENCY_HEADER,
+      USER_PRICE_ID_HEADER,
     ],
   };
   const corsOptions = config.cors ? config.cors(corsDefaults) : corsDefaults;

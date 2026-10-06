@@ -1,4 +1,5 @@
 import { Alert, Button, FieldError, Form, Input, Label, TextField, toast } from "@heroui/react";
+import { USER_PRICE_ID_HEADER } from "@m5kdev/commons/modules/auth/auth.constants";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
@@ -45,11 +46,13 @@ export function AuthPublicSignupForm({
   invitation,
   email,
   waitlist,
+  trialPriceId,
 }: {
   code?: string | null;
   invitation?: string | null;
   email?: string | null;
   waitlist?: boolean;
+  trialPriceId?: string | null;
 }) {
   const { t } = useTranslation();
   const { locales } = useAppConfig();
@@ -80,6 +83,7 @@ export function AuthPublicSignupForm({
             "Waitlist-Invitation-Code": code || "",
             "Organization-Invitation-Code": invitation || "",
             ...(locales ? createUserLocaleHeaders(locales) : {}),
+            ...(trialPriceId ? { [USER_PRICE_ID_HEADER]: trialPriceId } : {}),
           },
         }
       )

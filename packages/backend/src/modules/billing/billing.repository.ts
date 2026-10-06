@@ -217,17 +217,20 @@ export class BillingRepository extends BaseTableRepository<
     name,
     organizationId,
     memberId,
+    metadata,
   }: {
     email: string;
     name?: string;
     organizationId: string;
     memberId: string;
+    metadata?: Record<string, string>;
   }): ServerResultAsync<Stripe.Customer> {
     return this.throwablePromise(() =>
       this.stripe.customers.create({
         email,
         name,
         metadata: {
+          ...metadata,
           organizationId,
           memberId,
         },

@@ -21,6 +21,7 @@ export function AuthPublicSignupRoute({ providers, waitlist = false }: AuthPubli
   const [code] = useQueryState("code");
   const [invitation] = useQueryState("invitation");
   const [email] = useQueryState("email");
+  const [trialPriceId] = useQueryState("price");
 
   const hasWaitlist = waitlist;
   const hasInvitation = !!invitation;
@@ -65,6 +66,7 @@ export function AuthPublicSignupRoute({ providers, waitlist = false }: AuthPubli
                 providers={providers}
                 code={code}
                 invitation={invitation}
+                trialPriceId={trialPriceId}
                 requestSignUp
               />
               <AuthPublicSignupForm
@@ -72,6 +74,7 @@ export function AuthPublicSignupRoute({ providers, waitlist = false }: AuthPubli
                 invitation={invitation}
                 email={email}
                 waitlist={hasWaitlist}
+                trialPriceId={trialPriceId}
               />
             </div>
           </Card.Content>

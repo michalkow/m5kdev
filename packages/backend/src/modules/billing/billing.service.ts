@@ -12,7 +12,10 @@ import {
   setAdminBillingExemptInputSchema,
   setOrganizationCurrencyInputSchema,
 } from "@m5kdev/commons/modules/billing/billing.schema";
-import { catalogCurrencyKeys } from "@m5kdev/commons/modules/billing/billing.utils";
+import {
+  catalogCurrencyKeys,
+  findPriceCurrency,
+} from "@m5kdev/commons/modules/billing/billing.utils";
 import type { InferSelectModel } from "drizzle-orm";
 import { err, ok } from "neverthrow";
 import type Stripe from "stripe";
@@ -26,6 +29,7 @@ import type { EmailService } from "../email/email.service";
 import type { BillingRepository } from "./billing.repository";
 
 const TRIAL_ENDING_TEMPLATE_KEY = "trialEnding";
+const TRIAL_PRICE_ID_METADATA_KEY = "trialPriceId";
 const NO_PAYMENT_METHOD_MESSAGE =
   "The Customer has no payment method: pick a Trial or a 100% Coupon";
 
@@ -86,11 +90,13 @@ export class BillingService extends BasePermissionService<
     memberId,
     email,
     name,
+    metadata,
   }: {
     organizationId: string;
     memberId: string;
     email: string;
     name?: string;
+    metadata?: Record<string, string>;
   }): ServerResultAsync<Stripe.Customer> {
     const existingCustomerId =
       await this.repository.billing.getOrganizationCustomerId(organizationId);
@@ -106,6 +112,7 @@ export class BillingService extends BasePermissionService<
       name,
       organizationId,
       memberId,
+      metadata,
     });
     if (created.isErr()) return err(created.error);
 
@@ -124,22 +131,52 @@ export class BillingService extends BasePermissionService<
     };
   }
 
+  trialPriceCurrency(priceId: string): string | undefined {
+    const plan = this.repository.billing.getPlanByPriceId(priceId);
+    const currency = plan ? findPriceCurrency(plan, priceId) : undefined;
+    if (!currency || !this.repository.billing.priceBelongsToTrialPlan(priceId, currency)) {
+      return undefined;
+    }
+    return currency;
+  }
+
   async createOrganizationHook({
     organizationId,
     memberId,
     email,
     name,
+    trialPriceId: requestedTrialPriceId,
   }: {
     organizationId: string;
     memberId: string;
     email: string;
     name?: string;
+    trialPriceId?: string | null;
   }): ServerResultAsync<boolean> {
+    const organization = await this.repository.billing.getOrganizationById(organizationId);
+    if (organization.isErr()) return ok(false);
+    const currency = organization.value?.currency ?? this.repository.billing.defaultCurrency;
+
+    let pickedTrialPriceId: string | undefined;
+    if (requestedTrialPriceId) {
+      if (this.repository.billing.priceBelongsToTrialPlan(requestedTrialPriceId, currency)) {
+        pickedTrialPriceId = requestedTrialPriceId;
+      } else {
+        this.logger.info(
+          { organizationId, currency, trialPriceId: requestedTrialPriceId },
+          "Ignoring a sign-up Price that is not on the Trial Plan for Organization currency"
+        );
+      }
+    }
+
     const stripeCustomer = await this.createOrganizationCustomer({
       organizationId,
       memberId,
       email,
       name,
+      metadata: pickedTrialPriceId
+        ? { [TRIAL_PRICE_ID_METADATA_KEY]: pickedTrialPriceId }
+        : undefined,
     });
     if (stripeCustomer.isErr()) {
       this.logger.warn(
@@ -150,11 +187,9 @@ export class BillingService extends BasePermissionService<
     }
 
     if (!this.repository.billing.trialRequiresPaymentMethod) {
-      const organization = await this.repository.billing.getOrganizationById(organizationId);
-      if (organization.isErr()) return ok(false);
-      const currency = organization.value?.currency ?? this.repository.billing.defaultCurrency;
       const trialPlan = this.repository.billing.trialPlanFor(currency);
-      const trialPriceId = this.repository.billing.defaultTrialPriceId(currency);
+      const trialPriceId =
+        pickedTrialPriceId ?? this.repository.billing.defaultTrialPriceId(currency);
       if (trialPlan && !trialPriceId) return ok(false);
 
       if (trialPlan && trialPriceId) {
@@ -198,6 +233,26 @@ export class BillingService extends BasePermissionService<
     return this.repository.billing.getAccessibleSubscription(organizationId);
   }
 
+  async getTrialPriceId(ctx: Context): ServerResultAsync<string | null> {
+    const organizationId = ctx.actor.organizationId;
+    if (!organizationId) return this.error("FORBIDDEN", "Organization is required");
+
+    const readGuard = this.accessGuard(ctx.actor, "read", { organizationId });
+    if (readGuard.isErr()) return err(readGuard.error);
+
+    const organization = await this.repository.billing.getOrganizationById(organizationId);
+    if (organization.isErr()) return err(organization.error);
+    if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
+    const customerId = this.repository.billing.customerIdOf(organization.value);
+    if (!customerId) return ok(null);
+
+    const customer = await this.repository.billing.getStripeCustomer(customerId);
+    if (customer.isErr()) return err(customer.error);
+    if (customer.value.deleted) return ok(null);
+    const currency = organization.value.currency ?? this.repository.billing.defaultCurrency;
+    return ok(this.pickedTrialPriceId({ customer: customer.value, currency }) ?? null);
+  }
+
   async listInvoices(ctx: Context): ServerResultAsync<Stripe.Invoice[]> {
     const organizationId = ctx.actor.organizationId;
     if (!organizationId) return this.error("FORBIDDEN", "Organization is required");
@@ -238,11 +293,13 @@ export class BillingService extends BasePermissionService<
     let checkoutPriceId = priceId;
     let trialDays: number | undefined;
     let collectPaymentMethod = false;
+    let usePickedTrialPrice = false;
 
     if (this.repository.billing.trialRequiresPaymentMethod && trialPlan) {
       const defaultPriceId = this.repository.billing.defaultTrialPriceId(currency);
       if (defaultPriceId) {
         checkoutPriceId = defaultPriceId;
+        usePickedTrialPrice = true;
       } else if (!this.repository.billing.priceBelongsToTrialPlan(priceId, currency)) {
         return this.error("NOT_FOUND", "Price not found for this Trial Plan");
       }
@@ -267,6 +324,10 @@ export class BillingService extends BasePermissionService<
       name,
     });
     if (stripeCustomer.isErr()) return err(stripeCustomer.error);
+    if (usePickedTrialPrice) {
+      checkoutPriceId =
+        this.pickedTrialPriceId({ customer: stripeCustomer.value, currency }) ?? checkoutPriceId;
+    }
 
     const stripeSubscriptions = await this.repository.billing.listStripeSubscriptions(
       stripeCustomer.value.id
@@ -854,6 +915,20 @@ export class BillingService extends BasePermissionService<
     const synced = await this.syncStripeData({ customerId });
     if (synced.isErr()) return err(synced.error);
     return ok();
+  }
+
+  private pickedTrialPriceId({
+    customer,
+    currency,
+  }: {
+    customer: Stripe.Customer;
+    currency: string;
+  }): string | undefined {
+    const priceId = customer.metadata?.[TRIAL_PRICE_ID_METADATA_KEY];
+    if (!priceId || !this.repository.billing.priceBelongsToTrialPlan(priceId, currency)) {
+      return undefined;
+    }
+    return priceId;
   }
 
   private defaultPaymentMethodId(
