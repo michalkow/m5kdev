@@ -106,25 +106,32 @@ function FilterDateRangeValue({
   );
 }
 
+type TranslateFn = ReturnType<typeof useTranslation>["t"];
+
 type ComponentRenderer = (
   value: FilterValue,
   onChange: (value: FilterValue) => void,
-  options?: { label: string; value: string }[]
+  options: { label: string; value: string }[],
+  t: TranslateFn
 ) => ReactNode;
 
+function selectValueLabel(t: TranslateFn): string {
+  return t("web-ui:table.filter.selectValue", { defaultValue: "Select Value" });
+}
+
 const componentForFilterMethod: Record<ComponentForFilterMethod, ComponentRenderer> = {
-  text: (value, onChange) => (
+  text: (value, onChange, _options, t) => (
     <Input
-      aria-label="Select Value"
+      aria-label={selectValueLabel(t)}
       className="flex-1 min-w-0 text-sm"
       variant="secondary"
       value={(value as string) ?? ""}
       onChange={(e) => onChange(e.target.value)}
     />
   ),
-  number: (value, onChange) => (
+  number: (value, onChange, _options, t) => (
     <Input
-      aria-label="Select Value"
+      aria-label={selectValueLabel(t)}
       type="number"
       className="flex-1 min-w-0 text-sm"
       variant="secondary"
@@ -134,9 +141,9 @@ const componentForFilterMethod: Record<ComponentForFilterMethod, ComponentRender
   ),
   date: (value, onChange) => <FilterDateValue value={value} onChange={onChange} />,
   range: (value, onChange) => <FilterDateRangeValue value={value} onChange={onChange} />,
-  radio: (value, onChange) => (
+  radio: (value, onChange, _options, t) => (
     <Select
-      aria-label="Select Value"
+      aria-label={selectValueLabel(t)}
       className="flex-1 min-w-0 text-sm"
       selectedKey={(value as boolean | null) ? "true" : "false"}
       onSelectionChange={(key) => onChange(key === "true")}
@@ -147,25 +154,33 @@ const componentForFilterMethod: Record<ComponentForFilterMethod, ComponentRender
       </Select.Trigger>
       <FilterSelectPopover>
         <ListBox>
-          <ListBox.Item className="text-sm" id="true" textValue="True">
-            True
+          <ListBox.Item
+            className="text-sm"
+            id="true"
+            textValue={t("web-ui:table.filter.true", { defaultValue: "True" })}
+          >
+            {t("web-ui:table.filter.true", { defaultValue: "True" })}
             <ListBox.ItemIndicator />
           </ListBox.Item>
-          <ListBox.Item className="text-sm" id="false" textValue="False">
-            False
+          <ListBox.Item
+            className="text-sm"
+            id="false"
+            textValue={t("web-ui:table.filter.false", { defaultValue: "False" })}
+          >
+            {t("web-ui:table.filter.false", { defaultValue: "False" })}
             <ListBox.ItemIndicator />
           </ListBox.Item>
         </ListBox>
       </FilterSelectPopover>
     </Select>
   ),
-  select: (value, onChange, options = []) => {
+  select: (value, onChange, options, t) => {
     const selection = (value as Selection | undefined) ?? new Set<string>();
     const selectedKey =
       selection === "all" ? null : selection.size > 0 ? String([...selection][0]) : null;
     return (
       <Select
-        aria-label="Select Value"
+        aria-label={selectValueLabel(t)}
         className="flex-1 min-w-0 text-sm"
         selectedKey={selectedKey}
         onSelectionChange={(key) => {
@@ -195,14 +210,14 @@ const componentForFilterMethod: Record<ComponentForFilterMethod, ComponentRender
       </Select>
     );
   },
-  multiSelect: (value, onChange, options = []) => {
+  multiSelect: (value, onChange, options, t) => {
     const selectedKeys: Selection =
       value === "all" ? "all" : value instanceof Set ? (value as Set<Key>) : new Set<Key>();
     const selectValue: readonly Key[] =
       selectedKeys === "all" ? options.map((o) => o.value) : [...selectedKeys];
     return (
       <Select<object, "multiple">
-        aria-label="Select Value"
+        aria-label={selectValueLabel(t)}
         className="flex-1 min-w-0 text-sm"
         selectionMode="multiple"
         value={selectValue}
@@ -594,7 +609,7 @@ const TableFilteringItem = ({
     if (!filter.type) return null;
     return (
       <Select
-        aria-label="Select Method"
+        aria-label={t("web-ui:table.filter.selectMethod", { defaultValue: "Select Method" })}
         className="w-40 flex-shrink-0 text-sm"
         selectedKey={filter.method?.value ?? null}
         onSelectionChange={handleMethodChange}
@@ -635,14 +650,14 @@ const TableFilteringItem = ({
     const ComponentFn =
       componentForFilterMethod[component as keyof typeof componentForFilterMethod];
     if (!ComponentFn) return <div className="flex-1 min-w-0" />;
-    return ComponentFn(filter.value as any, handleValueChange, filter.options ?? []);
-  }, [filter.method?.component, filter.value, filter.options, handleValueChange]);
+    return ComponentFn(filter.value as any, handleValueChange, filter.options ?? [], t);
+  }, [filter.method?.component, filter.value, filter.options, handleValueChange, t]);
 
   return (
     <div className="flex items-center gap-2 w-full">
       <div className="flex flex-1 items-center gap-2 min-w-0">
         <Select
-          aria-label="Select Column"
+          aria-label={t("web-ui:table.filter.selectColumn", { defaultValue: "Select Column" })}
           className="w-40 flex-shrink-0 text-sm"
           selectedKey={filter.columnId || null}
           onSelectionChange={handleColumnChange}

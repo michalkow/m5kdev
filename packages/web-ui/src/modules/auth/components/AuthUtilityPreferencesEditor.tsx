@@ -12,6 +12,7 @@ import {
 } from "@heroui/react";
 import { parseTime } from "@internationalized/date";
 import type { FormEvent, ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import type { z } from "zod";
 
 export type UpdatePreferencesOptions = {
@@ -60,6 +61,8 @@ export function AuthUtilityPreferencesEditor<S extends z.ZodObject<z.ZodRawShape
   labels,
   updateValues,
 }: PreferenceEditorProps<S>): ReactElement {
+  const { t } = useTranslation();
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -107,7 +110,9 @@ export function AuthUtilityPreferencesEditor<S extends z.ZodObject<z.ZodRawShape
     .join("|");
 
   if (isLoading) {
-    return <div>{labels.loading ?? "Loading..."}</div>;
+    return (
+      <div>{labels.loading ?? t("web-ui:common.loading", { defaultValue: "Loading..." })}</div>
+    );
   }
 
   return (
@@ -203,7 +208,11 @@ export function AuthUtilityPreferencesEditor<S extends z.ZodObject<z.ZodRawShape
               </div>
             );
           default:
-            return <div key={String(key)}>Invalid control</div>;
+            return (
+              <div key={String(key)}>
+                {t("web-ui:preferences.invalidControl", { defaultValue: "Invalid control" })}
+              </div>
+            );
         }
       })}
       <Button type="submit" variant="primary" isPending={isPending}>
