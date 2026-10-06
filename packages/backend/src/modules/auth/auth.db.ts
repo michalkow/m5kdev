@@ -114,6 +114,10 @@ export const organizations = sqliteTable("organizations", {
   stripeCustomerId: text("stripe_customer_id").unique(),
   stripeSandboxCustomerId: text("stripe_sandbox_customer_id").unique(),
   billingExempt: integer("billing_exempt", { mode: "boolean" }).notNull().default(false),
+  allowCardlessTrial: integer("allow_cardless_trial", { mode: "boolean" }).notNull().default(false),
+  cardlessTrialConsumed: text("cardless_trial_consumed", { mode: "json" })
+    .default({})
+    .$type<Partial<Record<"production" | "sandbox", boolean>>>(),
 });
 
 export const members = sqliteTable(

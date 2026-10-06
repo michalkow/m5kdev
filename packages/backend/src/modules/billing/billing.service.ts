@@ -1,4 +1,5 @@
 import {
+  type ActiveSubscription,
   applyAdminCouponInputSchema,
   type BillingCoupon,
   type BillingSchema,
@@ -9,6 +10,7 @@ import {
   cancelAdminSubscriptionInputSchema,
   createAdminSubscriptionInputSchema,
   organizationIdInputSchema,
+  setAdminAllowCardlessTrialInputSchema,
   setAdminBillingExemptInputSchema,
   setOrganizationCurrencyInputSchema,
 } from "@m5kdev/commons/modules/billing/billing.schema";
@@ -35,6 +37,11 @@ const TRIAL_PRICE_ID_METADATA_KEY = "trialPriceId";
 const TRIAL_START_FALLBACK_DAYS = 7;
 const NO_PAYMENT_METHOD_MESSAGE =
   "The Customer has no payment method: pick a Trial or a 100% Coupon";
+const CARDLESS_TRIAL_CARD_ON_ONLY_MESSAGE =
+  "allowCardlessTrial is only when Trial requires a payment method";
+const CARDLESS_TRIAL_CONSUMED_MESSAGE =
+  "This Organization already used a cardless Trial in this Stripe environment";
+const CARDLESS_TRIAL_NO_DAYS_MESSAGE = "Trial has no days for this Organization";
 
 type OwnerMember = InferSelectModel<typeof authTables.members> & { email: string };
 
@@ -234,14 +241,27 @@ export class BillingService extends BasePermissionService<
     return ok(true);
   }
 
-  async getActiveSubscription(ctx: Context): ServerResultAsync<BillingSchema | null> {
+  async getActiveSubscription(ctx: Context): ServerResultAsync<ActiveSubscription | null> {
     const organizationId = ctx.actor.organizationId;
     if (!organizationId) return this.error("FORBIDDEN", "Organization is required");
 
     const readGuard = this.accessGuard(ctx.actor, "read", { organizationId });
     if (readGuard.isErr()) return err(readGuard.error);
 
-    return this.repository.billing.getAccessibleSubscription(organizationId);
+    const subscription = await this.repository.billing.getAccessibleSubscription(organizationId);
+    if (subscription.isErr()) return err(subscription.error);
+    if (!subscription.value) return ok(null);
+
+    const ownerMustAddPaymentMethod = await this.ownerMustAddPaymentMethod({
+      organizationId,
+      organizationRole: ctx.actor.organizationRole,
+      subscription: subscription.value,
+    });
+    if (ownerMustAddPaymentMethod.isErr()) return err(ownerMustAddPaymentMethod.error);
+    return ok({
+      ...subscription.value,
+      ownerMustAddPaymentMethod: ownerMustAddPaymentMethod.value,
+    });
   }
 
   async getTrialPriceId(ctx: Context): ServerResultAsync<string | null> {
@@ -584,6 +604,14 @@ export class BillingService extends BasePermissionService<
       return this.repository.billing.setBillingExempt(input);
     });
 
+  setAdminAllowCardlessTrial = this.procedure("setAdminAllowCardlessTrial")
+    .input(setAdminAllowCardlessTrialInputSchema)
+    .requireAuth("admin")
+    .access({ action: "write" })
+    .handle(async ({ input }) => {
+      return this.setAllowCardlessTrialForOrganization(input);
+    });
+
   createAdminSubscription = this.procedure("createAdminSubscription")
     .input(createAdminSubscriptionInputSchema)
     .requireAuth("admin")
@@ -708,6 +736,141 @@ export class BillingService extends BasePermissionService<
     if (owner.isErr()) return err(owner.error);
     if (!owner.value?.email) return this.error("NOT_FOUND", "Organization Owner not found");
     return ok({ ...owner.value, email: owner.value.email });
+  }
+
+  private async setAllowCardlessTrialForOrganization({
+    organizationId,
+    allowCardlessTrial,
+  }: {
+    organizationId: string;
+    allowCardlessTrial: boolean;
+  }): ServerResultAsync<boolean> {
+    const organization = await this.repository.billing.getOrganizationById(organizationId);
+    if (organization.isErr()) return err(organization.error);
+    if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
+
+    if (!allowCardlessTrial) {
+      return this.repository.billing.setAllowCardlessTrial({
+        organizationId,
+        allowCardlessTrial: false,
+      });
+    }
+
+    if (!this.repository.billing.trialRequiresPaymentMethod) {
+      return this.error("BAD_REQUEST", CARDLESS_TRIAL_CARD_ON_ONLY_MESSAGE);
+    }
+
+    const open = await this.repository.billing.getOpenSubscription(organizationId);
+    if (open.isErr()) return err(open.error);
+    if (open.value) {
+      return this.repository.billing.setAllowCardlessTrial({
+        organizationId,
+        allowCardlessTrial: true,
+      });
+    }
+
+    if (organization.value.cardlessTrialConsumed?.[this.repository.billing.environment]) {
+      return this.error("CONFLICT", CARDLESS_TRIAL_CONSUMED_MESSAGE);
+    }
+
+    const owner = await this.requireOwner(organizationId);
+    if (owner.isErr()) return err(owner.error);
+
+    const currency = organization.value.currency ?? this.repository.billing.defaultCurrency;
+    const stripeCustomer = await this.createOrganizationCustomer({
+      organizationId,
+      memberId: owner.value.id,
+      email: owner.value.email,
+      name: owner.value.name || undefined,
+    });
+    if (stripeCustomer.isErr()) return err(stripeCustomer.error);
+
+    const started = await this.startCardlessTrial({
+      organizationId,
+      memberId: owner.value.id,
+      customerId: stripeCustomer.value.id,
+      currency,
+      customer: stripeCustomer.value,
+    });
+    if (started.isErr()) return err(started.error);
+    if (!started.value) return this.error("BAD_REQUEST", CARDLESS_TRIAL_NO_DAYS_MESSAGE);
+
+    const consumed = await this.repository.billing.markCardlessTrialConsumed(organizationId);
+    if (consumed.isErr()) return err(consumed.error);
+    return this.repository.billing.setAllowCardlessTrial({
+      organizationId,
+      allowCardlessTrial: true,
+    });
+  }
+
+  private async startCardlessTrial({
+    organizationId,
+    memberId,
+    customerId,
+    currency,
+    customer,
+  }: {
+    organizationId: string;
+    memberId: string;
+    customerId: string;
+    currency: string;
+    customer: Stripe.Customer;
+  }): ServerResultAsync<boolean> {
+    const trialPlan = this.repository.billing.trialPlanFor(currency);
+    const trialPriceId =
+      this.pickedTrialPriceId({ customer, currency }) ??
+      this.repository.billing.defaultTrialPriceId(currency);
+    if (!trialPlan || !trialPriceId) return ok(false);
+
+    const trialDays = resolveTrialDays({
+      plan: trialPlan,
+      priceId: trialPriceId,
+      fallbackDays: TRIAL_START_FALLBACK_DAYS,
+    });
+    if (trialDays == null) return ok(false);
+
+    const subscription = await this.repository.billing.createTrialSubscription({
+      customerId,
+      organizationId,
+      memberId,
+      priceId: trialPriceId,
+      currency,
+      trialDays,
+    });
+    if (subscription.isErr()) return err(subscription.error);
+
+    const syncResult = await this.syncStripeData({
+      customerId,
+      memberId,
+    });
+    if (syncResult.isErr()) return err(syncResult.error);
+    return ok(true);
+  }
+
+  private async ownerMustAddPaymentMethod({
+    organizationId,
+    organizationRole,
+    subscription,
+  }: {
+    organizationId: string;
+    organizationRole: string | null;
+    subscription: BillingSchema;
+  }): ServerResultAsync<boolean> {
+    if (organizationRole !== "owner" || subscription.status !== "trialing") return ok(false);
+
+    const organization = await this.repository.billing.getOrganizationById(organizationId);
+    if (organization.isErr()) return err(organization.error);
+    if (!organization.value || organization.value.allowCardlessTrial) return ok(false);
+
+    const customerId = this.repository.billing.customerIdOf(organization.value);
+    if (!customerId) return ok(true);
+
+    const customer = await this.repository.billing.getStripeCustomer(customerId);
+    if (customer.isErr()) return err(customer.error);
+    if (customer.value.deleted) return ok(true);
+    return ok(
+      !this.defaultPaymentMethodId(customer.value.invoice_settings?.default_payment_method)
+    );
   }
 
   private async setOrganizationCurrency({

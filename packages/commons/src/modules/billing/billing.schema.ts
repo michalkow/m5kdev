@@ -30,6 +30,12 @@ export const billingSchema = z.object({
 
 export type BillingSchema = z.infer<typeof billingSchema>;
 
+export const activeSubscriptionSchema = billingSchema.extend({
+  ownerMustAddPaymentMethod: z.boolean(),
+});
+
+export type ActiveSubscription = z.infer<typeof activeSubscriptionSchema>;
+
 export const billingCouponSchema = z.object({
   id: z.string(),
   name: z.string().nullable(),
@@ -71,6 +77,11 @@ export const setAdminBillingExemptInputSchema = z.object({
   billingExempt: z.boolean(),
 });
 
+export const setAdminAllowCardlessTrialInputSchema = z.object({
+  organizationId: z.string(),
+  allowCardlessTrial: z.boolean(),
+});
+
 export const cancelAdminSubscriptionInputSchema = z.object({
   organizationId: z.string(),
   when: z.enum(["immediate", "period_end"]),
@@ -84,6 +95,7 @@ export const adminOrganizationBillingRowSchema = z.object({
   stripeCustomerId: z.string().nullable(),
   defaultTrialDays: z.number().nullable(),
   billingExempt: z.boolean(),
+  allowCardlessTrial: z.boolean(),
   openSubscription: z.boolean(),
   subscription: billingSchema.nullable(),
   coupon: billingCouponSchema.nullable(),
@@ -99,4 +111,5 @@ export const billingAdminListOutputSchema = queryListOutput(
 export type BillingCoupon = z.infer<typeof billingCouponSchema>;
 export type CreateAdminSubscriptionInput = z.infer<typeof createAdminSubscriptionInputSchema>;
 export type SetAdminBillingExemptInput = z.infer<typeof setAdminBillingExemptInputSchema>;
+export type SetAdminAllowCardlessTrialInput = z.infer<typeof setAdminAllowCardlessTrialInputSchema>;
 export type AdminOrganizationBillingRow = z.infer<typeof adminOrganizationBillingRowSchema>;

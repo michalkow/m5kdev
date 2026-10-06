@@ -445,7 +445,9 @@ async function createTables(client: Client): Promise<void> {
       currency TEXT,
       stripe_customer_id TEXT UNIQUE,
       stripe_sandbox_customer_id TEXT UNIQUE,
-      billing_exempt INTEGER NOT NULL DEFAULT 0
+      billing_exempt INTEGER NOT NULL DEFAULT 0,
+      allow_cardless_trial INTEGER NOT NULL DEFAULT 0,
+      cardless_trial_consumed TEXT DEFAULT '{}'
     );
   `);
   await client.execute(`
@@ -2573,6 +2575,258 @@ describe("BillingService Billing Module admin", () => {
     expect(listed.rows[0]?.stripeCustomerId).toBe(CUSTOMER_ID);
   });
 
+  it("starts a cardless Trial when AdminActor sets allowCardlessTrial on a card-on catalog", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe, { trialRequiresPaymentMethod: true });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+    expect(stripe.subscriptions.create).not.toHaveBeenCalled();
+    expect((await billing.getActiveSubscription(memberCtx()))._unsafeUnwrap()).toBeNull();
+
+    const set = await billing.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: true },
+      adminCtx()
+    );
+    expect(set.isOk()).toBe(true);
+    expect(stripe.subscriptions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: [{ price: PRICE_ID, quantity: 1 }],
+        trial_period_days: 7,
+      })
+    );
+    expect((await billing.getActiveSubscription(memberCtx()))._unsafeUnwrap()?.status).toBe(
+      "trialing"
+    );
+    const listed = (await billing.listAdminOrganizationBilling({}, adminCtx()))._unsafeUnwrap();
+    expect(listed.rows[0]?.allowCardlessTrial).toBe(true);
+  });
+
+  it("starts cardless Trial on the Trial Price picked at sign-up", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe, { trialRequiresPaymentMethod: true });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+      trialPriceId: PRICE_USD_QUARTER,
+    });
+
+    const set = await billing.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: true },
+      adminCtx()
+    );
+    expect(set.isOk()).toBe(true);
+    expect(stripe.subscriptions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: [{ price: PRICE_USD_QUARTER, quantity: 1 }],
+        trial_period_days: 7,
+      })
+    );
+  });
+
+  it("refuses allowCardlessTrial on a card-off catalog", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe);
+
+    const refused = await billing.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: true },
+      adminCtx()
+    );
+    expect(refused._unsafeUnwrapErr().code).toBe("BAD_REQUEST");
+    expect(stripe.subscriptions.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses allowCardlessTrial when the Trial Price has no days", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe, {
+      trialRequiresPaymentMethod: true,
+      plans: [perPriceTrialPlan({ monthDays: 0, planDays: 14 })],
+      trialPlanName: { usd: "pro" },
+    });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+
+    const refused = await billing.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: true },
+      adminCtx()
+    );
+    expect(refused._unsafeUnwrapErr().code).toBe("BAD_REQUEST");
+    expect(stripe.subscriptions.create).not.toHaveBeenCalled();
+    const listed = (await billing.listAdminOrganizationBilling({}, adminCtx()))._unsafeUnwrap();
+    expect(listed.rows[0]?.allowCardlessTrial).toBe(false);
+  });
+
+  it("sets allowCardlessTrial on an open Subscription without creating another", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe, { trialRequiresPaymentMethod: true });
+    await billing.createAdminSubscription(
+      { organizationId: ORG_ID, priceId: PRICE_ID, trialDays: 14 },
+      adminCtx()
+    );
+    expect(stripe.subscriptions.create).toHaveBeenCalledTimes(1);
+
+    const set = await billing.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: true },
+      adminCtx()
+    );
+    expect(set.isOk()).toBe(true);
+    expect(stripe.subscriptions.create).toHaveBeenCalledTimes(1);
+    const listed = (await billing.listAdminOrganizationBilling({}, adminCtx()))._unsafeUnwrap();
+    expect(listed.rows[0]?.allowCardlessTrial).toBe(true);
+  });
+
+  it("starts a cardless Trial while the Organization is billingExempt", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe, { trialRequiresPaymentMethod: true });
+    await billing.setAdminBillingExempt(
+      { organizationId: ORG_ID, billingExempt: true },
+      adminCtx()
+    );
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+
+    const set = await billing.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: true },
+      adminCtx()
+    );
+    expect(set.isOk()).toBe(true);
+    expect(stripe.subscriptions.create).toHaveBeenCalledTimes(1);
+    expect((await billing.getActiveSubscription(memberCtx()))._unsafeUnwrap()?.status).toBe(
+      "trialing"
+    );
+  });
+
+  it("keeps Trial access when clearing allowCardlessTrial and gates the Owner to add a payment method", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe, { trialRequiresPaymentMethod: true });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+    await billing.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: true },
+      adminCtx()
+    );
+
+    const cleared = await billing.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: false },
+      adminCtx()
+    );
+    expect(cleared.isOk()).toBe(true);
+    expect((await billing.getActiveSubscription(memberCtx()))._unsafeUnwrap()).toEqual(
+      expect.objectContaining({ status: "trialing", ownerMustAddPaymentMethod: false })
+    );
+    expect((await billing.getActiveSubscription(ownerCtx()))._unsafeUnwrap()).toEqual(
+      expect.objectContaining({ status: "trialing", ownerMustAddPaymentMethod: true })
+    );
+
+    const reenabled = await billing.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: true },
+      adminCtx()
+    );
+    expect(reenabled.isOk()).toBe(true);
+    expect(stripe.subscriptions.create).toHaveBeenCalledTimes(1);
+    expect((await billing.getActiveSubscription(ownerCtx()))._unsafeUnwrap()).toEqual(
+      expect.objectContaining({ status: "trialing", ownerMustAddPaymentMethod: false })
+    );
+  });
+
+  it("does not start a second cardless Trial after the first is canceled", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe, { trialRequiresPaymentMethod: true });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+    await billing.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: true },
+      adminCtx()
+    );
+    await billing.cancelAdminSubscription(
+      { organizationId: ORG_ID, when: "immediate" },
+      adminCtx()
+    );
+    expect((await billing.getActiveSubscription(memberCtx()))._unsafeUnwrap()).toBeNull();
+
+    const refused = await billing.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: true },
+      adminCtx()
+    );
+    expect(refused._unsafeUnwrapErr().code).toBe("CONFLICT");
+    expect(stripe.subscriptions.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("still lets AdminActor start a Trial with trialDays after cardless Trial is consumed", async () => {
+    const stripe = createStripeStub({});
+    const billing = await boot(stripe, { trialRequiresPaymentMethod: true });
+    await billing.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+    await billing.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: true },
+      adminCtx()
+    );
+    await billing.cancelAdminSubscription(
+      { organizationId: ORG_ID, when: "immediate" },
+      adminCtx()
+    );
+
+    const created = await billing.createAdminSubscription(
+      { organizationId: ORG_ID, priceId: PRICE_ID, trialDays: 21 },
+      adminCtx()
+    );
+    expect(created.isOk()).toBe(true);
+    expect(stripe.subscriptions.create).toHaveBeenCalledTimes(2);
+    expect((await billing.getActiveSubscription(memberCtx()))._unsafeUnwrap()?.status).toBe(
+      "trialing"
+    );
+  });
+
+  it("does not consume production cardless Trial when sandbox starts one", async () => {
+    const sandboxStripe = createStripeStub({});
+    const sandbox = await boot(sandboxStripe, {
+      trialRequiresPaymentMethod: true,
+      environment: "sandbox",
+    });
+    await sandbox.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+    const sandboxSet = await sandbox.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: true },
+      adminCtx()
+    );
+    expect(sandboxSet.isOk()).toBe(true);
+
+    const productionStripe = createStripeStub({});
+    const production = await boot(productionStripe, { trialRequiresPaymentMethod: true });
+    await production.createOrganizationHook({
+      organizationId: ORG_ID,
+      memberId: MEMBER_ID,
+      email: USER_EMAIL,
+    });
+    const productionSet = await production.setAdminAllowCardlessTrial(
+      { organizationId: ORG_ID, allowCardlessTrial: true },
+      adminCtx()
+    );
+    expect(productionSet.isOk()).toBe(true);
+    expect(productionStripe.subscriptions.create).toHaveBeenCalledTimes(1);
+  });
+
   it("lists billingExempt false for a new Organization", async () => {
     const stripe = createStripeStub({});
     const billing = await boot(stripe);
@@ -2761,6 +3015,11 @@ describe("BillingService Billing Module admin", () => {
         ctx
       );
       expect(exempt._unsafeUnwrapErr().code).toBe("FORBIDDEN");
+      const cardless = await billing.setAdminAllowCardlessTrial(
+        { organizationId: ORG_ID, allowCardlessTrial: true },
+        ctx
+      );
+      expect(cardless._unsafeUnwrapErr().code).toBe("FORBIDDEN");
     }
     expect(stripe.subscriptions.create).not.toHaveBeenCalled();
   });

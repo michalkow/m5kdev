@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `BillingProvider` shows `paymentMethodPage` when `getActiveSubscription.ownerMustAddPaymentMethod` is true (Owner must add a card on an open Trial).
 - Better Auth 1.7 boots without SCHEMA_MISMATCH: apikeys has configId (default "default"), required referenceId, and nullable userId.
 - NuqsTable Filters, Group by, and Columns labels follow the active locale.
 - Table filter operators such as Equals, One Of, and Is Empty follow the active locale.

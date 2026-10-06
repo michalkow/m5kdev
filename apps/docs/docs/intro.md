@@ -166,6 +166,15 @@ and yearly skip Trial. No Drizzle generate.
 
 - [Trial days per Price](/guides/v0.38.20-billing-trial-days-per-price-migration)
 
+## Upgrading to 0.38.21 {#upgrade-0-38-21}
+
+Complete 0.38.20 first. Every app generates `organizations.allow_cardless_trial`
+and `organizations.cardless_trial_consumed`. Card-on Billing apps pass
+`trialRequiresPaymentMethod` into `BillingAdminRouter` so AdminActor can start
+one cardless Trial per Stripe environment.
+
+- [Organization allowCardlessTrial overlay](/guides/v0.38.21-organization-allow-cardless-trial-migration)
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module

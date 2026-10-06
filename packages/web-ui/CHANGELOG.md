@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Billing Module admin can Disable credit card check (`allowCardlessTrial`) when the catalog requires a card. Clearing it keeps Trial; the Owner is gated to Billing Portal until they add a payment method.
 - Accepting an organization invitation while signed in as a different account shows a switch-account prompt instead of spinning forever.
 - Reset password no longer shows a duplicated title and login link.
 - Better Auth 1.7 boots without SCHEMA_MISMATCH: apikeys has configId (default "default"), required referenceId, and nullable userId.

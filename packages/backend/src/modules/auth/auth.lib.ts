@@ -630,6 +630,18 @@ export function createBetterAuth<
                 defaultValue: false,
                 input: false,
               },
+              allowCardlessTrial: {
+                type: "boolean",
+                required: false,
+                defaultValue: false,
+                input: false,
+              },
+              cardlessTrialConsumed: {
+                type: "string",
+                required: false,
+                defaultValue: "{}",
+                input: false,
+              },
             },
           },
         },

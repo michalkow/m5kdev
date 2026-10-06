@@ -293,11 +293,11 @@ A Stripe Coupon already in the Stripe account (percent or amount off, duration).
 _Avoid_: Complimentary; Trial; free Subscription as a Kernel grant; paywall bypass (that is billingExempt); customer-facing promo on the Plan page; Kernel-created Coupon catalog
 
 **Checkout**:
-Stripe-hosted start of a Subscription when the Organization has none in this Stripe environment. When Trial requires a payment method, Checkout starts Trial on the Trial Price (default or picked) and collects the card; there is no access until it completes. When Trial does not require a card, Checkout is not used to start Trial.
-_Avoid_: Billing Portal; a second Subscription on an already-trialing Organization in this environment; using Checkout to change interval after convert; treating a sandbox Subscription as blocking production Checkout
+Stripe-hosted start of a Subscription when the Organization has none in this Stripe environment. When Trial requires a payment method, Checkout starts Trial on the Trial Price (default or picked) and collects the card; there is no access until it completes. When Trial does not require a card, Checkout is not used to start Trial. `allowCardlessTrial` starts Trial without Checkout.
+_Avoid_: Billing Portal; a second Subscription on an already-trialing Organization in this environment; using Checkout to change interval after convert; treating a sandbox Subscription as blocking production Checkout; using Checkout to add a card onto an existing Trial
 
 **Billing Portal**:
-Stripe-hosted management of an existing paid Subscription (Plan, interval, payment method, invoices). After convert, interval change is this, not the Kernel Plan page.
+Stripe-hosted management of an existing Subscription (Plan, interval, payment method, invoices). After convert, interval change is this, not the Kernel Plan page. Adding a card onto an in-progress Trial is this, not Checkout.
 _Avoid_: Checkout; in-app Plan switch after paid; collecting the first card when no Subscription exists (that is Checkout)
 
 **Seat billing**:
@@ -306,7 +306,11 @@ _Avoid_: usage/metered billing; mixing on and off across Plans; billed Membershi
 
 **billingExempt**:
 An Organization boolean. When true, that Organization is exempt from the paywall and from Seat billing. AdminActor sets it on Billing Module admin; new Organizations start false; children do not inherit. See [ADR-0023](docs/adr/0023-organization-billing-exempt.md).
-_Avoid_: skipPlanCheck (that is the app-wide BillingProvider override); skip subscription check as the Kernel noun; grandfathered; Coupon as the bypass; stuffing this into Organization flags
+_Avoid_: skipPlanCheck (that is the app-wide BillingProvider override); skip subscription check as the Kernel noun; grandfathered; Coupon as the bypass; stuffing this into Organization flags; using this to start Trial without a card (that is allowCardlessTrial)
+
+**allowCardlessTrial**:
+An Organization boolean. AdminActor may waive catalog `trialRequiresPaymentMethod` for this Organization: Kernel starts at most one cardless Trial per Stripe environment (picked-at-sign-up Price else default Trial Price) without Checkout. It does not skip the paywall (that is billingExempt). New Organizations start false; children do not inherit. Clearing it while trialing keeps access and sends the Owner to Billing Portal for a card; turning it on again drops that gate. After that Trial ends they pay via Checkout; Admin Create Subscription with trialDays remains. See [ADR-0026](docs/adr/0026-organization-allow-cardless-trial.md).
+_Avoid_: billingExempt; skip credit card check as the Kernel noun; a second cardless Trial via the switch; stuffing this into Organization flags; using Checkout to add a card onto the open Trial
 
 **Subscription**:
 Local row re-synced from Stripe; Stripe is the source of truth. The billed party is the Organization, not a User. One mutable row per Organization per Stripe environment (`production` | `sandbox`), the same split as Customer and Plan catalogs. Paywall, admin, Checkout, and Seat billing use this process environment's row only. Stamp MemberId for attribution; do not key billing by UserId. Access while the current-environment status is `active`, `trialing`, or `past_due`, or while the Organization is billingExempt. See [ADR-0017](docs/adr/0017-billing-org-paywall-seat-billing-opt-in.md), [ADR-0023](docs/adr/0023-organization-billing-exempt.md), and [ADR-0024](docs/adr/0024-subscription-per-stripe-environment.md).

@@ -1,12 +1,13 @@
 import {
+  activeSubscriptionSchema,
   applyAdminCouponInputSchema,
   billingAdminListInputSchema,
   billingAdminListOutputSchema,
   billingCouponListOutputSchema,
-  billingSchema,
   cancelAdminSubscriptionInputSchema,
   createAdminSubscriptionInputSchema,
   organizationIdInputSchema,
+  setAdminAllowCardlessTrialInputSchema,
   setAdminBillingExemptInputSchema,
   setOrganizationCurrencyInputSchema,
 } from "@m5kdev/commons/modules/billing/billing.schema";
@@ -20,7 +21,7 @@ export function createBillingTRPC(
 ) {
   return router({
     getActiveSubscription: organizationProcedure
-      .output(billingSchema.nullable())
+      .output(activeSubscriptionSchema.nullable())
       .query(async ({ ctx }) => {
         return handleTRPCResult(await billingService.getActiveSubscription(ctx));
       }),
@@ -62,6 +63,12 @@ export function createBillingTRPC(
       .input(setAdminBillingExemptInputSchema)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await billingService.setAdminBillingExempt(input, ctx));
+      }),
+
+    setAdminAllowCardlessTrial: adminProcedure
+      .input(setAdminAllowCardlessTrialInputSchema)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await billingService.setAdminAllowCardlessTrial(input, ctx));
       }),
 
     createAdminSubscription: adminProcedure

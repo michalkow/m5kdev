@@ -1,5 +1,5 @@
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
-import type { BillingSchema } from "@m5kdev/commons/modules/billing/billing.schema";
+import type { ActiveSubscription } from "@m5kdev/commons/modules/billing/billing.schema";
 import { useQuery } from "@tanstack/react-query";
 import { createContext } from "react";
 import { useAppTRPC } from "../../app/hooks/useAppTrpc";
@@ -8,7 +8,7 @@ import { useUserOrganizations } from "../../auth/hooks/useUserOrganizations";
 
 export const billingProviderContext = createContext<{
   isLoading: boolean;
-  data: BillingSchema | null;
+  data: ActiveSubscription | null;
 }>({
   isLoading: true,
   data: null,
@@ -18,11 +18,13 @@ export function BillingProvider({
   children,
   loader,
   planPage,
+  paymentMethodPage,
   skipPlanCheck = false,
 }: {
   children: React.ReactNode;
   loader?: React.ReactNode;
   planPage: React.ReactNode;
+  paymentMethodPage?: React.ReactNode;
   skipPlanCheck?: boolean;
 }): React.ReactNode {
   const trpc = useAppTRPC<BackendTRPCRouter>();
@@ -33,8 +35,7 @@ export function BillingProvider({
       (organization) => organization.id === session?.session.activeOrganizationId
     )?.billingExempt
   );
-  const skipSubscriptionQuery =
-    skipPlanCheck || organizations.isLoading || billingExempt;
+  const skipSubscriptionQuery = skipPlanCheck || organizations.isLoading || billingExempt;
 
   const { data: activeSubscription, isLoading } = useQuery(
     trpc.billing.getActiveSubscription.queryOptions(undefined, {
@@ -71,8 +72,12 @@ export function BillingProvider({
     return planPage;
   }
 
+  if (activeSubscription.ownerMustAddPaymentMethod) {
+    return paymentMethodPage ?? "Add a payment method";
+  }
+
   return (
-    <billingProviderContext.Provider value={{ isLoading, data: activeSubscription ?? null }}>
+    <billingProviderContext.Provider value={{ isLoading, data: activeSubscription }}>
       {children}
     </billingProviderContext.Provider>
   );

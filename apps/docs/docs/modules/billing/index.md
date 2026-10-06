@@ -161,8 +161,11 @@ succeeds if Stripe is down; the paywall shows until a Subscription exists.
   Subscription on a catalog Price with either a Trial (Admin-entered days,
   pre-filled from `resolveTrialDays` for the selected Price) or a Coupon, apply /
   replace / remove one Coupon on an existing Subscription (Price unchanged),
-  cancel, and toggle `billingExempt` (UI copy: Skip subscription check).
-  Without a payment method on the Customer, create requires a Trial
+  cancel, toggle `billingExempt` (UI copy: Skip subscription check), and on a
+  card-on catalog toggle `allowCardlessTrial` (UI copy: Disable credit card check).
+  Turning `allowCardlessTrial` on starts at most one cardless Trial in this Stripe
+  environment. Clearing it keeps Trial; the Owner is gated to Billing Portal until
+  a default payment method exists. Without a payment method on the Customer, create requires a Trial
   or a 100%-off Coupon (Stripe cannot charge a first invoice without one). An
   Admin Trial ends like catalog Trial: Stripe cancels without a card. The page
   shows the catalog environment (Production / Sandbox). The listed Subscription
@@ -172,7 +175,7 @@ succeeds if Stripe is down; the paywall shows until a Subscription exists.
   billing for that Organization; new Organizations start false. Kernel does not
   backfill. `BillingProvider` skips `getActiveSubscription` when
   `skipPlanCheck` is true (whole app) or the active Organization is
-  `billingExempt`.
+  `billingExempt`. `allowCardlessTrial` does not skip the paywall.
 - `constructEvent`, `processEvent`, `syncStripeData` — webhook verify and re-sync.
   A failed invoice stays `past_due` with access, with or without a payment
   method; AdminActor cancel is the cutoff.
@@ -199,7 +202,7 @@ Organization-scoped.
 
 | Procedure | Description |
 | --- | --- |
-| `billing.getActiveSubscription` | Current accessible Subscription or `null` |
+| `billing.getActiveSubscription` | Current accessible Subscription or `null`. Includes `ownerMustAddPaymentMethod` for the Owner when Trial is open, the cardless switch is off, and there is no default payment method |
 | `billing.getTrialPriceId` | Trial Price picked at sign-up (from Stripe Customer metadata) or `null` |
 | `billing.listInvoices` | Stripe invoices for the Organization Customer |
 
@@ -208,11 +211,12 @@ AdminActor is not in that Organization.
 
 | Procedure | Description |
 | --- | --- |
-| `billing.listAdminOrganizationBilling` | Catalog `environment` plus Organizations with Stripe Customer, currency, default Trial days, `billingExempt`, Subscription, and Coupon |
+| `billing.listAdminOrganizationBilling` | Catalog `environment` plus Organizations with Stripe Customer, currency, default Trial days, `billingExempt`, `allowCardlessTrial`, Subscription, and Coupon |
 | `billing.listAdminCoupons` | Valid Coupons in the Stripe account |
 | `billing.createAdminCustomer` | Create the Stripe Customer when missing (Owner email) |
 | `billing.setAdminOrganizationCurrency` | Set currency only when it is null (owned-Organization lock applies) |
 | `billing.setAdminBillingExempt` | Set `billingExempt` (Skip subscription check). Does not require a Subscription |
+| `billing.setAdminAllowCardlessTrial` | Set `allowCardlessTrial` (Disable credit card check). Card-on catalogs only; starts at most one cardless Trial per Stripe environment |
 | `billing.createAdminSubscription` | Catalog Price plus a Trial (`trialDays`) or a Coupon (`couponId`) when there is no Subscription; no card requires one of them (Coupon at 100%) |
 | `billing.applyAdminCoupon` | Apply or replace the single Coupon on the Subscription |
 | `billing.removeAdminCoupon` | Clear the Coupon (never cancels) |
@@ -226,7 +230,9 @@ shows, the wrap adds Organization Select, the impersonation banner, and a link
 to Admin panel (`/admin`) for User-role admin on their own session. Do not put
 `AuthAdminRouter` inside that wrap. There is no session skip of the paywall;
 `skipPlanCheck` still bypasses it for the whole app and ignores `billingExempt`.
-An exempt Organization also skips the subscription query.
+An exempt Organization also skips the subscription query. When
+`ownerMustAddPaymentMethod` is true, `BillingPaywallProvider` shows a full-page
+Billing Portal prompt instead of the app.
 
 `@m5kdev/web-ui` provides `BillingRouter` with
 `BillingPlanSelect` (1..N Plans), `BillingSinglePlanSelect`, `BillingInvoicePage`,
@@ -240,7 +246,9 @@ no trial days means no “N-day Trial” / “Start Trial”; the CTA is Subscri
 Checkout omits `trial_period_days`. `AuthPublicSignupRoute` reads `?price=`; pass
 `trialPriceId` when rendering `AuthPublicSignupForm` or `AuthPublicProviders`
 yourself. Billing Module admin row actions are a 3-dot menu; Skip
-subscription check stays a Switch.
+subscription check stays a Switch. Disable credit card check is a Switch only
+when the catalog requires a card; pass `trialRequiresPaymentMethod` into
+`BillingAdminRouter`.
 
 The Admin panel keeps Users / Organizations / Waitlist. Pass optional
 `extraLinks` and `extraRoutes` on `AuthAdminRouter` so Module admin hangs off
@@ -250,7 +258,10 @@ sidecar links (ADR-0021). Apps that register Billing compose:
 AuthAdminRouter({
   enableWaitlist: true,
   extraLinks: [{ label: "Billing", to: "/admin/billing" }],
-  extraRoutes: BillingAdminRouter({ plans: resolved.plans }),
+  extraRoutes: BillingAdminRouter({
+    plans: resolved.plans,
+    trialRequiresPaymentMethod: resolved.trialRequiresPaymentMethod,
+  }),
 })
 ```
 
@@ -273,6 +284,7 @@ constructed in app code with your secret key. Include
 - [Organization billingExempt overlay in 0.38.13](/guides/v0.38.13-organization-billing-exempt-migration)
 - [Subscription per Stripe environment in 0.38.15](/guides/v0.38.15-subscription-per-stripe-environment-migration)
 - [Trial days per Price in 0.38.20](/guides/v0.38.20-billing-trial-days-per-price-migration)
+- [Organization allowCardlessTrial overlay in 0.38.21](/guides/v0.38.21-organization-allow-cardless-trial-migration)
 - [N Prices, frozen Organization currency, and Trial Price at start in 0.38.9](/guides/v0.38.9-billing-trial-price-catalog-migration)
 - [Billing trial-ending email in 0.34.0](/guides/v0.34.0-billing-trial-ending-email-migration)
 - [Email Core Module](/modules/email)
@@ -280,3 +292,4 @@ constructed in app code with your secret key. Include
 - ADR-0022 (`docs/adr/0022-complimentary-billing-admin.md`)
 - ADR-0023 (`docs/adr/0023-organization-billing-exempt.md`)
 - ADR-0024 (`docs/adr/0024-subscription-per-stripe-environment.md`)
+- ADR-0026 (`docs/adr/0026-organization-allow-cardless-trial.md`)

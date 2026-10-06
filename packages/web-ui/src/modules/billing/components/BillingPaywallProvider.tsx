@@ -1,3 +1,4 @@
+import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { BillingProvider } from "@m5kdev/frontend/modules/billing/components/BillingProvider";
 import type { ReactNode } from "react";
@@ -29,6 +30,12 @@ export function BillingPaywallProvider({
           {planPage}
         </>
       }
+      paymentMethodPage={
+        <>
+          <BillingPaywallChrome />
+          <BillingAddPaymentMethodPage />
+        </>
+      }
     >
       {children}
     </BillingProvider>
@@ -55,6 +62,18 @@ function BillingPaywallChrome(): ReactNode {
         <AuthOrganizationSelect />
         {showAdminLink ? <Link to="/admin">{t("web-ui:billing.paywall.admin")}</Link> : null}
       </div>
+    </div>
+  );
+}
+
+function BillingAddPaymentMethodPage(): ReactNode {
+  const { t } = useTranslation("web-ui");
+  const { serverUrl } = useAppConfig();
+
+  return (
+    <div className="mx-auto flex w-full max-w-lg flex-col items-center gap-4 px-4 py-16 text-center">
+      <p>{t("web-ui:billing.portal.addPaymentMethod")}</p>
+      <a href={`${serverUrl}/stripe/portal`}>{t("web-ui:billing.portal.addPaymentMethodCta")}</a>
     </div>
   );
 }

@@ -141,6 +141,7 @@ describe("BillingPaywallProvider", () => {
         planPage: ReactNode;
         children: ReactNode;
         skipPlanCheck?: boolean;
+        paymentMethodPage?: ReactNode;
       }) => (skipPlanCheck ? children : planPage)
     );
     stubSession({ role: "user" });
@@ -153,6 +154,15 @@ describe("BillingPaywallProvider", () => {
     expect(markup).toContain("Unpaid Co");
     expect(markup).toContain("Paid Co");
     expect(markup).not.toContain("App shell");
+  });
+
+  it("passes a Billing Portal payment-method page into BillingProvider", () => {
+    renderPaywall();
+    expect(mockedBillingProvider.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        paymentMethodPage: expect.anything(),
+      })
+    );
   });
 
   it("hides Organization Select when the User has one Membership", () => {

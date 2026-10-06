@@ -26,6 +26,7 @@ jest.mock("@m5kdev/frontend/modules/app/hooks/useAppTrpc", () => ({
       removeAdminCoupon: { mutationOptions: () => ({}) },
       cancelAdminSubscription: { mutationOptions: () => ({}) },
       setAdminBillingExempt: { mutationOptions: () => ({}) },
+      setAdminAllowCardlessTrial: { mutationOptions: () => ({}) },
     },
   }),
 }));
@@ -44,6 +45,7 @@ const unpaidRow: AdminOrganizationBillingRow = {
   stripeCustomerId: null,
   defaultTrialDays: 14,
   billingExempt: false,
+  allowCardlessTrial: false,
   openSubscription: false,
   subscription: null,
   coupon: null,
@@ -169,6 +171,14 @@ describe("BillingAdminPage", () => {
     expect(markup).toContain("web-ui:billing.admin.createCustomer");
     expect(markup).not.toContain("web-ui:billing.admin.createSubscription");
     expect(markup).toContain('data-switch="false"');
+    expect(markup).not.toContain('data-column="allowCardlessTrial"');
+  });
+
+  it("shows the cardless Trial Switch only when the catalog requires a card", () => {
+    tableRows = [unpaidRow];
+    const markup = renderToStaticMarkup(<BillingAdminPage plans={[]} trialRequiresPaymentMethod />);
+    expect(markup).toContain('data-column="allowCardlessTrial"');
+    expect(markup).toContain('data-column="billingExempt"');
   });
 
   it("lists coupon and cancel items for an open Subscription and keeps the exempt Switch", () => {
@@ -181,5 +191,6 @@ describe("BillingAdminPage", () => {
     expect(markup).toContain("web-ui:billing.admin.cancelNow");
     expect(markup).not.toContain("web-ui:billing.admin.createSubscription");
     expect(markup).toContain('data-switch="false"');
+    expect(markup).not.toContain('data-column="allowCardlessTrial"');
   });
 });

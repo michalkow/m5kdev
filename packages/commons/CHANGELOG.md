@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- AdminActor `allowCardlessTrial` waives catalog `trialRequiresPaymentMethod` for one Organization: Kernel starts at most one cardless Trial per Stripe environment. `getActiveSubscription` includes `ownerMustAddPaymentMethod` so the Owner can be gated to Billing Portal after the switch is cleared.
 - Better Auth 1.7 boots without SCHEMA_MISMATCH: apikeys has configId (default "default"), required referenceId, and nullable userId.
 - NuqsTable Filters, Group by, and Columns labels follow the active locale.
 - Table filter operators such as Equals, One Of, and Is Empty follow the active locale.

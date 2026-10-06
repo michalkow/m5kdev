@@ -64,7 +64,9 @@ async function createTables(client: Client): Promise<void> {
       currency TEXT,
       stripe_customer_id TEXT UNIQUE,
       stripe_sandbox_customer_id TEXT UNIQUE,
-      billing_exempt INTEGER NOT NULL DEFAULT 0
+      billing_exempt INTEGER NOT NULL DEFAULT 0,
+      allow_cardless_trial INTEGER NOT NULL DEFAULT 0,
+      cardless_trial_consumed TEXT DEFAULT '{}'
     );
   `);
   await client.execute(`

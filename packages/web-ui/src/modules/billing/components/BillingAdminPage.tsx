@@ -123,7 +123,13 @@ function couponLabel({
   return [coupon.name ?? coupon.id, discount, duration].filter(Boolean).join(" · ");
 }
 
-export function BillingAdminPage({ plans }: { plans: readonly StripePlan[] }): ReactElement {
+export function BillingAdminPage({
+  plans,
+  trialRequiresPaymentMethod = false,
+}: {
+  plans: readonly StripePlan[];
+  trialRequiresPaymentMethod?: boolean;
+}): ReactElement {
   const { t } = useTranslation();
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();
@@ -198,6 +204,11 @@ export function BillingAdminPage({ plans }: { plans: readonly StripePlan[] }): R
       mutationOptions("web-ui:billing.admin.skipCheckSuccess")
     )
   );
+  const setCardlessTrial = useMutation(
+    trpc.billing.setAdminAllowCardlessTrial.mutationOptions(
+      mutationOptions("web-ui:billing.admin.disableCreditCardCheckSuccess")
+    )
+  );
 
   const openDialog = (next: BillingAdminDialog): void => {
     setCurrency(currencies[0] ?? "");
@@ -245,6 +256,33 @@ export function BillingAdminPage({ plans }: { plans: readonly StripePlan[] }): R
         );
       },
     },
+    ...(trialRequiresPaymentMethod
+      ? [
+          {
+            id: "allowCardlessTrial",
+            header: t("web-ui:billing.admin.disableCreditCardCheck"),
+            cell: ({ row }: { row: { original: BillingAdminRow } }) => {
+              const item = row.original;
+              return (
+                <Switch
+                  isSelected={item.allowCardlessTrial}
+                  isDisabled={setCardlessTrial.isPending}
+                  onChange={(next) => {
+                    setCardlessTrial.mutate({
+                      organizationId: item.organizationId,
+                      allowCardlessTrial: next,
+                    });
+                  }}
+                >
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                </Switch>
+              );
+            },
+          } satisfies NuqsTableColumn<BillingAdminRow>,
+        ]
+      : []),
     {
       id: "stripeCustomerId",
       accessorFn: (row) => row.stripeCustomerId ?? "—",

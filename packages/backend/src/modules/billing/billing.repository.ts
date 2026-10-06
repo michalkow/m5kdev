@@ -394,6 +394,42 @@ export class BillingRepository extends BaseTableRepository<
     });
   }
 
+  setAllowCardlessTrial({
+    organizationId,
+    allowCardlessTrial,
+  }: {
+    organizationId: string;
+    allowCardlessTrial: boolean;
+  }): ServerResultAsync<boolean> {
+    return this.throwableQuery(async () => {
+      await this.orm
+        .update(this.schema.organizations)
+        .set({ allowCardlessTrial })
+        .where(eq(this.schema.organizations.id, organizationId));
+      return true;
+    });
+  }
+
+  markCardlessTrialConsumed(organizationId: string): ServerResultAsync<boolean> {
+    return this.throwableQuery(async () => {
+      const [organization] = await this.orm
+        .select({ cardlessTrialConsumed: this.schema.organizations.cardlessTrialConsumed })
+        .from(this.schema.organizations)
+        .where(eq(this.schema.organizations.id, organizationId))
+        .limit(1);
+      await this.orm
+        .update(this.schema.organizations)
+        .set({
+          cardlessTrialConsumed: {
+            ...(organization?.cardlessTrialConsumed ?? {}),
+            [this.environment]: true,
+          },
+        })
+        .where(eq(this.schema.organizations.id, organizationId));
+      return true;
+    });
+  }
+
   listOtherOwnedCurrencies({
     userId,
     organizationId,
@@ -594,6 +630,7 @@ export class BillingRepository extends BaseTableRepository<
           stripeCustomerId: this.schema.organizations.stripeCustomerId,
           stripeSandboxCustomerId: this.schema.organizations.stripeSandboxCustomerId,
           billingExempt: this.schema.organizations.billingExempt,
+          allowCardlessTrial: this.schema.organizations.allowCardlessTrial,
         })
         .from(this.schema.organizations)
         .where(where)
@@ -615,6 +652,7 @@ export class BillingRepository extends BaseTableRepository<
         currency: organization.currency ?? null,
         stripeCustomerId: this.customerIdOf(organization),
         billingExempt: organization.billingExempt,
+        allowCardlessTrial: organization.allowCardlessTrial,
         openSubscription: Boolean(
           subscription.value && OPEN_STATUSES.includes(subscription.value.status)
         ),
