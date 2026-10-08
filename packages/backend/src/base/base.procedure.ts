@@ -76,7 +76,9 @@ export type ServiceProcedure<TInput, TCtx extends ServiceProcedureContext, TOutp
   ctx: TCtx
 ) => ServerResultAsync<TOutput>;
 
-type OrganizationIdInput = { organizationId?: string };
+export interface OrganizationIdInput {
+  organizationId?: string;
+}
 
 type WithOrganizationIdInput<TInput> = unknown extends TInput
   ? OrganizationIdInput | undefined

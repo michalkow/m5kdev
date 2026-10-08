@@ -17,6 +17,7 @@ export function createMcpTRPC(
         handleTRPCResult(
           await mcpService.listOrganizations({
             userId: ctx.actor.userId,
+            // oauthClientId exists only on MCP in-process calls; without one no allowlist matches (fail-closed → empty list).
             oauthClientId: ctx.oauthClientId ?? "",
           })
         )

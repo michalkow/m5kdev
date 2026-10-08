@@ -166,7 +166,12 @@ export function createMcpToolInvoker(input: {
     (input.tools ?? collectMcpTools(input.router)).map((tool) => [tool.name, tool])
   );
   const createCaller = input.methods.createCallerFactory(input.router);
-  return async ({ userId, oauthClientId, name, arguments: args }) => {
+  return async ({
+    userId,
+    oauthClientId,
+    name,
+    arguments: args,
+  }: McpInvokeInput): ServerResultAsync<unknown> => {
     const tool = tools.get(name);
     if (!tool) {
       return err(new ServerError({ code: "NOT_FOUND", message: `Unknown MCP tool "${name}"` }));

@@ -1,6 +1,11 @@
 import type { IncomingMessage } from "node:http";
 import { transformer } from "@m5kdev/commons/utils/trpc";
-import { initTRPC, type TRPCError } from "@trpc/server";
+import {
+  initTRPC,
+  type TRPCError,
+  type TRPCProcedureBuilder,
+  type TRPCUnsetMarker,
+} from "@trpc/server";
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { fromNodeHeaders } from "better-auth/node";
@@ -121,7 +126,18 @@ const organizationIdInputSchema = z
   .object({ organizationId: z.string().min(1).optional() })
   .optional();
 
-function createOrganizationProcedure(memberships: MembershipLookup | undefined) {
+function createOrganizationProcedure(
+  memberships: MembershipLookup | undefined
+): TRPCProcedureBuilder<
+  RequestContext,
+  TRPCProcedureMeta,
+  OrganizationContext,
+  z.input<typeof organizationIdInputSchema>,
+  z.output<typeof organizationIdInputSchema>,
+  TRPCUnsetMarker,
+  TRPCUnsetMarker,
+  false
+> {
   return baseProcedure
     .meta({ actorScope: "organization" })
     .input(organizationIdInputSchema)
