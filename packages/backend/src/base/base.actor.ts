@@ -1,5 +1,7 @@
+import { err, ok } from "neverthrow";
 import type { Session, User } from "../modules/auth/auth.lib";
 import { ServerError } from "../utils/errors";
+import type { ServerResult, ServerResultAsync } from "./base.dto";
 
 export type UserActor = {
   userId: string;
@@ -185,6 +187,96 @@ export function createServiceActor(claims: ServiceActorClaims): AuthenticatedAct
     teamId,
     teamRole,
   };
+}
+
+/** Live Membership lookup; `AuthOrganizationRepository` satisfies it. */
+export interface MembershipLookup {
+  findMemberByUserAndOrganization(args: {
+    userId: string;
+    organizationId: string;
+  }): ServerResultAsync<{ id: string; userId: string | null; role: string }>;
+}
+
+function actorValidationError(
+  code: "BAD_REQUEST" | "NOT_FOUND" | "INTERNAL_SERVER_ERROR",
+  message: string
+): ServerResult<never> {
+  return err(new ServerError({ code, message, layer: "controller", layerName: "ActorValidation" }));
+}
+
+/**
+ * Reads `organizationId` off a caller input and returns the input without it.
+ * Non-object inputs are returned unchanged.
+ */
+export function takeOrganizationId(
+  input: unknown
+): ServerResult<{ organizationId?: string; input: unknown }> {
+  if (
+    typeof input !== "object" ||
+    input === null ||
+    Array.isArray(input) ||
+    !("organizationId" in input)
+  ) {
+    return ok({ input });
+  }
+  const { organizationId, ...rest } = input as Record<string, unknown>;
+  if (organizationId === undefined) return ok({ input: rest });
+  if (typeof organizationId !== "string" || organizationId.length === 0) {
+    return actorValidationError("BAD_REQUEST", "organizationId must be a non-empty string");
+  }
+  return ok({ organizationId, input: rest });
+}
+
+/**
+ * Named `organizationId` (input, or session active Organization at the transport) wins and
+ * a live Membership builds OrganizationActor; otherwise an OrganizationActor already on the
+ * call is kept; otherwise BAD_REQUEST.
+ */
+export async function resolveOrganizationActor({
+  user,
+  organizationId,
+  actor,
+  memberships,
+}: {
+  user: Pick<UserActor, "userId" | "userRole">;
+  organizationId?: string | null;
+  actor?: AuthenticatedActor | null;
+  memberships?: MembershipLookup;
+}): ServerResultAsync<OrganizationActor> {
+  if (!organizationId) {
+    if (actor && validateActor(actor, "organization")) return ok(actor as OrganizationActor);
+    return actorValidationError("BAD_REQUEST", "organizationId is required");
+  }
+  if (!memberships) {
+    return actorValidationError(
+      "INTERNAL_SERVER_ERROR",
+      "Membership lookup is required to name an Organization"
+    );
+  }
+
+  const member = await memberships.findMemberByUserAndOrganization({
+    userId: user.userId,
+    organizationId,
+  });
+  if (member.isErr()) {
+    if (member.error.code === "NOT_FOUND") {
+      return actorValidationError("NOT_FOUND", "Live Membership required");
+    }
+    return err(member.error);
+  }
+  if (member.value.userId !== user.userId) {
+    return actorValidationError("NOT_FOUND", "Live Membership required");
+  }
+
+  return ok({
+    userId: user.userId,
+    userRole: user.userRole,
+    organizationId,
+    organizationRole: member.value.role,
+    memberId: member.value.id,
+    teamId: null,
+    teamRole: null,
+  });
 }
 
 export function getServiceActorScope(actor: AuthenticatedActor): ActorScope {

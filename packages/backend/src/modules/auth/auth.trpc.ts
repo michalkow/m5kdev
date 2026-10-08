@@ -324,10 +324,10 @@ export function createAuthTRPC(
       }),
 
     setOrganizationFlags: organizationProcedure
-      .input(settingsSchemas.input.flags)
+      .input(z.object({ flags: settingsSchemas.input.flags }))
       .output(settingsSchemas.output.flags)
       .mutation(async ({ ctx, input }) => {
-        return handleTRPCResult(await authService.setOrganizationFlags(input, ctx));
+        return handleTRPCResult(await authService.setOrganizationFlags(input.flags, ctx));
       }),
 
     getOrganizationOnboarding: organizationProcedure
@@ -337,10 +337,10 @@ export function createAuthTRPC(
       }),
 
     setOrganizationOnboarding: organizationProcedure
-      .input(settingsSchemas.input.onboarding)
+      .input(z.object({ onboarding: settingsSchemas.input.onboarding }))
       .output(settingsSchemas.output.onboarding)
       .mutation(async ({ ctx, input }) => {
-        return handleTRPCResult(await authService.setOrganizationOnboarding(input, ctx));
+        return handleTRPCResult(await authService.setOrganizationOnboarding(input.onboarding, ctx));
       }),
 
     getOrganizationMetadata: organizationProcedure
@@ -363,10 +363,10 @@ export function createAuthTRPC(
       }),
 
     setMemberOnboarding: organizationProcedure
-      .input(settingsSchemas.input.onboarding)
+      .input(z.object({ onboarding: settingsSchemas.input.onboarding }))
       .output(settingsSchemas.output.onboarding)
       .mutation(async ({ ctx, input }) => {
-        return handleTRPCResult(await authService.setMemberOnboarding(input, ctx));
+        return handleTRPCResult(await authService.setMemberOnboarding(input.onboarding, ctx));
       }),
 
     getMemberPreferences: organizationProcedure
@@ -402,10 +402,10 @@ export function createAuthTRPC(
       }),
 
     setMemberFlags: organizationProcedure
-      .input(settingsSchemas.input.flags)
+      .input(z.object({ flags: settingsSchemas.input.flags }))
       .output(settingsSchemas.output.flags)
       .mutation(async ({ ctx, input }) => {
-        return handleTRPCResult(await authService.setMemberFlags(input, ctx));
+        return handleTRPCResult(await authService.setMemberFlags(input.flags, ctx));
       }),
 
     validateWaitlistCode: publicProcedure

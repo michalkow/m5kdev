@@ -24,7 +24,7 @@ import type { InferSelectModel } from "drizzle-orm";
 import { err, ok } from "neverthrow";
 import type Stripe from "stripe";
 import { posthogCapture } from "../../utils/posthog";
-import type { Context } from "../../utils/trpc";
+import type { OrganizationContext } from "../../utils/trpc";
 import type * as authTables from "../auth/auth.db";
 import { resolveOrganizationCurrency } from "../auth/auth.utils";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
@@ -241,7 +241,9 @@ export class BillingService extends BasePermissionService<
     return ok(true);
   }
 
-  async getActiveSubscription(ctx: Context): ServerResultAsync<ActiveSubscription | null> {
+  async getActiveSubscription(
+    ctx: OrganizationContext
+  ): ServerResultAsync<ActiveSubscription | null> {
     const organizationId = ctx.actor.organizationId;
     if (!organizationId) return this.error("FORBIDDEN", "Organization is required");
 
@@ -264,7 +266,7 @@ export class BillingService extends BasePermissionService<
     });
   }
 
-  async getTrialPriceId(ctx: Context): ServerResultAsync<string | null> {
+  async getTrialPriceId(ctx: OrganizationContext): ServerResultAsync<string | null> {
     const organizationId = ctx.actor.organizationId;
     if (!organizationId) return this.error("FORBIDDEN", "Organization is required");
 
@@ -284,7 +286,7 @@ export class BillingService extends BasePermissionService<
     return ok(this.pickedTrialPriceId({ customer: customer.value, currency }) ?? null);
   }
 
-  async listInvoices(ctx: Context): ServerResultAsync<Stripe.Invoice[]> {
+  async listInvoices(ctx: OrganizationContext): ServerResultAsync<Stripe.Invoice[]> {
     const organizationId = ctx.actor.organizationId;
     if (!organizationId) return this.error("FORBIDDEN", "Organization is required");
 

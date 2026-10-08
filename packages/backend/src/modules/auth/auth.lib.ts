@@ -646,7 +646,8 @@ export function createBetterAuth<
           },
         },
       }),
-      createApiKeyPlugin() as BetterAuthPlugin,
+      // `x-api-key` callers get a session without an active Organization; they name one with `organizationId`.
+      createApiKeyPlugin({ enableSessionForAPIKeys: true }) as BetterAuthPlugin,
       ...createMcpOAuthPlugins(
         mcp
           ? {

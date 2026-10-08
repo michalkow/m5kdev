@@ -40,6 +40,7 @@ import { McpDcrOauthClientRepository } from "./modules/auth/auth.mcp-dcr.reposit
 import type { AuthRequest } from "./modules/auth/auth.middleware";
 import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/auth.middleware";
 import { oauthClients } from "./modules/auth/auth.oauth.db";
+import type { AuthOrganizationRepository } from "./modules/auth/auth.repository";
 import type { BaseModule } from "./modules/base/base.module";
 import { McpService } from "./modules/mcp/mcp.service";
 import { mcpResourceUrl } from "./modules/mcp/mcp.types";
@@ -847,7 +848,9 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     }
   }
 
-  const trpcMethods = createTRPCMethods();
+  const memberships: AuthOrganizationRepository | undefined =
+    moduleStates.get("auth")?.repositories.organization;
+  const trpcMethods = createTRPCMethods({ memberships });
   const routerFragments = {} as BuiltModuleRouters<Modules>;
   const createContext = auth ? createAuthContext(auth) : createRequestContext();
   const trpcMountPath = config.trpc?.mountPath ?? "/trpc";

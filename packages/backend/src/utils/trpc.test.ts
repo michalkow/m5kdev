@@ -1,9 +1,14 @@
 import { TRPCError } from "@trpc/server";
+import { err, ok } from "neverthrow";
+import { z } from "zod";
+import type { MembershipLookup } from "../base/base.actor";
 import type { BetterAuth, Session, User } from "../modules/auth/auth.lib";
 import type { UserActor } from "../modules/base/base.actor";
+import { ServerError } from "./errors";
 import type { RequestContext } from "./trpc";
 import {
   createAuthContext,
+  createTRPCMethods,
   requireRequestActor,
   requireRequestUser,
   verifyAdminProcedureContext,
@@ -87,6 +92,181 @@ function createRequestContext(overrides: Partial<RequestContext> = {}): RequestC
     ...overrides,
   };
 }
+
+function createMemberships(
+  members: Record<string, { id: string; role: string; userId?: string | null }>
+): MembershipLookup {
+  return {
+    findMemberByUserAndOrganization: async ({ userId, organizationId }) => {
+      const member = members[organizationId];
+      if (!member) {
+        return err(
+          new ServerError({
+            code: "NOT_FOUND",
+            layer: "repository",
+            layerName: "MembershipFixture",
+            message: "Member not found",
+          })
+        );
+      }
+      return ok({ userId, ...member });
+    },
+  };
+}
+
+function createOrganizationCaller(memberships: MembershipLookup) {
+  const { router, organizationProcedure, createCallerFactory } = createTRPCMethods({
+    memberships,
+  });
+  const appRouter = router({
+    run: organizationProcedure
+      .input(z.object({ title: z.string() }))
+      .query(({ ctx, input }) => ({ actor: ctx.actor, input })),
+    patch: organizationProcedure
+      .input(z.record(z.string(), z.unknown()))
+      .mutation(({ input }) => input),
+    bare: organizationProcedure.query(({ ctx, input }) => ({
+      organizationId: ctx.actor.organizationId,
+      input,
+    })),
+  });
+  return createCallerFactory(appRouter);
+}
+
+const sessionOrgActor = {
+  userId: "user-1",
+  userRole: "member",
+  organizationId: "org-1",
+  organizationRole: "owner",
+  memberId: "member-1",
+  teamId: null,
+  teamRole: null,
+} satisfies UserActor;
+
+describe("organizationProcedure", () => {
+  it("builds OrganizationActor from a live Membership for the session active Organization", async () => {
+    const caller = createOrganizationCaller(
+      createMemberships({ "org-1": { id: "member-1", role: "member" } })
+    )(
+      createRequestContext({
+        session: createSession({
+          activeOrganizationId: "org-1",
+          activeOrganizationRole: "owner",
+          activeOrganizationMemberId: "member-1",
+        }),
+      })
+    );
+
+    await expect(caller.run({ title: "Hello" })).resolves.toEqual({
+      input: { title: "Hello" },
+      actor: { ...sessionOrgActor, organizationRole: "member" },
+    });
+  });
+
+  it("lets input organizationId win over the session active Organization", async () => {
+    const caller = createOrganizationCaller(
+      createMemberships({
+        "org-1": { id: "member-1", role: "owner" },
+        "org-2": { id: "member-2", role: "admin" },
+      })
+    )(
+      createRequestContext({
+        session: createSession({ activeOrganizationId: "org-1" }),
+        actor: sessionOrgActor,
+      })
+    );
+
+    await expect(caller.bare({ organizationId: "org-2" })).resolves.toEqual({
+      organizationId: "org-2",
+      input: undefined,
+    });
+  });
+
+  it("keeps an existing OrganizationActor when nothing names an Organization", async () => {
+    const caller = createOrganizationCaller(createMemberships({}))({
+      user: createUser(),
+      session: null,
+      actor: sessionOrgActor,
+    });
+
+    await expect(caller.run({ title: "Hello" })).resolves.toEqual({
+      input: { title: "Hello" },
+      actor: sessionOrgActor,
+    });
+  });
+
+  it("is BAD_REQUEST when nothing names an Organization", async () => {
+    const caller = createOrganizationCaller(createMemberships({}))(createRequestContext());
+
+    await expect(caller.run({ title: "Hello" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("is NOT_FOUND without a live Membership for the named Organization", async () => {
+    const caller = createOrganizationCaller(
+      createMemberships({ "org-3": { id: "member-3", role: "member", userId: null } })
+    )(createRequestContext());
+
+    await expect(caller.run({ title: "Hello", organizationId: "org-2" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    await expect(caller.run({ title: "Hello", organizationId: "org-3" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+
+  it("is UNAUTHORIZED without a User", async () => {
+    const caller = createOrganizationCaller(createMemberships({}))({
+      user: null,
+      session: null,
+      actor: null,
+    });
+
+    await expect(caller.run({ title: "Hello", organizationId: "org-2" })).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+  });
+
+  it("strips organizationId before record-shaped domain input", async () => {
+    const caller = createOrganizationCaller(
+      createMemberships({ "org-2": { id: "member-2", role: "admin" } })
+    )(createRequestContext());
+
+    await expect(caller.patch({ theme: "dark", organizationId: "org-2" })).resolves.toEqual({
+      theme: "dark",
+    });
+  });
+
+  it("stamps ActorScope on Procedure meta", () => {
+    const { privateProcedure, organizationProcedure, adminProcedure, publicProcedure } =
+      createTRPCMethods();
+    const meta = (procedure: { query: (resolver: () => null) => unknown }) =>
+      (procedure.query(() => null) as { _def: { meta?: unknown } })._def.meta;
+
+    expect(meta(privateProcedure)).toEqual({ actorScope: "user" });
+    expect(meta(organizationProcedure)).toEqual({ actorScope: "organization" });
+    expect(meta(adminProcedure)).toEqual({ actorScope: "admin" });
+    expect(meta(publicProcedure)).toBeUndefined();
+  });
+
+  it("builds OrganizationActor from a live Membership for a cookieless User", async () => {
+    const caller = createOrganizationCaller(
+      createMemberships({ "org-2": { id: "member-2", role: "admin" } })
+    )({ user: createUser(), session: null, actor: null });
+
+    await expect(caller.run({ title: "Hello", organizationId: "org-2" })).resolves.toEqual({
+      input: { title: "Hello" },
+      actor: {
+        userId: "user-1",
+        userRole: "member",
+        organizationId: "org-2",
+        organizationRole: "admin",
+        memberId: "member-2",
+        teamId: null,
+        teamRole: null,
+      },
+    });
+  });
+});
 
 describe("trpc auth helpers", () => {
   it("stores a user-scoped actor on the request context while copying session ids", async () => {

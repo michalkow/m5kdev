@@ -1,8 +1,14 @@
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { MatchQueryInput } from "@m5kdev/commons/modules/schemas/queryMatch";
 import { err, ok } from "neverthrow";
+import { z } from "zod";
 import { ServerError } from "../utils/errors";
-import type { ServiceActorClaims, ServiceOrganizationActor, ServiceTeamActor } from "./base.actor";
+import type {
+  MembershipLookup,
+  ServiceActorClaims,
+  ServiceOrganizationActor,
+  ServiceTeamActor,
+} from "./base.actor";
 import { createServiceActor } from "./base.actor";
 import type { ResourceGrant } from "./base.grants";
 import { BasePermissionService, BaseService } from "./base.service";
@@ -45,6 +51,27 @@ function createTeamActor(overrides: Partial<ServiceActorClaims> = {}): ServiceTe
     teamRole: "member",
     ...overrides,
   }) as ServiceTeamActor;
+}
+
+function createMemberships(
+  members: Record<string, { id: string; role: string; userId?: string | null }>
+): MembershipLookup {
+  return {
+    findMemberByUserAndOrganization: async ({ userId, organizationId }) => {
+      const member = members[organizationId];
+      if (!member) {
+        return err(
+          new ServerError({
+            code: "NOT_FOUND",
+            layer: "repository",
+            layerName: "MembershipFixture",
+            message: "Member not found",
+          })
+        );
+      }
+      return ok({ userId, ...member });
+    },
+  };
 }
 
 describe("BaseService procedure builder", () => {
@@ -630,6 +657,131 @@ describe("BaseService procedure builder", () => {
     if (result.isOk()) {
       expect(result.value).toBe("org-1");
     }
+  });
+
+  describe("org-scoped Procedure names OrganizationActor with organizationId", () => {
+    class OrganizationScopedService extends BaseService<
+      Record<string, never>,
+      Record<string, never>
+    > {
+      readonly run = this.procedure("run")
+        .input(z.object({ title: z.string() }))
+        .requireAuth("organization")
+        .handle(({ input, ctx }) => ok({ input, actor: ctx.actor }));
+    }
+
+    it("builds OrganizationActor from a live Membership for a cookieless User", async () => {
+      const service = new OrganizationScopedService();
+      const result = await service.run({ title: "Hello", organizationId: "org-2" }, {
+        actor: createActor(),
+        memberships: createMemberships({ "org-2": { id: "member-2", role: "admin" } }),
+      } as never);
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value.input).toEqual({ title: "Hello" });
+        expect(result.value.actor).toEqual({
+          userId: "user-1",
+          userRole: "member",
+          organizationId: "org-2",
+          organizationRole: "admin",
+          memberId: "member-2",
+          teamId: null,
+          teamRole: null,
+        });
+      }
+    });
+
+    it("lets input organizationId win over an OrganizationActor for another Organization", async () => {
+      const service = new OrganizationScopedService();
+      const result = await service.run(
+        { title: "Hello", organizationId: "org-2" },
+        {
+          actor: createOrganizationActor(),
+          memberships: createMemberships({ "org-2": { id: "member-2", role: "member" } }),
+        }
+      );
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value.input).toEqual({ title: "Hello" });
+        expect(result.value.actor).toMatchObject({
+          organizationId: "org-2",
+          organizationRole: "member",
+          memberId: "member-2",
+        });
+      }
+    });
+
+    it("keeps an OrganizationActor already on the call when organizationId is omitted", async () => {
+      const service = new OrganizationScopedService();
+      const result = await service.run({ title: "Hello" }, { actor: createOrganizationActor() });
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value.input).toEqual({ title: "Hello" });
+        expect(result.value.actor).toEqual(createOrganizationActor());
+      }
+    });
+
+    it("returns BAD_REQUEST when no Organization is named and no OrganizationActor exists", async () => {
+      const service = new OrganizationScopedService();
+      const result = await service.run({ title: "Hello" }, {
+        actor: createActor(),
+        memberships: createMemberships({}),
+      } as never);
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe("BAD_REQUEST");
+      }
+    });
+
+    it("returns NOT_FOUND when the User is not a live Member of the named Organization", async () => {
+      const service = new OrganizationScopedService();
+      const missing = await service.run(
+        { title: "Hello", organizationId: "org-2" },
+        { actor: createOrganizationActor(), memberships: createMemberships({}) }
+      );
+      const invited = await service.run(
+        { title: "Hello", organizationId: "org-2" },
+        {
+          actor: createOrganizationActor(),
+          memberships: createMemberships({
+            "org-2": { id: "member-2", role: "member", userId: null },
+          }),
+        }
+      );
+
+      for (const result of [missing, invited]) {
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(result.error.code).toBe("NOT_FOUND");
+        }
+      }
+    });
+
+    it("does not treat organizationId as an Organization name on user-scoped Procedures", async () => {
+      class UserScopedService extends BaseService<Record<string, never>, Record<string, never>> {
+        readonly run = this.procedure("run")
+          .input(z.object({ title: z.string() }))
+          .requireAuth()
+          .handle(({ input, ctx }) => ok({ input, actor: ctx.actor }));
+      }
+
+      const service = new UserScopedService();
+      const result = await service.run(
+        // @ts-expect-error user-scoped Procedures do not accept organizationId
+        { title: "Hello", organizationId: "org-2" },
+        { actor: createActor(), memberships: createMemberships({}) }
+      );
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value.input).toEqual({ title: "Hello", organizationId: "org-2" });
+        expect(result.value.actor).toEqual(createActor());
+      }
+    });
   });
 
   it("requireAuth rejects actors without the requested team scope", async () => {

@@ -298,9 +298,9 @@ export class AuthService extends BasePermissionService<
   private assertCanCreateChildOrganizations(
     ctx: OrganizationContext
   ): ServerResult<{ parentId: string; organizationType: string }> {
-    const organizationType = ctx.session.activeOrganizationType ?? "organization";
-    const parentId = ctx.session.activeOrganizationId ?? null;
-    const role = ctx.session.activeOrganizationRole ?? "member";
+    const organizationType = ctx.session?.activeOrganizationType ?? "organization";
+    const parentId = ctx.session?.activeOrganizationId ?? null;
+    const role = ctx.session?.activeOrganizationRole ?? "member";
     if (
       !parentId ||
       !["enterprise", "agency"].includes(organizationType) ||
@@ -313,9 +313,9 @@ export class AuthService extends BasePermissionService<
   private assertCanManageChildOrganizations(
     ctx: OrganizationContext
   ): ServerResult<{ parentId: string; organizationType: string }> {
-    const organizationType = ctx.session.activeOrganizationType ?? "organization";
-    const parentId = ctx.session.activeOrganizationId ?? null;
-    const role = ctx.session.activeOrganizationRole ?? "member";
+    const organizationType = ctx.session?.activeOrganizationType ?? "organization";
+    const parentId = ctx.session?.activeOrganizationId ?? null;
+    const role = ctx.session?.activeOrganizationRole ?? "member";
 
     this.logger.info({ parentId, organizationType, role, ctx });
     if (!parentId)
@@ -1217,9 +1217,7 @@ export class AuthService extends BasePermissionService<
     .output(waitlistSchemas.output.full.array())
     .requireAuth()
     .addContextFilter(["user"])
-    .use("waitlist", ({ input }) =>
-      this.repository.waitlist.queryList(input)
-    )
+    .use("waitlist", ({ input }) => this.repository.waitlist.queryList(input))
     .handle(({ state }) => {
       return ok(state.waitlist.rows);
     });

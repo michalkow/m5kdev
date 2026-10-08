@@ -1,13 +1,21 @@
 import type { QueryFilter, QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { QueryMatch } from "@m5kdev/commons/modules/schemas/queryMatch";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server";
-import { ok } from "neverthrow";
+import { err, ok } from "neverthrow";
 import type { z } from "zod";
 import type { ServerError } from "../utils/errors";
 import type { logger } from "../utils/logger";
 import { serializeSpanValue, withSpan } from "../utils/telemetry";
 import type { Base } from "./base.abstract";
-import { type Actor, type ActorScope, type AuthenticatedActor, validateActor } from "./base.actor";
+import {
+  type Actor,
+  type ActorScope,
+  type AuthenticatedActor,
+  type MembershipLookup,
+  resolveOrganizationActor,
+  takeOrganizationId,
+  validateActor,
+} from "./base.actor";
 import type { ServerResult, ServerResultAsync } from "./base.dto";
 import {
   type Entity,
@@ -23,6 +31,8 @@ type ServiceMap = Record<string, Base>;
 
 export type ServiceProcedureContext = {
   actor?: AuthenticatedActor | null;
+  /** Required when a direct caller names an Organization with `organizationId`. */
+  memberships?: MembershipLookup;
 } & Record<string, unknown>;
 
 export type ServiceProcedureState = Record<string, unknown>;
@@ -65,6 +75,28 @@ export type ServiceProcedure<TInput, TCtx extends ServiceProcedureContext, TOutp
   input: TInput,
   ctx: TCtx
 ) => ServerResultAsync<TOutput>;
+
+type OrganizationIdInput = { organizationId?: string };
+
+type WithOrganizationIdInput<TInput> = unknown extends TInput
+  ? OrganizationIdInput | undefined
+  : [NonNullable<TInput>] extends [never]
+    ? OrganizationIdInput | undefined
+    : NonNullable<TInput> extends readonly unknown[]
+      ? TInput
+      : NonNullable<TInput> extends object
+        ? (NonNullable<TInput> & OrganizationIdInput) | Extract<TInput, null | undefined>
+        : TInput;
+
+/** Org-scoped Procedures (`requireAuth("organization")`) also accept optional `organizationId`. */
+export type ServiceProcedureCallerInput<
+  TInput,
+  State extends ServiceProcedureState,
+> = State extends { auth: Actor["team"] }
+  ? TInput
+  : State extends { auth: Actor["organization"] }
+    ? WithOrganizationIdInput<TInput>
+    : TInput;
 
 export type ServiceProcedureArgs<
   TInput,
@@ -294,14 +326,14 @@ export interface ServiceProcedureBuilder<
     ServiceProcedureAuthContext<Scope, TCtx>,
     Repositories,
     Services,
-    State,
+    State & { auth: Actor[Scope] },
     TExpectedOutput
   >;
   // biome-ignore lint/suspicious/noConfusingVoidType: void is used as a sentinel for "no output schema declared"
   handle: [TExpectedOutput] extends [void]
     ? <TOutput>(
         handler: ServiceProcedureHandler<TInput, TCtx, Repositories, Services, State, TOutput>
-      ) => ServiceProcedure<TInput, TCtx, TOutput>
+      ) => ServiceProcedure<ServiceProcedureCallerInput<TInput, State>, TCtx, TOutput>
     : (
         handler: ServiceProcedureHandler<
           TInput,
@@ -311,7 +343,7 @@ export interface ServiceProcedureBuilder<
           State,
           TExpectedOutput
         >
-      ) => ServiceProcedure<TInput, TCtx, TExpectedOutput>;
+      ) => ServiceProcedure<ServiceProcedureCallerInput<TInput, State>, TCtx, TExpectedOutput>;
 }
 
 export interface PermissionServiceProcedureBuilder<
@@ -417,7 +449,7 @@ export interface PermissionServiceProcedureBuilder<
     ServiceProcedureAuthContext<Scope, TCtx>,
     Repositories,
     Services,
-    State,
+    State & { auth: Actor[Scope] },
     TExpectedOutput
   >;
   access(
@@ -519,19 +551,33 @@ type PermissionServiceProcedureHost<
 
 type ProcedureStage = "start" | "auth_passed" | "access_passed" | "forbidden" | "success" | "error";
 
-type ProcedureRuntimeStep<Repositories extends RepositoryMap, Services extends ServiceMap> = {
-  stage: "use" | "input" | "auth" | "access";
-  stepName: string;
-  run: (
-    args: ServiceProcedureArgs<
-      unknown,
-      ServiceProcedureContext,
-      Repositories,
-      Services,
-      ServiceProcedureState
-    >
-  ) => Promise<ServerResult<unknown>>;
-};
+type ProcedureRuntimeStepArgs<
+  Repositories extends RepositoryMap,
+  Services extends ServiceMap,
+> = ServiceProcedureArgs<
+  unknown,
+  ServiceProcedureContext,
+  Repositories,
+  Services,
+  ServiceProcedureState
+>;
+
+type ProcedureRuntimeStep<Repositories extends RepositoryMap, Services extends ServiceMap> =
+  | {
+      stage: "use" | "input" | "access";
+      stepName: string;
+      run: (
+        args: ProcedureRuntimeStepArgs<Repositories, Services>
+      ) => Promise<ServerResult<unknown>>;
+    }
+  | {
+      stage: "auth";
+      stepName: string;
+      /** Resolves the Actor for the rest of the call and the input it continues with. */
+      run: (
+        args: ProcedureRuntimeStepArgs<Repositories, Services>
+      ) => Promise<ServerResult<{ actor: AuthenticatedActor; input: unknown }>>;
+    };
 
 type ProcedureBuilderConfig<Repositories extends RepositoryMap, Services extends ServiceMap> = {
   name: string;
@@ -651,8 +697,27 @@ function createRequireAuthStep<Repositories extends RepositoryMap, Services exte
   return {
     stage: "auth",
     stepName: "auth",
-    run: async ({ ctx }) => {
-      return requireProcedureActor(host, ctx, scope);
+    run: async ({ ctx, input }) => {
+      if (scope !== "organization") {
+        const actor = requireProcedureActor(host, ctx, scope);
+        if (actor.isErr()) return err(actor.error);
+        return ok({ actor: actor.value, input });
+      }
+
+      if (!ctx.actor) {
+        return host.error("UNAUTHORIZED", "Unauthorized");
+      }
+      const named = takeOrganizationId(input);
+      if (named.isErr()) return err(named.error);
+      // The transport already turned a session active Organization into ctx.actor.
+      const actor = await resolveOrganizationActor({
+        user: ctx.actor,
+        organizationId: named.value.organizationId,
+        actor: ctx.actor,
+        memberships: ctx.memberships,
+      });
+      if (actor.isErr()) return err(actor.error);
+      return ok({ actor: actor.value, input: named.value.input });
     },
   };
 }
@@ -1020,27 +1085,27 @@ function createProcedureHandler<
         host.throwableAsync(async () => {
           const state: ServiceProcedureState = {};
           const startTime = Date.now();
-          const typedCtx = ctx as ServiceProcedureContext;
+          let typedCtx = ctx as ServiceProcedureContext;
           let currentInput: unknown = input;
 
           logProcedureStage(host, config.name, typedCtx, "start");
 
           try {
             for (const step of config.steps) {
+              const stepArgs = {
+                input: currentInput,
+                ctx: typedCtx,
+                state,
+                repository: host.repository,
+                service: host.service,
+                logger: host.logger,
+              };
               const stepResult = await withSpan(
                 {
                   name: `${config.name}.${step.stepName}`,
                   attributes: { input: serializeSpanValue(currentInput) },
                 },
-                () =>
-                  step.run({
-                    input: currentInput,
-                    ctx: typedCtx,
-                    state,
-                    repository: host.repository,
-                    service: host.service,
-                    logger: host.logger,
-                  })
+                (): Promise<ServerResult<unknown>> => step.run(stepArgs)
               );
 
               if (stepResult.isErr()) {
@@ -1059,16 +1124,26 @@ function createProcedureHandler<
                 return stepResult as ServerResult<TOutput>;
               }
 
+              if (step.stage === "auth") {
+                const { actor, input: authInput } = stepResult.value as {
+                  actor: AuthenticatedActor;
+                  input: unknown;
+                };
+                state[step.stepName] = actor;
+                currentInput = authInput;
+                if (actor !== typedCtx.actor) {
+                  typedCtx = { ...typedCtx, actor };
+                }
+                logProcedureStage(host, config.name, typedCtx, "auth_passed", {
+                  stepName: step.stepName,
+                });
+                continue;
+              }
+
               state[step.stepName] = stepResult.value;
 
               if (step.stage === "input") {
                 currentInput = stepResult.value;
-              }
-
-              if (step.stage === "auth") {
-                logProcedureStage(host, config.name, typedCtx, "auth_passed", {
-                  stepName: step.stepName,
-                });
               }
 
               if (step.stage === "access") {
@@ -1087,7 +1162,7 @@ function createProcedureHandler<
                 normalizeProcedureResult(
                   handler({
                     input: currentInput as TInput,
-                    ctx: ctx as TCtx,
+                    ctx: typedCtx as TCtx,
                     state: state as State,
                     repository: host.repository,
                     service: host.service,
@@ -1291,7 +1366,7 @@ export function createServiceProcedureBuilder<
         ServiceProcedureAuthContext<Scope, TCtx>,
         Repositories,
         Services,
-        State,
+        State & { auth: Actor[Scope] },
         TExpectedOutput
       >(host, {
         ...config,
@@ -1520,7 +1595,7 @@ export function createPermissionServiceProcedureBuilder<
         ServiceProcedureAuthContext<Scope, TCtx>,
         Repositories,
         Services,
-        State,
+        State & { auth: Actor[Scope] },
         TExpectedOutput
       >(host, {
         ...config,

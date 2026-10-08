@@ -5,17 +5,21 @@ import type { CreateExpressContextOptions } from "@trpc/server/adapters/express"
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { fromNodeHeaders } from "better-auth/node";
 import type { Result } from "neverthrow";
-import type { BetterAuth, Session, User } from "../modules/auth/auth.lib";
+import { z } from "zod";
 import {
   type ActorScope,
   type AdminActor,
   type AuthenticatedActor,
   createActorFromContext,
+  type MembershipLookup,
   type OrganizationActor,
+  resolveOrganizationActor,
   type TeamActor,
+  takeOrganizationId,
   type UserActor,
   validateActor,
-} from "../modules/base/base.actor";
+} from "../base/base.actor";
+import type { BetterAuth, Session, User } from "../modules/auth/auth.lib";
 import { captureServerError, reportError, ServerError } from "./errors";
 import { logger } from "./logger";
 import {
@@ -28,7 +32,8 @@ import {
 } from "./telemetry";
 
 export type RequestContext = {
-  session: Session | null;
+  /** Absent for cookieless callers (in-process MCP calls); API keys get a session without an active Organization. */
+  session?: Session | null;
   user: User | null;
   actor: UserActor | null;
   /** Express request; used to label the HTTP root span with the tRPC procedure. */
@@ -41,8 +46,9 @@ export type Context = {
   actor: UserActor;
 };
 
+/** `session` is null for cookieless callers that name the Organization with `organizationId`. */
 export type OrganizationContext = {
-  session: Session;
+  session?: Session | null;
   user: User;
   actor: OrganizationActor;
 };
@@ -59,7 +65,12 @@ export type AdminContext = {
   actor: AdminActor;
 };
 
-const t = initTRPC.context<RequestContext>().create({ transformer });
+export interface TRPCProcedureMeta {
+  /** Stamped by `privateProcedure` / `organizationProcedure` / `adminProcedure`. */
+  actorScope?: Exclude<ActorScope, "team">;
+}
+
+const t = initTRPC.context<RequestContext>().meta<TRPCProcedureMeta>().create({ transformer });
 const baseProcedure = t.procedure.use(async ({ path, type, ctx, input, next }) => {
   attachTrpcPathToRequest(ctx.req, path);
   return runWithActorTelemetry(actorTelemetryFromRequestContext(ctx), () =>
@@ -78,22 +89,48 @@ const baseProcedure = t.procedure.use(async ({ path, type, ctx, input, next }) =
   );
 });
 const publicProcedure = baseProcedure;
-const privateProcedure = baseProcedure.use(({ ctx, next }) => {
+const privateProcedure = baseProcedure.meta({ actorScope: "user" }).use(({ ctx, next }) => {
   return next({ ctx: verifyProtectedProcedureContext(ctx) });
 });
-const organizationProcedure = privateProcedure.use(({ ctx, next }) => {
-  return next({ ctx: verifyOrganizationProcedureContext(ctx) });
-});
-const adminProcedure = baseProcedure.use(({ ctx, next }) => {
+const adminProcedure = baseProcedure.meta({ actorScope: "admin" }).use(({ ctx, next }) => {
   return next({ ctx: verifyAdminProcedureContext(ctx) });
 });
 
+const organizationIdInputSchema = z
+  .object({ organizationId: z.string().min(1).optional() })
+  .optional();
+
+function createOrganizationProcedure(memberships: MembershipLookup | undefined) {
+  return baseProcedure
+    .meta({ actorScope: "organization" })
+    .input(organizationIdInputSchema)
+    .use(async ({ ctx, input, next }) => {
+      const organizationCtx = await resolveOrganizationProcedureContext({
+        ctx,
+        organizationId: input?.organizationId,
+        memberships,
+      });
+      return next({ ctx: organizationCtx, input: undefined });
+    })
+    .use(({ getRawInput, next }) =>
+      // Domain parsers (e.g. `z.record`) must not see `organizationId`.
+      next({
+        getRawInput: async () => {
+          const rawInput = await getRawInput();
+          const named = takeOrganizationId(rawInput);
+          return named.isOk() ? named.value.input : rawInput;
+        },
+      })
+    );
+}
+
 export type TRPCMethods = {
   router: typeof t.router;
+  createCallerFactory: typeof t.createCallerFactory;
   baseProcedure: typeof baseProcedure;
   publicProcedure: typeof publicProcedure;
   privateProcedure: typeof privateProcedure;
-  organizationProcedure: typeof organizationProcedure;
+  organizationProcedure: ReturnType<typeof createOrganizationProcedure>;
   adminProcedure: typeof adminProcedure;
 };
 
@@ -110,13 +147,19 @@ export function createRequestContext() {
   };
 }
 
-export function createTRPCMethods() {
+export function createTRPCMethods({
+  memberships,
+}: {
+  /** Live Membership lookup for `organizationProcedure` (Auth's organization repository). */
+  memberships?: MembershipLookup;
+} = {}): TRPCMethods {
   return {
     router: t.router,
+    createCallerFactory: t.createCallerFactory,
     baseProcedure,
     publicProcedure,
     privateProcedure,
-    organizationProcedure,
+    organizationProcedure: createOrganizationProcedure(memberships),
     adminProcedure,
   };
 }
@@ -204,21 +247,35 @@ export function verifyProtectedProcedureContext(ctx: RequestContext): Context {
   return ctx as Context;
 }
 
-export function verifyOrganizationProcedureContext(ctx: Context): OrganizationContext {
-  if (!ctx.user || !ctx.session) {
+/**
+ * Names the Organization with input `organizationId`, else the session active Organization
+ * (both rebuilt from a live Membership), else keeps an OrganizationActor already on the call.
+ * A session is not required.
+ */
+async function resolveOrganizationProcedureContext({
+  ctx,
+  organizationId,
+  memberships,
+}: {
+  ctx: RequestContext;
+  organizationId: string | undefined;
+  memberships: MembershipLookup | undefined;
+}): Promise<OrganizationContext> {
+  if (!ctx.user) {
     throw new ServerError({
       code: "UNAUTHORIZED",
       layer: "controller",
       layerName: "TRPCController",
     }).toTRPC();
   }
-  try {
-    const actor = createActorFromContext({ user: ctx.user, session: ctx.session }, "organization");
-    return { ...ctx, actor };
-  } catch (e) {
-    if (e instanceof ServerError) throw e.toTRPC();
-    throw e;
-  }
+  const actor = await resolveOrganizationActor({
+    user: { userId: ctx.user.id, userRole: ctx.user.role ?? "user" },
+    organizationId: organizationId ?? ctx.session?.activeOrganizationId,
+    actor: ctx.actor,
+    memberships,
+  });
+  if (actor.isErr()) throw actor.error.toTRPC();
+  return { session: ctx.session ?? null, user: ctx.user, actor: actor.value };
 }
 
 export function verifyTeamProcedureContext(ctx: Context): TeamContext {

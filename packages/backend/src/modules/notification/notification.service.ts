@@ -8,7 +8,7 @@ import type {
 import type { NotificationRegisterDeviceInput } from "@m5kdev/commons/modules/notification/notification.schema";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
-import type { Context } from "../../utils/trpc";
+import type { Context, OrganizationContext } from "../../utils/trpc";
 import type { AuthService } from "../auth/auth.service";
 import type { ServerResultAsync } from "../base/base.dto";
 import type { ResourceGrant } from "../base/base.grants";
@@ -325,7 +325,7 @@ export class NotificationService extends BasePermissionService<
     return ok(inserted.value);
   }
 
-  async listMyInbox(ctx: Context): ServerResultAsync<NotificationInstanceRow[]> {
+  async listMyInbox(ctx: OrganizationContext): ServerResultAsync<NotificationInstanceRow[]> {
     const memberId = ctx.actor.memberId;
     if (!memberId || !ctx.actor.organizationId) {
       return this.error("FORBIDDEN");
@@ -336,7 +336,7 @@ export class NotificationService extends BasePermissionService<
     return this.repository.notification.listVisibleInboxByMemberId(memberId);
   }
 
-  async getMyPreferences(ctx: Context): ServerResultAsync<
+  async getMyPreferences(ctx: OrganizationContext): ServerResultAsync<
     {
       kind: string;
       channels: { channel: NotificationChannel; enabled: boolean }[];
@@ -365,7 +365,7 @@ export class NotificationService extends BasePermissionService<
   }
 
   async setMyPreference(
-    ctx: Context,
+    ctx: OrganizationContext,
     input: { kind: string; channel: NotificationChannel; enabled: boolean }
   ): ServerResultAsync<{
     kind: string;
@@ -411,7 +411,7 @@ export class NotificationService extends BasePermissionService<
     return ok(updated);
   }
 
-  async markRead(ctx: Context, id: string): ServerResultAsync<NotificationInstanceRow> {
+  async markRead(ctx: OrganizationContext, id: string): ServerResultAsync<NotificationInstanceRow> {
     const memberId = ctx.actor.memberId;
     if (!memberId || !ctx.actor.organizationId) {
       return this.error("FORBIDDEN");
