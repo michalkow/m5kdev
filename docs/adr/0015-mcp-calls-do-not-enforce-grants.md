@@ -1,6 +1,10 @@
+---
+status: superseded by ADR-0028
+---
+
 # MCP calls do not have to enforce Grants
 
-Superseded in part by [ADR-0016](0016-mcp-calls-are-module-hooks.md): Grants are **not required** on an MCP call. A handle may delegate to a Procedure (Grant check runs) or call unguarded service methods. Membership and MCP allowlist are still not Grants; they only build OrganizationActor for organization-scoped calls. An MCP call is still not a Procedure in the glossary.
+Superseded by [ADR-0028](0028-mcp-tools-are-opted-in-trpc-procedures.md): an MCP call is a tRPC procedure, so Grant checks always run. Membership and MCP allowlist are still not Grants.
 
 ## Considered Options
 

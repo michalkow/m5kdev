@@ -49,20 +49,20 @@ _Avoid_: Invitation, Waitlist, signup
 ### Identity and access
 
 **Actor**:
-Who a Service call is made on behalf of: `UserActor`, `OrganizationActor`, or `AdminActor`. Organization scope requires an active Membership (User attached, not soft-deleted). Invited Members are not Actors. An MCP call’s OrganizationActor is built from the client’s organizationId plus a live Membership, not from webapp `setActive`. User-scoped MCP calls use UserActor (organizationId unset) and do not consult the MCP allowlist.
-_Avoid_: Session, Context, Principal, Request, TeamActor; treating MCP allowlist as the Actor
+Who a Service call is made on behalf of: `UserActor`, `OrganizationActor`, or `AdminActor`. Organization scope requires an active Membership (User attached, not soft-deleted). Invited Members are not Actors. For an org-scoped Procedure, the Organization is named by the call’s `organizationId` when present, otherwise the session active Organization, otherwise an OrganizationActor already on the call (Workflow jobs / internal). When named from input or session, a live Membership builds OrganizationActor. Webapp `setActive` is the session fallback, not the only source. Cookieless callers (API key, MCP client) must pass `organizationId`. Do not synthesize `session.activeOrganization*`. After Actor resolution, `organizationId` is stripped from handle input.
+_Avoid_: Session, Context, Principal, Request, TeamActor; treating MCP allowlist as the Actor; treating `organizationId` on input as replacing Actor
 
 **MCP client**:
 A remote Model Context Protocol client (Cursor, Claude Desktop, and the like) that calls the app after Better Auth MCP OAuth, on behalf of a User.
 _Avoid_: Agent (that is Mastra), Connection (that is a linked third-party API account), treating the OAuth client as a User or Member
 
 **MCP call**:
-A catalog entry a Backend Module contributes that an MCP client invokes as a protocol tool. Organization-scoped calls take organizationId (MCP allowlist + live Membership → OrganizationActor; organizationId stripped from handle input); User-scoped calls use UserActor and skip the allowlist. A handle may delegate to a Procedure (Grant check runs) or call unguarded service methods.
-_Avoid_: treating the MCP call itself as a Procedure or tRPC procedure; Tool (the protocol object); Workflow job; scraping Service properties; wrapping a tRPC router; Agent, Endpoint
+A tRPC procedure opted in with `meta.mcp` (`name` and instruction-style `description` required) that an MCP client invokes as a protocol tool. Tool names are a flat list; collisions fail at boot. Org vs User vs Admin follows the procedure’s ActorScope (stamped by `organizationProcedure` / `userProcedure` / `adminProcedure`). Organization-scoped procedures take `organizationId` on input (optional in the tRPC schema; the MCP adapter advertises it required; input wins over session active Organization; required at runtime when there is no session active Organization). McpModule checks the MCP allowlist, then a live Membership builds OrganizationActor. User-scoped procedures use UserActor and skip the allowlist. Admin-scoped procedures use AdminActor and skip the allowlist and the `organizationId` helper. Grant checks always run — it is the Procedure.
+_Avoid_: a second catalog (`*.mcp.ts`, module `mcp()` hooks); unguarded MCP handles; treating the MCP call as something other than a tRPC procedure; Tool (the protocol object); Workflow job; Agent; OpenAPI copy as the MCP description
 
 **MCP allowlist**:
-The Organizations a given Better Auth OAuth client may pass as organizationId for a User. Chosen at that client’s consent. Per OAuth client, not one list for the User. Not Membership and not Grant; organization-scoped MCP calls still need a live Membership to build OrganizationActor. Changing it requires re-consent. User-scoped MCP calls do not consult it, except list-organizations which returns it.
-_Avoid_: Scope, Connection, a User-global org list; treating allowlist as permission to write
+The Organizations a given Better Auth OAuth client may pass as organizationId for a User. Chosen at that client’s consent. Per OAuth client, not one list for the User. Not Membership and not Grant; organization-scoped MCP calls still need a live Membership to build OrganizationActor. Changing it requires re-consent. User-scoped MCP calls do not consult it, except list-organizations which returns it. Cookie tRPC and API keys are not OAuth clients and do not use this list.
+_Avoid_: Scope, Connection, a User-global org list; treating allowlist as permission to write; applying allowlist to API keys
 
 **ActorScope**:
 Auth requirement on a Procedure: `user` | `organization` | `admin`.
@@ -333,5 +333,5 @@ A named Mastra agent the app registers. A Conversation selects which Agent answe
 _Avoid_: Assistant, Bot, Model; MCP client
 
 **McpModule**:
-The Core Module that serves MCP to MCP clients, holds the MCP allowlist, and ships the builtin list-organizations MCP call. Apps omit it from `createBackendApp` to disable MCP (Kernel then does not merge module MCP catalogs). Better Auth MCP OAuth stays on Auth.
-_Avoid_: wrapping tRPC as the catalog; Optional `@m5kdev/trpc-mcp`; Kernel-owned MCP HTTP like tRPC; Plugin; scraping Service properties for the catalog
+The Core Module that serves MCP to MCP clients: mounts the tRPC-MCP adapter for procedures with `meta.mcp`, holds the MCP allowlist, and ships list-organizations as a user-scoped tRPC procedure with `meta.mcp`. Apps omit it from `createBackendApp` to disable MCP (Kernel then does not enable MCP OAuth or MCP HTTP). Better Auth MCP OAuth stays on Auth. Not a second call catalog besides tRPC. 1.0 Core modules other than McpModule do not mark procedures with `meta.mcp`; Starter Posts marks list-posts and create-post only.
+_Avoid_: `*.mcp.ts` / module `mcp()` hooks as the catalog; Optional `@m5kdev/trpc-mcp` package as the product surface; Kernel-owned MCP HTTP like tRPC; scraping Service properties; OpenAPI descriptions as MCP descriptions

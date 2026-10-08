@@ -1,8 +1,10 @@
+---
+status: superseded by ADR-0028
+---
+
 # MCP calls are module hooks, not Service scrape and not a tRPC projection
 
-Kernel merges Backend Module `mcp()` (OrganizationActor) and `mcpUser()` (UserActor) catalogs at boot only when McpModule is registered — the same composition shape as tRPC fragments, not Workflow-job scraping of service properties, and not wrapping a tRPC router. Names are flat (map key = tool name); collisions fail; `list-organizations` is reserved. HTTP still lives on McpModule ([ADR-0003](0003-kernel-owns-express-http-shell.md)). Grants are optional: a handle may delegate to a Procedure or call unguarded service methods. Starter Posts `list-posts` / `create-post` delegate to Procedures; Posts.create attributes from `ctx.actor`, not `session.activeOrganizationId`. User-scoped calls skip the MCP allowlist; list-organizations reads it as data. `create-m5kdev` `mcp` stays default off (omit McpModule → no merge); Starter keeps `posts.mcp.ts` and strips it when the flag is off.
-
-Supersedes service-property discovery in [ADR-0013](0013-mcp-calls-not-trpc-projection.md) and the “never Grants” rule in [ADR-0015](0015-mcp-calls-do-not-enforce-grants.md). Not wrapping tRPC still stands.
+Superseded by [ADR-0028](0028-mcp-tools-are-opted-in-trpc-procedures.md). Service-property scrape stays rejected; `mcp()` / `mcpUser()` hooks and “not wrapping tRPC” do not. HTTP on McpModule, flat names, omit-module-to-disable, and “do not synthesize `session.activeOrganization*`” still hold.
 
 ## Considered Options
 

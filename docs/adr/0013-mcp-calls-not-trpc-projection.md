@@ -1,6 +1,10 @@
+---
+status: superseded by ADR-0028
+---
+
 # MCP calls are a Core Module catalog, not a tRPC projection
 
-Discovery-on-services is superseded by [ADR-0016](0016-mcp-calls-are-module-hooks.md). This ADR still stands: MCP calls are not selected tRPC procedures, not community `trpc-mcp` / `trpc-to-mcp`, and MCP HTTP is not Kernel-owned like tRPC.
+Superseded by [ADR-0028](0028-mcp-tools-are-opted-in-trpc-procedures.md). Discovery-on-services was already superseded by [ADR-0016](0016-mcp-calls-are-module-hooks.md). The “not a tRPC projection” rule is reversed; Kernel-owned MCP HTTP stays rejected.
 
 m5kdev apps expose a User’s MCP client to selected work as **MCP calls**. McpModule is Core (Starter registers it; `create-m5kdev` flag default off). 1.0 ships the builtin list-organizations MCP call plus whatever the app declares; other Core modules do not ship MCP calls.
 
