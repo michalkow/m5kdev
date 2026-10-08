@@ -8,6 +8,7 @@ export function createPostsTRPC(
 ) {
   return router({
     list: procedure
+      // m5k:mcp:start
       .meta({
         mcp: {
           name: "list-posts",
@@ -15,11 +16,13 @@ export function createPostsTRPC(
             "List posts in an Organization. Call list-organizations first to learn organizationId values, then pass one as organizationId.",
         },
       })
+      // m5k:mcp:end
       .input(postSchemas.input.list)
       .output(postSchemas.output.list)
       .query(async ({ ctx, input }) => handleTRPCResult(await postsService.list(input ?? {}, ctx))),
 
     create: procedure
+      // m5k:mcp:start
       .meta({
         mcp: {
           name: "create-post",
@@ -27,6 +30,7 @@ export function createPostsTRPC(
             "Create a draft post in an Organization. Call list-organizations first to learn organizationId values, then pass one as organizationId.",
         },
       })
+      // m5k:mcp:end
       .input(postSchemas.input.create)
       .output(postSchemas.output.single)
       .mutation(async ({ ctx, input }) => handleTRPCResult(await postsService.create(input, ctx))),

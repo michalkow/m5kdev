@@ -121,11 +121,7 @@ const FEATURE_MANIFEST = {
     mcp: {
       kind: "module",
       label: "MCP",
-      paths: [
-        "apps/server/src/modules/posts/posts.mcp.ts",
-        "apps/e2e/tests/mcp.spec.ts",
-        "apps/e2e/tests/mcp-helpers.ts",
-      ],
+      paths: ["apps/e2e/tests/mcp.spec.ts", "apps/e2e/tests/mcp-helpers.ts"],
     },
     notifications: {
       kind: "module",

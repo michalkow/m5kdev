@@ -347,6 +347,14 @@ describe("scaffoldProject", () => {
     expect(offPostsModule).not.toContain("createPostsMcp");
     expect(offPostsModule).not.toContain("override mcp(");
     expect(offPostsModule).not.toContain("m5k:");
+    const offPostsTrpc = await fs.readFile(
+      path.join(off.targetDirectory, "apps/server/src/modules/posts/posts.trpc.ts"),
+      "utf8"
+    );
+    expect(offPostsTrpc).not.toContain("mcp:");
+    expect(offPostsTrpc).not.toContain('"list-posts"');
+    expect(offPostsTrpc).not.toContain('"create-post"');
+    expect(offPostsTrpc).not.toContain("m5k:");
 
     const on = await scaffoldProject({
       targetDirectory: "mcp-on-desk",
@@ -389,17 +397,25 @@ describe("scaffoldProject", () => {
       path.join(on.targetDirectory, "apps/server/src/modules/posts/posts.module.ts"),
       "utf8"
     );
-    expect(onPostsModule).toContain("createPostsMcp");
-    expect(onPostsModule).toContain("override mcp(");
+    expect(onPostsModule).not.toContain("createPostsMcp");
+    expect(onPostsModule).not.toContain("override mcp(");
     expect(onPostsModule).not.toContain("m5k:");
 
-    const onPostsMcp = await fs.readFile(
-      path.join(on.targetDirectory, "apps/server/src/modules/posts/posts.mcp.ts"),
+    await expect(
+      fs.stat(path.join(on.targetDirectory, "apps/server/src/modules/posts/posts.mcp.ts"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+
+    const onPostsTrpc = await fs.readFile(
+      path.join(on.targetDirectory, "apps/server/src/modules/posts/posts.trpc.ts"),
       "utf8"
     );
-    expect(onPostsMcp).toContain('"list-posts"');
-    expect(onPostsMcp).toContain('"create-post"');
-    expect(onPostsMcp).toContain("defineMcpCall");
+    expect(onPostsTrpc).toContain(".meta({");
+    expect(onPostsTrpc).toContain("mcp: {");
+    expect(onPostsTrpc).toContain('"list-posts"');
+    expect(onPostsTrpc).toContain('"create-post"');
+    expect(onPostsTrpc).toContain("Call list-organizations first");
+    expect(onPostsTrpc).not.toContain("defineMcpCall");
+    expect(onPostsTrpc).not.toContain("m5k:");
 
     const onAgents = await fs.readFile(
       path.join(on.targetDirectory, "apps/server/AGENTS.md"),
