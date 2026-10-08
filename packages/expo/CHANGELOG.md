@@ -1,5 +1,12 @@
 # @m5kdev/expo
 
+## 0.39.0
+
+### Patch Changes
+
+- @m5kdev/frontend@0.39.0
+- @m5kdev/commons@0.39.0
+
 ## Unreleased
 
 - Better Auth 1.7 boots without SCHEMA_MISMATCH: apikeys has configId (default "default"), required referenceId, and nullable userId.

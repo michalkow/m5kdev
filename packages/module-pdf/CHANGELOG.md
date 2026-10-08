@@ -1,5 +1,12 @@
 # @m5kdev/module-pdf
 
+## 0.39.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/backend@0.39.0
+
 ## Unreleased
 
 - NuqsTable Filters, Group by, and Columns labels follow the active locale.

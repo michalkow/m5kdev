@@ -1,5 +1,21 @@
 # create-m5kdev
 
+## 0.39.0
+
+### Minor Changes
+
+- Organization-scoped Procedures and tRPC procedures now accept an optional `organizationId` that names the Organization (winning over the session active Organization), with a live Membership building the OrganizationActor and a missing Organization failing as bad request.
+
+  API-key callers now receive a session so cookieless requests can name an Organization with `organizationId`, and a new `userProcedure` supports user-scoped procedures without a session.
+
+  MCP tools are now tRPC procedures opted in with `meta.mcp` (`name` plus instruction-style `description`); the module `mcp()`/`mcpUser()` hooks and `defineMcpCall` catalog are removed, `list-organizations` is a user-scoped tRPC procedure, and Grant checks always run on MCP calls.
+
+  Auth `setOrganizationFlags`/`setMemberFlags` now take `{ flags }` and `setOrganizationOnboarding`/`setMemberOnboarding` now take `{ onboarding }`.
+
+  Child-organization checks authorize from the Actor's Organization instead of the session active Organization.
+
+  The `create-m5kdev` `mcp` flag scaffolds Posts `meta.mcp` on tRPC instead of a `posts.mcp.ts` catalog file.
+
 ## Unreleased
 
 - Better Auth 1.7 boots without SCHEMA_MISMATCH: apikeys has configId (default "default"), required referenceId, and nullable userId.
