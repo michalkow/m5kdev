@@ -21,3 +21,16 @@ export const mcpConsentSchemas = {
     }),
   },
 };
+
+const listedOrganizationSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  organizationRole: z.string(),
+});
+
+export const mcpOrganizationSchemas = {
+  output: {
+    organization: listedOrganizationSchema,
+    organizations: listedOrganizationSchema.array(),
+  },
+};

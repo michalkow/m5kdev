@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
@@ -12,9 +12,7 @@ import { AuthModule } from "../../auth/auth.module";
 import { EmailModule } from "../../email/email.module";
 import type { EmailTemplates } from "../../email/email.service";
 import { mcpAllowlistEntries } from "../mcp.db";
-import { defineMcpCall, defineUserMcpCall } from "../mcp.define";
 import { McpModule } from "../mcp.module";
-import type { McpService } from "../mcp.service";
 import {
   LIST_ORGANIZATIONS_MCP_CALL,
   MCP_AUTH_ISSUER_PATH,
@@ -63,10 +61,14 @@ const createMcpHandlerMock = jest.fn(
   })
 );
 
+const mockRegisteredTools: { name: string; description: string }[] = [];
+
 jest.mock("@modelcontextprotocol/server", () => ({
   createMcpHandler: (...args: unknown[]) => createMcpHandlerMock(...args),
   McpServer: class {
-    registerTool(): void {}
+    registerTool(name: string, params: { description: string }): void {
+      mockRegisteredTools.push({ name, description: params.description });
+    }
   },
 }));
 
@@ -145,12 +147,22 @@ async function withServer(app: Express, run: (baseUrl: string) => Promise<void>)
   }
 }
 
+function registeredToolNames(): string[] {
+  const factory = createMcpHandlerMock.mock.calls[0]?.[0] as
+    | ((ctx: unknown) => unknown)
+    | undefined;
+  if (!factory) return [];
+  factory({});
+  return mockRegisteredTools.map((tool) => tool.name);
+}
+
 describe("McpModule HTTP", () => {
   let client: Client;
 
   beforeEach(() => {
     client = createClient({ url: ":memory:" });
     createMcpHandlerMock.mockClear();
+    mockRegisteredTools.length = 0;
   });
 
   afterEach(async () => {
@@ -158,6 +170,18 @@ describe("McpModule HTTP", () => {
   });
 
   it("does not mount /mcp when McpModule is omitted", () => {
+    const ping = defineBackendModule({
+      id: "ping-mcp",
+      trpc(ctx) {
+        return {
+          ping: ctx.trpc.router({
+            check: ctx.trpc.userProcedure
+              .meta({ mcp: { name: "ping", description: "Ping" } })
+              .query(() => "pong"),
+          }),
+        };
+      },
+    });
     const built = createBackendApp(
       {
         db: { client },
@@ -174,14 +198,14 @@ describe("McpModule HTTP", () => {
           },
         },
       },
-      [new EmailModule(templates), new AuthModule()] as const
+      [new EmailModule(templates), new AuthModule(), ping] as const
     );
     const routes = mountedRoutes(built.express.app);
     expect(routes.some((route) => route.path === MCP_HTTP_PATH)).toBe(false);
     expect(routes.some((route) => route.path.includes(".well-known"))).toBe(false);
   });
 
-  it("mounts POST /mcp only when McpModule is registered", async () => {
+  it("mounts POST /mcp with list-organizations when McpModule is registered", async () => {
     const built = createBackendApp(
       {
         db: { client },
@@ -204,14 +228,10 @@ describe("McpModule HTTP", () => {
       (route) => route.path === MCP_HTTP_PATH
     );
     expect(mcpRoutes).toEqual([{ path: MCP_HTTP_PATH, methods: ["post"] }]);
-    expect(createMcpHandlerMock).toHaveBeenCalledWith(
-      expect.any(Function),
-      { legacy: "stateless" }
-    );
-    const mcpService = built.modules.mcp.services.mcp as McpService;
-    expect(mcpService.listCatalog().map((entry) => entry.name)).toEqual([
-      LIST_ORGANIZATIONS_MCP_CALL,
-    ]);
+    expect(createMcpHandlerMock).toHaveBeenCalledWith(expect.any(Function), {
+      legacy: "stateless",
+    });
+    expect(registeredToolNames()).toEqual([LIST_ORGANIZATIONS_MCP_CALL]);
 
     await withServer(built.express.app, async (baseUrl) => {
       const response = await fetch(`${baseUrl}${MCP_HTTP_PATH}`, {
@@ -234,61 +254,33 @@ describe("McpModule HTTP", () => {
     });
   });
 
-  it("does not run module mcp hooks when McpModule is omitted", () => {
-    const loud = defineBackendModule({
-      id: "loud-mcp",
-      mcp() {
-        throw new Error("mcp hook should not run");
-      },
-      mcpUser() {
-        throw new Error("mcpUser hook should not run");
-      },
-    });
-    expect(() =>
-      createBackendApp(
-        {
-          db: { client },
-          schema,
-          app: {
-            urls: {
-              web: "http://localhost:5173",
-              api: "http://127.0.0.1:8080",
-            },
-          },
-          auth: {
-            factory() {
-              return fakeAuth() as never;
-            },
-          },
-        },
-        [new EmailModule(templates), new AuthModule(), loud] as const
-      )
-    ).not.toThrow();
-  });
-
-  it("merges module mcp hooks and ignores leftover service mcpCall properties", () => {
-    const echo = defineBackendModule({
+  it("exposes meta.mcp tools from multiple modules with flat names", () => {
+    const orgCalls = defineBackendModule({
       id: "echo-mcp",
-      services() {
+      trpc(ctx) {
         return {
-          decoy: {
-            leftover: {
-              mcpCall: true,
-              description: "should not appear",
-            },
-          },
-        };
-      },
-      mcp() {
-        return {
-          echo: defineMcpCall()
-            .description("Echo")
-            .input(z.object({ text: z.string() }))
-            .handle(async (input: { text: string }) => input.text),
+          echo: ctx.trpc.router({
+            run: ctx.trpc.organizationProcedure
+              .meta({ mcp: { name: "echo", description: "Echo" } })
+              .input(z.object({ text: z.string() }))
+              .query(({ input }) => input),
+          }),
         };
       },
     });
-    const built = createBackendApp(
+    const userCalls = defineBackendModule({
+      id: "ping-mcp",
+      trpc(ctx) {
+        return {
+          ping: ctx.trpc.router({
+            check: ctx.trpc.userProcedure
+              .meta({ mcp: { name: "ping", description: "Ping" } })
+              .query(() => "pong"),
+          }),
+        };
+      },
+    });
+    createBackendApp(
       {
         db: { client },
         schema,
@@ -304,33 +296,35 @@ describe("McpModule HTTP", () => {
           },
         },
       },
-      [new EmailModule(templates), new AuthModule(), new McpModule(), echo] as const
+      [new EmailModule(templates), new AuthModule(), new McpModule(), orgCalls, userCalls] as const
     );
-    const mcpService = built.modules.mcp.services.mcp as McpService;
-    expect(mcpService.listCatalog().map((entry) => entry.name)).toEqual([
-      LIST_ORGANIZATIONS_MCP_CALL,
-      "echo",
-    ]);
+    expect(registeredToolNames().sort()).toEqual(["echo", LIST_ORGANIZATIONS_MCP_CALL, "ping"]);
   });
 
-  it("fails boot when two modules register the same MCP call name", () => {
+  it("fails boot when two procedures share a flat MCP tool name", () => {
     const first = defineBackendModule({
       id: "first-mcp",
-      mcp() {
+      trpc(ctx) {
         return {
-          echo: defineMcpCall()
-            .description("First")
-            .handle(async () => "first"),
+          first: ctx.trpc.router({
+            echo: ctx.trpc.organizationProcedure
+              .meta({ mcp: { name: "echo", description: "First" } })
+              .input(z.object({}))
+              .query(() => "first"),
+          }),
         };
       },
     });
     const second = defineBackendModule({
       id: "second-mcp",
-      mcp() {
+      trpc(ctx) {
         return {
-          echo: defineMcpCall()
-            .description("Second")
-            .handle(async () => "second"),
+          second: ctx.trpc.router({
+            echo: ctx.trpc.organizationProcedure
+              .meta({ mcp: { name: "echo", description: "Second" } })
+              .input(z.object({}))
+              .query(() => "second"),
+          }),
         };
       },
     });
@@ -353,61 +347,12 @@ describe("McpModule HTTP", () => {
         },
         [new EmailModule(templates), new AuthModule(), new McpModule(), first, second] as const
       )
-    ).toThrow('already registered for MCP call "echo"');
-  });
-
-  it("fails boot when organization and user hooks register the same MCP call name", () => {
-    const organizationCall = defineBackendModule({
-      id: "org-ping",
-      mcp() {
-        return {
-          ping: defineMcpCall()
-            .description("Org ping")
-            .handle(async () => "org"),
-        };
-      },
-    });
-    const userCall = defineBackendModule({
-      id: "user-ping",
-      mcpUser() {
-        return {
-          ping: defineUserMcpCall()
-            .description("User ping")
-            .handle(async () => "user"),
-        };
-      },
-    });
-    expect(() =>
-      createBackendApp(
-        {
-          db: { client },
-          schema,
-          app: {
-            urls: {
-              web: "http://localhost:5173",
-              api: "http://127.0.0.1:8080",
-            },
-          },
-          auth: {
-            factory() {
-              return fakeAuth() as never;
-            },
-          },
-        },
-        [
-          new EmailModule(templates),
-          new AuthModule(),
-          new McpModule(),
-          organizationCall,
-          userCall,
-        ] as const
-      )
-    ).toThrow('already registered for MCP call "ping"');
+    ).toThrow('Duplicate MCP tool name "echo"');
   });
 });
 
 describe("Starter MCP registration", () => {
-  it("registers McpModule with Posts list-posts and create-post MCP calls", () => {
+  it("marks Posts list-posts and create-post with meta.mcp on tRPC", () => {
     const starterRoot = join(__dirname, "../../../../../../apps/starter/server/src");
     const appSource = readFileSync(join(starterRoot, "app.ts"), "utf8");
     const schemaSource = readFileSync(join(starterRoot, "schema.ts"), "utf8");
@@ -416,7 +361,7 @@ describe("Starter MCP registration", () => {
       join(starterRoot, "modules/posts/posts.module.ts"),
       "utf8"
     );
-    const postsMcpSource = readFileSync(join(starterRoot, "modules/posts/posts.mcp.ts"), "utf8");
+    const postsTrpcSource = readFileSync(join(starterRoot, "modules/posts/posts.trpc.ts"), "utf8");
     expect(appSource).toMatch(/new McpModule\(/);
     expect(appSource).toMatch(/\bmcp\b/);
     expect(schemaSource).toMatch(/mcpAllowlistEntries/);
@@ -424,11 +369,12 @@ describe("Starter MCP registration", () => {
     expect(postsSource).not.toMatch(/\.mcp\./);
     expect(postsSource).toMatch(/ctx\.actor\.organizationId/);
     expect(postsSource).not.toMatch(/session\.activeOrganizationId/);
-    expect(postsModuleSource).toMatch(/createPostsMcp/);
-    expect(postsModuleSource).toMatch(/override mcp\(/);
-    expect(postsMcpSource).toMatch(/"list-posts"/);
-    expect(postsMcpSource).toMatch(/"create-post"/);
-    expect(postsMcpSource).toMatch(/defineMcpCall/);
+    expect(postsModuleSource).not.toMatch(/createPostsMcp/);
+    expect(postsModuleSource).not.toMatch(/override mcp\(/);
+    expect(existsSync(join(starterRoot, "modules/posts/posts.mcp.ts"))).toBe(false);
+    expect(postsTrpcSource).toMatch(/"list-posts"/);
+    expect(postsTrpcSource).toMatch(/"create-post"/);
+    expect(postsTrpcSource).toMatch(/meta\.mcp|mcp:\s*\{/);
     const consentRouter = readFileSync(
       join(
         __dirname,

@@ -38,6 +38,8 @@ export type RequestContext = {
   actor: UserActor | null;
   /** Express request; used to label the HTTP root span with the tRPC procedure. */
   req?: IncomingMessage;
+  /** Better Auth OAuth client id; set by the MCP adapter for in-process calls, absent otherwise. */
+  oauthClientId?: string;
 };
 
 export type Context = {
@@ -60,14 +62,30 @@ export type TeamContext = {
 };
 
 export type AdminContext = {
-  session: Session;
+  /** Absent for cookieless callers (in-process MCP calls). */
+  session?: Session | null;
   user: User;
   actor: AdminActor;
 };
 
+/** Cookieless User context; a session is not required. */
+export type UserContext = {
+  /** Absent for cookieless callers (in-process MCP calls). */
+  session?: Session | null;
+  user: User;
+  actor: UserActor;
+};
+
 export interface TRPCProcedureMeta {
-  /** Stamped by `privateProcedure` / `organizationProcedure` / `adminProcedure`. */
+  /** Stamped by `privateProcedure` / `userProcedure` / `organizationProcedure` / `adminProcedure`. */
   actorScope?: Exclude<ActorScope, "team">;
+  /** Opts the procedure into the MCP catalog; both fields are required. */
+  mcp?: {
+    /** Flat tool name; collisions fail at boot. */
+    name: string;
+    /** Instruction-style copy for MCP clients, not OpenAPI. */
+    description: string;
+  };
 }
 
 const t = initTRPC.context<RequestContext>().meta<TRPCProcedureMeta>().create({ transformer });
@@ -91,6 +109,9 @@ const baseProcedure = t.procedure.use(async ({ path, type, ctx, input, next }) =
 const publicProcedure = baseProcedure;
 const privateProcedure = baseProcedure.meta({ actorScope: "user" }).use(({ ctx, next }) => {
   return next({ ctx: verifyProtectedProcedureContext(ctx) });
+});
+const userProcedure = baseProcedure.meta({ actorScope: "user" }).use(({ ctx, next }) => {
+  return next({ ctx: verifyUserProcedureContext(ctx) });
 });
 const adminProcedure = baseProcedure.meta({ actorScope: "admin" }).use(({ ctx, next }) => {
   return next({ ctx: verifyAdminProcedureContext(ctx) });
@@ -130,6 +151,7 @@ export type TRPCMethods = {
   baseProcedure: typeof baseProcedure;
   publicProcedure: typeof publicProcedure;
   privateProcedure: typeof privateProcedure;
+  userProcedure: typeof userProcedure;
   organizationProcedure: ReturnType<typeof createOrganizationProcedure>;
   adminProcedure: typeof adminProcedure;
 };
@@ -159,6 +181,7 @@ export function createTRPCMethods({
     baseProcedure,
     publicProcedure,
     privateProcedure,
+    userProcedure,
     organizationProcedure: createOrganizationProcedure(memberships),
     adminProcedure,
   };
@@ -278,6 +301,34 @@ async function resolveOrganizationProcedureContext({
   return { session: ctx.session ?? null, user: ctx.user, actor: actor.value };
 }
 
+/**
+ * Names the User without requiring a session, so cookieless callers (in-process
+ * MCP calls) can invoke user-scoped procedures. An extra `organizationId` in
+ * the input never selects an OrganizationActor here.
+ */
+export function verifyUserProcedureContext(ctx: RequestContext): UserContext {
+  if (!ctx.user) {
+    throw new ServerError({
+      code: "UNAUTHORIZED",
+      layer: "controller",
+      layerName: "TRPCController",
+    }).toTRPC();
+  }
+  const actor: UserActor =
+    ctx.actor && validateActor(ctx.actor, "user")
+      ? ctx.actor
+      : {
+          userId: ctx.user.id,
+          userRole: ctx.user.role ?? "user",
+          organizationId: null,
+          organizationRole: null,
+          memberId: null,
+          teamId: null,
+          teamRole: null,
+        };
+  return { session: ctx.session ?? null, user: ctx.user, actor };
+}
+
 export function verifyTeamProcedureContext(ctx: Context): TeamContext {
   if (!ctx.user || !ctx.session) {
     throw new ServerError({
@@ -296,7 +347,7 @@ export function verifyTeamProcedureContext(ctx: Context): TeamContext {
 }
 
 export function verifyAdminProcedureContext(ctx: RequestContext): AdminContext {
-  if (!ctx.user || !ctx.session) {
+  if (!ctx.user) {
     throw new ServerError({
       code: "UNAUTHORIZED",
       layer: "controller",
@@ -311,14 +362,19 @@ export function verifyAdminProcedureContext(ctx: RequestContext): AdminContext {
       layerName: "TRPCController",
     }).toTRPC();
   }
-  if (!ctx.actor) {
-    throw new ServerError({
-      code: "UNAUTHORIZED",
-      layer: "controller",
-      layerName: "TRPCController",
-    }).toTRPC();
-  }
-  return ctx as AdminContext;
+  const actor: AdminActor =
+    ctx.actor && validateActor(ctx.actor, "admin")
+      ? { ...ctx.actor, userRole: "admin" as const }
+      : {
+          userId: ctx.user.id,
+          userRole: "admin" as const,
+          organizationId: null,
+          organizationRole: null,
+          memberId: null,
+          teamId: null,
+          teamRole: null,
+        };
+  return { session: ctx.session ?? null, user: ctx.user, actor };
 }
 
 export function requireRequestUser(ctx: RequestContext): User {

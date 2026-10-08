@@ -1,7 +1,7 @@
 import type { Result } from "neverthrow";
-import { z } from "zod";
+import { type ZodType, z } from "zod";
 import type { ServerError } from "../../utils/errors";
-import type { McpCatalogEntry, McpInvokeInput, McpRegisteredCall } from "./mcp.types";
+import type { McpCatalogEntry, McpInvokeInput } from "./mcp.types";
 
 export interface McpToolTextContent {
   type: "text";
@@ -15,7 +15,7 @@ export interface McpToolCallResult {
 
 export function mcpToolInputSchema(
   entry: Pick<McpCatalogEntry, "requiresOrganizationId">,
-  definition?: Pick<McpRegisteredCall, "inputSchema">
+  definition?: { inputSchema: ZodType }
 ): z.ZodObject<z.ZodRawShape> {
   if (!entry.requiresOrganizationId) {
     return z.object({});

@@ -42,7 +42,6 @@ import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/a
 import { oauthClients } from "./modules/auth/auth.oauth.db";
 import type { AuthOrganizationRepository } from "./modules/auth/auth.repository";
 import type { BaseModule } from "./modules/base/base.module";
-import { McpService } from "./modules/mcp/mcp.service";
 import { mcpResourceUrl } from "./modules/mcp/mcp.types";
 import { WorkflowRegistry } from "./modules/workflow/workflow.registry";
 import { WorkflowService } from "./modules/workflow/workflow.service";
@@ -82,8 +81,6 @@ export type BackendAppModule = {
   services?(ctx: any): any;
   auth?(ctx: any): any;
   trpc?(ctx: any): any;
-  mcp?(ctx: any): any;
-  mcpUser?(ctx: any): any;
   express?(ctx: any): void;
   workflows?(ctx: any): void;
   startup?(ctx: any): Promise<void> | void;
@@ -241,15 +238,15 @@ export type BackendModuleTRPCContext = BackendModuleServicesContext & {
   auth?: BetterAuth;
 };
 
-export type BackendModuleMcpContext = BackendModuleServicesContext & {
-  services: AnyRecord;
-};
-
 export type BackendModuleExpressContext = BackendModuleServicesContext & {
   services: AnyRecord;
   auth?: BetterAuth;
   authMiddleware?: ReturnType<typeof createAuthMiddleware>;
   roleAuthMiddleware?: ReturnType<typeof createRoleAuthMiddleware>;
+  trpc: {
+    router: AnyRouter;
+    methods: TRPCMethods;
+  };
 };
 
 export type BackendModuleWorkflowContext = BackendModuleServicesContext & {
@@ -288,8 +285,6 @@ export type BackendModuleDefinition<
   services?: (ctx: BackendModuleServicesContext) => Services | void;
   auth?: (ctx: BackendModuleAuthContext) => BetterAuth | void;
   trpc?: (ctx: BackendModuleTRPCContext) => TRouters | void;
-  mcp?: (ctx: BackendModuleMcpContext) => Record<string, unknown> | void;
-  mcpUser?: (ctx: BackendModuleMcpContext) => Record<string, unknown> | void;
   express?: (ctx: BackendModuleExpressContext) => void;
   workflows?: (ctx: BackendModuleWorkflowContext) => void;
   startup?: (ctx: BackendModuleLifecycleContext) => Promise<void> | void;
@@ -379,10 +374,6 @@ export function createBackendRouterMap<const Namespace extends string, Router ex
 
 function isWorkflowService(value: unknown): value is WorkflowService {
   return value instanceof WorkflowService;
-}
-
-function isMcpService(value: unknown): value is McpService {
-  return value instanceof McpService;
 }
 
 function normalizeEnv(env: BackendAppConfig["env"]): Record<string, string | undefined> {
@@ -814,40 +805,6 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     }
   }
 
-  let mcpService: McpService | undefined;
-  for (const module of orderedModules) {
-    const state = moduleStates.get(module.id)!;
-    for (const service of Object.values(state.services)) {
-      if (isMcpService(service)) {
-        if (mcpService) {
-          throw new Error("Multiple McpService instances detected; only one is supported");
-        }
-        mcpService = service;
-      }
-    }
-  }
-
-  if (mcpService) {
-    for (const module of orderedModules) {
-      const state = moduleStates.get(module.id)!;
-      const mcpCtx = {
-        env,
-        logger,
-        appConfig,
-        emailConfig,
-        i18n: appI18n,
-        deps: createDependencyMap(module, moduleStates),
-        repositories: state.repositories,
-        services: state.services,
-        modules: Object.fromEntries(moduleStates.entries()) as ModuleRuntimeMap,
-        db,
-        infra,
-      };
-      mcpService.registerUserCalls(module.mcpUser?.(mcpCtx) ?? {}, { moduleId: module.id });
-      mcpService.registerOrganizationCalls(module.mcp?.(mcpCtx) ?? {});
-    }
-  }
-
   const memberships: AuthOrganizationRepository | undefined =
     moduleStates.get("auth")?.repositories.organization;
   const trpcMethods = createTRPCMethods({ memberships });
@@ -931,6 +888,10 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       auth,
       authMiddleware,
       roleAuthMiddleware,
+      trpc: {
+        router: appRouter,
+        methods: trpcMethods,
+      },
     } as any);
   }
 

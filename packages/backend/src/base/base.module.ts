@@ -6,7 +6,6 @@ import type {
   BackendModuleDependencyMap,
   BackendModuleExpressContext,
   BackendModuleLifecycleContext,
-  BackendModuleMcpContext,
   BackendModuleRepositoriesContext,
   BackendModuleServicesContext,
   BackendModuleTRPCContext,
@@ -51,14 +50,6 @@ export type ModuleTRPCContext<
   Deps extends BaseModuleDeps = Record<string, never>,
   Services extends Record<string, unknown> = AnyRecord,
 > = Omit<BackendModuleTRPCContext, "deps" | "services"> & {
-  deps: ModuleTypedDeps<Deps>;
-  services: Services & AnyRecord;
-};
-
-export type ModuleMcpContext<
-  Deps extends BaseModuleDeps = Record<string, never>,
-  Services extends Record<string, unknown> = AnyRecord,
-> = Omit<BackendModuleMcpContext, "deps" | "services"> & {
   deps: ModuleTypedDeps<Deps>;
   services: Services & AnyRecord;
 };
@@ -134,10 +125,6 @@ export abstract class BaseModule<
   services?(ctx: ModuleServicesContext<Deps, Repositories>): Services | undefined;
 
   trpc?(ctx: ModuleTRPCContext<Deps, Services>): Routers | undefined;
-
-  mcp?(ctx: ModuleMcpContext<Deps, Services>): Record<string, unknown> | undefined;
-
-  mcpUser?(ctx: ModuleMcpContext<Deps, Services>): Record<string, unknown> | undefined;
 
   express?(ctx: ModuleExpressContext<Deps, Services>): void;
 

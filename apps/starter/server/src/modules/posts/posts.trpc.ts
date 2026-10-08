@@ -8,11 +8,25 @@ export function createPostsTRPC(
 ) {
   return router({
     list: procedure
+      .meta({
+        mcp: {
+          name: "list-posts",
+          description:
+            "List posts in an Organization. Call list-organizations first to learn organizationId values, then pass one as organizationId.",
+        },
+      })
       .input(postSchemas.input.list)
       .output(postSchemas.output.list)
       .query(async ({ ctx, input }) => handleTRPCResult(await postsService.list(input ?? {}, ctx))),
 
     create: procedure
+      .meta({
+        mcp: {
+          name: "create-post",
+          description:
+            "Create a draft post in an Organization. Call list-organizations first to learn organizationId values, then pass one as organizationId.",
+        },
+      })
       .input(postSchemas.input.create)
       .output(postSchemas.output.single)
       .mutation(async ({ ctx, input }) => handleTRPCResult(await postsService.create(input, ctx))),

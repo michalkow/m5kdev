@@ -237,15 +237,105 @@ describe("organizationProcedure", () => {
   });
 
   it("stamps ActorScope on Procedure meta", () => {
-    const { privateProcedure, organizationProcedure, adminProcedure, publicProcedure } =
-      createTRPCMethods();
+    const {
+      privateProcedure,
+      userProcedure,
+      organizationProcedure,
+      adminProcedure,
+      publicProcedure,
+    } = createTRPCMethods();
     const meta = (procedure: { query: (resolver: () => null) => unknown }) =>
       (procedure.query(() => null) as { _def: { meta?: unknown } })._def.meta;
 
     expect(meta(privateProcedure)).toEqual({ actorScope: "user" });
+    expect(meta(userProcedure)).toEqual({ actorScope: "user" });
     expect(meta(organizationProcedure)).toEqual({ actorScope: "organization" });
     expect(meta(adminProcedure)).toEqual({ actorScope: "admin" });
     expect(meta(publicProcedure)).toBeUndefined();
+  });
+
+  it("merges meta.mcp onto the stamped ActorScope", () => {
+    const { organizationProcedure } = createTRPCMethods();
+    const procedure = organizationProcedure
+      .input(z.object({ title: z.string() }))
+      .meta({ mcp: { name: "announce", description: "Announce something" } })
+      .query(() => null) as unknown as { _def: { meta?: unknown } };
+
+    expect(procedure._def.meta).toEqual({
+      actorScope: "organization",
+      mcp: { name: "announce", description: "Announce something" },
+    });
+  });
+
+  it("runs userProcedure for a cookieless User without selecting an Organization", async () => {
+    const { router, userProcedure, createCallerFactory } = createTRPCMethods();
+    const appRouter = router({
+      whoami: userProcedure.query(({ ctx, input }) => ({ actor: ctx.actor, input })),
+    });
+    const caller = createCallerFactory(appRouter)({
+      user: createUser(),
+      session: null,
+      actor: null,
+    });
+
+    await expect(caller.whoami({ organizationId: "org-9" })).resolves.toEqual({
+      actor: {
+        userId: "user-1",
+        userRole: "member",
+        organizationId: null,
+        organizationRole: null,
+        memberId: null,
+        teamId: null,
+        teamRole: null,
+      },
+      input: undefined,
+    });
+  });
+
+  it("rejects userProcedure without a User", async () => {
+    const { router, userProcedure, createCallerFactory } = createTRPCMethods();
+    const appRouter = router({
+      whoami: userProcedure.query(({ ctx }) => ctx.actor),
+    });
+    const caller = createCallerFactory(appRouter)({ user: null, session: null, actor: null });
+
+    await expect(caller.whoami()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+
+  it("runs adminProcedure for a cookieless admin User", async () => {
+    const { router, adminProcedure, createCallerFactory } = createTRPCMethods();
+    const appRouter = router({
+      status: adminProcedure.query(({ ctx }) => ctx.actor),
+    });
+    const caller = createCallerFactory(appRouter)({
+      user: createUser({ role: "admin" }),
+      session: null,
+      actor: null,
+    });
+
+    await expect(caller.status()).resolves.toEqual({
+      userId: "user-1",
+      userRole: "admin",
+      organizationId: null,
+      organizationRole: null,
+      memberId: null,
+      teamId: null,
+      teamRole: null,
+    });
+  });
+
+  it("rejects adminProcedure for a cookieless non-admin User", async () => {
+    const { router, adminProcedure, createCallerFactory } = createTRPCMethods();
+    const appRouter = router({
+      status: adminProcedure.query(({ ctx }) => ctx.actor),
+    });
+    const caller = createCallerFactory(appRouter)({
+      user: createUser({ role: "member" }),
+      session: null,
+      actor: null,
+    });
+
+    await expect(caller.status()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("builds OrganizationActor from a live Membership for a cookieless User", async () => {

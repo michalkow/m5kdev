@@ -2,9 +2,12 @@ import { requireMcpAuth } from "@better-auth/mcp";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "better-auth/node";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
+import type { Result } from "neverthrow";
+import type { ServerError } from "../../utils/errors";
 import type { BetterAuth } from "../auth/auth.lib";
-import { invokeMcpTool, isArgumentRecord, mcpToolInputSchema } from "./mcp.protocol";
-import type { McpService } from "./mcp.service";
+import type { McpToolBinding } from "./mcp.adapter";
+import { invokeMcpTool, isArgumentRecord } from "./mcp.protocol";
+import type { McpInvokeInput } from "./mcp.types";
 import {
   MCP_AUTHORIZATION_SERVER_METADATA_PATH,
   MCP_HTTP_PATH,
@@ -84,7 +87,8 @@ async function writeWebResponse(res: Response, response: globalThis.Response): P
 }
 
 export function createMcpExpressHandler(input: {
-  mcp: McpService;
+  tools: readonly McpToolBinding[];
+  invoke: (payload: McpInvokeInput) => Promise<Result<unknown, ServerError>>;
   auth: BetterAuth;
   resource: string;
   serverName: string;
@@ -95,23 +99,22 @@ export function createMcpExpressHandler(input: {
         name: input.serverName,
         version: "1.0.0",
       });
-      for (const entry of input.mcp.listCatalog()) {
-        const definition = input.mcp.getCall(entry.name);
+      for (const tool of input.tools) {
         server.registerTool(
-          entry.name,
+          tool.name,
           {
-            description: entry.description,
-            inputSchema: mcpToolInputSchema(entry, definition),
+            description: tool.description,
+            inputSchema: tool.inputSchema,
           },
           async (args) => {
             const extra = ctx.authInfo?.extra;
             const userId = typeof extra?.userId === "string" ? extra.userId : "";
             const oauthClientId = ctx.authInfo?.clientId ?? "";
             const result = await invokeMcpTool({
-              invoke: (payload) => input.mcp.invoke(payload),
+              invoke: (payload) => input.invoke(payload),
               userId,
               oauthClientId,
-              name: entry.name,
+              name: tool.name,
               arguments: isArgumentRecord(args) ? args : {},
             });
             if (result.isError) {
@@ -170,7 +173,8 @@ function mountMcpOAuthDiscovery(input: { express: McpExpressMount; auth: BetterA
 
 export function mountMcpHttp(input: {
   express: McpExpressMount;
-  mcp: McpService;
+  tools: readonly McpToolBinding[];
+  invoke: (payload: McpInvokeInput) => Promise<Result<unknown, ServerError>>;
   auth: BetterAuth;
   resource: string;
   serverName: string;
@@ -179,7 +183,8 @@ export function mountMcpHttp(input: {
   input.express.post(
     MCP_HTTP_PATH,
     createMcpExpressHandler({
-      mcp: input.mcp,
+      tools: input.tools,
+      invoke: input.invoke,
       auth: input.auth,
       resource: input.resource,
       serverName: input.serverName,

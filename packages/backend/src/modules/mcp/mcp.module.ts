@@ -3,22 +3,17 @@ import type { AuthModule } from "../auth/auth.module";
 import {
   BaseModule,
   type ModuleExpressContext,
-  type ModuleMcpContext,
   type ModuleRepositoriesContext,
   type ModuleServicesContext,
   type ModuleTRPCContext,
 } from "../base/base.module";
+import { collectMcpTools, createMcpToolInvoker } from "./mcp.adapter";
 import type * as mcpTables from "./mcp.db";
-import { defineUserMcpCall } from "./mcp.define";
 import { mountMcpHttp } from "./mcp.http";
 import { McpRepository } from "./mcp.repository";
 import { McpService } from "./mcp.service";
 import { createMcpTRPC } from "./mcp.trpc";
-import {
-  LIST_ORGANIZATIONS_DESCRIPTION,
-  LIST_ORGANIZATIONS_MCP_CALL,
-  mcpResourceUrl,
-} from "./mcp.types";
+import { mcpResourceUrl } from "./mcp.types";
 
 type McpModuleDeps = { auth: AuthModule };
 type McpModuleTables = typeof mcpTables;
@@ -69,31 +64,26 @@ export class McpModule extends BaseModule<
     return createBackendRouterMap("mcp", createMcpTRPC(trpc, services.mcp));
   }
 
-  override mcpUser({ services }: ModuleMcpContext<McpModuleDeps, McpModuleServices>) {
-    return {
-      [LIST_ORGANIZATIONS_MCP_CALL]: defineUserMcpCall()
-        .description(LIST_ORGANIZATIONS_DESCRIPTION)
-        .handle((_input, actor, request) =>
-          services.mcp.listOrganizations({
-            userId: actor.userId,
-            oauthClientId: request.oauthClientId,
-          })
-        ),
-    };
-  }
-
   override express({
     infra,
     services,
     auth,
     appConfig,
+    trpc,
   }: ModuleExpressContext<McpModuleDeps, McpModuleServices>) {
     if (!auth) return;
     const apiUrl = appConfig.urls.api;
     if (!apiUrl) return;
+    const tools = collectMcpTools(trpc.router);
     mountMcpHttp({
       express: infra.express,
-      mcp: services.mcp,
+      tools,
+      invoke: createMcpToolInvoker({
+        router: trpc.router,
+        methods: trpc.methods,
+        mcp: services.mcp,
+        tools,
+      }),
       auth,
       resource: mcpResourceUrl(apiUrl),
       serverName: appConfig.name ?? "m5kdev",

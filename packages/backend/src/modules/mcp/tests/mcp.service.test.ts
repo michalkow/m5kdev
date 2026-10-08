@@ -1,628 +1,161 @@
-import { type Client, createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
-import { z } from "zod";
-import * as authTables from "../../auth/auth.db";
-import { AuthOrganizationRepository, AuthUserRepository } from "../../auth/auth.repository";
-import { mcpAllowlistEntries } from "../mcp.db";
-import { defineMcpCall, defineUserMcpCall } from "../mcp.define";
-import { McpRepository } from "../mcp.repository";
-import { McpService } from "../mcp.service";
-import { LIST_ORGANIZATIONS_DESCRIPTION, LIST_ORGANIZATIONS_MCP_CALL } from "../mcp.types";
+import type { Client } from "@libsql/client";
+import type { McpService } from "../mcp.service";
+import {
+  createMcpMemoryClient,
+  createMcpService,
+  createMcpTables,
+  MCP_CLIENT_CLAUDE,
+  MCP_CLIENT_CURSOR,
+  MCP_ORG_A,
+  MCP_ORG_B,
+  MCP_ORG_C,
+  MCP_USER_ID,
+  seedMcpFixture,
+} from "./mcp.fixtures";
 
-const USER_ID = "user-1";
-const USER_ROLE = "user";
-const ORG_A = "org-a";
-const ORG_B = "org-b";
-const ORG_C = "org-c";
-const MEMBER_A = "member-a";
-const MEMBER_B = "member-b";
-const MEMBER_INVITED = "member-invited";
-const MEMBER_DELETED = "member-deleted";
-const CLIENT_CURSOR = "oauth-cursor";
-const CLIENT_CLAUDE = "oauth-claude";
-
-const schema = {
-  ...authTables,
-  mcpAllowlistEntries,
-};
-
-async function createTables(client: Client): Promise<void> {
-  await client.execute(`
-    CREATE TABLE users (
-      id TEXT PRIMARY KEY NOT NULL,
-      name TEXT NOT NULL,
-      email TEXT NOT NULL UNIQUE,
-      email_verified INTEGER NOT NULL,
-      image TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      role TEXT,
-      banned INTEGER,
-      ban_reason TEXT,
-      ban_expires INTEGER,
-      preferences TEXT DEFAULT '{}',
-      metadata TEXT DEFAULT '{}',
-      onboarding INTEGER,
-      flags TEXT DEFAULT '[]',
-      locale TEXT
-    );
-  `);
-  await client.execute(`
-    CREATE TABLE organizations (
-      id TEXT PRIMARY KEY NOT NULL,
-      name TEXT NOT NULL,
-      slug TEXT UNIQUE,
-      logo TEXT,
-      type TEXT,
-      parent_id TEXT,
-      created_at INTEGER NOT NULL,
-      onboarding INTEGER,
-      preferences TEXT DEFAULT '{}',
-      metadata TEXT DEFAULT '{}',
-      flags TEXT DEFAULT '[]',
-      locale TEXT,
-      currency TEXT,
-      stripe_customer_id TEXT UNIQUE,
-      stripe_sandbox_customer_id TEXT UNIQUE,
-      billing_exempt INTEGER NOT NULL DEFAULT 0,
-      allow_cardless_trial INTEGER NOT NULL DEFAULT 0,
-      cardless_trial_consumed TEXT DEFAULT '{}'
-    );
-  `);
-  await client.execute(`
-    CREATE TABLE members (
-      id TEXT PRIMARY KEY NOT NULL,
-      organization_id TEXT NOT NULL REFERENCES organizations(id),
-      user_id TEXT REFERENCES users(id),
-      email TEXT,
-      name TEXT NOT NULL DEFAULT '',
-      image TEXT,
-      role TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      deleted_at INTEGER,
-      preferences TEXT DEFAULT '{}',
-      metadata TEXT DEFAULT '{}',
-      onboarding INTEGER,
-      flags TEXT DEFAULT '[]'
-    );
-  `);
-  await client.execute(`
-    CREATE TABLE invitations (
-      id TEXT PRIMARY KEY NOT NULL,
-      organization_id TEXT NOT NULL,
-      member_id TEXT,
-      email TEXT NOT NULL,
-      role TEXT,
-      status TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      expires_at INTEGER NOT NULL,
-      inviter_id TEXT NOT NULL
-    );
-  `);
-  await client.execute(`
-    CREATE TABLE mcp_allowlist_entries (
-      id TEXT PRIMARY KEY NOT NULL,
-      oauth_client_id TEXT NOT NULL,
-      user_id TEXT NOT NULL REFERENCES users(id),
-      organization_id TEXT NOT NULL REFERENCES organizations(id),
-      created_at INTEGER NOT NULL,
-      UNIQUE (oauth_client_id, user_id, organization_id)
-    );
-  `);
-}
-
-function createService(client: Client): McpService {
-  const orm = drizzle(client, { schema });
-  const mcpRepository = new McpRepository({
-    orm,
-    schema: { mcpAllowlistEntries },
-    table: mcpAllowlistEntries,
-  });
-  const organizationRepository = new AuthOrganizationRepository({
-    orm,
-    schema: authTables,
-    table: authTables.organizations,
-  });
-  const userRepository = new AuthUserRepository({
-    orm,
-    schema: authTables,
-    table: authTables.users,
-  });
-  return new McpService(mcpRepository, organizationRepository, userRepository);
-}
-
-async function seed(client: Client): Promise<void> {
-  const orm = drizzle(client, { schema });
-  await orm.insert(authTables.users).values({
-    id: USER_ID,
-    name: "Ada",
-    email: "ada@example.com",
-    emailVerified: true,
-    role: USER_ROLE,
-  });
-  await orm.insert(authTables.organizations).values([
-    { id: ORG_A, name: "Acme", slug: "acme" },
-    { id: ORG_B, name: "Beta", slug: "beta" },
-    { id: ORG_C, name: "Closed", slug: "closed" },
-  ]);
-  await orm.insert(authTables.members).values([
-    {
-      id: MEMBER_A,
-      organizationId: ORG_A,
-      userId: USER_ID,
-      name: "Ada",
-      role: "owner",
-    },
-    {
-      id: MEMBER_B,
-      organizationId: ORG_B,
-      userId: USER_ID,
-      name: "Ada",
-      role: "member",
-    },
-    {
-      id: MEMBER_INVITED,
-      organizationId: ORG_C,
-      userId: null,
-      name: "Invited",
-      email: "invitee@example.com",
-      role: "member",
-    },
-    {
-      id: MEMBER_DELETED,
-      organizationId: ORG_C,
-      userId: USER_ID,
-      name: "Ada",
-      role: "member",
-      deletedAt: new Date("2020-01-01T00:00:00.000Z"),
-    },
-  ]);
-}
-
-function announceCall(
-  handle: (input: { title: string }, actor: unknown) => unknown = async (input) => input.title
-) {
-  return defineMcpCall()
-    .description("Announce")
-    .input(z.object({ title: z.string() }))
-    .handle(handle);
-}
-
-function registerAnnounce(
-  mcp: McpService,
-  handle?: (input: { title: string }, actor: unknown) => unknown
-): void {
-  mcp.registerOrganizationCalls({
-    announce: announceCall(handle),
-  });
-}
-
-function registerListOrganizations(mcp: McpService): void {
-  mcp.registerUserCalls(
-    {
-      [LIST_ORGANIZATIONS_MCP_CALL]: defineUserMcpCall()
-        .description(LIST_ORGANIZATIONS_DESCRIPTION)
-        .handle((_input, actor, request) =>
-          mcp.listOrganizations({
-            userId: actor.userId,
-            oauthClientId: request.oauthClientId,
-          })
-        ),
-    },
-    { moduleId: "mcp" }
-  );
-}
-
-describe("McpService", () => {
+describe("McpService allowlist and consent", () => {
   let client: Client;
   let mcp: McpService;
 
   beforeEach(async () => {
-    client = createClient({ url: ":memory:" });
-    await createTables(client);
-    await seed(client);
-    mcp = createService(client);
+    client = createMcpMemoryClient();
+    await createMcpTables(client);
+    await seedMcpFixture(client);
+    mcp = createMcpService(client).mcp;
   });
 
   afterEach(async () => {
     await client.close?.();
   });
 
-  it("lists organization MCP calls from registered maps without scraping leftover properties", () => {
-    mcp.registerOrganizationCalls({
-      announce: announceCall(),
-    });
-    mcp.registerOrganizationCalls({
-      echo: defineMcpCall()
-        .description("Echo")
-        .input(z.object({ text: z.string() }))
-        .handle(async (input: { text: string }) => input.text),
-    });
-    expect(mcp.listCatalog().map((entry) => entry.name)).toEqual(["announce", "echo"]);
-  });
-
-  it("lists list-organizations first when registered as a user-scoped call", () => {
-    registerAnnounce(mcp);
-    registerListOrganizations(mcp);
-    expect(mcp.listCatalog()).toEqual([
-      {
-        name: LIST_ORGANIZATIONS_MCP_CALL,
-        description: LIST_ORGANIZATIONS_DESCRIPTION,
-        requiresOrganizationId: false,
-      },
-      {
-        name: "announce",
-        description: "Announce",
-        requiresOrganizationId: true,
-      },
-    ]);
-  });
-
-  it("rejects duplicate MCP call names across organization and user maps", () => {
-    mcp.registerOrganizationCalls({ announce: announceCall() });
-    expect(() => mcp.registerOrganizationCalls({ announce: announceCall() })).toThrow(
-      'already registered for MCP call "announce"'
-    );
-    expect(() =>
-      mcp.registerUserCalls({
-        announce: defineUserMcpCall()
-          .description("Announce")
-          .handle(async () => "nope"),
-      })
-    ).toThrow('already registered for MCP call "announce"');
-  });
-
-  it("rejects an MCP call without handle", () => {
-    const incomplete = defineMcpCall().description("Broken").input(z.object({}));
-    expect(() => mcp.registerOrganizationCalls({ broken: incomplete })).toThrow(
-      /no \.handle\(\) attached/
-    );
-  });
-
-  it("rejects list-organizations on the organization map and from a non-mcp module", () => {
-    expect(() =>
-      mcp.registerOrganizationCalls({
-        [LIST_ORGANIZATIONS_MCP_CALL]: announceCall(),
-      })
-    ).toThrow(/reserved/);
-    expect(() =>
-      mcp.registerUserCalls(
-        {
-          [LIST_ORGANIZATIONS_MCP_CALL]: defineUserMcpCall()
-            .description(LIST_ORGANIZATIONS_DESCRIPTION)
-            .handle(async () => []),
-        },
-        { moduleId: "posts" }
-      )
-    ).toThrow(/reserved/);
-  });
-
-  it("strips organizationId and passes OrganizationActor with that Membership", async () => {
-    let seen: { input: unknown; actor: unknown } | undefined;
-    registerAnnounce(mcp, async (input, actor) => {
-      seen = { input, actor };
-      return "ok";
-    });
-    await mcp.replaceAllowlist({
-      oauthClientId: CLIENT_CURSOR,
-      userId: USER_ID,
-      organizationIds: [ORG_A, ORG_B],
-    });
-    const result = await mcp.invoke({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CURSOR,
-      name: "announce",
-      arguments: { organizationId: ORG_A, title: "Hello" },
-    });
-    expect(result.isOk()).toBe(true);
-    expect(seen?.input).toEqual({ title: "Hello" });
-    expect(seen?.actor).toEqual({
-      userId: USER_ID,
-      userRole: USER_ROLE,
-      organizationId: ORG_A,
-      organizationRole: "owner",
-      memberId: MEMBER_A,
-      teamId: null,
-      teamRole: null,
-    });
-  });
-
-  it("fails when organizationId is missing", async () => {
-    registerAnnounce(mcp);
-    await mcp.replaceAllowlist({
-      oauthClientId: CLIENT_CURSOR,
-      userId: USER_ID,
-      organizationIds: [ORG_A],
-    });
-    const result = await mcp.invoke({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CURSOR,
-      name: "announce",
-      arguments: { title: "Hello" },
-    });
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.code).toBe("BAD_REQUEST");
-    }
-  });
-
-  it("fails allowlist miss distinctly from Membership miss", async () => {
-    registerAnnounce(mcp);
-    await mcp.replaceAllowlist({
-      oauthClientId: CLIENT_CURSOR,
-      userId: USER_ID,
-      organizationIds: [ORG_A],
-    });
-    const allowlistMiss = await mcp.invoke({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CURSOR,
-      name: "announce",
-      arguments: { organizationId: ORG_B, title: "Hello" },
-    });
-    expect(allowlistMiss.isErr()).toBe(true);
-    if (allowlistMiss.isErr()) {
-      expect(allowlistMiss.error.code).toBe("FORBIDDEN");
-      expect(allowlistMiss.error.context?.reason).toBe("allowlist");
-    }
-
-    await mcp.replaceAllowlist({
-      oauthClientId: CLIENT_CURSOR,
-      userId: USER_ID,
-      organizationIds: [ORG_C],
-    });
-    const membershipMiss = await mcp.invoke({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CURSOR,
-      name: "announce",
-      arguments: { organizationId: ORG_C, title: "Hello" },
-    });
-    expect(membershipMiss.isErr()).toBe(true);
-    if (membershipMiss.isErr()) {
-      expect(membershipMiss.error.code).toBe("NOT_FOUND");
-      expect(membershipMiss.error.context?.reason).toBe("membership");
-    }
-  });
-
-  it("does not run the handle when the MCP call name is unknown", async () => {
-    const result = await mcp.invoke({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CURSOR,
-      name: "missing",
-      arguments: { organizationId: ORG_A },
-    });
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.code).toBe("NOT_FOUND");
-    }
-  });
-
-  it("does not run the handle when input fails Zod", async () => {
-    let ran = false;
-    registerAnnounce(mcp, async () => {
-      ran = true;
-      return "ok";
-    });
-    await mcp.replaceAllowlist({
-      oauthClientId: CLIENT_CURSOR,
-      userId: USER_ID,
-      organizationIds: [ORG_A],
-    });
-    const result = await mcp.invoke({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CURSOR,
-      name: "announce",
-      arguments: { organizationId: ORG_A, title: 1 },
-    });
-    expect(ran).toBe(false);
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.code).toBe("BAD_REQUEST");
-    }
-  });
-
   it("lists only allowlisted Organizations with live Membership for that OAuth client", async () => {
-    registerListOrganizations(mcp);
     await mcp.replaceAllowlist({
-      oauthClientId: CLIENT_CURSOR,
-      userId: USER_ID,
-      organizationIds: [ORG_A, ORG_C],
+      oauthClientId: MCP_CLIENT_CURSOR,
+      userId: MCP_USER_ID,
+      organizationIds: [MCP_ORG_A, MCP_ORG_C],
     });
     await mcp.replaceAllowlist({
-      oauthClientId: CLIENT_CLAUDE,
-      userId: USER_ID,
-      organizationIds: [ORG_B],
+      oauthClientId: MCP_CLIENT_CLAUDE,
+      userId: MCP_USER_ID,
+      organizationIds: [MCP_ORG_B],
     });
-    const cursorList = await mcp.invoke({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CURSOR,
-      name: LIST_ORGANIZATIONS_MCP_CALL,
-      arguments: {},
+    const cursorList = await mcp.listOrganizations({
+      userId: MCP_USER_ID,
+      oauthClientId: MCP_CLIENT_CURSOR,
     });
     expect(cursorList.isOk()).toBe(true);
     if (cursorList.isOk()) {
-      expect(cursorList.value).toEqual([{ id: ORG_A, name: "Acme", organizationRole: "owner" }]);
+      expect(cursorList.value).toEqual([
+        { id: MCP_ORG_A, name: "Acme", organizationRole: "owner" },
+      ]);
     }
-    const claudeList = await mcp.invoke({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CLAUDE,
-      name: LIST_ORGANIZATIONS_MCP_CALL,
-      arguments: {},
+    const claudeList = await mcp.listOrganizations({
+      userId: MCP_USER_ID,
+      oauthClientId: MCP_CLIENT_CLAUDE,
     });
     expect(claudeList.isOk()).toBe(true);
     if (claudeList.isOk()) {
-      expect(claudeList.value).toEqual([{ id: ORG_B, name: "Beta", organizationRole: "member" }]);
-    }
-
-    registerAnnounce(mcp);
-    const cursorOnClaudeOrg = await mcp.invoke({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CURSOR,
-      name: "announce",
-      arguments: { organizationId: ORG_B, title: "Hello" },
-    });
-    expect(cursorOnClaudeOrg.isErr()).toBe(true);
-    if (cursorOnClaudeOrg.isErr()) {
-      expect(cursorOnClaudeOrg.error.code).toBe("FORBIDDEN");
-      expect(cursorOnClaudeOrg.error.context?.reason).toBe("allowlist");
+      expect(claudeList.value).toEqual([
+        { id: MCP_ORG_B, name: "Beta", organizationRole: "member" },
+      ]);
     }
   });
 
-  it("returns none and fails app MCP calls when the allowlist is empty", async () => {
-    registerAnnounce(mcp);
+  it("returns none for list-organizations when the allowlist is empty", async () => {
     await mcp.replaceAllowlist({
-      oauthClientId: CLIENT_CURSOR,
-      userId: USER_ID,
+      oauthClientId: MCP_CLIENT_CURSOR,
+      userId: MCP_USER_ID,
       organizationIds: [],
     });
     const listed = await mcp.listOrganizations({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CURSOR,
+      userId: MCP_USER_ID,
+      oauthClientId: MCP_CLIENT_CURSOR,
     });
     expect(listed.isOk()).toBe(true);
     if (listed.isOk()) {
       expect(listed.value).toEqual([]);
     }
-    const invoked = await mcp.invoke({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CURSOR,
-      name: "announce",
-      arguments: { organizationId: ORG_A, title: "Hello" },
-    });
-    expect(invoked.isErr()).toBe(true);
-    if (invoked.isErr()) {
-      expect(invoked.error.code).toBe("FORBIDDEN");
-    }
   });
 
-  it("does not treat an invited or soft-deleted Membership as an OrganizationActor", async () => {
-    registerAnnounce(mcp, async () => "ok");
+  it("does not treat an invited or soft-deleted Membership as allowlisted", async () => {
     await mcp.replaceAllowlist({
-      oauthClientId: CLIENT_CURSOR,
-      userId: USER_ID,
-      organizationIds: [ORG_C],
+      oauthClientId: MCP_CLIENT_CURSOR,
+      userId: MCP_USER_ID,
+      organizationIds: [MCP_ORG_C],
     });
-    const result = await mcp.invoke({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CURSOR,
-      name: "announce",
-      arguments: { organizationId: ORG_C, title: "Hello" },
+    const listed = await mcp.listOrganizations({
+      userId: MCP_USER_ID,
+      oauthClientId: MCP_CLIENT_CURSOR,
     });
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.code).toBe("NOT_FOUND");
-      expect(result.error.context?.reason).toBe("membership");
+    expect(listed.isOk()).toBe(true);
+    if (listed.isOk()) {
+      expect(listed.value).toEqual([]);
     }
   });
 
   it("lists consent Organizations as live Memberships only and marks the current allowlist", async () => {
     await mcp.replaceAllowlist({
-      oauthClientId: CLIENT_CURSOR,
-      userId: USER_ID,
-      organizationIds: [ORG_A, ORG_C],
+      oauthClientId: MCP_CLIENT_CURSOR,
+      userId: MCP_USER_ID,
+      organizationIds: [MCP_ORG_A, MCP_ORG_C],
     });
     const listed = await mcp.listConsentOrganizations({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CURSOR,
+      userId: MCP_USER_ID,
+      oauthClientId: MCP_CLIENT_CURSOR,
     });
     expect(listed.isOk()).toBe(true);
     if (listed.isOk()) {
       expect(listed.value).toEqual([
-        { id: ORG_A, name: "Acme", allowlisted: true },
-        { id: ORG_B, name: "Beta", allowlisted: false },
+        { id: MCP_ORG_A, name: "Acme", allowlisted: true },
+        { id: MCP_ORG_B, name: "Beta", allowlisted: false },
       ]);
     }
   });
 
   it("replaces a consent allowlist with live Memberships only, including empty", async () => {
-    registerAnnounce(mcp);
     await mcp.replaceConsentAllowlist({
-      oauthClientId: CLIENT_CURSOR,
-      userId: USER_ID,
-      organizationIds: [ORG_A, ORG_C],
+      oauthClientId: MCP_CLIENT_CURSOR,
+      userId: MCP_USER_ID,
+      organizationIds: [MCP_ORG_A, MCP_ORG_C],
     });
     await mcp.replaceConsentAllowlist({
-      oauthClientId: CLIENT_CLAUDE,
-      userId: USER_ID,
-      organizationIds: [ORG_B],
+      oauthClientId: MCP_CLIENT_CLAUDE,
+      userId: MCP_USER_ID,
+      organizationIds: [MCP_ORG_B],
     });
     const cursorList = await mcp.listOrganizations({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CURSOR,
+      userId: MCP_USER_ID,
+      oauthClientId: MCP_CLIENT_CURSOR,
     });
     expect(cursorList.isOk()).toBe(true);
     if (cursorList.isOk()) {
-      expect(cursorList.value).toEqual([{ id: ORG_A, name: "Acme", organizationRole: "owner" }]);
-    }
-    const cursorOnC = await mcp.invoke({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CURSOR,
-      name: "announce",
-      arguments: { organizationId: ORG_C, title: "Nope" },
-    });
-    expect(cursorOnC.isErr()).toBe(true);
-    if (cursorOnC.isErr()) {
-      expect(cursorOnC.error.context?.reason).toBe("allowlist");
+      expect(cursorList.value).toEqual([
+        { id: MCP_ORG_A, name: "Acme", organizationRole: "owner" },
+      ]);
     }
 
     await mcp.replaceConsentAllowlist({
-      oauthClientId: CLIENT_CURSOR,
-      userId: USER_ID,
+      oauthClientId: MCP_CLIENT_CURSOR,
+      userId: MCP_USER_ID,
       organizationIds: [],
     });
     const emptyList = await mcp.listOrganizations({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CURSOR,
+      userId: MCP_USER_ID,
+      oauthClientId: MCP_CLIENT_CURSOR,
     });
     expect(emptyList.isOk()).toBe(true);
     if (emptyList.isOk()) {
       expect(emptyList.value).toEqual([]);
     }
     const claudeList = await mcp.listOrganizations({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CLAUDE,
+      userId: MCP_USER_ID,
+      oauthClientId: MCP_CLIENT_CLAUDE,
     });
     expect(claudeList.isOk()).toBe(true);
     if (claudeList.isOk()) {
-      expect(claudeList.value).toEqual([{ id: ORG_B, name: "Beta", organizationRole: "member" }]);
+      expect(claudeList.value).toEqual([
+        { id: MCP_ORG_B, name: "Beta", organizationRole: "member" },
+      ]);
     }
-  });
-
-  it("invokes user-scoped MCP calls without an allowlist check", async () => {
-    let seen: { actor: unknown; oauthClientId: string } | undefined;
-    mcp.registerUserCalls({
-      ping: defineUserMcpCall()
-        .description("Ping")
-        .handle(async (_input, actor, request) => {
-          seen = { actor, oauthClientId: request.oauthClientId };
-          return actor.userId;
-        }),
-    });
-    await mcp.replaceAllowlist({
-      oauthClientId: CLIENT_CURSOR,
-      userId: USER_ID,
-      organizationIds: [],
-    });
-    const result = await mcp.invoke({
-      userId: USER_ID,
-      oauthClientId: CLIENT_CURSOR,
-      name: "ping",
-      arguments: {},
-    });
-    expect(result.isOk()).toBe(true);
-    if (result.isOk()) {
-      expect(result.value).toBe(USER_ID);
-    }
-    expect(seen).toEqual({
-      actor: {
-        userId: USER_ID,
-        userRole: USER_ROLE,
-        organizationId: null,
-        organizationRole: null,
-        memberId: null,
-        teamId: null,
-        teamRole: null,
-      },
-      oauthClientId: CLIENT_CURSOR,
-    });
   });
 });
