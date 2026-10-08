@@ -168,5 +168,5 @@ Issues live in Linear, one project per repo, via the Cursor Linear plugin. See `
 
 ### Domain docs
 
-Single-context: one root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+Single-context: one root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
 

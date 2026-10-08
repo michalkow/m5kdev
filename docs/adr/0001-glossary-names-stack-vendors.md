@@ -1,6 +1,6 @@
 # Glossary names stack vendors and durable shape
 
-m5kdev's domain is the stack itself, not a product on anonymous infrastructure. `/domain-modeling` says `CONTEXT.md` must be devoid of implementation details; we name vendors (Better Auth, Stripe, BullMQ, libSQL/Drizzle, S3) and durable shape (`members`, Workflow run statuses, File upload statuses, MemberId stamping) in the glossary on purpose so a later grill does not strip them. Layer rules, commands, and architecture inventories stay out of `CONTEXT.md` — those live in `AGENTS.md`, `README.md`, and the environment.
+m5kdev's domain is the stack itself, not a product on anonymous infrastructure. `/domain-modeling` says `GLOSSARY.md` must be devoid of implementation details; we name vendors (Better Auth, Stripe, BullMQ, libSQL/Drizzle, S3) and durable shape (`members`, Workflow run statuses, File upload statuses, MemberId stamping) in the glossary on purpose so a later grill does not strip them. Layer rules, commands, and architecture inventories stay out of `GLOSSARY.md` — those live in `AGENTS.md`, `README.md`, and the environment.
 
 ## Considered Options
 
