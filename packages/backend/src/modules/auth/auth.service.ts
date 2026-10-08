@@ -295,35 +295,38 @@ export class AuthService extends BasePermissionService<
     });
   }
 
-  private assertCanCreateChildOrganizations(
+  private async assertCanCreateChildOrganizations(
     ctx: OrganizationContext
-  ): ServerResult<{ parentId: string; organizationType: string }> {
-    const organizationType = ctx.session?.activeOrganizationType ?? "organization";
-    const parentId = ctx.session?.activeOrganizationId ?? null;
-    const role = ctx.session?.activeOrganizationRole ?? "member";
-    if (
-      !parentId ||
-      !["enterprise", "agency"].includes(organizationType) ||
-      !["admin", "owner"].includes(role)
-    )
+  ): ServerResultAsync<{ parentId: string; organizationType: string }> {
+    const parentId = ctx.actor.organizationId;
+    const role = ctx.actor.organizationRole;
+    if (!parentId || !["admin", "owner"].includes(role))
+      return this.error("FORBIDDEN", "You are not allowed to create an organization");
+    const parent = await this.repository.organization.findById(parentId, undefined, ["type"]);
+    if (parent.isErr()) return err(parent.error);
+    const organizationType = parent.value?.type ?? "organization";
+    if (!["enterprise", "agency"].includes(organizationType))
       return this.error("FORBIDDEN", "You are not allowed to create an organization");
     return ok({ parentId, organizationType });
   }
 
-  private assertCanManageChildOrganizations(
+  private async assertCanManageChildOrganizations(
     ctx: OrganizationContext
-  ): ServerResult<{ parentId: string; organizationType: string }> {
-    const organizationType = ctx.session?.activeOrganizationType ?? "organization";
-    const parentId = ctx.session?.activeOrganizationId ?? null;
-    const role = ctx.session?.activeOrganizationRole ?? "member";
+  ): ServerResultAsync<{ parentId: string; organizationType: string }> {
+    const parentId = ctx.actor.organizationId;
+    const role = ctx.actor.organizationRole;
 
-    this.logger.info({ parentId, organizationType, role, ctx });
     if (!parentId)
       return this.error(
         "FORBIDDEN",
         "You are not allowed to manage child organizations without a parent organization"
       );
 
+    const parent = await this.repository.organization.findById(parentId, undefined, ["type"]);
+    if (parent.isErr()) return err(parent.error);
+    const organizationType = parent.value?.type ?? "organization";
+
+    this.logger.info({ parentId, organizationType, role, ctx });
     if (!["enterprise", "agency"].includes(organizationType))
       return this.error(
         "FORBIDDEN",
@@ -552,7 +555,7 @@ export class AuthService extends BasePermissionService<
     .output(organizationSchemas.output.single)
     .requireAuth("organization")
     .handle(async ({ ctx, input }) => {
-      const access = this.assertCanCreateChildOrganizations(ctx);
+      const access = await this.assertCanCreateChildOrganizations(ctx);
       if (access.isErr()) return err(access.error);
       const userResult = await this.repository.user.findById(ctx.actor.userId);
       if (userResult.isErr()) return err(userResult.error);
@@ -610,7 +613,7 @@ export class AuthService extends BasePermissionService<
     .output(organizationSchemas.output.child.array())
     .requireAuth("organization")
     .handle(async ({ ctx }) => {
-      const access = this.assertCanManageChildOrganizations(ctx);
+      const access = await this.assertCanManageChildOrganizations(ctx);
       if (access.isErr()) return err(access.error);
       const result = await this.repository.organization.queryList(
         {
@@ -656,7 +659,7 @@ export class AuthService extends BasePermissionService<
     .output(organizationSchemas.output.child)
     .requireAuth("organization")
     .handle(async ({ input, ctx }) => {
-      const access = this.assertCanManageChildOrganizations(ctx);
+      const access = await this.assertCanManageChildOrganizations(ctx);
       if (access.isErr()) return err(access.error);
 
       const target = await this.repository.organization.findById(input.id, undefined, ["parentId"]);
