@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createZodSchemas } from "../base/base.dto";
 import { files } from "./file.db";
 
-const { insertSchema, updateSchema, output, input } = createZodSchemas(files);
+const { insertSchema, output, input } = createZodSchemas(files);
 
 export const fileSchemas = {
   output: {
@@ -51,15 +51,10 @@ export const fileSchemas = {
       memberId: true,
       organizationId: true,
     }),
-    update: updateSchema
-      .omit({
-        createdAt: true,
-        updatedAt: true,
-        deletedAt: true,
-        userId: true,
-        memberId: true,
-        organizationId: true,
-      })
-      .extend({ id: z.string() }),
+    update: z.object({
+      fileId: z.string(),
+      originalName: z.string().optional(),
+      metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+    }),
   },
 };

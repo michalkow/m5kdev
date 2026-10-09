@@ -24,6 +24,13 @@ export function createFileTRPC(
         handleTRPCResult(await fileService.getDownloadUrl(input, ctx))
       ),
 
+    update: organizationProcedure
+      .input(fileSchemas.input.update)
+      .output(fileSchemas.output.single)
+      .mutation(async ({ ctx, input }) =>
+        handleTRPCResult(await fileService.update(input, ctx))
+      ),
+
     initiate: organizationProcedure
       .input(fileSchemas.input.initiate)
       .output(fileSchemas.output.initiate)
@@ -52,6 +59,12 @@ export function createFileTRPC(
         .output(fileSchemas.output.downloadUrl)
         .query(async ({ ctx, input }) =>
           handleTRPCResult(await fileService.getDownloadUrl(input, ctx))
+        ),
+      update: userProcedure
+        .input(fileSchemas.input.update)
+        .output(fileSchemas.output.single)
+        .mutation(async ({ ctx, input }) =>
+          handleTRPCResult(await fileService.update(input, ctx))
         ),
       initiate: userProcedure
         .input(fileSchemas.input.initiate)

@@ -124,6 +124,42 @@ export class FileRepository extends BaseTableRepository<
     return this.updateStatusById(id, { status: "FAILED" }, tx);
   }
 
+  async updateOriginalNameAndMetadata(
+    id: string,
+    data: {
+      originalName?: string;
+      originalExtension?: string | null;
+      metadata?: Record<string, unknown> | null;
+    },
+    tx?: Orm
+  ): ServerResultAsync<FileRow> {
+    const db = tx ?? this.orm;
+    const patch: {
+      updatedAt: Date;
+      originalName?: string;
+      originalExtension?: string | null;
+      metadata?: Record<string, unknown> | null;
+    } = { updatedAt: new Date() };
+    if (data.originalName !== undefined) {
+      patch.originalName = data.originalName;
+      patch.originalExtension = data.originalExtension;
+    }
+    if (data.metadata !== undefined) {
+      patch.metadata = data.metadata;
+    }
+    const result = await this.throwableQuery(() =>
+      db
+        .update(this.schema.files)
+        .set(patch)
+        .where(eq(this.schema.files.id, id))
+        .returning()
+    );
+    if (result.isErr()) return err(result.error);
+    const [row] = result.value as FileRow[];
+    if (!row) return this.error("NOT_FOUND");
+    return ok(row);
+  }
+
   async softDeleteUploadById(id: string, tx?: Orm): ServerResultAsync<{ id: string }> {
     const db = tx ?? this.orm;
     const rowsResult = await this.throwableQuery(() =>

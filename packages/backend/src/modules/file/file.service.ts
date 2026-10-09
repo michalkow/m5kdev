@@ -136,6 +136,33 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
       return this.presignDownload(row);
     });
 
+  readonly update = this.procedure("update")
+    .input(fileSchemas.input.update)
+    .output(fileSchemas.output.single)
+    .requireAuth()
+    .loadResource("file", ({ input }) => this.findUploadedFile({ fileId: input.fileId }))
+    .access({
+      action: "write",
+      entityStep: "file",
+    })
+    .handle(async ({ input, ctx, state }) => {
+      const row = state.file;
+      if (!this.actorMatchesFileScope(ctx.actor, row)) {
+        return this.error("FORBIDDEN", "Actor scope does not match this File");
+      }
+      if (this.memberCannotAccessOthersFile(ctx.actor, row)) {
+        return this.error("FORBIDDEN", "You can only update your own File");
+      }
+      return this.repository.file.updateOriginalNameAndMetadata(row.id, {
+        originalName: input.originalName,
+        originalExtension:
+          input.originalName !== undefined
+            ? extractOriginalExtension(input.originalName) ?? null
+            : undefined,
+        metadata: input.metadata,
+      });
+    });
+
   /**
    * Cookie download: load the File, build Actor from the File (Membership in that
    * organizationId, not the session active Organization), then Grant `read` and presign.
