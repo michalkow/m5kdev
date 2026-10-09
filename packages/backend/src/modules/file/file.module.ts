@@ -2,6 +2,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createBackendRouterMap } from "../../app";
 import type { AuthModule } from "../auth/auth.module";
+import type { WorkflowModule } from "../workflow/workflow.module";
 import type { Grant } from "../base/base.grants";
 import {
   BaseModule,
@@ -28,7 +29,7 @@ export interface FileModuleConfig {
   readonly deleteAfterDays?: number;
 }
 
-type FileModuleDeps = { auth: AuthModule };
+type FileModuleDeps = { auth: AuthModule; workflow?: WorkflowModule };
 type FileModuleTables = typeof fileTables;
 type FileModuleRepositories = {
   file: FileRepository;
@@ -66,6 +67,7 @@ export class FileModule extends BaseModule<
 > {
   readonly id = "file";
   override readonly dependsOn = ["auth"] as const;
+  override readonly optionalDependsOn = ["workflow"] as const;
   private readonly grants: Grant[];
   private readonly uploadPath: string;
   readonly downloadPath: string;
@@ -113,6 +115,7 @@ export class FileModule extends BaseModule<
 
   override services({
     repositories,
+    deps,
   }: ModuleServicesContext<FileModuleDeps, FileModuleRepositories>) {
     return {
       file: new FileService(
@@ -122,7 +125,11 @@ export class FileModule extends BaseModule<
         },
         {},
         this.grants,
-        { buckets: this.buckets, deleteAfterDays: this.deleteAfterDays }
+        {
+          buckets: this.buckets,
+          deleteAfterDays: this.deleteAfterDays,
+          purgeObjectOnDelete: !deps.workflow,
+        }
       ),
     };
   }

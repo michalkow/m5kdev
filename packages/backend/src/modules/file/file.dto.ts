@@ -56,5 +56,9 @@ export const fileSchemas = {
       originalName: z.string().optional(),
       metadata: z.record(z.string(), z.unknown()).nullable().optional(),
     }),
+    delete: z.union([
+      z.object({ fileId: z.string() }),
+      z.object({ bucket: z.string(), key: z.string() }),
+    ]),
   },
 };

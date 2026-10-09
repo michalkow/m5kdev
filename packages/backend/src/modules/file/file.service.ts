@@ -30,6 +30,7 @@ import { buildS3ObjectKey, extractOriginalExtension } from "./file.utils";
 export interface FileServiceConfig {
   readonly buckets?: readonly string[];
   readonly deleteAfterDays?: number;
+  readonly purgeObjectOnDelete?: boolean;
 }
 
 export type FileServiceRepositories = {
@@ -161,6 +162,32 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
             : undefined,
         metadata: input.metadata,
       });
+    });
+
+  readonly delete = this.procedure("delete")
+    .input(fileSchemas.input.delete)
+    .output(fileSchemas.output.uuid)
+    .requireAuth()
+    .loadResource("file", ({ input }) => this.findActiveFile(input))
+    .access({
+      action: "delete",
+      entityStep: "file",
+    })
+    .handle(async ({ ctx, state }) => {
+      const row = state.file;
+      if (!this.actorMatchesFileScope(ctx.actor, row)) {
+        return this.error("FORBIDDEN", "Actor scope does not match this File");
+      }
+      if (this.memberCannotAccessOthersFile(ctx.actor, row)) {
+        return this.error("FORBIDDEN", "You can only delete your own File");
+      }
+      if (this.fileConfig.purgeObjectOnDelete !== false) {
+        const s3Result = await this.repository.fileS3.deleteS3Object(row.key, row.bucket);
+        if (s3Result.isErr()) return err(s3Result.error);
+      }
+      const soft = await this.repository.file.softDeleteUploadById(row.id);
+      if (soft.isErr()) return err(soft.error);
+      return ok({ id: row.id });
     });
 
   /**
@@ -534,39 +561,31 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
     });
   }
 
-  private async findUploadedFile(locator: FileLocator): ServerResultAsync<FileRow> {
+  private async findActiveFile(locator: FileLocator): ServerResultAsync<FileRow> {
     const rowResult =
       "fileId" in locator
         ? await this.repository.file.findActiveById(locator.fileId)
         : await this.repository.file.findActiveByBucketAndKey(locator.bucket, locator.key);
     if (rowResult.isErr()) return err(rowResult.error);
     const row = rowResult.value;
-    if (!row || row.status !== "UPLOADED") {
+    if (!row) {
       return this.error("NOT_FOUND", "File not found");
     }
     return ok(row);
   }
 
-  async deleteUploadedFileById(actor: AuthenticatedActor, fileId: string): ServerResultAsync<void> {
-    const rowResult = await this.repository.file.findActiveById(fileId);
+  private async findUploadedFile(locator: FileLocator): ServerResultAsync<FileRow> {
+    const rowResult = await this.findActiveFile(locator);
     if (rowResult.isErr()) return err(rowResult.error);
-    const row = rowResult.value;
-    if (!row) {
+    if (rowResult.value.status !== "UPLOADED") {
       return this.error("NOT_FOUND", "File not found");
     }
+    return ok(rowResult.value);
+  }
 
-    const deleteGuard = this.accessGuard(actor, "delete", {
-      userId: row.userId,
-      memberId: row.memberId,
-      organizationId: row.organizationId,
-    });
-    if (deleteGuard.isErr()) return err(deleteGuard.error);
-
-    const s3Result = await this.repository.fileS3.deleteS3Object(row.key, row.bucket);
-    if (s3Result.isErr()) return err(s3Result.error);
-
-    const soft = await this.repository.file.softDeleteUploadById(row.id);
-    if (soft.isErr()) return err(soft.error);
+  async deleteUploadedFileById(actor: AuthenticatedActor, fileId: string): ServerResultAsync<void> {
+    const result = await this.delete({ fileId }, { actor, user: { id: actor.userId } });
+    if (result.isErr()) return err(result.error);
     return ok(undefined);
   }
 

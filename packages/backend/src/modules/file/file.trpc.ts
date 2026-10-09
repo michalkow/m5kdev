@@ -31,6 +31,13 @@ export function createFileTRPC(
         handleTRPCResult(await fileService.update(input, ctx))
       ),
 
+    delete: organizationProcedure
+      .input(fileSchemas.input.delete)
+      .output(fileSchemas.output.uuid)
+      .mutation(async ({ ctx, input }) =>
+        handleTRPCResult(await fileService.delete(input, ctx))
+      ),
+
     initiate: organizationProcedure
       .input(fileSchemas.input.initiate)
       .output(fileSchemas.output.initiate)
@@ -65,6 +72,12 @@ export function createFileTRPC(
         .output(fileSchemas.output.single)
         .mutation(async ({ ctx, input }) =>
           handleTRPCResult(await fileService.update(input, ctx))
+        ),
+      delete: userProcedure
+        .input(fileSchemas.input.delete)
+        .output(fileSchemas.output.uuid)
+        .mutation(async ({ ctx, input }) =>
+          handleTRPCResult(await fileService.delete(input, ctx))
         ),
       initiate: userProcedure
         .input(fileSchemas.input.initiate)
