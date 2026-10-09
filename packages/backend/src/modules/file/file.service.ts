@@ -11,8 +11,14 @@ import { BasePermissionService } from "../base/base.service";
 import { LOCAL_FILE_BUCKET } from "./file.constants";
 import { fileSchemas } from "./file.dto";
 import type { LocalFileObjectStore } from "./file.local-store";
-import type { FileRepository, FileS3Repository } from "./file.repository";
-import type { RecordLocalUploadInput, RecordLocalUploadResult } from "./file.types";
+import type { FileObjectBody } from "./file.object-store";
+import type { FileRepository, FileRow, FileS3Repository } from "./file.repository";
+import type {
+  FileLocator,
+  PutFileObjectInput,
+  RecordLocalUploadInput,
+  RecordLocalUploadResult,
+} from "./file.types";
 import { buildS3ObjectKey, extractOriginalExtension } from "./file.utils";
 
 export interface FileServiceConfig {
@@ -71,6 +77,86 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
 
   getS3Object(key: string) {
     return this.repository.fileS3.getS3Object(key);
+  }
+
+  /**
+   * In-process write for other Services. Not a Procedure — do not call from routers or tRPC.
+   */
+  async putObject(input: PutFileObjectInput): ServerResultAsync<FileRow> {
+    const hasUser = Boolean(input.userId);
+    const hasOrg = Boolean(input.memberId && input.organizationId);
+    if (!hasUser && !hasOrg) {
+      return this.error("BAD_REQUEST", "putObject requires userId or memberId plus organizationId");
+    }
+    if (Boolean(input.memberId) !== Boolean(input.organizationId)) {
+      return this.error("BAD_REQUEST", "memberId and organizationId must be provided together");
+    }
+
+    const contentTypeAllowed = Object.values(fileTypes).some((kind) =>
+      kind.mimetypes.includes(input.contentType)
+    );
+    if (!contentTypeAllowed) {
+      return this.error("BAD_REQUEST", "File type is not allowed");
+    }
+
+    const bucketResult = this.resolveBucket(input.bucket);
+    if (bucketResult.isErr()) return err(bucketResult.error);
+    const bucket = bucketResult.value;
+
+    const ownerUserId = input.userId ?? input.memberId;
+    if (!ownerUserId) {
+      return this.error("BAD_REQUEST", "putObject requires userId or memberId plus organizationId");
+    }
+
+    const originalExtension = extractOriginalExtension(input.originalName);
+    const key = buildS3ObjectKey({
+      userId: ownerUserId,
+      organizationId: input.organizationId,
+      extension: originalExtension,
+      pathHint: input.pathHint,
+    });
+
+    const put = await this.repository.fileS3.putS3Object(
+      key,
+      input.body,
+      input.contentType,
+      bucket
+    );
+    if (put.isErr()) return err(put.error);
+
+    return this.repository.file.create({
+      bucket,
+      key,
+      originalName: input.originalName,
+      originalExtension,
+      contentType: input.contentType,
+      sizeBytes: input.sizeBytes ?? input.body.byteLength,
+      metadata: input.metadata,
+      status: "UPLOADED",
+      userId: input.userId ?? null,
+      memberId: input.memberId ?? null,
+      organizationId: input.organizationId ?? null,
+      uploadedAt: new Date(),
+    });
+  }
+
+  /**
+   * In-process read for other Services. Not a Procedure — do not call from routers or tRPC.
+   */
+  async getObject(locator: FileLocator): ServerResultAsync<FileObjectBody & { fileId: string }> {
+    const rowResult =
+      "fileId" in locator
+        ? await this.repository.file.findActiveById(locator.fileId)
+        : await this.repository.file.findActiveByBucketAndKey(locator.bucket, locator.key);
+    if (rowResult.isErr()) return err(rowResult.error);
+    const row = rowResult.value;
+    if (!row || row.status !== "UPLOADED") {
+      return this.error("NOT_FOUND", "File not found");
+    }
+
+    const object = await this.repository.fileS3.getS3Object(row.key, row.bucket);
+    if (object.isErr()) return err(object.error);
+    return ok({ ...object.value, fileId: row.id });
   }
 
   /**
