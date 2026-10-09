@@ -2,7 +2,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createBackendRouterMap } from "../../app";
 import type { AuthModule } from "../auth/auth.module";
-import type { WorkflowModule } from "../workflow/workflow.module";
+import type { Base } from "../base/base.abstract";
 import type { Grant } from "../base/base.grants";
 import {
   BaseModule,
@@ -12,28 +12,32 @@ import {
   type ModuleTRPCContext,
   type ModuleWorkflowContext,
 } from "../base/base.module";
+import type { WorkflowModule } from "../workflow/workflow.module";
 import { FILE_PURGE_CRON_NAME, FILE_PURGE_CRON_PATTERN } from "./file.constants";
 import type * as fileTables from "./file.db";
+import { createDownloadRouter } from "./file.download.router";
 import { defaultFileGrants } from "./file.grants";
 import { LocalFileObjectStore } from "./file.local-store";
 import { createMockS3Router, FILE_S3_MOCK_MOUNT } from "./file.mock-s3.router";
+import type { FileObjectStore } from "./file.object-store";
 import { FileRepository, FileS3Repository } from "./file.repository";
-import { createDownloadRouter } from "./file.download.router";
 import { FileService } from "./file.service";
 import { createFileTRPC } from "./file.trpc";
+import type { FileTypeAllowlist } from "./file.types";
 
 export interface FileModuleConfig {
   readonly downloadPath?: string;
   readonly grants?: Grant[];
   readonly buckets?: readonly string[];
   readonly deleteAfterDays?: number;
+  readonly fileTypes?: Record<string, FileTypeAllowlist>;
 }
 
 type FileModuleDeps = { auth: AuthModule; workflow?: WorkflowModule };
 type FileModuleTables = typeof fileTables;
 type FileModuleRepositories = {
   file: FileRepository;
-  fileS3: FileS3Repository | LocalFileObjectStore;
+  fileS3: FileObjectStore & Base;
 };
 type FileModuleServices = {
   file: FileService;
@@ -72,19 +76,21 @@ export class FileModule extends BaseModule<
   readonly downloadPath: string;
   private readonly buckets: readonly string[];
   private readonly deleteAfterDays: number;
+  private readonly fileTypes: Record<string, FileTypeAllowlist> | undefined;
   private localStore: LocalFileObjectStore | undefined;
 
-  constructor(config: FileModuleConfig = {}, grants?: Grant[]) {
+  constructor(config: FileModuleConfig = {}) {
     super();
     this.downloadPath = config.downloadPath ?? "/files";
-    this.grants = config.grants ?? grants ?? defaultFileGrants;
+    this.grants = config.grants ?? defaultFileGrants;
     this.buckets = config.buckets ?? defaultBuckets();
     this.deleteAfterDays = config.deleteAfterDays ?? 30;
+    this.fileTypes = config.fileTypes;
   }
 
   override repositories({ db }: ModuleRepositoriesContext<FileModuleDeps, FileModuleTables>) {
     const defaultBucket = this.buckets[0] ?? process.env.AWS_S3_BUCKET ?? "local-s3";
-    const fileS3: FileS3Repository | LocalFileObjectStore = isProduction()
+    const fileS3: FileObjectStore & Base = isProduction()
       ? new FileS3Repository()
       : new LocalFileObjectStore({
           root: path.join(tmpdir(), "m5kdev-file-s3"),
@@ -119,6 +125,7 @@ export class FileModule extends BaseModule<
           buckets: this.buckets,
           deleteAfterDays: this.deleteAfterDays,
           purgeObjectOnDelete: !deps.workflow,
+          fileTypes: this.fileTypes,
         }
       ),
     };

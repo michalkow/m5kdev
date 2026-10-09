@@ -118,12 +118,9 @@ describe("FileService.initiate", () => {
       defaultBucket: "app-bucket",
     });
     const files = memoryFileRepository();
-    const service = new FileService(
-      { file: files, fileS3: store },
-      {},
-      defaultFileGrants,
-      { buckets: ["app-bucket"] }
-    );
+    const service = new FileService({ file: files, fileS3: store }, {}, defaultFileGrants, {
+      buckets: ["app-bucket"],
+    });
 
     const result = await service.initiate(
       { contentType: "image/png", originalName: "photo.png" },
@@ -170,6 +167,35 @@ describe("FileService.initiate", () => {
     expect(result.error.code).toBe("BAD_REQUEST");
   });
 
+  it("accepts a MIME type from FileServiceConfig.fileTypes", async () => {
+    root = await mkdtemp(path.join(tmpdir(), "m5kdev-file-initiate-"));
+    const store = new LocalFileObjectStore({
+      root,
+      publicBaseUrl: "http://localhost:3000",
+      defaultBucket: "app-bucket",
+    });
+    const service = new FileService(
+      { file: memoryFileRepository(), fileS3: store },
+      {},
+      defaultFileGrants,
+      {
+        buckets: ["app-bucket"],
+        fileTypes: {
+          document: { mimetypes: ["application/pdf"], extensions: ["pdf"] },
+        },
+      }
+    );
+
+    const result = await service.initiate(
+      { contentType: "application/pdf", originalName: "doc.pdf" },
+      { actor: organizationActor(), user: { id: "user-1" } }
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) return;
+    expect(result.value.fileId).toEqual(expect.any(String));
+  });
+
   it("rejects a bucket that is not on the allowlist", async () => {
     root = await mkdtemp(path.join(tmpdir(), "m5kdev-file-initiate-"));
     const store = new LocalFileObjectStore({
@@ -202,12 +228,9 @@ describe("FileService.initiate", () => {
       defaultBucket: "app-bucket",
     });
     const files = memoryFileRepository();
-    const service = new FileService(
-      { file: files, fileS3: store },
-      {},
-      defaultFileGrants,
-      { buckets: ["app-bucket"] }
-    );
+    const service = new FileService({ file: files, fileS3: store }, {}, defaultFileGrants, {
+      buckets: ["app-bucket"],
+    });
 
     const result = await service.initiate(
       { contentType: "image/jpeg", originalName: "me.jpg" },
@@ -234,12 +257,9 @@ describe("FileService.initiate", () => {
     });
     store.getS3UploadUrl = async () => store.error("INTERNAL_SERVER_ERROR", "presign failed");
     const files = memoryFileRepository();
-    const service = new FileService(
-      { file: files, fileS3: store },
-      {},
-      defaultFileGrants,
-      { buckets: ["app-bucket"] }
-    );
+    const service = new FileService({ file: files, fileS3: store }, {}, defaultFileGrants, {
+      buckets: ["app-bucket"],
+    });
 
     const result = await service.initiate(
       { contentType: "image/png", originalName: "photo.png" },
@@ -266,12 +286,9 @@ describe("FileService.finalize", () => {
       defaultBucket: "app-bucket",
     });
     const files = memoryFileRepository();
-    const service = new FileService(
-      { file: files, fileS3: store },
-      {},
-      defaultFileGrants,
-      { buckets: ["app-bucket"] }
-    );
+    const service = new FileService({ file: files, fileS3: store }, {}, defaultFileGrants, {
+      buckets: ["app-bucket"],
+    });
     return { store, files, service };
   }
 

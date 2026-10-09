@@ -7,7 +7,10 @@ export { fileCookieDownloadPath, fileCookieDownloadUrl };
  * Cookie download URL for an inventoried File id. HTTP(S) values (OAuth avatars)
  * pass through unchanged.
  */
-export function fileDisplayUrl(serverUrl: string, stored: string | null | undefined): string | null {
+export function fileDisplayUrl(
+  serverUrl: string,
+  stored: string | null | undefined
+): string | null {
   if (!stored) return null;
   if (stored.startsWith("http://") || stored.startsWith("https://")) {
     return stored;

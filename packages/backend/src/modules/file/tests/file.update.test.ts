@@ -55,6 +55,16 @@ function memoryFileRepository(): FileRepository {
       if (!row || row.deletedAt) return ok(undefined);
       return ok(row);
     },
+    async findActiveByBucketAndKey(
+      bucket: string,
+      key: string
+    ): ServerResultAsync<FileRow | undefined> {
+      return ok(
+        [...rows.values()].find(
+          (item) => item.bucket === bucket && item.key === key && !item.deletedAt
+        )
+      );
+    },
     async updateOriginalNameAndMetadata(
       id: string,
       data: {
@@ -94,12 +104,9 @@ describe("FileService.update", () => {
       defaultBucket: "app-bucket",
     });
     const files = memoryFileRepository();
-    const service = new FileService(
-      { file: files, fileS3: store },
-      {},
-      defaultFileGrants,
-      { buckets: ["app-bucket"] }
-    );
+    const service = new FileService({ file: files, fileS3: store }, {}, defaultFileGrants, {
+      buckets: ["app-bucket"],
+    });
     return { files, service };
   }
 
@@ -151,5 +158,20 @@ describe("FileService.update", () => {
     expect(updated.isErr()).toBe(true);
     if (updated.isOk()) return;
     expect(updated.error.code).toBe("FORBIDDEN");
+  });
+
+  it("updates originalName by bucket and key", async () => {
+    const { files, service } = await setup();
+    const created = await files.create({ key: "by-locator.png", sizeBytes: 12 });
+    if (created.isErr()) return;
+
+    const updated = await service.update(
+      { bucket: "app-bucket", key: "by-locator.png", originalName: "located.png" },
+      { actor: organizationActor(), user: { id: "user-1" } }
+    );
+    expect(updated.isOk()).toBe(true);
+    if (updated.isErr()) return;
+    expect(updated.value.originalName).toBe("located.png");
+    expect(updated.value.key).toBe("by-locator.png");
   });
 });

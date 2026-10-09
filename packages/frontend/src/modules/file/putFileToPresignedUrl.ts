@@ -3,29 +3,31 @@ export interface PutFileProgressEvent {
   readonly total: number;
 }
 
+export interface PutFileToPresignedUrlInput {
+  readonly url: string;
+  readonly body: Blob;
+  readonly contentType: string;
+  readonly onProgress?: (progress: number, event: PutFileProgressEvent) => void;
+}
+
 /**
  * PUT bytes to a presigned (or mock S3) URL. Progress is reported from XHR upload events.
  */
-export function putFileToPresignedUrl(
-  url: string,
-  body: Blob,
-  contentType: string,
-  onProgress?: (progress: number, event: PutFileProgressEvent) => void
-): Promise<void> {
+export function putFileToPresignedUrl(input: PutFileToPresignedUrlInput): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url);
-    xhr.setRequestHeader("Content-Type", contentType);
+    xhr.open("PUT", input.url);
+    xhr.setRequestHeader("Content-Type", input.contentType);
 
     xhr.upload.onprogress = (event: ProgressEvent<EventTarget>) => {
       if (!event.lengthComputable) return;
       const progress = Math.round((event.loaded * 100) / event.total);
-      onProgress?.(progress, { loaded: event.loaded, total: event.total });
+      input.onProgress?.(progress, { loaded: event.loaded, total: event.total });
     };
 
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        onProgress?.(100, { loaded: body.size, total: body.size });
+        input.onProgress?.(100, { loaded: input.body.size, total: input.body.size });
         resolve();
         return;
       }
@@ -36,6 +38,6 @@ export function putFileToPresignedUrl(
       reject(new Error("Network error during upload"));
     };
 
-    xhr.send(body);
+    xhr.send(input.body);
   });
 }

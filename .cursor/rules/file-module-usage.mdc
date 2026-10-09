@@ -25,10 +25,10 @@ Unguarded Service methods for other Services (not Procedures, not tRPC): `putObj
 1. `initiate` → `{ fileId, bucket, key, url }` (`PENDING`).
 2. Browser `PUT` bytes to `url` (CORS must allow PUT from the web origin, including `Content-Type`).
 3. `finalize` → `UPLOADED` (or `FAILED` if the object is missing).
-4. Cookie UIs open `GET /files/:id` (302 to a short-lived presigned GET after Grant `read`). Cookieless Actors (API keys) call `getDownloadUrl`.
+4. Cookie UIs open `GET /files/:id` (302 to a short-lived presigned GET after Grant `read`). Cookieless Actors (API keys) call `useFileDownloadUrl` / tRPC `getDownloadUrl`.
 5. tRPC `get` returns the row, not a URL. Construct `/files/${id}` from the id.
 
-Frontend: `useS3Upload({ scope: "organization" | "user" })` runs initiate → PUT (progress) → finalize and returns File id. Display with `fileCookieDownloadUrl(serverUrl, fileId)` or `fileDisplayUrl` (HTTP(S) OAuth avatars pass through).
+Frontend: `useS3Upload({ scope: "organization" | "user" })` runs initiate → PUT (progress) → finalize and returns File id. Cookie display uses `fileCookieDownloadUrl(serverUrl, fileId)` or `fileDisplayUrl` (HTTP(S) OAuth avatars pass through). Cookieless download uses `useFileDownloadUrl`.
 
 ## Delete and purge
 

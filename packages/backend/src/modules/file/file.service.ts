@@ -4,6 +4,7 @@ import path, { dirname } from "node:path";
 import { fileTypes } from "@m5kdev/commons/modules/file/file.constants";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
+import type { Base } from "../base/base.abstract";
 import {
   type AuthenticatedActor,
   createServiceActor,
@@ -16,24 +17,32 @@ import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
 import { FILE_DOWNLOAD_EXPIRES_IN, FILE_PENDING_TTL_MS } from "./file.constants";
 import { fileSchemas } from "./file.dto";
-import type { LocalFileObjectStore } from "./file.local-store";
-import type { FileObjectBody } from "./file.object-store";
-import type { FileRepository, FileRow, FileS3Repository } from "./file.repository";
-import type { FileLocator, PutFileObjectInput } from "./file.types";
+import type { FileObjectBody, FileObjectStore } from "./file.object-store";
+import type { FileRepository, FileRow } from "./file.repository";
+import {
+  type FileLocator,
+  type FileTypeAllowlist,
+  type PutFileObjectInput,
+  toFileLocator,
+} from "./file.types";
 import { buildS3ObjectKey, extractOriginalExtension } from "./file.utils";
 
 export interface FileServiceConfig {
   readonly buckets?: readonly string[];
   readonly deleteAfterDays?: number;
   readonly purgeObjectOnDelete?: boolean;
+  readonly fileTypes?: Record<string, FileTypeAllowlist>;
 }
 
 export type FileServiceRepositories = {
-  fileS3: FileS3Repository | LocalFileObjectStore;
+  fileS3: FileObjectStore & Base;
   file: FileRepository;
 };
 
-export class FileService extends BasePermissionService<FileServiceRepositories, Record<string, never>> {
+export class FileService extends BasePermissionService<
+  FileServiceRepositories,
+  Record<string, never>
+> {
   constructor(
     repository: FileServiceRepositories,
     service: Record<string, never>,
@@ -82,10 +91,7 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
       });
       if (listed.isErr()) return listed;
       const filtered = this.filterPermission(ctx.actor, "read", listed.value);
-      if (
-        hasServiceActorScope(ctx.actor, "organization") &&
-        ctx.actor.organizationRole === "member"
-      ) {
+      if (this.memberMustOwnFiles(ctx.actor, "read")) {
         const rows = filtered.rows.filter((row) => row.memberId === ctx.actor.memberId);
         return ok({ rows, total: rows.length });
       }
@@ -102,14 +108,9 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
       entityStep: "file",
     })
     .handle(({ ctx, state }) => {
-      const row = state.file;
-      if (!this.actorMatchesFileScope(ctx.actor, row)) {
-        return this.error("FORBIDDEN", "Actor scope does not match this File");
-      }
-      if (this.memberCannotAccessOthersFile(ctx.actor, row)) {
-        return this.error("FORBIDDEN", "You can only read your own File");
-      }
-      return ok(row);
+      const denied = this.denyFileAccess(ctx.actor, state.file, "read");
+      if (denied) return denied;
+      return ok(state.file);
     });
 
   readonly getDownloadUrl = this.procedure("getDownloadUrl")
@@ -122,38 +123,34 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
       entityStep: "file",
     })
     .handle(async ({ ctx, state }) => {
-      const row = state.file;
-      if (!this.actorMatchesFileScope(ctx.actor, row)) {
-        return this.error("FORBIDDEN", "Actor scope does not match this File");
-      }
-      if (this.memberCannotAccessOthersFile(ctx.actor, row)) {
-        return this.error("FORBIDDEN", "You can only read your own File");
-      }
-      return this.presignDownload(row);
+      const denied = this.denyFileAccess(ctx.actor, state.file, "read");
+      if (denied) return denied;
+      return this.presignDownload(state.file);
     });
 
   readonly update = this.procedure("update")
     .input(fileSchemas.input.update)
     .output(fileSchemas.output.single)
     .requireAuth()
-    .loadResource("file", ({ input }) => this.findUploadedFile({ fileId: input.fileId }))
+    .loadResource("file", ({ input }) => {
+      const locator = toFileLocator(input);
+      if (!locator) {
+        return this.error("BAD_REQUEST", "Provide fileId or bucket and key, not both");
+      }
+      return this.findUploadedFile(locator);
+    })
     .access({
       action: "write",
       entityStep: "file",
     })
     .handle(async ({ input, ctx, state }) => {
-      const row = state.file;
-      if (!this.actorMatchesFileScope(ctx.actor, row)) {
-        return this.error("FORBIDDEN", "Actor scope does not match this File");
-      }
-      if (this.memberCannotAccessOthersFile(ctx.actor, row)) {
-        return this.error("FORBIDDEN", "You can only update your own File");
-      }
-      return this.repository.file.updateOriginalNameAndMetadata(row.id, {
+      const denied = this.denyFileAccess(ctx.actor, state.file, "write");
+      if (denied) return denied;
+      return this.repository.file.updateOriginalNameAndMetadata(state.file.id, {
         originalName: input.originalName,
         originalExtension:
           input.originalName !== undefined
-            ? extractOriginalExtension(input.originalName) ?? null
+            ? (extractOriginalExtension(input.originalName) ?? null)
             : undefined,
         metadata: input.metadata,
       });
@@ -169,13 +166,9 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
       entityStep: "file",
     })
     .handle(async ({ ctx, state }) => {
+      const denied = this.denyFileAccess(ctx.actor, state.file, "delete");
+      if (denied) return denied;
       const row = state.file;
-      if (!this.actorMatchesFileScope(ctx.actor, row)) {
-        return this.error("FORBIDDEN", "Actor scope does not match this File");
-      }
-      if (this.memberCannotAccessOthersFile(ctx.actor, row)) {
-        return this.error("FORBIDDEN", "You can only delete your own File");
-      }
       if (this.fileConfig.purgeObjectOnDelete !== false) {
         const s3Result = await this.repository.fileS3.deleteS3Object(row.key, row.bucket);
         if (s3Result.isErr()) return err(s3Result.error);
@@ -270,7 +263,7 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
     return this.repository.fileS3.getS3DownloadUrl(key, expiresIn);
   }
 
-  getS3Object(key: string) {
+  getS3Object(key: string): ServerResultAsync<FileObjectBody> {
     return this.repository.fileS3.getS3Object(key);
   }
 
@@ -287,9 +280,7 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
       return this.error("BAD_REQUEST", "memberId and organizationId must be provided together");
     }
 
-    const contentTypeAllowed = Object.values(fileTypes).some((kind) =>
-      kind.mimetypes.includes(input.contentType)
-    );
+    const contentTypeAllowed = this.contentTypeAllowed(input.contentType);
     if (!contentTypeAllowed) {
       return this.error("BAD_REQUEST", "File type is not allowed");
     }
@@ -368,9 +359,7 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
             },
     })
     .handle(async ({ input, ctx }) => {
-      const contentTypeAllowed = Object.values(fileTypes).some((kind) =>
-        kind.mimetypes.includes(input.contentType)
-      );
+      const contentTypeAllowed = this.contentTypeAllowed(input.contentType);
       if (!contentTypeAllowed) {
         return this.error("BAD_REQUEST", "File type is not allowed");
       }
@@ -451,20 +440,21 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
     .input(fileSchemas.input.finalize)
     .output(fileSchemas.output.finalize)
     .requireAuth()
-    .loadResource("file", ({ input }) => this.repository.file.findActiveById(input.fileId))
+    .loadResource("file", ({ input }) => {
+      const locator = toFileLocator(input);
+      if (!locator) {
+        return this.error("BAD_REQUEST", "Provide fileId or bucket and key, not both");
+      }
+      return this.findActiveFile(locator);
+    })
     .access({
       action: "write",
       entityStep: "file",
     })
     .handle(async ({ input, ctx, state }) => {
+      const denied = this.denyFileAccess(ctx.actor, state.file, "write");
+      if (denied) return denied;
       const row = state.file;
-      const scopeOk = this.actorMatchesFileScope(ctx.actor, row);
-      if (!scopeOk) {
-        return this.error("FORBIDDEN", "Actor scope does not match this File");
-      }
-      if (this.memberCannotAccessOthersFile(ctx.actor, row)) {
-        return this.error("FORBIDDEN", "You can only finalize your own File");
-      }
 
       if (row.status === "UPLOADED") {
         return ok(undefined);
@@ -482,7 +472,7 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
         return this.error("BAD_REQUEST", "Uploaded object was not found");
       }
 
-      const updated = await this.repository.file.updateStatusById(input.fileId, {
+      const updated = await this.repository.file.updateStatusById(row.id, {
         status: "UPLOADED",
         etag: input.etag ?? null,
         uploadedAt: new Date(),
@@ -491,10 +481,37 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
       return ok(undefined);
     });
 
+  private allowedFileTypes(): Record<string, FileTypeAllowlist> {
+    return this.fileConfig.fileTypes ?? fileTypes;
+  }
+
+  private contentTypeAllowed(contentType: string): boolean {
+    return Object.values(this.allowedFileTypes()).some((kind) =>
+      kind.mimetypes.includes(contentType)
+    );
+  }
+
+  private denyFileAccess(
+    actor: AuthenticatedActor,
+    file: { organizationId: string | null; memberId: string | null },
+    action: string
+  ): ServerResult<never> | null {
+    if (!this.actorMatchesFileScope(actor, file)) {
+      return this.error("FORBIDDEN", "Actor scope does not match this File");
+    }
+    if (this.memberCannotAccessOthersFile(actor, file, action)) {
+      return this.error("FORBIDDEN", `You can only ${action} your own File`);
+    }
+    return null;
+  }
+
   private actorMatchesFileScope(
     actor: AuthenticatedActor,
     file: { organizationId: string | null }
   ): boolean {
+    if (actor.userRole === "admin") {
+      return true;
+    }
     if (file.organizationId) {
       return (
         hasServiceActorScope(actor, "organization") && actor.organizationId === file.organizationId
@@ -503,20 +520,28 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
     return !hasServiceActorScope(actor, "organization");
   }
 
-  private memberCannotAccessOthersFile(
-    actor: AuthenticatedActor,
-    file: { memberId: string | null }
-  ): boolean {
-    return (
-      hasServiceActorScope(actor, "organization") &&
-      actor.organizationRole === "member" &&
-      file.memberId !== actor.memberId
+  private memberMustOwnFiles(actor: AuthenticatedActor, action: string): boolean {
+    if (!hasServiceActorScope(actor, "organization") || actor.organizationRole !== "member") {
+      return false;
+    }
+    const grant = this.grants.find(
+      (item) =>
+        item.action === action &&
+        item.level === "organization" &&
+        item.role === actor.organizationRole
     );
+    return grant?.access !== "org" && grant?.access !== "all";
   }
 
-  private async presignDownload(
-    row: FileRow
-  ): ServerResultAsync<{ url: string; expiresAt: Date }> {
+  private memberCannotAccessOthersFile(
+    actor: AuthenticatedActor,
+    file: { memberId: string | null },
+    action: string
+  ): boolean {
+    return this.memberMustOwnFiles(actor, action) && file.memberId !== actor.memberId;
+  }
+
+  private async presignDownload(row: FileRow): ServerResultAsync<{ url: string; expiresAt: Date }> {
     const url = await this.repository.fileS3.getS3DownloadUrl(
       row.key,
       FILE_DOWNLOAD_EXPIRES_IN,
@@ -625,14 +650,12 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
     return ok(destinationPath);
   }
 
-  getFileType(
-    pathValue: string
-  ): { fileType: keyof typeof fileTypes; extension: string } | undefined {
+  getFileType(pathValue: string): { fileType: string; extension: string } | undefined {
     const extension = pathValue.split(".").pop();
     if (!extension) return undefined;
 
-    for (const [key, value] of Object.entries(fileTypes)) {
-      if (value.extensions.includes(extension)) {
+    for (const [key, value] of Object.entries(this.allowedFileTypes())) {
+      if (value.extensions?.includes(extension)) {
         return { fileType: key, extension };
       }
     }

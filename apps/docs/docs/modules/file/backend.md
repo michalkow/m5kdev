@@ -26,6 +26,9 @@ export const builtBackendApp = createBackendApp(
     new FileModule({
       buckets: [process.env.AWS_S3_BUCKET!],
       deleteAfterDays: 30,
+      fileTypes: {
+        document: { mimetypes: ["application/pdf"], extensions: ["pdf"] },
+      },
     }),
     new WorkflowModule({
       queues: { fast: { concurrency: 5 } },
@@ -37,6 +40,9 @@ export const builtBackendApp = createBackendApp(
 
 `deleteAfterDays` defaults to 30. Values below 1 are invalid when Workflow is
 present. Without Workflow, user delete removes the S3 object in the same request.
+
+`fileTypes` on `FileModule` replaces the commons MIME allowlist for initiate and
+`putObject`. Omit it to use `@m5kdev/commons` `fileTypes`.
 
 In `pnpm dev` and tests, File uses `LocalFileObjectStore` and mounts mock S3 at
 `/file-s3-mock`. `NODE_ENV=production` uses AWS S3 and does not mount the mock.

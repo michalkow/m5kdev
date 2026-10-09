@@ -4,6 +4,26 @@ import { files } from "./file.db";
 
 const { insertSchema, output, input } = createZodSchemas(files);
 
+const fileLocatorFields = {
+  fileId: z.string().optional(),
+  bucket: z.string().optional(),
+  key: z.string().optional(),
+};
+
+function xorFileLocator(
+  val: { fileId?: string; bucket?: string; key?: string },
+  ctx: z.RefinementCtx
+): void {
+  const hasId = Boolean(val.fileId);
+  const hasBucketKey = Boolean(val.bucket && val.key);
+  if (hasId === hasBucketKey) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Provide fileId or bucket and key, not both",
+    });
+  }
+}
+
 export const fileSchemas = {
   output: {
     ...output,
@@ -29,10 +49,12 @@ export const fileSchemas = {
       metadata: z.record(z.string(), z.unknown()).optional(),
       bucket: z.string().optional(),
     }),
-    finalize: z.object({
-      fileId: z.string(),
-      etag: z.string().optional(),
-    }),
+    finalize: z
+      .object({
+        ...fileLocatorFields,
+        etag: z.string().optional(),
+      })
+      .superRefine(xorFileLocator),
     get: z.union([
       z.object({ fileId: z.string() }),
       z.object({ bucket: z.string(), key: z.string() }),
@@ -47,15 +69,16 @@ export const fileSchemas = {
       updatedAt: true,
       deletedAt: true,
       userId: true,
-      // What this does is it is a user Id that is a real money maker
       memberId: true,
       organizationId: true,
     }),
-    update: z.object({
-      fileId: z.string(),
-      originalName: z.string().optional(),
-      metadata: z.record(z.string(), z.unknown()).nullable().optional(),
-    }),
+    update: z
+      .object({
+        ...fileLocatorFields,
+        originalName: z.string().optional(),
+        metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+      })
+      .superRefine(xorFileLocator),
     delete: z.union([
       z.object({ fileId: z.string() }),
       z.object({ bucket: z.string(), key: z.string() }),

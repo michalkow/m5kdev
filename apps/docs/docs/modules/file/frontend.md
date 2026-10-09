@@ -81,7 +81,7 @@ export function FileOpenLink({ fileId }: { fileId: string }) {
 ```
 
 `fileDisplayUrl` treats HTTP(S) values as OAuth avatars and File ids as
-`/files/${id}`. Cookieless Actors should call tRPC `getDownloadUrl` instead of
-the cookie path.
+`/files/${id}`. Cookieless Actors should call `useFileDownloadUrl` (tRPC
+`getDownloadUrl`) instead of the cookie path.
 
 Do not store the presigned URL. Store File id and construct the path when needed.

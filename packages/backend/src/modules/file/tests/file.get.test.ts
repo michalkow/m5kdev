@@ -5,10 +5,11 @@ import { ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
 import type { OrganizationActor, UserActor } from "../../base/base.actor";
 import type { ServerResultAsync } from "../../base/base.dto";
+import { flattenNestedGrants } from "../../base/base.grants";
 import { defaultFileGrants } from "../file.grants";
 import { LocalFileObjectStore } from "../file.local-store";
 import type { FileRepository, FileRow } from "../file.repository";
-import { FileService } from "../file.service";
+import { FileService, type FileServiceConfig } from "../file.service";
 
 function organizationActor(overrides: Partial<OrganizationActor> = {}): OrganizationActor {
   return {
@@ -27,7 +28,7 @@ function ownerActor(): OrganizationActor {
   return organizationActor({ organizationRole: "owner", memberId: "member-owner" });
 }
 
-function userActor(): UserActor {
+function userActor(overrides: Partial<UserActor> = {}): UserActor {
   return {
     userId: "user-1",
     userRole: "user",
@@ -36,8 +37,23 @@ function userActor(): UserActor {
     memberId: null,
     teamId: null,
     teamRole: null,
+    ...overrides,
   };
 }
+
+const memberOrgReadGrants = flattenNestedGrants({
+  file: {
+    user: {
+      user: { read: "own", write: "own", delete: "own" },
+      admin: { read: "all", write: "all", delete: "all" },
+    },
+    organization: {
+      owner: { read: "org", write: "org", delete: "org" },
+      admin: { read: "org", write: "org", delete: "org" },
+      member: { read: "org", write: "own", delete: "own" },
+    },
+  },
+});
 
 function memoryFileRepository(): FileRepository & { row(id: string): FileRow | undefined } {
   const rows = new Map<string, FileRow>();
@@ -79,17 +95,25 @@ function memoryFileRepository(): FileRepository & { row(id: string): FileRow | u
       key: string
     ): ServerResultAsync<FileRow | undefined> {
       return ok(
-        [...rows.values()].find((item) => item.bucket === bucket && item.key === key && !item.deletedAt)
+        [...rows.values()].find(
+          (item) => item.bucket === bucket && item.key === key && !item.deletedAt
+        )
       );
     },
-    async queryList(query?: { filters?: readonly { columnId: string; method: string; value?: unknown }[] }) {
+    async queryList(query?: {
+      filters?: readonly { columnId: string; method: string; value?: unknown }[];
+    }) {
       let listed = [...rows.values()].filter((row) => !row.deletedAt);
       for (const filter of query?.filters ?? []) {
         if (filter.method === "equals") {
-          listed = listed.filter((row) => (row as unknown as Record<string, unknown>)[filter.columnId] === filter.value);
+          listed = listed.filter(
+            (row) => (row as unknown as Record<string, unknown>)[filter.columnId] === filter.value
+          );
         }
         if (filter.method === "is_null") {
-          listed = listed.filter((row) => (row as unknown as Record<string, unknown>)[filter.columnId] == null);
+          listed = listed.filter(
+            (row) => (row as unknown as Record<string, unknown>)[filter.columnId] == null
+          );
         }
       }
       return ok({ rows: listed, total: listed.length });
@@ -104,7 +128,10 @@ describe("FileService.list and get", () => {
     if (root) await rm(root, { recursive: true, force: true });
   });
 
-  async function setup() {
+  async function setup(
+    grants = defaultFileGrants,
+    config: FileServiceConfig = { buckets: ["app-bucket"] }
+  ) {
     root = await mkdtemp(path.join(tmpdir(), "m5kdev-file-get-"));
     const store = new LocalFileObjectStore({
       root,
@@ -112,12 +139,7 @@ describe("FileService.list and get", () => {
       defaultBucket: "app-bucket",
     });
     const files = memoryFileRepository();
-    const service = new FileService(
-      { file: files, fileS3: store },
-      {},
-      defaultFileGrants,
-      { buckets: ["app-bucket"] }
-    );
+    const service = new FileService({ file: files, fileS3: store }, {}, grants, config);
     return { files, service };
   }
 
@@ -241,5 +263,68 @@ describe("FileService.list and get", () => {
     expect(got.isErr()).toBe(true);
     if (got.isOk()) return;
     expect(got.error.code).toBe("FORBIDDEN");
+  });
+
+  it("lets a User-role admin get an org File", async () => {
+    const { files, service } = await setup();
+    const created = await files.create({
+      status: "UPLOADED",
+      userId: "user-1",
+      memberId: "member-1",
+      organizationId: "org-1",
+    });
+    if (created.isErr()) return;
+
+    const got = await service.get(
+      { fileId: created.value.id },
+      { actor: userActor({ userRole: "admin" }), user: { id: "user-1" } }
+    );
+    expect(got.isOk()).toBe(true);
+    if (got.isErr()) return;
+    expect(got.value.id).toBe(created.value.id);
+  });
+
+  it("lets a member with read: org get another member's File", async () => {
+    const { files, service } = await setup(memberOrgReadGrants);
+    const created = await files.create({
+      status: "UPLOADED",
+      userId: "user-1",
+      memberId: "member-1",
+      organizationId: "org-1",
+    });
+    if (created.isErr()) return;
+
+    const got = await service.get(
+      { fileId: created.value.id },
+      {
+        actor: organizationActor({ userId: "user-2", memberId: "member-2" }),
+        user: { id: "user-2" },
+      }
+    );
+    expect(got.isOk()).toBe(true);
+    if (got.isErr()) return;
+    expect(got.value.id).toBe(created.value.id);
+  });
+
+  it("lets a member with read: org list another member's File", async () => {
+    const { files, service } = await setup(memberOrgReadGrants);
+    await files.create({
+      status: "UPLOADED",
+      userId: "user-1",
+      memberId: "member-1",
+      organizationId: "org-1",
+      originalName: "theirs.png",
+    });
+
+    const listed = await service.list(
+      {},
+      {
+        actor: organizationActor({ userId: "user-2", memberId: "member-2" }),
+        user: { id: "user-2" },
+      }
+    );
+    expect(listed.isOk()).toBe(true);
+    if (listed.isErr()) return;
+    expect(listed.value.rows.map((row) => row.originalName)).toEqual(["theirs.png"]);
   });
 });

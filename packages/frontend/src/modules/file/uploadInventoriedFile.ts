@@ -1,11 +1,11 @@
 import { putFileToPresignedUrl } from "./putFileToPresignedUrl";
 
-export type ResolvedUploadBlob = {
-  blob: Blob;
-  name: string;
-  type: string;
-  size: number;
-};
+export interface ResolvedUploadBlob {
+  readonly blob: Blob;
+  readonly name: string;
+  readonly type: string;
+  readonly size: number;
+}
 
 export interface InitiateFileUploadInput {
   readonly contentType: string;
@@ -37,8 +37,13 @@ export async function uploadInventoriedFile(
     originalName: input.file.name,
     sizeBytes: input.file.size,
   });
-  await putFileToPresignedUrl(initiated.url, input.file.blob, input.file.type, (progress) => {
-    input.onProgress?.(progress);
+  await putFileToPresignedUrl({
+    url: initiated.url,
+    body: input.file.blob,
+    contentType: input.file.type,
+    onProgress: (progress) => {
+      input.onProgress?.(progress);
+    },
   });
   await input.finalize({ fileId: initiated.fileId });
   return { fileId: initiated.fileId };
