@@ -5,9 +5,30 @@ import { files } from "./file.db";
 const { insertSchema, updateSchema, output, input } = createZodSchemas(files);
 
 export const fileSchemas = {
-  output,
+  output: {
+    ...output,
+    initiate: z.object({
+      fileId: z.string(),
+      bucket: z.string(),
+      key: z.string(),
+      url: z.string(),
+    }),
+    finalize: z.void(),
+  },
   input: {
     ...input,
+    initiate: z.object({
+      contentType: z.string(),
+      originalName: z.string(),
+      sizeBytes: z.number().optional(),
+      pathHint: z.string().optional(),
+      metadata: z.record(z.string(), z.unknown()).optional(),
+      bucket: z.string().optional(),
+    }),
+    finalize: z.object({
+      fileId: z.string(),
+      etag: z.string().optional(),
+    }),
     create: insertSchema.omit({
       id: true,
       createdAt: true,

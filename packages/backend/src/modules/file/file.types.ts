@@ -9,26 +9,3 @@ export interface RecordLocalUploadResult {
   readonly fileId?: string;
   readonly originalName: string;
 }
-
-export interface InitiateS3UploadInput {
-  readonly userId: string;
-  readonly memberId?: string;
-  readonly organizationId?: string;
-  readonly contentType: string;
-  readonly originalName: string;
-  readonly sizeBytes?: number;
-  readonly pathHint?: string;
-  readonly metadata?: Record<string, unknown>;
-}
-
-export interface FinalizeS3UploadInput {
-  readonly userId: string;
-  readonly fileId: string;
-  readonly etag?: string;
-}
-
-export interface InitiateS3UploadResult {
-  readonly key: string;
-  readonly url: string;
-  readonly fileId: string;
-}

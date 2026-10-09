@@ -160,25 +160,19 @@ export function createUploadRouter({
       if (!user || !session) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      const userId = user.id;
-      const { organizationId, contentType, originalName, sizeBytes, pathHint, metadata } =
-        req.body ?? {};
+      const { contentType, originalName, sizeBytes, pathHint, metadata, bucket } = req.body ?? {};
 
       if (!contentType || !originalName) {
         return res.status(400).json({ error: "Missing contentType or originalName" });
       }
 
-      const actor = createActorFromContext({ user, session }, "user");
-      const result = await fileService.initiateS3Upload(actor, {
-        userId,
-        memberId: session.activeOrganizationMemberId ?? undefined,
-        organizationId,
-        contentType,
-        originalName,
-        sizeBytes,
-        pathHint,
-        metadata,
-      });
+      const actor = session.activeOrganizationId
+        ? createActorFromContext({ user, session }, "organization")
+        : createActorFromContext({ user, session }, "user");
+      const result = await fileService.initiate(
+        { contentType, originalName, sizeBytes, pathHint, metadata, bucket },
+        { actor, user: { id: user.id } }
+      );
       if (result.isErr()) {
         return res.status(500).json({ error: result.error.message });
       }
@@ -196,14 +190,15 @@ export function createUploadRouter({
       if (!user || !session) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      const userId = user.id;
       const { fileId, etag } = req.body ?? {};
       if (!fileId) {
         return res.status(400).json({ error: "Missing fileId" });
       }
 
-      const actor = createActorFromContext({ user, session }, "user");
-      const result = await fileService.finalizeS3Upload(actor, { userId, fileId, etag });
+      const actor = session.activeOrganizationId
+        ? createActorFromContext({ user, session }, "organization")
+        : createActorFromContext({ user, session }, "user");
+      const result = await fileService.finalize({ fileId, etag }, { actor, user: { id: user.id } });
       if (result.isErr()) {
         const status =
           result.error.code === "NOT_FOUND" ? 404 : result.error.code === "BAD_REQUEST" ? 400 : 500;

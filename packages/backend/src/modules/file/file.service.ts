@@ -4,7 +4,7 @@ import path, { dirname } from "node:path";
 import { fileTypes } from "@m5kdev/commons/modules/file/file.constants";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
-import type { AuthenticatedActor } from "../base/base.actor";
+import { type AuthenticatedActor, hasServiceActorScope } from "../base/base.actor";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
@@ -12,13 +12,7 @@ import { LOCAL_FILE_BUCKET } from "./file.constants";
 import { fileSchemas } from "./file.dto";
 import type { LocalFileObjectStore } from "./file.local-store";
 import type { FileRepository, FileS3Repository } from "./file.repository";
-import type {
-  FinalizeS3UploadInput,
-  InitiateS3UploadInput,
-  InitiateS3UploadResult,
-  RecordLocalUploadInput,
-  RecordLocalUploadResult,
-} from "./file.types";
+import type { RecordLocalUploadInput, RecordLocalUploadResult } from "./file.types";
 import { buildS3ObjectKey, extractOriginalExtension } from "./file.utils";
 
 export interface FileServiceConfig {
@@ -135,93 +129,163 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
     });
   }
 
-  async initiateS3Upload(
-    actor: AuthenticatedActor,
-    input: InitiateS3UploadInput
-  ): ServerResultAsync<InitiateS3UploadResult> {
-    const writeGuard = this.accessGuard(actor, "write", {
-      userId: input.userId,
-      memberId: input.memberId ?? null,
-      organizationId: input.organizationId ?? null,
-    });
-    if (writeGuard.isErr()) return err(writeGuard.error);
+  readonly initiate = this.procedure("initiate")
+    .input(fileSchemas.input.initiate)
+    .output(fileSchemas.output.initiate)
+    .requireAuth()
+    .access({
+      action: "write",
+      entities: ({ ctx }) =>
+        hasServiceActorScope(ctx.actor, "organization")
+          ? {
+              userId: ctx.actor.userId,
+              memberId: ctx.actor.memberId,
+              organizationId: ctx.actor.organizationId,
+            }
+          : {
+              userId: ctx.actor.userId,
+              memberId: null,
+              organizationId: null,
+            },
+    })
+    .handle(async ({ input, ctx }) => {
+      const contentTypeAllowed = Object.values(fileTypes).some((kind) =>
+        kind.mimetypes.includes(input.contentType)
+      );
+      if (!contentTypeAllowed) {
+        return this.error("BAD_REQUEST", "File type is not allowed");
+      }
 
-    const bucket = this.repository.fileS3.getBucket();
-    if (!bucket) {
+      const bucketResult = this.resolveBucket(input.bucket);
+      if (bucketResult.isErr()) return err(bucketResult.error);
+      const bucket = bucketResult.value;
+
+      const isOrg = hasServiceActorScope(ctx.actor, "organization");
+      const organizationId = isOrg ? ctx.actor.organizationId : null;
+      const memberId = isOrg ? ctx.actor.memberId : null;
+
+      const originalExtension = extractOriginalExtension(input.originalName);
+      const key = buildS3ObjectKey({
+        userId: ctx.actor.userId,
+        organizationId: organizationId ?? undefined,
+        extension: originalExtension,
+        pathHint: input.pathHint,
+      });
+
+      const createdResult = await this.repository.file.create({
+        bucket,
+        key,
+        originalName: input.originalName,
+        originalExtension,
+        contentType: input.contentType,
+        sizeBytes: input.sizeBytes,
+        metadata: input.metadata,
+        status: "PENDING",
+        userId: ctx.actor.userId,
+        memberId,
+        organizationId,
+      });
+      if (createdResult.isErr()) return err(createdResult.error);
+
+      const row = createdResult.value;
+      const urlResult = await this.repository.fileS3.getS3UploadUrl(
+        key,
+        input.contentType,
+        undefined,
+        bucket
+      );
+      if (urlResult.isErr()) {
+        const failed = await this.repository.file.markFailedById(row.id);
+        if (failed.isErr()) return err(failed.error);
+        return err(urlResult.error);
+      }
+
+      return ok({
+        fileId: row.id,
+        bucket,
+        key,
+        url: urlResult.value,
+      });
+    });
+
+  private resolveBucket(requested?: string): ServerResult<string> {
+    const allowlist =
+      this.fileConfig.buckets && this.fileConfig.buckets.length > 0
+        ? this.fileConfig.buckets
+        : [this.repository.fileS3.getBucket()].filter(
+            (value): value is string => typeof value === "string" && value.length > 0
+          );
+    if (requested) {
+      if (!allowlist.includes(requested)) {
+        return this.error("BAD_REQUEST", "Bucket is not allowlisted");
+      }
+      return ok(requested);
+    }
+    const fallback = allowlist[0];
+    if (!fallback) {
       return this.error("INTERNAL_SERVER_ERROR", "S3 bucket is not configured");
     }
-
-    const originalExtension = extractOriginalExtension(input.originalName);
-    const key = buildS3ObjectKey({
-      userId: input.userId,
-      organizationId: input.organizationId,
-      extension: originalExtension,
-      pathHint: input.pathHint,
-    });
-
-    const createdResult = await this.repository.file.create({
-      bucket,
-      key,
-      originalName: input.originalName,
-      originalExtension,
-      contentType: input.contentType,
-      sizeBytes: input.sizeBytes,
-      metadata: input.metadata,
-      status: "PENDING",
-      userId: input.userId,
-      memberId: input.memberId ?? null,
-      organizationId: input.organizationId,
-    });
-    if (createdResult.isErr()) return err(createdResult.error);
-
-    const row = createdResult.value;
-    const urlResult = await this.repository.fileS3.getS3UploadUrl(key, input.contentType, undefined, bucket);
-    if (urlResult.isErr()) {
-      const failed = await this.repository.file.markFailedById(row.id);
-      if (failed.isErr()) return err(failed.error);
-      return err(urlResult.error);
-    }
-
-    return ok({
-      fileId: row.id,
-      key,
-      url: urlResult.value,
-    });
+    return ok(fallback);
   }
 
-  async finalizeS3Upload(
-    actor: AuthenticatedActor,
-    input: FinalizeS3UploadInput
-  ): ServerResultAsync<void> {
-    const rowResult = await this.repository.file.findActiveById(input.fileId);
-    if (rowResult.isErr()) return err(rowResult.error);
-    const row = rowResult.value;
-    if (!row) {
-      return this.error("NOT_FOUND", "File not found");
-    }
+  readonly finalize = this.procedure("finalize")
+    .input(fileSchemas.input.finalize)
+    .output(fileSchemas.output.finalize)
+    .requireAuth()
+    .loadResource("file", ({ input }) => this.repository.file.findActiveById(input.fileId))
+    .access({
+      action: "write",
+      entityStep: "file",
+    })
+    .handle(async ({ input, ctx, state }) => {
+      const row = state.file;
+      const scopeOk = this.actorMatchesFileScope(ctx.actor, row);
+      if (!scopeOk) {
+        return this.error("FORBIDDEN", "Actor scope does not match this File");
+      }
+      if (
+        hasServiceActorScope(ctx.actor, "organization") &&
+        ctx.actor.organizationRole === "member" &&
+        row.memberId !== ctx.actor.memberId
+      ) {
+        return this.error("FORBIDDEN", "You can only finalize your own File");
+      }
 
-    const writeGuard = this.accessGuard(actor, "write", {
-      userId: row.userId,
-      memberId: row.memberId,
-      organizationId: row.organizationId,
-    });
-    if (writeGuard.isErr()) return err(writeGuard.error);
+      if (row.status === "UPLOADED") {
+        return ok(undefined);
+      }
 
-    if (row.status === "UPLOADED") {
+      if (row.status !== "PENDING") {
+        return this.error("BAD_REQUEST", "File cannot be finalized in its current state");
+      }
+
+      const head = await this.repository.fileS3.headS3Object(row.key, row.bucket);
+      if (head.isErr()) return err(head.error);
+      if (!head.value) {
+        const failed = await this.repository.file.markFailedById(row.id);
+        if (failed.isErr()) return err(failed.error);
+        return this.error("BAD_REQUEST", "Uploaded object was not found");
+      }
+
+      const updated = await this.repository.file.updateStatusById(input.fileId, {
+        status: "UPLOADED",
+        etag: input.etag ?? null,
+        uploadedAt: new Date(),
+      });
+      if (updated.isErr()) return err(updated.error);
       return ok(undefined);
-    }
-
-    if (row.status !== "PENDING") {
-      return this.error("BAD_REQUEST", "File cannot be finalized in its current state");
-    }
-
-    const updated = await this.repository.file.updateStatusById(input.fileId, {
-      status: "UPLOADED",
-      etag: input.etag ?? null,
-      uploadedAt: new Date(),
     });
-    if (updated.isErr()) return err(updated.error);
-    return ok(undefined);
+
+  private actorMatchesFileScope(
+    actor: AuthenticatedActor,
+    file: { organizationId: string | null }
+  ): boolean {
+    if (file.organizationId) {
+      return (
+        hasServiceActorScope(actor, "organization") && actor.organizationId === file.organizationId
+      );
+    }
+    return !hasServiceActorScope(actor, "organization");
   }
 
   async deleteUploadedFileById(actor: AuthenticatedActor, fileId: string): ServerResultAsync<void> {
