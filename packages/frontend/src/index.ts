@@ -35,7 +35,6 @@ export * from "./modules/billing/hooks/useSubscription";
 export * from "./modules/file/fileDownloadPath";
 export * from "./modules/file/hooks/useS3DownloadUrl";
 export * from "./modules/file/hooks/useS3Upload";
-export * from "./modules/file/hooks/useUpload";
 export * from "./modules/file/uploadInventoriedFile";
 export * from "./modules/notification/hooks/useNotificationInbox";
 export * from "./modules/notification/hooks/useNotificationPreferences";

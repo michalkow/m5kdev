@@ -176,6 +176,16 @@ describe("Kernel infrastructure package surface", () => {
     void client.close?.();
   });
 
+  it("boots FileModule with Auth and no local-upload router", () => {
+    const client = createClient({ url: ":memory:" });
+    const built = createBackendApp(
+      { db: { client }, schema: { ...fileTables } },
+      [new FileModule(), new AuthFixtureModule()] as const
+    );
+    expect(Object.keys(built.modules).sort()).toEqual(["auth", "file"]);
+    void client.close?.();
+  });
+
   it("keeps Inbound callback module id as webhook", () => {
     expect(new WebhookModule().id).toBe("webhook");
   });

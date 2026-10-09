@@ -14,21 +14,12 @@ import {
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
-import {
-  FILE_DOWNLOAD_EXPIRES_IN,
-  FILE_PENDING_TTL_MS,
-  LOCAL_FILE_BUCKET,
-} from "./file.constants";
+import { FILE_DOWNLOAD_EXPIRES_IN, FILE_PENDING_TTL_MS } from "./file.constants";
 import { fileSchemas } from "./file.dto";
 import type { LocalFileObjectStore } from "./file.local-store";
 import type { FileObjectBody } from "./file.object-store";
 import type { FileRepository, FileRow, FileS3Repository } from "./file.repository";
-import type {
-  FileLocator,
-  PutFileObjectInput,
-  RecordLocalUploadInput,
-  RecordLocalUploadResult,
-} from "./file.types";
+import type { FileLocator, PutFileObjectInput } from "./file.types";
 import { buildS3ObjectKey, extractOriginalExtension } from "./file.utils";
 
 export interface FileServiceConfig {
@@ -357,62 +348,6 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
     return ok({ ...object.value, fileId: row.id });
   }
 
-  /**
-   * Deletes the object in S3. If a `FileRepository` is configured and a matching inventory row exists for the bucket, it is soft-deleted.
-   */
-  async deleteS3Object(key: string): ServerResultAsync<void> {
-    const deleteResult = await this.repository.fileS3.deleteS3Object(key);
-    if (deleteResult.isErr()) return err(deleteResult.error);
-
-    const bucket = this.repository.fileS3.getBucket();
-    if (!bucket) {
-      return ok(undefined);
-    }
-
-    const rowResult = await this.repository.file.findActiveByBucketAndKey(bucket, key);
-    if (rowResult.isErr()) return err(rowResult.error);
-    const row = rowResult.value;
-    if (!row) {
-      return ok(undefined);
-    }
-
-    const soft = await this.repository.file.softDeleteUploadById(row.id);
-    if (soft.isErr()) return err(soft.error);
-    return ok(undefined);
-  }
-
-  async recordLocalUpload(
-    actor: AuthenticatedActor,
-    input: RecordLocalUploadInput
-  ): ServerResultAsync<RecordLocalUploadResult> {
-    const writeGuard = this.accessGuard(actor, "write", {
-      userId: actor.userId,
-      memberId: actor.memberId ?? null,
-      organizationId: actor.organizationId ?? null,
-    });
-    if (writeGuard.isErr()) return err(writeGuard.error);
-
-    const createdResult = await this.repository.file.create({
-      bucket: LOCAL_FILE_BUCKET,
-      key: input.filename,
-      originalName: input.originalName,
-      originalExtension: extractOriginalExtension(input.originalName),
-      contentType: input.contentType,
-      sizeBytes: input.sizeBytes,
-      status: "UPLOADED",
-      userId: actor.userId,
-      memberId: actor.memberId ?? null,
-      organizationId: actor.organizationId ?? null,
-      uploadedAt: new Date(),
-    });
-    if (createdResult.isErr()) return err(createdResult.error);
-
-    return ok({
-      fileId: createdResult.value.id,
-      originalName: createdResult.value.originalName,
-    });
-  }
-
   readonly initiate = this.procedure("initiate")
     .input(fileSchemas.input.initiate)
     .output(fileSchemas.output.initiate)
@@ -614,12 +549,6 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
       return this.error("NOT_FOUND", "File not found");
     }
     return ok(rowResult.value);
-  }
-
-  async deleteUploadedFileById(actor: AuthenticatedActor, fileId: string): ServerResultAsync<void> {
-    const result = await this.delete({ fileId }, { actor, user: { id: actor.userId } });
-    if (result.isErr()) return err(result.error);
-    return ok(undefined);
   }
 
   async uploadFileToS3(localPath: string, returnDownloadUrl = false): ServerResultAsync<string> {

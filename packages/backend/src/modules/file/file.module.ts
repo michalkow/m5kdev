@@ -19,12 +19,10 @@ import { LocalFileObjectStore } from "./file.local-store";
 import { createMockS3Router, FILE_S3_MOCK_MOUNT } from "./file.mock-s3.router";
 import { FileRepository, FileS3Repository } from "./file.repository";
 import { createDownloadRouter } from "./file.download.router";
-import { createUploadRouter } from "./file.router";
 import { FileService } from "./file.service";
 import { createFileTRPC } from "./file.trpc";
 
 export interface FileModuleConfig {
-  readonly uploadPath?: string;
   readonly downloadPath?: string;
   readonly grants?: Grant[];
   readonly buckets?: readonly string[];
@@ -71,25 +69,15 @@ export class FileModule extends BaseModule<
   override readonly dependsOn = ["auth"] as const;
   override readonly optionalDependsOn = ["workflow"] as const;
   private readonly grants: Grant[];
-  private readonly uploadPath: string;
   readonly downloadPath: string;
   private readonly buckets: readonly string[];
   private readonly deleteAfterDays: number;
   private localStore: LocalFileObjectStore | undefined;
 
-  constructor(config: FileModuleConfig | string = {}, grants?: Grant[]) {
+  constructor(config: FileModuleConfig = {}, grants?: Grant[]) {
     super();
-    if (typeof config === "string") {
-      this.uploadPath = config;
-      this.downloadPath = "/files";
-      this.grants = grants ?? defaultFileGrants;
-      this.buckets = defaultBuckets();
-      this.deleteAfterDays = 30;
-      return;
-    }
-    this.uploadPath = config.uploadPath ?? "/upload";
     this.downloadPath = config.downloadPath ?? "/files";
-    this.grants = config.grants ?? defaultFileGrants;
+    this.grants = config.grants ?? grants ?? defaultFileGrants;
     this.buckets = config.buckets ?? defaultBuckets();
     this.deleteAfterDays = config.deleteAfterDays ?? 30;
   }
@@ -180,13 +168,6 @@ export class FileModule extends BaseModule<
         authMiddleware,
         fileService: services.file,
         memberships: deps.auth.repositories.organization,
-      })
-    );
-    infra.express.use(
-      this.uploadPath,
-      createUploadRouter({
-        authMiddleware,
-        fileService: services.file,
       })
     );
   }
