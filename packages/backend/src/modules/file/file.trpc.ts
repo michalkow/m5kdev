@@ -12,6 +12,11 @@ export function createFileTRPC(
       .output(fileSchemas.output.list)
       .query(async ({ ctx, input }) => handleTRPCResult(await fileService.list(input ?? {}, ctx))),
 
+    get: organizationProcedure
+      .input(fileSchemas.input.get)
+      .output(fileSchemas.output.single)
+      .query(async ({ ctx, input }) => handleTRPCResult(await fileService.get(input, ctx))),
+
     initiate: organizationProcedure
       .input(fileSchemas.input.initiate)
       .output(fileSchemas.output.initiate)
@@ -27,6 +32,14 @@ export function createFileTRPC(
       ),
 
     user: router({
+      list: userProcedure
+        .input(fileSchemas.input.list)
+        .output(fileSchemas.output.list)
+        .query(async ({ ctx, input }) => handleTRPCResult(await fileService.list(input ?? {}, ctx))),
+      get: userProcedure
+        .input(fileSchemas.input.get)
+        .output(fileSchemas.output.single)
+        .query(async ({ ctx, input }) => handleTRPCResult(await fileService.get(input, ctx))),
       initiate: userProcedure
         .input(fileSchemas.input.initiate)
         .output(fileSchemas.output.initiate)

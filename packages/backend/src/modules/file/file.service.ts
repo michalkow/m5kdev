@@ -43,12 +43,71 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
   readonly list = this.procedure("list")
     .input(fileSchemas.input.list)
     .output(fileSchemas.output.list)
-    .requireAuth("organization")
-    .addContextFilter(["organization"])
+    .requireAuth()
     .handle(async ({ input, ctx }) => {
-      const listed = await this.repository.file.queryList(input);
+      const uploadedFilter = {
+        columnId: "status",
+        type: "string" as const,
+        method: "equals" as const,
+        value: "UPLOADED",
+      };
+      const scopeFilters = hasServiceActorScope(ctx.actor, "organization")
+        ? [
+            {
+              columnId: "organizationId",
+              type: "string" as const,
+              method: "equals" as const,
+              value: ctx.actor.organizationId ?? "",
+            },
+          ]
+        : [
+            {
+              columnId: "userId",
+              type: "string" as const,
+              method: "equals" as const,
+              value: ctx.actor.userId,
+            },
+            {
+              columnId: "organizationId",
+              type: "string" as const,
+              method: "is_null" as const,
+              value: "",
+            },
+          ];
+      const listed = await this.repository.file.queryList({
+        ...input,
+        filters: [...(input.filters ?? []), uploadedFilter, ...scopeFilters],
+      });
       if (listed.isErr()) return listed;
-      return ok(this.filterPermission(ctx.actor, "read", listed.value));
+      const filtered = this.filterPermission(ctx.actor, "read", listed.value);
+      if (
+        hasServiceActorScope(ctx.actor, "organization") &&
+        ctx.actor.organizationRole === "member"
+      ) {
+        const rows = filtered.rows.filter((row) => row.memberId === ctx.actor.memberId);
+        return ok({ rows, total: rows.length });
+      }
+      return ok(filtered);
+    });
+
+  readonly get = this.procedure("get")
+    .input(fileSchemas.input.get)
+    .output(fileSchemas.output.single)
+    .requireAuth()
+    .loadResource("file", ({ input }) => this.findUploadedFile(input))
+    .access({
+      action: "read",
+      entityStep: "file",
+    })
+    .handle(({ ctx, state }) => {
+      const row = state.file;
+      if (!this.actorMatchesFileScope(ctx.actor, row)) {
+        return this.error("FORBIDDEN", "Actor scope does not match this File");
+      }
+      if (this.memberCannotAccessOthersFile(ctx.actor, row)) {
+        return this.error("FORBIDDEN", "You can only read your own File");
+      }
+      return ok(row);
     });
 
   isS3Path(pathValue: string): boolean {
@@ -144,15 +203,9 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
    * In-process read for other Services. Not a Procedure — do not call from routers or tRPC.
    */
   async getObject(locator: FileLocator): ServerResultAsync<FileObjectBody & { fileId: string }> {
-    const rowResult =
-      "fileId" in locator
-        ? await this.repository.file.findActiveById(locator.fileId)
-        : await this.repository.file.findActiveByBucketAndKey(locator.bucket, locator.key);
+    const rowResult = await this.findUploadedFile(locator);
     if (rowResult.isErr()) return err(rowResult.error);
     const row = rowResult.value;
-    if (!row || row.status !== "UPLOADED") {
-      return this.error("NOT_FOUND", "File not found");
-    }
 
     const object = await this.repository.fileS3.getS3Object(row.key, row.bucket);
     if (object.isErr()) return err(object.error);
@@ -329,11 +382,7 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
       if (!scopeOk) {
         return this.error("FORBIDDEN", "Actor scope does not match this File");
       }
-      if (
-        hasServiceActorScope(ctx.actor, "organization") &&
-        ctx.actor.organizationRole === "member" &&
-        row.memberId !== ctx.actor.memberId
-      ) {
+      if (this.memberCannotAccessOthersFile(ctx.actor, row)) {
         return this.error("FORBIDDEN", "You can only finalize your own File");
       }
 
@@ -372,6 +421,30 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
       );
     }
     return !hasServiceActorScope(actor, "organization");
+  }
+
+  private memberCannotAccessOthersFile(
+    actor: AuthenticatedActor,
+    file: { memberId: string | null }
+  ): boolean {
+    return (
+      hasServiceActorScope(actor, "organization") &&
+      actor.organizationRole === "member" &&
+      file.memberId !== actor.memberId
+    );
+  }
+
+  private async findUploadedFile(locator: FileLocator): ServerResultAsync<FileRow> {
+    const rowResult =
+      "fileId" in locator
+        ? await this.repository.file.findActiveById(locator.fileId)
+        : await this.repository.file.findActiveByBucketAndKey(locator.bucket, locator.key);
+    if (rowResult.isErr()) return err(rowResult.error);
+    const row = rowResult.value;
+    if (!row || row.status !== "UPLOADED") {
+      return this.error("NOT_FOUND", "File not found");
+    }
+    return ok(row);
   }
 
   async deleteUploadedFileById(actor: AuthenticatedActor, fileId: string): ServerResultAsync<void> {

@@ -29,6 +29,10 @@ export const fileSchemas = {
       fileId: z.string(),
       etag: z.string().optional(),
     }),
+    get: z.union([
+      z.object({ fileId: z.string() }),
+      z.object({ bucket: z.string(), key: z.string() }),
+    ]),
     create: insertSchema.omit({
       id: true,
       createdAt: true,
