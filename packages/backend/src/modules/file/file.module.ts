@@ -10,7 +10,9 @@ import {
   type ModuleRepositoriesContext,
   type ModuleServicesContext,
   type ModuleTRPCContext,
+  type ModuleWorkflowContext,
 } from "../base/base.module";
+import { FILE_PURGE_CRON_NAME, FILE_PURGE_CRON_PATTERN } from "./file.constants";
 import type * as fileTables from "./file.db";
 import { defaultFileGrants } from "./file.grants";
 import { LocalFileObjectStore } from "./file.local-store";
@@ -136,6 +138,30 @@ export class FileModule extends BaseModule<
 
   override trpc({ trpc, services }: ModuleTRPCContext<FileModuleDeps, FileModuleServices>) {
     return createBackendRouterMap("file", createFileTRPC(trpc, services.file));
+  }
+
+  override workflows({
+    workflow,
+    services,
+  }: ModuleWorkflowContext<FileModuleDeps, FileModuleServices>) {
+    if (this.deleteAfterDays < 1) {
+      throw new Error("FileModule deleteAfterDays must be at least 1 when Workflow is present");
+    }
+    if (!workflow) return;
+    const definition = workflow.service
+      .cron({
+        name: FILE_PURGE_CRON_NAME,
+        pattern: FILE_PURGE_CRON_PATTERN,
+      })
+      .handle(async () => {
+        const result = await services.file.purgeExpired();
+        if (result.isErr()) throw result.error;
+      });
+    const handler = definition._handler;
+    if (!handler) {
+      throw new Error(`${FILE_PURGE_CRON_NAME} cron is missing a handler`);
+    }
+    workflow.registry.register(definition, handler);
   }
 
   override express({

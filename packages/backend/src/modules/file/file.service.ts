@@ -14,7 +14,11 @@ import {
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
-import { FILE_DOWNLOAD_EXPIRES_IN, LOCAL_FILE_BUCKET } from "./file.constants";
+import {
+  FILE_DOWNLOAD_EXPIRES_IN,
+  FILE_PENDING_TTL_MS,
+  LOCAL_FILE_BUCKET,
+} from "./file.constants";
 import { fileSchemas } from "./file.dto";
 import type { LocalFileObjectStore } from "./file.local-store";
 import type { FileObjectBody } from "./file.object-store";
@@ -189,6 +193,35 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
       if (soft.isErr()) return err(soft.error);
       return ok({ id: row.id });
     });
+
+  /**
+   * Daily sweep: stale PENDING → FAILED + object gone; aged DELETED objects gone.
+   * No Server event — the User did not wait on this work.
+   */
+  async purgeExpired(now = new Date()): ServerResultAsync<void> {
+    const pendingCutoff = new Date(now.getTime() - FILE_PENDING_TTL_MS);
+    const pending = await this.repository.file.listPendingCreatedBefore(pendingCutoff);
+    if (pending.isErr()) return err(pending.error);
+    for (const row of pending.value) {
+      const removed = await this.repository.fileS3.deleteS3Object(row.key, row.bucket);
+      if (removed.isErr()) return err(removed.error);
+      const failed = await this.repository.file.markFailedById(row.id);
+      if (failed.isErr()) return err(failed.error);
+    }
+
+    const deleteAfterDays = this.fileConfig.deleteAfterDays ?? 30;
+    if (deleteAfterDays < 1) {
+      return this.error("INTERNAL_SERVER_ERROR", "deleteAfterDays must be at least 1");
+    }
+    const deletedCutoff = new Date(now.getTime() - deleteAfterDays * FILE_PENDING_TTL_MS);
+    const deleted = await this.repository.file.listDeletedBefore(deletedCutoff);
+    if (deleted.isErr()) return err(deleted.error);
+    for (const row of deleted.value) {
+      const removed = await this.repository.fileS3.deleteS3Object(row.key, row.bucket);
+      if (removed.isErr()) return err(removed.error);
+    }
+    return ok(undefined);
+  }
 
   /**
    * Cookie download: load the File, build Actor from the File (Membership in that

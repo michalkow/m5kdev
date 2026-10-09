@@ -7,7 +7,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { InferSelectModel } from "drizzle-orm";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, lt } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
@@ -122,6 +122,38 @@ export class FileRepository extends BaseTableRepository<
 
   async markFailedById(id: string, tx?: Orm): ServerResultAsync<FileRow> {
     return this.updateStatusById(id, { status: "FAILED" }, tx);
+  }
+
+  async listPendingCreatedBefore(before: Date, tx?: Orm): ServerResultAsync<FileRow[]> {
+    const db = tx ?? this.orm;
+    const result = await this.throwableQuery(() =>
+      db
+        .select()
+        .from(this.schema.files)
+        .where(
+          and(
+            eq(this.schema.files.status, "PENDING"),
+            lt(this.schema.files.createdAt, before),
+            isNull(this.schema.files.deletedAt)
+          )
+        )
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value);
+  }
+
+  async listDeletedBefore(before: Date, tx?: Orm): ServerResultAsync<FileRow[]> {
+    const db = tx ?? this.orm;
+    const result = await this.throwableQuery(() =>
+      db
+        .select()
+        .from(this.schema.files)
+        .where(
+          and(eq(this.schema.files.status, "DELETED"), lt(this.schema.files.deletedAt, before))
+        )
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value);
   }
 
   async updateOriginalNameAndMetadata(
