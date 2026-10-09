@@ -4,11 +4,17 @@ import path, { dirname } from "node:path";
 import { fileTypes } from "@m5kdev/commons/modules/file/file.constants";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
-import { type AuthenticatedActor, hasServiceActorScope } from "../base/base.actor";
+import {
+  type AuthenticatedActor,
+  createServiceActor,
+  hasServiceActorScope,
+  type MembershipLookup,
+  resolveOrganizationActor,
+} from "../base/base.actor";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
-import { LOCAL_FILE_BUCKET } from "./file.constants";
+import { FILE_DOWNLOAD_EXPIRES_IN, LOCAL_FILE_BUCKET } from "./file.constants";
 import { fileSchemas } from "./file.dto";
 import type { LocalFileObjectStore } from "./file.local-store";
 import type { FileObjectBody } from "./file.object-store";
@@ -109,6 +115,58 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
       }
       return ok(row);
     });
+
+  readonly getDownloadUrl = this.procedure("getDownloadUrl")
+    .input(fileSchemas.input.getDownloadUrl)
+    .output(fileSchemas.output.downloadUrl)
+    .requireAuth()
+    .loadResource("file", ({ input }) => this.findUploadedFile(input))
+    .access({
+      action: "read",
+      entityStep: "file",
+    })
+    .handle(async ({ ctx, state }) => {
+      const row = state.file;
+      if (!this.actorMatchesFileScope(ctx.actor, row)) {
+        return this.error("FORBIDDEN", "Actor scope does not match this File");
+      }
+      if (this.memberCannotAccessOthersFile(ctx.actor, row)) {
+        return this.error("FORBIDDEN", "You can only read your own File");
+      }
+      return this.presignDownload(row);
+    });
+
+  /**
+   * Cookie download: load the File, build Actor from the File (Membership in that
+   * organizationId, not the session active Organization), then Grant `read` and presign.
+   */
+  async downloadById(
+    fileId: string,
+    input: {
+      readonly userId: string;
+      readonly userRole: string;
+      readonly memberships?: MembershipLookup;
+    }
+  ): ServerResultAsync<{ url: string; expiresAt: Date }> {
+    const rowResult = await this.findUploadedFile({ fileId });
+    if (rowResult.isErr()) return err(rowResult.error);
+    const row = rowResult.value;
+
+    let actor: AuthenticatedActor;
+    if (row.organizationId) {
+      const resolved = await resolveOrganizationActor({
+        user: { userId: input.userId, userRole: input.userRole },
+        organizationId: row.organizationId,
+        memberships: input.memberships,
+      });
+      if (resolved.isErr()) return err(resolved.error);
+      actor = resolved.value;
+    } else {
+      actor = createServiceActor({ userId: input.userId, userRole: input.userRole });
+    }
+
+    return this.getDownloadUrl({ fileId }, { actor, user: { id: input.userId } });
+  }
 
   isS3Path(pathValue: string): boolean {
     return pathValue.startsWith("s3::");
@@ -432,6 +490,21 @@ export class FileService extends BasePermissionService<FileServiceRepositories, 
       actor.organizationRole === "member" &&
       file.memberId !== actor.memberId
     );
+  }
+
+  private async presignDownload(
+    row: FileRow
+  ): ServerResultAsync<{ url: string; expiresAt: Date }> {
+    const url = await this.repository.fileS3.getS3DownloadUrl(
+      row.key,
+      FILE_DOWNLOAD_EXPIRES_IN,
+      row.bucket
+    );
+    if (url.isErr()) return err(url.error);
+    return ok({
+      url: url.value,
+      expiresAt: new Date(Date.now() + FILE_DOWNLOAD_EXPIRES_IN * 1000),
+    });
   }
 
   private async findUploadedFile(locator: FileLocator): ServerResultAsync<FileRow> {

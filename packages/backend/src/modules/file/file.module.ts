@@ -15,6 +15,7 @@ import { defaultFileGrants } from "./file.grants";
 import { LocalFileObjectStore } from "./file.local-store";
 import { createMockS3Router, FILE_S3_MOCK_MOUNT } from "./file.mock-s3.router";
 import { FileRepository, FileS3Repository } from "./file.repository";
+import { createDownloadRouter } from "./file.download.router";
 import { createUploadRouter } from "./file.router";
 import { FileService } from "./file.service";
 import { createFileTRPC } from "./file.trpc";
@@ -134,11 +135,20 @@ export class FileModule extends BaseModule<
     infra,
     services,
     authMiddleware,
+    deps,
   }: ModuleExpressContext<FileModuleDeps, FileModuleServices>) {
     if (this.localStore && !isProduction()) {
       infra.express.use(FILE_S3_MOCK_MOUNT, createMockS3Router(this.localStore));
     }
     if (!authMiddleware) return;
+    infra.express.use(
+      this.downloadPath,
+      createDownloadRouter({
+        authMiddleware,
+        fileService: services.file,
+        memberships: deps.auth.repositories.organization,
+      })
+    );
     infra.express.use(
       this.uploadPath,
       createUploadRouter({

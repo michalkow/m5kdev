@@ -14,6 +14,10 @@ export const fileSchemas = {
       url: z.string(),
     }),
     finalize: z.void(),
+    downloadUrl: z.object({
+      url: z.string(),
+      expiresAt: z.date(),
+    }),
   },
   input: {
     ...input,
@@ -30,6 +34,10 @@ export const fileSchemas = {
       etag: z.string().optional(),
     }),
     get: z.union([
+      z.object({ fileId: z.string() }),
+      z.object({ bucket: z.string(), key: z.string() }),
+    ]),
+    getDownloadUrl: z.union([
       z.object({ fileId: z.string() }),
       z.object({ bucket: z.string(), key: z.string() }),
     ]),
