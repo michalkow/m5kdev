@@ -261,8 +261,8 @@ A Member's off switch for a Channel of a Notification kind. Offered Channels are
 _Avoid_: User-wide mute; browser or OS push permission; Device enabled flag
 
 **File**:
-An S3 or local object, optionally inventoried as a `files` row. Upload status: `PENDING` | `UPLOADED` | `DELETED` | `FAILED`. Org-scoped Files stamp MemberId.
-_Avoid_: Upload (the action), Asset, Attachment, Blob
+An inventoried S3 object: a `files` row plus the object at `(bucket, key)`. Named by File id or that pair. Status: `PENDING` | `UPLOADED` | `DELETED` | `FAILED`. Personal Files stamp UserId; org-scoped Files stamp MemberId. See [ADR-0030](docs/adr/0030-file-is-inventoried-s3-object.md).
+_Avoid_: Upload (the action), Asset, Attachment, Blob; a local-disk object as a File; an S3 object with no row; path (that is key); Team as a File owner; storing a presigned URL or S3 key on another entity (store File id)
 
 **Plan**:
 Named commercial offering in app code (`StripePlan` / `StripePlansConfig`). Not a database row. Not a Stripe Product. A Plan cites one Stripe Product id per currency and 1..N Prices under each Product. The catalog names a Trial Plan per currency. Seat billing is a catalog switch, not a per-Plan field. See [ADR-0017](docs/adr/0017-billing-org-paywall-seat-billing-opt-in.md), [ADR-0019](docs/adr/0019-billing-prices-per-currency-product.md), and [ADR-0020](docs/adr/0020-trial-price-at-start-card-catalog-switch.md).

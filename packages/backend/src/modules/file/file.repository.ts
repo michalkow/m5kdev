@@ -1,18 +1,19 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
-  type GetObjectCommandOutput,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { InferSelectModel } from "drizzle-orm";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, lt } from "drizzle-orm";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { err, ok } from "neverthrow";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import { BaseExternaRepository, BaseTableRepository } from "../base/base.repository";
 import { type FileUploadStatus, files } from "./file.db";
+import type { FileObjectBody, FileObjectStore } from "./file.object-store";
 
 const schema = { files };
 type Schema = typeof schema;
@@ -123,6 +124,74 @@ export class FileRepository extends BaseTableRepository<
     return this.updateStatusById(id, { status: "FAILED" }, tx);
   }
 
+  async listPendingCreatedBefore(before: Date, tx?: Orm): ServerResultAsync<FileRow[]> {
+    const db = tx ?? this.orm;
+    const result = await this.throwableQuery(() =>
+      db
+        .select()
+        .from(this.schema.files)
+        .where(
+          and(
+            eq(this.schema.files.status, "PENDING"),
+            lt(this.schema.files.createdAt, before),
+            isNull(this.schema.files.deletedAt)
+          )
+        )
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value);
+  }
+
+  async listDeletedBefore(before: Date, tx?: Orm): ServerResultAsync<FileRow[]> {
+    const db = tx ?? this.orm;
+    const result = await this.throwableQuery(() =>
+      db
+        .select()
+        .from(this.schema.files)
+        .where(
+          and(eq(this.schema.files.status, "DELETED"), lt(this.schema.files.deletedAt, before))
+        )
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value);
+  }
+
+  async updateOriginalNameAndMetadata(
+    id: string,
+    data: {
+      originalName?: string;
+      originalExtension?: string | null;
+      metadata?: Record<string, unknown> | null;
+    },
+    tx?: Orm
+  ): ServerResultAsync<FileRow> {
+    const db = tx ?? this.orm;
+    const patch: {
+      updatedAt: Date;
+      originalName?: string;
+      originalExtension?: string | null;
+      metadata?: Record<string, unknown> | null;
+    } = { updatedAt: new Date() };
+    if (data.originalName !== undefined) {
+      patch.originalName = data.originalName;
+      patch.originalExtension = data.originalExtension;
+    }
+    if (data.metadata !== undefined) {
+      patch.metadata = data.metadata;
+    }
+    const result = await this.throwableQuery(() =>
+      db
+        .update(this.schema.files)
+        .set(patch)
+        .where(eq(this.schema.files.id, id))
+        .returning()
+    );
+    if (result.isErr()) return err(result.error);
+    const [row] = result.value as FileRow[];
+    if (!row) return this.error("NOT_FOUND");
+    return ok(row);
+  }
+
   async softDeleteUploadById(id: string, tx?: Orm): ServerResultAsync<{ id: string }> {
     const db = tx ?? this.orm;
     const rowsResult = await this.throwableQuery(() =>
@@ -143,8 +212,12 @@ export class FileRepository extends BaseTableRepository<
   }
 }
 
-export class FileS3Repository extends BaseExternaRepository {
+export class FileS3Repository extends BaseExternaRepository implements FileObjectStore {
   private s3: S3Client | undefined;
+
+  private resolveBucket(bucket?: string): string | undefined {
+    return bucket ?? process.env.AWS_S3_BUCKET;
+  }
 
   private getClient(): ServerResult<S3Client> {
     if (this.s3) return ok(this.s3);
@@ -175,12 +248,17 @@ export class FileS3Repository extends BaseExternaRepository {
   async getS3UploadUrl(
     key: string,
     filetype: string,
-    expiresIn = 60 * 5
+    expiresIn = 60 * 5,
+    bucket?: string
   ): ServerResultAsync<string> {
     const client = this.getClient();
     if (client.isErr()) return err(client.error);
+    const resolvedBucket = this.resolveBucket(bucket);
+    if (!resolvedBucket) {
+      return this.error("INTERNAL_SERVER_ERROR", "S3 bucket is not configured");
+    }
     const command = new PutObjectCommand({
-      Bucket: process.env.AWS_S3_BUCKET,
+      Bucket: resolvedBucket,
       Key: key,
       ContentType: filetype,
     });
@@ -191,11 +269,19 @@ export class FileS3Repository extends BaseExternaRepository {
     return ok(urlResult.value);
   }
 
-  async getS3DownloadUrl(key: string, expiresIn = 60 * 5): ServerResultAsync<string> {
+  async getS3DownloadUrl(
+    key: string,
+    expiresIn = 60 * 5,
+    bucket?: string
+  ): ServerResultAsync<string> {
     const client = this.getClient();
     if (client.isErr()) return err(client.error);
+    const resolvedBucket = this.resolveBucket(bucket);
+    if (!resolvedBucket) {
+      return this.error("INTERNAL_SERVER_ERROR", "S3 bucket is not configured");
+    }
     const command = new GetObjectCommand({
-      Bucket: process.env.AWS_S3_BUCKET,
+      Bucket: resolvedBucket,
       Key: key,
     });
     const urlResult = await this.throwablePromise(() =>
@@ -205,27 +291,84 @@ export class FileS3Repository extends BaseExternaRepository {
     return ok(urlResult.value);
   }
 
-  async getS3Object(key: string): ServerResultAsync<GetObjectCommandOutput> {
+  async getS3Object(key: string, bucket?: string): ServerResultAsync<FileObjectBody> {
     const client = this.getClient();
     if (client.isErr()) return err(client.error);
+    const resolvedBucket = this.resolveBucket(bucket);
+    if (!resolvedBucket) {
+      return this.error("INTERNAL_SERVER_ERROR", "S3 bucket is not configured");
+    }
     const command = new GetObjectCommand({
-      Bucket: process.env.AWS_S3_BUCKET,
+      Bucket: resolvedBucket,
       Key: key,
     });
     const dataResult = await this.throwablePromise(() => client.value.send(command));
-    if (dataResult.isErr()) return dataResult;
-    return ok(dataResult.value);
+    if (dataResult.isErr()) return err(dataResult.error);
+    const body = dataResult.value.Body;
+    if (!body || typeof body.transformToByteArray !== "function") {
+      return this.error("INTERNAL_SERVER_ERROR", "S3 object body is empty");
+    }
+    const bytesResult = await this.throwablePromise(() => body.transformToByteArray());
+    if (bytesResult.isErr()) return err(bytesResult.error);
+    return ok({
+      body: Buffer.from(bytesResult.value),
+      contentType: dataResult.value.ContentType,
+      etag: dataResult.value.ETag,
+    });
   }
 
-  async deleteS3Object(key: string): ServerResultAsync<void> {
+  async putS3Object(
+    key: string,
+    body: Buffer,
+    contentType: string,
+    bucket?: string
+  ): ServerResultAsync<void> {
     const client = this.getClient();
     if (client.isErr()) return err(client.error);
+    const resolvedBucket = this.resolveBucket(bucket);
+    if (!resolvedBucket) {
+      return this.error("INTERNAL_SERVER_ERROR", "S3 bucket is not configured");
+    }
+    const command = new PutObjectCommand({
+      Bucket: resolvedBucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    });
+    const result = await this.throwablePromise(() => client.value.send(command));
+    if (result.isErr()) return err(result.error);
+    return ok(undefined);
+  }
+
+  async deleteS3Object(key: string, bucket?: string): ServerResultAsync<void> {
+    const client = this.getClient();
+    if (client.isErr()) return err(client.error);
+    const resolvedBucket = this.resolveBucket(bucket);
+    if (!resolvedBucket) {
+      return this.error("INTERNAL_SERVER_ERROR", "S3 bucket is not configured");
+    }
     const command = new DeleteObjectCommand({
-      Bucket: process.env.AWS_S3_BUCKET,
+      Bucket: resolvedBucket,
       Key: key,
     });
     const result = await this.throwablePromise(() => client.value.send(command));
     if (result.isErr()) return err(result.error);
     return ok(undefined);
+  }
+
+  async headS3Object(key: string, bucket?: string): ServerResultAsync<boolean> {
+    const client = this.getClient();
+    if (client.isErr()) return err(client.error);
+    const resolvedBucket = this.resolveBucket(bucket);
+    if (!resolvedBucket) {
+      return this.error("INTERNAL_SERVER_ERROR", "S3 bucket is not configured");
+    }
+    const command = new HeadObjectCommand({
+      Bucket: resolvedBucket,
+      Key: key,
+    });
+    const result = await this.throwablePromise(() => client.value.send(command));
+    if (result.isErr()) return ok(false);
+    return ok(true);
   }
 }

@@ -1,5 +1,8 @@
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { createBackendRouterMap } from "../../app";
 import type { AuthModule } from "../auth/auth.module";
+import type { Base } from "../base/base.abstract";
 import type { Grant } from "../base/base.grants";
 import {
   BaseModule,
@@ -7,19 +10,34 @@ import {
   type ModuleRepositoriesContext,
   type ModuleServicesContext,
   type ModuleTRPCContext,
+  type ModuleWorkflowContext,
 } from "../base/base.module";
+import type { WorkflowModule } from "../workflow/workflow.module";
+import { FILE_PURGE_CRON_NAME, FILE_PURGE_CRON_PATTERN } from "./file.constants";
 import type * as fileTables from "./file.db";
+import { createDownloadRouter } from "./file.download.router";
 import { defaultFileGrants } from "./file.grants";
+import { LocalFileObjectStore } from "./file.local-store";
+import { createMockS3Router, FILE_S3_MOCK_MOUNT } from "./file.mock-s3.router";
+import type { FileObjectStore } from "./file.object-store";
 import { FileRepository, FileS3Repository } from "./file.repository";
-import { createUploadRouter } from "./file.router";
 import { FileService } from "./file.service";
 import { createFileTRPC } from "./file.trpc";
+import type { FileTypeAllowlist } from "./file.types";
 
-type FileModuleDeps = { auth: AuthModule };
+export interface FileModuleConfig {
+  readonly downloadPath?: string;
+  readonly grants?: Grant[];
+  readonly buckets?: readonly string[];
+  readonly deleteAfterDays?: number;
+  readonly fileTypes?: Record<string, FileTypeAllowlist>;
+}
+
+type FileModuleDeps = { auth: AuthModule; workflow?: WorkflowModule };
 type FileModuleTables = typeof fileTables;
 type FileModuleRepositories = {
   file: FileRepository;
-  fileS3: FileS3Repository;
+  fileS3: FileObjectStore & Base;
 };
 type FileModuleServices = {
   file: FileService;
@@ -27,6 +45,22 @@ type FileModuleServices = {
 type FileModuleRouters = {
   file: ReturnType<typeof createFileTRPC>;
 };
+
+function isProduction(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
+function defaultBuckets(): string[] {
+  const envBucket = process.env.AWS_S3_BUCKET;
+  return envBucket ? [envBucket] : [];
+}
+
+function localStorePublicBaseUrl(): string {
+  return (process.env.VITE_SERVER_URL ?? `http://127.0.0.1:${process.env.PORT ?? "3000"}`).replace(
+    /\/$/,
+    ""
+  );
+}
 
 export class FileModule extends BaseModule<
   FileModuleDeps,
@@ -37,28 +71,47 @@ export class FileModule extends BaseModule<
 > {
   readonly id = "file";
   override readonly dependsOn = ["auth"] as const;
+  override readonly optionalDependsOn = ["workflow"] as const;
   private readonly grants: Grant[];
+  readonly downloadPath: string;
+  private readonly buckets: readonly string[];
+  private readonly deleteAfterDays: number;
+  private readonly fileTypes: Record<string, FileTypeAllowlist> | undefined;
+  private localStore: LocalFileObjectStore | undefined;
 
-  constructor(
-    private readonly mountPath: string = "/upload",
-    grants?: Grant[]
-  ) {
+  constructor(config: FileModuleConfig = {}) {
     super();
-    this.grants = grants ?? defaultFileGrants;
+    this.downloadPath = config.downloadPath ?? "/files";
+    this.grants = config.grants ?? defaultFileGrants;
+    this.buckets = config.buckets ?? defaultBuckets();
+    this.deleteAfterDays = config.deleteAfterDays ?? 30;
+    this.fileTypes = config.fileTypes;
   }
 
   override repositories({ db }: ModuleRepositoriesContext<FileModuleDeps, FileModuleTables>) {
+    const defaultBucket = this.buckets[0] ?? process.env.AWS_S3_BUCKET ?? "local-s3";
+    const fileS3: FileObjectStore & Base = isProduction()
+      ? new FileS3Repository()
+      : new LocalFileObjectStore({
+          root: path.join(tmpdir(), "m5kdev-file-s3"),
+          publicBaseUrl: localStorePublicBaseUrl(),
+          defaultBucket,
+        });
+    if (fileS3 instanceof LocalFileObjectStore) {
+      this.localStore = fileS3;
+    }
     return {
       file: new FileRepository({
         orm: db.orm,
         schema: db.schema,
       }),
-      fileS3: new FileS3Repository(),
+      fileS3,
     };
   }
 
   override services({
     repositories,
+    deps,
   }: ModuleServicesContext<FileModuleDeps, FileModuleRepositories>) {
     return {
       file: new FileService(
@@ -67,7 +120,13 @@ export class FileModule extends BaseModule<
           fileS3: repositories.fileS3,
         },
         {},
-        this.grants
+        this.grants,
+        {
+          buckets: this.buckets,
+          deleteAfterDays: this.deleteAfterDays,
+          purgeObjectOnDelete: !deps.workflow,
+          fileTypes: this.fileTypes,
+        }
       ),
     };
   }
@@ -76,17 +135,46 @@ export class FileModule extends BaseModule<
     return createBackendRouterMap("file", createFileTRPC(trpc, services.file));
   }
 
+  override workflows({
+    workflow,
+    services,
+  }: ModuleWorkflowContext<FileModuleDeps, FileModuleServices>) {
+    if (this.deleteAfterDays < 1) {
+      throw new Error("FileModule deleteAfterDays must be at least 1 when Workflow is present");
+    }
+    if (!workflow) return;
+    const definition = workflow.service
+      .cron({
+        name: FILE_PURGE_CRON_NAME,
+        pattern: FILE_PURGE_CRON_PATTERN,
+      })
+      .handle(async () => {
+        const result = await services.file.purgeExpired();
+        if (result.isErr()) throw result.error;
+      });
+    const handler = definition._handler;
+    if (!handler) {
+      throw new Error(`${FILE_PURGE_CRON_NAME} cron is missing a handler`);
+    }
+    workflow.registry.register(definition, handler);
+  }
+
   override express({
     infra,
     services,
     authMiddleware,
+    deps,
   }: ModuleExpressContext<FileModuleDeps, FileModuleServices>) {
+    if (this.localStore && !isProduction()) {
+      infra.express.use(FILE_S3_MOCK_MOUNT, createMockS3Router(this.localStore));
+    }
     if (!authMiddleware) return;
     infra.express.use(
-      this.mountPath,
-      createUploadRouter({
+      this.downloadPath,
+      createDownloadRouter({
         authMiddleware,
         fileService: services.file,
+        memberships: deps.auth.repositories.organization,
       })
     );
   }

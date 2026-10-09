@@ -1,36 +1,37 @@
-export interface RecordLocalUploadInput {
-  readonly originalName: string;
+export interface PutFileObjectInput {
+  readonly body: Buffer;
   readonly contentType: string;
-  readonly sizeBytes: number;
-  readonly filename: string;
-}
-
-export interface RecordLocalUploadResult {
-  readonly fileId?: string;
   readonly originalName: string;
-}
-
-export interface InitiateS3UploadInput {
-  readonly userId: string;
+  readonly userId?: string;
   readonly memberId?: string;
   readonly organizationId?: string;
-  readonly teamId?: string;
-  readonly contentType: string;
-  readonly originalName: string;
   readonly sizeBytes?: number;
   readonly pathHint?: string;
   readonly metadata?: Record<string, unknown>;
+  readonly bucket?: string;
 }
 
-export interface FinalizeS3UploadInput {
-  readonly userId: string;
-  readonly fileId: string;
-  readonly etag?: string;
+export type FileLocator =
+  | { readonly fileId: string }
+  | { readonly bucket: string; readonly key: string };
+
+export interface FileTypeAllowlist {
+  readonly mimetypes: readonly string[];
+  readonly extensions?: readonly string[];
 }
 
-/** When a DB `FileRepository` is wired, `fileId` is the inventory row id. Otherwise it is omitted. */
-export interface InitiateS3UploadResult {
-  readonly key: string;
-  readonly url: string;
+export function toFileLocator(input: {
   readonly fileId?: string;
+  readonly bucket?: string;
+  readonly key?: string;
+}): FileLocator | undefined {
+  const hasId = Boolean(input.fileId);
+  const hasBucketKey = Boolean(input.bucket && input.key);
+  if (hasId === hasBucketKey) {
+    return undefined;
+  }
+  if (input.fileId) {
+    return { fileId: input.fileId };
+  }
+  return { bucket: input.bucket ?? "", key: input.key ?? "" };
 }

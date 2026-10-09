@@ -1,51 +1,249 @@
-import { createWriteStream } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path, { dirname } from "node:path";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 import { fileTypes } from "@m5kdev/commons/modules/file/file.constants";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
-import type { AuthenticatedActor } from "../base/base.actor";
+import type { Base } from "../base/base.abstract";
+import {
+  type AuthenticatedActor,
+  createServiceActor,
+  hasServiceActorScope,
+  type MembershipLookup,
+  resolveOrganizationActor,
+} from "../base/base.actor";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
+import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
-import { LOCAL_FILE_BUCKET } from "./file.constants";
+import { FILE_DOWNLOAD_EXPIRES_IN, FILE_PENDING_TTL_MS } from "./file.constants";
 import { fileSchemas } from "./file.dto";
-import type { FileRepository, FileS3Repository } from "./file.repository";
-import type {
-  FinalizeS3UploadInput,
-  InitiateS3UploadInput,
-  InitiateS3UploadResult,
-  RecordLocalUploadInput,
-  RecordLocalUploadResult,
+import type { FileObjectBody, FileObjectStore } from "./file.object-store";
+import type { FileRepository, FileRow } from "./file.repository";
+import {
+  type FileLocator,
+  type FileTypeAllowlist,
+  type PutFileObjectInput,
+  toFileLocator,
 } from "./file.types";
 import { buildS3ObjectKey, extractOriginalExtension } from "./file.utils";
 
-/** Pass `file` when Drizzle inventory is available; omit it for S3-only (presign / get / delete) behavior. */
+export interface FileServiceConfig {
+  readonly buckets?: readonly string[];
+  readonly deleteAfterDays?: number;
+  readonly purgeObjectOnDelete?: boolean;
+  readonly fileTypes?: Record<string, FileTypeAllowlist>;
+}
+
 export type FileServiceRepositories = {
-  fileS3: FileS3Repository;
-  file?: FileRepository;
+  fileS3: FileObjectStore & Base;
+  file: FileRepository;
 };
 
 export class FileService extends BasePermissionService<
-  { fileS3: FileS3Repository } & Partial<{ file: FileRepository }>,
+  FileServiceRepositories,
   Record<string, never>
 > {
+  constructor(
+    repository: FileServiceRepositories,
+    service: Record<string, never>,
+    grants: ResourceGrant[] = [],
+    readonly fileConfig: FileServiceConfig = {}
+  ) {
+    super(repository, service, grants);
+  }
   readonly list = this.procedure("list")
     .input(fileSchemas.input.list)
     .output(fileSchemas.output.list)
-    .requireAuth("organization")
-    .addContextFilter(["organization"])
+    .requireAuth()
     .handle(async ({ input, ctx }) => {
-      const fileRepo = this.repository.file;
-      if (!fileRepo) {
-        return this.error("INTERNAL_SERVER_ERROR", "File inventory is not configured");
-      }
-      const listed = await fileRepo.queryList(input);
+      const uploadedFilter = {
+        columnId: "status",
+        type: "string" as const,
+        method: "equals" as const,
+        value: "UPLOADED",
+      };
+      const scopeFilters = hasServiceActorScope(ctx.actor, "organization")
+        ? [
+            {
+              columnId: "organizationId",
+              type: "string" as const,
+              method: "equals" as const,
+              value: ctx.actor.organizationId ?? "",
+            },
+          ]
+        : [
+            {
+              columnId: "userId",
+              type: "string" as const,
+              method: "equals" as const,
+              value: ctx.actor.userId,
+            },
+            {
+              columnId: "organizationId",
+              type: "string" as const,
+              method: "is_null" as const,
+              value: "",
+            },
+          ];
+      const ownFilters =
+        this.memberMustOwnFiles(ctx.actor, "read") && ctx.actor.memberId
+          ? [
+              {
+                columnId: "memberId",
+                type: "string" as const,
+                method: "equals" as const,
+                value: ctx.actor.memberId,
+              },
+            ]
+          : [];
+      const listed = await this.repository.file.queryList({
+        ...input,
+        filters: [...(input.filters ?? []), uploadedFilter, ...scopeFilters, ...ownFilters],
+      });
       if (listed.isErr()) return listed;
       return ok(this.filterPermission(ctx.actor, "read", listed.value));
     });
+
+  readonly get = this.procedure("get")
+    .input(fileSchemas.input.get)
+    .output(fileSchemas.output.single)
+    .requireAuth()
+    .loadResource("file", ({ input }) => this.findUploadedFile(input))
+    .access({
+      action: "read",
+      entityStep: "file",
+    })
+    .handle(({ ctx, state }) => {
+      const denied = this.denyFileAccess(ctx.actor, state.file, "read");
+      if (denied) return denied;
+      return ok(state.file);
+    });
+
+  readonly getDownloadUrl = this.procedure("getDownloadUrl")
+    .input(fileSchemas.input.getDownloadUrl)
+    .output(fileSchemas.output.downloadUrl)
+    .requireAuth()
+    .loadResource("file", ({ input }) => this.findUploadedFile(input))
+    .access({
+      action: "read",
+      entityStep: "file",
+    })
+    .handle(async ({ ctx, state }) => {
+      const denied = this.denyFileAccess(ctx.actor, state.file, "read");
+      if (denied) return denied;
+      return this.presignDownload(state.file);
+    });
+
+  readonly update = this.procedure("update")
+    .input(fileSchemas.input.update)
+    .output(fileSchemas.output.single)
+    .requireAuth()
+    .loadResource("file", ({ input }) => {
+      const locator = toFileLocator(input);
+      if (!locator) {
+        return this.error("BAD_REQUEST", "Provide fileId or bucket and key, not both");
+      }
+      return this.findUploadedFile(locator);
+    })
+    .access({
+      action: "write",
+      entityStep: "file",
+    })
+    .handle(async ({ input, ctx, state }) => {
+      const denied = this.denyFileAccess(ctx.actor, state.file, "write");
+      if (denied) return denied;
+      return this.repository.file.updateOriginalNameAndMetadata(state.file.id, {
+        originalName: input.originalName,
+        originalExtension:
+          input.originalName !== undefined
+            ? (extractOriginalExtension(input.originalName) ?? null)
+            : undefined,
+        metadata: input.metadata,
+      });
+    });
+
+  readonly delete = this.procedure("delete")
+    .input(fileSchemas.input.delete)
+    .output(fileSchemas.output.uuid)
+    .requireAuth()
+    .loadResource("file", ({ input }) => this.findActiveFile(input))
+    .access({
+      action: "delete",
+      entityStep: "file",
+    })
+    .handle(async ({ ctx, state }) => {
+      const denied = this.denyFileAccess(ctx.actor, state.file, "delete");
+      if (denied) return denied;
+      const row = state.file;
+      if (this.fileConfig.purgeObjectOnDelete !== false) {
+        const s3Result = await this.repository.fileS3.deleteS3Object(row.key, row.bucket);
+        if (s3Result.isErr()) return err(s3Result.error);
+      }
+      const soft = await this.repository.file.softDeleteUploadById(row.id);
+      if (soft.isErr()) return err(soft.error);
+      return ok({ id: row.id });
+    });
+
+  /**
+   * Daily sweep: stale PENDING → FAILED + object gone; aged DELETED objects gone.
+   * No Server event — the User did not wait on this work.
+   */
+  async purgeExpired(now = new Date()): ServerResultAsync<void> {
+    const pendingCutoff = new Date(now.getTime() - FILE_PENDING_TTL_MS);
+    const pending = await this.repository.file.listPendingCreatedBefore(pendingCutoff);
+    if (pending.isErr()) return err(pending.error);
+    for (const row of pending.value) {
+      const removed = await this.repository.fileS3.deleteS3Object(row.key, row.bucket);
+      if (removed.isErr()) return err(removed.error);
+      const failed = await this.repository.file.markFailedById(row.id);
+      if (failed.isErr()) return err(failed.error);
+    }
+
+    const deleteAfterDays = this.fileConfig.deleteAfterDays ?? 30;
+    if (deleteAfterDays < 1) {
+      return this.error("INTERNAL_SERVER_ERROR", "deleteAfterDays must be at least 1");
+    }
+    const deletedCutoff = new Date(now.getTime() - deleteAfterDays * FILE_PENDING_TTL_MS);
+    const deleted = await this.repository.file.listDeletedBefore(deletedCutoff);
+    if (deleted.isErr()) return err(deleted.error);
+    for (const row of deleted.value) {
+      const removed = await this.repository.fileS3.deleteS3Object(row.key, row.bucket);
+      if (removed.isErr()) return err(removed.error);
+    }
+    return ok(undefined);
+  }
+
+  /**
+   * Cookie download: load the File, build Actor from the File (Membership in that
+   * organizationId, not the session active Organization), then Grant `read` and presign.
+   */
+  async downloadById(
+    fileId: string,
+    input: {
+      readonly userId: string;
+      readonly userRole: string;
+      readonly memberships?: MembershipLookup;
+    }
+  ): ServerResultAsync<{ url: string; expiresAt: Date }> {
+    const rowResult = await this.findUploadedFile({ fileId });
+    if (rowResult.isErr()) return err(rowResult.error);
+    const row = rowResult.value;
+
+    let actor: AuthenticatedActor;
+    if (row.organizationId) {
+      const resolved = await resolveOrganizationActor({
+        user: { userId: input.userId, userRole: input.userRole },
+        organizationId: row.organizationId,
+        memberships: input.memberships,
+      });
+      if (resolved.isErr()) return err(resolved.error);
+      actor = resolved.value;
+    } else {
+      actor = createServiceActor({ userId: input.userId, userRole: input.userRole });
+    }
+
+    return this.getDownloadUrl({ fileId }, { actor, user: { id: input.userId } });
+  }
 
   isS3Path(pathValue: string): boolean {
     return pathValue.startsWith("s3::");
@@ -71,210 +269,320 @@ export class FileService extends BasePermissionService<
     return this.repository.fileS3.getS3DownloadUrl(key, expiresIn);
   }
 
-  getS3Object(key: string) {
+  getS3Object(key: string): ServerResultAsync<FileObjectBody> {
     return this.repository.fileS3.getS3Object(key);
   }
 
   /**
-   * Deletes the object in S3. If a `FileRepository` is configured and a matching inventory row exists for the bucket, it is soft-deleted.
+   * In-process write for other Services. Not a Procedure — do not call from routers or tRPC.
    */
-  async deleteS3Object(key: string): ServerResultAsync<void> {
-    const deleteResult = await this.repository.fileS3.deleteS3Object(key);
-    if (deleteResult.isErr()) return err(deleteResult.error);
-
-    const fileRepo = this.repository.file;
-    if (!fileRepo) {
-      return ok(undefined);
+  async putObject(input: PutFileObjectInput): ServerResultAsync<FileRow> {
+    const hasUser = Boolean(input.userId);
+    const hasOrg = Boolean(input.memberId && input.organizationId);
+    if (!hasUser && !hasOrg) {
+      return this.error("BAD_REQUEST", "putObject requires userId or memberId plus organizationId");
+    }
+    if (Boolean(input.memberId) !== Boolean(input.organizationId)) {
+      return this.error("BAD_REQUEST", "memberId and organizationId must be provided together");
     }
 
-    const bucket = this.repository.fileS3.getBucket();
-    if (!bucket) {
-      return ok(undefined);
+    const contentTypeAllowed = this.contentTypeAllowed(input.contentType);
+    if (!contentTypeAllowed) {
+      return this.error("BAD_REQUEST", "File type is not allowed");
     }
 
-    const rowResult = await fileRepo.findActiveByBucketAndKey(bucket, key);
-    if (rowResult.isErr()) return err(rowResult.error);
-    const row = rowResult.value;
-    if (!row) {
-      return ok(undefined);
-    }
+    const bucketResult = this.resolveBucket(input.bucket);
+    if (bucketResult.isErr()) return err(bucketResult.error);
+    const bucket = bucketResult.value;
 
-    const soft = await fileRepo.softDeleteUploadById(row.id);
-    if (soft.isErr()) return err(soft.error);
-    return ok(undefined);
-  }
-
-  async recordLocalUpload(
-    actor: AuthenticatedActor,
-    input: RecordLocalUploadInput
-  ): ServerResultAsync<RecordLocalUploadResult> {
-    const fileRepo = this.repository.file;
-    if (!fileRepo) {
-      return ok({ originalName: input.originalName });
-    }
-
-    const writeGuard = this.accessGuard(actor, "write", {
-      userId: actor.userId,
-      memberId: actor.memberId ?? null,
-      organizationId: actor.organizationId ?? null,
-      teamId: actor.teamId ?? null,
-    });
-    if (writeGuard.isErr()) return err(writeGuard.error);
-
-    const createdResult = await fileRepo.create({
-      bucket: LOCAL_FILE_BUCKET,
-      key: input.filename,
-      originalName: input.originalName,
-      originalExtension: extractOriginalExtension(input.originalName),
-      contentType: input.contentType,
-      sizeBytes: input.sizeBytes,
-      status: "UPLOADED",
-      userId: actor.userId,
-      memberId: actor.memberId ?? null,
-      organizationId: actor.organizationId ?? null,
-      teamId: actor.teamId ?? null,
-      uploadedAt: new Date(),
-    });
-    if (createdResult.isErr()) return err(createdResult.error);
-
-    return ok({
-      fileId: createdResult.value.id,
-      originalName: createdResult.value.originalName,
-    });
-  }
-
-  async initiateS3Upload(
-    actor: AuthenticatedActor,
-    input: InitiateS3UploadInput
-  ): ServerResultAsync<InitiateS3UploadResult> {
-    const writeGuard = this.accessGuard(actor, "write", {
-      userId: input.userId,
-      memberId: input.memberId ?? null,
-      organizationId: input.organizationId ?? null,
-      teamId: input.teamId ?? null,
-    });
-    if (writeGuard.isErr()) return err(writeGuard.error);
-
-    const bucket = this.repository.fileS3.getBucket();
-    if (!bucket) {
-      return this.error("INTERNAL_SERVER_ERROR", "S3 bucket is not configured");
+    const ownerUserId = input.userId ?? input.memberId;
+    if (!ownerUserId) {
+      return this.error("BAD_REQUEST", "putObject requires userId or memberId plus organizationId");
     }
 
     const originalExtension = extractOriginalExtension(input.originalName);
     const key = buildS3ObjectKey({
-      userId: input.userId,
+      userId: ownerUserId,
       organizationId: input.organizationId,
-      teamId: input.teamId,
       extension: originalExtension,
       pathHint: input.pathHint,
     });
 
-    const fileRepo = this.repository.file;
-    if (!fileRepo) {
-      const urlResult = await this.repository.fileS3.getS3UploadUrl(key, input.contentType);
-      if (urlResult.isErr()) return err(urlResult.error);
-      return ok({ key, url: urlResult.value });
-    }
+    const put = await this.repository.fileS3.putS3Object(
+      key,
+      input.body,
+      input.contentType,
+      bucket
+    );
+    if (put.isErr()) return err(put.error);
 
-    const createdResult = await fileRepo.create({
+    return this.repository.file.create({
       bucket,
       key,
       originalName: input.originalName,
       originalExtension,
       contentType: input.contentType,
-      sizeBytes: input.sizeBytes,
+      sizeBytes: input.sizeBytes ?? input.body.byteLength,
       metadata: input.metadata,
-      status: "PENDING",
-      userId: input.userId,
-      memberId: input.memberId ?? null,
-      organizationId: input.organizationId,
-      teamId: input.teamId,
-    });
-    if (createdResult.isErr()) return err(createdResult.error);
-
-    const row = createdResult.value;
-    const urlResult = await this.repository.fileS3.getS3UploadUrl(key, input.contentType);
-    if (urlResult.isErr()) {
-      const failed = await fileRepo.markFailedById(row.id);
-      if (failed.isErr()) return err(failed.error);
-      return err(urlResult.error);
-    }
-
-    return ok({
-      fileId: row.id,
-      key,
-      url: urlResult.value,
-    });
-  }
-
-  async finalizeS3Upload(
-    actor: AuthenticatedActor,
-    input: FinalizeS3UploadInput
-  ): ServerResultAsync<void> {
-    const fileRepo = this.repository.file;
-    if (!fileRepo) {
-      return this.error("INTERNAL_SERVER_ERROR", "File inventory is not configured");
-    }
-
-    const rowResult = await fileRepo.findActiveById(input.fileId);
-    if (rowResult.isErr()) return err(rowResult.error);
-    const row = rowResult.value;
-    if (!row) {
-      return this.error("NOT_FOUND", "File not found");
-    }
-
-    const writeGuard = this.accessGuard(actor, "write", {
-      userId: row.userId,
-      memberId: row.memberId,
-      organizationId: row.organizationId,
-      teamId: row.teamId,
-    });
-    if (writeGuard.isErr()) return err(writeGuard.error);
-
-    if (row.status === "UPLOADED") {
-      return ok(undefined);
-    }
-
-    if (row.status !== "PENDING") {
-      return this.error("BAD_REQUEST", "File cannot be finalized in its current state");
-    }
-
-    const updated = await fileRepo.updateStatusById(input.fileId, {
       status: "UPLOADED",
-      etag: input.etag ?? null,
+      userId: input.userId ?? null,
+      memberId: input.memberId ?? null,
+      organizationId: input.organizationId ?? null,
       uploadedAt: new Date(),
     });
-    if (updated.isErr()) return err(updated.error);
-    return ok(undefined);
   }
 
-  async deleteUploadedFileById(actor: AuthenticatedActor, fileId: string): ServerResultAsync<void> {
-    const fileRepo = this.repository.file;
-    if (!fileRepo) {
-      return this.error("INTERNAL_SERVER_ERROR", "File inventory is not configured");
-    }
+  /**
+   * In-process read for other Services. Not a Procedure — do not call from routers or tRPC.
+   */
+  async getObject(locator: FileLocator): ServerResultAsync<FileObjectBody & { fileId: string }> {
+    const rowResult = await this.findUploadedFile(locator);
+    if (rowResult.isErr()) return err(rowResult.error);
+    const row = rowResult.value;
 
-    const rowResult = await fileRepo.findActiveById(fileId);
+    const object = await this.repository.fileS3.getS3Object(row.key, row.bucket);
+    if (object.isErr()) return err(object.error);
+    return ok({ ...object.value, fileId: row.id });
+  }
+
+  readonly initiate = this.procedure("initiate")
+    .input(fileSchemas.input.initiate)
+    .output(fileSchemas.output.initiate)
+    .requireAuth()
+    .access({
+      action: "write",
+      entities: ({ ctx }) =>
+        hasServiceActorScope(ctx.actor, "organization")
+          ? {
+              userId: ctx.actor.userId,
+              memberId: ctx.actor.memberId,
+              organizationId: ctx.actor.organizationId,
+            }
+          : {
+              userId: ctx.actor.userId,
+              memberId: null,
+              organizationId: null,
+            },
+    })
+    .handle(async ({ input, ctx }) => {
+      const contentTypeAllowed = this.contentTypeAllowed(input.contentType);
+      if (!contentTypeAllowed) {
+        return this.error("BAD_REQUEST", "File type is not allowed");
+      }
+
+      const bucketResult = this.resolveBucket(input.bucket);
+      if (bucketResult.isErr()) return err(bucketResult.error);
+      const bucket = bucketResult.value;
+
+      const isOrg = hasServiceActorScope(ctx.actor, "organization");
+      const organizationId = isOrg ? ctx.actor.organizationId : null;
+      const memberId = isOrg ? ctx.actor.memberId : null;
+
+      const originalExtension = extractOriginalExtension(input.originalName);
+      const key = buildS3ObjectKey({
+        userId: ctx.actor.userId,
+        organizationId: organizationId ?? undefined,
+        extension: originalExtension,
+        pathHint: input.pathHint,
+      });
+
+      const createdResult = await this.repository.file.create({
+        bucket,
+        key,
+        originalName: input.originalName,
+        originalExtension,
+        contentType: input.contentType,
+        sizeBytes: input.sizeBytes,
+        metadata: input.metadata,
+        status: "PENDING",
+        userId: ctx.actor.userId,
+        memberId,
+        organizationId,
+      });
+      if (createdResult.isErr()) return err(createdResult.error);
+
+      const row = createdResult.value;
+      const urlResult = await this.repository.fileS3.getS3UploadUrl(
+        key,
+        input.contentType,
+        undefined,
+        bucket
+      );
+      if (urlResult.isErr()) {
+        const failed = await this.repository.file.markFailedById(row.id);
+        if (failed.isErr()) return err(failed.error);
+        return err(urlResult.error);
+      }
+
+      return ok({
+        fileId: row.id,
+        bucket,
+        key,
+        url: urlResult.value,
+      });
+    });
+
+  private resolveBucket(requested?: string): ServerResult<string> {
+    const allowlist =
+      this.fileConfig.buckets && this.fileConfig.buckets.length > 0
+        ? this.fileConfig.buckets
+        : [this.repository.fileS3.getBucket()].filter(
+            (value): value is string => typeof value === "string" && value.length > 0
+          );
+    if (requested) {
+      if (!allowlist.includes(requested)) {
+        return this.error("BAD_REQUEST", "Bucket is not allowlisted");
+      }
+      return ok(requested);
+    }
+    const fallback = allowlist[0];
+    if (!fallback) {
+      return this.error("INTERNAL_SERVER_ERROR", "S3 bucket is not configured");
+    }
+    return ok(fallback);
+  }
+
+  readonly finalize = this.procedure("finalize")
+    .input(fileSchemas.input.finalize)
+    .output(fileSchemas.output.finalize)
+    .requireAuth()
+    .loadResource("file", ({ input }) => {
+      const locator = toFileLocator(input);
+      if (!locator) {
+        return this.error("BAD_REQUEST", "Provide fileId or bucket and key, not both");
+      }
+      return this.findActiveFile(locator);
+    })
+    .access({
+      action: "write",
+      entityStep: "file",
+    })
+    .handle(async ({ input, ctx, state }) => {
+      const denied = this.denyFileAccess(ctx.actor, state.file, "write");
+      if (denied) return denied;
+      const row = state.file;
+
+      if (row.status === "UPLOADED") {
+        return ok(undefined);
+      }
+
+      if (row.status !== "PENDING") {
+        return this.error("BAD_REQUEST", "File cannot be finalized in its current state");
+      }
+
+      const head = await this.repository.fileS3.headS3Object(row.key, row.bucket);
+      if (head.isErr()) return err(head.error);
+      if (!head.value) {
+        const failed = await this.repository.file.markFailedById(row.id);
+        if (failed.isErr()) return err(failed.error);
+        return this.error("BAD_REQUEST", "Uploaded object was not found");
+      }
+
+      const updated = await this.repository.file.updateStatusById(row.id, {
+        status: "UPLOADED",
+        etag: input.etag ?? null,
+        uploadedAt: new Date(),
+      });
+      if (updated.isErr()) return err(updated.error);
+      return ok(undefined);
+    });
+
+  private allowedFileTypes(): Record<string, FileTypeAllowlist> {
+    return this.fileConfig.fileTypes ?? fileTypes;
+  }
+
+  private contentTypeAllowed(contentType: string): boolean {
+    return Object.values(this.allowedFileTypes()).some((kind) =>
+      kind.mimetypes.includes(contentType)
+    );
+  }
+
+  private denyFileAccess(
+    actor: AuthenticatedActor,
+    file: { organizationId: string | null; memberId: string | null },
+    action: string
+  ): ServerResult<never> | null {
+    if (!this.actorMatchesFileScope(actor, file)) {
+      return this.error("FORBIDDEN", "Actor scope does not match this File");
+    }
+    if (this.memberCannotAccessOthersFile(actor, file, action)) {
+      return this.error("FORBIDDEN", `You can only ${action} your own File`);
+    }
+    return null;
+  }
+
+  private actorMatchesFileScope(
+    actor: AuthenticatedActor,
+    file: { organizationId: string | null }
+  ): boolean {
+    if (actor.userRole === "admin") {
+      return true;
+    }
+    if (file.organizationId) {
+      return (
+        hasServiceActorScope(actor, "organization") && actor.organizationId === file.organizationId
+      );
+    }
+    return !hasServiceActorScope(actor, "organization");
+  }
+
+  private memberMustOwnFiles(actor: AuthenticatedActor, action: string): boolean {
+    if (actor.userRole === "admin") {
+      return false;
+    }
+    if (!hasServiceActorScope(actor, "organization") || actor.organizationRole !== "member") {
+      return false;
+    }
+    const grant = this.grants.find(
+      (item) =>
+        item.action === action &&
+        item.level === "organization" &&
+        item.role === actor.organizationRole
+    );
+    return grant?.access !== "org" && grant?.access !== "all";
+  }
+
+  private memberCannotAccessOthersFile(
+    actor: AuthenticatedActor,
+    file: { memberId: string | null },
+    action: string
+  ): boolean {
+    return this.memberMustOwnFiles(actor, action) && file.memberId !== actor.memberId;
+  }
+
+  private async presignDownload(row: FileRow): ServerResultAsync<{ url: string; expiresAt: Date }> {
+    const url = await this.repository.fileS3.getS3DownloadUrl(
+      row.key,
+      FILE_DOWNLOAD_EXPIRES_IN,
+      row.bucket
+    );
+    if (url.isErr()) return err(url.error);
+    return ok({
+      url: url.value,
+      expiresAt: new Date(Date.now() + FILE_DOWNLOAD_EXPIRES_IN * 1000),
+    });
+  }
+
+  private async findActiveFile(locator: FileLocator): ServerResultAsync<FileRow> {
+    const rowResult =
+      "fileId" in locator
+        ? await this.repository.file.findActiveById(locator.fileId)
+        : await this.repository.file.findActiveByBucketAndKey(locator.bucket, locator.key);
     if (rowResult.isErr()) return err(rowResult.error);
     const row = rowResult.value;
     if (!row) {
       return this.error("NOT_FOUND", "File not found");
     }
+    return ok(row);
+  }
 
-    const deleteGuard = this.accessGuard(actor, "delete", {
-      userId: row.userId,
-      memberId: row.memberId,
-      organizationId: row.organizationId,
-      teamId: row.teamId,
-    });
-    if (deleteGuard.isErr()) return err(deleteGuard.error);
-
-    const s3Result = await this.repository.fileS3.deleteS3Object(row.key);
-    if (s3Result.isErr()) return err(s3Result.error);
-
-    const soft = await fileRepo.softDeleteUploadById(row.id);
-    if (soft.isErr()) return err(soft.error);
-    return ok(undefined);
+  private async findUploadedFile(locator: FileLocator): ServerResultAsync<FileRow> {
+    const rowResult = await this.findActiveFile(locator);
+    if (rowResult.isErr()) return err(rowResult.error);
+    if (rowResult.value.status !== "UPLOADED") {
+      return this.error("NOT_FOUND", "File not found");
+    }
+    return ok(rowResult.value);
   }
 
   async uploadFileToS3(localPath: string, returnDownloadUrl = false): ServerResultAsync<string> {
@@ -339,107 +647,24 @@ export class FileService extends BasePermissionService<
     const result = await this.repository.fileS3.getS3Object(s3Path);
     if (result.isErr()) return err(result.error);
 
-    const body = result.value.Body;
-    if (!body) return this.error("INTERNAL_SERVER_ERROR", "S3 object body is empty");
-
     const mkdirResult = await this.throwablePromise(() =>
       mkdir(dirname(destinationPath), { recursive: true })
     );
     if (mkdirResult.isErr()) return err(mkdirResult.error);
 
-    if (
-      typeof body === "object" &&
-      "transformToByteArray" in body &&
-      typeof body.transformToByteArray === "function"
-    ) {
-      const bytesResult = await this.throwablePromise(() => body.transformToByteArray());
-      if (bytesResult.isErr()) return err(bytesResult.error);
-
-      const writeResult = await this.throwablePromise(() =>
-        writeFile(destinationPath, Buffer.from(bytesResult.value))
-      );
-      if (writeResult.isErr()) return err(writeResult.error);
-
-      return ok(destinationPath);
-    }
-
-    const writeStream = createWriteStream(destinationPath);
-    let input: NodeJS.ReadableStream | null = null;
-    const unknownBody: unknown = body;
-
-    if (
-      typeof unknownBody === "object" &&
-      unknownBody !== null &&
-      "pipe" in unknownBody &&
-      typeof (unknownBody as { pipe?: unknown }).pipe === "function"
-    ) {
-      input = unknownBody as NodeJS.ReadableStream;
-    } else if (
-      typeof unknownBody === "object" &&
-      unknownBody !== null &&
-      "getReader" in unknownBody &&
-      typeof (unknownBody as { getReader?: unknown }).getReader === "function"
-    ) {
-      input = Readable.fromWeb(unknownBody as unknown as globalThis.ReadableStream);
-    } else if (
-      typeof unknownBody === "object" &&
-      unknownBody !== null &&
-      "stream" in unknownBody &&
-      typeof (unknownBody as { stream?: unknown }).stream === "function"
-    ) {
-      input = Readable.fromWeb(
-        (unknownBody as { stream: () => globalThis.ReadableStream }).stream()
-      );
-    }
-
-    if (input) {
-      const pipelineResult = await this.throwablePromise(() => pipeline(input, writeStream));
-      if (pipelineResult.isErr()) {
-        writeStream.destroy();
-        return err(pipelineResult.error);
-      }
-      return ok(destinationPath);
-    }
-
-    if (
-      typeof unknownBody === "object" &&
-      unknownBody !== null &&
-      "arrayBuffer" in unknownBody &&
-      typeof (unknownBody as { arrayBuffer?: unknown }).arrayBuffer === "function"
-    ) {
-      const bufferResult = await this.throwablePromise(async () =>
-        Buffer.from(
-          await (unknownBody as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer()
-        )
-      );
-      if (bufferResult.isErr()) {
-        writeStream.destroy();
-        return err(bufferResult.error);
-      }
-
-      const pipelineResult = await this.throwablePromise(() =>
-        pipeline(Readable.from(bufferResult.value), writeStream)
-      );
-      if (pipelineResult.isErr()) {
-        writeStream.destroy();
-        return err(pipelineResult.error);
-      }
-
-      return ok(destinationPath);
-    }
-
-    writeStream.destroy();
-    return this.error("INTERNAL_SERVER_ERROR", "Unsupported S3 body type");
+    const writeResult = await this.throwablePromise(() =>
+      writeFile(destinationPath, result.value.body)
+    );
+    if (writeResult.isErr()) return err(writeResult.error);
+    return ok(destinationPath);
   }
 
-  getFileType(
-    pathValue: string
-  ): { fileType: keyof typeof fileTypes; extension: string } | undefined {
+  getFileType(pathValue: string): { fileType: string; extension: string } | undefined {
     const extension = pathValue.split(".").pop();
     if (!extension) return undefined;
 
-    for (const [key, value] of Object.entries(fileTypes)) {
-      if (value.extensions.includes(extension)) {
+    for (const [key, value] of Object.entries(this.allowedFileTypes())) {
+      if (value.extensions?.includes(extension)) {
         return { fileType: key, extension };
       }
     }

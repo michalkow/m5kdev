@@ -1,23 +1,26 @@
-import { useQuery } from "@tanstack/react-query";
 import { useAppConfig } from "../../app/hooks/useAppConfig";
+import { fileCookieDownloadPath, fileCookieDownloadUrl } from "../fileDownloadPath";
 
-export async function fetchS3DownloadUrl(filePath: string, serverUrl?: string) {
-  if (!serverUrl) {
-    throw new Error("fetchS3DownloadUrl requires a serverUrl. In React, use useS3DownloadUrl.");
+export { fileCookieDownloadPath, fileCookieDownloadUrl };
+
+/**
+ * Cookie download URL for an inventoried File id. HTTP(S) values (OAuth avatars)
+ * pass through unchanged.
+ */
+export function fileDisplayUrl(
+  serverUrl: string,
+  stored: string | null | undefined
+): string | null {
+  if (!stored) return null;
+  if (stored.startsWith("http://") || stored.startsWith("https://")) {
+    return stored;
   }
-
-  const res = await fetch(`${serverUrl}/upload/files/${filePath}`);
-  if (!res.ok) throw new Error("Failed to get download URL");
-  return (await res.json()).url as string;
+  return fileCookieDownloadUrl(serverUrl, stored);
 }
 
-export function useS3DownloadUrl(filePath: string, serverUrlOverride?: string) {
+export function useS3DownloadUrl(fileIdOrUrl: string, serverUrlOverride?: string) {
   const { serverUrl } = useAppConfig();
   const resolvedServerUrl = serverUrlOverride ?? serverUrl;
-
-  return useQuery<string, Error>({
-    queryKey: ["s3DownloadUrl", resolvedServerUrl, filePath],
-    queryFn: () => fetchS3DownloadUrl(filePath, resolvedServerUrl),
-    enabled: Boolean(filePath),
-  });
+  const data = fileDisplayUrl(resolvedServerUrl, fileIdOrUrl || null);
+  return { data };
 }

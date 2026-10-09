@@ -168,7 +168,7 @@
     "hero": {
       "eyebrow": "Files",
       "title": "Upload an image and see it inventoried.",
-      "body": "Local uploads land on disk and in the files table. Organization-scoped rows stamp the active member.",
+      "body": "The browser PUTs to S3 after initiate, then finalize inventories the File. Open uses /files/:id.",
       "upload": "Upload image",
       "syncing": "Refreshing",
       "synced": "Live against the files table"
@@ -178,11 +178,15 @@
       "body": "Upload an image to see it listed here."
     },
     "row": {
-      "organization": "Organization"
+      "organization": "Organization",
+      "open": "Open",
+      "delete": "Delete"
     },
     "toast": {
       "uploaded": "File uploaded.",
-      "failed": "Upload failed."
+      "failed": "Upload failed.",
+      "deleted": "File deleted.",
+      "deleteFailed": "Delete failed."
     }
   },
   "notifications": {

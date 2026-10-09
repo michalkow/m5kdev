@@ -1,3 +1,4 @@
+import { useS3Upload } from "@m5kdev/frontend/modules/file/hooks/useS3Upload";
 import { File, Upload, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
@@ -6,18 +7,18 @@ import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
 
 interface FileDropzoneProps {
-  onUploadComplete?: (filePath: string) => void;
+  onUploadComplete?: (fileId: string) => void;
   className?: string;
 }
 
 export function FileDropzone({ onUploadComplete, className }: FileDropzoneProps) {
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const { upload, progress, status, reset } = useS3Upload({ scope: "organization" });
+  const isUploading = status === "uploading";
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
-      setSelectedFile(acceptedFiles[0]);
+      setSelectedFile(acceptedFiles[0] ?? null);
     }
   }, []);
 
@@ -34,38 +35,19 @@ export function FileDropzone({ onUploadComplete, className }: FileDropzoneProps)
 
   const uploadFile = async () => {
     if (!selectedFile) return;
-
-    setIsUploading(true);
-    setUploadProgress(0);
-
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-
     try {
-      const response = await fetch("/api/upload/image", {
-        method: "POST",
-        body: formData,
-        // Note: Content-Type is automatically set for FormData
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      onUploadComplete?.(data.filePath);
+      const fileId = await upload(selectedFile);
+      onUploadComplete?.(fileId);
       setSelectedFile(null);
-      setUploadProgress(0);
+      reset();
     } catch (error) {
       console.error("Upload error:", error);
-    } finally {
-      setIsUploading(false);
     }
   };
 
   const removeFile = () => {
     setSelectedFile(null);
-    setUploadProgress(0);
+    reset();
   };
 
   return (
@@ -109,7 +91,7 @@ export function FileDropzone({ onUploadComplete, className }: FileDropzoneProps)
 
       {selectedFile && (
         <div className="mt-4 space-y-4">
-          {isUploading && <Progress value={uploadProgress} className="h-2 w-full" />}
+          {isUploading && <Progress value={progress} className="h-2 w-full" />}
           <Button onClick={uploadFile} disabled={isUploading} className="w-full">
             {isUploading ? "Uploading..." : "Upload File"}
           </Button>

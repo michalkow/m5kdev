@@ -1,7 +1,14 @@
 import { useCallback, useState } from "react";
-import { useAppConfig } from "../../app/hooks/useAppConfig";
+import { useAppTRPCClient } from "../../app/hooks/useAppTrpc";
+import {
+  type InitiateFileUploadInput,
+  type InitiateFileUploadResult,
+  type ResolvedUploadBlob,
+  uploadInventoriedFile,
+} from "../uploadInventoriedFile";
 
 export type S3UploadStatus = "idle" | "uploading" | "success" | "error";
+export type FileUploadScope = "organization" | "user";
 
 export type UploadBlobInput =
   | Blob
@@ -12,27 +19,7 @@ export type UploadBlobInput =
       size?: number;
     };
 
-export type ResolvedUploadBlob = {
-  blob: Blob;
-  name: string;
-  type: string;
-  size: number;
-};
-
-async function getPresignedUrl(
-  filename: string,
-  filetype: string,
-  serverUrl: string
-): Promise<string> {
-  const res = await fetch(`${serverUrl}/upload/s3-presigned-url`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ filename, filetype }),
-  });
-  if (!res.ok) throw new Error("Failed to get presigned URL");
-  const data = (await res.json()) as { url: string };
-  return data.url;
-}
+export type { ResolvedUploadBlob };
 
 function isBlobInput(file: UploadBlobInput): file is Blob {
   return typeof Blob !== "undefined" && file instanceof Blob;
@@ -64,83 +51,69 @@ export async function resolveUploadBlob(file: UploadBlobInput): Promise<Resolved
   };
 }
 
-function createUploadId() {
-  return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2, 11);
+interface FileUploadProcedures {
+  initiate: {
+    mutate: (input: InitiateFileUploadInput) => Promise<InitiateFileUploadResult>;
+  };
+  finalize: {
+    mutate: (input: { fileId: string }) => Promise<void>;
+  };
 }
 
-export function useS3Upload(serverUrlOverride?: string) {
-  const { serverUrl } = useAppConfig();
-  const resolvedServerUrl = serverUrlOverride ?? serverUrl;
+interface FileUploadRouter {
+  file: FileUploadProcedures & { user: FileUploadProcedures };
+}
+
+export interface UseS3UploadOptions {
+  readonly scope?: FileUploadScope;
+}
+
+/**
+ * Production File upload: initiate → PUT (progress) → finalize.
+ * Returns the File id. Does not POST multipart bytes to the app server.
+ */
+export function useS3Upload(options: UseS3UploadOptions = {}) {
+  const client = useAppTRPCClient() as unknown as FileUploadRouter;
+  const scope = options.scope ?? "organization";
   const [progress, setProgress] = useState<number>(0);
   const [status, setStatus] = useState<S3UploadStatus>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
+  const [fileId, setFileId] = useState<string | null>(null);
 
   const upload = useCallback(
-    async (file: UploadBlobInput, prefix?: string) => {
+    async (file: UploadBlobInput) => {
       setProgress(0);
       setStatus("uploading");
       setError(null);
-      setUploadedUrl(null);
+      setFileId(null);
       try {
         const resolvedFile = await resolveUploadBlob(file);
-        const originalFilename = resolvedFile.name;
-        const extension = originalFilename.split(".").pop() || "";
-        const uuid = createUploadId();
-        const filename = prefix
-          ? `${prefix}/${uuid}${extension ? `.${extension}` : ""}`
-          : `${uuid}${extension ? `.${extension}` : ""}`;
-        const filetype = resolvedFile.type;
-        const presignedUrl = await getPresignedUrl(filename, filetype, resolvedServerUrl);
-
-        return await new Promise<string>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open("PUT", presignedUrl);
-          xhr.setRequestHeader("Content-Type", filetype);
-
-          xhr.upload.onprogress = (event) => {
-            if (event.lengthComputable) {
-              setProgress(Math.round((event.loaded * 100) / event.total));
-            }
-          };
-
-          xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              setProgress(100);
-              setStatus("success");
-              // Remove query params to get the public URL
-              setUploadedUrl(presignedUrl.split("?")[0]);
-              resolve(filename);
-            } else {
-              setStatus("error");
-              setError(`Upload failed with status ${xhr.status}`);
-              reject(new Error(`Upload failed with status ${xhr.status}`));
-            }
-          };
-
-          xhr.onerror = () => {
-            setStatus("error");
-            setError("Network error during upload");
-            reject(new Error("Network error during upload"));
-          };
-
-          xhr.send(resolvedFile.blob);
+        const procedures = scope === "user" ? client.file.user : client.file;
+        const result = await uploadInventoriedFile({
+          file: resolvedFile,
+          initiate: (input) => procedures.initiate.mutate(input),
+          finalize: (input) => procedures.finalize.mutate(input),
+          onProgress: setProgress,
         });
+        setProgress(100);
+        setStatus("success");
+        setFileId(result.fileId);
+        return result.fileId;
       } catch (err: unknown) {
         setStatus("error");
         setError(err instanceof Error ? err.message : "Unknown error");
         return Promise.reject(err);
       }
     },
-    [resolvedServerUrl]
+    [client, scope]
   );
 
   const reset = useCallback(() => {
     setProgress(0);
     setStatus("idle");
     setError(null);
-    setUploadedUrl(null);
+    setFileId(null);
   }, []);
 
-  return { upload, progress, status, error, uploadedUrl, reset };
+  return { upload, progress, status, error, fileId, reset };
 }

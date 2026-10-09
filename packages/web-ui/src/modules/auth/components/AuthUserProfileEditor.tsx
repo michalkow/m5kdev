@@ -56,8 +56,9 @@ export function AuthUserProfileEditor() {
           <div className="flex flex-row gap-4 items-start">
             <AvatarUpload
               currentAvatarUrl={image}
-              onUploadComplete={(url) => {
-                setImage(url);
+              scope="user"
+              onUploadComplete={(fileId) => {
+                setImage(fileId);
               }}
             />
 
