@@ -19,7 +19,6 @@ export const files = table(
     organizationId: text("organization_id").references(() => organizations.id, {
       onDelete: "set null",
     }),
-    teamId: text("team_id"),
     bucket: text("bucket").notNull(),
     key: text("key").notNull(),
     originalName: text("original_name").notNull(),

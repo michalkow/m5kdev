@@ -1,17 +1,16 @@
-import { createWriteStream } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path, { dirname } from "node:path";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 import { fileTypes } from "@m5kdev/commons/modules/file/file.constants";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
 import type { AuthenticatedActor } from "../base/base.actor";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
+import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
 import { LOCAL_FILE_BUCKET } from "./file.constants";
 import { fileSchemas } from "./file.dto";
+import type { LocalFileObjectStore } from "./file.local-store";
 import type { FileRepository, FileS3Repository } from "./file.repository";
 import type {
   FinalizeS3UploadInput,
@@ -22,27 +21,32 @@ import type {
 } from "./file.types";
 import { buildS3ObjectKey, extractOriginalExtension } from "./file.utils";
 
-/** Pass `file` when Drizzle inventory is available; omit it for S3-only (presign / get / delete) behavior. */
+export interface FileServiceConfig {
+  readonly buckets?: readonly string[];
+  readonly deleteAfterDays?: number;
+}
+
 export type FileServiceRepositories = {
-  fileS3: FileS3Repository;
-  file?: FileRepository;
+  fileS3: FileS3Repository | LocalFileObjectStore;
+  file: FileRepository;
 };
 
-export class FileService extends BasePermissionService<
-  { fileS3: FileS3Repository } & Partial<{ file: FileRepository }>,
-  Record<string, never>
-> {
+export class FileService extends BasePermissionService<FileServiceRepositories, Record<string, never>> {
+  constructor(
+    repository: FileServiceRepositories,
+    service: Record<string, never>,
+    grants: ResourceGrant[] = [],
+    readonly fileConfig: FileServiceConfig = {}
+  ) {
+    super(repository, service, grants);
+  }
   readonly list = this.procedure("list")
     .input(fileSchemas.input.list)
     .output(fileSchemas.output.list)
     .requireAuth("organization")
     .addContextFilter(["organization"])
     .handle(async ({ input, ctx }) => {
-      const fileRepo = this.repository.file;
-      if (!fileRepo) {
-        return this.error("INTERNAL_SERVER_ERROR", "File inventory is not configured");
-      }
-      const listed = await fileRepo.queryList(input);
+      const listed = await this.repository.file.queryList(input);
       if (listed.isErr()) return listed;
       return ok(this.filterPermission(ctx.actor, "read", listed.value));
     });
@@ -82,24 +86,19 @@ export class FileService extends BasePermissionService<
     const deleteResult = await this.repository.fileS3.deleteS3Object(key);
     if (deleteResult.isErr()) return err(deleteResult.error);
 
-    const fileRepo = this.repository.file;
-    if (!fileRepo) {
-      return ok(undefined);
-    }
-
     const bucket = this.repository.fileS3.getBucket();
     if (!bucket) {
       return ok(undefined);
     }
 
-    const rowResult = await fileRepo.findActiveByBucketAndKey(bucket, key);
+    const rowResult = await this.repository.file.findActiveByBucketAndKey(bucket, key);
     if (rowResult.isErr()) return err(rowResult.error);
     const row = rowResult.value;
     if (!row) {
       return ok(undefined);
     }
 
-    const soft = await fileRepo.softDeleteUploadById(row.id);
+    const soft = await this.repository.file.softDeleteUploadById(row.id);
     if (soft.isErr()) return err(soft.error);
     return ok(undefined);
   }
@@ -108,20 +107,14 @@ export class FileService extends BasePermissionService<
     actor: AuthenticatedActor,
     input: RecordLocalUploadInput
   ): ServerResultAsync<RecordLocalUploadResult> {
-    const fileRepo = this.repository.file;
-    if (!fileRepo) {
-      return ok({ originalName: input.originalName });
-    }
-
     const writeGuard = this.accessGuard(actor, "write", {
       userId: actor.userId,
       memberId: actor.memberId ?? null,
       organizationId: actor.organizationId ?? null,
-      teamId: actor.teamId ?? null,
     });
     if (writeGuard.isErr()) return err(writeGuard.error);
 
-    const createdResult = await fileRepo.create({
+    const createdResult = await this.repository.file.create({
       bucket: LOCAL_FILE_BUCKET,
       key: input.filename,
       originalName: input.originalName,
@@ -132,7 +125,6 @@ export class FileService extends BasePermissionService<
       userId: actor.userId,
       memberId: actor.memberId ?? null,
       organizationId: actor.organizationId ?? null,
-      teamId: actor.teamId ?? null,
       uploadedAt: new Date(),
     });
     if (createdResult.isErr()) return err(createdResult.error);
@@ -151,7 +143,6 @@ export class FileService extends BasePermissionService<
       userId: input.userId,
       memberId: input.memberId ?? null,
       organizationId: input.organizationId ?? null,
-      teamId: input.teamId ?? null,
     });
     if (writeGuard.isErr()) return err(writeGuard.error);
 
@@ -164,19 +155,11 @@ export class FileService extends BasePermissionService<
     const key = buildS3ObjectKey({
       userId: input.userId,
       organizationId: input.organizationId,
-      teamId: input.teamId,
       extension: originalExtension,
       pathHint: input.pathHint,
     });
 
-    const fileRepo = this.repository.file;
-    if (!fileRepo) {
-      const urlResult = await this.repository.fileS3.getS3UploadUrl(key, input.contentType);
-      if (urlResult.isErr()) return err(urlResult.error);
-      return ok({ key, url: urlResult.value });
-    }
-
-    const createdResult = await fileRepo.create({
+    const createdResult = await this.repository.file.create({
       bucket,
       key,
       originalName: input.originalName,
@@ -188,14 +171,13 @@ export class FileService extends BasePermissionService<
       userId: input.userId,
       memberId: input.memberId ?? null,
       organizationId: input.organizationId,
-      teamId: input.teamId,
     });
     if (createdResult.isErr()) return err(createdResult.error);
 
     const row = createdResult.value;
-    const urlResult = await this.repository.fileS3.getS3UploadUrl(key, input.contentType);
+    const urlResult = await this.repository.fileS3.getS3UploadUrl(key, input.contentType, undefined, bucket);
     if (urlResult.isErr()) {
-      const failed = await fileRepo.markFailedById(row.id);
+      const failed = await this.repository.file.markFailedById(row.id);
       if (failed.isErr()) return err(failed.error);
       return err(urlResult.error);
     }
@@ -211,12 +193,7 @@ export class FileService extends BasePermissionService<
     actor: AuthenticatedActor,
     input: FinalizeS3UploadInput
   ): ServerResultAsync<void> {
-    const fileRepo = this.repository.file;
-    if (!fileRepo) {
-      return this.error("INTERNAL_SERVER_ERROR", "File inventory is not configured");
-    }
-
-    const rowResult = await fileRepo.findActiveById(input.fileId);
+    const rowResult = await this.repository.file.findActiveById(input.fileId);
     if (rowResult.isErr()) return err(rowResult.error);
     const row = rowResult.value;
     if (!row) {
@@ -227,7 +204,6 @@ export class FileService extends BasePermissionService<
       userId: row.userId,
       memberId: row.memberId,
       organizationId: row.organizationId,
-      teamId: row.teamId,
     });
     if (writeGuard.isErr()) return err(writeGuard.error);
 
@@ -239,7 +215,7 @@ export class FileService extends BasePermissionService<
       return this.error("BAD_REQUEST", "File cannot be finalized in its current state");
     }
 
-    const updated = await fileRepo.updateStatusById(input.fileId, {
+    const updated = await this.repository.file.updateStatusById(input.fileId, {
       status: "UPLOADED",
       etag: input.etag ?? null,
       uploadedAt: new Date(),
@@ -249,12 +225,7 @@ export class FileService extends BasePermissionService<
   }
 
   async deleteUploadedFileById(actor: AuthenticatedActor, fileId: string): ServerResultAsync<void> {
-    const fileRepo = this.repository.file;
-    if (!fileRepo) {
-      return this.error("INTERNAL_SERVER_ERROR", "File inventory is not configured");
-    }
-
-    const rowResult = await fileRepo.findActiveById(fileId);
+    const rowResult = await this.repository.file.findActiveById(fileId);
     if (rowResult.isErr()) return err(rowResult.error);
     const row = rowResult.value;
     if (!row) {
@@ -265,14 +236,13 @@ export class FileService extends BasePermissionService<
       userId: row.userId,
       memberId: row.memberId,
       organizationId: row.organizationId,
-      teamId: row.teamId,
     });
     if (deleteGuard.isErr()) return err(deleteGuard.error);
 
-    const s3Result = await this.repository.fileS3.deleteS3Object(row.key);
+    const s3Result = await this.repository.fileS3.deleteS3Object(row.key, row.bucket);
     if (s3Result.isErr()) return err(s3Result.error);
 
-    const soft = await fileRepo.softDeleteUploadById(row.id);
+    const soft = await this.repository.file.softDeleteUploadById(row.id);
     if (soft.isErr()) return err(soft.error);
     return ok(undefined);
   }
@@ -339,97 +309,16 @@ export class FileService extends BasePermissionService<
     const result = await this.repository.fileS3.getS3Object(s3Path);
     if (result.isErr()) return err(result.error);
 
-    const body = result.value.Body;
-    if (!body) return this.error("INTERNAL_SERVER_ERROR", "S3 object body is empty");
-
     const mkdirResult = await this.throwablePromise(() =>
       mkdir(dirname(destinationPath), { recursive: true })
     );
     if (mkdirResult.isErr()) return err(mkdirResult.error);
 
-    if (
-      typeof body === "object" &&
-      "transformToByteArray" in body &&
-      typeof body.transformToByteArray === "function"
-    ) {
-      const bytesResult = await this.throwablePromise(() => body.transformToByteArray());
-      if (bytesResult.isErr()) return err(bytesResult.error);
-
-      const writeResult = await this.throwablePromise(() =>
-        writeFile(destinationPath, Buffer.from(bytesResult.value))
-      );
-      if (writeResult.isErr()) return err(writeResult.error);
-
-      return ok(destinationPath);
-    }
-
-    const writeStream = createWriteStream(destinationPath);
-    let input: NodeJS.ReadableStream | null = null;
-    const unknownBody: unknown = body;
-
-    if (
-      typeof unknownBody === "object" &&
-      unknownBody !== null &&
-      "pipe" in unknownBody &&
-      typeof (unknownBody as { pipe?: unknown }).pipe === "function"
-    ) {
-      input = unknownBody as NodeJS.ReadableStream;
-    } else if (
-      typeof unknownBody === "object" &&
-      unknownBody !== null &&
-      "getReader" in unknownBody &&
-      typeof (unknownBody as { getReader?: unknown }).getReader === "function"
-    ) {
-      input = Readable.fromWeb(unknownBody as unknown as globalThis.ReadableStream);
-    } else if (
-      typeof unknownBody === "object" &&
-      unknownBody !== null &&
-      "stream" in unknownBody &&
-      typeof (unknownBody as { stream?: unknown }).stream === "function"
-    ) {
-      input = Readable.fromWeb(
-        (unknownBody as { stream: () => globalThis.ReadableStream }).stream()
-      );
-    }
-
-    if (input) {
-      const pipelineResult = await this.throwablePromise(() => pipeline(input, writeStream));
-      if (pipelineResult.isErr()) {
-        writeStream.destroy();
-        return err(pipelineResult.error);
-      }
-      return ok(destinationPath);
-    }
-
-    if (
-      typeof unknownBody === "object" &&
-      unknownBody !== null &&
-      "arrayBuffer" in unknownBody &&
-      typeof (unknownBody as { arrayBuffer?: unknown }).arrayBuffer === "function"
-    ) {
-      const bufferResult = await this.throwablePromise(async () =>
-        Buffer.from(
-          await (unknownBody as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer()
-        )
-      );
-      if (bufferResult.isErr()) {
-        writeStream.destroy();
-        return err(bufferResult.error);
-      }
-
-      const pipelineResult = await this.throwablePromise(() =>
-        pipeline(Readable.from(bufferResult.value), writeStream)
-      );
-      if (pipelineResult.isErr()) {
-        writeStream.destroy();
-        return err(pipelineResult.error);
-      }
-
-      return ok(destinationPath);
-    }
-
-    writeStream.destroy();
-    return this.error("INTERNAL_SERVER_ERROR", "Unsupported S3 body type");
+    const writeResult = await this.throwablePromise(() =>
+      writeFile(destinationPath, result.value.body)
+    );
+    if (writeResult.isErr()) return err(writeResult.error);
+    return ok(destinationPath);
   }
 
   getFileType(

@@ -35,7 +35,6 @@ function normalizeS3FileExtension(extension: string | undefined): string {
 export function buildS3ObjectKey(input: {
   readonly userId: string;
   readonly organizationId?: string;
-  readonly teamId?: string;
   readonly extension?: string;
   readonly pathHint?: string;
 }): string {
@@ -44,9 +43,6 @@ export function buildS3ObjectKey(input: {
   const parts: string[] = [];
   if (input.organizationId) {
     parts.push(`org/${input.organizationId}`);
-  }
-  if (input.teamId) {
-    parts.push(`team/${input.teamId}`);
   }
   parts.push(`user/${input.userId}`);
   if (input.pathHint) {

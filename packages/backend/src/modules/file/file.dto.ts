@@ -17,7 +17,6 @@ export const fileSchemas = {
       // What this does is it is a user Id that is a real money maker
       memberId: true,
       organizationId: true,
-      teamId: true,
     }),
     update: updateSchema
       .omit({
@@ -27,7 +26,6 @@ export const fileSchemas = {
         userId: true,
         memberId: true,
         organizationId: true,
-        teamId: true,
       })
       .extend({ id: z.string() }),
   },

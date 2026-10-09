@@ -14,7 +14,6 @@ export interface InitiateS3UploadInput {
   readonly userId: string;
   readonly memberId?: string;
   readonly organizationId?: string;
-  readonly teamId?: string;
   readonly contentType: string;
   readonly originalName: string;
   readonly sizeBytes?: number;
@@ -28,9 +27,8 @@ export interface FinalizeS3UploadInput {
   readonly etag?: string;
 }
 
-/** When a DB `FileRepository` is wired, `fileId` is the inventory row id. Otherwise it is omitted. */
 export interface InitiateS3UploadResult {
   readonly key: string;
   readonly url: string;
-  readonly fileId?: string;
+  readonly fileId: string;
 }
