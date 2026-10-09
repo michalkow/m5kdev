@@ -15,7 +15,7 @@ record: ADR-0030 (`docs/adr/0030-file-is-inventoried-s3-object.md`).
 | `@m5kdev/commons` | `fileTypes` shared by backend validation and frontend accept lists. |
 | `@m5kdev/backend` | `FileModule`, inventory, S3 port (AWS or local adapter), Procedures, `GET /files/:id`. |
 | `@m5kdev/frontend` | `useS3Upload` (initiate → PUT → finalize), File id download URL helpers. |
-| `@m5kdev/web-ui` | `AvatarUpload` stores File id and displays `/files/${id}`. |
+| `@m5kdev/web-ui` | `AvatarUpload` and `FileDropzone` store File id and display `/files/${id}`. |
 
 ## Use cases
 

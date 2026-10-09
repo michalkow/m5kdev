@@ -175,6 +175,20 @@ one cardless Trial per Stripe environment.
 
 - [Organization allowCardlessTrial overlay](/guides/v0.38.21-organization-allow-cardless-trial-migration)
 
+## Upgrading to 0.39.0 {#upgrade-0-39-0}
+
+Complete 0.38.21 first. MCP tools are tRPC procedures with `meta.mcp`. No
+Drizzle generate for that catalog change.
+
+- [MCP catalog as tRPC procedures](/guides/v0.39.0-mcp-trpc-catalog-migration)
+
+## Upgrading to 0.40.0 {#upgrade-0-40-0}
+
+Complete 0.39.0 first. Apps that register FileModule generate `files` without
+`team_id` after the catalog bump.
+
+- [Inventoried File 1.0](/guides/v0.40.0-inventoried-file-migration)
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module

@@ -1,5 +1,9 @@
 # @m5kdev/config
 
+## 0.40.0
+
+No changes in this release.
+
 ## 0.39.0
 
 ## Unreleased
