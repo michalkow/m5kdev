@@ -60,7 +60,6 @@ import {
   useAppConfig,
   useAppTRPC,
   useAuthClient,
-  useFileUpload,
   useS3Upload,
   useSession,
   useSubscription,
@@ -73,7 +72,7 @@ Deep imports are still available through package exports when a smaller import
 surface is preferred:
 
 ```ts
-import { useFileUpload } from "@m5kdev/frontend/modules/file/hooks/useUpload";
+import { useS3Upload } from "@m5kdev/frontend/modules/file/hooks/useS3Upload";
 import { useQueryWithParams } from "@m5kdev/frontend/modules/table/hooks/useQueryWithParams";
 import { useTableQueryParams } from "@m5kdev/frontend/modules/table/hooks/useTableQueryParams";
 import {
@@ -236,15 +235,15 @@ Upload hooks now normalize inputs to `Blob`. Web apps can pass a `File` because
 Web:
 
 ```ts
-const { upload } = useFileUpload();
-await upload("avatar", file);
+const { upload } = useS3Upload({ scope: "user" });
+const fileId = await upload(file);
 ```
 
 Expo:
 
 ```ts
-const { upload } = useFileUpload();
-await upload("avatar", {
+const { upload } = useS3Upload({ scope: "user" });
+const fileId = await upload({
   uri: asset.uri,
   name: asset.fileName ?? "avatar.jpg",
   type: asset.mimeType ?? "image/jpeg",
@@ -252,8 +251,8 @@ await upload("avatar", {
 });
 ```
 
-Use the same input shape with `useS3Upload` and `useMultipartUpload`. If you
-need to normalize outside the hook, import `resolveUploadBlob` from
+`useS3Upload` runs initiate → PUT → finalize and returns File id. If you need
+to normalize outside the hook, import `resolveUploadBlob` from
 `@m5kdev/frontend/modules/file/hooks/useS3Upload`.
 
 ## Dependency changes

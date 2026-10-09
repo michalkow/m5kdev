@@ -177,9 +177,16 @@ export class BillingModule extends BaseModule<
 ### Module with Express Hook
 
 ```typescript
-override express({ infra, services, authMiddleware }: ModuleExpressContext<Deps, Services>) {
+override express({ infra, services, authMiddleware, deps }: ModuleExpressContext<Deps, Services>) {
   if (!authMiddleware) return;
-  infra.express.use("/upload", createUploadRouter({ authMiddleware, fileService: services.file }));
+  infra.express.use(
+    "/files",
+    createDownloadRouter({
+      authMiddleware,
+      fileService: services.file,
+      memberships: deps.auth.repositories.organization,
+    })
+  );
 }
 ```
 

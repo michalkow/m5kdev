@@ -4,94 +4,57 @@ sidebar_position: 5
 
 # End-to-end file flow
 
-This is the preferred flow when an app needs durable file records and direct S3
-uploads.
+Preferred path: Grant-checked Procedures, browser PUT to S3, durable File id.
 
 ## 1. Register backend modules
 
-Register auth before file because `FileModule` depends on auth.
+Register Auth before File. Add Workflow when you want delayed S3 purge.
 
 ```ts
 export const builtBackendApp = createBackendApp(
   {
     db: { url: process.env.DATABASE_URL! },
   },
-  [new AuthModule(), new FileModule()] as const
+  [new AuthModule(), new FileModule(), new WorkflowModule({ /* queues */ })] as const
 );
 ```
 
-## 2. Initiate the upload
+## 2. Initiate
 
-Call `POST /upload/s3/initiate` from an authenticated browser session with the
-file metadata.
+Call tRPC `file.initiate` (or `file.user.initiate`) with metadata. The row is
+`PENDING`. The response includes `fileId` and a PUT `url`.
 
-```ts
-const initRes = await fetch(`${serverUrl}/upload/s3/initiate`, {
-  method: "POST",
-  credentials: "include",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    originalName: file.name,
-    contentType: file.type,
-    sizeBytes: file.size,
-    pathHint: "documents",
-    metadata: { entity: "contract" },
-  }),
-});
+## 3. PUT bytes
 
-if (!initRes.ok) throw new Error("Failed to initiate upload");
+PUT the file to `url` with `Content-Type` matching initiate. The app CORS config
+must allow that browser PUT (methods include PUT; allow `Content-Type`).
 
-const init = (await initRes.json()) as {
-  key: string;
-  url: string;
-  fileId?: string;
-};
-```
+## 4. Finalize
 
-## 3. Upload to S3
+Call `file.finalize` with `{ fileId }`. The row becomes `UPLOADED`, or `FAILED`
+if the object is missing.
 
-Use the presigned URL returned by the backend.
+## 5. Store File id
 
-```ts
-const uploadRes = await fetch(init.url, {
-  method: "PUT",
-  headers: { "Content-Type": file.type },
-  body: file,
-});
+Store `fileId` on the domain record. Clients build `/files/${fileId}`. Do not
+store the presigned URL or the S3 key.
 
-if (!uploadRes.ok) throw new Error("Failed to upload file");
-```
+Open in a cookie UI with `GET /files/:id`. API keys use `getDownloadUrl`.
 
-## 4. Finalize the upload
+## Delete
 
-If `fileId` is present, mark the inventory row as uploaded.
+tRPC `file.delete` hides the File immediately (`DELETED`). Without Workflow, S3
+is deleted in that request. With Workflow, a daily cron purges objects for
+`DELETED` older than `deleteAfterDays` and stale `PENDING` older than one day.
 
-```ts
-if (init.fileId) {
-  const finalizeRes = await fetch(`${serverUrl}/upload/s3/finalize`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      fileId: init.fileId,
-      etag: uploadRes.headers.get("etag") ?? undefined,
-    }),
-  });
+## In-process bytes
 
-  if (!finalizeRes.ok) throw new Error("Failed to finalize upload");
-}
-```
-
-## 5. Store the key
-
-Store `init.key` in the app's domain record. Use the key later with
-`useS3DownloadUrl` or `GET /upload/files/:path`.
+Other Services call `putObject` / `getObject` on `FileService`. Those skip
+Grants; the caller authorizes. They still create or load an inventory row.
 
 ## Failure handling
 
-- If presigning fails after inventory creation, the backend marks the row as
-  `FAILED`.
-- If upload succeeds but finalization fails, retry finalization before creating a
-  duplicate upload.
-- Use `DELETE /upload/files/by-id/:fileId` for authenticated inventory-backed
-  deletion.
+- If presigning fails after insert, the row is `FAILED`.
+- If PUT succeeds but finalize fails, retry finalize before starting a new
+  upload.
+- There is no undelete after `delete`.

@@ -18,7 +18,7 @@ import { fileTypes } from "@m5kdev/commons/modules/file/file.constants";
 | `video` | `video/mp4`, `video/mov`, `video/avi`, `video/mkv`, `video/webm` | `mp4`, `mov`, `avi`, `mkv` |
 | `audio` | `audio/mp3`, `audio/wav`, `audio/m4a`, `audio/webm` | `mp3`, `wav`, `m4a`, `webm` |
 
-The backend upload router uses this map to validate local upload MIME types. Apps
+The backend uses this map to validate initiate / `putObject` MIME types. Apps
 can also read the same map when building accept lists for file pickers.
 
 ```tsx

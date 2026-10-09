@@ -4,25 +4,25 @@ sidebar_position: 1
 
 # File module
 
-The file module covers browser uploads, S3 presigned URLs, upload inventory, and
-download URL resolution.
+File 1.0 is an inventoried S3 object: a `files` row plus the object at
+`(bucket, key)`. Client operations load that row and check Grants. Decision
+record: ADR-0030 (`docs/adr/0030-file-is-inventoried-s3-object.md`).
 
 ## Package map
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/commons` | File type constants shared by backend validation and frontend UX. |
-| `@m5kdev/backend` | `FileModule`, upload routes, S3 repository, inventory repository, and file service helpers. |
-| `@m5kdev/frontend` | React hooks for local upload routes, direct S3 uploads, and S3 download URLs. |
-| `@m5kdev/web-ui` | No file-specific UI module yet. App code can compose hooks with shared UI primitives. |
+| `@m5kdev/commons` | `fileTypes` shared by backend validation and frontend accept lists. |
+| `@m5kdev/backend` | `FileModule`, inventory, S3 port (AWS or local adapter), Procedures, `GET /files/:id`. |
+| `@m5kdev/frontend` | `useS3Upload` (initiate → PUT → finalize), File id download URL helpers. |
+| `@m5kdev/web-ui` | `AvatarUpload` stores File id and displays `/files/${id}`. |
 
 ## Use cases
 
-- Upload a file to the backend local upload route and receive a URL.
-- Request a presigned S3 URL, upload directly from the browser, and store the S3 key.
-- Use the inventory-backed S3 lifecycle when the app needs a DB row for ownership,
-  status, metadata, and deletion.
-- Resolve an S3 key to a short-lived download URL.
+- Store File id on other entities; clients construct `/files/${id}`.
+- Browser upload: Grant-checked initiate, PUT to S3, finalize.
+- Cookie download: `GET /files/:id` 302. API keys: `getDownloadUrl`.
+- Other Services write/read bytes with unguarded `putObject` / `getObject`.
 
 ## Pages
 

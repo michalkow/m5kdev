@@ -5,137 +5,62 @@ alwaysApply: false
 
 # File Module Usage Guide
 
-File is a Core Module. Apps that use inventory typically register `FileModule` in `createBackendApp`. This guide covers the File services, S3, and upload router.
+File is a Core Module. Register `FileModule` in `createBackendApp`. File 1.0 is always an inventoried S3 object: a `files` row plus bytes at `(bucket, key)`. See `docs/adr/0030-file-is-inventoried-s3-object.md`.
 
-This guide explains how to use the file module across commons, backend, and frontend.
+## Model
 
-## Overview
+- Other entities store **File id** (a DB relation). Clients build `/files/${id}` from that id. Do not store presigned URLs or S3 keys on those rows.
+- File Grants (`read` / `write` / `delete`) are the only access check. Parent-entity read does not confer File read. `read: org` when every Member should see org Files.
+- FileModule does not scan other tables. The Service that deletes a parent must also delete the File if the File should go.
+- Local disk is the S3 adapter in tests and `pnpm dev` only. Production storage is S3. `NODE_ENV=production` uses `FileS3Repository`; otherwise `LocalFileObjectStore` plus mock S3 HTTP at `/file-s3-mock`.
 
-- `packages/commons/modules/file/file.constants.ts`: shared `fileTypes` and related constants.
-- `packages/backend/src/modules/file/`:
-  - `file.db.ts`: Drizzle `files` table (inventory: bucket/key, metadata, `userId` / `organizationId` / `teamId`, lifecycle `status`).
-  - `file.repository.ts`: DB persistence (`FileRepository`).
-  - `file.s3.repository.ts`: S3 operations (`FileS3Repository`: presigned upload/download URLs, get/delete object).
-  - `file.service.ts`: orchestrates S3 always; when a `FileRepository` is passed in the constructor map, also persists inventory (`initiateS3Upload`, `finalizeS3Upload`, `deleteUploadedFileById`). Omit `file` for S3-only behavior (no DB writes).
-  - `file.router.ts`: `createUploadRouter({ fileService })` — Express routes for local uploads and S3.
-  - `file.types.ts`, `file.utils.ts`: request types and S3 key helpers.
-- `packages/frontend/modules/file/hooks/`:
-  - `useUpload.ts`: direct POST to server for local file upload by type.
-  - `useS3Upload.ts`: presigned S3 PUT upload with progress.
+## Procedures vs in-process methods
 
-## Database
+Grant-checked Procedures (tRPC `file.*` organization, `file.user.*` personal): `list`, `get`, `initiate`, `finalize`, `getDownloadUrl`, `update` (originalName/metadata only), `delete`.
 
-Add the `files` table from `file.db.ts` to your app’s Drizzle schema and generate/run migrations when you use inventory (do not commit ad-hoc migration files from agents). Instantiate `FileRepository` with an ORM whose schema includes `files`, and pass it into `FileService` as `file`.
+Unguarded Service methods for other Services (not Procedures, not tRPC): `putObject`, `getObject`. Callers own authorization. Routers must not use them.
 
-## Setup
+## Client upload and download
 
-Backend environment variables:
+1. `initiate` → `{ fileId, bucket, key, url }` (`PENDING`).
+2. Browser `PUT` bytes to `url` (CORS must allow PUT from the web origin, including `Content-Type`).
+3. `finalize` → `UPLOADED` (or `FAILED` if the object is missing).
+4. Cookie UIs open `GET /files/:id` (302 to a short-lived presigned GET after Grant `read`). Cookieless Actors (API keys) call `getDownloadUrl`.
+5. tRPC `get` returns the row, not a URL. Construct `/files/${id}` from the id.
+
+Frontend: `useS3Upload({ scope: "organization" | "user" })` runs initiate → PUT (progress) → finalize and returns File id. Display with `fileCookieDownloadUrl(serverUrl, fileId)` or `fileDisplayUrl` (HTTP(S) OAuth avatars pass through).
+
+## Delete and purge
+
+User `delete` marks `DELETED` immediately; get/list/`GET /files/:id` treat it as not found. No undelete.
+
+- Workflow **absent**: S3 object is deleted in the same request (`purgeObjectOnDelete`).
+- Workflow **present**: File optional-depends on Workflow; daily cron `file.purge` (`0 0 * * *`). Stale `PENDING` (createdAt older than 1 day, not configurable) → `FAILED` + object gone. `DELETED` older than `deleteAfterDays` (default 30, min 1 when Workflow is present) → object gone. No Server event on purge.
+
+## Register
+
+```ts
+new FileModule({
+  buckets: [process.env.AWS_S3_BUCKET!],
+  deleteAfterDays: 30,
+})
+```
+
+Optional `workflow` dependency is declared on the module. Production File HTTP is only `GET /files/:id`.
+
+## Environment
 
 ```bash
 AWS_REGION=...
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
 AWS_S3_BUCKET=...
-# Optional for S3-compatible providers
-AWS_S3_ENDPOINT=...
-
-# Public server URL for returned links
+AWS_S3_ENDPOINT=...   # optional, S3-compatible
 VITE_SERVER_URL=http://localhost:PORT
 ```
 
-Ensure CORS is configured on your S3 bucket (e.g. add `apps/<your-app>/shared/s3.cors.json` or your app’s equivalent).
+Allowlist buckets via `FileModule` `buckets`. Allowed MIME types live in `fileTypes` (`@m5kdev/commons`).
 
-## Backend: Register router
+## Schema
 
-Construct `FileService` in your composition root, then mount the router.
-
-**S3 only (no database inventory):**
-
-```ts
-import express from "express";
-import { createUploadRouter } from "@m5kdev/backend/modules/file/file.router";
-import { FileService } from "@m5kdev/backend/modules/file/file.service";
-import { FileS3Repository } from "@m5kdev/backend/modules/file/file.s3.repository";
-
-const app = express();
-const fileService = new FileService({ fileS3: new FileS3Repository() });
-app.use("/upload", createUploadRouter({ fileService }));
-```
-
-**With Drizzle inventory:**
-
-```ts
-import { FileRepository } from "@m5kdev/backend/modules/file/file.repository";
-import { FileS3Repository } from "@m5kdev/backend/modules/file/file.s3.repository";
-import { FileService } from "@m5kdev/backend/modules/file/file.service";
-import * as fileSchema from "@m5kdev/backend/modules/file/file.db";
-
-const schema = { ...fileSchema };
-const fileRepository = new FileRepository({ orm, schema });
-const fileService = new FileService({ file: fileRepository, fileS3: new FileS3Repository() });
-app.use("/upload", createUploadRouter({ fileService }));
-```
-
-### Routes
-
-- `POST /upload/file/:type` — local upload via Multer (validates `:type` against `fileTypes`).
-- `GET /upload/file/:filename` — serve uploaded local file.
-- `POST /upload/s3/initiate` — body `{ userId, contentType, originalName, organizationId?, teamId?, sizeBytes?, pathHint?, metadata? }` → `{ key, url }` and `fileId` when inventory is configured (DB row `PENDING`, then presigned PUT URL for the managed `key`).
-- `POST /upload/s3/finalize` — body `{ userId, fileId, etag? }` — marks row `UPLOADED` (returns 400 if inventory is not configured).
-- `DELETE /upload/files/by-id/:fileId?userId=<owner>` — deletes S3 object and soft-deletes the DB row when inventory is configured (400 if not).
-- `POST /upload/s3-presigned-url` — **legacy** body `{ filename, filetype }` → `{ url }` presigned PUT URL (no DB row).
-- `GET /upload/files/:path` — presigned GET URL for a single-segment S3 key (`:path`).
-- `DELETE /upload/files/:path(*)` — **legacy** delete by S3 key; soft-deletes a matching inventory row when a `FileRepository` is configured and a row exists.
-
-## Frontend: Local uploads
-
-Use `useFileUpload` for single file uploads to the server:
-
-```ts
-const { upload, progress, status, error, reset } = useFileUpload();
-// type must be a key from fileTypes (e.g., "image")
-const response = await upload<{ url: string }>("image", file);
-```
-
-For multiple files:
-
-```ts
-const { uploadFiles, overallProgress, uploadQueue, reset } = useMultipartUpload();
-await uploadFiles("image", files);
-```
-
-## Frontend: S3 direct uploads (inventory-backed)
-
-When the server uses a `FileRepository`:
-
-1. `POST /upload/s3/initiate` with metadata → receive `fileId` (if inventory), `key`, `url`.
-2. `PUT` the file bytes to `url`.
-3. `POST /upload/s3/finalize` with `{ userId, fileId, etag? }`.
-
-**S3-only server:** use `POST /upload/s3/initiate` for a managed `key` + `url` without `fileId`, or `POST /upload/s3-presigned-url` with `{ filename, filetype }`, then `PUT` to the returned URL (no finalize step).
-
-## Validation and Types
-
-- Allowed MIME types are defined in `fileTypes`. Extend as needed:
-
-```ts
-export const fileTypes = {
-  image: { mimetypes: ["image/jpeg", "image/png", "image/webp"] },
-  // video: { mimetypes: ["video/mp4"] },
-} as const;
-```
-
-Update backend validation in `file.router.ts` if you add new categories.
-
-## Error Handling
-
-- Repositories return `ServerResult` / `ServerResultAsync` (`neverthrow`).
-- Router maps errors to HTTP 4xx/5xx JSON responses.
-- Frontend hooks surface `status` and `error` strings and maintain progress state.
-
-## Security Notes
-
-- Validate `:type` on local uploads against allowed `fileTypes`.
-- Presigned URLs expire (`expiresIn` defaults to 5 minutes). Do not store them client-side beyond immediate use.
-- Ensure S3 bucket policies limit public access unless explicitly desired.
-- `userId` on initiate/finalize/delete-by-id must be tied to your auth layer in production (session/JWT), not trusted client-only input.
+`files` has `userId` / `memberId` / `organizationId`, unique `(bucket, key)`, status `PENDING | UPLOADED | DELETED | FAILED`. There is no `teamId`. When schema changes need a migration, ask the user to run the project migration generation command; do not write Drizzle migration files in-agent.
