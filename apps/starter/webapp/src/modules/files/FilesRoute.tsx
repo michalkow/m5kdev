@@ -79,6 +79,31 @@ export function FilesRoute() {
                   </Chip>
                 ) : null}
               </Card.Header>
+              <Card.Content className="flex flex-wrap items-center gap-3">
+                <img
+                  src={row.downloadUrl}
+                  alt={row.originalName}
+                  className="h-16 w-16 rounded-md object-cover"
+                  data-testid="file-preview"
+                  crossOrigin="use-credentials"
+                />
+                <a
+                  href={row.downloadUrl}
+                  data-testid="file-download"
+                  className="text-sm font-medium underline"
+                >
+                  {t("files.row.open")}
+                </a>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  data-testid="file-delete"
+                  isDisabled={files.isDeleting}
+                  onPress={() => files.remove(row.id)}
+                >
+                  {t("files.row.delete")}
+                </Button>
+              </Card.Content>
             </Card>
           ))}
         </div>

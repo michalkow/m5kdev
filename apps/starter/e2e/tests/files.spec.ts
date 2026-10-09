@@ -32,4 +32,8 @@ test("upload a file and see it inventoried", async ({ page, request }) => {
   await expect(page.getByTestId("file-row").first()).toContainText("hello.png", {
     timeout: 15_000,
   });
+  await expect(page.getByTestId("file-download")).toHaveAttribute(
+    "href",
+    /\/files\/[0-9a-f-]{36}$/i
+  );
 });
