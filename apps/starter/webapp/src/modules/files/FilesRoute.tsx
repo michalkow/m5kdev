@@ -85,7 +85,6 @@ export function FilesRoute() {
                   alt={row.originalName}
                   className="h-16 w-16 rounded-md object-cover"
                   data-testid="file-preview"
-                  crossOrigin="use-credentials"
                 />
                 <a
                   href={row.downloadUrl}

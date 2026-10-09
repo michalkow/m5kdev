@@ -85,17 +85,23 @@ export class FileService extends BasePermissionService<
               value: "",
             },
           ];
+      const ownFilters =
+        this.memberMustOwnFiles(ctx.actor, "read") && ctx.actor.memberId
+          ? [
+              {
+                columnId: "memberId",
+                type: "string" as const,
+                method: "equals" as const,
+                value: ctx.actor.memberId,
+              },
+            ]
+          : [];
       const listed = await this.repository.file.queryList({
         ...input,
-        filters: [...(input.filters ?? []), uploadedFilter, ...scopeFilters],
+        filters: [...(input.filters ?? []), uploadedFilter, ...scopeFilters, ...ownFilters],
       });
       if (listed.isErr()) return listed;
-      const filtered = this.filterPermission(ctx.actor, "read", listed.value);
-      if (this.memberMustOwnFiles(ctx.actor, "read")) {
-        const rows = filtered.rows.filter((row) => row.memberId === ctx.actor.memberId);
-        return ok({ rows, total: rows.length });
-      }
-      return ok(filtered);
+      return ok(this.filterPermission(ctx.actor, "read", listed.value));
     });
 
   readonly get = this.procedure("get")
@@ -521,6 +527,9 @@ export class FileService extends BasePermissionService<
   }
 
   private memberMustOwnFiles(actor: AuthenticatedActor, action: string): boolean {
+    if (actor.userRole === "admin") {
+      return false;
+    }
     if (!hasServiceActorScope(actor, "organization") || actor.organizationRole !== "member") {
       return false;
     }

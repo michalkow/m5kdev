@@ -306,6 +306,33 @@ describe("FileService.list and get", () => {
     expect(got.value.id).toBe(created.value.id);
   });
 
+  it("lets a User-role admin list another member's org File", async () => {
+    const { files, service } = await setup();
+    await files.create({
+      status: "UPLOADED",
+      userId: "user-1",
+      memberId: "member-1",
+      organizationId: "org-1",
+      originalName: "theirs.png",
+    });
+
+    const listed = await service.list(
+      {},
+      {
+        actor: organizationActor({
+          userId: "admin-1",
+          userRole: "admin",
+          memberId: "member-admin",
+        }),
+        user: { id: "admin-1" },
+      }
+    );
+    expect(listed.isOk()).toBe(true);
+    if (listed.isErr()) return;
+    expect(listed.value.rows.map((row) => row.originalName)).toEqual(["theirs.png"]);
+    expect(listed.value.total).toBe(1);
+  });
+
   it("lets a member with read: org list another member's File", async () => {
     const { files, service } = await setup(memberOrgReadGrants);
     await files.create({
