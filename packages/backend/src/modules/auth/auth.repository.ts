@@ -64,6 +64,13 @@ export class AuthUserRepository extends BaseTableRepository<
   async purgeUser(userId: string): ServerResultAsync<{ id: string }> {
     return this.throwableQuery(async () => {
       await this.orm
+        .delete(this.schema.accountClaimMagicLinks)
+        .where(eq(this.schema.accountClaimMagicLinks.userId, userId));
+      await this.orm
+        .delete(this.schema.accountClaims)
+        .where(eq(this.schema.accountClaims.claimUserId, userId));
+      await this.orm.delete(this.schema.waitlist).where(eq(this.schema.waitlist.userId, userId));
+      await this.orm
         .delete(this.schema.invitations)
         .where(eq(this.schema.invitations.inviterId, userId));
       await this.orm
