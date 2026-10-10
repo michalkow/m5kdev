@@ -3,6 +3,7 @@ import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 import {
   accountClaimMagicLinkSchemas,
   accountClaimSchemas,
+  closeOrganizationSchemas,
   closeUserSchemas,
   organizationSchemas as defaultOrganizationSchemas,
   invitationSchemas,
@@ -87,6 +88,20 @@ export function createAuthTRPC(
       .output(invitationSchemas.output.removed)
       .mutation(async ({ ctx }) => {
         return handleTRPCResult(await authService.leaveOrganization(undefined, ctx));
+      }),
+
+    closeOrganization: organizationProcedure
+      .input(closeOrganizationSchemas.input.close)
+      .output(closeOrganizationSchemas.output.closed)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.closeOrganization(input, ctx));
+      }),
+
+    restoreOrganization: adminProcedure
+      .input(closeOrganizationSchemas.input.restore)
+      .output(z.object({ id: z.string(), closedAt: z.date().nullable() }))
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.restoreOrganization(input, ctx));
       }),
 
     closeUser: procedure

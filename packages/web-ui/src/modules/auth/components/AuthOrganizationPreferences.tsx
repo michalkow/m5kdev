@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactElement, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { z } from "zod";
+import { AuthCloseOrganizationDangerZone } from "./AuthCloseOrganizationDangerZone";
 import {
   AuthOrganizationProfile,
   type AuthOrganizationProfileProps,
@@ -85,6 +86,7 @@ export function AuthOrganizationPreferences<S extends z.ZodObject<z.ZodRawShape>
           labels={resolvedLabels}
           updateValues={setPreferences}
         />
+        <AuthCloseOrganizationDangerZone />
       </div>
     </div>
   );

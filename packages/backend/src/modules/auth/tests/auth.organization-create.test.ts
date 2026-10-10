@@ -384,4 +384,71 @@ describe("getActiveOrganization", () => {
       organizationMemberId: "member-owner",
     });
   });
+
+  it("does not treat a Closed Organization as the Organization Actor", async () => {
+    const orm = drizzle(client, { schema: auth });
+    const now = new Date();
+    await orm.insert(auth.users).values({
+      id: "user-owner",
+      name: "Pat",
+      email: "pat@example.com",
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await orm.insert(auth.organizations).values([
+      {
+        id: "org-closed",
+        name: "Closed",
+        slug: "closed",
+        createdAt: now,
+        closedAt: now,
+      },
+      {
+        id: "org-live",
+        name: "Live",
+        slug: "live",
+        createdAt: now,
+      },
+    ]);
+    await orm.insert(auth.members).values([
+      {
+        id: "member-closed",
+        organizationId: "org-closed",
+        userId: "user-owner",
+        email: "pat@example.com",
+        name: "Pat",
+        role: "owner",
+        createdAt: now,
+      },
+      {
+        id: "member-live",
+        organizationId: "org-live",
+        userId: "user-owner",
+        email: "pat@example.com",
+        name: "Pat",
+        role: "owner",
+        createdAt: new Date(now.getTime() - 1_000),
+      },
+    ]);
+    await orm.insert(auth.sessions).values({
+      id: "session-owner",
+      token: "token-owner",
+      userId: "user-owner",
+      expiresAt: new Date(now.getTime() + 60_000),
+      createdAt: now,
+      updatedAt: now,
+      activeOrganizationId: "org-closed",
+      activeOrganizationMemberId: "member-closed",
+      activeOrganizationRole: "owner",
+    });
+
+    const actor = await getActiveOrganization(orm, auth, "user-owner");
+    expect(actor).toEqual({
+      organizationId: "org-live",
+      organizationRole: "owner",
+      organizationType: undefined,
+      organizationMemberId: "member-live",
+    });
+  });
 });

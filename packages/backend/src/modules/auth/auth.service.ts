@@ -34,6 +34,7 @@ import * as auth from "./auth.db";
 import {
   accountClaimMagicLinkSchemas,
   accountClaimSchemas,
+  closeOrganizationSchemas,
   closeUserSchemas,
   invitationSchemas,
   organizationSchemas,
@@ -641,11 +642,12 @@ export class AuthService extends BasePermissionService<
             "locale",
             "currency",
             "billingExempt",
+            "closedAt",
           ],
         }
       );
       if (result.isErr()) return err(result.error);
-      return ok(result.value.rows);
+      return ok(result.value.rows.filter((row) => row.closedAt == null));
     });
 
   listUserOrganizations = this.procedure("listUserOrganizations")
@@ -653,6 +655,100 @@ export class AuthService extends BasePermissionService<
     .requireAuth()
     .handle(async ({ ctx }) => {
       return this.repository.organization.listUserOrganizations(ctx.actor.userId);
+    });
+
+  closeOrganization = this.procedure("closeOrganization")
+    .input(closeOrganizationSchemas.input.close)
+    .output(closeOrganizationSchemas.output.closed)
+    .requireAuth("organization")
+    .loadResource("organization", ({ ctx }) =>
+      this.repository.organization.findById(ctx.actor.organizationId)
+    )
+    .access({
+      action: "delete",
+      entities: ({ ctx }) => ({
+        organizationId: ctx.actor.organizationId,
+      }),
+    })
+    .handle(async ({ input, ctx, state }) => {
+      if (state.organization.closedAt) {
+        return this.error("BAD_REQUEST", "This Organization is already Closed");
+      }
+      if (input.name !== state.organization.name) {
+        return this.error("BAD_REQUEST", "Type the Organization name to confirm");
+      }
+      const children = await this.repository.organization.listLiveChildOrganizations(
+        ctx.actor.organizationId
+      );
+      if (children.isErr()) return err(children.error);
+      if (children.value.length > 0) {
+        return this.error("BAD_REQUEST", "Close child Organizations first");
+      }
+      const pending = await this.repository.invitation.listPendingByOrganization(
+        ctx.actor.organizationId
+      );
+      if (pending.isErr()) return err(pending.error);
+      for (const invitation of pending.value) {
+        const canceled = await this.cancelInvitationSeat(invitation);
+        if (canceled.isErr()) return err(canceled.error);
+      }
+      const memberships = await this.repository.organization.listLiveNonOwnerMembers(
+        ctx.actor.organizationId
+      );
+      if (memberships.isErr()) return err(memberships.error);
+      for (const member of memberships.value) {
+        const billed = await this.billingAdjustSeat({
+          organizationId: member.organizationId,
+          role: member.role,
+          delta: -1,
+        });
+        if (billed.isErr()) return err(billed.error);
+        const removed = await this.repository.organization.removeOrganizationMember({
+          organizationId: member.organizationId,
+          memberId: member.id,
+        });
+        if (removed.isErr()) return err(removed.error);
+      }
+      const billing = this.getBillingService();
+      if (billing) {
+        const canceled = await billing.cancelOrganizationSubscription({
+          organizationId: ctx.actor.organizationId,
+        });
+        if (canceled.isErr()) return err(canceled.error);
+      }
+      const closedAt = new Date();
+      const updated = await this.repository.organization.update({
+        id: ctx.actor.organizationId,
+        closedAt,
+      });
+      if (updated.isErr()) return err(updated.error);
+      const cleared = await this.repository.organization.clearActiveOrganizationSessions(
+        ctx.actor.organizationId
+      );
+      if (cleared.isErr()) return err(cleared.error);
+      return ok({
+        id: ctx.actor.organizationId,
+        closedAt: updated.value.closedAt ?? closedAt,
+      });
+    });
+
+  restoreOrganization = this.procedure("restoreOrganization")
+    .input(closeOrganizationSchemas.input.restore)
+    .output(z.object({ id: z.string(), closedAt: z.date().nullable() }))
+    .requireAuth("admin")
+    .handle(async ({ input }) => {
+      const organization = await this.repository.organization.findById(input.id);
+      if (organization.isErr()) return err(organization.error);
+      if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
+      if (!organization.value.closedAt) {
+        return this.error("BAD_REQUEST", "This Organization is not Closed");
+      }
+      const updated = await this.repository.organization.update({
+        id: input.id,
+        closedAt: null,
+      });
+      if (updated.isErr()) return err(updated.error);
+      return ok({ id: input.id, closedAt: null });
     });
 
   updateChildOrganization = this.procedure("updateChildOrganization")

@@ -17,6 +17,7 @@ export async function getNewOrganization<O extends Orm, S extends Schema>(
   name: string;
   slug: string | null;
   type: string | null;
+  closedAt: Date | null;
   role: string;
   memberId: string | null;
 }> {
@@ -26,6 +27,7 @@ export async function getNewOrganization<O extends Orm, S extends Schema>(
       name: schema.organizations.name,
       slug: schema.organizations.slug,
       type: schema.organizations.type,
+      closedAt: schema.organizations.closedAt,
     })
     .from(schema.organizations)
     .where(eq(schema.organizations.id, organizationId))
@@ -91,12 +93,17 @@ export async function getActiveOrganization<O extends Orm, S extends Schema>(
     const [activeMember] = await orm
       .select({ id: schema.members.id, role: schema.members.role })
       .from(schema.members)
+      .innerJoin(
+        schema.organizations,
+        eq(schema.members.organizationId, schema.organizations.id)
+      )
       .where(
         and(
           eq(schema.members.id, organizationMemberId),
           eq(schema.members.organizationId, organizationId),
           eq(schema.members.userId, userId),
-          isNull(schema.members.deletedAt)
+          isNull(schema.members.deletedAt),
+          isNull(schema.organizations.closedAt)
         )
       )
       .limit(1);
@@ -118,8 +125,18 @@ export async function getActiveOrganization<O extends Orm, S extends Schema>(
         role: schema.members.role,
       })
       .from(schema.members)
+      .innerJoin(
+        schema.organizations,
+        eq(schema.members.organizationId, schema.organizations.id)
+      )
       .orderBy(desc(schema.members.createdAt))
-      .where(and(eq(schema.members.userId, userId), isNull(schema.members.deletedAt)))
+      .where(
+        and(
+          eq(schema.members.userId, userId),
+          isNull(schema.members.deletedAt),
+          isNull(schema.organizations.closedAt)
+        )
+      )
       .limit(1);
     organizationId = member?.organizationId;
     organizationRole = member?.role;

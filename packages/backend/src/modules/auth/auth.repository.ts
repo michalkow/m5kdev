@@ -279,6 +279,17 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     userId: string;
     organizationId: string;
   }): ServerResultAsync<OrganizationMemberRow> {
+    const closed = await this.throwableQuery(() =>
+      this.orm
+        .select({ closedAt: this.schema.organizations.closedAt })
+        .from(this.schema.organizations)
+        .where(eq(this.schema.organizations.id, organizationId))
+        .limit(1)
+    );
+    if (closed.isErr()) return err(closed.error);
+    if (closed.value[0]?.closedAt) {
+      return this.error("NOT_FOUND", "This Organization is Closed");
+    }
     const result = await this.throwableQuery(() =>
       this.selectMemberRows(organizationId, { userId, limit: 1 })
     );
@@ -421,11 +432,60 @@ export class AuthOrganizationRepository extends BaseTableRepository<
             and(
               eq(this.schema.members.userId, userId),
               eq(this.schema.members.role, "owner"),
-              isNull(this.schema.members.deletedAt)
+              isNull(this.schema.members.deletedAt),
+              isNull(this.schema.organizations.closedAt)
             )
           )
       );
     });
+
+  listLiveChildOrganizations = this.query<string>("listLiveChildOrganizations")
+    .output(z.array(organizationSchemas.output.simple.pick({ id: true, name: true })))
+    .handle(async (parentId) => {
+      return this.throwableQuery(() =>
+        this.orm
+          .select({
+            id: this.schema.organizations.id,
+            name: this.schema.organizations.name,
+          })
+          .from(this.schema.organizations)
+          .where(
+            and(
+              eq(this.schema.organizations.parentId, parentId),
+              isNull(this.schema.organizations.closedAt)
+            )
+          )
+      );
+    });
+
+  async listLiveNonOwnerMembers(organizationId: string): ServerResultAsync<MemberRow[]> {
+    return this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(this.schema.members)
+        .where(
+          and(
+            eq(this.schema.members.organizationId, organizationId),
+            ne(this.schema.members.role, "owner"),
+            isNull(this.schema.members.deletedAt)
+          )
+        )
+    );
+  }
+
+  async clearActiveOrganizationSessions(organizationId: string): ServerResultAsync<void> {
+    return this.throwableQuery(async () => {
+      await this.orm
+        .update(this.schema.sessions)
+        .set({
+          activeOrganizationId: null,
+          activeOrganizationRole: null,
+          activeOrganizationMemberId: null,
+          activeOrganizationType: null,
+        })
+        .where(eq(this.schema.sessions.activeOrganizationId, organizationId));
+    });
+  }
 
   async listLiveNonOwnerMemberships(userId: string): ServerResultAsync<MemberRow[]> {
     return this.throwableQuery(() =>
@@ -465,7 +525,13 @@ export class AuthOrganizationRepository extends BaseTableRepository<
             this.schema.members,
             eq(this.schema.organizations.id, this.schema.members.organizationId)
           )
-          .where(and(eq(this.schema.members.userId, userId), isNull(this.schema.members.deletedAt)))
+          .where(
+            and(
+              eq(this.schema.members.userId, userId),
+              isNull(this.schema.members.deletedAt),
+              isNull(this.schema.organizations.closedAt)
+            )
+          )
           .then((rows) => {
             const seen = new Set<string>();
             return rows.filter((row) => {
@@ -937,6 +1003,24 @@ export class AuthInvitationRepository extends BaseTableRepository<
             eq(this.schema.invitations.status, "pending"),
             isNull(this.schema.invitations.memberId),
             sql`lower(${this.schema.invitations.email}) = ${email}`
+          )
+        )
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value);
+  }
+
+  async listPendingByOrganization(
+    organizationId: string
+  ): ServerResultAsync<(typeof auth.invitations.$inferSelect)[]> {
+    const result = await this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(this.schema.invitations)
+        .where(
+          and(
+            eq(this.schema.invitations.organizationId, organizationId),
+            eq(this.schema.invitations.status, "pending")
           )
         )
     );

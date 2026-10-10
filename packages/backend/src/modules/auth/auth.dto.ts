@@ -21,6 +21,23 @@ import {
   waitlist,
 } from "./auth.db";
 
+export const closeOrganizationSchemas = {
+  input: {
+    close: z.object({
+      name: z.string(),
+    }),
+    restore: z.object({
+      id: z.string(),
+    }),
+  },
+  output: {
+    closed: z.object({
+      id: z.string(),
+      closedAt: z.date(),
+    }),
+  },
+};
+
 export const closeUserSchemas = {
   input: {
     close: z.object({

@@ -637,6 +637,12 @@ export function createBetterAuth<
                 defaultValue: "{}",
                 input: false,
               },
+              closedAt: {
+                type: "date",
+                required: false,
+                defaultValue: null,
+                input: false,
+              },
             },
           },
         },
@@ -938,6 +944,9 @@ export function createBetterAuth<
                   activeOrganizationId as string,
                   prevSession.userId
                 );
+                if (newOrganization.closedAt) {
+                  throw new APIError("FORBIDDEN", { message: "This Organization is Closed" });
+                }
 
                 data.activeOrganizationType = newOrganization.type;
                 data.activeOrganizationRole = newOrganization.role;
