@@ -189,6 +189,14 @@ Complete 0.39.0 first. Apps that register FileModule generate `files` without
 
 - [Inventoried File 1.0](/guides/v0.40.0-inventoried-file-migration)
 
+## Upgrading to 0.40.1 {#upgrade-0-40-1}
+
+Complete 0.40.0 first. Every Auth app generates `users.closed_at` and
+`organizations.closed_at`. Better Auth `deleteUser` is gone; Close is the
+restorable lockout.
+
+- [Close, Restore, and Purge](/guides/v0.40.1-close-restore-purge-migration)
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module

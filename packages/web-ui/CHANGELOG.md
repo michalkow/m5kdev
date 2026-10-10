@@ -1,5 +1,16 @@
 # @m5kdev/web-ui
 
+## 0.40.1
+
+### Patch Changes
+
+- Auth Close, Restore, and Purge replace Better Auth deleteUser for Users and Organizations.
+  Preferences Danger zones Close a User or Organization in-app; Admin can Close, Restore, or Purge, distinct from Ban.
+  With Workflow registered, a daily sweep Purges Closed rows after closeAfterDays (default 30).
+- Updated dependencies
+  - @m5kdev/commons@0.40.1
+  - @m5kdev/frontend@0.40.1
+
 ## 0.40.0
 
 ### Minor Changes

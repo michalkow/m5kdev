@@ -235,6 +235,7 @@ team on the session.
 
 ## Migration guides
 
+- [Close, Restore, and Purge in 0.40.1](/guides/v0.40.1-close-restore-purge-migration)
 - [Organizations and members](/guides/organizations-and-members) (intended usage)
 - [Better Auth 1.7.2 in 0.37.0](/guides/v0.37.0-better-auth-1.7.2-migration)
 - [McpModule and MCP OAuth in 0.37.0](/guides/v0.37.0-mcp-oauth-migration)

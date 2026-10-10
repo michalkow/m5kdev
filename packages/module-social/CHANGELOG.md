@@ -1,5 +1,12 @@
 # @m5kdev/module-social
 
+## 0.40.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/backend@0.40.1
+
 ## 0.40.0
 
 ### Patch Changes
