@@ -5,9 +5,12 @@ import {
   type ModuleRepositoriesContext,
   type ModuleServicesContext,
   type ModuleTRPCContext,
+  type ModuleWorkflowContext,
 } from "../base/base.module";
 import type { BillingModule } from "../billing/billing.module";
 import type { EmailModule } from "../email/email.module";
+import type { WorkflowModule } from "../workflow/workflow.module";
+import { AUTH_PURGE_CRON_NAME, AUTH_PURGE_CRON_PATTERN } from "./auth.constants";
 import type * as authTables from "./auth.db";
 import { createOrganizationSchemas } from "./auth.dto";
 import { defaultAuthGrants } from "./auth.grants";
@@ -21,7 +24,13 @@ import {
 import { AuthService, type AuthServiceHooks } from "./auth.service";
 import { createAuthTRPC } from "./auth.trpc";
 
-type AuthModuleDeps = { email: EmailModule; billing?: BillingModule };
+export interface AuthModuleConfig {
+  readonly grants?: Grant[];
+  readonly hooks?: AuthServiceHooks;
+  readonly closeAfterDays?: number;
+}
+
+type AuthModuleDeps = { email: EmailModule; billing?: BillingModule; workflow?: WorkflowModule };
 type AuthModuleTables = typeof authTables;
 type AuthModuleRepositories = {
   accountClaim: AuthAccountClaimRepository;
@@ -45,14 +54,22 @@ export class AuthModule extends BaseModule<
 > {
   readonly id = "auth";
   override readonly dependsOn = ["email"] as const;
-  override readonly optionalDependsOn = ["billing"] as const;
+  override readonly optionalDependsOn = ["billing", "workflow"] as const;
   private readonly grants: Grant[];
   private readonly hooks?: AuthServiceHooks;
+  private readonly closeAfterDays: number;
 
-  constructor(grants?: Grant[], hooks?: AuthServiceHooks) {
+  constructor(grants?: Grant[] | AuthModuleConfig, hooks?: AuthServiceHooks) {
     super();
+    if (grants && !Array.isArray(grants)) {
+      this.grants = grants.grants ?? defaultAuthGrants;
+      this.hooks = grants.hooks;
+      this.closeAfterDays = grants.closeAfterDays ?? 30;
+      return;
+    }
     this.grants = grants ?? defaultAuthGrants;
     this.hooks = hooks;
+    this.closeAfterDays = 30;
   }
 
   override repositories({ db }: ModuleRepositoriesContext<AuthModuleDeps, AuthModuleTables>) {
@@ -105,9 +122,34 @@ export class AuthModule extends BaseModule<
         this.hooks,
         appConfig.locales,
         i18n,
-        appConfig.roles
+        appConfig.roles,
+        this.closeAfterDays
       ),
     };
+  }
+
+  override workflows({
+    workflow,
+    services,
+  }: ModuleWorkflowContext<AuthModuleDeps, AuthModuleServices>) {
+    if (!workflow) return;
+    if (this.closeAfterDays < 1) {
+      throw new Error("AuthModule closeAfterDays must be at least 1 when Workflow is present");
+    }
+    const definition = workflow.service
+      .cron({
+        name: AUTH_PURGE_CRON_NAME,
+        pattern: AUTH_PURGE_CRON_PATTERN,
+      })
+      .handle(async () => {
+        const result = await services.auth.purgeExpired();
+        if (result.isErr()) throw result.error;
+      });
+    const handler = definition._handler;
+    if (!handler) {
+      throw new Error(`${AUTH_PURGE_CRON_NAME} cron is missing a handler`);
+    }
+    workflow.registry.register(definition, handler);
   }
 
   override trpc({

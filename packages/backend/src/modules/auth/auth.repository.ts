@@ -78,6 +78,15 @@ export class AuthUserRepository extends BaseTableRepository<
       return { id: userId };
     });
   }
+
+  async listClosedUsersBefore(before: Date): ServerResultAsync<UserRow[]> {
+    return this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(this.schema.users)
+        .where(and(isNotNull(this.schema.users.closedAt), lte(this.schema.users.closedAt, before)))
+    );
+  }
 }
 
 export class AuthOrganizationRepository extends BaseTableRepository<
@@ -526,6 +535,27 @@ export class AuthOrganizationRepository extends BaseTableRepository<
             eq(this.schema.members.organizationId, organizationId),
             ne(this.schema.members.role, "owner"),
             isNull(this.schema.members.deletedAt)
+          )
+        )
+    );
+  }
+
+  async listClosedOrganizationsBefore(
+    before: Date
+  ): ServerResultAsync<Pick<OrganizationRow, "id" | "parentId" | "name" | "closedAt">[]> {
+    return this.throwableQuery(() =>
+      this.orm
+        .select({
+          id: this.schema.organizations.id,
+          parentId: this.schema.organizations.parentId,
+          name: this.schema.organizations.name,
+          closedAt: this.schema.organizations.closedAt,
+        })
+        .from(this.schema.organizations)
+        .where(
+          and(
+            isNotNull(this.schema.organizations.closedAt),
+            lte(this.schema.organizations.closedAt, before)
           )
         )
     );

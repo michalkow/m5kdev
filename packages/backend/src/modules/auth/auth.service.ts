@@ -135,7 +135,8 @@ export class AuthService extends BasePermissionService<
     hooks?: AuthServiceHooks,
     locales?: AuthLocaleConfig,
     i18n?: AppI18n,
-    rolesConfig: NormalizedAuthRolesConfig = DEFAULT_AUTH_ROLES
+    rolesConfig: NormalizedAuthRolesConfig = DEFAULT_AUTH_ROLES,
+    private readonly closeAfterDays = 30
   ) {
     super(repository, service, grants);
     this.appUrls = appUrls;
@@ -340,6 +341,48 @@ export class AuthService extends BasePermissionService<
     const revoked = await this.repository.user.revokeUserCredentials(user.id);
     if (revoked.isErr()) return err(revoked.error);
     return ok({ id: user.id, closedAt: updated.value.closedAt ?? closedAt });
+  }
+
+  private async performPurgeOrganization(
+    organization: Pick<Organization, "id"> & Partial<Organization>
+  ): ServerResultAsync<{ id: string }> {
+    const children = await this.repository.organization.listLiveChildOrganizations(organization.id);
+    if (children.isErr()) return err(children.error);
+    if (children.value.length > 0) {
+      return this.error("BAD_REQUEST", "Purge child Organizations first");
+    }
+    if (this.hooks?.afterPurgeOrganization) {
+      try {
+        await this.hooks.afterPurgeOrganization({ organization: organization as Organization });
+      } catch (error) {
+        return this.error("INTERNAL_SERVER_ERROR", "Failed to call afterPurgeOrganization hook", {
+          cause: error,
+        });
+      }
+    }
+    const purged = await this.repository.organization.purgeOrganization(organization.id);
+    if (purged.isErr()) return err(purged.error);
+    return ok({ id: organization.id });
+  }
+
+  private async performPurgeUser(user: User): ServerResultAsync<{ id: string }> {
+    const owned = await this.repository.organization.listOwnedOrganizations(user.id);
+    if (owned.isErr()) return err(owned.error);
+    if (owned.value.length > 0) {
+      return this.error("BAD_REQUEST", "Cannot Purge a User who still Owns an Organization");
+    }
+    if (this.hooks?.afterPurgeUser) {
+      try {
+        await this.hooks.afterPurgeUser({ user });
+      } catch (error) {
+        return this.error("INTERNAL_SERVER_ERROR", "Failed to call afterPurgeUser hook", {
+          cause: error,
+        });
+      }
+    }
+    const purged = await this.repository.user.purgeUser(user.id);
+    if (purged.isErr()) return err(purged.error);
+    return ok({ id: user.id });
   }
 
   private async sendOrganizationInviteResult({
@@ -829,25 +872,7 @@ export class AuthService extends BasePermissionService<
       const organization = await this.repository.organization.findById(input.id);
       if (organization.isErr()) return err(organization.error);
       if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
-      const children = await this.repository.organization.listLiveChildOrganizations(input.id);
-      if (children.isErr()) return err(children.error);
-      if (children.value.length > 0) {
-        return this.error("BAD_REQUEST", "Purge child Organizations first");
-      }
-      if (this.hooks?.afterPurgeOrganization) {
-        try {
-          await this.hooks.afterPurgeOrganization({ organization: organization.value });
-        } catch (error) {
-          return this.error(
-            "INTERNAL_SERVER_ERROR",
-            "Failed to call afterPurgeOrganization hook",
-            { cause: error }
-          );
-        }
-      }
-      const purged = await this.repository.organization.purgeOrganization(input.id);
-      if (purged.isErr()) return err(purged.error);
-      return ok({ id: input.id });
+      return this.performPurgeOrganization(organization.value);
     });
 
   restoreOrganization = this.procedure("restoreOrganization")
@@ -2167,24 +2192,51 @@ export class AuthService extends BasePermissionService<
       const user = await this.repository.user.findById(input.id);
       if (user.isErr()) return err(user.error);
       if (!user.value) return this.error("NOT_FOUND", "User not found");
-      const owned = await this.repository.organization.listOwnedOrganizations(input.id);
-      if (owned.isErr()) return err(owned.error);
-      if (owned.value.length > 0) {
-        return this.error("BAD_REQUEST", "Cannot Purge a User who still Owns an Organization");
-      }
-      if (this.hooks?.afterPurgeUser) {
-        try {
-          await this.hooks.afterPurgeUser({ user: user.value });
-        } catch (error) {
-          return this.error("INTERNAL_SERVER_ERROR", "Failed to call afterPurgeUser hook", {
-            cause: error,
-          });
-        }
-      }
-      const purged = await this.repository.user.purgeUser(input.id);
-      if (purged.isErr()) return err(purged.error);
-      return ok({ id: input.id });
+      return this.performPurgeUser(user.value);
     });
+
+  async purgeExpired(): ServerResultAsync<{ organizations: number; users: number }> {
+    const cutoff = new Date(Date.now() - this.closeAfterDays * 24 * 60 * 60 * 1000);
+    const organizations = await this.repository.organization.listClosedOrganizationsBefore(cutoff);
+    if (organizations.isErr()) return err(organizations.error);
+    const remaining = new Map(organizations.value.map((organization) => [organization.id, organization]));
+    let purgedOrganizations = 0;
+    while (remaining.size > 0) {
+      let progressed = false;
+      for (const organization of [...remaining.values()]) {
+        const liveChildren = await this.repository.organization.listLiveChildOrganizations(
+          organization.id
+        );
+        if (liveChildren.isErr()) return err(liveChildren.error);
+        if (liveChildren.value.length > 0) {
+          remaining.delete(organization.id);
+          continue;
+        }
+        const remainingChildren = [...remaining.values()].filter(
+          (child) => child.parentId === organization.id
+        );
+        if (remainingChildren.length > 0) continue;
+        const purged = await this.performPurgeOrganization(organization);
+        if (purged.isErr()) return err(purged.error);
+        remaining.delete(organization.id);
+        purgedOrganizations += 1;
+        progressed = true;
+      }
+      if (!progressed) break;
+    }
+    const users = await this.repository.user.listClosedUsersBefore(cutoff);
+    if (users.isErr()) return err(users.error);
+    let purgedUsers = 0;
+    for (const user of users.value) {
+      const owned = await this.repository.organization.listOwnedOrganizations(user.id);
+      if (owned.isErr()) return err(owned.error);
+      if (owned.value.length > 0) continue;
+      const purged = await this.performPurgeUser(user);
+      if (purged.isErr()) return err(purged.error);
+      purgedUsers += 1;
+    }
+    return ok({ organizations: purgedOrganizations, users: purgedUsers });
+  }
 
   restoreUser = this.procedure("restoreUser")
     .input(closeUserSchemas.input.restore)
