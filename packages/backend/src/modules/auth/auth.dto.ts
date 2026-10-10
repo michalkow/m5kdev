@@ -80,6 +80,7 @@ export const adminUserSummarySchema = createSelectSchema(users).pick({
   role: true,
   banned: true,
   emailVerified: true,
+  closedAt: true,
 });
 
 export const organizationSchema = createSelectSchema(organizations).omit({

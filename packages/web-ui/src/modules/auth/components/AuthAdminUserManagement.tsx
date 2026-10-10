@@ -25,7 +25,6 @@ import {
   type ListUsersQueryData,
   type ListUsersQueryInput,
   listUsersQueryOptions,
-  useRemoveUser,
   useUpdateUser,
 } from "@m5kdev/frontend/modules/auth/hooks/useAuthAdmin";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
@@ -48,7 +47,9 @@ import { NuqsTable, type NuqsTableColumn } from "../../table/components/NuqsTabl
 import useNuqsTable from "../../table/hooks/useNuqsTable";
 import { AuthLocaleSelect } from "./AuthLocaleSelect";
 
-type AdminUserRow = NonNullable<ListUsersQueryData["users"]>[number];
+type AdminUserRow = NonNullable<ListUsersQueryData["users"]>[number] & {
+  closedAt?: Date | string | null;
+};
 
 const USER_ROLE_ADMIN = "admin";
 
@@ -56,15 +57,24 @@ function isUserRoleAdmin(role: string | null | undefined): boolean {
   return role === USER_ROLE_ADMIN;
 }
 
+function isClosed(user: Pick<AdminUserRow, "closedAt">): boolean {
+  return user.closedAt != null;
+}
+
 function getUserRoleChangeBlockReason(input: {
-  user: Pick<AdminUserRow, "id" | "role" | "banned">;
+  user: Pick<AdminUserRow, "id" | "role" | "banned" | "closedAt">;
   currentUserId: string | undefined;
   activeAdminCount: number;
 }): string | null {
   if (input.currentUserId !== undefined && input.user.id === input.currentUserId) {
     return "You cannot change your own User Role";
   }
-  if (isUserRoleAdmin(input.user.role) && !input.user.banned && input.activeAdminCount <= 1) {
+  if (
+    isUserRoleAdmin(input.user.role) &&
+    !input.user.banned &&
+    !isClosed(input.user) &&
+    input.activeAdminCount <= 1
+  ) {
     return "Cannot demote the last Active User-role admin";
   }
   return null;
@@ -112,7 +122,8 @@ export function AuthAdminUserManagement({
   const passwordInputId = useId();
   const setPasswordInputId = useId();
   const roleSelectId = useId();
-  const [userToDelete, setUserToDelete] = useState<string | null>(null);
+  const [userToClose, setUserToClose] = useState<string | null>(null);
+  const [userToPurge, setUserToPurge] = useState<string | null>(null);
   const [userToBan, setUserToBan] = useState<{ id: string; name: string } | null>(null);
   const [banReason, setBanReason] = useState("");
   const [banExpiry, setBanExpiry] = useState("never"); // "never", "1d", "7d", "30d", "custom"
@@ -186,18 +197,44 @@ export function AuthAdminUserManagement({
   const users = listUsers?.users;
   const totalUsers = listUsers?.total ?? 0;
   const activeAdminCount = (users ?? []).filter(
-    (user) => isUserRoleAdmin(user.role) && !user.banned
+    (user) => isUserRoleAdmin(user.role) && !user.banned && !isClosed(user)
   ).length;
 
-  const { mutate: deleteUser, isPending: isDeleting } = useRemoveUser({
-    onSuccess: () => {
-      toast.success("User deleted successfully");
-      void invalidateListUsersQuery(queryClient);
-    },
-    onError: (error: Error) => {
-      toast.error(`Error deleting user: ${error.message}`);
-    },
-  });
+  const { mutate: closeUser, isPending: isClosing } = useMutation(
+    trpc.auth.adminCloseUser.mutationOptions({
+      onSuccess: () => {
+        toast.success("User Closed");
+        void invalidateListUsersQuery(queryClient);
+      },
+      onError: (error: Error) => {
+        toast.error(error.message);
+      },
+    })
+  );
+
+  const { mutate: restoreUser, isPending: isRestoring } = useMutation(
+    trpc.auth.restoreUser.mutationOptions({
+      onSuccess: () => {
+        toast.success("User Restored");
+        void invalidateListUsersQuery(queryClient);
+      },
+      onError: (error: Error) => {
+        toast.error(error.message);
+      },
+    })
+  );
+
+  const { mutate: purgeUser, isPending: isPurging } = useMutation(
+    trpc.auth.purgeUser.mutationOptions({
+      onSuccess: () => {
+        toast.success("User Purged");
+        void invalidateListUsersQuery(queryClient);
+      },
+      onError: (error: Error) => {
+        toast.error(error.message);
+      },
+    })
+  );
 
   const { mutate: updateUser } = useUpdateUser({
     onSuccess: () => {
@@ -209,14 +246,21 @@ export function AuthAdminUserManagement({
     },
   });
 
-  const confirmDelete = (userId: string) => {
-    setUserToDelete(userId);
+  const confirmClose = (userId: string) => {
+    setUserToClose(userId);
   };
 
-  const handleDelete = (): void => {
-    if (userToDelete) {
-      deleteUser({ id: userToDelete });
-      setUserToDelete(null);
+  const handleClose = (): void => {
+    if (userToClose) {
+      closeUser({ id: userToClose });
+      setUserToClose(null);
+    }
+  };
+
+  const handlePurge = (): void => {
+    if (userToPurge) {
+      purgeUser({ id: userToPurge });
+      setUserToPurge(null);
     }
   };
 
@@ -637,6 +681,13 @@ export function AuthAdminUserManagement({
       header: "Status",
       cell: ({ row }) => {
         const user = row.original;
+        if (isClosed(user)) {
+          return (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-200 text-neutral-800">
+              Closed
+            </span>
+          );
+        }
         return user.banned ? (
           <Tooltip>
             <Tooltip.Trigger>
@@ -767,29 +818,46 @@ export function AuthAdminUserManagement({
                       Generate Magic Login Link
                     </span>
                   </Dropdown.Item>
-                  {user.banned ? (
-                    <Dropdown.Item
-                      key="unban"
-                      onPress={() => handleUnbanUser(user.id)}
-                      isDisabled={isUnbanningUser[user.id]}
-                    >
-                      {isUnbanningUser[user.id] ? (
-                        <>
-                          <Spinner className="mr-2 h-3 w-3" />
-                          Unbanning...
-                        </>
-                      ) : (
-                        "Unban"
-                      )}
-                    </Dropdown.Item>
+                  {isClosed(user) ? (
+                    <>
+                      <Dropdown.Item
+                        key="restore"
+                        onPress={() => restoreUser({ id: user.id })}
+                        isDisabled={isRestoring}
+                      >
+                        Restore
+                      </Dropdown.Item>
+                      <Dropdown.Item key="purge" onPress={() => setUserToPurge(user.id)}>
+                        Purge
+                      </Dropdown.Item>
+                    </>
                   ) : (
-                    <Dropdown.Item key="ban" onPress={() => openBanModal(user.id, user.name)}>
-                      Ban
-                    </Dropdown.Item>
+                    <>
+                      {user.banned ? (
+                        <Dropdown.Item
+                          key="unban"
+                          onPress={() => handleUnbanUser(user.id)}
+                          isDisabled={isUnbanningUser[user.id]}
+                        >
+                          {isUnbanningUser[user.id] ? (
+                            <>
+                              <Spinner className="mr-2 h-3 w-3" />
+                              Unbanning...
+                            </>
+                          ) : (
+                            "Unban"
+                          )}
+                        </Dropdown.Item>
+                      ) : (
+                        <Dropdown.Item key="ban" onPress={() => openBanModal(user.id, user.name)}>
+                          Ban
+                        </Dropdown.Item>
+                      )}
+                      <Dropdown.Item key="close" onPress={() => confirmClose(user.id)}>
+                        Close
+                      </Dropdown.Item>
+                    </>
                   )}
-                  <Dropdown.Item key="remove" onPress={() => confirmDelete(user.id)}>
-                    Remove
-                  </Dropdown.Item>
                 </Dropdown.Menu>
               </Dropdown.Popover>
             </Dropdown>
@@ -830,32 +898,61 @@ export function AuthAdminUserManagement({
         hideFilters
       />
 
-      {/* Delete confirmation modal */}
       <Modal
-        isOpen={!!userToDelete}
+        isOpen={!!userToClose}
         onOpenChange={(open) => {
-          if (!open) setUserToDelete(null);
+          if (!open) setUserToClose(null);
         }}
       >
         <Modal.Backdrop>
           <Modal.Container>
             <Modal.Dialog>
               <Modal.Header>
-                <Modal.Heading className="text-lg font-semibold">Are you sure?</Modal.Heading>
+                <Modal.Heading className="text-lg font-semibold">Close this User?</Modal.Heading>
               </Modal.Header>
               <Modal.Body>
                 <p className="text-sm text-muted-foreground">
-                  This action cannot be undone. This will permanently delete the user and all their
-                  data.
+                  They will not be able to sign in. You can Restore them until they are Purged.
                 </p>
               </Modal.Body>
               <Modal.Footer>
-                <Button variant="outline" onPress={() => setUserToDelete(null)}>
+                <Button variant="outline" onPress={() => setUserToClose(null)}>
                   Cancel
                 </Button>
-                <Button variant="danger" onPress={handleDelete} isDisabled={isDeleting}>
-                  {isDeleting ? <Spinner className="mr-2 h-4 w-4" /> : null}
-                  Delete
+                <Button variant="danger" onPress={handleClose} isDisabled={isClosing}>
+                  {isClosing ? <Spinner className="mr-2 h-4 w-4" /> : null}
+                  Close
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      <Modal
+        isOpen={!!userToPurge}
+        onOpenChange={(open) => {
+          if (!open) setUserToPurge(null);
+        }}
+      >
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading className="text-lg font-semibold">Purge this User?</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <p className="text-sm text-muted-foreground">
+                  This permanently removes the User. It cannot be undone.
+                </p>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="outline" onPress={() => setUserToPurge(null)}>
+                  Cancel
+                </Button>
+                <Button variant="danger" onPress={handlePurge} isDisabled={isPurging}>
+                  {isPurging ? <Spinner className="mr-2 h-4 w-4" /> : null}
+                  Purge
                 </Button>
               </Modal.Footer>
             </Modal.Dialog>

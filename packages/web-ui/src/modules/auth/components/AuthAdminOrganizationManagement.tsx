@@ -112,6 +112,8 @@ export function AuthAdminOrganizationManagement() {
   const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<Key | null>(null);
   const [newMemberRole, setNewMemberRole] = useState<Key>(organizationRoles.defaultRole);
+  const [orgToClose, setOrgToClose] = useState<OrganizationAdminRow | null>(null);
+  const [orgToPurge, setOrgToPurge] = useState<OrganizationAdminRow | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedParentSearch(parentSearch), 300);
@@ -335,6 +337,44 @@ export function AuthAdminOrganizationManagement() {
     })
   );
 
+  const closeOrganizationMutation = useMutation(
+    trpc.auth.adminCloseOrganization.mutationOptions({
+      onSuccess: async () => {
+        toast.success("Organization Closed");
+        setOrgToClose(null);
+        await invalidateOrgLists();
+      },
+      onError: (error: unknown) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      },
+    })
+  );
+
+  const restoreOrganizationMutation = useMutation(
+    trpc.auth.restoreOrganization.mutationOptions({
+      onSuccess: async () => {
+        toast.success("Organization Restored");
+        await invalidateOrgLists();
+      },
+      onError: (error: unknown) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      },
+    })
+  );
+
+  const purgeOrganizationMutation = useMutation(
+    trpc.auth.purgeOrganization.mutationOptions({
+      onSuccess: async () => {
+        toast.success("Organization Purged");
+        setOrgToPurge(null);
+        await invalidateOrgLists();
+      },
+      onError: (error: unknown) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      },
+    })
+  );
+
   const handleAddMember = (): void => {
     if (!membersOrg || !selectedUserId) return;
     addMemberMutation.mutate({
@@ -406,6 +446,21 @@ export function AuthAdminOrganizationManagement() {
       enableSorting: true,
     },
     {
+      id: "status",
+      header: "Status",
+      cell: ({ row }) =>
+        row.original.closedAt ? (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-200 text-neutral-800">
+            Closed
+          </span>
+        ) : (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            Live
+          </span>
+        ),
+      enableSorting: false,
+    },
+    {
       id: "parentId",
       accessorKey: "parentId",
       header: "Parent",
@@ -445,6 +500,25 @@ export function AuthAdminOrganizationManagement() {
           >
             <Pencil className="h-4 w-4" />
           </Button>
+          {row.original.closedAt ? (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                onPress={() => restoreOrganizationMutation.mutate({ id: row.original.id })}
+                isDisabled={restoreOrganizationMutation.isPending}
+              >
+                Restore
+              </Button>
+              <Button size="sm" variant="danger" onPress={() => setOrgToPurge(row.original)}>
+                Purge
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" variant="danger" onPress={() => setOrgToClose(row.original)}>
+              Close
+            </Button>
+          )}
         </div>
       ),
       enableSorting: false,
@@ -924,6 +998,79 @@ export function AuthAdminOrganizationManagement() {
               <Modal.Footer>
                 <Button variant="secondary" slot="close">
                   Close
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      <Modal
+        isOpen={!!orgToClose}
+        onOpenChange={(open) => {
+          if (!open) setOrgToClose(null);
+        }}
+      >
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading className="text-lg font-semibold">
+                  Close {orgToClose?.name}?
+                </Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <p className="text-sm text-muted-foreground">
+                  The Organization will be hidden and unusable. You can Restore it until it is
+                  Purged.
+                </p>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="outline" onPress={() => setOrgToClose(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  onPress={() => orgToClose && closeOrganizationMutation.mutate({ id: orgToClose.id })}
+                  isDisabled={closeOrganizationMutation.isPending}
+                >
+                  Close
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      <Modal
+        isOpen={!!orgToPurge}
+        onOpenChange={(open) => {
+          if (!open) setOrgToPurge(null);
+        }}
+      >
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading className="text-lg font-semibold">
+                  Purge {orgToPurge?.name}?
+                </Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <p className="text-sm text-muted-foreground">
+                  This permanently removes the Organization. It cannot be undone.
+                </p>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="outline" onPress={() => setOrgToPurge(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  onPress={() => orgToPurge && purgeOrganizationMutation.mutate({ id: orgToPurge.id })}
+                  isDisabled={purgeOrganizationMutation.isPending}
+                >
+                  Purge
                 </Button>
               </Modal.Footer>
             </Modal.Dialog>

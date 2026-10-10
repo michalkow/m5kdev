@@ -60,6 +60,24 @@ export class AuthUserRepository extends BaseTableRepository<
       await this.orm.run(sql`delete from oauth_refresh_tokens where user_id = ${userId}`);
     });
   }
+
+  async purgeUser(userId: string): ServerResultAsync<{ id: string }> {
+    return this.throwableQuery(async () => {
+      await this.orm
+        .delete(this.schema.invitations)
+        .where(eq(this.schema.invitations.inviterId, userId));
+      await this.orm
+        .update(this.schema.members)
+        .set({ userId: null })
+        .where(eq(this.schema.members.userId, userId));
+      await this.orm.delete(this.schema.sessions).where(eq(this.schema.sessions.userId, userId));
+      await this.orm.delete(this.schema.apikeys).where(eq(this.schema.apikeys.userId, userId));
+      await this.orm.run(sql`delete from oauth_access_tokens where user_id = ${userId}`);
+      await this.orm.run(sql`delete from oauth_refresh_tokens where user_id = ${userId}`);
+      await this.orm.delete(this.schema.users).where(eq(this.schema.users.id, userId));
+      return { id: userId };
+    });
+  }
 }
 
 export class AuthOrganizationRepository extends BaseTableRepository<
@@ -414,6 +432,30 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     });
   }
 
+  listOwnedOrganizations = this.query<string>("listOwnedOrganizations")
+    .output(z.array(organizationSchemas.output.simple.pick({ id: true, name: true })))
+    .handle(async (userId) => {
+      return this.throwableQuery(() =>
+        this.orm
+          .select({
+            id: this.schema.organizations.id,
+            name: this.schema.organizations.name,
+          })
+          .from(this.schema.organizations)
+          .innerJoin(
+            this.schema.members,
+            eq(this.schema.organizations.id, this.schema.members.organizationId)
+          )
+          .where(
+            and(
+              eq(this.schema.members.userId, userId),
+              eq(this.schema.members.role, "owner"),
+              isNull(this.schema.members.deletedAt)
+            )
+          )
+      );
+    });
+
   listLiveOwnedOrganizations = this.query<string>("listLiveOwnedOrganizations")
     .output(z.array(organizationSchemas.output.simple.pick({ id: true, name: true })))
     .handle(async (userId) => {
@@ -487,6 +529,30 @@ export class AuthOrganizationRepository extends BaseTableRepository<
           )
         )
     );
+  }
+
+  async purgeOrganization(organizationId: string): ServerResultAsync<{ id: string }> {
+    return this.throwableQuery(async () => {
+      await this.orm
+        .delete(this.schema.invitations)
+        .where(eq(this.schema.invitations.organizationId, organizationId));
+      await this.orm
+        .delete(this.schema.members)
+        .where(eq(this.schema.members.organizationId, organizationId));
+      await this.orm
+        .update(this.schema.sessions)
+        .set({
+          activeOrganizationId: null,
+          activeOrganizationRole: null,
+          activeOrganizationMemberId: null,
+          activeOrganizationType: null,
+        })
+        .where(eq(this.schema.sessions.activeOrganizationId, organizationId));
+      await this.orm
+        .delete(this.schema.organizations)
+        .where(eq(this.schema.organizations.id, organizationId));
+      return { id: organizationId };
+    });
   }
 
   async clearActiveOrganizationSessions(organizationId: string): ServerResultAsync<void> {

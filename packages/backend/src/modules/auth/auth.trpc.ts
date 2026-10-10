@@ -118,6 +118,34 @@ export function createAuthTRPC(
         return handleTRPCResult(await authService.restoreUser(input, ctx));
       }),
 
+    adminCloseUser: adminProcedure
+      .input(closeUserSchemas.input.restore)
+      .output(closeUserSchemas.output.closed)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.adminCloseUser(input, ctx));
+      }),
+
+    purgeUser: adminProcedure
+      .input(closeUserSchemas.input.restore)
+      .output(z.object({ id: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.purgeUser(input, ctx));
+      }),
+
+    adminCloseOrganization: adminProcedure
+      .input(closeOrganizationSchemas.input.restore)
+      .output(closeOrganizationSchemas.output.closed)
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.adminCloseOrganization(input, ctx));
+      }),
+
+    purgeOrganization: adminProcedure
+      .input(closeOrganizationSchemas.input.restore)
+      .output(z.object({ id: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        return handleTRPCResult(await authService.purgeOrganization(input, ctx));
+      }),
+
     createWaitlistCode: procedure
       .input(waitlistSchemas.input.create)
       .output(waitlistSchemas.output.full)

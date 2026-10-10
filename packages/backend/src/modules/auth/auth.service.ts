@@ -99,6 +99,8 @@ export type AuthServiceHooks = {
     locale?: string;
     t?: TFunction;
   }) => Promise<void>;
+  afterPurgeUser?: (props: { user: User }) => Promise<void>;
+  afterPurgeOrganization?: (props: { organization: Organization }) => Promise<void>;
 };
 
 export class AuthService extends BasePermissionService<
@@ -286,6 +288,58 @@ export class AuthService extends BasePermissionService<
       }
     }
     return ok();
+  }
+
+  private async closeLiveUser(user: {
+    id: string;
+    role: string | null;
+    closedAt: Date | null;
+  }): ServerResultAsync<{ id: string; closedAt: Date }> {
+    if (user.closedAt) {
+      return this.error("BAD_REQUEST", "This User is already Closed");
+    }
+    if (user.role === "admin") {
+      const admins = await this.repository.user.countLiveUserAdmins();
+      if (admins.isErr()) return err(admins.error);
+      if (admins.value <= 1) {
+        return this.error("BAD_REQUEST", "Cannot Close the last User-role admin");
+      }
+    }
+    const owned = await this.repository.organization.listLiveOwnedOrganizations(user.id);
+    if (owned.isErr()) return err(owned.error);
+    for (const organization of owned.value) {
+      const members = await this.repository.organization.countLiveMembers(organization.id);
+      if (members.isErr()) return err(members.error);
+      if (members.value > 1) {
+        return this.error("BAD_REQUEST", "Close or transfer Organizations you Own first");
+      }
+    }
+    const closedOwned = await this.closeOwnedOrganizations(owned.value);
+    if (closedOwned.isErr()) return err(closedOwned.error);
+    const memberships = await this.repository.organization.listLiveNonOwnerMemberships(user.id);
+    if (memberships.isErr()) return err(memberships.error);
+    for (const member of memberships.value) {
+      const billed = await this.billingAdjustSeat({
+        organizationId: member.organizationId,
+        role: member.role,
+        delta: -1,
+      });
+      if (billed.isErr()) return err(billed.error);
+      const removed = await this.repository.organization.removeOrganizationMember({
+        organizationId: member.organizationId,
+        memberId: member.id,
+      });
+      if (removed.isErr()) return err(removed.error);
+    }
+    const closedAt = new Date();
+    const updated = await this.repository.user.update({
+      id: user.id,
+      closedAt,
+    });
+    if (updated.isErr()) return err(updated.error);
+    const revoked = await this.repository.user.revokeUserCredentials(user.id);
+    if (revoked.isErr()) return err(revoked.error);
+    return ok({ id: user.id, closedAt: updated.value.closedAt ?? closedAt });
   }
 
   private async sendOrganizationInviteResult({
@@ -753,6 +807,49 @@ export class AuthService extends BasePermissionService<
       return this.closeLiveOrganization(ctx.actor.organizationId);
     });
 
+  adminCloseOrganization = this.procedure("adminCloseOrganization")
+    .input(closeOrganizationSchemas.input.restore)
+    .output(closeOrganizationSchemas.output.closed)
+    .requireAuth("admin")
+    .handle(async ({ input }) => {
+      const organization = await this.repository.organization.findById(input.id);
+      if (organization.isErr()) return err(organization.error);
+      if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
+      if (organization.value.closedAt) {
+        return this.error("BAD_REQUEST", "This Organization is already Closed");
+      }
+      return this.closeLiveOrganization(input.id);
+    });
+
+  purgeOrganization = this.procedure("purgeOrganization")
+    .input(closeOrganizationSchemas.input.restore)
+    .output(z.object({ id: z.string() }))
+    .requireAuth("admin")
+    .handle(async ({ input }) => {
+      const organization = await this.repository.organization.findById(input.id);
+      if (organization.isErr()) return err(organization.error);
+      if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
+      const children = await this.repository.organization.listLiveChildOrganizations(input.id);
+      if (children.isErr()) return err(children.error);
+      if (children.value.length > 0) {
+        return this.error("BAD_REQUEST", "Purge child Organizations first");
+      }
+      if (this.hooks?.afterPurgeOrganization) {
+        try {
+          await this.hooks.afterPurgeOrganization({ organization: organization.value });
+        } catch (error) {
+          return this.error(
+            "INTERNAL_SERVER_ERROR",
+            "Failed to call afterPurgeOrganization hook",
+            { cause: error }
+          );
+        }
+      }
+      const purged = await this.repository.organization.purgeOrganization(input.id);
+      if (purged.isErr()) return err(purged.error);
+      return ok({ id: input.id });
+    });
+
   restoreOrganization = this.procedure("restoreOrganization")
     .input(closeOrganizationSchemas.input.restore)
     .output(z.object({ id: z.string(), closedAt: z.date().nullable() }))
@@ -854,7 +951,7 @@ export class AuthService extends BasePermissionService<
     .requireAuth("admin")
     .handle(async ({ input }) => {
       return this.repository.user.queryList(input, {
-        columns: ["id", "name", "email", "role", "banned", "emailVerified"],
+        columns: ["id", "name", "email", "role", "banned", "emailVerified", "closedAt"],
         globalSearchColumns: ["name", "email"],
       });
     });
@@ -2044,57 +2141,49 @@ export class AuthService extends BasePermissionService<
         userId: state.user.id,
       }),
     })
-    .handle(async ({ input, ctx, state }) => {
-      if (state.user.closedAt) {
-        return this.error("BAD_REQUEST", "This User is already Closed");
-      }
+    .handle(async ({ input, state }) => {
       if (input.email !== state.user.email) {
         return this.error("BAD_REQUEST", "Type your email to confirm");
       }
-      if (state.user.role === "admin") {
-        const admins = await this.repository.user.countLiveUserAdmins();
-        if (admins.isErr()) return err(admins.error);
-        if (admins.value <= 1) {
-          return this.error("BAD_REQUEST", "Cannot Close the last User-role admin");
-        }
-      }
-      const owned = await this.repository.organization.listLiveOwnedOrganizations(ctx.actor.userId);
+      return this.closeLiveUser(state.user);
+    });
+
+  adminCloseUser = this.procedure("adminCloseUser")
+    .input(closeUserSchemas.input.restore)
+    .output(closeUserSchemas.output.closed)
+    .requireAuth("admin")
+    .handle(async ({ input }) => {
+      const user = await this.repository.user.findById(input.id);
+      if (user.isErr()) return err(user.error);
+      if (!user.value) return this.error("NOT_FOUND", "User not found");
+      return this.closeLiveUser(user.value);
+    });
+
+  purgeUser = this.procedure("purgeUser")
+    .input(closeUserSchemas.input.restore)
+    .output(z.object({ id: z.string() }))
+    .requireAuth("admin")
+    .handle(async ({ input }) => {
+      const user = await this.repository.user.findById(input.id);
+      if (user.isErr()) return err(user.error);
+      if (!user.value) return this.error("NOT_FOUND", "User not found");
+      const owned = await this.repository.organization.listOwnedOrganizations(input.id);
       if (owned.isErr()) return err(owned.error);
-      for (const organization of owned.value) {
-        const members = await this.repository.organization.countLiveMembers(organization.id);
-        if (members.isErr()) return err(members.error);
-        if (members.value > 1) {
-          return this.error("BAD_REQUEST", "Close or transfer Organizations you Own first");
+      if (owned.value.length > 0) {
+        return this.error("BAD_REQUEST", "Cannot Purge a User who still Owns an Organization");
+      }
+      if (this.hooks?.afterPurgeUser) {
+        try {
+          await this.hooks.afterPurgeUser({ user: user.value });
+        } catch (error) {
+          return this.error("INTERNAL_SERVER_ERROR", "Failed to call afterPurgeUser hook", {
+            cause: error,
+          });
         }
       }
-      const closedOwned = await this.closeOwnedOrganizations(owned.value);
-      if (closedOwned.isErr()) return err(closedOwned.error);
-      const memberships = await this.repository.organization.listLiveNonOwnerMemberships(
-        ctx.actor.userId
-      );
-      if (memberships.isErr()) return err(memberships.error);
-      for (const member of memberships.value) {
-        const billed = await this.billingAdjustSeat({
-          organizationId: member.organizationId,
-          role: member.role,
-          delta: -1,
-        });
-        if (billed.isErr()) return err(billed.error);
-        const removed = await this.repository.organization.removeOrganizationMember({
-          organizationId: member.organizationId,
-          memberId: member.id,
-        });
-        if (removed.isErr()) return err(removed.error);
-      }
-      const closedAt = new Date();
-      const updated = await this.repository.user.update({
-        id: ctx.actor.userId,
-        closedAt,
-      });
-      if (updated.isErr()) return err(updated.error);
-      const revoked = await this.repository.user.revokeUserCredentials(ctx.actor.userId);
-      if (revoked.isErr()) return err(revoked.error);
-      return ok({ id: ctx.actor.userId, closedAt: updated.value.closedAt ?? closedAt });
+      const purged = await this.repository.user.purgeUser(input.id);
+      if (purged.isErr()) return err(purged.error);
+      return ok({ id: input.id });
     });
 
   restoreUser = this.procedure("restoreUser")
