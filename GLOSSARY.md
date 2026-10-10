@@ -7,11 +7,11 @@ Opinionated TypeScript stack for AI SaaS apps. This file is the domain glossary:
 ### Tenancy
 
 **Organization**:
-The default tenancy unit. Every authenticated User belongs to at least one, including single-user products where the org stays invisible in the UI.
+The default tenancy unit. Signup creates one; single-user products keep it invisible in the UI. A Closed Organization cannot be used. A User may have no live Organization after theirs are Closed.
 _Avoid_: Workspace, tenant, account, company, Team (not a 1.0 tenancy unit; [ADR-0011](docs/adr/0011-no-team-at-1.0.md))
 
 **Membership**:
-A durable `members` row in an Organization. Invite creates it before a User exists (`userId` unset; email and name snapshots). Accept attaches that User to the same row. Leave, invite cancel, and invite expiry soft-delete it; rejoin or re-invite revives it so MemberId stays stable. An Organization has exactly one Owner. The Owner cannot leave; they delete the Organization, or a User-role `admin` transfers Owner first.
+A durable `members` row in an Organization. Invite creates it before a User exists (`userId` unset; email and name snapshots). Accept attaches that User to the same row. Leave, invite cancel, invite expiry, User Close of a non-Owner seat, and Organization Close of non-Owner seats and pending invites soft-delete it; rejoin or re-invite revives it so MemberId stays stable. The Owner Membership stays until the Organization is Purged, even if that Owner User is Closed. Restore does not revive left Memberships. An Organization has exactly one Owner. The Owner cannot leave; they Close the Organization, or a User-role `admin` transfers Owner first.
 _Avoid_: OrgUser, OrganizationUser; a second live row for the same person in the same Organization; using "member" to mean only the default role name; treating Invitation as the Membership; a second Owner; org self-service granting or transferring Owner; Seat (that is Seat billing)
 
 **Member**:
@@ -23,8 +23,20 @@ The Membership id stamped on org-scoped rows. In organization context, `"own"` g
 _Avoid_: authorMemberId, createdBy; UserId as the org ownership key
 
 **User**:
-The global Better Auth identity. Owns personal resources that are not org tenancy.
+The global Better Auth identity. Owns personal resources that are not org tenancy. A Closed User cannot sign in.
 _Avoid_: Account, Customer, Client, Member
+
+**Closed**:
+A User or Organization in the restorable lockout state. A Closed User cannot sign in. A Closed Organization cannot be used. Only an AdminActor Restores, and only before Purge. See [ADR-0031](docs/adr/0031-close-restore-purge.md).
+_Avoid_: soft-delete (that is Membership leave/cancel/expiry), deactivated, suspended, banned; Better Auth deleteUser as the product action
+
+**Restore**:
+An AdminActor returning a Closed User or Organization to usable state before Purge. The Admin panel is the only Restore surface.
+_Avoid_: undelete, reactivate, unsuspend; self-serve undo from preferences or email
+
+**Purge**:
+Permanent removal of a Closed User or Organization after the grace window. When Workflow is registered, one scheduled run does this: child Organizations before parents, Organizations before Users. A User who still Owns an Organization cannot be Purged. An AdminActor may Purge before the window ends.
+_Avoid_: hard-delete as the User-facing noun; File object removal (that is File delete)
 
 **Email verified**:
 Whether a User's email address has been confirmed. An AdminActor may mark it true without sending a verification Email.
@@ -49,7 +61,7 @@ _Avoid_: Invitation, Waitlist, signup
 ### Identity and access
 
 **Actor**:
-Who a Service call is made on behalf of: `UserActor`, `OrganizationActor`, or `AdminActor`. Organization scope requires an active Membership (User attached, not soft-deleted). Invited Members are not Actors. For an org-scoped Procedure, the Organization is named by the call’s `organizationId` when present, otherwise the session active Organization, otherwise an OrganizationActor already on the call (Workflow jobs / internal). When named from input or session, a live Membership builds OrganizationActor. Webapp `setActive` is the session fallback, not the only source. Cookieless callers (API key, MCP client) must pass `organizationId`. Do not synthesize `session.activeOrganization*`. After Actor resolution, `organizationId` is stripped from handle input.
+Who a Service call is made on behalf of: `UserActor`, `OrganizationActor`, or `AdminActor`. Organization scope requires an active Membership (User attached, not soft-deleted) and an Organization that is not Closed. Invited Members are not Actors. A Closed User cannot authenticate as any Actor. For an org-scoped Procedure, the Organization is named by the call’s `organizationId` when present, otherwise the session active Organization, otherwise an OrganizationActor already on the call (Workflow jobs / internal). When named from input or session, a live Membership builds OrganizationActor. Webapp `setActive` is the session fallback, not the only source. Cookieless callers (API key, MCP client) must pass `organizationId`. Do not synthesize `session.activeOrganization*`. After Actor resolution, `organizationId` is stripped from handle input.
 _Avoid_: Session, Context, Principal, Request, TeamActor; treating MCP allowlist as the Actor; treating `organizationId` on input as replacing Actor
 
 **MCP client**:
@@ -85,7 +97,7 @@ A named key at User or Organization scope, configured once in `defineAuthRoles` 
 _Avoid_: Grant, Access, permission; Team role scope
 
 **Owner**:
-The Organization Role `owner`. Steady state is exactly one per Organization. Creating an Organization (signup) makes that User the Owner. Invite and org self-service cannot grant or change it. A User-role `admin` (AdminActor) may grant Owner only when there is none, or transfer when there is exactly one: promote an active Member and demote the previous Owner to Organization Role `admin` in one operation. Extra Owners from before this rule stay until an Admin demotes them; Auth refuses another Owner grant while more than one exists. The Owner cannot leave; they delete the Organization, or an Admin transfers first.
+The Organization Role `owner`. Steady state is exactly one per Organization. Creating an Organization (signup) makes that User the Owner. Invite and org self-service cannot grant or change it. A User-role `admin` (AdminActor) may grant Owner only when there is none, or transfer when there is exactly one: promote an active Member and demote the previous Owner to Organization Role `admin` in one operation. Extra Owners from before this rule stay until an Admin demotes them; Auth refuses another Owner grant while more than one exists. The Owner cannot leave; they Close the Organization, or an Admin transfers first.
 _Avoid_: multiple Owners as a product feature; inviting Owner; org members UI assigning Owner
 
 ### Composition
@@ -277,7 +289,7 @@ The Plan the catalog names for Organization currency (a map, not one global name
 _Avoid_: a different trial Plan per Price interval; treating Trial Plan as a Stripe Product
 
 **Organization currency**:
-Frozen ISO code on the Organization, set at create the same way locale is (payload or catalog default). An AdminActor may set it only when it is null; then it freezes. Stripe Customer and Prices use this currency's Product. Never switched once set. A User may only own live Organizations in one currency: omit copies the owned currency; an explicit mismatch is rejected; after those Organizations are deleted, a new one may pick again.
+Frozen ISO code on the Organization, set at create the same way locale is (payload or catalog default). An AdminActor may set it only when it is null; then it freezes. Stripe Customer and Prices use this currency's Product. Never switched once set. A User may only own live Organizations in one currency: omit copies the owned currency; an explicit mismatch is rejected. Closed Organizations still count; after those Organizations are Purged, a new one may pick again.
 _Avoid_: deriving currency from locale on every read; a User-keyed currency column; switching USD↔PLN in Billing Portal; lookup of Stripe Customer by email to share currency; Admin changing a currency that is already set
 
 **Trial**:

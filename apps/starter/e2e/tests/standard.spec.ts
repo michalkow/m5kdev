@@ -781,7 +781,7 @@ test("session management endpoints list and revoke sessions", async ({ page, req
   ).toBe(true);
 });
 
-test("delete account request stores a verification email", async ({ page, request }) => {
+test.skip("delete account request stores a verification email", async ({ page, request }) => {
   const email = `delete.${Date.now()}@auth-e2e.local`;
   const password = "password1234";
 

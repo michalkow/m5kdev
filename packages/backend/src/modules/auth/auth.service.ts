@@ -34,6 +34,7 @@ import * as auth from "./auth.db";
 import {
   accountClaimMagicLinkSchemas,
   accountClaimSchemas,
+  closeUserSchemas,
   invitationSchemas,
   organizationSchemas,
   waitlistSchemas,
@@ -1913,6 +1914,80 @@ export class AuthService extends BasePermissionService<
         organizationId: ctx.actor.organizationId,
         memberId: ctx.actor.memberId,
       });
+    });
+
+  closeUser = this.procedure("closeUser")
+    .input(closeUserSchemas.input.close)
+    .output(closeUserSchemas.output.closed)
+    .requireAuth()
+    .loadResource("user", ({ ctx }) => this.repository.user.findById(ctx.actor.userId))
+    .access({
+      action: "delete",
+      entities: ({ state }) => ({
+        userId: state.user.id,
+      }),
+    })
+    .handle(async ({ input, ctx, state }) => {
+      if (state.user.closedAt) {
+        return this.error("BAD_REQUEST", "This User is already Closed");
+      }
+      if (input.email !== state.user.email) {
+        return this.error("BAD_REQUEST", "Type your email to confirm");
+      }
+      if (state.user.role === "admin") {
+        const admins = await this.repository.user.countLiveUserAdmins();
+        if (admins.isErr()) return err(admins.error);
+        if (admins.value <= 1) {
+          return this.error("BAD_REQUEST", "Cannot Close the last User-role admin");
+        }
+      }
+      const owned = await this.repository.organization.listLiveOwnedOrganizations(ctx.actor.userId);
+      if (owned.isErr()) return err(owned.error);
+      if (owned.value.length > 0) {
+        return this.error("BAD_REQUEST", "Close or transfer Organizations you Own first");
+      }
+      const memberships = await this.repository.organization.listLiveNonOwnerMemberships(
+        ctx.actor.userId
+      );
+      if (memberships.isErr()) return err(memberships.error);
+      for (const member of memberships.value) {
+        const billed = await this.billingAdjustSeat({
+          organizationId: member.organizationId,
+          role: member.role,
+          delta: -1,
+        });
+        if (billed.isErr()) return err(billed.error);
+        const removed = await this.repository.organization.removeOrganizationMember({
+          organizationId: member.organizationId,
+          memberId: member.id,
+        });
+        if (removed.isErr()) return err(removed.error);
+      }
+      const closedAt = new Date();
+      const updated = await this.repository.user.update({
+        id: ctx.actor.userId,
+        closedAt,
+      });
+      if (updated.isErr()) return err(updated.error);
+      const revoked = await this.repository.user.revokeUserCredentials(ctx.actor.userId);
+      if (revoked.isErr()) return err(revoked.error);
+      return ok({ id: ctx.actor.userId, closedAt: updated.value.closedAt ?? closedAt });
+    });
+
+  restoreUser = this.procedure("restoreUser")
+    .input(closeUserSchemas.input.restore)
+    .output(z.object({ id: z.string(), closedAt: z.date().nullable() }))
+    .requireAuth("admin")
+    .handle(async ({ input }) => {
+      const user = await this.repository.user.findById(input.id);
+      if (user.isErr()) return err(user.error);
+      if (!user.value) return this.error("NOT_FOUND", "User not found");
+      if (!user.value.closedAt) {
+        return this.error("BAD_REQUEST", "This User is not Closed");
+      }
+      const updated = await this.repository.user.update({ id: input.id, closedAt: null });
+      if (updated.isErr()) return err(updated.error);
+      return ok({ id: input.id, closedAt: null });
     });
 
   // #endregion Invitations

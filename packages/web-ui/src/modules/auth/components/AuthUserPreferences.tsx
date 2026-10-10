@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { z } from "zod";
+import { AuthCloseUserDangerZone } from "./AuthCloseUserDangerZone";
 import { AuthUserProfileEditor } from "./AuthUserProfileEditor";
 import { AuthUtilityLocalePicker } from "./AuthUtilityLocalePicker";
 import {
@@ -63,6 +64,7 @@ export function AuthUserPreferences<S extends z.ZodObject<z.ZodRawShape>>({
           labels={labels}
           updateValues={setPreferences}
         />
+        <AuthCloseUserDangerZone />
       </div>
     </div>
   );

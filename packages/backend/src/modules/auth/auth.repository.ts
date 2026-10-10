@@ -34,7 +34,33 @@ export class AuthUserRepository extends BaseTableRepository<
   Schema,
   Record<string, never>,
   Schema["users"]
-> {}
+> {
+  async countLiveUserAdmins(): ServerResultAsync<number> {
+    const result = await this.throwableQuery(() =>
+      this.orm
+        .select({ value: count() })
+        .from(this.schema.users)
+        .where(
+          and(
+            eq(this.schema.users.role, "admin"),
+            isNull(this.schema.users.closedAt),
+            or(isNull(this.schema.users.banned), eq(this.schema.users.banned, false))
+          )
+        )
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value[0]?.value ?? 0);
+  }
+
+  async revokeUserCredentials(userId: string): ServerResultAsync<void> {
+    return this.throwableQuery(async () => {
+      await this.orm.delete(this.schema.sessions).where(eq(this.schema.sessions.userId, userId));
+      await this.orm.delete(this.schema.apikeys).where(eq(this.schema.apikeys.userId, userId));
+      await this.orm.run(sql`delete from oauth_access_tokens where user_id = ${userId}`);
+      await this.orm.run(sql`delete from oauth_refresh_tokens where user_id = ${userId}`);
+    });
+  }
+}
 
 export class AuthOrganizationRepository extends BaseTableRepository<
   Orm,
@@ -375,6 +401,45 @@ export class AuthOrganizationRepository extends BaseTableRepository<
         );
       return rows.map((row) => row.currency);
     });
+  }
+
+  listLiveOwnedOrganizations = this.query<string>("listLiveOwnedOrganizations")
+    .output(z.array(organizationSchemas.output.simple.pick({ id: true, name: true })))
+    .handle(async (userId) => {
+      return this.throwableQuery(() =>
+        this.orm
+          .select({
+            id: this.schema.organizations.id,
+            name: this.schema.organizations.name,
+          })
+          .from(this.schema.organizations)
+          .innerJoin(
+            this.schema.members,
+            eq(this.schema.organizations.id, this.schema.members.organizationId)
+          )
+          .where(
+            and(
+              eq(this.schema.members.userId, userId),
+              eq(this.schema.members.role, "owner"),
+              isNull(this.schema.members.deletedAt)
+            )
+          )
+      );
+    });
+
+  async listLiveNonOwnerMemberships(userId: string): ServerResultAsync<MemberRow[]> {
+    return this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(this.schema.members)
+        .where(
+          and(
+            eq(this.schema.members.userId, userId),
+            ne(this.schema.members.role, "owner"),
+            isNull(this.schema.members.deletedAt)
+          )
+        )
+    );
   }
 
   listUserOrganizations = this.query<string>("listUserOrganizations")

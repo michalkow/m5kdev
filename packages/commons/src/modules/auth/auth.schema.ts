@@ -14,6 +14,7 @@ export const userSchema = z.object({
   banExpires: z.date().nullable(),
   preferences: z.string().nullable(),
   onboarding: z.boolean().nullable(),
+  closedAt: z.date().nullable(),
 });
 
 export type UserSchema = z.infer<typeof userSchema>;

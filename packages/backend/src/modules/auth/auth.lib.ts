@@ -376,18 +376,7 @@ export function createBetterAuth<
     },
     user: {
       deleteUser: {
-        enabled: true,
-        sendDeleteAccountVerification: async ({ user, url }) => {
-          const locale = getRecordLocale(user);
-          const result = await emailService?.sendDeleteAccountVerification(user.email, url, {
-            locale,
-          });
-          if (result?.isErr()) {
-            captureServerError(result.error, { logger }); // no-op when captured at creation
-            hooks?.onError?.(result.error);
-            throw result.error;
-          }
-        },
+        enabled: false,
       },
       additionalFields: {
         onboarding: {
@@ -400,6 +389,12 @@ export function createBetterAuth<
           required: false,
           defaultValue: null,
           input: true,
+        },
+        closedAt: {
+          type: "date",
+          required: false,
+          defaultValue: null,
+          input: false,
         },
         // returned: false keeps these out of session responses and the
         // session cookie cache (4KB limit); read them via auth.service procedures
@@ -905,6 +900,14 @@ export function createBetterAuth<
       session: {
         create: {
           before: async (session) => {
+            const [closedUser] = await orm
+              .select({ closedAt: schema.users.closedAt })
+              .from(schema.users)
+              .where(eq(schema.users.id, session.userId))
+              .limit(1);
+            if (closedUser?.closedAt) {
+              throw new APIError("FORBIDDEN", { message: "This User is Closed" });
+            }
             const { organizationId, organizationRole, organizationType, organizationMemberId } =
               await getActiveOrganization(orm, schema, session.userId);
             return {

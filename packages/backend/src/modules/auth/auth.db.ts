@@ -29,6 +29,7 @@ export const users = sqliteTable("users", {
   onboarding: integer("onboarding"),
   flags: text("flags", { mode: "json" }).default([]).$type<string[]>(),
   locale: text("locale"),
+  closedAt: integer("closed_at", { mode: "timestamp" }),
 });
 
 export const sessions = sqliteTable("sessions", {
@@ -118,6 +119,7 @@ export const organizations = sqliteTable("organizations", {
   cardlessTrialConsumed: text("cardless_trial_consumed", { mode: "json" })
     .default({})
     .$type<Partial<Record<"production" | "sandbox", boolean>>>(),
+  closedAt: integer("closed_at", { mode: "timestamp" }),
 });
 
 export const members = sqliteTable(

@@ -431,7 +431,8 @@ async function createTables(client: Client): Promise<void> {
       metadata TEXT DEFAULT '{}',
       onboarding INTEGER,
       flags TEXT DEFAULT '[]',
-      locale TEXT
+      locale TEXT,
+      closed_at INTEGER
     );
   `);
   await client.execute(`
@@ -453,7 +454,8 @@ async function createTables(client: Client): Promise<void> {
       stripe_sandbox_customer_id TEXT UNIQUE,
       billing_exempt INTEGER NOT NULL DEFAULT 0,
       allow_cardless_trial INTEGER NOT NULL DEFAULT 0,
-      cardless_trial_consumed TEXT DEFAULT '{}'
+      cardless_trial_consumed TEXT DEFAULT '{}',
+      closed_at INTEGER
     );
   `);
   await client.execute(`
