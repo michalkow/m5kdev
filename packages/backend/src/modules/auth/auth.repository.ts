@@ -458,6 +458,22 @@ export class AuthOrganizationRepository extends BaseTableRepository<
       );
     });
 
+  async countLiveMembers(organizationId: string): ServerResultAsync<number> {
+    const result = await this.throwableQuery(() =>
+      this.orm
+        .select({ value: count() })
+        .from(this.schema.members)
+        .where(
+          and(
+            eq(this.schema.members.organizationId, organizationId),
+            isNull(this.schema.members.deletedAt)
+          )
+        )
+    );
+    if (result.isErr()) return err(result.error);
+    return ok(result.value[0]?.value ?? 0);
+  }
+
   async listLiveNonOwnerMembers(organizationId: string): ServerResultAsync<MemberRow[]> {
     return this.throwableQuery(() =>
       this.orm

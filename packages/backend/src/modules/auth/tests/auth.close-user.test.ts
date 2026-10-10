@@ -70,6 +70,12 @@ describe("AuthService.closeUser", () => {
     removeOrganizationMember?: AuthOrganizationRepository["removeOrganizationMember"];
     countLiveUserAdmins?: AuthUserRepository["countLiveUserAdmins"];
     revokeUserCredentials?: AuthUserRepository["revokeUserCredentials"];
+    countLiveMembers?: AuthOrganizationRepository["countLiveMembers"];
+    listLiveChildOrganizations?: AuthOrganizationRepository["listLiveChildOrganizations"];
+    listLiveNonOwnerMembers?: AuthOrganizationRepository["listLiveNonOwnerMembers"];
+    updateOrganization?: AuthOrganizationRepository["update"];
+    clearActiveOrganizationSessions?: AuthOrganizationRepository["clearActiveOrganizationSessions"];
+    listPendingByOrganization?: AuthInvitationRepository["listPendingByOrganization"];
   }): AuthService {
     return new AuthService(
       {
@@ -81,7 +87,10 @@ describe("AuthService.closeUser", () => {
           revokeUserCredentials:
             fakes.revokeUserCredentials ?? jest.fn().mockResolvedValue(ok(undefined)),
         } as unknown as AuthUserRepository,
-        invitation: {} as AuthInvitationRepository,
+        invitation: {
+          listPendingByOrganization:
+            fakes.listPendingByOrganization ?? jest.fn().mockResolvedValue(ok([])),
+        } as unknown as AuthInvitationRepository,
         waitlist: {} as AuthWaitlistRepository,
         organization: {
           listLiveOwnedOrganizations: fakes.listLiveOwnedOrganizations,
@@ -89,6 +98,14 @@ describe("AuthService.closeUser", () => {
             fakes.listLiveNonOwnerMemberships ?? jest.fn().mockResolvedValue(ok([])),
           removeOrganizationMember:
             fakes.removeOrganizationMember ?? jest.fn().mockResolvedValue(ok({ id: MEMBER_ID })),
+          countLiveMembers: fakes.countLiveMembers ?? jest.fn().mockResolvedValue(ok(1)),
+          listLiveChildOrganizations:
+            fakes.listLiveChildOrganizations ?? jest.fn().mockResolvedValue(ok([])),
+          listLiveNonOwnerMembers:
+            fakes.listLiveNonOwnerMembers ?? jest.fn().mockResolvedValue(ok([])),
+          update: fakes.updateOrganization ?? jest.fn(),
+          clearActiveOrganizationSessions:
+            fakes.clearActiveOrganizationSessions ?? jest.fn().mockResolvedValue(ok(undefined)),
         } as unknown as AuthOrganizationRepository,
       },
       { email: {} as EmailService },
@@ -118,11 +135,13 @@ describe("AuthService.closeUser", () => {
     expect(revokeUserCredentials).toHaveBeenCalledWith(USER_ID);
   });
 
-  it("refuses Close when the User Owns an Organization", async () => {
+  it("refuses Close when the User Owns an Organization with other live Members", async () => {
+    const update = jest.fn();
     const auth = createCloseAuth({
       findById: jest.fn().mockResolvedValue(ok(liveUser())),
-      update: jest.fn(),
+      update,
       listLiveOwnedOrganizations: jest.fn().mockResolvedValue(ok([{ id: ORG_ID, name: "Acme" }])),
+      countLiveMembers: jest.fn().mockResolvedValue(ok(2)),
     });
 
     const result = await auth.closeUser({ email: EMAIL }, userCtx());
@@ -130,6 +149,51 @@ describe("AuthService.closeUser", () => {
     expect(result.isErr()).toBe(true);
     if (result.isOk()) return;
     expect(result.error.message).toBe("Close or transfer Organizations you Own first");
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("Closes Organizations the User Owns when they are the only live Member", async () => {
+    const closedAt = new Date("2026-10-10T12:00:00.000Z");
+    const removeOrganizationMember = jest.fn().mockResolvedValue(ok({ id: MEMBER_ID }));
+    const updateOrganization = jest.fn().mockResolvedValue(ok({ id: ORG_ID, closedAt }));
+    const auth = createCloseAuth({
+      findById: jest.fn().mockResolvedValue(ok(liveUser())),
+      update: jest.fn().mockResolvedValue(ok(liveUser({ closedAt }))),
+      listLiveOwnedOrganizations: jest.fn().mockResolvedValue(ok([{ id: ORG_ID, name: "Acme" }])),
+      countLiveMembers: jest.fn().mockResolvedValue(ok(1)),
+      updateOrganization,
+      removeOrganizationMember,
+    });
+
+    const result = await auth.closeUser({ email: EMAIL }, userCtx());
+
+    expect(result.isOk()).toBe(true);
+    expect(updateOrganization).toHaveBeenCalledWith({ id: ORG_ID, closedAt: expect.any(Date) });
+    expect(removeOrganizationMember).not.toHaveBeenCalled();
+  });
+
+  it("does not un-Close owned Organizations when Restoring the User", async () => {
+    const closedAt = new Date("2026-10-10T12:00:00.000Z");
+    const updateOrganization = jest.fn();
+    const auth = createCloseAuth({
+      findById: jest
+        .fn()
+        .mockResolvedValueOnce(ok(liveUser()))
+        .mockResolvedValueOnce(ok(liveUser({ closedAt }))),
+      update: jest
+        .fn()
+        .mockResolvedValueOnce(ok(liveUser({ closedAt })))
+        .mockResolvedValueOnce(ok(liveUser({ closedAt: null }))),
+      listLiveOwnedOrganizations: jest.fn().mockResolvedValue(ok([])),
+      updateOrganization,
+    });
+
+    const closed = await auth.closeUser({ email: EMAIL }, userCtx());
+    expect(closed.isOk()).toBe(true);
+
+    const restored = await auth.restoreUser({ id: USER_ID }, adminCtx());
+    expect(restored.isOk()).toBe(true);
+    expect(updateOrganization).not.toHaveBeenCalled();
   });
 
   it("leaves non-Owner Memberships and does not revive them on Restore", async () => {

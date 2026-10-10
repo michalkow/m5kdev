@@ -215,6 +215,79 @@ export class AuthService extends BasePermissionService<
     return ok({ invitationId: invitation.id, memberId: invitation.memberId });
   }
 
+  private async closeLiveOrganization(
+    organizationId: string
+  ): ServerResultAsync<{ id: string; closedAt: Date }> {
+    const children = await this.repository.organization.listLiveChildOrganizations(organizationId);
+    if (children.isErr()) return err(children.error);
+    if (children.value.length > 0) {
+      return this.error("BAD_REQUEST", "Close child Organizations first");
+    }
+    const pending = await this.repository.invitation.listPendingByOrganization(organizationId);
+    if (pending.isErr()) return err(pending.error);
+    for (const invitation of pending.value) {
+      const canceled = await this.cancelInvitationSeat(invitation);
+      if (canceled.isErr()) return err(canceled.error);
+    }
+    const memberships = await this.repository.organization.listLiveNonOwnerMembers(organizationId);
+    if (memberships.isErr()) return err(memberships.error);
+    for (const member of memberships.value) {
+      const billed = await this.billingAdjustSeat({
+        organizationId: member.organizationId,
+        role: member.role,
+        delta: -1,
+      });
+      if (billed.isErr()) return err(billed.error);
+      const removed = await this.repository.organization.removeOrganizationMember({
+        organizationId: member.organizationId,
+        memberId: member.id,
+      });
+      if (removed.isErr()) return err(removed.error);
+    }
+    const billing = this.getBillingService();
+    if (billing) {
+      const canceled = await billing.cancelOrganizationSubscription({ organizationId });
+      if (canceled.isErr()) return err(canceled.error);
+    }
+    const closedAt = new Date();
+    const updated = await this.repository.organization.update({
+      id: organizationId,
+      closedAt,
+    });
+    if (updated.isErr()) return err(updated.error);
+    const cleared =
+      await this.repository.organization.clearActiveOrganizationSessions(organizationId);
+    if (cleared.isErr()) return err(cleared.error);
+    return ok({ id: organizationId, closedAt: updated.value.closedAt ?? closedAt });
+  }
+
+  private async closeOwnedOrganizations(
+    owned: readonly { id: string }[]
+  ): ServerResultAsync<void> {
+    const remaining = new Map(owned.map((organization) => [organization.id, organization]));
+    while (remaining.size > 0) {
+      let progressed = false;
+      for (const organization of [...remaining.values()]) {
+        const children = await this.repository.organization.listLiveChildOrganizations(
+          organization.id
+        );
+        if (children.isErr()) return err(children.error);
+        if (children.value.some((child) => !remaining.has(child.id))) {
+          return this.error("BAD_REQUEST", "Close child Organizations first");
+        }
+        if (children.value.length > 0) continue;
+        const closed = await this.closeLiveOrganization(organization.id);
+        if (closed.isErr()) return err(closed.error);
+        remaining.delete(organization.id);
+        progressed = true;
+      }
+      if (!progressed) {
+        return this.error("BAD_REQUEST", "Close child Organizations first");
+      }
+    }
+    return ok();
+  }
+
   private async sendOrganizationInviteResult({
     email,
     role,
@@ -677,59 +750,7 @@ export class AuthService extends BasePermissionService<
       if (input.name !== state.organization.name) {
         return this.error("BAD_REQUEST", "Type the Organization name to confirm");
       }
-      const children = await this.repository.organization.listLiveChildOrganizations(
-        ctx.actor.organizationId
-      );
-      if (children.isErr()) return err(children.error);
-      if (children.value.length > 0) {
-        return this.error("BAD_REQUEST", "Close child Organizations first");
-      }
-      const pending = await this.repository.invitation.listPendingByOrganization(
-        ctx.actor.organizationId
-      );
-      if (pending.isErr()) return err(pending.error);
-      for (const invitation of pending.value) {
-        const canceled = await this.cancelInvitationSeat(invitation);
-        if (canceled.isErr()) return err(canceled.error);
-      }
-      const memberships = await this.repository.organization.listLiveNonOwnerMembers(
-        ctx.actor.organizationId
-      );
-      if (memberships.isErr()) return err(memberships.error);
-      for (const member of memberships.value) {
-        const billed = await this.billingAdjustSeat({
-          organizationId: member.organizationId,
-          role: member.role,
-          delta: -1,
-        });
-        if (billed.isErr()) return err(billed.error);
-        const removed = await this.repository.organization.removeOrganizationMember({
-          organizationId: member.organizationId,
-          memberId: member.id,
-        });
-        if (removed.isErr()) return err(removed.error);
-      }
-      const billing = this.getBillingService();
-      if (billing) {
-        const canceled = await billing.cancelOrganizationSubscription({
-          organizationId: ctx.actor.organizationId,
-        });
-        if (canceled.isErr()) return err(canceled.error);
-      }
-      const closedAt = new Date();
-      const updated = await this.repository.organization.update({
-        id: ctx.actor.organizationId,
-        closedAt,
-      });
-      if (updated.isErr()) return err(updated.error);
-      const cleared = await this.repository.organization.clearActiveOrganizationSessions(
-        ctx.actor.organizationId
-      );
-      if (cleared.isErr()) return err(cleared.error);
-      return ok({
-        id: ctx.actor.organizationId,
-        closedAt: updated.value.closedAt ?? closedAt,
-      });
+      return this.closeLiveOrganization(ctx.actor.organizationId);
     });
 
   restoreOrganization = this.procedure("restoreOrganization")
@@ -2039,9 +2060,15 @@ export class AuthService extends BasePermissionService<
       }
       const owned = await this.repository.organization.listLiveOwnedOrganizations(ctx.actor.userId);
       if (owned.isErr()) return err(owned.error);
-      if (owned.value.length > 0) {
-        return this.error("BAD_REQUEST", "Close or transfer Organizations you Own first");
+      for (const organization of owned.value) {
+        const members = await this.repository.organization.countLiveMembers(organization.id);
+        if (members.isErr()) return err(members.error);
+        if (members.value > 1) {
+          return this.error("BAD_REQUEST", "Close or transfer Organizations you Own first");
+        }
       }
+      const closedOwned = await this.closeOwnedOrganizations(owned.value);
+      if (closedOwned.isErr()) return err(closedOwned.error);
       const memberships = await this.repository.organization.listLiveNonOwnerMemberships(
         ctx.actor.userId
       );
