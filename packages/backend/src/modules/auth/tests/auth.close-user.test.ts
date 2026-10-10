@@ -134,6 +134,7 @@ describe("AuthService.closeUser", () => {
       listLiveOwnedOrganizations,
       revokeUserCredentials,
     });
+    const emit = jest.spyOn(auth, "userEmit");
 
     const result = await auth.closeUser({ email: EMAIL }, userCtx());
 
@@ -141,6 +142,8 @@ describe("AuthService.closeUser", () => {
     if (result.isErr()) return;
     expect(result.value).toEqual({ id: USER_ID, closedAt });
     expect(revokeUserCredentials).toHaveBeenCalledWith(USER_ID);
+    expect(emit).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith(expect.not.objectContaining({ banned: true }));
   });
 
   it("refuses Close when the User Owns an Organization with other live Members", async () => {
@@ -282,11 +285,15 @@ describe("AuthService.closeUser", () => {
       listLiveOwnedOrganizations: jest.fn().mockResolvedValue(ok([])),
     });
 
+    const emit = jest.spyOn(auth, "userEmit");
     const result = await auth.adminCloseUser({ id: USER_ID }, adminCtx());
 
     expect(result.isOk()).toBe(true);
     if (result.isErr()) return;
     expect(result.value).toEqual({ id: USER_ID, closedAt });
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: USER_ID, resource: "user", change: "updated" })
+    );
   });
 
   it("Restores a User whose Closed grace has elapsed but who is not yet Purged", async () => {
@@ -302,6 +309,24 @@ describe("AuthService.closeUser", () => {
     expect(restored.isOk()).toBe(true);
     if (restored.isErr()) return;
     expect(restored.value).toEqual({ id: USER_ID, closedAt: null });
+  });
+
+  it("refuses Purge of a User who is not Closed", async () => {
+    const purgeUser = jest.fn();
+    const auth = createCloseAuth({
+      findById: jest.fn().mockResolvedValue(ok(liveUser())),
+      update: jest.fn(),
+      listLiveOwnedOrganizations: jest.fn(),
+      listOwnedOrganizations: jest.fn().mockResolvedValue(ok([])),
+      purgeUser,
+    });
+
+    const result = await auth.purgeUser({ id: USER_ID }, adminCtx());
+
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) return;
+    expect(result.error.message).toBe("This User is not Closed");
+    expect(purgeUser).not.toHaveBeenCalled();
   });
 
   it("refuses Purge User while they still Own an Organization", async () => {

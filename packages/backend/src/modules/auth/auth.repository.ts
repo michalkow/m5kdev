@@ -306,17 +306,17 @@ export class AuthOrganizationRepository extends BaseTableRepository<
     userId: string;
     organizationId: string;
   }): ServerResultAsync<OrganizationMemberRow> {
-    const closed = await this.throwableQuery(() =>
+    const live = await this.throwableQuery(() =>
       this.orm
-        .select({ closedAt: this.schema.organizations.closedAt })
+        .select({ id: this.schema.organizations.id })
         .from(this.schema.organizations)
-        .where(eq(this.schema.organizations.id, organizationId))
+        .where(
+          and(eq(this.schema.organizations.id, organizationId), isNull(this.schema.organizations.closedAt))
+        )
         .limit(1)
     );
-    if (closed.isErr()) return err(closed.error);
-    if (closed.value[0]?.closedAt) {
-      return this.error("NOT_FOUND", "This Organization is Closed");
-    }
+    if (live.isErr()) return err(live.error);
+    if (!live.value[0]) return this.error("NOT_FOUND", "Member not found");
     const result = await this.throwableQuery(() =>
       this.selectMemberRows(organizationId, { userId, limit: 1 })
     );
@@ -506,6 +506,20 @@ export class AuthOrganizationRepository extends BaseTableRepository<
               isNull(this.schema.organizations.closedAt)
             )
           )
+      );
+    });
+
+  listChildOrganizations = this.query<string>("listChildOrganizations")
+    .output(z.array(organizationSchemas.output.simple.pick({ id: true, name: true })))
+    .handle(async (parentId) => {
+      return this.throwableQuery(() =>
+        this.orm
+          .select({
+            id: this.schema.organizations.id,
+            name: this.schema.organizations.name,
+          })
+          .from(this.schema.organizations)
+          .where(eq(this.schema.organizations.parentId, parentId))
       );
     });
 

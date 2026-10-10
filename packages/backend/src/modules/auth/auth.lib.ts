@@ -663,6 +663,11 @@ export function createBetterAuth<
 
     databaseHooks: {
       user: {
+        delete: {
+          before: async () => {
+            throw new APIError("FORBIDDEN", { message: "Use Auth Close" });
+          },
+        },
         update: {
           after: async (user) => {
             try {

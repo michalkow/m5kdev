@@ -29,6 +29,7 @@ describe("AuthService.purgeExpired", () => {
   function createAuth(fakes: {
     listClosedOrganizationsBefore?: AuthOrganizationRepository["listClosedOrganizationsBefore"];
     listLiveChildOrganizations?: AuthOrganizationRepository["listLiveChildOrganizations"];
+    listChildOrganizations?: AuthOrganizationRepository["listChildOrganizations"];
     listClosedUsersBefore?: AuthUserRepository["listClosedUsersBefore"];
     listOwnedOrganizations?: AuthOrganizationRepository["listOwnedOrganizations"];
     purgeOrganization?: AuthOrganizationRepository["purgeOrganization"];
@@ -50,6 +51,9 @@ describe("AuthService.purgeExpired", () => {
             fakes.listClosedOrganizationsBefore ?? jest.fn().mockResolvedValue(ok([])),
           listLiveChildOrganizations:
             fakes.listLiveChildOrganizations ?? jest.fn().mockResolvedValue(ok([])),
+          listChildOrganizations:
+            fakes.listChildOrganizations ?? jest.fn().mockResolvedValue(ok([])),
+          listOrganizationMembers: jest.fn().mockResolvedValue(ok([{ userId: USER_ID }])),
           listOwnedOrganizations:
             fakes.listOwnedOrganizations ?? jest.fn().mockResolvedValue(ok([])),
           purgeOrganization:
@@ -83,7 +87,17 @@ describe("AuthService.purgeExpired", () => {
   });
 
   it("Purges Organizations past grace, children before parents", async () => {
-    const purgeOrganization = jest.fn().mockImplementation(async (id: string) => ok({ id }));
+    const purged = new Set<string>();
+    const purgeOrganization = jest.fn().mockImplementation(async (id: string) => {
+      purged.add(id);
+      return ok({ id });
+    });
+    const listChildOrganizations = jest.fn().mockImplementation(async (id: string) => {
+      if (id === ORG_ID && !purged.has(CHILD_ID)) {
+        return ok([{ id: CHILD_ID, name: "Child" }]);
+      }
+      return ok([]);
+    });
     const auth = createAuth({
       listClosedOrganizationsBefore: jest.fn().mockResolvedValue(
         ok([
@@ -91,6 +105,7 @@ describe("AuthService.purgeExpired", () => {
           { id: CHILD_ID, parentId: ORG_ID, name: "Child", closedAt: new Date() },
         ])
       ),
+      listChildOrganizations,
       purgeOrganization,
     });
 

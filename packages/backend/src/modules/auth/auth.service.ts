@@ -100,7 +100,9 @@ export type AuthServiceHooks = {
     t?: TFunction;
   }) => Promise<void>;
   afterPurgeUser?: (props: { user: User }) => Promise<void>;
-  afterPurgeOrganization?: (props: { organization: Organization }) => Promise<void>;
+  afterPurgeOrganization?: (props: {
+    organization: Pick<Organization, "id"> & Partial<Organization>;
+  }) => Promise<void>;
 };
 
 export class AuthService extends BasePermissionService<
@@ -346,26 +348,38 @@ export class AuthService extends BasePermissionService<
   private async performPurgeOrganization(
     organization: Pick<Organization, "id"> & Partial<Organization>
   ): ServerResultAsync<{ id: string }> {
-    const children = await this.repository.organization.listLiveChildOrganizations(organization.id);
+    if (!organization.closedAt) {
+      return this.error("BAD_REQUEST", "This Organization is not Closed");
+    }
+    const children = await this.repository.organization.listChildOrganizations(organization.id);
     if (children.isErr()) return err(children.error);
     if (children.value.length > 0) {
       return this.error("BAD_REQUEST", "Purge child Organizations first");
     }
     if (this.hooks?.afterPurgeOrganization) {
       try {
-        await this.hooks.afterPurgeOrganization({ organization: organization as Organization });
+        await this.hooks.afterPurgeOrganization({ organization });
       } catch (error) {
         return this.error("INTERNAL_SERVER_ERROR", "Failed to call afterPurgeOrganization hook", {
           cause: error,
         });
       }
     }
+    await this.organizationEmit({
+      organizationId: organization.id,
+      resource: "organization",
+      id: organization.id,
+      change: "deleted",
+    });
     const purged = await this.repository.organization.purgeOrganization(organization.id);
     if (purged.isErr()) return err(purged.error);
     return ok({ id: organization.id });
   }
 
   private async performPurgeUser(user: User): ServerResultAsync<{ id: string }> {
+    if (!user.closedAt) {
+      return this.error("BAD_REQUEST", "This User is not Closed");
+    }
     const owned = await this.repository.organization.listOwnedOrganizations(user.id);
     if (owned.isErr()) return err(owned.error);
     if (owned.value.length > 0) {
@@ -380,6 +394,13 @@ export class AuthService extends BasePermissionService<
         });
       }
     }
+    this.userEmit({
+      userId: user.id,
+      resource: "user",
+      id: user.id,
+      change: "deleted",
+      organizationId: null,
+    });
     const purged = await this.repository.user.purgeUser(user.id);
     if (purged.isErr()) return err(purged.error);
     return ok({ id: user.id });
@@ -851,7 +872,7 @@ export class AuthService extends BasePermissionService<
     });
 
   adminCloseOrganization = this.procedure("adminCloseOrganization")
-    .input(closeOrganizationSchemas.input.restore)
+    .input(closeOrganizationSchemas.input.id)
     .output(closeOrganizationSchemas.output.closed)
     .requireAuth("admin")
     .handle(async ({ input }) => {
@@ -861,11 +882,19 @@ export class AuthService extends BasePermissionService<
       if (organization.value.closedAt) {
         return this.error("BAD_REQUEST", "This Organization is already Closed");
       }
-      return this.closeLiveOrganization(input.id);
+      const closed = await this.closeLiveOrganization(input.id);
+      if (closed.isErr()) return err(closed.error);
+      await this.organizationEmit({
+        organizationId: input.id,
+        resource: "organization",
+        id: input.id,
+        change: "updated",
+      });
+      return closed;
     });
 
   purgeOrganization = this.procedure("purgeOrganization")
-    .input(closeOrganizationSchemas.input.restore)
+    .input(closeOrganizationSchemas.input.id)
     .output(z.object({ id: z.string() }))
     .requireAuth("admin")
     .handle(async ({ input }) => {
@@ -876,7 +905,7 @@ export class AuthService extends BasePermissionService<
     });
 
   restoreOrganization = this.procedure("restoreOrganization")
-    .input(closeOrganizationSchemas.input.restore)
+    .input(closeOrganizationSchemas.input.id)
     .output(z.object({ id: z.string(), closedAt: z.date().nullable() }))
     .requireAuth("admin")
     .handle(async ({ input }) => {
@@ -891,6 +920,12 @@ export class AuthService extends BasePermissionService<
         closedAt: null,
       });
       if (updated.isErr()) return err(updated.error);
+      await this.organizationEmit({
+        organizationId: input.id,
+        resource: "organization",
+        id: input.id,
+        change: "updated",
+      });
       return ok({ id: input.id, closedAt: null });
     });
 
@@ -2174,18 +2209,27 @@ export class AuthService extends BasePermissionService<
     });
 
   adminCloseUser = this.procedure("adminCloseUser")
-    .input(closeUserSchemas.input.restore)
+    .input(closeUserSchemas.input.id)
     .output(closeUserSchemas.output.closed)
     .requireAuth("admin")
     .handle(async ({ input }) => {
       const user = await this.repository.user.findById(input.id);
       if (user.isErr()) return err(user.error);
       if (!user.value) return this.error("NOT_FOUND", "User not found");
-      return this.closeLiveUser(user.value);
+      const closed = await this.closeLiveUser(user.value);
+      if (closed.isErr()) return err(closed.error);
+      this.userEmit({
+        userId: user.value.id,
+        resource: "user",
+        id: user.value.id,
+        change: "updated",
+        organizationId: null,
+      });
+      return closed;
     });
 
   purgeUser = this.procedure("purgeUser")
-    .input(closeUserSchemas.input.restore)
+    .input(closeUserSchemas.input.id)
     .output(z.object({ id: z.string() }))
     .requireAuth("admin")
     .handle(async ({ input }) => {
@@ -2204,18 +2248,15 @@ export class AuthService extends BasePermissionService<
     while (remaining.size > 0) {
       let progressed = false;
       for (const organization of [...remaining.values()]) {
-        const liveChildren = await this.repository.organization.listLiveChildOrganizations(
+        const children = await this.repository.organization.listChildOrganizations(
           organization.id
         );
-        if (liveChildren.isErr()) return err(liveChildren.error);
-        if (liveChildren.value.length > 0) {
+        if (children.isErr()) return err(children.error);
+        if (children.value.some((child) => !remaining.has(child.id))) {
           remaining.delete(organization.id);
           continue;
         }
-        const remainingChildren = [...remaining.values()].filter(
-          (child) => child.parentId === organization.id
-        );
-        if (remainingChildren.length > 0) continue;
+        if (children.value.length > 0) continue;
         const purged = await this.performPurgeOrganization(organization);
         if (purged.isErr()) return err(purged.error);
         remaining.delete(organization.id);
@@ -2239,7 +2280,7 @@ export class AuthService extends BasePermissionService<
   }
 
   restoreUser = this.procedure("restoreUser")
-    .input(closeUserSchemas.input.restore)
+    .input(closeUserSchemas.input.id)
     .output(z.object({ id: z.string(), closedAt: z.date().nullable() }))
     .requireAuth("admin")
     .handle(async ({ input }) => {
@@ -2251,6 +2292,13 @@ export class AuthService extends BasePermissionService<
       }
       const updated = await this.repository.user.update({ id: input.id, closedAt: null });
       if (updated.isErr()) return err(updated.error);
+      this.userEmit({
+        userId: input.id,
+        resource: "user",
+        id: input.id,
+        change: "updated",
+        organizationId: null,
+      });
       return ok({ id: input.id, closedAt: null });
     });
 
@@ -2283,42 +2331,42 @@ export class AuthService extends BasePermissionService<
     this.serverEvents.batchEmit({ userIds: input.userIds, payload: envelope });
   }
 
-  organizationEmit(input: AuthOrganizationServerEventInput): void {
-    void this.repository.organization
-      .listOrganizationMembers(input.organizationId)
-      .then((members) => {
-        if (members.isErr()) {
-          this.logger.error(
-            { err: members.error, organizationId: input.organizationId },
-            "Server event organization emit listing failed"
-          );
-          return;
-        }
-        const userIds = members.value
-          .map((member) => member.userId)
-          .filter((userId): userId is string => typeof userId === "string" && userId.length > 0);
-        if (userIds.length === 0) {
-          this.logger.error(
-            { organizationId: input.organizationId },
-            "Server event organization emit has no Members"
-          );
-          return;
-        }
-        this.batchUserEmit({
-          userIds,
-          resource: input.resource,
-          id: input.id,
-          change: input.change,
-          organizationId: input.organizationId,
-          snapshot: input.snapshot,
-        });
-      })
-      .catch((err: unknown) => {
+  async organizationEmit(input: AuthOrganizationServerEventInput): Promise<void> {
+    try {
+      const members = await this.repository.organization.listOrganizationMembers(
+        input.organizationId
+      );
+      if (members.isErr()) {
         this.logger.error(
-          { err, organizationId: input.organizationId },
+          { err: members.error, organizationId: input.organizationId },
           "Server event organization emit listing failed"
         );
+        return;
+      }
+      const userIds = members.value
+        .map((member) => member.userId)
+        .filter((userId): userId is string => typeof userId === "string" && userId.length > 0);
+      if (userIds.length === 0) {
+        this.logger.error(
+          { organizationId: input.organizationId },
+          "Server event organization emit has no Members"
+        );
+        return;
+      }
+      this.batchUserEmit({
+        userIds,
+        resource: input.resource,
+        id: input.id,
+        change: input.change,
+        organizationId: input.organizationId,
+        snapshot: input.snapshot,
       });
+    } catch (err: unknown) {
+      this.logger.error(
+        { err, organizationId: input.organizationId },
+        "Server event organization emit listing failed"
+      );
+    }
   }
 
   emitServerEvent(input: AuthEmitServerEventInput): void {

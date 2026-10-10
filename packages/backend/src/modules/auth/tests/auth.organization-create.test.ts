@@ -4,7 +4,9 @@ import path from "node:path";
 import { type Client, createClient } from "@libsql/client";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
+import { resolveOrganizationActor } from "../../../base/base.actor";
 import * as auth from "../auth.db";
+import { AuthOrganizationRepository } from "../auth.repository";
 import {
   createOrganizationWithOwner,
   getActiveOrganization,
@@ -494,5 +496,49 @@ describe("getActiveOrganization", () => {
     const actor = await getActiveOrganization(orm, auth, "user-owner");
     expect(actor.organizationId).toBeUndefined();
     expect(actor.organizationMemberId).toBeUndefined();
+  });
+
+  it("refuses OrganizationActor for a Closed Organization", async () => {
+    const orm = drizzle(client, { schema: auth });
+    const now = new Date();
+    await orm.insert(auth.users).values({
+      id: "user-owner",
+      name: "Pat",
+      email: "pat@example.com",
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await orm.insert(auth.organizations).values({
+      id: "org-closed",
+      name: "Closed",
+      slug: "closed",
+      createdAt: now,
+      closedAt: now,
+    });
+    await orm.insert(auth.members).values({
+      id: "member-closed",
+      organizationId: "org-closed",
+      userId: "user-owner",
+      email: "pat@example.com",
+      name: "Pat",
+      role: "owner",
+      createdAt: now,
+    });
+    const memberships = new AuthOrganizationRepository({
+      orm,
+      schema: auth,
+      table: auth.organizations,
+    });
+
+    const result = await resolveOrganizationActor({
+      user: { userId: "user-owner", userRole: "user" },
+      organizationId: "org-closed",
+      memberships,
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) return;
+    expect(result.error.message).toBe("Live Membership required");
   });
 });

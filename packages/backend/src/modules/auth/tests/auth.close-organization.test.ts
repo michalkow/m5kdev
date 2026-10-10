@@ -69,6 +69,7 @@ describe("AuthService.closeOrganization", () => {
     findById: AuthOrganizationRepository["findById"];
     update: AuthOrganizationRepository["update"];
     listLiveChildOrganizations?: AuthOrganizationRepository["listLiveChildOrganizations"];
+    listChildOrganizations?: AuthOrganizationRepository["listChildOrganizations"];
     listLiveNonOwnerMembers?: AuthOrganizationRepository["listLiveNonOwnerMembers"];
     removeOrganizationMember?: AuthOrganizationRepository["removeOrganizationMember"];
     listPendingInvitations?: AuthInvitationRepository["listPendingByOrganization"];
@@ -93,6 +94,9 @@ describe("AuthService.closeOrganization", () => {
           update: fakes.update,
           listLiveChildOrganizations:
             fakes.listLiveChildOrganizations ?? jest.fn().mockResolvedValue(ok([])),
+          listChildOrganizations:
+            fakes.listChildOrganizations ?? jest.fn().mockResolvedValue(ok([])),
+          listOrganizationMembers: jest.fn().mockResolvedValue(ok([{ userId: "owner-1" }])),
           listLiveNonOwnerMembers:
             fakes.listLiveNonOwnerMembers ?? jest.fn().mockResolvedValue(ok([])),
           removeOrganizationMember:
@@ -246,6 +250,39 @@ describe("AuthService.closeOrganization", () => {
     expect(result.isOk()).toBe(true);
     if (result.isErr()) return;
     expect(result.value).toEqual({ id: ORG_ID, closedAt });
+  });
+
+  it("refuses Purge of an Organization that is not Closed", async () => {
+    const purgeOrganization = jest.fn();
+    const auth = createCloseAuth({
+      findById: jest.fn().mockResolvedValue(ok(liveOrg())),
+      update: jest.fn(),
+      purgeOrganization,
+    });
+
+    const result = await auth.purgeOrganization({ id: ORG_ID }, adminCtx());
+
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) return;
+    expect(result.error.message).toBe("This Organization is not Closed");
+    expect(purgeOrganization).not.toHaveBeenCalled();
+  });
+
+  it("refuses Purge while a child Organization still exists", async () => {
+    const purgeOrganization = jest.fn();
+    const auth = createCloseAuth({
+      findById: jest.fn().mockResolvedValue(ok(liveOrg({ closedAt: new Date() }))),
+      update: jest.fn(),
+      listChildOrganizations: jest.fn().mockResolvedValue(ok([{ id: CHILD_ID, name: "Child" }])),
+      purgeOrganization,
+    });
+
+    const result = await auth.purgeOrganization({ id: ORG_ID }, adminCtx());
+
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) return;
+    expect(result.error.message).toBe("Purge child Organizations first");
+    expect(purgeOrganization).not.toHaveBeenCalled();
   });
 
   it("Purges an Organization and runs afterPurgeOrganization", async () => {

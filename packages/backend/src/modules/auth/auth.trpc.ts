@@ -98,7 +98,7 @@ export function createAuthTRPC(
       }),
 
     restoreOrganization: adminProcedure
-      .input(closeOrganizationSchemas.input.restore)
+      .input(closeOrganizationSchemas.input.id)
       .output(z.object({ id: z.string(), closedAt: z.date().nullable() }))
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.restoreOrganization(input, ctx));
@@ -112,35 +112,35 @@ export function createAuthTRPC(
       }),
 
     restoreUser: adminProcedure
-      .input(closeUserSchemas.input.restore)
+      .input(closeUserSchemas.input.id)
       .output(z.object({ id: z.string(), closedAt: z.date().nullable() }))
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.restoreUser(input, ctx));
       }),
 
     adminCloseUser: adminProcedure
-      .input(closeUserSchemas.input.restore)
+      .input(closeUserSchemas.input.id)
       .output(closeUserSchemas.output.closed)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.adminCloseUser(input, ctx));
       }),
 
     purgeUser: adminProcedure
-      .input(closeUserSchemas.input.restore)
+      .input(closeUserSchemas.input.id)
       .output(z.object({ id: z.string() }))
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.purgeUser(input, ctx));
       }),
 
     adminCloseOrganization: adminProcedure
-      .input(closeOrganizationSchemas.input.restore)
+      .input(closeOrganizationSchemas.input.id)
       .output(closeOrganizationSchemas.output.closed)
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.adminCloseOrganization(input, ctx));
       }),
 
     purgeOrganization: adminProcedure
-      .input(closeOrganizationSchemas.input.restore)
+      .input(closeOrganizationSchemas.input.id)
       .output(z.object({ id: z.string() }))
       .mutation(async ({ input, ctx }) => {
         return handleTRPCResult(await authService.purgeOrganization(input, ctx));
