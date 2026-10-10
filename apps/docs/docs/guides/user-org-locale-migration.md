@@ -154,7 +154,7 @@ Email locale resolution:
 
 | Email | Locale source |
 | --- | --- |
-| Verification, password reset, account deletion | `user.locale` |
+| Verification, password reset | `user.locale` |
 | Organization invitation | `organization.locale` |
 | Waitlist user invite | Inviting user's locale |
 | Waitlist confirmation / admin waitlist invite | App `defaultLocale` |

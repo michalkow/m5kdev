@@ -781,31 +781,53 @@ test("session management endpoints list and revoke sessions", async ({ page, req
   ).toBe(true);
 });
 
-test.skip("delete account request stores a verification email", async ({ page, request }) => {
-  const email = `delete.${Date.now()}@auth-e2e.local`;
+test("Close account from preferences refuses login until Admin Restore", async ({
+  page,
+  request,
+}) => {
+  const email = `close.${Date.now()}@auth-e2e.local`;
   const password = "password1234";
 
   await createVerifiedAccount(page, request, email, password);
   await login(page, email, password);
 
-  const deleteResponse = await authFetch(page, profile, "/api/auth/delete-user", {
-    method: "POST",
-    body: {
-      callbackURL: `${profiles.standard.webUrl}/login`,
-    },
-  });
+  await page.goto("/user/preferences");
+  await page.getByPlaceholder(email).fill(email);
+  const closeResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" && response.url().includes("closeUser")
+  );
+  await page.getByRole("button", { name: /close account/i }).click();
+  const closeResponse = await closeResponsePromise;
   expect(
-    deleteResponse.ok,
-    `${deleteResponse.status} ${deleteResponse.statusText}: ${deleteResponse.text}`
+    closeResponse.ok(),
+    `${closeResponse.status()} ${closeResponse.statusText()}: ${await closeResponse.text()}`
   ).toBe(true);
+  await expect(page).toHaveURL(/\/login/);
 
-  const deletionEmail = await latestEmail(request, profile, {
-    to: email,
-    templateId: "account-deletion",
-  });
-  expect(deletionEmail.subject).toContain("Delete your account");
-  expect(deletionEmail.html).toContain("Confirm account deletion");
-  expect(emailUrl(deletionEmail)).toContain("/api/auth/delete-user/callback");
+  await expectLoginRejected(page, email, password);
+
+  await login(page, profiles.standard.adminEmail, profiles.standard.adminPassword);
+  await page.goto("/admin/users");
+  await page.locator('input[name="search"]').fill(email);
+  const row = page.getByRole("row").filter({ hasText: email });
+  await expect(row).toBeVisible();
+  await expect(row.getByText(/^closed$/i)).toBeVisible();
+  await row.getByLabel("User actions").click();
+  const restoreResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" && response.url().includes("restoreUser")
+  );
+  await page.getByRole("menuitem", { name: /^restore$/i }).click();
+  const restoreResponse = await restoreResponsePromise;
+  expect(
+    restoreResponse.ok(),
+    `${restoreResponse.status()} ${restoreResponse.statusText()}: ${await restoreResponse.text()}`
+  ).toBe(true);
+  await expect(row.getByText(/^active$/i)).toBeVisible();
+
+  await logout(page);
+  await login(page, email, password);
 });
 
 test("admin can create and switch to a child organization from an enterprise org", async ({

@@ -636,28 +636,26 @@ test("session management endpoints list and revoke sessions", async ({ page, req
   await expectAuthOk(revokeResponse);
 });
 
-test.skip("delete account request stores a verification email", async ({ page, request }) => {
-  const email = `expo.delete.${Date.now()}@auth-e2e.local`;
+test("Close User refuses login until Admin Restore", async ({ page, request }) => {
+  const email = `expo.close.${Date.now()}@auth-e2e.local`;
   const password = "password1234";
 
   await createVerifiedExpoAccount(page, request, email, password);
   await expoLoginNative(page, email, password);
 
-  const deleteResponse = await authFetch(page, profile, "/api/auth/delete-user", {
-    method: "POST",
-    body: {
-      callbackURL: `${profiles[profile].webUrl}/login`,
-    },
-  });
-  await expectAuthOk(deleteResponse);
+  const userTrpc = await createExpoTrpcClient(page, profile);
+  await userTrpc.auth.closeUser.mutate({ email });
 
-  const deletionEmail = await latestEmail(request, profile, {
-    to: email,
-    templateId: "account-deletion",
-  });
-  expect(deletionEmail.subject).toContain("Delete your account");
-  expect(deletionEmail.html).toContain("Confirm account deletion");
-  expect(emailUrl(deletionEmail)).toContain("/api/auth/delete-user/callback");
+  await expectExpoLoginRejectedNative(page, email, password);
+
+  await expoLoginNative(page, profiles[profile].adminEmail, profiles[profile].adminPassword);
+  const adminTrpc = await createExpoTrpcClient(page, profile);
+  const users = await adminTrpc.auth.searchAdminUsers.query({ q: email, limit: 10 });
+  const user = users.rows.find((row) => row.email === email);
+  expect(user).toBeTruthy();
+  await adminTrpc.auth.restoreUser.mutate({ id: user?.id ?? "" });
+
+  await expoLoginNative(page, email, password);
 });
 
 test("admin can create and switch to a child organization from an enterprise org", async ({

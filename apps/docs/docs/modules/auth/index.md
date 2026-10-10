@@ -46,13 +46,21 @@ rows keep `user_id` and copy it onto `reference_id` when migrating.
 import { createBackendApp } from "@m5kdev/backend/app";
 import { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
 
-// depends on EmailModule; BillingModule is an optional dependency
-createBackendApp(config, [new AuthModule(customGrants, serviceHooks)]);
+// depends on EmailModule; BillingModule and WorkflowModule are optional
+createBackendApp(config, [
+  new AuthModule({
+    grants: customGrants,
+    hooks: serviceHooks,
+    closeAfterDays: 30,
+  }),
+]);
 ```
 
 Grants default to `defaultAuthGrants` (admin: all; user: own; org owner/admin:
-all). Pass `AuthServiceHooks` to react to lifecycle events such as organization
-creation.
+all). The `(grants, hooks)` constructor still works. Pass `AuthServiceHooks` to
+react to lifecycle events such as organization creation and Purge (`afterPurgeUser`,
+`afterPurgeOrganization`). `closeAfterDays` defaults to 30; values below 1 fail
+at boot when Workflow is present.
 
 ### Better Auth integration
 
@@ -109,8 +117,54 @@ The `auth` router covers, by area:
   `generateAccountClaimMagicLink`, `getMyAccountClaimStatus`,
   `setMyAccountClaimEmail`, `acceptMyAccountClaim`.
 - **Admin** — organization CRUD, `searchAdminUsers`, member add/update/remove.
+- **Close / Restore / Purge** — `closeUser` (self, typed email), `closeOrganization`
+  (Owner, typed name), Admin-only `adminCloseUser`, `adminCloseOrganization`,
+  `restoreUser`, `restoreOrganization`, `purgeUser`, `purgeOrganization`.
 
-Better Auth's own HTTP endpoints stay under `/api/auth/*`.
+Better Auth's own HTTP endpoints stay under `/api/auth/*`. Better Auth
+`deleteUser` is disabled; there is no `/api/auth/delete-user` product path and
+Close does not send an account-deletion email.
+
+### Close, Restore, and Purge
+
+Decision record: ADR-0031 (`docs/adr/0031-close-restore-purge.md`).
+
+**Closed** is a restorable lockout, not Membership soft-delete and not Better
+Auth Ban. A Closed User cannot sign in. A Closed Organization cannot be used
+and is hidden from product UI. Slug and email stay taken until Purge.
+
+Who may act:
+
+- Close User: the User (Danger zone, type email) or an AdminActor (Admin panel,
+  no typed confirm).
+- Close Organization: Owner (Danger zone, type org name) or an AdminActor.
+  Organization Role admin cannot Close.
+- Restore: AdminActor only, and only while the row is still Closed. There is no
+  self-serve Restore.
+- Purge now: AdminActor. A User who still Owns an Organization cannot be
+  Purged.
+
+Close User also Closes Organizations they Own when they are the only live
+Member; otherwise they must Close or transfer those Organizations first. Close
+User refuses if they are the last User-role admin. Close Organization refuses
+while a child Organization is live and cancels Stripe at Close (it does not
+resurrect on Restore).
+
+Owner Membership stays until the Organization is Purged, even if that Owner
+User is Closed. Other seats and pending invites leave on Organization Close.
+User Close leaves non-Owner seats. Restore does not revive left Memberships.
+Closed Organizations still count for currency until Purge.
+
+When Workflow is registered, Auth runs one daily File-shaped sweep that Purges
+Closed rows older than `closeAfterDays`: child Organizations before parents,
+Organizations before Users; skip a User who still Owns an Organization. Apps
+hook extra cleanup on the same Purge path Admin Purge uses. Without Workflow
+there is no cron and Close does not Purge in-request; Closed rows stay until
+Restore or Admin Purge.
+
+Ban stays Better Auth `banUser` / `unbanUser` on the Admin user list. It is not
+Close: a banned User is not Restored through Close, and Close does not set
+`banned`.
 
 ### Server events
 
@@ -138,11 +192,13 @@ locale then refreshes the session with cookie cache disabled;
   `/consent` (MCP allowlist picker during Better Auth MCP OAuth), and
   `/organization/accept-invitation` (must stay public so a logged-out invitee
   can be sent to signup instead of bouncing inside protected routes).
-- `AuthUserRouter` — profile editor, preferences, logout, invite friends.
-- `AuthOrganizationRouter` — org profile, preferences, members,
-  child organizations, org select.
+- `AuthUserRouter` — profile editor, preferences (Danger zone Close User),
+  logout, invite friends.
+- `AuthOrganizationRouter` — org profile, preferences (Owner Danger zone Close
+  Organization), members, child organizations, org select.
 - `AuthAdminRouter` — user management (change User Role, mark Email verified,
-  set password), organization management, waitlist. Role change is blocked
+  set password, Close / Restore / Purge distinct from Ban), organization
+  management (Close / Restore / Purge), waitlist. Role change is blocked
   for the signed-in User and for the last Active User-role admin. Optional
   `extraLinks` / `extraRoutes` hang Module admin (for example Billing) off
   sidecar links beside those tabs. Omit them for none.
@@ -159,7 +215,9 @@ locale then refreshes the session with cookie cache disabled;
   are not Actors.
 - Leave / remove / invite cancel / lazy expiry soft-delete the row and clear
   active org session fields for that organization. Re-invite revives
-  `memberId`.
+  `memberId`. User Close of a non-Owner seat and Organization Close of
+  non-Owner seats do the same; the Owner seat stays until Organization Purge.
+  Restore does not revive left Memberships.
 - Pending tokens without `memberId` are leftovers; accept fails until a new
   Auth invite. There is no Invitation backfill.
 - Org self-service cannot grant or change Owner. A User-role `admin` transfers
