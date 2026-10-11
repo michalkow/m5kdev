@@ -1,5 +1,13 @@
 # @m5kdev/backend
 
+## 0.40.3
+
+### Patch Changes
+
+- listUserOrganizations selects organizations.closedAt so the simple organization DTO validates. 0.40.1 added the column; the list query filtered it but omitted it from the select, which failed tRPC output validation (undefined vs date | null).
+- @m5kdev/commons@0.40.3
+  - @m5kdev/config@0.40.3
+
 ## 0.40.2
 
 ### Patch Changes

@@ -236,6 +236,7 @@ team on the session.
 
 ## Migration guides
 
+- [listUserOrganizations closedAt in 0.40.3](/guides/v0.40.3-list-user-organizations-closed-at-migration)
 - [Auth and Workflow boot cycle in 0.40.2](/guides/v0.40.2-auth-workflow-cycle-migration)
 - [Close, Restore, and Purge in 0.40.1](/guides/v0.40.1-close-restore-purge-migration)
 - [Organizations and members](/guides/organizations-and-members) (intended usage)

@@ -204,6 +204,14 @@ boot until they pin 0.40.2. No schema or app source change.
 
 - [Auth and Workflow boot cycle](/guides/v0.40.2-auth-workflow-cycle-migration)
 
+## Upgrading to 0.40.3 {#upgrade-0-40-3}
+
+Complete 0.40.2 first. Apps that call `auth.listUserOrganizations` on 0.40.1 or
+0.40.2 fail tRPC output validation until they pin 0.40.3. No schema or app
+source change. Drop any `@m5kdev/backend@0.40.2` pnpm patch for that select.
+
+- [listUserOrganizations closedAt](/guides/v0.40.3-list-user-organizations-closed-at-migration)
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module
