@@ -46,7 +46,8 @@ rows keep `user_id` and copy it onto `reference_id` when migrating.
 import { createBackendApp } from "@m5kdev/backend/app";
 import { AuthModule } from "@m5kdev/backend/modules/auth/auth.module";
 
-// depends on EmailModule; BillingModule and WorkflowModule are optional
+// depends on EmailModule; BillingModule is optional. Purge cron registers
+// when WorkflowModule is in the app (workflows() hook; not a module dep).
 createBackendApp(config, [
   new AuthModule({
     grants: customGrants,
@@ -235,6 +236,7 @@ team on the session.
 
 ## Migration guides
 
+- [Auth and Workflow boot cycle in 0.40.2](/guides/v0.40.2-auth-workflow-cycle-migration)
 - [Close, Restore, and Purge in 0.40.1](/guides/v0.40.1-close-restore-purge-migration)
 - [Organizations and members](/guides/organizations-and-members) (intended usage)
 - [Better Auth 1.7.2 in 0.37.0](/guides/v0.37.0-better-auth-1.7.2-migration)

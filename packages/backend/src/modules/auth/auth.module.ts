@@ -9,7 +9,6 @@ import {
 } from "../base/base.module";
 import type { BillingModule } from "../billing/billing.module";
 import type { EmailModule } from "../email/email.module";
-import type { WorkflowModule } from "../workflow/workflow.module";
 import { AUTH_PURGE_CRON_NAME, AUTH_PURGE_CRON_PATTERN } from "./auth.constants";
 import type * as authTables from "./auth.db";
 import { createOrganizationSchemas } from "./auth.dto";
@@ -30,7 +29,7 @@ export interface AuthModuleConfig {
   readonly closeAfterDays?: number;
 }
 
-type AuthModuleDeps = { email: EmailModule; billing?: BillingModule; workflow?: WorkflowModule };
+type AuthModuleDeps = { email: EmailModule; billing?: BillingModule };
 type AuthModuleTables = typeof authTables;
 type AuthModuleRepositories = {
   accountClaim: AuthAccountClaimRepository;
@@ -54,7 +53,7 @@ export class AuthModule extends BaseModule<
 > {
   readonly id = "auth";
   override readonly dependsOn = ["email"] as const;
-  override readonly optionalDependsOn = ["billing", "workflow"] as const;
+  override readonly optionalDependsOn = ["billing"] as const;
   private readonly grants: Grant[];
   private readonly hooks?: AuthServiceHooks;
   private readonly closeAfterDays: number;

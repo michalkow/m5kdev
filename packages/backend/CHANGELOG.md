@@ -1,5 +1,14 @@
 # @m5kdev/backend
 
+## 0.40.2
+
+### Patch Changes
+
+- Auth no longer optionalDependsOn Workflow, which cycled with Workflow's Auth dependency and refused boot.
+  The daily Close Purge cron still registers from Auth's workflows() hook when Workflow is in the app.
+- @m5kdev/commons@0.40.2
+  - @m5kdev/config@0.40.2
+
 ## 0.40.1
 
 ### Patch Changes

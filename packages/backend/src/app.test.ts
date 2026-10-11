@@ -1,6 +1,8 @@
 import { type Client, createClient } from "@libsql/client";
 import { createBackendApp } from "./app";
+import { AuthModule } from "./modules/auth/auth.module";
 import { BaseModule, type TableMap } from "./modules/base/base.module";
+import { WorkflowModule } from "./modules/workflow/workflow.module";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {
@@ -124,6 +126,35 @@ describe("createBackendApp", () => {
     expect(() => createBackendApp({ db: { client } }, [a, b] as const)).toThrow(
       "Circular backend module dependency detected"
     );
+  });
+
+  it("boots AuthModule with WorkflowModule without a circular dependency", () => {
+    const auth = new AuthModule();
+    const workflow = new WorkflowModule({
+      queues: { default: {} },
+      defaultQueue: "default",
+    });
+
+    class DeclaredAuth extends BaseModule {
+      readonly id = auth.id;
+      override readonly dependsOn = auth.dependsOn;
+      override readonly optionalDependsOn = auth.optionalDependsOn;
+    }
+    class DeclaredWorkflow extends BaseModule {
+      readonly id = workflow.id;
+      override readonly dependsOn = workflow.dependsOn;
+    }
+    class DeclaredEmail extends BaseModule {
+      readonly id = "email";
+    }
+
+    expect(() =>
+      createBackendApp({ db: { client } }, [
+        new DeclaredAuth(),
+        new DeclaredWorkflow(),
+        new DeclaredEmail(),
+      ] as const)
+    ).not.toThrow();
   });
 
   it("fails on duplicate tRPC namespaces", () => {

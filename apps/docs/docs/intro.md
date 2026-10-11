@@ -197,6 +197,13 @@ restorable lockout.
 
 - [Close, Restore, and Purge](/guides/v0.40.1-close-restore-purge-migration)
 
+## Upgrading to 0.40.2 {#upgrade-0-40-2}
+
+Complete 0.40.1 first. Apps that register Auth and Workflow on 0.40.1 cannot
+boot until they pin 0.40.2. No schema or app source change.
+
+- [Auth and Workflow boot cycle](/guides/v0.40.2-auth-workflow-cycle-migration)
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module
