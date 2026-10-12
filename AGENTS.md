@@ -164,7 +164,11 @@ Do not introduce alternate core libraries for these concerns without explicit re
 
 ### Issue tracker
 
-Issues live in Linear, one project per repo, via the Cursor Linear plugin. See `docs/agents/issue-tracker.md`.
+Issues live as GitHub issues on `michalkow/typeorb`, via the GitHub MCP (or `gh` for listing). Identify issues by `#123`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage roles map to GitHub labels in `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
