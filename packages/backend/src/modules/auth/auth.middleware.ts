@@ -31,6 +31,9 @@ export function createAuthMiddleware(auth: BetterAuth): AuthMiddleware {
     auth.api
       .getSession({
         headers: fromNodeHeaders(req.headers),
+        // Soft-delete / leave clears activeOrganization* in DB; cookie cache
+        // would otherwise keep serving the removed Member's org context.
+        query: { disableCookieCache: true },
       })
       .then((data) => {
         if (!data?.user || !data?.session) {
@@ -63,6 +66,7 @@ export function createRoleAuthMiddleware(auth: BetterAuth): (role: string) => Au
     auth.api
       .getSession({
         headers: fromNodeHeaders(req?.headers),
+        query: { disableCookieCache: true },
       })
       .then((data) => {
         const user = (data?.user as User) || null;
