@@ -204,6 +204,13 @@ boot until they pin 0.40.2. No schema or app source change.
 
 - [Auth and Workflow boot cycle](/guides/v0.40.2-auth-workflow-cycle-migration)
 
+## Upgrading to 0.41.0 {#upgrade-0-41-0}
+
+Complete 0.40.2 first. The Express Boundary-library pin is 5.3.0. Name every
+splat. Do not apply JSON on a pass-in Express instance.
+
+- [Express 5.3.0](/guides/v0.41.0-express-v5-migration)
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module
