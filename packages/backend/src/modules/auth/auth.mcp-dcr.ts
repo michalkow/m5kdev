@@ -61,58 +61,68 @@ export function mountMcpDcrNativeClientInterop(input: {
   const logger = rootLogger.child({ layer: "mcpDcr" });
 
   input.app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.method !== "POST") {
-      next();
-      return;
-    }
+    void (async () => {
+      if (req.method !== "POST") {
+        next();
+        return;
+      }
 
-    const path = (req.path.replace(/\/+$/, "") || "/").toLowerCase();
-    if (!path.endsWith("/oauth2/register")) {
-      next();
-      return;
-    }
+      const path = (req.path.replace(/\/+$/, "") || "/").toLowerCase();
+      if (!path.endsWith("/oauth2/register")) {
+        next();
+        return;
+      }
 
-    const body = jsonObject(req.body);
-    const redirectUris = readRedirectUris(body);
-    const rewrite = rewriteMcpDcrRedirects({
-      redirectUris,
-      softwareId: typeof body?.software_id === "string" ? body.software_id : undefined,
-    });
-    if (!body || !rewrite) {
-      next();
-      return;
-    }
-
-    body.application_type = rewrite.applicationType;
-    body.redirect_uris = [...rewrite.registrationUris];
-    body.software_id = rewrite.softwareId;
-
-    holdResponseUntil({
-      res,
-      beforeFlush: async (statusCode) => {
-        if (statusCode !== 201 || !input.store) {
-          return;
+      const taken = await takeJsonBody(req);
+      const body = taken.body;
+      const redirectUris = readRedirectUris(body);
+      const rewrite = rewriteMcpDcrRedirects({
+        redirectUris,
+        softwareId: typeof body?.software_id === "string" ? body.software_id : undefined,
+      });
+      if (!body || !rewrite) {
+        if (taken.raw) {
+          replayRequestBody(req, taken.raw);
         }
+        next();
+        return;
+      }
 
-        try {
-          await input.store.restoreClientRedirectUrisBySoftwareId({
-            softwareId: rewrite.softwareId,
-            redirectUris: rewrite.restoredUris,
-          });
-          logger.info(
-            { softwareId: rewrite.softwareId, redirectUris: rewrite.restoredUris },
-            "Restored MCP native redirect URIs after DCR"
-          );
-        } catch (error) {
-          logger.error(
-            { error, softwareId: rewrite.softwareId },
-            "Failed to restore MCP redirect URIs after DCR"
-          );
-        }
-      },
-    });
+      body.application_type = rewrite.applicationType;
+      body.redirect_uris = [...rewrite.registrationUris];
+      body.software_id = rewrite.softwareId;
+      req.body = body;
+      if (taken.raw) {
+        replayRequestBody(req, Buffer.from(JSON.stringify(body)));
+      }
 
-    next();
+      holdResponseUntil({
+        res,
+        beforeFlush: async (statusCode) => {
+          if (statusCode !== 201 || !input.store) {
+            return;
+          }
+
+          try {
+            await input.store.restoreClientRedirectUrisBySoftwareId({
+              softwareId: rewrite.softwareId,
+              redirectUris: rewrite.restoredUris,
+            });
+            logger.info(
+              { softwareId: rewrite.softwareId, redirectUris: rewrite.restoredUris },
+              "Restored MCP native redirect URIs after DCR"
+            );
+          } catch (error) {
+            logger.error(
+              { error, softwareId: rewrite.softwareId },
+              "Failed to restore MCP redirect URIs after DCR"
+            );
+          }
+        },
+      });
+
+      next();
+    })().catch(next);
   });
 }
 
@@ -122,6 +132,44 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 
 function jsonObject(value: unknown): Record<string, unknown> | undefined {
   return isJsonObject(value) ? value : undefined;
+}
+
+async function takeJsonBody(
+  req: Request
+): Promise<{ body: Record<string, unknown> | undefined; raw: Buffer | undefined }> {
+  const existing = jsonObject(req.body);
+  if (existing) {
+    return { body: existing, raw: undefined };
+  }
+  if (req.readableEnded) {
+    return { body: undefined, raw: undefined };
+  }
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  const raw = Buffer.concat(chunks);
+  if (raw.length === 0) {
+    return { body: undefined, raw };
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw.toString("utf8"));
+    return { body: jsonObject(parsed), raw };
+  } catch {
+    return { body: undefined, raw };
+  }
+}
+
+function replayRequestBody(req: Request, payload: Buffer): void {
+  req.headers["content-length"] = String(payload.length);
+  Object.defineProperty(req, "readableEnded", {
+    configurable: true,
+    get: () => false,
+  });
+  process.nextTick(() => {
+    req.emit("data", payload);
+    req.emit("end");
+  });
 }
 
 function readRedirectUris(body: Record<string, unknown> | undefined): string[] {

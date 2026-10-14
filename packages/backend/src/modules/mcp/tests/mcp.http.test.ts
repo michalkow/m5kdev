@@ -104,13 +104,13 @@ function fakeAuth() {
 function mountedRoutes(app: Express): { methods: string[]; path: string }[] {
   const router = (
     app as unknown as {
-      _router?: {
+      router?: {
         stack: readonly {
           route?: { path: string; methods: Record<string, boolean> };
         }[];
       };
     }
-  )._router;
+  ).router;
   if (!router) return [];
   return router.stack.flatMap((layer) => {
     if (!layer.route) return [];

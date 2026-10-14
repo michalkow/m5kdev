@@ -162,7 +162,8 @@ export class EmailPreviewModule extends BaseModule<
     });
 
     router.get(`${this.mountPath}/:id/raw.html`, async (req: Request, res: Response) => {
-      const email = await emailService.readStoredEmail(req.params.id);
+      const emailId = typeof req.params.id === "string" ? req.params.id : undefined;
+      const email = emailId ? await emailService.readStoredEmail(emailId) : undefined;
       if (!email) {
         res.status(404).type("text/plain").send("Email not found");
         return;
@@ -171,7 +172,8 @@ export class EmailPreviewModule extends BaseModule<
     });
 
     router.get(`${this.mountPath}/:id.json`, async (req: Request, res: Response) => {
-      const email = await emailService.readStoredEmail(req.params.id);
+      const emailId = typeof req.params.id === "string" ? req.params.id : undefined;
+      const email = emailId ? await emailService.readStoredEmail(emailId) : undefined;
       if (!email) {
         sendJson(res, 404, { error: "Email not found" });
         return;
@@ -180,7 +182,8 @@ export class EmailPreviewModule extends BaseModule<
     });
 
     router.get(`${this.mountPath}/:id`, async (req: Request, res: Response) => {
-      const email = await emailService.readStoredEmail(req.params.id);
+      const emailId = typeof req.params.id === "string" ? req.params.id : undefined;
+      const email = emailId ? await emailService.readStoredEmail(emailId) : undefined;
       if (!email) {
         res.status(404).type("text/plain").send("Email not found");
         return;

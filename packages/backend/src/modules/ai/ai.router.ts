@@ -43,8 +43,8 @@ export function createAiConversationRouter({
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      const agentId = req.params.agentId;
-      const threadId = req.params.threadId;
+      const agentId = typeof req.params.agentId === "string" ? req.params.agentId : undefined;
+      const threadId = typeof req.params.threadId === "string" ? req.params.threadId : undefined;
       if (!agentId || !threadId) {
         return res.status(400).json({ message: "Missing agentId or threadId" });
       }
@@ -75,7 +75,7 @@ export function createAiConversationRouter({
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const agentId = req.params.agentId;
+    const agentId = typeof req.params.agentId === "string" ? req.params.agentId : undefined;
     if (!agentId) {
       return res.status(400).json({ message: "Missing agentId" });
     }
