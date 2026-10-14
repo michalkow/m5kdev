@@ -2,10 +2,20 @@ import express, { type Request, type Response, type Router } from "express";
 import { FILE_S3_MOCK_MOUNT } from "./file.object-store";
 import type { LocalFileObjectStore } from "./file.local-store";
 
+function splatPath(value: string | string[] | undefined): string | undefined {
+  if (typeof value === "string" && value.length > 0) {
+    return value;
+  }
+  if (Array.isArray(value) && value.length > 0 && value.every((part) => typeof part === "string")) {
+    return value.join("/");
+  }
+  return undefined;
+}
+
 function objectLocator(req: Request): { bucket: string; key: string } | undefined {
   const bucket = req.params.bucket;
-  const key = req.params.key;
-  if (typeof bucket !== "string" || typeof key !== "string" || key.length === 0) {
+  const key = splatPath(req.params.key);
+  if (typeof bucket !== "string" || !key) {
     return undefined;
   }
   return { bucket: decodeURIComponent(bucket), key: key.split("/").map(decodeURIComponent).join("/") };
