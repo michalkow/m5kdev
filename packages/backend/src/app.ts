@@ -21,7 +21,7 @@ import { toNodeHandler } from "better-auth/node";
 import cors, { type CorsOptions } from "cors";
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
 import type { SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
-import express, { type Express } from "express";
+import express, { type Express, type RequestHandler } from "express";
 import IORedis, { type RedisOptions } from "ioredis";
 import type { Logger } from "pino";
 import { Resend } from "resend";
@@ -648,7 +648,7 @@ function applyBakedSpa(options: { expressApp: Express; spa: BackendAppConfig["sp
     return;
   }
   expressApp.use(express.static(root));
-  expressApp.get("*", (_req, res, next) => {
+  expressApp.get("/{*splat}", (_req, res, next) => {
     res.sendFile(path.join(root, "index.html"), (error) => {
       if (error) {
         next(error);
@@ -865,7 +865,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
           : null;
       mountMcpDcrNativeClientInterop({ app: expressApp, store: dcrStore });
     }
-    expressApp.all("/api/auth/*", toNodeHandler(auth));
+    expressApp.all("/api/auth/*splat", toNodeHandler(auth) as RequestHandler);
   }
   applyJsonParser({ expressApp, config });
 
@@ -878,7 +878,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         onError: ({ error, type, path, input }) => {
           handleTRPCBoundaryError({ error, type, path, input });
         },
-      })
+      }) as unknown as RequestHandler
     );
   }
 
@@ -1081,7 +1081,8 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       const port = parseListenPort(process.env.PORT);
       try {
         await new Promise<void>((resolve, reject) => {
-          const server = expressApp.listen(port, () => {
+          const server = expressApp.listen(port);
+          server.once("listening", () => {
             resolve();
           });
           server.once("error", reject);

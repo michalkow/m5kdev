@@ -160,12 +160,12 @@ interface McpExpressMount {
 }
 
 function mountMcpOAuthDiscovery(input: { express: McpExpressMount; auth: BetterAuth }): void {
-  const handler = toNodeHandler(input.auth);
+  const handler = toNodeHandler(input.auth) as RequestHandler;
   for (const path of [
     MCP_PROTECTED_RESOURCE_METADATA_PATH,
-    `${MCP_PROTECTED_RESOURCE_METADATA_PATH}/*`,
+    `${MCP_PROTECTED_RESOURCE_METADATA_PATH}/*splat`,
     MCP_AUTHORIZATION_SERVER_METADATA_PATH,
-    `${MCP_AUTHORIZATION_SERVER_METADATA_PATH}/*`,
+    `${MCP_AUTHORIZATION_SERVER_METADATA_PATH}/*splat`,
   ]) {
     input.express.all(path, handler);
   }

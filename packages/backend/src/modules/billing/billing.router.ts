@@ -35,7 +35,11 @@ export function createBillingRouter(
       return res.status(403).json({ message: "Organization is required" });
     }
 
-    const session = await service.createCheckoutSession({ priceId: req.params.priceId }, fields);
+    const priceId = typeof req.params.priceId === "string" ? req.params.priceId : undefined;
+    if (!priceId) {
+      return res.status(400).json({ message: "Missing priceId" });
+    }
+    const session = await service.createCheckoutSession({ priceId }, fields);
     if (session.isErr()) {
       const status =
         session.error.code === "FORBIDDEN"

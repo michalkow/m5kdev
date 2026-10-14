@@ -18,8 +18,11 @@ export function createConnectRouter(
     if (!user || !session) {
       return res.status(401).json({ message: "Unauthorized" });
     }
-    const { provider } = req.params;
+    const provider = queryString(req.params.provider);
     const redirect = queryString(req.query.redirect);
+    if (!provider) {
+      return res.status(400).json({ message: "Missing provider" });
+    }
 
     const result = await connectService.startAuth(user, session.id, provider);
 
@@ -39,7 +42,7 @@ export function createConnectRouter(
     if (!user || !session) {
       return res.status(401).json({ message: "Unauthorized" });
     }
-    const { provider } = req.params;
+    const provider = queryString(req.params.provider);
     const code = queryString(req.query.code);
     const state = queryString(req.query.state);
     const error = queryString(req.query.error);
@@ -56,7 +59,7 @@ export function createConnectRouter(
       return res.redirect(errorUrl);
     }
 
-    if (!code || !state) {
+    if (!provider || !code || !state) {
       const errorUrl = `${successUrl}&error=${encodeURIComponent("Missing code or state")}`;
       return res.redirect(errorUrl);
     }

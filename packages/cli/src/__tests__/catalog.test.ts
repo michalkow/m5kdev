@@ -208,6 +208,21 @@ describe("monorepo catalog hygiene", () => {
     expect(catalog.catalog).not.toHaveProperty("@types/body-parser");
   });
 
+  it("pins Express 5.3.0 with @types/express 5", () => {
+    const catalog = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8")) as {
+      catalog?: Record<string, string | number>;
+    };
+    expect(catalog.catalog?.express).toBe("5.3.0");
+    expect(catalog.catalog?.["@types/express"]).toBe("5.0.6");
+    const consumer = buildConsumerCatalog({
+      repoRoot: REPO_ROOT,
+      starterDirectory: path.join(REPO_ROOT, "apps/starter"),
+      rootTemplatesDirectory: path.join(REPO_ROOT, "packages/cli/root-templates"),
+    });
+    expect(consumer.express).toBe("5.3.0");
+    expect(consumer["@types/express"]).toBe("5.0.6");
+  });
+
   it("does not exact-pin catalogued third-parties in Starter or root templates", () => {
     const catalog = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8")) as {
       catalog?: Record<string, string | number>;
