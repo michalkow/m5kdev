@@ -2,6 +2,10 @@ import { Router } from "express";
 import type { AuthMiddleware, AuthRequest } from "../auth/auth.middleware";
 import type { ConnectService } from "./connect.service";
 
+function queryString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
 export function createConnectRouter(
   authMiddleware: AuthMiddleware,
   connectService: ConnectService
@@ -15,7 +19,7 @@ export function createConnectRouter(
       return res.status(401).json({ message: "Unauthorized" });
     }
     const { provider } = req.params;
-    const { redirect } = req.query;
+    const redirect = queryString(req.query.redirect);
 
     const result = await connectService.startAuth(user, session.id, provider);
 
@@ -36,18 +40,19 @@ export function createConnectRouter(
       return res.status(401).json({ message: "Unauthorized" });
     }
     const { provider } = req.params;
-    const { code, state, error, error_description } = req.query;
-    const { redirect } = req.query;
+    const code = queryString(req.query.code);
+    const state = queryString(req.query.state);
+    const error = queryString(req.query.error);
+    const errorDescription = queryString(req.query.error_description);
+    const redirect = queryString(req.query.redirect);
 
     const successUrl =
-      redirect && typeof redirect === "string"
-        ? redirect
-        : `${process.env.VITE_APP_URL || process.env.VITE_SERVER_URL || "/"}?connect_success=true`;
+      redirect ??
+      `${process.env.VITE_APP_URL || process.env.VITE_SERVER_URL || "/"}?connect_success=true`;
 
-    // Handle OAuth errors from provider
     if (error) {
-      const errorMessage = error_description || error || "OAuth error";
-      const errorUrl = `${successUrl}&error=${encodeURIComponent(String(errorMessage))}`;
+      const errorMessage = errorDescription || error;
+      const errorUrl = `${successUrl}&error=${encodeURIComponent(errorMessage)}`;
       return res.redirect(errorUrl);
     }
 
@@ -56,13 +61,7 @@ export function createConnectRouter(
       return res.redirect(errorUrl);
     }
 
-    const result = await connectService.handleCallback(
-      user,
-      session.id,
-      provider,
-      String(code),
-      String(state)
-    );
+    const result = await connectService.handleCallback(user, session.id, provider, code, state);
 
     if (result.isErr()) {
       const errorUrl = `${successUrl}&error=${encodeURIComponent(result.error.message)}`;
