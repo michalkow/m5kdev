@@ -18,8 +18,11 @@ export function createWebhookRouter(webhookService: WebhookService): Router {
     const token = presentedToken(req);
     if (!token) return res.status(401).json({ message: "Missing token" });
 
+    const id = typeof req.params.id === "string" ? req.params.id : undefined;
+    if (!id) return res.status(400).json({ message: "Missing inbound callback id" });
+
     const result = await webhookService.receive({
-      id: req.params.id,
+      id,
       token,
       payload: req.body,
     });

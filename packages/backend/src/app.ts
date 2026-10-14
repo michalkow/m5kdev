@@ -41,6 +41,7 @@ import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/a
 import { oauthClients } from "./modules/auth/auth.oauth.db";
 import type { AuthOrganizationRepository } from "./modules/auth/auth.repository";
 import type { BaseModule } from "./modules/base/base.module";
+import { mountMcpOAuthDiscovery } from "./modules/mcp/mcp.discovery";
 import { mcpResourceUrl } from "./modules/mcp/mcp.types";
 import { WorkflowRegistry } from "./modules/workflow/workflow.registry";
 import { WorkflowService } from "./modules/workflow/workflow.service";
@@ -610,7 +611,7 @@ function applyJsonParser({
   expressApp.use(express.json(jsonOptions));
 }
 
-function applyHttpShell({
+function applyCors({
   expressApp,
   config,
   appConfig,
@@ -671,7 +672,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
 
   const orderedModules = resolveModuleOrder(registeredModules);
   const expressApp = config.express ?? express();
-  applyHttpShell({ expressApp, config, appConfig });
+  applyCors({ expressApp, config, appConfig });
   const dbClientState = createDbClient(config.db, logger);
   const redisState = createRedisClient(config.redis);
   const resendState = createResendClient(config.resend);
@@ -864,6 +865,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
           ? new McpDcrOauthClientRepository({ orm, oauthClients })
           : null;
       mountMcpDcrNativeClientInterop({ app: expressApp, store: dcrStore });
+      mountMcpOAuthDiscovery({ express: expressApp, auth });
     }
     expressApp.all("/api/auth/*splat", toNodeHandler(auth) as RequestHandler);
   }

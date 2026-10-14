@@ -173,6 +173,38 @@ describe("createBackendApp HTTP shell", () => {
     });
   });
 
+  it("rewrites MCP DCR native-client register JSON on the Auth stream", async () => {
+    const built = createBackendApp(
+      {
+        db: { client },
+        auth: {
+          factory: () => ({}) as never,
+        },
+      },
+      [defineBackendModule({ id: "mcp" })]
+    );
+
+    await withServer(built.express.app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/auth/oauth2/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          redirect_uris: [
+            "https://example.com/callback",
+            "cursor://anysphere.cursor-mcp/oauth/callback",
+          ],
+          software_id: "cursor-software",
+        }),
+      });
+      expect(response.status).toBe(200);
+      expect(JSON.parse(await response.text())).toEqual({
+        redirect_uris: ["https://example.com/callback"],
+        software_id: "cursor-software",
+        application_type: "native",
+      });
+    });
+  });
+
   it("lets a CORS map add an extra origin", async () => {
     const extraOrigin = "http://preview.example";
     const built = createBackendApp({

@@ -1,6 +1,5 @@
 import { requireMcpAuth } from "@better-auth/mcp";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
-import { toNodeHandler } from "better-auth/node";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import type { Result } from "neverthrow";
 import type { ServerError } from "../../utils/errors";
@@ -8,11 +7,7 @@ import type { BetterAuth } from "../auth/auth.lib";
 import type { McpToolBinding } from "./mcp.adapter";
 import { invokeMcpTool, isArgumentRecord } from "./mcp.protocol";
 import type { McpInvokeInput } from "./mcp.types";
-import {
-  MCP_AUTHORIZATION_SERVER_METADATA_PATH,
-  MCP_HTTP_PATH,
-  MCP_PROTECTED_RESOURCE_METADATA_PATH,
-} from "./mcp.types";
+import { MCP_HTTP_PATH } from "./mcp.types";
 
 interface McpAccessTokenClaims {
   sub?: unknown;
@@ -156,19 +151,6 @@ export function createMcpExpressHandler(input: {
 
 interface McpExpressMount {
   post(path: string, handler: RequestHandler): unknown;
-  all(path: string, handler: RequestHandler): unknown;
-}
-
-function mountMcpOAuthDiscovery(input: { express: McpExpressMount; auth: BetterAuth }): void {
-  const handler = toNodeHandler(input.auth) as RequestHandler;
-  for (const path of [
-    MCP_PROTECTED_RESOURCE_METADATA_PATH,
-    `${MCP_PROTECTED_RESOURCE_METADATA_PATH}/*splat`,
-    MCP_AUTHORIZATION_SERVER_METADATA_PATH,
-    `${MCP_AUTHORIZATION_SERVER_METADATA_PATH}/*splat`,
-  ]) {
-    input.express.all(path, handler);
-  }
 }
 
 export function mountMcpHttp(input: {
@@ -179,7 +161,6 @@ export function mountMcpHttp(input: {
   resource: string;
   serverName: string;
 }): void {
-  mountMcpOAuthDiscovery({ express: input.express, auth: input.auth });
   input.express.post(
     MCP_HTTP_PATH,
     createMcpExpressHandler({
