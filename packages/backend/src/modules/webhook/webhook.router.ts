@@ -1,5 +1,4 @@
-import bodyParser from "body-parser";
-import { type Request, Router } from "express";
+import express, { type Request, Router } from "express";
 import type { WebhookService } from "./webhook.service";
 
 function presentedToken(req: Request): string | undefined {
@@ -15,7 +14,7 @@ function presentedToken(req: Request): string | undefined {
 export function createWebhookRouter(webhookService: WebhookService): Router {
   const webhookRouter = Router();
 
-  webhookRouter.post("/:id", bodyParser.json(), async (req, res) => {
+  webhookRouter.post("/:id", express.json(), async (req, res) => {
     const token = presentedToken(req);
     if (!token) return res.status(401).json({ message: "Missing token" });
 

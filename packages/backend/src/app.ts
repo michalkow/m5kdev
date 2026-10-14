@@ -18,7 +18,6 @@ import { transformer } from "@m5kdev/commons/utils/trpc";
 import type { AnyRouter, TRPCCreateRouterOptions } from "@trpc/server";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import { toNodeHandler } from "better-auth/node";
-import type { OptionsJson } from "body-parser";
 import cors, { type CorsOptions } from "cors";
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
 import type { SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
@@ -310,6 +309,8 @@ export type BackendAppAuthFactoryContext = {
   };
 };
 
+type JsonParserOptions = NonNullable<Parameters<typeof express.json>[0]>;
+
 export type BackendAppConfig = {
   db:
     | {
@@ -348,7 +349,7 @@ export type BackendAppConfig = {
   };
   schema?: AppDbSchema;
   cors?: (defaults: CorsOptions) => CorsOptions;
-  json?: (defaults: OptionsJson) => OptionsJson;
+  json?: (defaults: JsonParserOptions) => JsonParserOptions;
   onShutdown?: () => void | Promise<void>;
   spa?: {
     root: string;
@@ -606,7 +607,7 @@ function applyHttpShell({
   config: BackendAppConfig;
   appConfig: ResolvedBackendAppMetadata;
 }): void {
-  const jsonDefaults: OptionsJson = {};
+  const jsonDefaults: JsonParserOptions = {};
   const jsonOptions = config.json ? config.json(jsonDefaults) : jsonDefaults;
   expressApp.use(express.json(jsonOptions));
   const corsDefaults: CorsOptions = {

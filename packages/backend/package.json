@@ -62,7 +62,6 @@
     "@sentry/node": "catalog:",
     "ai": "catalog:",
     "@parse/node-apn": "catalog:",
-    "body-parser": "catalog:",
     "bullmq": "catalog:",
     "bullmq-otel": "catalog:",
     "cors": "catalog:",
@@ -99,7 +98,6 @@
   },
   "devDependencies": {
     "@jest/globals": "catalog:",
-    "@types/body-parser": "catalog:",
     "@types/cors": "catalog:",
     "@types/express": "catalog:",
     "@types/jest": "catalog:",

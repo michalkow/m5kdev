@@ -200,6 +200,14 @@ describe("monorepo catalog hygiene", () => {
     expect(catalog.catalog).not.toHaveProperty("@types/multer");
   });
 
+  it("does not catalog a standalone body-parser", () => {
+    const catalog = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8")) as {
+      catalog?: Record<string, string | number>;
+    };
+    expect(catalog.catalog).not.toHaveProperty("body-parser");
+    expect(catalog.catalog).not.toHaveProperty("@types/body-parser");
+  });
+
   it("does not exact-pin catalogued third-parties in Starter or root templates", () => {
     const catalog = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8")) as {
       catalog?: Record<string, string | number>;

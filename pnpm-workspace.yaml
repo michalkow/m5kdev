@@ -81,7 +81,6 @@ catalog:
   "@trpc/server": 11.4.3
   "@trpc/tanstack-react-query": 11.4.3
   "@tsdown/css": 0.21.7
-  "@types/body-parser": 1.19.5
   "@types/cors": 2.8.17
   "@types/express": 4.17.21
   "@types/jest": 30.0.0
@@ -101,7 +100,6 @@ catalog:
   ai: 7.0.28
   babel-plugin-react-compiler: 1.0.0
   better-auth: 1.7.3
-  body-parser: 1.20.3
   bullmq: 5.81.2
   bullmq-otel: 2.0.0
   chart.js: 4.4.0
