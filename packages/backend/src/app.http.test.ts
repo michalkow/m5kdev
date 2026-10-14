@@ -15,7 +15,38 @@ jest.mock("@m5kdev/commons/utils/trpc", () => ({
 }));
 
 jest.mock("better-auth/node", () => ({
-  toNodeHandler: () => () => undefined,
+  toNodeHandler:
+    () =>
+    (
+      req: {
+        readableEnded?: boolean;
+        on: (event: string, listener: (chunk?: Buffer | string) => void) => void;
+      },
+      res: {
+        statusCode: number;
+        setHeader: (name: string, value: string) => void;
+        end: (body: Buffer) => void;
+      }
+    ) => {
+      const finish = (chunks: Buffer[]): void => {
+        res.statusCode = 200;
+        res.setHeader("content-type", "text/plain; charset=utf-8");
+        res.end(Buffer.concat(chunks));
+      };
+      if (req.readableEnded) {
+        finish([]);
+        return;
+      }
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk) => {
+        if (chunk) {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        }
+      });
+      req.on("end", () => {
+        finish(chunks);
+      });
+    },
   fromNodeHeaders: (headers: unknown) => headers,
 }));
 
@@ -120,6 +151,25 @@ describe("createBackendApp HTTP shell", () => {
         body: JSON.stringify({ hello: "kernel" }),
       });
       expect(await response.json()).toEqual({ hello: "kernel" });
+    });
+  });
+
+  it("leaves the Better Auth request stream unconsumed", async () => {
+    const built = createBackendApp({
+      db: { client },
+      auth: {
+        factory: () => ({}) as never,
+      },
+    });
+
+    await withServer(built.express.app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/auth/sign-in`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: '{"email":"user@example.test"}',
+      });
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe('{"email":"user@example.test"}');
     });
   });
 

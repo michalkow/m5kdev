@@ -598,6 +598,18 @@ function parseListenPort(value: string | undefined): number {
   return Number.isNaN(parsed) ? 8080 : parsed;
 }
 
+function applyJsonParser({
+  expressApp,
+  config,
+}: {
+  expressApp: Express;
+  config: BackendAppConfig;
+}): void {
+  const jsonDefaults: JsonParserOptions = {};
+  const jsonOptions = config.json ? config.json(jsonDefaults) : jsonDefaults;
+  expressApp.use(express.json(jsonOptions));
+}
+
 function applyHttpShell({
   expressApp,
   config,
@@ -607,9 +619,6 @@ function applyHttpShell({
   config: BackendAppConfig;
   appConfig: ResolvedBackendAppMetadata;
 }): void {
-  const jsonDefaults: JsonParserOptions = {};
-  const jsonOptions = config.json ? config.json(jsonDefaults) : jsonDefaults;
-  expressApp.use(express.json(jsonOptions));
   const corsDefaults: CorsOptions = {
     origin: appConfig.urls.web ? [appConfig.urls.web] : false,
     credentials: true,
@@ -848,6 +857,18 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   const authMiddleware = auth ? createAuthMiddleware(auth) : undefined;
   const roleAuthMiddleware = auth ? createRoleAuthMiddleware(auth) : undefined;
 
+  if (auth) {
+    if (orderedModules.some((module) => module.id === "mcp")) {
+      const dcrStore =
+        schema.oauthClients === oauthClients
+          ? new McpDcrOauthClientRepository({ orm, oauthClients })
+          : null;
+      mountMcpDcrNativeClientInterop({ app: expressApp, store: dcrStore });
+    }
+    expressApp.all("/api/auth/*", toNodeHandler(auth));
+  }
+  applyJsonParser({ expressApp, config });
+
   if (Object.keys(routerFragments as Record<string, unknown>).length > 0) {
     expressApp.use(
       trpcMountPath,
@@ -859,17 +880,6 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         },
       })
     );
-  }
-
-  if (auth) {
-    if (orderedModules.some((module) => module.id === "mcp")) {
-      const dcrStore =
-        schema.oauthClients === oauthClients
-          ? new McpDcrOauthClientRepository({ orm, oauthClients })
-          : null;
-      mountMcpDcrNativeClientInterop({ app: expressApp, store: dcrStore });
-    }
-    expressApp.all("/api/auth/*", toNodeHandler(auth));
   }
 
   for (const module of orderedModules) {
