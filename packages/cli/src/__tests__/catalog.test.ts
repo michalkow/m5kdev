@@ -192,6 +192,14 @@ describe("monorepo catalog hygiene", () => {
     expect(keys.filter((name) => !referenced.has(name))).toEqual([]);
   });
 
+  it("does not catalog unused Kernel upload parsers", () => {
+    const catalog = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8")) as {
+      catalog?: Record<string, string | number>;
+    };
+    expect(catalog.catalog).not.toHaveProperty("multer");
+    expect(catalog.catalog).not.toHaveProperty("@types/multer");
+  });
+
   it("does not exact-pin catalogued third-parties in Starter or root templates", () => {
     const catalog = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8")) as {
       catalog?: Record<string, string | number>;
