@@ -1,4 +1,3 @@
-import type { QueryFilters } from "@m5kdev/commons/modules/schemas/query.schema";
 import {
   type AnyUseMutationOptions,
   type QueryClient,
@@ -7,9 +6,11 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import type { AuthClient } from "../auth.lib";
-import { getAuthClient } from "../auth.lib";
+import { type AuthClient, getAuthClient } from "../auth.lib";
+import { type ListUsersQueryInput, mapQueryInputToListUsersArg } from "./listUsersQuery";
 import { useAuthClient } from "./useAuthClient";
+
+export type { ListUsersQueryInput } from "./listUsersQuery";
 
 type ListUsersArgs = Parameters<AuthClient["admin"]["listUsers"]>;
 
@@ -21,36 +22,6 @@ type ListUsersResult = Awaited<ReturnType<AuthClient["admin"]["listUsers"]>>;
 export type ListUsersQueryData = NonNullable<ListUsersResult["data"]>;
 
 export const AUTH_ADMIN_LIST_USERS_KEY = "auth-admin-list-users" as const;
-
-/**
- * Input aligned with `useQueryWithParams` table state (page, limit, sort, order, q, filters).
- * Maps to Better Auth `listUsers` query payload.
- */
-export interface ListUsersQueryInput {
-  page: number;
-  limit: number;
-  sort?: string;
-  order?: "asc" | "desc" | null;
-  q?: string;
-  filters?: QueryFilters;
-}
-
-type ListUsersFirstArg = ListUsersArgs[0];
-
-function mapQueryInputToListUsersArg(input: ListUsersQueryInput): ListUsersFirstArg {
-  const page = Math.max(1, input.page);
-  return {
-    query: {
-      searchField: "name",
-      searchOperator: "contains",
-      searchValue: input.q?.trim() ?? "",
-      limit: input.limit,
-      offset: (page - 1) * input.limit,
-      sortBy: (input.sort ?? "createdAt") as "name" | "email" | "role" | "createdAt",
-      sortDirection: (input.order ?? "desc") as "asc" | "desc",
-    },
-  };
-}
 
 /**
  * Query key factory (tRPC-style). Omit input to match all list-users queries for invalidation.

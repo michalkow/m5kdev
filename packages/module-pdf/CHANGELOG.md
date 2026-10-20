@@ -1,5 +1,17 @@
 # @m5kdev/module-pdf
 
+## 0.41.0
+
+### Minor Changes
+
+- 8a8efeb: Lockstep Express to 5.3.0: brace named splats, Auth-before-json, Kernel Stripe webhook raw skip, OTEL JS SDK 2, and Bull Board 9.10.4.
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies [8a8efeb]
+  - @m5kdev/backend@0.41.0
+
 ## 0.40.2
 
 ### Patch Changes

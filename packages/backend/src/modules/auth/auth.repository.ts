@@ -26,7 +26,10 @@ type OrganizationRow = typeof auth.organizations.$inferSelect;
 type MemberRow = typeof auth.members.$inferSelect;
 type OrganizationMemberRow = typeof auth.members.$inferSelect & {
   invitationId: string | null;
-  user: Pick<UserRow, "id" | "name" | "email" | "role" | "banned" | "emailVerified"> | null;
+  user: Pick<
+    UserRow,
+    "id" | "name" | "email" | "role" | "banned" | "emailVerified" | "closedAt"
+  > | null;
 };
 
 export class AuthUserRepository extends BaseTableRepository<
@@ -135,6 +138,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
           role: this.schema.users.role,
           banned: this.schema.users.banned,
           emailVerified: this.schema.users.emailVerified,
+          closedAt: this.schema.users.closedAt,
         },
       })
       .from(this.schema.members)
@@ -652,6 +656,7 @@ export class AuthOrganizationRepository extends BaseTableRepository<
             currency: this.schema.organizations.currency,
             billingExempt: this.schema.organizations.billingExempt,
             createdAt: this.schema.organizations.createdAt,
+            closedAt: this.schema.organizations.closedAt,
           })
           .from(this.schema.organizations)
           .innerJoin(

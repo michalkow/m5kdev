@@ -1036,6 +1036,7 @@ export class AuthService extends BasePermissionService<
           "locale",
           "currency",
           "billingExempt",
+          "closedAt",
         ]
       );
       if (organization.isErr()) return err(organization.error);
@@ -1732,11 +1733,14 @@ export class AuthService extends BasePermissionService<
           method: "POST",
           headers: {
             "content-type": "application/json",
+            origin: new URL(apiBase).origin,
+            connection: "close",
           },
           body: JSON.stringify({
             email: targetEmail.toLowerCase(),
             callbackURL: callback.toString(),
           }),
+          keepalive: false,
           signal: controller.signal,
         });
       } catch (cause: unknown) {
