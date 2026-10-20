@@ -2,7 +2,7 @@
 
 Express stays the HTTP vendor, but the Kernel owns the default shell so a library release can change CORS headers, JSON defaults, listen, and signal shutdown without asking every app to edit starter conventions. Apps still get the Express instance back; extra routes belong on a Backend Module `express` hook. JSON and CORS are maps over Kernel defaults (`(defaults) => next`); omitting a default drops it — same trust as passing your own Express.
 
-The Kernel applies CORS first, then Better Auth / MCP DCR `toNodeHandler` mounts (when Auth exists), then `express.json()`. Better Auth must see an unconsumed request stream; JSON-first hangs sign-in on Express 5. Stripe `/stripe/webhook` stays a known leftover on the module `express` hook after JSON.
+The Kernel applies CORS first, then Better Auth / MCP DCR `toNodeHandler` mounts (when Auth exists), then `express.json()`. Better Auth must see an unconsumed request stream; JSON-first hangs sign-in on Express 5. Kernel JSON applies `express.raw` on `POST /stripe/webhook` so Billing signature verification still sees a Buffer ([ADR-0032](0032-managed-catalog-is-express-5.md)).
 
 Callers may pass an Express instance; the Kernel still applies this shell onto it. Passing an instance that already has json/CORS is unsupported (and json-first hangs Auth). `start()` listens on `PORT` (fallback 8080) on all interfaces (Node dual-stack default, so IPv4 and IPv6 localhost both work) unless `listen: false`. When listening, SIGINT/SIGTERM closes Server event streams, then HTTP, then the rest of Kernel shutdown, then `onShutdown` (telemetry), then process exit. OTEL stays an app `import "./instrumentation"` so the Kernel does not force tracing.
 
@@ -16,6 +16,6 @@ Callers may pass an Express instance; the Kernel still applies this shell onto i
 - **Kernel owns OTEL** — rejected: instrumentation must load before other imports and must stay optional.
 - **JSON then CORS then Auth** — rejected: Better Auth's Express guide requires `toNodeHandler` before `express.json()`; Express 5 hangs otherwise.
 - **Early module `express` phase before JSON** — rejected for 0.41.0: more Kernel API than needed; Auth/DCR are already Kernel-owned mounts.
-- **JSON skip-list for `/api/auth` and `/stripe/webhook`** — rejected: couples the Kernel to Billing paths; Stripe raw webhook stays the leftover.
+- **JSON skip-list for `/api/auth`** — rejected: Auth is mounted before JSON instead. Stripe `/stripe/webhook` raw skip is recorded in [ADR-0032](0032-managed-catalog-is-express-5.md).
 
 Baked SPA static serving is Kernel HTTP shell when `spa.root` is set; see [ADR-0006](0006-kernel-owns-baked-spa.md). Server events (SSE subscribe) are Kernel HTTP shell and Kernel infrastructure, not a module hook; see [ADR-0010](0010-kernel-owns-server-events.md).

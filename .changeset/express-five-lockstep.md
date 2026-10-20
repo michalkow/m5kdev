@@ -14,4 +14,4 @@
 "create-m5kdev": minor
 ---
 
-Lockstep Express to 5.3.0: named splats, Auth-before-json, and catalog types at @types/express 5.0.6.
+Lockstep Express to 5.3.0: brace named splats, Auth-before-json, Kernel Stripe webhook raw skip, OTEL JS SDK 2, and Bull Board 9.10.4.

@@ -207,7 +207,9 @@ boot until they pin 0.40.2. No schema or app source change.
 ## Upgrading to 0.41.0 {#upgrade-0-41-0}
 
 Complete 0.40.2 first. The Express Boundary-library pin is 5.3.0. Name every
-splat. Do not apply JSON on a pass-in Express instance.
+splat with `{*name}`. Do not apply JSON on a pass-in Express instance. Kernel
+keeps Stripe webhook bodies raw. Telemetry is OTEL JS SDK 2; Workflow Bull Board
+is 9.10.4.
 
 - [Express 5.3.0](/guides/v0.41.0-express-v5-migration)
 
