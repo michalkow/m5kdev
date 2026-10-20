@@ -4,8 +4,9 @@ import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 
 export function registerTestTracerProvider(exporter: InMemorySpanExporter): NodeTracerProvider {
   trace.disable();
-  const provider = new NodeTracerProvider();
-  provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
+  const provider = new NodeTracerProvider({
+    spanProcessors: [new SimpleSpanProcessor(exporter)],
+  });
   provider.register();
   return provider;
 }

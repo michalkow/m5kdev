@@ -5,10 +5,11 @@ import { ExpressInstrumentation } from "@opentelemetry/instrumentation-express";
 import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
 import { PinoInstrumentation } from "@opentelemetry/instrumentation-pino";
 import {
-  detectResourcesSync,
-  envDetectorSync,
-  processDetectorSync,
-  Resource,
+  detectResources,
+  envDetector,
+  processDetector,
+  resourceFromAttributes,
+  type Resource,
 } from "@opentelemetry/resources";
 import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
 import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
@@ -37,12 +38,12 @@ function resolveTraceExporter(env: string | undefined) {
 }
 
 function createResource(serviceName: string): Resource {
-  const detected = detectResourcesSync({
-    detectors: [envDetectorSync, processDetectorSync],
+  const detected = detectResources({
+    detectors: [envDetector, processDetector],
   });
 
   return detected.merge(
-    new Resource({
+    resourceFromAttributes({
       [ATTR_SERVICE_NAME]: process.env.OTEL_SERVICE_NAME ?? serviceName,
     })
   );
@@ -72,7 +73,7 @@ export function initTelemetry({
     resource: createResource(serviceName),
     ...(traceExporter ? { traceExporter } : {}),
     ...(hasOtlp
-      ? { logRecordProcessors: [new BatchLogRecordProcessor(new OTLPLogExporter())] }
+      ? { logRecordProcessors: [new BatchLogRecordProcessor({ exporter: new OTLPLogExporter() })] }
       : {}),
     ...(hasMetrics
       ? {

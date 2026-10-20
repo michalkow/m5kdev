@@ -218,6 +218,6 @@ describe("withSpan actor attributes", () => {
 
     const root = spans.find((span) => span.name === "workflow.cron.example");
     const child = spans.find((span) => span.name === "service.Example.run");
-    expect(child?.parentSpanId).toBe(root?.spanContext().spanId);
+    expect(child?.parentSpanContext?.spanId).toBe(root?.spanContext().spanId);
   });
 });
