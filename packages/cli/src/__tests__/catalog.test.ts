@@ -208,6 +208,17 @@ describe("monorepo catalog hygiene", () => {
     expect(catalog.catalog).not.toHaveProperty("@types/body-parser");
   });
 
+  it("pins Bull Board 9.10.4 without an Express override", () => {
+    const catalog = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8")) as {
+      catalog?: Record<string, string | number>;
+    };
+    expect(catalog.catalog?.["@bull-board/api"]).toBe("9.10.4");
+    expect(catalog.catalog?.["@bull-board/express"]).toBe("9.10.4");
+    const root = readJson(path.join(REPO_ROOT, "package.json"));
+    const overrides = (root.pnpm as { overrides?: Record<string, string> } | undefined)?.overrides;
+    expect(overrides?.express).toBeUndefined();
+  });
+
   it("pins Express 5.3.0 with @types/express 5", () => {
     const catalog = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8")) as {
       catalog?: Record<string, string | number>;
