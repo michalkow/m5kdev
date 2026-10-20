@@ -60,69 +60,67 @@ export function mountMcpDcrNativeClientInterop(input: {
 }): void {
   const logger = rootLogger.child({ layer: "mcpDcr" });
 
-  input.app.use((req: Request, res: Response, next: NextFunction) => {
-    void (async () => {
-      if (req.method !== "POST") {
-        next();
-        return;
-      }
-
-      const path = (req.path.replace(/\/+$/, "") || "/").toLowerCase();
-      if (!path.endsWith("/oauth2/register")) {
-        next();
-        return;
-      }
-
-      const taken = await takeJsonBody(req);
-      const body = taken.body;
-      const redirectUris = readRedirectUris(body);
-      const rewrite = rewriteMcpDcrRedirects({
-        redirectUris,
-        softwareId: typeof body?.software_id === "string" ? body.software_id : undefined,
-      });
-      if (!body || !rewrite) {
-        if (taken.raw) {
-          replayRequestBody(req, taken.raw);
-        }
-        next();
-        return;
-      }
-
-      body.application_type = rewrite.applicationType;
-      body.redirect_uris = [...rewrite.registrationUris];
-      body.software_id = rewrite.softwareId;
-      req.body = body;
-      if (taken.raw) {
-        replayRequestBody(req, Buffer.from(JSON.stringify(body)));
-      }
-
-      holdResponseUntil({
-        res,
-        beforeFlush: async (statusCode) => {
-          if (statusCode !== 201 || !input.store) {
-            return;
-          }
-
-          try {
-            await input.store.restoreClientRedirectUrisBySoftwareId({
-              softwareId: rewrite.softwareId,
-              redirectUris: rewrite.restoredUris,
-            });
-            logger.info(
-              { softwareId: rewrite.softwareId, redirectUris: rewrite.restoredUris },
-              "Restored MCP native redirect URIs after DCR"
-            );
-          } catch (error) {
-            logger.error(
-              { error, softwareId: rewrite.softwareId },
-              "Failed to restore MCP redirect URIs after DCR"
-            );
-          }
-        },
-      });
-
+  input.app.use(async (req: Request, res: Response, next: NextFunction) => {
+    if (req.method !== "POST") {
       next();
-    })().catch(next);
+      return;
+    }
+
+    const path = (req.path.replace(/\/+$/, "") || "/").toLowerCase();
+    if (!path.endsWith("/oauth2/register")) {
+      next();
+      return;
+    }
+
+    const taken = await takeJsonBody(req);
+    const body = taken.body;
+    const redirectUris = readRedirectUris(body);
+    const rewrite = rewriteMcpDcrRedirects({
+      redirectUris,
+      softwareId: typeof body?.software_id === "string" ? body.software_id : undefined,
+    });
+    if (!body || !rewrite) {
+      if (taken.raw) {
+        replayRequestBody(req, taken.raw);
+      }
+      next();
+      return;
+    }
+
+    body.application_type = rewrite.applicationType;
+    body.redirect_uris = [...rewrite.registrationUris];
+    body.software_id = rewrite.softwareId;
+    req.body = body;
+    if (taken.raw) {
+      replayRequestBody(req, Buffer.from(JSON.stringify(body)));
+    }
+
+    holdResponseUntil({
+      res,
+      beforeFlush: async (statusCode) => {
+        if (statusCode !== 201 || !input.store) {
+          return;
+        }
+
+        try {
+          await input.store.restoreClientRedirectUrisBySoftwareId({
+            softwareId: rewrite.softwareId,
+            redirectUris: rewrite.restoredUris,
+          });
+          logger.info(
+            { softwareId: rewrite.softwareId, redirectUris: rewrite.restoredUris },
+            "Restored MCP native redirect URIs after DCR"
+          );
+        } catch (error) {
+          logger.error(
+            { error, softwareId: rewrite.softwareId },
+            "Failed to restore MCP redirect URIs after DCR"
+          );
+        }
+      },
+    });
+
+    next();
   });
 }
 

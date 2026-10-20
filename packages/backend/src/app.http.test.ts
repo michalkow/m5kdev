@@ -220,6 +220,43 @@ describe("createBackendApp HTTP shell", () => {
     });
   });
 
+  it("does not leave suffix paths other than /stripe/webhook as a raw Buffer", async () => {
+    const payload = JSON.stringify({ id: "evt_unrelated" });
+    const built = createBackendApp(
+      {
+        db: { client },
+        app: { urls: { web: WEB_ORIGIN } },
+      },
+      [
+        defineBackendModule({
+          id: "probe",
+          express({ infra }) {
+            infra.express.post("/evil/stripe/webhook", (req, res) => {
+              const body = req.body as unknown;
+              res.json({
+                isBuffer: Buffer.isBuffer(body),
+                isParsedObject: typeof body === "object" && body !== null && !Buffer.isBuffer(body),
+              });
+            });
+          },
+        }),
+      ]
+    );
+
+    await withServer(built.express.app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/evil/stripe/webhook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        isBuffer: false,
+        isParsedObject: true,
+      });
+    });
+  });
+
   it("does not feed Stripe constructEvent a parsed JSON object", async () => {
     const payload = JSON.stringify({ id: "evt_test", type: "invoice.paid" });
     const constructEvent = jest.fn((body: unknown) => {

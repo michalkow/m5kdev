@@ -627,7 +627,7 @@ function isStripeWebhookRequest(
     return false;
   }
   const pathname = requestPathname(req);
-  return pathname === STRIPE_WEBHOOK_PATH || pathname.endsWith(STRIPE_WEBHOOK_PATH);
+  return pathname === STRIPE_WEBHOOK_PATH;
 }
 
 function applyJsonParser({
