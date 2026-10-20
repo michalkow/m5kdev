@@ -906,7 +906,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       mountMcpDcrNativeClientInterop({ app: expressApp, store: dcrStore });
       mountMcpOAuthDiscovery({ express: expressApp, auth });
     }
-    expressApp.all("/api/auth/*splat", toNodeHandler(auth) as RequestHandler);
+    expressApp.all("/api/auth/{*splat}", toNodeHandler(auth) as RequestHandler);
   }
   applyJsonParser({ expressApp, config });
 

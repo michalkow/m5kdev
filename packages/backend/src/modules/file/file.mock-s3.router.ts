@@ -24,7 +24,7 @@ function objectLocator(req: Request): { bucket: string; key: string } | undefine
 export function createMockS3Router(store: LocalFileObjectStore): Router {
   const router = express.Router();
 
-  router.put("/:bucket/*key", express.raw({ type: "*/*", limit: "50mb" }), async (req: Request, res: Response) => {
+  router.put("/:bucket/{*key}", express.raw({ type: "*/*", limit: "50mb" }), async (req: Request, res: Response) => {
     const locator = objectLocator(req);
     if (!locator) {
       return res.status(400).json({ error: "Missing bucket or key" });
@@ -38,7 +38,7 @@ export function createMockS3Router(store: LocalFileObjectStore): Router {
     return res.status(200).end();
   });
 
-  router.get("/:bucket/*key", async (req: Request, res: Response) => {
+  router.get("/:bucket/{*key}", async (req: Request, res: Response) => {
     const locator = objectLocator(req);
     if (!locator) {
       return res.status(400).json({ error: "Missing bucket or key" });
