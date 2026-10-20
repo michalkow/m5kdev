@@ -21,7 +21,13 @@ import { toNodeHandler } from "better-auth/node";
 import cors, { type CorsOptions } from "cors";
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
 import type { SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
-import express, { type Express, type RequestHandler } from "express";
+import express, {
+  type Express,
+  type NextFunction,
+  type Request,
+  type RequestHandler,
+  type Response,
+} from "express";
 import IORedis, { type RedisOptions } from "ioredis";
 import type { Logger } from "pino";
 import { Resend } from "resend";
@@ -599,6 +605,31 @@ function parseListenPort(value: string | undefined): number {
   return Number.isNaN(parsed) ? 8080 : parsed;
 }
 
+/** Must match Billing `express.use("/stripe")` + `post("/webhook")`. */
+const STRIPE_WEBHOOK_PATH = "/stripe/webhook";
+
+function requestPathname(req: Pick<Request, "path" | "originalUrl" | "url">): string {
+  const raw =
+    typeof req.path === "string" && req.path.length > 0
+      ? req.path
+      : String(req.originalUrl ?? req.url ?? "");
+  const pathname = raw.split("?")[0] ?? "";
+  if (pathname.length > 1 && pathname.endsWith("/")) {
+    return pathname.slice(0, -1);
+  }
+  return pathname;
+}
+
+function isStripeWebhookRequest(
+  req: Pick<Request, "method" | "path" | "originalUrl" | "url">
+): boolean {
+  if (req.method?.toUpperCase() !== "POST") {
+    return false;
+  }
+  const pathname = requestPathname(req);
+  return pathname === STRIPE_WEBHOOK_PATH || pathname.endsWith(STRIPE_WEBHOOK_PATH);
+}
+
 function applyJsonParser({
   expressApp,
   config,
@@ -608,7 +639,15 @@ function applyJsonParser({
 }): void {
   const jsonDefaults: JsonParserOptions = {};
   const jsonOptions = config.json ? config.json(jsonDefaults) : jsonDefaults;
-  expressApp.use(express.json(jsonOptions));
+  const jsonParser = express.json(jsonOptions);
+  const stripeWebhookRawParser = express.raw({ type: "application/json" });
+  expressApp.use((req: Request, res: Response, next: NextFunction) => {
+    if (isStripeWebhookRequest(req)) {
+      stripeWebhookRawParser(req, res, next);
+      return;
+    }
+    jsonParser(req, res, next);
+  });
 }
 
 function applyCors({
