@@ -48,6 +48,8 @@ import {
 
 const schema = { ...auth, ...oauth };
 type Schema = typeof schema;
+/** Auth tables `createBetterAuth` queries. Caller schemas may add app tables and omit MCP/oauth. */
+type AuthQuerySchema = typeof auth;
 export type Orm = LibSQLDatabase<Schema>;
 
 export type User = InferSelectModel<typeof auth.users>;
@@ -107,7 +109,7 @@ export type CreateBetterAuthConfigParams = {
 
 type CreateBetterAuthParams<
   O extends Orm,
-  S extends Schema,
+  S extends AuthQuerySchema,
   E extends EmailService,
   B extends BillingService,
 > = {
@@ -173,7 +175,7 @@ function setPasswordEndpointPlugin(): BetterAuthPlugin {
 
 export function createBetterAuth<
   O extends Orm,
-  S extends Schema,
+  S extends AuthQuerySchema,
   E extends EmailService,
   B extends BillingService,
 >({

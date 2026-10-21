@@ -22,7 +22,7 @@ import type { OptionsJson } from "body-parser";
 import cors, { type CorsOptions } from "cors";
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
 import type { SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
-import express, { type Express } from "express";
+import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import IORedis, { type RedisOptions } from "ioredis";
 import type { Logger } from "pino";
 import { Resend } from "resend";
@@ -597,6 +597,45 @@ function parseListenPort(value: string | undefined): number {
   return Number.isNaN(parsed) ? 8080 : parsed;
 }
 
+/** Must match `BillingModule` `express.use("/stripe")` + `post("/webhook")`. */
+const STRIPE_WEBHOOK_PATH = "/stripe/webhook";
+
+function requestPathname(req: Pick<Request, "path" | "originalUrl" | "url">): string {
+  const raw =
+    typeof req.path === "string" && req.path.length > 0
+      ? req.path
+      : String(req.originalUrl ?? req.url ?? "");
+  const pathname = raw.split("?")[0] ?? "";
+  if (pathname.length > 1 && pathname.endsWith("/")) {
+    return pathname.slice(0, -1);
+  }
+  return pathname;
+}
+
+function isStripeWebhookRequest(
+  req: Pick<Request, "method" | "path" | "originalUrl" | "url">
+): boolean {
+  if (req.method?.toUpperCase() !== "POST") {
+    return false;
+  }
+  const pathname = requestPathname(req);
+  return pathname === STRIPE_WEBHOOK_PATH || pathname.endsWith(STRIPE_WEBHOOK_PATH);
+}
+
+function applyJsonBodyParser(expressApp: Express, jsonOptions: OptionsJson): void {
+  const jsonParser = express.json(jsonOptions);
+  const stripeWebhookRawParser = express.raw({ type: "application/json" });
+  // Choose parsers by pathname, not `app.use("/stripe/webhook")`. Express 5
+  // path-to-regexp changed unnamed wildcards; a string compare is stable on 4 and 5.
+  expressApp.use((req: Request, res: Response, next: NextFunction) => {
+    if (isStripeWebhookRequest(req)) {
+      stripeWebhookRawParser(req, res, next);
+      return;
+    }
+    jsonParser(req, res, next);
+  });
+}
+
 function applyHttpShell({
   expressApp,
   config,
@@ -608,7 +647,7 @@ function applyHttpShell({
 }): void {
   const jsonDefaults: OptionsJson = {};
   const jsonOptions = config.json ? config.json(jsonDefaults) : jsonDefaults;
-  expressApp.use(express.json(jsonOptions));
+  applyJsonBodyParser(expressApp, jsonOptions);
   const corsDefaults: CorsOptions = {
     origin: appConfig.urls.web ? [appConfig.urls.web] : false,
     credentials: true,

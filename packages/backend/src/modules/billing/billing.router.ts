@@ -1,5 +1,4 @@
-import bodyParser from "body-parser";
-import { Router } from "express";
+import express, { Router } from "express";
 import type { AuthMiddleware, AuthRequest } from "../auth/auth.middleware";
 import type { BillingService } from "./billing.service";
 
@@ -87,7 +86,7 @@ export function createBillingRouter(
     return res.redirect(`${process.env.VITE_APP_URL}/billing`);
   });
 
-  billingRouter.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, res) => {
+  billingRouter.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
     const signature = req.headers["stripe-signature"];
 
     if (!signature) return res.status(400).json({ message: "No signature" });

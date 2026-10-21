@@ -6,6 +6,9 @@ import path from "node:path";
 import { type Client, createClient } from "@libsql/client";
 import express, { type Express } from "express";
 import { createBackendApp, defineBackendModule } from "./app";
+import type { AuthMiddleware } from "./modules/auth/auth.middleware";
+import { createBillingRouter } from "./modules/billing/billing.router";
+import type { BillingService } from "./modules/billing/billing.service";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {
@@ -120,6 +123,117 @@ describe("createBackendApp HTTP shell", () => {
         body: JSON.stringify({ hello: "kernel" }),
       });
       expect(await response.json()).toEqual({ hello: "kernel" });
+    });
+  });
+
+  it("leaves POST /stripe/webhook as a Buffer for Stripe signature verification", async () => {
+    const payload = JSON.stringify({
+      id: "evt_test",
+      object: "event",
+      type: "customer.subscription.updated",
+    });
+    const built = createBackendApp(
+      {
+        db: { client },
+        app: { urls: { web: WEB_ORIGIN } },
+      },
+      [
+        defineBackendModule({
+          id: "probe",
+          express({ infra }) {
+            const router = express.Router();
+            router.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
+              const body = req.body as unknown;
+              res.json({
+                isBuffer: Buffer.isBuffer(body),
+                isParsedObject: typeof body === "object" && body !== null && !Buffer.isBuffer(body),
+                utf8: Buffer.isBuffer(body) ? body.toString("utf8") : null,
+              });
+            });
+            infra.express.use("/stripe", router);
+          },
+        }),
+      ]
+    );
+
+    await withServer(built.express.app, async (baseUrl) => {
+      const signed = await fetch(`${baseUrl}/stripe/webhook`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Stripe-Signature": "t=1,v1=test",
+          Origin: WEB_ORIGIN,
+        },
+        body: payload,
+      });
+      expect(signed.status).toBe(200);
+      expect(await signed.json()).toEqual({
+        isBuffer: true,
+        isParsedObject: false,
+        utf8: payload,
+      });
+
+      const withQuery = await fetch(`${baseUrl}/stripe/webhook?livemode=true`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Stripe-Signature": "t=1,v1=test",
+        },
+        body: payload,
+      });
+      expect(await withQuery.json()).toEqual({
+        isBuffer: true,
+        isParsedObject: false,
+        utf8: payload,
+      });
+    });
+  });
+
+  it("does not feed Stripe constructEvent a parsed JSON object", async () => {
+    const payload = JSON.stringify({ id: "evt_test", type: "invoice.paid" });
+    const constructEvent = jest.fn((body: unknown) => {
+      if (!Buffer.isBuffer(body) && typeof body !== "string") {
+        return {
+          isErr: () => true as const,
+          error: {
+            message:
+              "Webhook payload must be provided as a string or a Buffer. Payload was provided as a parsed JavaScript object instead.",
+          },
+        };
+      }
+      return { isErr: () => false as const, value: { id: "evt_test" } };
+    });
+    const processEvent = jest.fn(async () => ({ isErr: () => false as const, value: true }));
+    const authMiddleware: AuthMiddleware = (_req, _res, next) => next();
+    const built = createBackendApp({
+      db: { client },
+      app: { urls: { web: WEB_ORIGIN } },
+    });
+    built.express.app.use(
+      "/stripe",
+      createBillingRouter(authMiddleware, {
+        constructEvent,
+        processEvent,
+      } as unknown as BillingService)
+    );
+
+    await withServer(built.express.app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/stripe/webhook`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Stripe-Signature": "t=1,v1=test",
+        },
+        body: payload,
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ received: true });
+      expect(constructEvent).toHaveBeenCalledTimes(1);
+      const [body, signature] = constructEvent.mock.calls[0] ?? [];
+      expect(Buffer.isBuffer(body)).toBe(true);
+      expect(Buffer.isBuffer(body) ? body.toString("utf8") : body).toBe(payload);
+      expect(signature).toBe("t=1,v1=test");
+      expect(processEvent).toHaveBeenCalledWith({ id: "evt_test" });
     });
   });
 

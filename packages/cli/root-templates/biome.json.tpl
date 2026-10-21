@@ -14,6 +14,7 @@
       "!!**/storybook-static",
       "!**/.react-router",
       "!**/.m5kdev.json",
+      "!**/.e2e",
       "!**/drizzle/meta"
     ]
   },

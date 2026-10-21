@@ -1,3 +1,4 @@
+// biome-ignore-all assist/source/organizeImports: feature-gated module imports stay in marker blocks
 import { createBackendApp } from "@m5kdev/backend/app";
 import { shutdownTelemetry } from "@m5kdev/backend/lib/otel";
 // m5k:ai:start

@@ -39,6 +39,8 @@ Database tables are registered by hand in `apps/server/src/schema.ts`; after cha
 
 - Email: `admin@{{APP_SLUG}}.local`
 - Password: `password1234`
+
+After sign-in, the index route (`/`) is the Posts list.
 // m5k:server:end
 
 ## Typical Commands
