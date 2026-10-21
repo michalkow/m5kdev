@@ -47,6 +47,12 @@ Modules. There is no `--modules` flag. Interactive create prompts
 comma-separated module ids (or `none`). Experimental choices are labeled in
 that prompt. Landing-only create skips those prompts.
 
+Create writes root `GLOSSARY.md` (kernel tenancy and access language;
+optional-module nouns are feature-gated), `docs/agents/` (GitHub issue tracker,
+domain docs, triage labels), and `docs/adr/`. Landing-only keeps `docs/agents`
+and an empty Language section. `m5kdev update` **ensures** those paths if they
+are missing and does not overwrite local glossary edits.
+
 Always-on for `web` / `expo` / `both` in Starter: Auth, Email, Posts, Email
 preview, Landing, Deploy home. Kernel infrastructure is not a selectable
 module. Expo-only still includes a server.

@@ -1,5 +1,12 @@
 # create-m5kdev
 
+## 0.41.1
+
+### Patch Changes
+
+- bda03c8: Scaffold generated apps with `GLOSSARY.md`, `docs/agents/`, and `docs/adr/` so agent skills have kernel language and tracker config from create.
+- af8da5f: Allow createBetterAuth to accept app schemas that omit MCP/oauth tables, ship a starter Auth schema migration, and add generated-app lint/typecheck CI.
+
 ## 0.41.0
 
 ### Minor Changes

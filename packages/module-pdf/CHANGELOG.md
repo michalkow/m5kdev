@@ -1,5 +1,12 @@
 # @m5kdev/module-pdf
 
+## 0.41.1
+
+### Patch Changes
+
+- Updated dependencies [af8da5f]
+  - @m5kdev/backend@0.41.1
+
 ## 0.41.0
 
 ### Minor Changes
