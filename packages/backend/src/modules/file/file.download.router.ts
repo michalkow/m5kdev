@@ -21,7 +21,7 @@ export function createDownloadRouter({
     if (!user) {
       return res.status(401).json({ message: "Unauthorized" });
     }
-    const fileId = req.params.id;
+    const fileId = typeof req.params.id === "string" ? req.params.id : undefined;
     if (!fileId) {
       return res.status(400).json({ error: "Missing file id" });
     }

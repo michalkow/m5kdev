@@ -1,5 +1,19 @@
 # @m5kdev/frontend
 
+## 0.41.0
+
+### Minor Changes
+
+- 8a8efeb: Lockstep Express to 5.3.0: brace named splats, Auth-before-json, Kernel Stripe webhook raw skip, OTEL JS SDK 2, and Bull Board 9.10.4.
+
+### Patch Changes
+
+- Admin user search matches email when the query contains @.
+  Organization member and user-organization lists include closedAt so tRPC output validation succeeds.
+  Account-claim magic-link generation no longer hangs on the in-process Auth request.
+- Updated dependencies [8a8efeb]
+  - @m5kdev/commons@0.41.0
+
 ## 0.40.2
 
 ### Patch Changes

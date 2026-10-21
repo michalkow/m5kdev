@@ -60,7 +60,7 @@ export function mountMcpDcrNativeClientInterop(input: {
 }): void {
   const logger = rootLogger.child({ layer: "mcpDcr" });
 
-  input.app.use((req: Request, res: Response, next: NextFunction) => {
+  input.app.use(async (req: Request, res: Response, next: NextFunction) => {
     if (req.method !== "POST") {
       next();
       return;
@@ -72,13 +72,17 @@ export function mountMcpDcrNativeClientInterop(input: {
       return;
     }
 
-    const body = jsonObject(req.body);
+    const taken = await takeJsonBody(req);
+    const body = taken.body;
     const redirectUris = readRedirectUris(body);
     const rewrite = rewriteMcpDcrRedirects({
       redirectUris,
       softwareId: typeof body?.software_id === "string" ? body.software_id : undefined,
     });
     if (!body || !rewrite) {
+      if (taken.raw) {
+        replayRequestBody(req, taken.raw);
+      }
       next();
       return;
     }
@@ -86,6 +90,10 @@ export function mountMcpDcrNativeClientInterop(input: {
     body.application_type = rewrite.applicationType;
     body.redirect_uris = [...rewrite.registrationUris];
     body.software_id = rewrite.softwareId;
+    req.body = body;
+    if (taken.raw) {
+      replayRequestBody(req, Buffer.from(JSON.stringify(body)));
+    }
 
     holdResponseUntil({
       res,
@@ -122,6 +130,44 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 
 function jsonObject(value: unknown): Record<string, unknown> | undefined {
   return isJsonObject(value) ? value : undefined;
+}
+
+async function takeJsonBody(
+  req: Request
+): Promise<{ body: Record<string, unknown> | undefined; raw: Buffer | undefined }> {
+  const existing = jsonObject(req.body);
+  if (existing) {
+    return { body: existing, raw: undefined };
+  }
+  if (req.readableEnded) {
+    return { body: undefined, raw: undefined };
+  }
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  const raw = Buffer.concat(chunks);
+  if (raw.length === 0) {
+    return { body: undefined, raw };
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw.toString("utf8"));
+    return { body: jsonObject(parsed), raw };
+  } catch {
+    return { body: undefined, raw };
+  }
+}
+
+function replayRequestBody(req: Request, payload: Buffer): void {
+  req.headers["content-length"] = String(payload.length);
+  Object.defineProperty(req, "readableEnded", {
+    configurable: true,
+    get: () => false,
+  });
+  process.nextTick(() => {
+    req.emit("data", payload);
+    req.emit("end");
+  });
 }
 
 function readRedirectUris(body: Record<string, unknown> | undefined): string[] {

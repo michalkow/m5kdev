@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import { resolveOrganizationActor } from "../../../base/base.actor";
 import * as auth from "../auth.db";
+import { invitationSchemas, organizationSchemas } from "../auth.dto";
 import { AuthOrganizationRepository } from "../auth.repository";
 import {
   createOrganizationWithOwner,
@@ -90,6 +91,19 @@ async function createTables(client: Client): Promise<void> {
       active_organization_member_id TEXT,
       active_organization_role TEXT,
       active_organization_type TEXT
+    );
+  `);
+  await client.execute(`
+    CREATE TABLE invitations (
+      id TEXT PRIMARY KEY NOT NULL,
+      organization_id TEXT NOT NULL REFERENCES organizations(id),
+      member_id TEXT REFERENCES members(id),
+      email TEXT NOT NULL,
+      role TEXT,
+      status TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      inviter_id TEXT NOT NULL REFERENCES users(id)
     );
   `);
 }
@@ -540,5 +554,80 @@ describe("getActiveOrganization", () => {
     expect(result.isErr()).toBe(true);
     if (result.isOk()) return;
     expect(result.error.message).toBe("Live Membership required");
+  });
+});
+
+describe("listOrganizationMembers tRPC output", () => {
+  let client: Client;
+  let dbDir: string;
+
+  beforeEach(async () => {
+    dbDir = await fs.mkdtemp(path.join(os.tmpdir(), "auth-member-list-"));
+    client = createClient({ url: `file:${path.join(dbDir, "test.db")}` });
+    await createTables(client);
+  });
+
+  afterEach(async () => {
+    client.close();
+    await fs.rm(dbDir, { recursive: true, force: true });
+  });
+
+  it("returns User rows that include closedAt so Auth list Members can serialize", async () => {
+    const orm = drizzle(client, { schema: auth });
+    const now = new Date();
+    await orm.insert(auth.users).values({
+      id: "user-owner",
+      name: "Pat",
+      email: "pat@example.com",
+      emailVerified: true,
+      role: "user",
+      banned: false,
+      createdAt: now,
+      updatedAt: now,
+      closedAt: null,
+    });
+    await orm.insert(auth.organizations).values({
+      id: "org-1",
+      name: "Org",
+      slug: "org-1",
+      createdAt: now,
+    });
+    await orm.insert(auth.members).values({
+      id: "member-owner",
+      organizationId: "org-1",
+      userId: "user-owner",
+      email: "pat@example.com",
+      name: "Pat",
+      role: "owner",
+      createdAt: now,
+    });
+
+    const memberships = new AuthOrganizationRepository({
+      orm,
+      schema: auth,
+      table: auth.organizations,
+    });
+    const listed = await memberships.listOrganizationMembers("org-1");
+
+    expect(listed.isOk()).toBe(true);
+    if (listed.isErr()) return;
+    expect(listed.value[0]?.user).toEqual(
+      expect.objectContaining({
+        id: "user-owner",
+        closedAt: null,
+      })
+    );
+    expect(invitationSchemas.output.members.parse(listed.value)).toHaveLength(1);
+
+    const orgs = await memberships.listUserOrganizations("user-owner");
+    expect(orgs.isOk()).toBe(true);
+    if (orgs.isErr()) return;
+    expect(orgs.value[0]).toEqual(
+      expect.objectContaining({
+        id: "org-1",
+        closedAt: null,
+      })
+    );
+    expect(organizationSchemas.output.simple.array().parse(orgs.value)).toHaveLength(1);
   });
 });

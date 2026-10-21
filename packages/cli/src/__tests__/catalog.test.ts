@@ -192,6 +192,48 @@ describe("monorepo catalog hygiene", () => {
     expect(keys.filter((name) => !referenced.has(name))).toEqual([]);
   });
 
+  it("does not catalog unused Kernel upload parsers", () => {
+    const catalog = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8")) as {
+      catalog?: Record<string, string | number>;
+    };
+    expect(catalog.catalog).not.toHaveProperty("multer");
+    expect(catalog.catalog).not.toHaveProperty("@types/multer");
+  });
+
+  it("does not catalog a standalone body-parser", () => {
+    const catalog = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8")) as {
+      catalog?: Record<string, string | number>;
+    };
+    expect(catalog.catalog).not.toHaveProperty("body-parser");
+    expect(catalog.catalog).not.toHaveProperty("@types/body-parser");
+  });
+
+  it("pins Bull Board 9.10.4 without an Express override", () => {
+    const catalog = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8")) as {
+      catalog?: Record<string, string | number>;
+    };
+    expect(catalog.catalog?.["@bull-board/api"]).toBe("9.10.4");
+    expect(catalog.catalog?.["@bull-board/express"]).toBe("9.10.4");
+    const root = readJson(path.join(REPO_ROOT, "package.json"));
+    const overrides = (root.pnpm as { overrides?: Record<string, string> } | undefined)?.overrides;
+    expect(overrides?.express).toBeUndefined();
+  });
+
+  it("pins Express 5.3.0 with @types/express 5", () => {
+    const catalog = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8")) as {
+      catalog?: Record<string, string | number>;
+    };
+    expect(catalog.catalog?.express).toBe("5.3.0");
+    expect(catalog.catalog?.["@types/express"]).toBe("5.0.6");
+    const consumer = buildConsumerCatalog({
+      repoRoot: REPO_ROOT,
+      starterDirectory: path.join(REPO_ROOT, "apps/starter"),
+      rootTemplatesDirectory: path.join(REPO_ROOT, "packages/cli/root-templates"),
+    });
+    expect(consumer.express).toBe("5.3.0");
+    expect(consumer["@types/express"]).toBe("5.0.6");
+  });
+
   it("does not exact-pin catalogued third-parties in Starter or root templates", () => {
     const catalog = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8")) as {
       catalog?: Record<string, string | number>;
@@ -261,12 +303,36 @@ describe("boundary library peers", () => {
 });
 
 describe("OpenTelemetry catalog pin", () => {
+  it("pins a coherent OpenTelemetry JS SDK 2 set", () => {
+    const workspace = parse(
+      fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8")
+    ) as {
+      catalog?: Record<string, string | number>;
+    };
+    const catalog = workspace.catalog ?? {};
+    expect(catalog["@opentelemetry/api"]).toBe("1.9.1");
+    expect(catalog["@opentelemetry/api-logs"]).toBe("0.223.0");
+    expect(catalog["@opentelemetry/exporter-logs-otlp-http"]).toBe("0.223.0");
+    expect(catalog["@opentelemetry/exporter-metrics-otlp-http"]).toBe("0.223.0");
+    expect(catalog["@opentelemetry/exporter-trace-otlp-http"]).toBe("0.223.0");
+    expect(catalog["@opentelemetry/instrumentation-express"]).toBe("0.71.1");
+    expect(catalog["@opentelemetry/instrumentation-http"]).toBe("0.223.0");
+    expect(catalog["@opentelemetry/instrumentation-pino"]).toBe("0.69.0");
+    expect(catalog["@opentelemetry/resources"]).toBe("2.12.0");
+    expect(catalog["@opentelemetry/sdk-logs"]).toBe("0.223.0");
+    expect(catalog["@opentelemetry/sdk-metrics"]).toBe("2.12.0");
+    expect(catalog["@opentelemetry/sdk-node"]).toBe("0.223.0");
+    expect(catalog["@opentelemetry/sdk-trace-base"]).toBe("2.12.0");
+    expect(catalog["@opentelemetry/sdk-trace-node"]).toBe("2.12.0");
+    expect(catalog["@opentelemetry/semantic-conventions"]).toBe("1.43.0");
+  });
+
   it("includes Starter server @opentelemetry/api in the consumer catalog", () => {
     const catalog = buildConsumerCatalog({
       repoRoot: REPO_ROOT,
       starterDirectory: path.join(REPO_ROOT, "apps/starter"),
       rootTemplatesDirectory: path.join(REPO_ROOT, "packages/cli/root-templates"),
     });
-    expect(catalog).toHaveProperty("@opentelemetry/api", "1.9.0");
+    expect(catalog).toHaveProperty("@opentelemetry/api", "1.9.1");
   });
 });

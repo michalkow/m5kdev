@@ -18,11 +18,16 @@ import { transformer } from "@m5kdev/commons/utils/trpc";
 import type { AnyRouter, TRPCCreateRouterOptions } from "@trpc/server";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import { toNodeHandler } from "better-auth/node";
-import type { OptionsJson } from "body-parser";
 import cors, { type CorsOptions } from "cors";
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
 import type { SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
-import express, { type Express, type NextFunction, type Request, type Response } from "express";
+import express, {
+  type Express,
+  type NextFunction,
+  type Request,
+  type RequestHandler,
+  type Response,
+} from "express";
 import IORedis, { type RedisOptions } from "ioredis";
 import type { Logger } from "pino";
 import { Resend } from "resend";
@@ -42,6 +47,7 @@ import { createAuthMiddleware, createRoleAuthMiddleware } from "./modules/auth/a
 import { oauthClients } from "./modules/auth/auth.oauth.db";
 import type { AuthOrganizationRepository } from "./modules/auth/auth.repository";
 import type { BaseModule } from "./modules/base/base.module";
+import { mountMcpOAuthDiscovery } from "./modules/mcp/mcp.discovery";
 import { mcpResourceUrl } from "./modules/mcp/mcp.types";
 import { WorkflowRegistry } from "./modules/workflow/workflow.registry";
 import { WorkflowService } from "./modules/workflow/workflow.service";
@@ -310,6 +316,8 @@ export type BackendAppAuthFactoryContext = {
   };
 };
 
+type JsonParserOptions = NonNullable<Parameters<typeof express.json>[0]>;
+
 export type BackendAppConfig = {
   db:
     | {
@@ -348,7 +356,7 @@ export type BackendAppConfig = {
   };
   schema?: AppDbSchema;
   cors?: (defaults: CorsOptions) => CorsOptions;
-  json?: (defaults: OptionsJson) => OptionsJson;
+  json?: (defaults: JsonParserOptions) => JsonParserOptions;
   onShutdown?: () => void | Promise<void>;
   spa?: {
     root: string;
@@ -597,7 +605,7 @@ function parseListenPort(value: string | undefined): number {
   return Number.isNaN(parsed) ? 8080 : parsed;
 }
 
-/** Must match `BillingModule` `express.use("/stripe")` + `post("/webhook")`. */
+/** Must match Billing `express.use("/stripe")` + `post("/webhook")`. */
 const STRIPE_WEBHOOK_PATH = "/stripe/webhook";
 
 function requestPathname(req: Pick<Request, "path" | "originalUrl" | "url">): string {
@@ -619,14 +627,20 @@ function isStripeWebhookRequest(
     return false;
   }
   const pathname = requestPathname(req);
-  return pathname === STRIPE_WEBHOOK_PATH || pathname.endsWith(STRIPE_WEBHOOK_PATH);
+  return pathname === STRIPE_WEBHOOK_PATH;
 }
 
-function applyJsonBodyParser(expressApp: Express, jsonOptions: OptionsJson): void {
+function applyJsonParser({
+  expressApp,
+  config,
+}: {
+  expressApp: Express;
+  config: BackendAppConfig;
+}): void {
+  const jsonDefaults: JsonParserOptions = {};
+  const jsonOptions = config.json ? config.json(jsonDefaults) : jsonDefaults;
   const jsonParser = express.json(jsonOptions);
   const stripeWebhookRawParser = express.raw({ type: "application/json" });
-  // Choose parsers by pathname, not `app.use("/stripe/webhook")`. Express 5
-  // path-to-regexp changed unnamed wildcards; a string compare is stable on 4 and 5.
   expressApp.use((req: Request, res: Response, next: NextFunction) => {
     if (isStripeWebhookRequest(req)) {
       stripeWebhookRawParser(req, res, next);
@@ -636,7 +650,7 @@ function applyJsonBodyParser(expressApp: Express, jsonOptions: OptionsJson): voi
   });
 }
 
-function applyHttpShell({
+function applyCors({
   expressApp,
   config,
   appConfig,
@@ -645,9 +659,6 @@ function applyHttpShell({
   config: BackendAppConfig;
   appConfig: ResolvedBackendAppMetadata;
 }): void {
-  const jsonDefaults: OptionsJson = {};
-  const jsonOptions = config.json ? config.json(jsonDefaults) : jsonDefaults;
-  applyJsonBodyParser(expressApp, jsonOptions);
   const corsDefaults: CorsOptions = {
     origin: appConfig.urls.web ? [appConfig.urls.web] : false,
     credentials: true,
@@ -677,7 +688,7 @@ function applyBakedSpa(options: { expressApp: Express; spa: BackendAppConfig["sp
     return;
   }
   expressApp.use(express.static(root));
-  expressApp.get("*", (_req, res, next) => {
+  expressApp.get("/{*splat}", (_req, res, next) => {
     res.sendFile(path.join(root, "index.html"), (error) => {
       if (error) {
         next(error);
@@ -700,7 +711,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
 
   const orderedModules = resolveModuleOrder(registeredModules);
   const expressApp = config.express ?? express();
-  applyHttpShell({ expressApp, config, appConfig });
+  applyCors({ expressApp, config, appConfig });
   const dbClientState = createDbClient(config.db, logger);
   const redisState = createRedisClient(config.redis);
   const resendState = createResendClient(config.resend);
@@ -886,6 +897,19 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   const authMiddleware = auth ? createAuthMiddleware(auth) : undefined;
   const roleAuthMiddleware = auth ? createRoleAuthMiddleware(auth) : undefined;
 
+  if (auth) {
+    if (orderedModules.some((module) => module.id === "mcp")) {
+      const dcrStore =
+        schema.oauthClients === oauthClients
+          ? new McpDcrOauthClientRepository({ orm, oauthClients })
+          : null;
+      mountMcpDcrNativeClientInterop({ app: expressApp, store: dcrStore });
+      mountMcpOAuthDiscovery({ express: expressApp, auth });
+    }
+    expressApp.all("/api/auth/{*splat}", toNodeHandler(auth) as RequestHandler);
+  }
+  applyJsonParser({ expressApp, config });
+
   if (Object.keys(routerFragments as Record<string, unknown>).length > 0) {
     expressApp.use(
       trpcMountPath,
@@ -895,19 +919,8 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         onError: ({ error, type, path, input }) => {
           handleTRPCBoundaryError({ error, type, path, input });
         },
-      })
+      }) as unknown as RequestHandler
     );
-  }
-
-  if (auth) {
-    if (orderedModules.some((module) => module.id === "mcp")) {
-      const dcrStore =
-        schema.oauthClients === oauthClients
-          ? new McpDcrOauthClientRepository({ orm, oauthClients })
-          : null;
-      mountMcpDcrNativeClientInterop({ app: expressApp, store: dcrStore });
-    }
-    expressApp.all("/api/auth/*", toNodeHandler(auth));
   }
 
   for (const module of orderedModules) {
@@ -1109,7 +1122,8 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       const port = parseListenPort(process.env.PORT);
       try {
         await new Promise<void>((resolve, reject) => {
-          const server = expressApp.listen(port, () => {
+          const server = expressApp.listen(port);
+          server.once("listening", () => {
             resolve();
           });
           server.once("error", reject);

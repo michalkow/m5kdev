@@ -18,7 +18,38 @@ jest.mock("@m5kdev/commons/utils/trpc", () => ({
 }));
 
 jest.mock("better-auth/node", () => ({
-  toNodeHandler: () => () => undefined,
+  toNodeHandler:
+    () =>
+    (
+      req: {
+        readableEnded?: boolean;
+        on: (event: string, listener: (chunk?: Buffer | string) => void) => void;
+      },
+      res: {
+        statusCode: number;
+        setHeader: (name: string, value: string) => void;
+        end: (body: Buffer) => void;
+      }
+    ) => {
+      const finish = (chunks: Buffer[]): void => {
+        res.statusCode = 200;
+        res.setHeader("content-type", "text/plain; charset=utf-8");
+        res.end(Buffer.concat(chunks));
+      };
+      if (req.readableEnded) {
+        finish([]);
+        return;
+      }
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk) => {
+        if (chunk) {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        }
+      });
+      req.on("end", () => {
+        finish(chunks);
+      });
+    },
   fromNodeHeaders: (headers: unknown) => headers,
 }));
 
@@ -189,6 +220,43 @@ describe("createBackendApp HTTP shell", () => {
     });
   });
 
+  it("does not leave suffix paths other than /stripe/webhook as a raw Buffer", async () => {
+    const payload = JSON.stringify({ id: "evt_unrelated" });
+    const built = createBackendApp(
+      {
+        db: { client },
+        app: { urls: { web: WEB_ORIGIN } },
+      },
+      [
+        defineBackendModule({
+          id: "probe",
+          express({ infra }) {
+            infra.express.post("/evil/stripe/webhook", (req, res) => {
+              const body = req.body as unknown;
+              res.json({
+                isBuffer: Buffer.isBuffer(body),
+                isParsedObject: typeof body === "object" && body !== null && !Buffer.isBuffer(body),
+              });
+            });
+          },
+        }),
+      ]
+    );
+
+    await withServer(built.express.app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/evil/stripe/webhook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        isBuffer: false,
+        isParsedObject: true,
+      });
+    });
+  });
+
   it("does not feed Stripe constructEvent a parsed JSON object", async () => {
     const payload = JSON.stringify({ id: "evt_test", type: "invoice.paid" });
     const constructEvent = jest.fn((body: unknown) => {
@@ -234,6 +302,57 @@ describe("createBackendApp HTTP shell", () => {
       expect(Buffer.isBuffer(body) ? body.toString("utf8") : body).toBe(payload);
       expect(signature).toBe("t=1,v1=test");
       expect(processEvent).toHaveBeenCalledWith({ id: "evt_test" });
+    });
+  });
+
+  it("leaves the Better Auth request stream unconsumed", async () => {
+    const built = createBackendApp({
+      db: { client },
+      auth: {
+        factory: () => ({}) as never,
+      },
+    });
+
+    await withServer(built.express.app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/auth/sign-in`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: '{"email":"user@example.test"}',
+      });
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe('{"email":"user@example.test"}');
+    });
+  });
+
+  it("rewrites MCP DCR native-client register JSON on the Auth stream", async () => {
+    const built = createBackendApp(
+      {
+        db: { client },
+        auth: {
+          factory: () => ({}) as never,
+        },
+      },
+      [defineBackendModule({ id: "mcp" })]
+    );
+
+    await withServer(built.express.app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/auth/oauth2/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          redirect_uris: [
+            "https://example.com/callback",
+            "cursor://anysphere.cursor-mcp/oauth/callback",
+          ],
+          software_id: "cursor-software",
+        }),
+      });
+      expect(response.status).toBe(200);
+      expect(JSON.parse(await response.text())).toEqual({
+        redirect_uris: ["https://example.com/callback"],
+        software_id: "cursor-software",
+        application_type: "native",
+      });
     });
   });
 
