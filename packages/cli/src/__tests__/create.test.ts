@@ -70,7 +70,40 @@ describe("scaffoldProject", () => {
     expect(rootPackage).toContain('"name": "editorial-desk"');
     expect(rootAgents).toContain("Editorial Desk");
     expect(rootAgents).toContain("A clean newsroom starter.");
-    expect(rootAgents).toContain("Server event:");
+    expect(rootAgents).toContain("apps/shared/src/modules/posts/");
+    expect(rootAgents).toContain("apps/server/src/modules/posts/");
+    expect(rootAgents).toContain("apps/webapp/src/modules/posts/");
+    expect(rootAgents).toContain("Read the matching `.cursor/rules` guide");
+    expect(rootAgents).toContain("## Agent skills");
+    expect(rootAgents).toContain("docs/agents/issue-tracker.md");
+    expect(rootAgents).toContain("docs/agents/triage-labels.md");
+    expect(rootAgents).toContain("docs/agents/domain.md");
+    expect(rootAgents).not.toMatch(/## Cloud/i);
+    expect(rootAgents).not.toContain("Server event:");
+
+    const glossary = await fs.readFile(path.join(result.targetDirectory, "GLOSSARY.md"), "utf8");
+    expect(glossary).toContain("# Editorial Desk");
+    expect(glossary).toContain("A clean newsroom starter.");
+    expect(glossary).toContain("**Organization**:");
+    expect(glossary).toContain("**Membership**:");
+    expect(glossary).toContain("**Admin panel**:");
+    expect(glossary).not.toContain("**File**:");
+    expect(glossary).not.toContain("**Post**:");
+    expect(glossary).not.toContain("{{APP_NAME}}");
+    expect(glossary).not.toContain("m5k:");
+
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "docs/agents/issue-tracker.md"))
+    ).resolves.toBeTruthy();
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "docs/agents/domain.md"))
+    ).resolves.toBeTruthy();
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "docs/agents/triage-labels.md"))
+    ).resolves.toBeTruthy();
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "docs/adr/.gitkeep"))
+    ).resolves.toBeTruthy();
 
     const rootClaude = await fs.readFile(path.join(result.targetDirectory, "CLAUDE.md"), "utf8");
     expect(rootClaude).toContain("Editorial Desk");
@@ -78,6 +111,8 @@ describe("scaffoldProject", () => {
     expect(rootClaude).toContain(".cursor/rules/module-db-guide.mdc");
     expect(rootClaude).toContain(".cursor/rules/server-event-emit.mdc");
     expect(rootClaude).toContain("`apps/webapp`");
+    expect(rootClaude).toContain("## Agent skills");
+    expect(rootClaude).toContain("docs/agents/issue-tracker.md");
     // web platform without the test harness: expo and e2e marker blocks are stripped
     expect(rootClaude).not.toContain("apps/expo");
     expect(rootClaude).not.toContain("apps/e2e");
@@ -253,6 +288,11 @@ describe("scaffoldProject", () => {
     expect(offApp).not.toContain("FileModule");
     expect(offApp).not.toContain("m5k:");
 
+    const offGlossary = await fs.readFile(path.join(off.targetDirectory, "GLOSSARY.md"), "utf8");
+    expect(offGlossary).toContain("**Organization**:");
+    expect(offGlossary).not.toContain("**File**:");
+    expect(offGlossary).not.toContain("m5k:");
+
     const offSchema = await fs.readFile(
       path.join(off.targetDirectory, "apps/server/src/schema.ts"),
       "utf8"
@@ -287,6 +327,11 @@ describe("scaffoldProject", () => {
     );
     expect(onApp).toContain("FileModule");
     expect(onApp).not.toContain("m5k:");
+
+    const onGlossary = await fs.readFile(path.join(on.targetDirectory, "GLOSSARY.md"), "utf8");
+    expect(onGlossary).toContain("**File**:");
+    expect(onGlossary).not.toContain("**Subscription**:");
+    expect(onGlossary).not.toContain("m5k:");
 
     const onSchema = await fs.readFile(
       path.join(on.targetDirectory, "apps/server/src/schema.ts"),
@@ -1130,6 +1175,25 @@ describe("scaffoldProject", () => {
     expect(landingVite).not.toContain("envDir");
     expect(landingVite).not.toContain("m5k:");
 
+    const landingGlossary = await fs.readFile(
+      path.join(result.targetDirectory, "GLOSSARY.md"),
+      "utf8"
+    );
+    expect(landingGlossary).toContain("# Landing Only");
+    expect(landingGlossary).toContain("## Language");
+    expect(landingGlossary).not.toContain("**Organization**:");
+    expect(landingGlossary).not.toContain("**Admin panel**:");
+    expect(landingGlossary).not.toContain("m5k:");
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "docs/agents/issue-tracker.md"))
+    ).resolves.toBeTruthy();
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "docs/adr/.gitkeep"))
+    ).resolves.toBeTruthy();
+
+    const landingAgents = await fs.readFile(path.join(result.targetDirectory, "AGENTS.md"), "utf8");
+    expect(landingAgents).toContain("## Agent skills");
+
     const landingPage = await fs.readFile(
       path.join(result.targetDirectory, "apps/landing/src/LandingPage.tsx"),
       "utf8"
@@ -1322,6 +1386,9 @@ describe("landing-only platform upgrade", () => {
       await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8")
     ) as { template: { features: string[] } };
     expect(state.template.features).toEqual(["webapp"]);
+
+    const glossary = await fs.readFile(path.join(result.targetDirectory, "GLOSSARY.md"), "utf8");
+    expect(glossary).toContain("**Organization**:");
 
     const report = await diagnoseManagedRepo({ repoRoot: result.targetDirectory });
     expect(report.ok).toBe(true);

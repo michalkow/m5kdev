@@ -139,6 +139,20 @@ The framework's detailed conventions live in `.cursor/rules/*.mdc`. Cursor appli
 | `.cursor/rules/frontend-i18n-guide.mdc` | webapp user-facing copy |
 // m5k:webapp:end
 
-`AGENTS.md` (repo root and per-app) carries a compact summary of the same conventions for other agents; this file plus the guides above are the authoritative version for Claude.
+`AGENTS.md` (repo root and per-app) points at this file and `.cursor/rules`. This file plus the guides above are the authoritative conventions.
 // m5k:server:end
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues. Use the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default role labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
 
