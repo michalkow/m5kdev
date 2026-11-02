@@ -1,4 +1,3 @@
-import { safeParseJson } from "@m5kdev/commons/utils/json";
 import { err, ok } from "neverthrow";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
@@ -111,7 +110,7 @@ export class WebhookService extends BaseService<{ webhook: WebhookRepository }, 
       }
       const { status, payload } = result.value;
       if (status === "COMPLETED") {
-        const data = payload ? safeParseJson<T>(payload, payload as T) : (payload as T);
+        const data = payload as T;
         return ok(data);
       }
       if (status !== "WAITING") {

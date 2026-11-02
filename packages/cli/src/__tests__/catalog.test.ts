@@ -55,7 +55,10 @@ describe("consumer catalog", () => {
       JSON.parse(fs.readFileSync(path.join(REPO_ROOT, "packages/module-clay/package.json"), "utf8"))
         .version
     );
-    expect(catalog["@libsql/client"]).toBe("0.17.4");
+    expect(catalog["@libsql/client"]).toBeUndefined();
+    expect(catalog["@mastra/libsql"]).toBeUndefined();
+    expect(catalog.pg).toBe("8.23.1");
+    expect(catalog["@mastra/pg"]).toBe("1.16.0");
     expect(catalog["@types/react"]).toBe("19.2.17");
     expect(catalog["drizzle-kit"]).toBe("0.31.10");
     expect(catalog["drizzle-orm"]).toBe("0.45.2");

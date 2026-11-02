@@ -1,5 +1,6 @@
-import { type Client, createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
+import { drizzle } from "drizzle-orm/node-postgres";
+import type { Pool } from "pg";
+import { createTestPool, prepareTestSchema } from "../../../test/postgresql";
 import { webhook } from "../webhook.db";
 import { WebhookRepository } from "../webhook.repository";
 import { WebhookService, type WebhookServiceConfig } from "../webhook.service";
@@ -8,23 +9,24 @@ const schema = { webhook };
 const API_URL = "https://api.example.test";
 const PROCESS_SECRET = "process-secret";
 
-async function createTables(client: Client): Promise<void> {
-  await client.execute(`
-    CREATE TABLE webhook (
+async function createTables(client: Pool): Promise<void> {
+  const namespace = await prepareTestSchema(client);
+  await client.query(`
+    CREATE TABLE "${namespace}".webhook (
       id TEXT PRIMARY KEY NOT NULL,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ,
       timeout_sec INTEGER NOT NULL DEFAULT 60,
       status TEXT NOT NULL DEFAULT 'WAITING',
       error TEXT,
-      payload TEXT,
+      payload JSONB,
       name TEXT,
       secret TEXT
     );
   `);
 }
 
-function createService(client: Client, config?: Partial<WebhookServiceConfig>): WebhookService {
+function createService(client: Pool, config?: Partial<WebhookServiceConfig>): WebhookService {
   const orm = drizzle(client, { schema });
   const repository = new WebhookRepository({
     orm,
@@ -54,15 +56,24 @@ function parseCallbackUrl(url: string): { id: string; token: string } {
 }
 
 describe("WebhookService.waitForRequest mint", () => {
-  let client: Client;
+  let client: Pool;
 
   beforeEach(async () => {
-    client = createClient({ url: ":memory:" });
+    client = createTestPool();
     await createTables(client);
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
+  });
+
+  it("preserves JSON-looking strings as strings rather than reparsing payloads", async () => {
+    const service = createService(client);
+    const result = await service.waitForRequest<string>(async (url) => {
+      const { id } = parseCallbackUrl(url);
+      await service.completed(id, '{"message":"string payload"}');
+    });
+    expect(result._unsafeUnwrap()).toBe('{"message":"string payload"}');
   });
 
   it("returns an error when an untyped wait has no WEBHOOK_SECRET", async () => {
@@ -73,7 +84,9 @@ describe("WebhookService.waitForRequest mint", () => {
       expect(result.error.code).toBe("INTERNAL_SERVER_ERROR");
       expect(result.error.message).toBe("WEBHOOK_SECRET is not set");
     }
-    const count = await client.execute("SELECT COUNT(*) AS n FROM webhook");
+    const count = await client.query(
+      `SELECT COUNT(*) AS n FROM "${process.env.DATABASE_SCHEMA}".webhook`
+    );
     expect(Number(count.rows[0]?.n ?? 0)).toBe(0);
   });
 
@@ -84,7 +97,9 @@ describe("WebhookService.waitForRequest mint", () => {
     if (result.isErr()) {
       expect(result.error.code).toBe("BAD_REQUEST");
     }
-    const count = await client.execute("SELECT COUNT(*) AS n FROM webhook");
+    const count = await client.query(
+      `SELECT COUNT(*) AS n FROM "${process.env.DATABASE_SCHEMA}".webhook`
+    );
     expect(Number(count.rows[0]?.n ?? 0)).toBe(0);
   });
 

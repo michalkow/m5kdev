@@ -1,40 +1,45 @@
-import { createClient } from "@libsql/client";
 import { eq } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
-import { drizzle } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { createTestPool, prepareTestSchema } from "../../../test/postgresql";
 import { workflows } from "../workflow.db";
 import { WorkflowRepository } from "../workflow.repository";
 
 const workflowSchema = { workflows };
 type Schema = typeof workflowSchema;
-type Orm = LibSQLDatabase<Schema>;
+type Orm = NodePgDatabase<Schema>;
 
 describe("WorkflowRepository.started", () => {
-  const client = createClient({ url: ":memory:" });
+  const client = createTestPool();
   const orm = drizzle(client, { schema: workflowSchema }) as Orm;
   const repo = new WorkflowRepository({ orm, schema: workflowSchema }, {});
 
   beforeAll(async () => {
-    await client.execute(`
-      CREATE TABLE workflows (
+    const namespace = await prepareTestSchema(client);
+    await client.query(`
+      CREATE TABLE "${namespace}".workflows (
         id TEXT PRIMARY KEY NOT NULL,
         user_id TEXT,
         job_id TEXT NOT NULL UNIQUE,
         job_name TEXT NOT NULL,
         queue_name TEXT NOT NULL,
         timeout INTEGER,
-        tags TEXT DEFAULT '[]',
-        input TEXT,
-        output TEXT,
+        tags TEXT[] DEFAULT '{}',
+        input JSONB,
+        output JSONB,
         status TEXT NOT NULL,
         error TEXT,
         retries INTEGER NOT NULL DEFAULT 0,
-        finished_at INTEGER,
-        processed_at INTEGER,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        finished_at TIMESTAMPTZ,
+        processed_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
       );
     `);
+  });
+
+  afterAll(async () => {
+    await client.end();
   });
 
   it("inserts a row when none exists (cron / no prior added)", async () => {

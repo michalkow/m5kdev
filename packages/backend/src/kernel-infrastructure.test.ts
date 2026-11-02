@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createClient } from "@libsql/client";
 import { ClayModule } from "../../module-clay/src/clay.module";
 import { DocxModule } from "../../module-docx/src/docx.module";
 import { PdfModule } from "../../module-pdf/src/pdf.module";
@@ -15,6 +14,7 @@ import * as fileTables from "./modules/file/file.db";
 import { FileModule } from "./modules/file/file.module";
 import * as webhookTables from "./modules/webhook/webhook.db";
 import { WebhookModule } from "./modules/webhook/webhook.module";
+import { createTestPool } from "./test/postgresql";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {
@@ -105,34 +105,34 @@ describe("Kernel infrastructure package surface", () => {
   });
 
   it("boots createBackendApp with a Core Module that is not base or utils", () => {
-    const client = createClient({ url: ":memory:" });
+    const client = createTestPool();
     const module = new CoreFixtureModule();
     expect(module.id).not.toBe("base");
     expect(module.id).not.toBe("utils");
     const built = createBackendApp({ db: { client } }, [module] as const);
     expect(Object.keys(built.modules)).toEqual(["core-fixture"]);
-    void client.close?.();
+    void client.end();
   });
 
   it("boots createBackendApp when PdfModule from the Optional package is registered", () => {
-    const client = createClient({ url: ":memory:" });
+    const client = createTestPool();
     const built = createBackendApp({ db: { client } }, [new PdfModule()] as const);
     expect(Object.keys(built.modules)).toEqual(["pdf"]);
-    void client.close?.();
+    void client.end();
   });
 
   it("boots createBackendApp when DocxModule from the Optional package is registered", () => {
-    const client = createClient({ url: ":memory:" });
+    const client = createTestPool();
     const built = createBackendApp({ db: { client } }, [new DocxModule()] as const);
     expect(Object.keys(built.modules)).toEqual(["docx"]);
-    void client.close?.();
+    void client.end();
   });
 
   it("boots createBackendApp when VideoModule from the Optional package is registered", () => {
-    const client = createClient({ url: ":memory:" });
+    const client = createTestPool();
     const built = createBackendApp({ db: { client } }, [new VideoModule()] as const);
     expect(Object.keys(built.modules)).toEqual(["video"]);
-    void client.close?.();
+    void client.end();
   });
 
   it("keeps Connection module id as connect", () => {
@@ -140,7 +140,7 @@ describe("Kernel infrastructure package surface", () => {
   });
 
   it("boots createBackendApp when SocialModule from the Optional package is registered with Connection and File", () => {
-    const client = createClient({ url: ":memory:" });
+    const client = createTestPool();
     const built = createBackendApp(
       { db: { client }, schema: { ...connectTables, ...fileTables } },
       [
@@ -151,11 +151,11 @@ describe("Kernel infrastructure package surface", () => {
       ] as const
     );
     expect(Object.keys(built.modules).sort()).toEqual(["auth", "connect", "file", "social"]);
-    void client.close?.();
+    void client.end();
   });
 
   it("throws when SocialModule is missing Connection or File", () => {
-    const client = createClient({ url: ":memory:" });
+    const client = createTestPool();
     const schema = { ...connectTables, ...fileTables };
     expect(() => createBackendApp({ db: { client } }, [new SocialModule([])] as const)).toThrow(
       'Backend module "social" is missing required dependency "connect"'
@@ -173,17 +173,17 @@ describe("Kernel infrastructure package surface", () => {
         new AuthFixtureModule(),
       ] as const)
     ).toThrow('Backend module "social" is missing required dependency "connect"');
-    void client.close?.();
+    void client.end();
   });
 
   it("boots FileModule with Auth and no local-upload router", () => {
-    const client = createClient({ url: ":memory:" });
-    const built = createBackendApp(
-      { db: { client }, schema: { ...fileTables } },
-      [new FileModule(), new AuthFixtureModule()] as const
-    );
+    const client = createTestPool();
+    const built = createBackendApp({ db: { client }, schema: { ...fileTables } }, [
+      new FileModule(),
+      new AuthFixtureModule(),
+    ] as const);
     expect(Object.keys(built.modules).sort()).toEqual(["auth", "file"]);
-    void client.close?.();
+    void client.end();
   });
 
   it("keeps Inbound callback module id as webhook", () => {
@@ -191,22 +191,19 @@ describe("Kernel infrastructure package surface", () => {
   });
 
   it("boots createBackendApp when ClayModule from the Optional package is registered with Inbound callback", () => {
-    const client = createClient({ url: ":memory:" });
-    const built = createBackendApp(
-      { db: { client }, schema: { ...webhookTables } },
-      [
-        new ClayModule({
-          tables: { enrichment: { webhookUrl: "https://example.test/clay" } },
-        }),
-        new WebhookModule(),
-      ] as const
-    );
+    const client = createTestPool();
+    const built = createBackendApp({ db: { client }, schema: { ...webhookTables } }, [
+      new ClayModule({
+        tables: { enrichment: { webhookUrl: "https://example.test/clay" } },
+      }),
+      new WebhookModule(),
+    ] as const);
     expect(Object.keys(built.modules).sort()).toEqual(["clay", "webhook"]);
-    void client.close?.();
+    void client.end();
   });
 
   it("throws when ClayModule is missing Inbound callback", () => {
-    const client = createClient({ url: ":memory:" });
+    const client = createTestPool();
     expect(() =>
       createBackendApp({ db: { client } }, [
         new ClayModule({
@@ -214,6 +211,6 @@ describe("Kernel infrastructure package surface", () => {
         }),
       ] as const)
     ).toThrow('Backend module "clay" is missing required dependency "webhook"');
-    void client.close?.();
+    void client.end();
   });
 });

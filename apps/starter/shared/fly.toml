@@ -6,10 +6,6 @@ primary_region = "iad"
 [env]
   PORT = "8080"
 
-[[mounts]]
-  source = "libsql_data"
-  destination = "/app/data"
-
 [http_service]
   internal_port = 8080
   force_https = true

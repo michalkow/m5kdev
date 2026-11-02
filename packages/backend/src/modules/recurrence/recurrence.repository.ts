@@ -1,5 +1,5 @@
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseTableRepository } from "../base/base.repository";
@@ -7,7 +7,7 @@ import { recurrence, recurrenceRules } from "./recurrence.db";
 
 const schema = { recurrence, recurrenceRules };
 type Schema = typeof schema;
-type Orm = LibSQLDatabase<Schema>;
+type Orm = NodePgDatabase<Schema>;
 type RecurrenceInsert = InferInsertModel<Schema["recurrence"]>;
 type RecurrenceRulesInsert = InferInsertModel<Schema["recurrenceRules"]>;
 

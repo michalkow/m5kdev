@@ -1,8 +1,8 @@
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { createClient } from "@libsql/client";
 import { createBackendApp } from "./app";
 import type { BetterAuth } from "./modules/auth/auth.lib";
+import { createTestPool } from "./test/postgresql";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {
@@ -165,10 +165,10 @@ async function openSse(
 }
 
 describe("Kernel Server events HTTP", () => {
-  const client = createClient({ url: ":memory:" });
+  const client = createTestPool();
 
   afterAll(async () => {
-    await client.close?.();
+    await client.end();
   });
 
   it("rejects unauthenticated subscribe with 401 when Auth is registered", async () => {

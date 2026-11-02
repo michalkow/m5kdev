@@ -1,8 +1,9 @@
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { type Client, createClient } from "@libsql/client";
 import type { Express } from "express";
+import type { Pool } from "pg";
 import { createBackendApp } from "../../../app";
+import { createTestPool, prepareTestSchema } from "../../../test/postgresql";
 import * as webhookTables from "../webhook.db";
 import { WebhookModule } from "../webhook.module";
 import type { WebhookService } from "../webhook.service";
@@ -22,16 +23,17 @@ jest.mock("better-auth/node", () => ({
 const PROCESS_SECRET = "process-secret";
 const API_URL = "https://api.example.test";
 
-async function createTables(client: Client): Promise<void> {
-  await client.execute(`
-    CREATE TABLE webhook (
+async function createTables(client: Pool): Promise<void> {
+  const namespace = await prepareTestSchema(client);
+  await client.query(`
+    CREATE TABLE "${namespace}".webhook (
       id TEXT PRIMARY KEY NOT NULL,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ,
       timeout_sec INTEGER NOT NULL DEFAULT 60,
       status TEXT NOT NULL DEFAULT 'WAITING',
       error TEXT,
-      payload TEXT,
+      payload JSONB,
       name TEXT,
       secret TEXT
     );
@@ -73,15 +75,15 @@ function parseCallbackUrl(url: string): { id: string; token: string } {
 }
 
 describe("Inbound callback HTTP", () => {
-  let client: Client;
+  let client: Pool;
 
   beforeEach(async () => {
-    client = createClient({ url: ":memory:" });
+    client = createTestPool();
     await createTables(client);
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
   });
 
   it("completes an untyped wait from the query token and 409s a replay", async () => {

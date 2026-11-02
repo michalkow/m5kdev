@@ -8,7 +8,7 @@ Guidance for Claude Code when working in this repository.
 
 This is a pnpm + Turborepo monorepo built on the **m5kdev framework**:
 
-- `@m5kdev/backend` — backend kernel: Express, Better Auth, Drizzle (LibSQL), and tRPC. Apps compose it via `createBackendApp(config, [modules])`.
+- `@m5kdev/backend` — backend kernel: Express, Better Auth, Drizzle (PostgreSQL), and tRPC. Apps compose it via `createBackendApp(config, [modules])`.
 - `@m5kdev/commons` — shared runtime utilities and contracts.
 - `@m5kdev/config` — configuration loading and validation.
 // m5k:server:start
@@ -68,7 +68,7 @@ First-time setup: `pnpm install`, then `drizzle:migrate` and `drizzle:seed`, the
 End-to-end tests: `pnpm --filter ./apps/e2e test:e2e` (Playwright).
 // m5k:test-harness:end
 
-The local database is a LibSQL file; local auth emails are written to `apps/server/.emails`. Demo login: `admin@{{APP_SLUG}}.local` / `password1234`.
+Runtime uses PostgreSQL through PgBouncer (`DATABASE_URL`); migrations and initialization require `DATABASE_DIRECT_URL`. Keep app, Mastra, and vector schemas separately owned. Start the local PostgreSQL/PgBouncer Compose stack and provision pgvector before applying reviewed migrations. Agents must not generate or hand-author migration SQL or metadata. Local auth emails are written to `apps/server/.emails`. Demo login: `admin@{{APP_SLUG}}.local` / `password1234`.
 // m5k:server:end
 
 // m5k:server:start

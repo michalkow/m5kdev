@@ -32,8 +32,11 @@ pnpm --filter ./apps/server drizzle:migrate
 pnpm --filter ./apps/server drizzle:seed
 ```
 
-The starter uses a local LibSQL file by default and writes local auth emails to `apps/server/.emails`.
-Database tables are registered by hand in `apps/server/src/schema.ts`; after changing any `*.db.ts`, run `drizzle:generate` and `drizzle:migrate`.
+The starter uses PostgreSQL through PgBouncer and writes local auth emails to `apps/server/.emails`. Start `docker compose -f apps/shared/compose.yaml up -d --build`, configure runtime `DATABASE_URL` and direct `DATABASE_DIRECT_URL`, and provision pgvector in `public` before migration/initialization.
+Database tables are registered in `apps/server/src/schema.ts`; `src/drizzle.schema.ts` adds schema metadata for migration generation. After changing any `*.db.ts`, the maintainer runs `drizzle:generate`, reviews the output, then runs `drizzle:migrate`.
+// m5k:ai:start
+Run `pnpm --filter ./apps/server mastra:init` after migrations and before seed or runtime startup. App migrations own `app`; Mastra owns `mastra` and the embedding adapter owns `vectors`.
+// m5k:ai:end
 
 ## Demo Credentials
 
@@ -83,7 +86,6 @@ cp apps/shared/.env.production.example apps/shared/.env.production
 # fill in URLs, BETTER_AUTH_SECRET, REDIS_URL, …
 
 fly apps create {{APP_SLUG}}-app
-fly volumes create libsql_data --app {{APP_SLUG}}-app --region iad --size 1
 pnpm app:secrets
 pnpm app:deploy
 // m5k:server:end
@@ -97,7 +99,11 @@ pnpm landing:deploy
 `m5kdev-fly-secrets`). A missing env file errors with a copy-the-example
 message.
 // m5k:server:start
-`app:deploy` does the same for the product image. Product data lives on the
-`libsql_data` volume at `/app/data` (`DATABASE_URL=file:/app/data/local.db`).
-Redis is a runtime secret, not an image layer.
+`app:deploy` does the same for the product image. Provision provider-neutral
+PostgreSQL with pgvector in `public` and a transaction-mode PgBouncer endpoint.
+Set `DATABASE_URL` to the runtime pool and `DATABASE_DIRECT_URL` to the direct
+database endpoint. App migrations own `app`; Mastra owns `mastra` and vectors
+use `vectors`. Run reviewed app migrations and, when AI is selected, `mastra:init`
+through direct connections before starting the server. Redis and database URLs
+are server secrets, not image layers. No local database volume is required.
 // m5k:server:end

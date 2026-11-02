@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { err, ok } from "neverthrow";
 import type { ServerResultAsync } from "../../base/base.dto";
 import { BaseTableRepository } from "../../base/base.repository";
@@ -7,7 +7,7 @@ import { mcpAllowlistEntries } from "./mcp.db";
 
 const schema = { mcpAllowlistEntries };
 type Schema = typeof schema;
-type Orm = LibSQLDatabase<Schema>;
+type Orm = NodePgDatabase<Schema>;
 
 export class McpRepository extends BaseTableRepository<
   Orm,

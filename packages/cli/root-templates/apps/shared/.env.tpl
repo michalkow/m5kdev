@@ -8,9 +8,12 @@ VITE_SERVER_URL=http://localhost:8080
 VITE_ENABLE_WAITLIST=false
 
 # Database
-DATABASE_URL=file:./local.db
-TURSO_DATABASE_URL=
-TURSO_AUTH_TOKEN=
+DATABASE_URL=postgresql://m5kdev:m5kdev@127.0.0.1:6432/m5kdev
+DATABASE_DIRECT_URL=postgresql://m5kdev:m5kdev@127.0.0.1:5432/m5kdev
+DATABASE_SCHEMA=app
+DATABASE_DISPOSABLE=false
+MASTRA_DATABASE_SCHEMA=mastra
+VECTOR_DATABASE_SCHEMA=vectors
 
 # m5k:ai:start
 # Optional OpenRouter (AI Conversation). Required to get an assistant reply.

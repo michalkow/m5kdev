@@ -75,6 +75,9 @@ Do not import services into repositories.
 
 ## Transactions and DB Discipline
 
+- PostgreSQL is the only supported SQL dialect. Runtime uses `DATABASE_URL` through PgBouncer; migrations and administrative initialization require `DATABASE_DIRECT_URL` without runtime fallback.
+- App migrations own framework/app tables in the app schema. Mastra owns its storage structures; keep Mastra and vectors in separately owned schemas and retain supported `mastra_` names.
+- Use native JSONB/scalar arrays where the domain warrants them and native Drizzle operators; do not restore serialized-text JSON/array search helpers. See `docs/agents/postgresql-migration.md` for the consumer migration prompt and maintainer checkpoints.
 - Repository methods may accept optional `tx`.
 - Inside transaction callbacks, use `tx` consistently.
 - Do not mix `this.orm` queries with `tx` in the same transaction flow.
@@ -164,7 +167,7 @@ Do not introduce alternate core libraries for these concerns without explicit re
 
 ### Issue tracker
 
-Issues live in Linear, one project per repo, via the Cursor Linear plugin. See `docs/agents/issue-tracker.md`.
+Issues and specs live in this repository's GitHub Issues. Use the connected GitHub tools or authenticated `gh` CLI. See `docs/agents/issue-tracker.md` for publication, labels, and ticket dependencies.
 
 ### Domain docs
 

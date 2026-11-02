@@ -22,6 +22,11 @@
     "typescript": "catalog:m5kdev"
   },
   "packageManager": "pnpm@10.13.1",
+  "pnpm": {
+    "overrides": {
+      "drizzle-orm>@libsql/client": "-"
+    }
+  },
   "engines": {
     "node": ">=24"
   }

@@ -1,9 +1,9 @@
-import type { Client } from "@libsql/client";
+import type { Pool } from "pg";
 import type { McpService } from "../mcp.service";
 import {
-  createMcpMemoryClient,
   createMcpService,
   createMcpTables,
+  createMcpTestPool,
   MCP_CLIENT_CLAUDE,
   MCP_CLIENT_CURSOR,
   MCP_ORG_A,
@@ -14,18 +14,18 @@ import {
 } from "./mcp.fixtures";
 
 describe("McpService allowlist and consent", () => {
-  let client: Client;
+  let client: Pool;
   let mcp: McpService;
 
   beforeEach(async () => {
-    client = createMcpMemoryClient();
+    client = createMcpTestPool();
     await createMcpTables(client);
     await seedMcpFixture(client);
     mcp = createMcpService(client).mcp;
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
   });
 
   it("lists only allowlisted Organizations with live Membership for that OAuth client", async () => {

@@ -19,7 +19,7 @@ paths. The `fly` CLI must be on PATH.
 
 | App | Image | Fly name | Volume |
 | --- | --- | --- | --- |
-| Product (server + baked webapp) | `apps/shared/Dockerfile` | `<app-slug>-app` in new apps | `libsql_data` → `/app/data` |
+| Product (server + baked webapp) | `apps/shared/Dockerfile` | `<app-slug>-app` in new apps | none; externally hosted PostgreSQL |
 | Landing (public site) | `apps/landing/Dockerfile` | `<app-slug>-landing` | none |
 
 There is **one** root `.dockerignore`. Do not add a dockerignore next to a
@@ -52,15 +52,17 @@ cp apps/shared/.env.production.example apps/shared/.env.production
 cp apps/landing/.env.production.example apps/landing/.env.production
 ```
 
-Product example includes `DATABASE_URL=file:/app/data/local.db` (the Fly volume)
-and documents `REDIS_URL`.
+Product examples require a PostgreSQL `DATABASE_URL` routed through PgBouncer
+for runtime and a separate `DATABASE_DIRECT_URL` for migration/provisioning jobs.
+They also document `REDIS_URL`. Use one database per app/environment with
+separately owned `app`, `mastra`, and `vectors` schemas. No local database volume
+is required. Keep the direct connection secret out of frontend values.
 
 ## First deploy
 
 ```sh
 fly apps create <app-slug>-app
 fly apps create <app-slug>-landing
-fly volumes create libsql_data --app <app-slug>-app --region iad --size 1
 pnpm app:secrets
 pnpm landing:secrets
 pnpm app:deploy
@@ -69,6 +71,13 @@ pnpm landing:deploy
 
 Default Fly region in the starter is `iad`, 1gb shared CPU, `PORT=8080`,
 `force_https`, `min_machines_running = 1`.
+
+Before starting the product image, provision PostgreSQL and pgvector in `public`,
+apply the app's maintainer-generated PostgreSQL migration history through the
+direct connection, and run `mastra:init` when AI is enabled. Initialization is
+an explicit deployment step, not a runtime auto-migration. Remove legacy SQLite
+mounts only after backing up and validating the data transfer; do not delete a
+production volume as part of an unverified cutover.
 
 ## `create-m5kdev update` and fly.toml
 

@@ -16,7 +16,7 @@ import {
 } from "@m5kdev/commons/modules/base/server-event.schema";
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { InferSelectModel } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { TFunction } from "i18next";
 import { err, ok } from "neverthrow";
 import { z } from "zod";
@@ -51,7 +51,7 @@ import { resolveOrganizationCurrency } from "./auth.utils";
 
 const schema = { ...auth };
 type Schema = typeof schema;
-type Orm = LibSQLDatabase<Schema>;
+type Orm = NodePgDatabase<Schema>;
 
 export type User = InferSelectModel<typeof auth.users>;
 export type Organization = InferSelectModel<typeof auth.organizations>;
@@ -266,9 +266,7 @@ export class AuthService extends BasePermissionService<
     return ok({ id: organizationId, closedAt: updated.value.closedAt ?? closedAt });
   }
 
-  private async closeOwnedOrganizations(
-    owned: readonly { id: string }[]
-  ): ServerResultAsync<void> {
+  private async closeOwnedOrganizations(owned: readonly { id: string }[]): ServerResultAsync<void> {
     const remaining = new Map(owned.map((organization) => [organization.id, organization]));
     while (remaining.size > 0) {
       let progressed = false;
@@ -2247,14 +2245,14 @@ export class AuthService extends BasePermissionService<
     const cutoff = new Date(Date.now() - this.closeAfterDays * 24 * 60 * 60 * 1000);
     const organizations = await this.repository.organization.listClosedOrganizationsBefore(cutoff);
     if (organizations.isErr()) return err(organizations.error);
-    const remaining = new Map(organizations.value.map((organization) => [organization.id, organization]));
+    const remaining = new Map(
+      organizations.value.map((organization) => [organization.id, organization])
+    );
     let purgedOrganizations = 0;
     while (remaining.size > 0) {
       let progressed = false;
       for (const organization of [...remaining.values()]) {
-        const children = await this.repository.organization.listChildOrganizations(
-          organization.id
-        );
+        const children = await this.repository.organization.listChildOrganizations(organization.id);
         if (children.isErr()) return err(children.error);
         if (children.value.some((child) => !remaining.has(child.id))) {
           remaining.delete(organization.id);

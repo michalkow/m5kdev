@@ -1,7 +1,8 @@
 import type { AddressInfo } from "node:net";
 import net from "node:net";
-import { type Client, createClient } from "@libsql/client";
+import type { Pool } from "pg";
 import { createBackendApp } from "./app";
+import { createTestPool } from "./test/postgresql";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {
@@ -33,16 +34,16 @@ async function getFreePort(): Promise<number> {
 }
 
 describe("createBackendApp listen", () => {
-  let client: Client;
+  let client: Pool;
   let previousPort: string | undefined;
 
   beforeEach(() => {
-    client = createClient({ url: ":memory:" });
+    client = createTestPool();
     previousPort = process.env.PORT;
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
     if (previousPort === undefined) {
       delete process.env.PORT;
     } else {
@@ -191,7 +192,7 @@ describe("createBackendApp listen", () => {
 
   it("does not sync when an injected client has no syncUrl", async () => {
     const sync = jest.fn(async () => undefined);
-    const injected: Client = Object.assign(client, { sync });
+    const injected: Pool = Object.assign(client, { sync });
     const built = createBackendApp({ db: { client: injected } });
     await built.start({ listen: false });
     expect(sync).not.toHaveBeenCalled();

@@ -47,6 +47,7 @@
   },
   "pnpm": {
     "overrides": {
+      "drizzle-orm>@libsql/client": "-",
       "resolve": "1.22.10"
     }
   },

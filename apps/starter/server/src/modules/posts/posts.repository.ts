@@ -1,7 +1,7 @@
 import { BaseTableRepository } from "@m5kdev/backend/modules/base/base.repository";
 
 import { and, eq, isNull, ne } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { err, ok } from "neverthrow";
 import { z } from "zod";
 import { posts } from "./posts.db";
@@ -9,7 +9,7 @@ import { postSchemas } from "./posts.dto";
 
 const schema = { posts };
 type Schema = typeof schema;
-type Orm = LibSQLDatabase<Schema>;
+type Orm = NodePgDatabase<Schema>;
 
 export class PostsRepository extends BaseTableRepository<
   Orm,

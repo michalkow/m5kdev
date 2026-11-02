@@ -8,7 +8,7 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { InferSelectModel } from "drizzle-orm";
 import { and, eq, isNull, lt } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { err, ok } from "neverthrow";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import { BaseExternaRepository, BaseTableRepository } from "../base/base.repository";
@@ -17,7 +17,7 @@ import type { FileObjectBody, FileObjectStore } from "./file.object-store";
 
 const schema = { files };
 type Schema = typeof schema;
-type Orm = LibSQLDatabase<Schema>;
+type Orm = NodePgDatabase<Schema>;
 export type FileRow = InferSelectModel<typeof files>;
 
 export class FileRepository extends BaseTableRepository<
@@ -180,11 +180,7 @@ export class FileRepository extends BaseTableRepository<
       patch.metadata = data.metadata;
     }
     const result = await this.throwableQuery(() =>
-      db
-        .update(this.schema.files)
-        .set(patch)
-        .where(eq(this.schema.files.id, id))
-        .returning()
+      db.update(this.schema.files).set(patch).where(eq(this.schema.files.id, id)).returning()
     );
     if (result.isErr()) return err(result.error);
     const [row] = result.value as FileRow[];

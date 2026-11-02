@@ -12,20 +12,16 @@ import {
   type InferSelectModel,
   inArray,
   isNull,
-  like,
   or,
   type SelectedFields,
   type SQL,
 } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
-import type { SQLiteColumn, SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import type { PgColumn, PgTableWithColumns } from "drizzle-orm/pg-core";
 import { err, ok } from "neverthrow";
 import { ServerError } from "../utils/errors";
 import { applyPagination } from "./applyPagination";
 import { applySorting } from "./applySorting";
-import { getConditionsFromFilters } from "./getConditionsFromFilters";
-import { getConditionsFromMatch } from "./getConditionsFromMatch";
-import { pushGlobalSearch } from "./getGlobalSearchCondition";
 import { Base } from "./base.abstract";
 import {
   pickColumns,
@@ -34,13 +30,16 @@ import {
   type ServerResultAsync,
 } from "./base.dto";
 import { createRepositoryQueryBuilder, type RepositoryQueryBuilder } from "./base.query";
+import { getConditionsFromFilters } from "./getConditionsFromFilters";
+import { getConditionsFromMatch } from "./getConditionsFromMatch";
+import { pushGlobalSearch } from "./getGlobalSearchCondition";
 
 export type QueryFindInput = Omit<QueryInput, "page" | "limit">;
 export type MatchQueryFindInput = Omit<MatchQueryInput, "page" | "limit">;
 
 /** Payload for update/updateMany: id key required (string), other table fields optional. */
 export type TableUpdatePayload<
-  TTable extends SQLiteTableWithColumns<any>,
+  TTable extends PgTableWithColumns<any>,
   TIdKey extends Extract<keyof InferSelectModel<TTable>, string> = "id",
 > = Record<TIdKey, string> & Partial<Omit<InferSelectModel<TTable>, TIdKey>>;
 
@@ -65,7 +64,7 @@ export class ConditionBuilder {
 }
 
 export class TableConditionBuilder<
-  TTable extends SQLiteTableWithColumns<any>,
+  TTable extends PgTableWithColumns<any>,
 > extends ConditionBuilder {
   private table: TTable;
 
@@ -82,22 +81,14 @@ export class TableConditionBuilder<
     return getConditionsFromMatch(this, match, this.table);
   }
 
-  applyGlobalSearch(q: string | undefined, columns: readonly SQLiteColumn[]) {
+  applyGlobalSearch(q: string | undefined, columns: readonly PgColumn[]) {
     pushGlobalSearch(this, q, columns);
   }
 }
 
-export const arrayContains = (table: SQLiteColumn, values: string[]) => {
-  const arrayContains: SQL[] = [];
-  for (const value of values) {
-    arrayContains.push(like(table, `%"${value}%"`));
-  }
-  return or(...arrayContains);
-};
-
 export class BaseRepository<
-  O extends LibSQLDatabase<any>,
-  S extends Record<string, SQLiteTableWithColumns<any>>,
+  O extends NodePgDatabase<any>,
+  S extends Record<string, PgTableWithColumns<any>>,
   R extends Record<string, BaseRepository<any, any, any> | BaseExternaRepository>,
 > extends Base {
   protected orm: O;
@@ -118,10 +109,10 @@ export class BaseRepository<
   }
   getConditionBuilder(): ConditionBuilder;
   getConditionBuilder(table: undefined): ConditionBuilder;
-  getConditionBuilder<TTable extends SQLiteTableWithColumns<any>>(
+  getConditionBuilder<TTable extends PgTableWithColumns<any>>(
     table: TTable
   ): TableConditionBuilder<TTable>;
-  getConditionBuilder<TTable extends SQLiteTableWithColumns<any>>(
+  getConditionBuilder<TTable extends PgTableWithColumns<any>>(
     table?: TTable
   ): ConditionBuilder | TableConditionBuilder<TTable> {
     if (table === undefined) {
@@ -150,7 +141,7 @@ export class BaseRepository<
     return applyPagination(query, limit, page);
   }
 
-  withSorting<TTable extends SQLiteTableWithColumns<any>, TQuery>(
+  withSorting<TTable extends PgTableWithColumns<any>, TQuery>(
     query: TQuery,
     { sort, order }: Pick<QueryInput, "sort" | "order">,
     table?: TTable
@@ -159,7 +150,7 @@ export class BaseRepository<
     return applySorting(query, table, sort, order);
   }
 
-  withSortingAndPagination<TTable extends SQLiteTableWithColumns<any>, TQuery>(
+  withSortingAndPagination<TTable extends PgTableWithColumns<any>, TQuery>(
     query: TQuery,
     { sort, order, page, limit }: Pick<QueryInput, "sort" | "order" | "page" | "limit">,
     table?: TTable
@@ -186,7 +177,6 @@ export class BaseRepository<
 
   helpers = {
     pickColumns,
-    arrayContains,
     ConditionBuilder,
   };
 }
@@ -197,38 +187,38 @@ export class BaseRepository<
  * Example:
  * const userRepo = new UserRepository(db, schema);
  * class UserRepository extends BaseTableRepository<typeof schema.user> {
- *   constructor(db: LibSQLDatabase<typeof schema>, schema: typeof schema) {
+ *   constructor(db: NodePgDatabase<typeof schema>, schema: typeof schema) {
  *     super(db, schema, schema.user);
  *   }
  * }
  */
 export class BaseTableRepository<
-  O extends LibSQLDatabase<any>,
-  S extends Record<string, SQLiteTableWithColumns<any>>,
+  O extends NodePgDatabase<any>,
+  S extends Record<string, PgTableWithColumns<any>>,
   R extends Record<string, BaseRepository<any, any, any> | BaseExternaRepository>,
-  TTable extends SQLiteTableWithColumns<any>,
+  TTable extends PgTableWithColumns<any>,
   TIdKey extends Extract<keyof InferSelectModel<TTable>, string> = "id",
 > extends BaseRepository<O, S, R> {
   protected readonly table: TTable;
   protected readonly idKey: TIdKey;
-  protected readonly idColumn: SQLiteColumn;
+  protected readonly idColumn: PgColumn;
 
   constructor(options: { orm: O; schema: S; table: TTable; idKey?: TIdKey }, repository?: R) {
     super({ orm: options.orm, schema: options.schema }, repository);
     this.table = options.table;
     this.idKey = options.idKey ?? ("id" as TIdKey);
-    this.idColumn = (this.table as any)[this.idKey] as SQLiteColumn;
+    this.idColumn = (this.table as any)[this.idKey] as PgColumn;
   }
 
   override withSorting<TQuery>(
     query: TQuery,
     { sort, order }: Pick<QueryInput, "sort" | "order">,
-    table?: SQLiteTableWithColumns<any>
+    table?: PgTableWithColumns<any>
   ): TQuery {
     return super.withSorting(query, { sort, order }, table || this.table);
   }
 
-  override withSortingAndPagination<MTable extends SQLiteTableWithColumns<any>, TQuery>(
+  override withSortingAndPagination<MTable extends PgTableWithColumns<any>, TQuery>(
     query: TQuery,
     { sort, order, page, limit }: Pick<QueryInput, "sort" | "order" | "page" | "limit">,
     table?: MTable
@@ -250,7 +240,7 @@ export class BaseTableRepository<
     query?: QueryInput,
     options?: {
       conditions?: TableConditionBuilder<TTable>;
-      select?: SelectedFields<SQLiteColumn, TTable>;
+      select?: SelectedFields<PgColumn, TTable>;
       globalSearchColumns?: string[];
       showDeleted?: boolean;
     },
@@ -260,7 +250,7 @@ export class BaseTableRepository<
     query?: QueryInput,
     options?: {
       conditions?: TableConditionBuilder<TTable>;
-      select?: SelectedFields<SQLiteColumn, TTable>;
+      select?: SelectedFields<PgColumn, TTable>;
       columns?: readonly K[];
       globalSearchColumns?: string[];
       showDeleted?: boolean;
@@ -277,9 +267,9 @@ export class BaseTableRepository<
     conditions.applyFilters(query);
 
     if (options?.globalSearchColumns?.length) {
-      const columns: SQLiteColumn[] = [];
+      const columns: PgColumn[] = [];
       for (const columnId of options.globalSearchColumns) {
-        const column = this.table[columnId as keyof TTable] as SQLiteColumn | undefined;
+        const column = this.table[columnId as keyof TTable] as PgColumn | undefined;
         if (!column) {
           return this.error(
             "BAD_REQUEST",
@@ -345,7 +335,7 @@ export class BaseTableRepository<
     query?: QueryFindInput,
     options?: {
       conditions?: TableConditionBuilder<TTable>;
-      select?: SelectedFields<SQLiteColumn, TTable>;
+      select?: SelectedFields<PgColumn, TTable>;
       globalSearchColumns?: string[];
       showDeleted?: boolean;
     },
@@ -355,7 +345,7 @@ export class BaseTableRepository<
     query?: QueryFindInput,
     options?: {
       conditions?: TableConditionBuilder<TTable>;
-      select?: SelectedFields<SQLiteColumn, TTable>;
+      select?: SelectedFields<PgColumn, TTable>;
       columns?: readonly K[];
       globalSearchColumns?: string[];
       showDeleted?: boolean;
@@ -369,9 +359,9 @@ export class BaseTableRepository<
     conditions.applyFilters(query);
 
     if (options?.globalSearchColumns?.length) {
-      const columns: SQLiteColumn[] = [];
+      const columns: PgColumn[] = [];
       for (const columnId of options.globalSearchColumns) {
-        const column = this.table[columnId as keyof TTable] as SQLiteColumn | undefined;
+        const column = this.table[columnId as keyof TTable] as PgColumn | undefined;
         if (!column) {
           return this.error(
             "BAD_REQUEST",
@@ -427,7 +417,7 @@ export class BaseTableRepository<
     query?: MatchQueryInput,
     options?: {
       conditions?: TableConditionBuilder<TTable>;
-      select?: SelectedFields<SQLiteColumn, TTable>;
+      select?: SelectedFields<PgColumn, TTable>;
       globalSearchColumns?: string[];
       showDeleted?: boolean;
     },
@@ -437,7 +427,7 @@ export class BaseTableRepository<
     query?: MatchQueryInput,
     options?: {
       conditions?: TableConditionBuilder<TTable>;
-      select?: SelectedFields<SQLiteColumn, TTable>;
+      select?: SelectedFields<PgColumn, TTable>;
       columns?: readonly K[];
       globalSearchColumns?: string[];
       showDeleted?: boolean;
@@ -455,9 +445,9 @@ export class BaseTableRepository<
     if (applied.isErr()) return this.error("BAD_REQUEST", applied.error);
 
     if (options?.globalSearchColumns?.length) {
-      const columns: SQLiteColumn[] = [];
+      const columns: PgColumn[] = [];
       for (const columnId of options.globalSearchColumns) {
-        const column = this.table[columnId as keyof TTable] as SQLiteColumn | undefined;
+        const column = this.table[columnId as keyof TTable] as PgColumn | undefined;
         if (!column) {
           return this.error(
             "BAD_REQUEST",
@@ -523,7 +513,7 @@ export class BaseTableRepository<
     query?: MatchQueryFindInput,
     options?: {
       conditions?: TableConditionBuilder<TTable>;
-      select?: SelectedFields<SQLiteColumn, TTable>;
+      select?: SelectedFields<PgColumn, TTable>;
       globalSearchColumns?: string[];
       showDeleted?: boolean;
     },
@@ -533,7 +523,7 @@ export class BaseTableRepository<
     query?: MatchQueryFindInput,
     options?: {
       conditions?: TableConditionBuilder<TTable>;
-      select?: SelectedFields<SQLiteColumn, TTable>;
+      select?: SelectedFields<PgColumn, TTable>;
       columns?: readonly K[];
       globalSearchColumns?: string[];
       showDeleted?: boolean;
@@ -548,9 +538,9 @@ export class BaseTableRepository<
     if (applied.isErr()) return this.error("BAD_REQUEST", applied.error);
 
     if (options?.globalSearchColumns?.length) {
-      const columns: SQLiteColumn[] = [];
+      const columns: PgColumn[] = [];
       for (const columnId of options.globalSearchColumns) {
-        const column = this.table[columnId as keyof TTable] as SQLiteColumn | undefined;
+        const column = this.table[columnId as keyof TTable] as PgColumn | undefined;
         if (!column) {
           return this.error(
             "BAD_REQUEST",
@@ -611,7 +601,7 @@ export class BaseTableRepository<
         columns !== undefined
           ? db.select(pickTableColumns(this.table, columns)).from(this.table as any)
           : db.select().from(this.table as any);
-      return query.where(eq(this.idColumn as SQLiteColumn, id));
+      return query.where(eq(this.idColumn as PgColumn, id));
     });
     if (rowsResult.isErr()) return err(rowsResult.error);
 
@@ -637,7 +627,7 @@ export class BaseTableRepository<
       db
         .select()
         .from(this.table as any)
-        .where(inArray(this.idColumn as SQLiteColumn, ids as string[]))
+        .where(inArray(this.idColumn as PgColumn, ids as string[]))
     );
     if (rowsResult.isErr()) return err(rowsResult.error);
 
@@ -704,7 +694,7 @@ export class BaseTableRepository<
       db
         .update(this.table as any)
         .set(update as unknown as Partial<InferInsertModel<TTable>>)
-        .where(eq(this.idColumn as SQLiteColumn, id))
+        .where(eq(this.idColumn as PgColumn, id))
         .returning()
     );
     if (rowsResult.isErr()) return err(rowsResult.error);
@@ -738,7 +728,7 @@ export class BaseTableRepository<
         db
           .update(this.table as any)
           .set(update as unknown as Partial<InferInsertModel<TTable>>)
-          .where(eq(this.idColumn as SQLiteColumn, id))
+          .where(eq(this.idColumn as PgColumn, id))
           .returning()
       );
       if (rowsResult.isErr()) return err(rowsResult.error);
@@ -758,9 +748,9 @@ export class BaseTableRepository<
       db
         .update(this.table as any)
         .set({ deletedAt: new Date() })
-        .where(eq(this.idColumn as SQLiteColumn, id))
+        .where(eq(this.idColumn as PgColumn, id))
         .returning({
-          id: this.idColumn as SQLiteColumn,
+          id: this.idColumn as PgColumn,
         })
     );
     if (rowsResult.isErr()) return err(rowsResult.error);
@@ -781,9 +771,9 @@ export class BaseTableRepository<
       db
         .update(this.table as any)
         .set({ deletedAt: new Date() })
-        .where(inArray(this.idColumn as SQLiteColumn, ids as string[]))
+        .where(inArray(this.idColumn as PgColumn, ids as string[]))
         .returning({
-          id: this.idColumn as SQLiteColumn,
+          id: this.idColumn as PgColumn,
         })
     );
     if (rowsResult.isErr()) return err(rowsResult.error);
@@ -799,9 +789,9 @@ export class BaseTableRepository<
     const rowsResult = await this.throwableQuery(() =>
       db
         .delete(this.table as any)
-        .where(eq(this.idColumn as SQLiteColumn, id))
+        .where(eq(this.idColumn as PgColumn, id))
         .returning({
-          id: this.idColumn as SQLiteColumn,
+          id: this.idColumn as PgColumn,
         })
     );
     if (rowsResult.isErr()) return err(rowsResult.error);
@@ -821,9 +811,9 @@ export class BaseTableRepository<
     const rowsResult = await this.throwableQuery(() =>
       db
         .delete(this.table as any)
-        .where(inArray(this.idColumn as SQLiteColumn, ids as string[]))
+        .where(inArray(this.idColumn as PgColumn, ids as string[]))
         .returning({
-          id: this.idColumn as SQLiteColumn,
+          id: this.idColumn as PgColumn,
         })
     );
     if (rowsResult.isErr()) return err(rowsResult.error);

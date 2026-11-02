@@ -5,8 +5,12 @@ const config: Config = {
   roots: ["<rootDir>/src"],
   testMatch: ["**/*.test.ts"],
   transform: {
-    "^.+\\.(t|j)s$": ["ts-jest", { tsconfig: "tsconfig.json" }],
+    "^.+\\.mjs$": "<rootDir>/jest-esm-transform.cjs",
+    "^.+\\.(t|j)s$": ["ts-jest", { tsconfig: { allowJs: true } }],
   },
+  transformIgnorePatterns: [
+    "node_modules/(?!(?:\\.pnpm/)?(?:@sindresorhus[+/]|escape-string-regexp|tokenx|p-map))",
+  ],
   moduleNameMapper: {
     "^#utils$": "<rootDir>/src/test/stubs/utils.ts",
     "^#modules/(.*)$": "<rootDir>/src/modules/$1",
@@ -15,6 +19,7 @@ const config: Config = {
     "^@m5kdev/backend/(.*)$": "<rootDir>/src/$1",
   },
   verbose: true,
+  setupFilesAfterEnv: ["<rootDir>/src/test/postgresql.setup.ts"],
 };
 
 export default config;

@@ -1,5 +1,5 @@
 import { asc, desc } from "drizzle-orm";
-import type { SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
+import type { PgTableWithColumns } from "drizzle-orm/pg-core";
 
 /**
  * Applies sorting to a drizzle query builder.
@@ -8,7 +8,7 @@ import type { SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
  * If createdAt column doesn't exist, returns the query unchanged.
  */
 
-export const applySorting = <TQuery, TTable extends SQLiteTableWithColumns<any>>(
+export const applySorting = <TQuery, TTable extends PgTableWithColumns<any>>(
   query: TQuery,
   table: TTable,
   sort?: string,

@@ -1,0 +1,6 @@
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends pgbouncer && rm -rf /var/lib/apt/lists/*
+COPY pgbouncer.ini /etc/pgbouncer/pgbouncer.ini
+COPY pgbouncer.users /etc/pgbouncer/users.txt
+USER nobody
+CMD ["pgbouncer", "/etc/pgbouncer/pgbouncer.ini"]

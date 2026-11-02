@@ -1,7 +1,8 @@
-import { type Client, createClient } from "@libsql/client";
 import type { NotificationKind } from "@m5kdev/commons/modules/notification/notification.constants";
-import { drizzle } from "drizzle-orm/libsql";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { err, ok } from "neverthrow";
+import type { Pool } from "pg";
+import { createTestPool, prepareTestSchema } from "../../../test/postgresql";
 import type { ServerError } from "../../../utils/errors";
 import type { Context } from "../../../utils/trpc";
 import * as authTables from "../../auth/auth.db";
@@ -143,134 +144,135 @@ function otherOrgAContext(): Context {
   });
 }
 
-async function createTables(client: Client): Promise<void> {
-  await client.execute(`
-    CREATE TABLE users (
+async function createTables(client: Pool): Promise<void> {
+  const namespace = await prepareTestSchema(client);
+  await client.query(`
+    CREATE TABLE "${namespace}".users (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
-      email_verified INTEGER NOT NULL,
+      email_verified BOOLEAN NOT NULL,
       image TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
       role TEXT,
-      banned INTEGER,
+      banned BOOLEAN,
       ban_reason TEXT,
-      ban_expires INTEGER,
-      preferences TEXT DEFAULT '{}',
-      metadata TEXT DEFAULT '{}',
+      ban_expires TIMESTAMPTZ,
+      preferences JSONB DEFAULT '{}',
+      metadata JSONB DEFAULT '{}',
       onboarding INTEGER,
-      flags TEXT DEFAULT '[]',
+      flags TEXT[] DEFAULT '{}',
       locale TEXT,
-      closed_at INTEGER
+      closed_at TIMESTAMPTZ
     );
   `);
-  await client.execute(`
-    CREATE TABLE organizations (
+  await client.query(`
+    CREATE TABLE "${namespace}".organizations (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
       slug TEXT UNIQUE,
       logo TEXT,
       type TEXT,
       parent_id TEXT,
-      created_at INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
       onboarding INTEGER,
-      preferences TEXT DEFAULT '{}',
-      metadata TEXT DEFAULT '{}',
-      flags TEXT DEFAULT '[]',
+      preferences JSONB DEFAULT '{}',
+      metadata JSONB DEFAULT '{}',
+      flags TEXT[] DEFAULT '{}',
       locale TEXT,
       currency TEXT,
       stripe_customer_id TEXT UNIQUE,
       stripe_sandbox_customer_id TEXT UNIQUE,
-      billing_exempt INTEGER NOT NULL DEFAULT 0,
-      allow_cardless_trial INTEGER NOT NULL DEFAULT 0,
-      cardless_trial_consumed TEXT DEFAULT '{}',
-      closed_at INTEGER
+      billing_exempt BOOLEAN NOT NULL DEFAULT false,
+      allow_cardless_trial BOOLEAN NOT NULL DEFAULT false,
+      cardless_trial_consumed JSONB DEFAULT '{}',
+      closed_at TIMESTAMPTZ
     );
   `);
-  await client.execute(`
-    CREATE TABLE members (
+  await client.query(`
+    CREATE TABLE "${namespace}".members (
       id TEXT PRIMARY KEY NOT NULL,
-      organization_id TEXT NOT NULL REFERENCES organizations(id),
-      user_id TEXT REFERENCES users(id),
+      organization_id TEXT NOT NULL REFERENCES "${namespace}".organizations(id),
+      user_id TEXT REFERENCES "${namespace}".users(id),
       email TEXT,
       name TEXT NOT NULL DEFAULT '',
       image TEXT,
       role TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      deleted_at INTEGER,
-      preferences TEXT DEFAULT '{}',
-      metadata TEXT DEFAULT '{}',
+      created_at TIMESTAMPTZ NOT NULL,
+      deleted_at TIMESTAMPTZ,
+      preferences JSONB DEFAULT '{}',
+      metadata JSONB DEFAULT '{}',
       onboarding INTEGER,
-      flags TEXT DEFAULT '[]'
+      flags TEXT[] DEFAULT '{}'
     );
   `);
-  await client.execute(`
-    CREATE TABLE notification_devices (
+  await client.query(`
+    CREATE TABLE "${namespace}".notification_devices (
       id TEXT PRIMARY KEY NOT NULL,
-      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES "${namespace}".users(id) ON DELETE CASCADE,
       platform TEXT NOT NULL,
       endpoint TEXT UNIQUE,
-      subscription TEXT,
+      subscription JSONB,
       token TEXT UNIQUE,
       label TEXT,
-      enabled INTEGER NOT NULL DEFAULT 1,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
     );
   `);
-  await client.execute(`
-    CREATE TABLE notifications (
+  await client.query(`
+    CREATE TABLE "${namespace}".notifications (
       id TEXT PRIMARY KEY NOT NULL,
-      member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      member_id TEXT NOT NULL REFERENCES "${namespace}".members(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES "${namespace}".users(id) ON DELETE CASCADE,
       kind TEXT NOT NULL,
       title TEXT NOT NULL,
       body TEXT NOT NULL,
-      data TEXT,
-      visible_in_inbox INTEGER NOT NULL,
-      armed_channels TEXT NOT NULL DEFAULT '[]',
-      web_pushed_at INTEGER,
-      mobile_pushed_at INTEGER,
-      emailed_at INTEGER,
-      read_at INTEGER,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
+      data JSONB,
+      visible_in_inbox BOOLEAN NOT NULL,
+      armed_channels TEXT[] NOT NULL DEFAULT '{}',
+      web_pushed_at TIMESTAMPTZ,
+      mobile_pushed_at TIMESTAMPTZ,
+      emailed_at TIMESTAMPTZ,
+      read_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
     );
   `);
-  await client.execute(`
-    CREATE TABLE notification_preferences (
+  await client.query(`
+    CREATE TABLE "${namespace}".notification_preferences (
       id TEXT PRIMARY KEY NOT NULL,
-      member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+      member_id TEXT NOT NULL REFERENCES "${namespace}".members(id) ON DELETE CASCADE,
       kind TEXT NOT NULL,
       channel TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
       UNIQUE (member_id, kind, channel)
     );
   `);
-  await client.execute(`
-    CREATE TABLE notification_send_logs (
+  await client.query(`
+    CREATE TABLE "${namespace}".notification_send_logs (
       id TEXT PRIMARY KEY NOT NULL,
       batch_id TEXT NOT NULL,
-      notification_id TEXT NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
-      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      device_id TEXT REFERENCES notification_devices(id) ON DELETE SET NULL,
+      notification_id TEXT NOT NULL REFERENCES "${namespace}".notifications(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES "${namespace}".users(id) ON DELETE CASCADE,
+      device_id TEXT REFERENCES "${namespace}".notification_devices(id) ON DELETE SET NULL,
       channel TEXT NOT NULL,
       provider TEXT,
       title TEXT NOT NULL,
       body TEXT NOT NULL,
-      data TEXT,
+      data JSONB,
       status TEXT NOT NULL,
       error TEXT,
       job_id TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
     );
   `);
 }
 
-async function insertUser(client: Client, id: string, email: string): Promise<void> {
+async function insertUser(client: Pool, id: string, email: string): Promise<void> {
   const orm = drizzle(client, { schema: { users: authTables.users } });
   await orm.insert(authTables.users).values({
     id,
@@ -280,7 +282,7 @@ async function insertUser(client: Client, id: string, email: string): Promise<vo
   });
 }
 
-async function insertOrganization(client: Client, id: string, name: string): Promise<void> {
+async function insertOrganization(client: Pool, id: string, name: string): Promise<void> {
   const orm = drizzle(client, { schema: { organizations: authTables.organizations } });
   await orm.insert(authTables.organizations).values({
     id,
@@ -290,7 +292,7 @@ async function insertOrganization(client: Client, id: string, name: string): Pro
 }
 
 async function insertMember(input: {
-  client: Client;
+  client: Pool;
   id: string;
   organizationId: string;
   userId: string | null;
@@ -307,7 +309,7 @@ async function insertMember(input: {
   });
 }
 
-async function seedUsersAndMembers(client: Client): Promise<void> {
+async function seedUsersAndMembers(client: Pool): Promise<void> {
   await insertUser(client, OWNER_ID, "owner@example.com");
   await insertUser(client, OTHER_ID, "other@example.com");
   await insertOrganization(client, ORG_A_ID, "Org A");
@@ -332,13 +334,15 @@ async function seedUsersAndMembers(client: Client): Promise<void> {
   });
 }
 
-async function countNotificationRows(client: Client): Promise<number> {
-  const result = await client.execute("SELECT COUNT(*) AS n FROM notifications");
+async function countNotificationRows(client: Pool): Promise<number> {
+  const result = await client.query(
+    `SELECT COUNT(*) AS n FROM "${process.env.DATABASE_SCHEMA}".notifications`
+  );
   return Number(result.rows[0]?.n ?? 0);
 }
 
 function createHarness(
-  client: Client,
+  client: Pool,
   options?: { email?: NotificationEmailSender }
 ): {
   service: NotificationService;
@@ -369,21 +373,21 @@ function createHarness(
   return { service, userEmit, trigger };
 }
 
-function createService(client: Client): NotificationService {
+function createService(client: Pool): NotificationService {
   return createHarness(client).service;
 }
 
 describe("NotificationService Device tenancy", () => {
-  let client: Client;
+  let client: Pool;
 
   beforeEach(async () => {
-    client = createClient({ url: ":memory:" });
+    client = createTestPool();
     await createTables(client);
     await seedUsersAndMembers(client);
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
   });
 
   it("rejects registering a web endpoint that belongs to another User", async () => {
@@ -529,16 +533,16 @@ describe("defaultNotificationGrants", () => {
 });
 
 describe("NotificationService inbox", () => {
-  let client: Client;
+  let client: Pool;
 
   beforeEach(async () => {
-    client = createClient({ url: ":memory:" });
+    client = createTestPool();
     await createTables(client);
     await seedUsersAndMembers(client);
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
   });
 
   it("fails send for an unknown kind without inserting or emitting", async () => {
@@ -785,16 +789,16 @@ describe("NotificationService inbox", () => {
 });
 
 describe("NotificationService preferences", () => {
-  let client: Client;
+  let client: Pool;
 
   beforeEach(async () => {
-    client = createClient({ url: ":memory:" });
+    client = createTestPool();
     await createTables(client);
     await seedUsersAndMembers(client);
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
   });
 
   it("returns catalog kinds with default Channels on when prefs are missing", async () => {
@@ -1168,19 +1172,19 @@ describe("NotificationService preferences", () => {
 });
 
 describe("NotificationService push cascade", () => {
-  let client: Client;
+  let client: Pool;
 
   beforeEach(async () => {
     sendWebPushMock.mockReset().mockResolvedValue(undefined);
     sendApnMock.mockReset().mockResolvedValue(undefined);
     sendFcmMock.mockReset().mockResolvedValue(undefined);
-    client = createClient({ url: ":memory:" });
+    client = createTestPool();
     await createTables(client);
     await seedUsersAndMembers(client);
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
   });
 
   it("does not send push immediately and schedules delayed web/mobile jobs", async () => {
@@ -1429,17 +1433,17 @@ describe("NotificationService push cascade", () => {
 });
 
 describe("NotificationService email cascade", () => {
-  let client: Client;
+  let client: Pool;
 
   beforeEach(async () => {
     sendWebPushMock.mockReset().mockResolvedValue(undefined);
-    client = createClient({ url: ":memory:" });
+    client = createTestPool();
     await createTables(client);
     await seedUsersAndMembers(client);
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
   });
 
   it("does not send email immediately and schedules a 15m job", async () => {

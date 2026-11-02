@@ -1,6 +1,6 @@
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { ok } from "neverthrow";
 import { BaseTableRepository } from "../base/base.repository";
 import * as connect from "./connect.db";
@@ -8,7 +8,7 @@ import type { ConnectListInputSchema } from "./connect.dto";
 
 const schema = { ...connect };
 type Schema = typeof schema;
-type Orm = LibSQLDatabase<Schema>;
+type Orm = NodePgDatabase<Schema>;
 
 export type ConnectRow = InferSelectModel<Schema["connect"]>;
 export type ConnectInsert = InferInsertModel<Schema["connect"]>;

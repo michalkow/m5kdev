@@ -1,6 +1,6 @@
 /**
  * Shared webServer definitions for the Playwright configs. Each profile runs
- * an isolated stack: own port pair, own SQLite file, own email output dir, and
+ * an isolated stack: own port pair, own PostgreSQL database, own email output dir, and
  * own Redis DB index (queue names are identical across profiles — sharing a
  * Redis DB would let one profile's workers consume the other's jobs).
  */
@@ -48,11 +48,27 @@ function serverEnv(profile: E2EProfile, expo: boolean): Record<string, string> {
   const serverPort = expo ? ports.expoServer : ports.server;
   const webPort = expo ? ports.expoWeb : ports.web;
   const suffix = expo ? `${profile}-expo` : profile;
+  const databaseConnection = (key: string): string => {
+    const value = process.env[key];
+    if (!value) throw new Error(`${key} is required for PostgreSQL E2E tests`);
+    const url = new URL(value);
+    url.pathname = `${url.pathname}_e2e_${suffix.replaceAll("-", "_")}`;
+    return url.toString();
+  };
   return {
     PORT: String(serverPort),
     VITE_SERVER_URL: `http://127.0.0.1:${serverPort}`,
     VITE_APP_URL: `http://127.0.0.1:${webPort}`,
-    DATABASE_URL: `file:./.e2e/${suffix}.db`,
+    DATABASE_URL: databaseConnection("E2E_DATABASE_URL"),
+    DATABASE_DIRECT_URL: databaseConnection("E2E_DATABASE_DIRECT_URL"),
+    DATABASE_SCHEMA: "app",
+    DATABASE_DISPOSABLE: process.env.E2E_DATABASE_DISPOSABLE ?? "false",
+    MASTRA_DATABASE_URL: "",
+    MASTRA_DATABASE_DIRECT_URL: "",
+    VECTOR_DATABASE_URL: "",
+    VECTOR_DATABASE_DIRECT_URL: "",
+    MASTRA_DATABASE_SCHEMA: "mastra",
+    VECTOR_DATABASE_SCHEMA: "vectors",
     EMAIL_OUTPUT_DIRECTORY: `.e2e/emails-${suffix}`,
     PROVISIONED_EMAIL_DOMAIN: "provisioned.auth-e2e.local",
     REDIS_URL: `redis://127.0.0.1:6379/${expo ? PORTS[profile].expoRedisDb : PORTS[profile].redisDb}`,
@@ -62,9 +78,6 @@ function serverEnv(profile: E2EProfile, expo: boolean): Record<string, string> {
     BETTER_AUTH_SECRET: "auth-e2e-local-secret-auth-e2e-local-secret",
     SYSTEM_NOTIFICATION_EMAIL: "ops@auth-e2e.local",
     NODE_ENV: "development",
-    // hermetic: shared/.env Turso credentials must not leak into drizzle-kit
-    TURSO_DATABASE_URL: "",
-    TURSO_AUTH_TOKEN: "",
     // hermetic: a real key in the invoking shell would flip email mode to
     // "send" and the stored-email assertions would find nothing
     RESEND_API_KEY: "",
@@ -84,7 +97,10 @@ export function serverWebServer(profile: E2EProfile, { expo = false } = {}) {
   return {
     command: [
       `${SERVER_FILTER} tsx db.ts reset`,
-      `${SERVER_FILTER} drizzle-kit migrate`,
+      `${SERVER_FILTER} tsx db.ts migrate`,
+      // m5k:ai:start
+      `${SERVER_FILTER} tsx mastra.ts`,
+      // m5k:ai:end
       `${SERVER_FILTER} tsx db.e2e.ts seed`,
       `${SERVER_FILTER} tsx src/index.ts`,
     ].join(" && "),

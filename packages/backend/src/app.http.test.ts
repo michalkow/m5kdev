@@ -3,12 +3,13 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { type Client, createClient } from "@libsql/client";
 import express, { type Express } from "express";
+import type { Pool } from "pg";
 import { createBackendApp, defineBackendModule } from "./app";
 import type { AuthMiddleware } from "./modules/auth/auth.middleware";
 import { createBillingRouter } from "./modules/billing/billing.router";
 import type { BillingService } from "./modules/billing/billing.service";
+import { createTestPool } from "./test/postgresql";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {
@@ -80,14 +81,14 @@ async function withServer(app: Express, run: (baseUrl: string) => Promise<void>)
 }
 
 describe("createBackendApp HTTP shell", () => {
-  let client: Client;
+  let client: Pool;
 
   beforeEach(() => {
-    client = createClient({ url: ":memory:" });
+    client = createTestPool();
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
   });
 
   it("allows credentialed CORS from the app web URL", async () => {
