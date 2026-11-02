@@ -1,5 +1,12 @@
 # @m5kdev/module-clay
 
+## 0.43.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @m5kdev/backend@0.43.0
+
 ## 0.42.0
 
 ### Patch Changes
