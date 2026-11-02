@@ -103,7 +103,7 @@ _Avoid_: multiple Owners as a product feature; inviting Owner; org members UI as
 ### Composition
 
 **Kernel**:
-`createBackendApp` — the composition root that wires libSQL/Drizzle, Redis, Better Auth, modules, tRPC, Express, startup, and shutdown ([ADR-0003](docs/adr/0003-kernel-owns-express-http-shell.md)). It owns the Express instance, JSON and CORS defaults (origin from the app web URL; library allowed headers), HTTP listen (PORT, all interfaces), and SIGINT/SIGTERM when it is listening. Signal shutdown closes Server event streams, then HTTP, then the rest of Kernel shutdown, then app `onShutdown`, then process exit. JSON and CORS defaults may be mapped; a map that omits a default drops it. Callers may pass an Express instance that has not already applied json/CORS; the Kernel still applies that shell. Opt-in baked SPA serving (`spa.root`, skip if missing) is also Kernel HTTP shell ([ADR-0006](docs/adr/0006-kernel-owns-baked-spa.md)). Server events (SSE subscribe) are Kernel HTTP shell and Kernel infrastructure ([ADR-0010](docs/adr/0010-kernel-owns-server-events.md)). Other extra HTTP belongs on a Backend Module `express` hook. Extra shutdown work (telemetry) registers on the Kernel, not a starter signal handler. One-shot Database commands are Kernel-owned and must not boot that HTTP shell, Redis, or queues ([ADR-0005](docs/adr/0005-kernel-owns-database-commands.md)).
+`createBackendApp` — the composition root that wires Turso Database/Drizzle, Redis, Better Auth, modules, tRPC, Express, startup, and shutdown ([ADR-0003](docs/adr/0003-kernel-owns-express-http-shell.md)). It owns the Express instance, JSON and CORS defaults (origin from the app web URL; library allowed headers), HTTP listen (PORT, all interfaces), and SIGINT/SIGTERM when it is listening. Signal shutdown closes Server event streams, then HTTP, then the rest of Kernel shutdown, then app `onShutdown`, then process exit. JSON and CORS defaults may be mapped; a map that omits a default drops it. Callers may pass an Express instance that has not already applied json/CORS; the Kernel still applies that shell. Opt-in baked SPA serving (`spa.root`, skip if missing) is also Kernel HTTP shell ([ADR-0006](docs/adr/0006-kernel-owns-baked-spa.md)). Server events (SSE subscribe) are Kernel HTTP shell and Kernel infrastructure ([ADR-0010](docs/adr/0010-kernel-owns-server-events.md)). Other extra HTTP belongs on a Backend Module `express` hook. Extra shutdown work (telemetry) registers on the Kernel, not a starter signal handler. One-shot Database commands are Kernel-owned and must not boot that HTTP shell, Redis, or queues ([ADR-0005](docs/adr/0005-kernel-owns-database-commands.md)).
 _Avoid_: Framework (the stack is composable, not closed), App (that is the product), app-owned CORS as the default path; booting createBackendApp to reset or seed; ad-hoc `express.static` in starter `app.ts`
 
 **Backend Module**:
@@ -137,6 +137,14 @@ _Avoid_: Webhook (when you mean this primitive vs Stripe Subscription sync); Con
 **Named Inbound Callback**:
 An Inbound callback that carries a name. The name selects a shared secret registered for that name; every wait with that name and no secret of its own shares it.
 _Avoid_: Callback type, webhook type, kind (that is Notification)
+
+**Turso Database**:
+The Kernel app-database engine. One local file (or in-memory database) owned by one server process. Drizzle is the ORM.
+_Avoid_: libSQL for the app ORM; SQLite as the product noun; treating Turso Cloud as the process that serves requests
+
+**Turso Sync**:
+Optional Kernel mode: that same local Turso Database, plus push and pull of committed writes to Turso Cloud. Reads and writes are local. Not libSQL Embedded Replica (those forwarded writes to a cloud primary).
+_Avoid_: Embedded Replica, replica, libSQL sync; a second writer on the same local file
 
 **App schema**:
 The table map the app composes from Backend Module tables plus its own tables. One composition root, passed to the Kernel at boot, to drizzle-kit, and to Database commands.
