@@ -9,6 +9,10 @@ m5kdev is an opinionated TypeScript framework for building AI SaaS applications.
 It is a pnpm/Turborepo monorepo of packages you compose into apps: a backend app
 kernel, shared contracts, frontend hooks, and a reusable web UI library.
 
+Upgrading an existing libSQL app to 0.42.0? Follow the
+[PostgreSQL and pgvector migration](./guides/v0.42.0-postgresql-pgvector-migration.md)
+before deploying; package installation alone does not migrate your data.
+
 ## Stack philosophy
 
 m5kdev is deliberately **not** technology-agnostic. Most frameworks stay neutral

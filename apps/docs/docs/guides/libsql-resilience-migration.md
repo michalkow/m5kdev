@@ -4,6 +4,10 @@ sidebar_position: 8
 
 # libsql resilience migration
 
+> Historical guide for releases before 0.42.0. PostgreSQL replaces libSQL in
+> 0.42.0; use the [PostgreSQL and pgvector migration](./v0.42.0-postgresql-pgvector-migration.md)
+> instead when upgrading to that release or later.
+
 This guide covers hardening libsql/Turso connection handling in existing m5kdev
 apps. It addresses two production failure modes:
 
