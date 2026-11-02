@@ -1,22 +1,25 @@
-import { integer, real, sqliteTable as table, text } from "drizzle-orm/sqlite-core";
+import { doublePrecision, integer, jsonb, text, timestamp } from "drizzle-orm/pg-core";
 import { v4 as uuidv4 } from "uuid";
+import { appDatabaseSchema } from "../../base/database.schema";
 import { members, organizations, users } from "../auth/auth.db";
 
-export const chats = table("chats", {
+export const chats = appDatabaseSchema.table("chats", {
   id: text("id").primaryKey().$default(uuidv4),
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   title: text("title"),
   type: text("type"),
-  conversation: text("conversation", { mode: "json" }),
-  createdAt: integer("created_at", { mode: "timestamp" }).$default(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
+  conversation: jsonb("conversation"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).$default(
+    () => new Date()
+  ),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$default(() => new Date()),
 });
 
-export const aiUsage = table("ai_usage", {
+export const aiUsage = appDatabaseSchema.table("ai_usage", {
   id: text("id").primaryKey().$default(uuidv4),
   userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
   memberId: text("member_id").references(() => members.id, { onDelete: "set null" }),
@@ -30,10 +33,10 @@ export const aiUsage = table("ai_usage", {
   inputTokens: integer("input_tokens"),
   outputTokens: integer("output_tokens"),
   totalTokens: integer("total_tokens"),
-  cost: real("cost"),
+  cost: doublePrecision("cost"),
   traceId: text("trace_id"),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$default(() => new Date()),
-  metadata: text("metadata", { mode: "json" }),
+  metadata: jsonb("metadata"),
 });

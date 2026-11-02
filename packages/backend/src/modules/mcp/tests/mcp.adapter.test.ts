@@ -1,5 +1,5 @@
-import type { Client } from "@libsql/client";
 import { TRPCError } from "@trpc/server";
+import type { Pool } from "pg";
 import { z } from "zod";
 import { createTRPCMethods } from "../../../utils/trpc";
 import type { AuthOrganizationRepository } from "../../auth/auth.repository";
@@ -8,9 +8,9 @@ import type { McpService } from "../mcp.service";
 import { createMcpTRPC } from "../mcp.trpc";
 import { LIST_ORGANIZATIONS_MCP_CALL } from "../mcp.types";
 import {
-  createMcpMemoryClient,
   createMcpService,
   createMcpTables,
+  createMcpTestPool,
   MCP_CLIENT_CLAUDE,
   MCP_CLIENT_CURSOR,
   MCP_ORG_A,
@@ -117,7 +117,7 @@ describe("collectMcpTools", () => {
 });
 
 describe("createMcpToolInvoker", () => {
-  let client: Client;
+  let client: Pool;
   let mcp: McpService;
   let organizations: AuthOrganizationRepository;
 
@@ -152,7 +152,7 @@ describe("createMcpToolInvoker", () => {
   }
 
   beforeEach(async () => {
-    client = createMcpMemoryClient();
+    client = createMcpTestPool();
     await createMcpTables(client);
     await seedMcpFixture(client);
     const services = createMcpService(client);
@@ -166,7 +166,7 @@ describe("createMcpToolInvoker", () => {
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
   });
 
   it("invokes an org-scoped procedure in-process with the OAuth User", async () => {

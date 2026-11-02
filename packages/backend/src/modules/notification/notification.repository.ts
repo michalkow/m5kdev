@@ -5,7 +5,7 @@ import type {
   NotificationSendStatus,
 } from "@m5kdev/commons/modules/notification/notification.constants";
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { err, ok } from "neverthrow";
 import { members, users } from "../auth/auth.db";
 import type { ServerResultAsync } from "../base/base.dto";
@@ -26,7 +26,7 @@ const schema = {
   members,
 };
 type Schema = typeof schema;
-type Orm = LibSQLDatabase<Schema>;
+type Orm = NodePgDatabase<Schema>;
 
 export interface NotificationDeviceRow {
   readonly id: string;

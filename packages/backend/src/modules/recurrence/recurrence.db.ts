@@ -1,8 +1,9 @@
-import { integer, sqliteTable as table, text } from "drizzle-orm/sqlite-core";
+import { boolean, integer, jsonb, text, timestamp } from "drizzle-orm/pg-core";
 import { v4 as uuidv4 } from "uuid";
+import { appDatabaseSchema } from "../../base/database.schema";
 import { members, organizations, users } from "../auth/auth.db";
 
-export const recurrence = table("recurrence", {
+export const recurrence = appDatabaseSchema.table("recurrence", {
   id: text("id").primaryKey().$default(uuidv4),
   userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
   memberId: text("member_id").references(() => members.id, { onDelete: "set null" }),
@@ -12,22 +13,22 @@ export const recurrence = table("recurrence", {
   teamId: text("team_id"),
   name: text("name"),
   kind: text("kind"),
-  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  enabled: boolean("enabled").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$default(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$default(() => new Date()),
-  metadata: text("metadata", { mode: "json" }).$type<Record<string, unknown>>(),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
 });
 
-export const recurrenceRules = table("recurrence_rules", {
+export const recurrenceRules = appDatabaseSchema.table("recurrence_rules", {
   id: text("id").primaryKey().$default(uuidv4),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$default(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$default(() => new Date()),
   recurrenceId: text("recurrence_id").references(() => recurrence.id, {
@@ -38,7 +39,7 @@ export const recurrenceRules = table("recurrence_rules", {
   freq: integer("freq").notNull(),
 
   // Start date; base for recurrence and source for missing instance params
-  dtstart: integer("dtstart", { mode: "timestamp" }),
+  dtstart: timestamp("dtstart", { withTimezone: true, mode: "date" }),
 
   // Interval between each freq iteration (default 1)
   interval: integer("interval").notNull().default(1),
@@ -50,31 +51,31 @@ export const recurrenceRules = table("recurrence_rules", {
   count: integer("count"),
 
   // Last occurrence date (inclusive)
-  until: integer("until", { mode: "timestamp" }),
+  until: timestamp("until", { withTimezone: true, mode: "date" }),
 
   // IANA timezone string (Intl API)
   tzid: text("tzid"),
 
   // BYSETPOS: occurrence number(s) in the frequency period (e.g. -1 = last)
-  bysetpos: text("bysetpos", { mode: "json" }).$type<number | number[]>(),
+  bysetpos: jsonb("bysetpos").$type<number | number[]>(),
 
   // BYMONTH: month(s) 1–12
-  bymonth: text("bymonth", { mode: "json" }).$type<number | number[]>(),
+  bymonth: jsonb("bymonth").$type<number | number[]>(),
 
   // BYMONTHDAY: day(s) of month
-  bymonthday: text("bymonthday", { mode: "json" }).$type<number | number[]>(),
+  bymonthday: jsonb("bymonthday").$type<number | number[]>(),
 
   // BYYEARDAY: day(s) of year
-  byyearday: text("byyearday", { mode: "json" }).$type<number | number[]>(),
+  byyearday: jsonb("byyearday").$type<number | number[]>(),
 
   // BYWEEKNO: week number(s) (ISO8601)
-  byweekno: text("byweekno", { mode: "json" }).$type<number | number[]>(),
+  byweekno: jsonb("byweekno").$type<number | number[]>(),
 
   // BYWEEKDAY: weekday(s) 0–6, or nth e.g. { weekday: 4, n: 1 } for first Friday
-  byweekday: text("byweekday", { mode: "json" }).$type<number | number[]>(),
+  byweekday: jsonb("byweekday").$type<number | number[]>(),
 
   // BYHOUR, BYMINUTE, BYSECOND
-  byhour: text("byhour", { mode: "json" }).$type<number | number[]>(),
-  byminute: text("byminute", { mode: "json" }).$type<number | number[]>(),
-  bysecond: text("bysecond", { mode: "json" }).$type<number | number[]>(),
+  byhour: jsonb("byhour").$type<number | number[]>(),
+  byminute: jsonb("byminute").$type<number | number[]>(),
+  bysecond: jsonb("bysecond").$type<number | number[]>(),
 });

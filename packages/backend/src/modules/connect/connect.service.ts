@@ -85,11 +85,6 @@ export class ConnectService extends BasePermissionService<
     if (profileResult.isErr()) return err(profileResult.error);
     const profile = profileResult.value;
 
-    const metadataJsonResult = profile.metadata
-      ? this.throwable(() => ok(JSON.stringify(profile.metadata)))
-      : ok<string | null>(null);
-    if (metadataJsonResult.isErr()) return err(metadataJsonResult.error);
-
     const connection = await this.repository.connect.upsert({
       userId: user.id,
       provider: providerId,
@@ -104,7 +99,7 @@ export class ConnectService extends BasePermissionService<
       scope: tokens.scope,
       expiresAt: tokens.expiresAt,
       parentId: profile.parentId,
-      metadataJson: metadataJsonResult.value,
+      metadataJson: profile.metadata ?? null,
     });
 
     if (connection.isErr()) {

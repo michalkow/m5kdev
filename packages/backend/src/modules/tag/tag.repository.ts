@@ -5,8 +5,8 @@ import type {
   TagListSchema,
   TagSchema,
 } from "@m5kdev/commons/modules/tag/tag.schema";
-import { and, count, eq, inArray, isNull } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import { and, arrayContains, count, eq, inArray, isNull } from "drizzle-orm";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { err, ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseTableRepository } from "../base/base.repository";
@@ -15,7 +15,7 @@ import type { TaggingSelectOutputResult, TagSelectOutputResult } from "./tag.dto
 
 const schema = { tags, taggings };
 type Schema = typeof schema;
-type Orm = LibSQLDatabase<Schema>;
+type Orm = NodePgDatabase<Schema>;
 
 export class TagRepository extends BaseTableRepository<
   Orm,
@@ -286,7 +286,7 @@ export class TagRepository extends BaseTableRepository<
     conditions.applyFilters(input);
 
     if (input?.assignableTo) {
-      conditions.push(this.helpers.arrayContains(this.table.assignableTo, [input.assignableTo]));
+      conditions.push(arrayContains(this.table.assignableTo, [input.assignableTo]));
     }
     const whereClause = conditions.join();
     const rowsQuery = this.withSortingAndPagination(

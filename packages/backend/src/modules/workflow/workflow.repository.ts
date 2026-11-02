@@ -4,7 +4,7 @@ import type {
   WorkflowReadOutputSchema,
 } from "@m5kdev/commons/modules/workflow/workflow.schema";
 import { and, asc, eq, inArray, lt, type SQL, sql } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { err, ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseRepository } from "../base/base.repository";
@@ -13,7 +13,7 @@ import { workflows } from "./workflow.db";
 const schema = { workflows };
 
 type Schema = typeof schema;
-type Orm = LibSQLDatabase<Schema>;
+type Orm = NodePgDatabase<Schema>;
 
 /**
  * Sync model: BullMQ/Redis is the runtime source of truth; this table is a
@@ -27,11 +27,6 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
   /** `status` is terminal — SQL predicate against the existing row. */
   private terminalStatus(): SQL {
     return sql`${this.schema.workflows.status} IN ('completed', 'failed')`;
-  }
-
-  /** Epoch seconds for raw SQL against `integer(..., { mode: "timestamp" })` columns. */
-  private static toEpochSeconds(date: Date): number {
-    return Math.floor(date.getTime() / 1000);
   }
 
   async read({
@@ -84,7 +79,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
    * receive the trigger-side fields the events couldn't know (input, tags, …).
    */
   private addedConflictSet(triggeredAt: Date) {
-    const t0 = WorkflowRepository.toEpochSeconds(triggeredAt);
+    const t0 = triggeredAt.toISOString();
     const stale = sql`${this.schema.workflows.updatedAt} < ${t0}`;
     return {
       status: sql`CASE WHEN ${stale} THEN 'queued' ELSE ${this.schema.workflows.status} END`,
@@ -204,7 +199,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
     userId?: string;
   }): ServerResultAsync<WorkflowReadOutputSchema> {
     const now = new Date();
-    const nowSec = WorkflowRepository.toEpochSeconds(now);
+    const timestamp = now.toISOString();
     const terminal = this.terminalStatus();
 
     const wfResult = await this.throwableQuery(() =>
@@ -228,10 +223,10 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
           set: {
             // a stale active event must never resurrect a terminal row
             status: sql`CASE WHEN ${terminal} THEN ${this.schema.workflows.status} ELSE 'running' END`,
-            processedAt: sql`CASE WHEN ${terminal} THEN ${this.schema.workflows.processedAt} ELSE ${nowSec} END`,
+            processedAt: sql`CASE WHEN ${terminal} THEN ${this.schema.workflows.processedAt} ELSE ${timestamp} END`,
             // the trigger-side insert has richer data; only fill gaps
             userId: sql`COALESCE(${this.schema.workflows.userId}, excluded.user_id)`,
-            updatedAt: sql`${nowSec}`,
+            updatedAt: sql`${timestamp}`,
           },
         })
         .returning()
@@ -253,7 +248,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
     output: unknown;
   }): ServerResultAsync<WorkflowReadOutputSchema> {
     const now = new Date();
-    const nowSec = WorkflowRepository.toEpochSeconds(now);
+    const timestamp = now.toISOString();
     const terminal = this.terminalStatus();
 
     const wfResult = await this.throwableQuery(() =>
@@ -278,8 +273,8 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
             // first terminal status wins; never flip failed -> completed
             status: sql`CASE WHEN ${terminal} THEN ${this.schema.workflows.status} ELSE 'completed' END`,
             output: sql`CASE WHEN ${terminal} THEN ${this.schema.workflows.output} ELSE excluded.output END`,
-            finishedAt: sql`CASE WHEN ${terminal} THEN ${this.schema.workflows.finishedAt} ELSE ${nowSec} END`,
-            updatedAt: sql`${nowSec}`,
+            finishedAt: sql`CASE WHEN ${terminal} THEN ${this.schema.workflows.finishedAt} ELSE ${timestamp} END`,
+            updatedAt: sql`${timestamp}`,
           },
         })
         .returning()
@@ -304,7 +299,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
     retries?: number;
   }): ServerResultAsync<WorkflowReadOutputSchema> {
     const now = new Date();
-    const nowSec = WorkflowRepository.toEpochSeconds(now);
+    const timestamp = now.toISOString();
     const terminal = this.terminalStatus();
     const retriesValue =
       retries !== undefined
@@ -334,8 +329,8 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
             status: sql`CASE WHEN ${terminal} THEN ${this.schema.workflows.status} ELSE 'failed' END`,
             error: sql`CASE WHEN ${terminal} THEN ${this.schema.workflows.error} ELSE excluded.error END`,
             retries: sql`CASE WHEN ${terminal} THEN ${this.schema.workflows.retries} ELSE ${retriesValue} END`,
-            finishedAt: sql`CASE WHEN ${terminal} THEN ${this.schema.workflows.finishedAt} ELSE ${nowSec} END`,
-            updatedAt: sql`${nowSec}`,
+            finishedAt: sql`CASE WHEN ${terminal} THEN ${this.schema.workflows.finishedAt} ELSE ${timestamp} END`,
+            updatedAt: sql`${timestamp}`,
           },
         })
         .returning()

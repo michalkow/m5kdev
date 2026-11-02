@@ -1,5 +1,5 @@
-import { or, type SQL, sql } from "drizzle-orm";
-import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
+import { ilike, or, type SQL } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 
 interface SqlConditionSink {
   push(condition?: SQL): void;
@@ -16,7 +16,7 @@ export function escapeLikeUserInput(value: string): string {
  */
 export function getGlobalSearchCondition(
   q: string | undefined,
-  columns: readonly SQLiteColumn[]
+  columns: readonly PgColumn[]
 ): SQL | undefined {
   const trimmed = q?.trim();
   if (!trimmed || columns.length === 0) {
@@ -24,7 +24,7 @@ export function getGlobalSearchCondition(
   }
 
   const pattern = `%${escapeLikeUserInput(trimmed)}%`;
-  const clauses = columns.map((col) => sql`${col} LIKE ${pattern} ESCAPE '\\'`);
+  const clauses = columns.map((column) => ilike(column, pattern));
 
   if (clauses.length === 1) {
     return clauses[0];
@@ -36,7 +36,7 @@ export function getGlobalSearchCondition(
 export function pushGlobalSearch(
   builder: SqlConditionSink,
   q: string | undefined,
-  columns: readonly SQLiteColumn[]
+  columns: readonly PgColumn[]
 ): void {
   const cond = getGlobalSearchCondition(q, columns);
   if (cond) {

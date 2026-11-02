@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import type { Server } from "node:http";
 import path from "node:path";
-import { type Client, createClient, type Config as LibSQLClientConfig } from "@libsql/client";
 import {
   ADMIN_CREATE_VERIFIED_USER_HEADER,
   USER_CURRENCY_HEADER,
@@ -19,8 +18,9 @@ import type { AnyRouter, TRPCCreateRouterOptions } from "@trpc/server";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import { toNodeHandler } from "better-auth/node";
 import cors, { type CorsOptions } from "cors";
-import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
-import type { SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
+import { is } from "drizzle-orm";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import { getTableConfig, PgTable, type PgTableWithColumns } from "drizzle-orm/pg-core";
 import express, {
   type Express,
   type NextFunction,
@@ -29,6 +29,7 @@ import express, {
   type Response,
 } from "express";
 import IORedis, { type RedisOptions } from "ioredis";
+import { Pool, type PoolConfig } from "pg";
 import type { Logger } from "pino";
 import { Resend } from "resend";
 import {
@@ -37,7 +38,6 @@ import {
   type ServerEventBus,
 } from "./base/server-event";
 import { type AppI18n, type BackendAppI18nResources, createAppI18n } from "./i18n/app-i18n";
-import { withLibsqlRetry } from "./lib/libsql";
 import type * as authTables from "./modules/auth/auth.db";
 import type { BetterAuth } from "./modules/auth/auth.lib";
 import { mountMcpDcrNativeClientInterop } from "./modules/auth/auth.mcp-dcr";
@@ -62,7 +62,7 @@ import {
 } from "./utils/trpc";
 
 type AnyRecord = Record<string, any>;
-type TableMap = Record<string, SQLiteTableWithColumns<any>>;
+type TableMap = Record<string, PgTableWithColumns<any>>;
 type RouterMap = Record<string, AnyRouter>;
 
 type UnionToIntersection<T> = (T extends unknown ? (value: T) => void : never) extends (
@@ -189,11 +189,11 @@ export type BackendModuleDependencyMap = Record<
 >;
 
 export type BackendAppDbContext<Tables extends TableMap = TableMap> = {
-  client: Client;
-  orm: LibSQLDatabase<any>;
+  client: Pool;
+  orm: NodePgDatabase<any>;
   schema: AppDbSchema<Tables>;
   /**
-   * Configured libsql URL when the kernel created the client from connection
+   * Configured PostgreSQL URL when the kernel created the pool from connection
    * options. Unset when the caller supplied a preconfigured `client`.
    */
   url?: string;
@@ -321,9 +321,9 @@ type JsonParserOptions = NonNullable<Parameters<typeof express.json>[0]>;
 export type BackendAppConfig = {
   db:
     | {
-        client: Client;
+        client: Pool;
       }
-    | (LibSQLClientConfig & {
+    | (PoolConfig & {
         client?: never;
       });
   express?: Express;
@@ -427,32 +427,23 @@ function normalizeEmailConfig(
   };
 }
 
-function createDbClient(
-  config: BackendAppConfig["db"],
-  logger: Logger
-): { client: Client; owned: boolean; url?: string } {
+function createDbClient(config: BackendAppConfig["db"]): {
+  client: Pool;
+  owned: boolean;
+  url?: string;
+} {
   if ("client" in config && config.client) {
     return {
-      // Always wrap — apps that inject a raw client previously skipped retry/logging.
-      client: withLibsqlRetry(config.client, { logger }),
+      client: config.client,
       owned: false,
     };
   }
 
   return {
-    client: withLibsqlRetry(createClient(config), { logger }),
+    client: new Pool(config),
     owned: true,
-    url: config.url,
+    url: config.connectionString,
   };
-}
-
-function dbConfigHasSyncUrl(config: BackendAppConfig["db"]): boolean {
-  return (
-    !("client" in config && config.client) &&
-    "syncUrl" in config &&
-    typeof config.syncUrl === "string" &&
-    config.syncUrl.length > 0
-  );
 }
 
 function createRedisClient(config: BackendAppConfig["redis"]): { redis?: IORedis; owned: boolean } {
@@ -712,7 +703,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   const orderedModules = resolveModuleOrder(registeredModules);
   const expressApp = config.express ?? express();
   applyCors({ expressApp, config, appConfig });
-  const dbClientState = createDbClient(config.db, logger);
+  const dbClientState = createDbClient(config.db);
   const redisState = createRedisClient(config.redis);
   const resendState = createResendClient(config.resend);
   const serverEvents = createServerEventBus({ redis: redisState.redis, logger });
@@ -1056,7 +1047,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
         redisState.redis.disconnect();
       }
       if (dbClientState.owned) {
-        await dbClientState.client.close?.();
+        await dbClientState.client.end();
       }
       if (config.onShutdown) {
         await config.onShutdown();
@@ -1103,12 +1094,24 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       if (shouldListen && httpServer) {
         throw new Error("already listening");
       }
-      // Embedded replicas must see primary oauth_resources before Better Auth
-      // seedResources (first $context / POST /mcp). Stale UNIQUE inserts get
-      // wrapped by Drizzle and break oauth-provider's unique catch.
-      if (dbConfigHasSyncUrl(config.db)) {
-        logger.info("Syncing embedded libsql replica before start");
-        await dbClientState.client.sync();
+      const tableNames = Object.values(schema)
+        .filter((table) => is(table, PgTable))
+        .map((table) => {
+          const config = getTableConfig(table);
+          return [config.schema ?? "public", config.name]
+            .map((name) => `"${name.replaceAll('"', '""')}"`)
+            .join(".");
+        });
+      if (tableNames.length > 0) {
+        const readiness = await db.client.query<{ name: string }>(
+          "SELECT name FROM unnest($1::text[]) AS name WHERE to_regclass(name) IS NULL",
+          [tableNames]
+        );
+        if (readiness.rows.length > 0) {
+          throw new Error(
+            `Database tables are missing: ${readiness.rows.map((row) => row.name).join(", ")}. Run app migrations using DATABASE_DIRECT_URL before startup.`
+          );
+        }
       }
       if (workflowRuntime) {
         await workflowRuntime.registry.start();

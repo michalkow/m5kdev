@@ -35,7 +35,7 @@ apps/server/src/modules/<module>/
 // m5k:ai:start
 - `AIModule` is registered in `app.ts` with an app-owned Mastra Agent (`assistant`). Conversation HTTP lives on `/ai`. Set `OPENROUTER_API_KEY` for live replies. Do not add a Starter service wrapper around `AIService` chat.
 // m5k:ai:end
-- Database commands live in server `db.ts` (`pnpm drizzle:reset`, `drizzle:sync`, `drizzle:seed`) and call Kernel `runDb` — they must not import `app.ts`.
+- Database commands live in server `db.ts` and call Kernel `runDb` through `DATABASE_DIRECT_URL`, without importing `app.ts`. Runtime uses `DATABASE_URL` through PgBouncer. Reset requires a disposable environment and preserves Mastra/vector data.
 
 ## Avoid Trivial Service Delegation
 

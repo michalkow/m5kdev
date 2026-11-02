@@ -5,10 +5,13 @@ import type {
 } from "@m5kdev/commons/modules/schemas/queryMatch";
 import {
   and,
+  arrayContains,
+  arrayOverlaps,
   between,
   eq,
   gt,
   gte,
+  ilike,
   inArray,
   isNotNull,
   isNull,
@@ -22,13 +25,12 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
-import type { SQLiteColumn, SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
+import type { PgColumn, PgTableWithColumns } from "drizzle-orm/pg-core";
 import { DateTime } from "luxon";
 import { err, ok, type Result } from "neverthrow";
 import type { ConditionBuilder } from "./base.repository";
-import { escapeLikeUserInput } from "./getGlobalSearchCondition";
 
-type ColumnKind = "string" | "number" | "date" | "boolean" | "json";
+type ColumnKind = "string" | "number" | "date" | "boolean" | "json" | "array";
 
 const SQL_OPS = new Set([
   "$eq",
@@ -73,21 +75,16 @@ function getUTCDateBoundaries(isoString: string): { start: Date; end: Date } {
   };
 }
 
-function jsonArrayLike(column: SQLiteColumn, value: string): SQL {
-  const needle = JSON.stringify(value);
-  const pattern = `%${escapeLikeUserInput(needle)}%`;
-  return sql`${column} LIKE ${pattern} ESCAPE '\\'`;
-}
-
-function columnKind(column: SQLiteColumn): ColumnKind {
-  const type = column.columnType;
-  if (type.includes("Timestamp")) return "date";
-  if (type.includes("Boolean")) return "boolean";
-  if (type.includes("TextJson") || column.dataType === "json") return "json";
-  if (type.includes("Integer") || type.includes("Real") || column.dataType === "number") {
-    return "number";
-  }
-  return "string";
+function columnKind(column: PgColumn): ColumnKind {
+  if (column.getSQLType() === "jsonb") return "json";
+  const type = column.dataType;
+  return type === "date" ||
+    type === "boolean" ||
+    type === "json" ||
+    type === "number" ||
+    type === "array"
+    ? type
+    : "string";
 }
 
 function asIsoString(value: unknown): string | undefined {
@@ -109,7 +106,7 @@ function asDate(value: unknown): Date | undefined {
   return undefined;
 }
 
-function compareValue(column: SQLiteColumn, value: unknown): unknown {
+function compareValue(column: PgColumn, value: unknown): unknown {
   if (columnKind(column) === "date") {
     return asDate(value) ?? value;
   }
@@ -147,25 +144,13 @@ function joinOr(parts: SQL[]): SQL | undefined {
   return or(...parts);
 }
 
-function jsonEqualsAnd(column: SQLiteColumn, values: readonly string[]): SQL | undefined {
-  const clauses = values.filter((v) => v.length > 0).map((v) => jsonArrayLike(column, v));
-  return joinAnd(clauses);
-}
-
-function jsonOneOfOr(column: SQLiteColumn, values: readonly string[]): SQL | undefined {
-  const clauses = values.filter((v) => v.length > 0).map((v) => jsonArrayLike(column, v));
-  return joinOr(clauses);
-}
-
-function emptyCondition(column: SQLiteColumn, isEmpty: boolean): SQL | undefined {
+function emptyCondition(column: PgColumn, isEmpty: boolean): SQL | undefined {
   const kind = columnKind(column);
   if (kind === "string") {
     return isEmpty ? or(isNull(column), eq(column, "")) : and(isNotNull(column), ne(column, ""));
   }
-  if (kind === "json") {
-    return isEmpty
-      ? or(isNull(column), eq(column, ""), eq(column, "[]"))
-      : and(isNotNull(column), ne(column, ""), ne(column, "[]"));
+  if (kind === "json" || kind === "array") {
+    return isEmpty ? or(isNull(column), eq(column, [])) : and(isNotNull(column), ne(column, []));
   }
   if (kind === "number") {
     return isEmpty ? or(isNull(column), eq(column, 0)) : and(isNotNull(column), ne(column, 0));
@@ -173,35 +158,47 @@ function emptyCondition(column: SQLiteColumn, isEmpty: boolean): SQL | undefined
   return undefined;
 }
 
-function applyEq(column: SQLiteColumn, value: unknown): Result<SQL | undefined, string> {
+function applyEq(column: PgColumn, value: unknown): Result<SQL | undefined, string> {
   if (value === null) return ok(isNull(column));
   if (Array.isArray(value)) {
-    if (columnKind(column) === "json") {
+    const kind = columnKind(column);
+    if (kind === "json" || kind === "array") {
       const strings = value.filter((v): v is string => typeof v === "string");
-      return ok(jsonEqualsAnd(column, strings));
+      if (strings.length === 0) return ok(undefined);
+      return ok(
+        kind === "array"
+          ? arrayContains(column, strings)
+          : sql`${column} @> ${JSON.stringify(strings)}::jsonb`
+      );
     }
-    return err("$eq array is only valid on json columns");
+    return err("$eq array is only valid on JSON or array columns");
   }
   return ok(eq(column, compareValue(column, value)));
 }
 
-function applyOneOf(column: SQLiteColumn, value: unknown): Result<SQL | undefined, string> {
+function applyOneOf(column: PgColumn, value: unknown): Result<SQL | undefined, string> {
   if (!Array.isArray(value)) {
     return err("$oneOf requires an array");
   }
   if (value.length === 0) return ok(undefined);
-  if (columnKind(column) === "json") {
+  const kind = columnKind(column);
+  if (kind === "json" || kind === "array") {
     const strings = value.filter((v): v is string => typeof v === "string");
-    return ok(jsonOneOfOr(column, strings));
+    if (strings.length === 0) return ok(undefined);
+    return ok(
+      kind === "array"
+        ? arrayOverlaps(column, strings)
+        : or(...strings.map((entry) => sql`${column} @> ${JSON.stringify([entry])}::jsonb`))
+    );
   }
   return ok(inArray(column, value));
 }
 
 function applyOperator(
-  column: SQLiteColumn,
+  column: PgColumn,
   op: string,
   value: unknown,
-  table: Record<string, SQLiteColumn>
+  table: Record<string, PgColumn>
 ): Result<SQL | undefined, string> {
   switch (op) {
     case "$eq":
@@ -220,6 +217,7 @@ function applyOperator(
     case "$in":
       if (!Array.isArray(value)) return err("$in requires an array");
       if (value.length === 0) return ok(neverMatch());
+      if (columnKind(column) === "array") return ok(neverMatch());
       return ok(
         inArray(
           column,
@@ -229,6 +227,7 @@ function applyOperator(
     case "$nin":
       if (!Array.isArray(value)) return err("$nin requires an array");
       if (value.length === 0) return ok(undefined);
+      if (columnKind(column) === "array") return ok(isNotNull(column));
       return ok(
         notInArray(
           column,
@@ -243,13 +242,13 @@ function applyOperator(
       return ok(like(column, value));
     case "$contains":
       if (typeof value !== "string") return err("$contains requires a string");
-      return ok(like(column, `%${value}%`));
+      return ok(ilike(column, `%${value}%`));
     case "$starts_with":
       if (typeof value !== "string") return err("$starts_with requires a string");
-      return ok(like(column, `${value}%`));
+      return ok(ilike(column, `${value}%`));
     case "$ends_with":
       if (typeof value !== "string") return err("$ends_with requires a string");
-      return ok(like(column, `%${value}`));
+      return ok(ilike(column, `%${value}`));
     case "$greater_than":
       return ok(gte(column, compareValue(column, value)));
     case "$less_than":
@@ -334,9 +333,9 @@ function applyOperator(
 }
 
 function applyOperatorMap(
-  column: SQLiteColumn,
+  column: PgColumn,
   ops: QueryMatchOperators,
-  table: Record<string, SQLiteColumn>
+  table: Record<string, PgColumn>
 ): Result<SQL | undefined, string> {
   const parts: SQL[] = [];
   for (const [op, raw] of Object.entries(ops)) {
@@ -359,9 +358,9 @@ function applyOperatorMap(
 }
 
 function applyFieldValue(
-  column: SQLiteColumn,
+  column: PgColumn,
   value: QueryMatchFieldValue,
-  table: Record<string, SQLiteColumn>
+  table: Record<string, PgColumn>
 ): Result<SQL | undefined, string> {
   if (isOperatorMap(value)) {
     return applyOperatorMap(column, value, table);
@@ -371,7 +370,7 @@ function applyFieldValue(
 
 function applyDocument(
   match: QueryMatch,
-  table: Record<string, SQLiteColumn>
+  table: Record<string, PgColumn>
 ): Result<SQL | undefined, string> {
   const parts: SQL[] = [];
 
@@ -436,7 +435,7 @@ function applyDocument(
   return ok(joinAnd(parts));
 }
 
-export function getConditionsFromMatch<T extends SQLiteTableWithColumns<any>>(
+export function getConditionsFromMatch<T extends PgTableWithColumns<any>>(
   conditions: ConditionBuilder,
   match: QueryMatch | undefined,
   table: T
@@ -444,7 +443,7 @@ export function getConditionsFromMatch<T extends SQLiteTableWithColumns<any>>(
   if (!match || Object.keys(match).length === 0) {
     return ok(undefined);
   }
-  const applied = applyDocument(match, table as unknown as Record<string, SQLiteColumn>);
+  const applied = applyDocument(match, table as unknown as Record<string, PgColumn>);
   if (applied.isErr()) return err(applied.error);
   conditions.push(applied.value);
   return ok(undefined);

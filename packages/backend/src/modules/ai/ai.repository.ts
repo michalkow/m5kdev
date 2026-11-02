@@ -1,7 +1,7 @@
-import type { LibSQLVector } from "@mastra/libsql";
+import type { PgVector } from "@mastra/pg";
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import { eq, sql } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { err, ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseExternaRepository, BaseTableRepository } from "../base/base.repository";
@@ -9,7 +9,7 @@ import { aiUsage } from "./ai.db";
 
 const schema = { aiUsage };
 type Schema = typeof schema;
-type Orm = LibSQLDatabase<Schema>;
+type Orm = NodePgDatabase<Schema>;
 
 export type AiUsageRow = InferSelectModel<Schema["aiUsage"]>;
 export type AiUsageInsert = InferInsertModel<Schema["aiUsage"]>;
@@ -42,10 +42,10 @@ export class AiUsageRepository extends BaseTableRepository<
     const usageResult = await this.throwableQuery(() =>
       this.orm
         .select({
-          inputTokens: sql<number>`SUM(${this.table.inputTokens})`,
-          outputTokens: sql<number>`SUM(${this.table.outputTokens})`,
-          totalTokens: sql<number>`SUM(${this.table.totalTokens})`,
-          cost: sql<number>`SUM(${this.table.cost})`,
+          inputTokens: sql<number>`SUM(${this.table.inputTokens})`.mapWith(Number),
+          outputTokens: sql<number>`SUM(${this.table.outputTokens})`.mapWith(Number),
+          totalTokens: sql<number>`SUM(${this.table.totalTokens})`.mapWith(Number),
+          cost: sql<number>`SUM(${this.table.cost})`.mapWith(Number),
         })
         .from(this.table)
         .where(eq(this.table.userId, userId))
@@ -57,9 +57,9 @@ export class AiUsageRepository extends BaseTableRepository<
 }
 
 export class AiVectorRepository extends BaseExternaRepository {
-  readonly vectorStore: LibSQLVector;
+  readonly vectorStore: PgVector;
 
-  constructor(vectorStore: LibSQLVector) {
+  constructor(vectorStore: PgVector) {
     super();
     this.vectorStore = vectorStore;
   }

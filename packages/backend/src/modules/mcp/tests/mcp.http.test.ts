@@ -2,11 +2,12 @@ import { existsSync, readFileSync } from "node:fs";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
-import { type Client, createClient } from "@libsql/client";
 import type { Express } from "express";
+import type { Pool } from "pg";
 import type { FunctionComponent } from "react";
 import { z } from "zod";
 import { createBackendApp, defineBackendModule } from "../../../app";
+import { createTestPool } from "../../../test/postgresql";
 import * as authTables from "../../auth/auth.db";
 import { AuthModule } from "../../auth/auth.module";
 import { EmailModule } from "../../email/email.module";
@@ -157,16 +158,16 @@ function registeredToolNames(): string[] {
 }
 
 describe("McpModule HTTP", () => {
-  let client: Client;
+  let client: Pool;
 
   beforeEach(() => {
-    client = createClient({ url: ":memory:" });
+    client = createTestPool();
     createMcpHandlerMock.mockClear();
     mockRegisteredTools.length = 0;
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
   });
 
   it("does not mount /mcp when McpModule is omitted", () => {

@@ -1,11 +1,12 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { type Client, createClient } from "@libsql/client";
+import type { Pool } from "pg";
 import type { Logger } from "pino";
 import type { FunctionComponent } from "react";
 import { createBackendApp } from "../../../app";
 import { createAppI18n } from "../../../i18n/app-i18n";
+import { createTestPool } from "../../../test/postgresql";
 import { EmailModule } from "../email.module";
 import { EmailService, type EmailTemplates } from "../email.service";
 
@@ -394,14 +395,14 @@ describe("EmailService", () => {
 });
 
 describe("createEmailBackendModule", () => {
-  let client: Client;
+  let client: Pool;
 
   beforeEach(() => {
-    client = createClient({ url: ":memory:" });
+    client = createTestPool();
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
   });
 
   it("builds the email service from backend app config", () => {

@@ -3,10 +3,11 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { type Client, createClient } from "@libsql/client";
 import type { Express } from "express";
+import type { Pool } from "pg";
 import type { FunctionComponent } from "react";
 import { createBackendApp } from "../../../app";
+import { createTestPool } from "../../../test/postgresql";
 import { EmailModule } from "../email.module";
 import { EmailPreviewModule } from "../email.preview.module";
 import type { EmailService, EmailTemplates } from "../email.service";
@@ -62,19 +63,19 @@ async function withServer(app: Express, run: (baseUrl: string) => Promise<void>)
 }
 
 describe("EmailPreviewModule HTTP", () => {
-  let client: Client;
+  let client: Pool;
   let outputDirectory: string;
   const previousNodeEnv = process.env.NODE_ENV;
 
   beforeEach(async () => {
-    client = createClient({ url: ":memory:" });
+    client = createTestPool();
     outputDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "m5kdev-email-preview-"));
     process.env.NODE_ENV = "test";
   });
 
   afterEach(async () => {
     process.env.NODE_ENV = previousNodeEnv;
-    await client.close?.();
+    await client.end();
     await fs.rm(outputDirectory, { recursive: true, force: true });
   });
 

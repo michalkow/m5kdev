@@ -8,7 +8,7 @@
       "eyebrow": "Included by Default",
       "title": "Auth, modules, and one honest feature.",
       "body": "This starter keeps the stack visible: Better Auth, Drizzle, tRPC, React Router, HeroUI, and a single editorial posts module.",
-      "local": "Local SQLite",
+      "local": "PostgreSQL",
       "auth": "Better Auth"
     },
     "navigation": {

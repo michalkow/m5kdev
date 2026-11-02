@@ -1,4 +1,4 @@
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { err, ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseTableRepository } from "../base/base.repository";
@@ -7,7 +7,7 @@ import { webhook } from "./webhook.db";
 
 const schema = { webhook };
 type Schema = typeof schema;
-type Orm = LibSQLDatabase<Schema>;
+type Orm = NodePgDatabase<Schema>;
 
 export class WebhookRepository extends BaseTableRepository<
   Orm,
@@ -23,14 +23,11 @@ export class WebhookRepository extends BaseTableRepository<
       return this.error("CONFLICT", "Inbound callback is not waiting");
     }
 
-    const payloadResult = this.throwable(() => ok(JSON.stringify(payload)));
-    if (payloadResult.isErr()) return err(payloadResult.error);
-
     const updateResult = await this.update(
       {
         id,
         status: WEBHOOK_STATUS_ENUM.COMPLETED,
-        payload: payloadResult.value,
+        payload,
       },
       tx
     );

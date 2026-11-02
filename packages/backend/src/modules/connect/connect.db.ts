@@ -1,7 +1,8 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { jsonb, text, timestamp } from "drizzle-orm/pg-core";
 import { v4 as uuidv4 } from "uuid";
+import { appDatabaseSchema } from "../../base/database.schema";
 
-export const connect = sqliteTable("connect", {
+export const connect = appDatabaseSchema.table("connect", {
   id: text("id").primaryKey().$default(uuidv4),
   userId: text("user_id").notNull(), // FK -> users.id
 
@@ -17,16 +18,16 @@ export const connect = sqliteTable("connect", {
   refreshToken: text("refresh_token"), // may be null if provider doesn’t issue refresh tokens
   tokenType: text("token_type"), // e.g. "bearer"
   scope: text("scope"), // space- or comma-separated list, for auditing
-  expiresAt: integer("expires_at", { mode: "timestamp" }), // epoch seconds
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
 
   // Provider-specific glue
   parentId: text("parent_id"), // e.g. FB Page’s connected IG business account, or org URN
-  metadataJson: text("metadata_json", { mode: "json" }), // JSON string for extras (region, perms, etc.)
+  metadataJson: jsonb("metadata_json"),
 
-  revokedAt: integer("revoked_at", { mode: "timestamp" }),
-  lastRefreshedAt: integer("last_refreshed_at", { mode: "timestamp" }),
-  createdAt: integer("created_at", { mode: "timestamp" })
+  revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "date" }),
+  lastRefreshedAt: timestamp("last_refreshed_at", { withTimezone: true, mode: "date" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .$default(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }),
 });

@@ -1,17 +1,18 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { type Client, createClient } from "@libsql/client";
 import type {
   ResolvedStripePlans,
   StripePlan,
 } from "@m5kdev/commons/modules/billing/billing.types";
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/libsql";
+import { drizzle } from "drizzle-orm/node-postgres";
+import type { Pool } from "pg";
 import type { FunctionComponent } from "react";
 import type Stripe from "stripe";
 import { createBackendApp } from "../../../app";
 import { createServiceActor } from "../../../base/base.actor";
+import { createTestPool, prepareTestSchema } from "../../../test/postgresql";
 import * as authTables from "../../auth/auth.db";
 import { EmailModule } from "../../email/email.module";
 import type { EmailTemplates } from "../../email/email.service";
@@ -413,53 +414,54 @@ function trialConvertedEvent(): Stripe.Event {
   } as unknown as Stripe.Event;
 }
 
-async function createTables(client: Client): Promise<void> {
-  await client.execute(`
-    CREATE TABLE users (
+async function createTables(client: Pool): Promise<void> {
+  const namespace = await prepareTestSchema(client);
+  await client.query(`
+    CREATE TABLE "${namespace}".users (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
-      email_verified INTEGER NOT NULL,
+      email_verified BOOLEAN NOT NULL,
       image TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
       role TEXT,
-      banned INTEGER,
+      banned BOOLEAN,
       ban_reason TEXT,
-      ban_expires INTEGER,
-      preferences TEXT DEFAULT '{}',
-      metadata TEXT DEFAULT '{}',
+      ban_expires TIMESTAMPTZ,
+      preferences JSONB DEFAULT '{}',
+      metadata JSONB DEFAULT '{}',
       onboarding INTEGER,
-      flags TEXT DEFAULT '[]',
+      flags TEXT[] DEFAULT '{}',
       locale TEXT,
-      closed_at INTEGER
+      closed_at TIMESTAMPTZ
     );
   `);
-  await client.execute(`
-    CREATE TABLE organizations (
+  await client.query(`
+    CREATE TABLE "${namespace}".organizations (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
       slug TEXT UNIQUE,
       logo TEXT,
       type TEXT,
       parent_id TEXT,
-      created_at INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
       onboarding INTEGER,
-      preferences TEXT DEFAULT '{}',
-      metadata TEXT DEFAULT '{}',
-      flags TEXT DEFAULT '[]',
+      preferences JSONB DEFAULT '{}',
+      metadata JSONB DEFAULT '{}',
+      flags TEXT[] DEFAULT '{}',
       locale TEXT,
       currency TEXT,
       stripe_customer_id TEXT UNIQUE,
       stripe_sandbox_customer_id TEXT UNIQUE,
-      billing_exempt INTEGER NOT NULL DEFAULT 0,
-      allow_cardless_trial INTEGER NOT NULL DEFAULT 0,
-      cardless_trial_consumed TEXT DEFAULT '{}',
-      closed_at INTEGER
+      billing_exempt BOOLEAN NOT NULL DEFAULT false,
+      allow_cardless_trial BOOLEAN NOT NULL DEFAULT false,
+      cardless_trial_consumed JSONB DEFAULT '{}',
+      closed_at TIMESTAMPTZ
     );
   `);
-  await client.execute(`
-    CREATE TABLE members (
+  await client.query(`
+    CREATE TABLE "${namespace}".members (
       id TEXT PRIMARY KEY NOT NULL,
       organization_id TEXT NOT NULL,
       user_id TEXT,
@@ -467,50 +469,50 @@ async function createTables(client: Client): Promise<void> {
       name TEXT NOT NULL DEFAULT '',
       image TEXT,
       role TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      deleted_at INTEGER,
-      preferences TEXT DEFAULT '{}',
-      metadata TEXT DEFAULT '{}',
+      created_at TIMESTAMPTZ NOT NULL,
+      deleted_at TIMESTAMPTZ,
+      preferences JSONB DEFAULT '{}',
+      metadata JSONB DEFAULT '{}',
       onboarding INTEGER,
-      flags TEXT DEFAULT '[]'
+      flags TEXT[] DEFAULT '{}'
     );
   `);
-  await client.execute(`
-    CREATE TABLE subscriptions (
+  await client.query(`
+    CREATE TABLE "${namespace}".subscriptions (
       id TEXT PRIMARY KEY NOT NULL,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ,
       plan TEXT NOT NULL,
       reference_id TEXT NOT NULL,
       stripe_customer_id TEXT,
       stripe_subscription_id TEXT,
       status TEXT NOT NULL,
-      period_start INTEGER,
-      period_end INTEGER,
+      period_start TIMESTAMPTZ,
+      period_end TIMESTAMPTZ,
       price_id TEXT,
       interval TEXT,
       interval_count INTEGER,
-      interval_picked INTEGER DEFAULT 0,
+      interval_picked BOOLEAN DEFAULT false,
       unit_amount INTEGER,
-      discounts TEXT,
-      cancel_at_period_end INTEGER,
-      cancel_at INTEGER,
-      canceled_at INTEGER,
+      discounts TEXT[],
+      cancel_at_period_end BOOLEAN,
+      cancel_at TIMESTAMPTZ,
+      canceled_at TIMESTAMPTZ,
       seats INTEGER,
       member_id TEXT,
-      trial_start INTEGER,
-      trial_end INTEGER,
+      trial_start TIMESTAMPTZ,
+      trial_end TIMESTAMPTZ,
       environment TEXT
     );
   `);
-  await client.execute(`
+  await client.query(`
     CREATE UNIQUE INDEX subscriptions_reference_environment_unique
-    ON subscriptions (reference_id, environment)
+    ON "${namespace}".subscriptions (reference_id, environment)
     WHERE environment IS NOT NULL;
   `);
 }
 
-async function seedOrg(client: Client, memberCount = 1): Promise<void> {
+async function seedOrg(client: Pool, memberCount = 1): Promise<void> {
   const orm = drizzle(client, {
     schema: {
       users: authTables.users,
@@ -542,7 +544,7 @@ async function seedOrg(client: Client, memberCount = 1): Promise<void> {
 }
 
 async function insertOrgSubscription(
-  client: Client,
+  client: Pool,
   values: {
     id: string;
     environment?: "production" | "sandbox" | null;
@@ -566,7 +568,7 @@ async function insertOrgSubscription(
 }
 
 async function bootBilling(options: {
-  client: Client;
+  client: Pool;
   templates: EmailTemplates;
   outputDirectory: string;
   stripe: Stripe;
@@ -652,18 +654,18 @@ function invoicePaymentFailedEvent(): Stripe.Event {
 }
 
 describe("BillingService.processEvent trial_will_end", () => {
-  let client: Client;
+  let client: Pool;
   let outputDirectory: string;
 
   beforeEach(async () => {
-    client = createClient({ url: ":memory:" });
+    client = createTestPool();
     outputDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "m5kdev-billing-email-"));
     await createTables(client);
     await seedOrg(client);
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
     await fs.rm(outputDirectory, { recursive: true, force: true });
   });
 
@@ -765,18 +767,18 @@ describe("BillingService.processEvent trial_will_end", () => {
 });
 
 describe("BillingService Organization paywall", () => {
-  let client: Client;
+  let client: Pool;
   let outputDirectory: string;
 
   beforeEach(async () => {
-    client = createClient({ url: ":memory:" });
+    client = createTestPool();
     outputDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "m5kdev-billing-org-"));
     await createTables(client);
     await seedOrg(client);
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
     await fs.rm(outputDirectory, { recursive: true, force: true });
   });
 
@@ -2153,18 +2155,18 @@ describe("BillingService Organization paywall", () => {
 });
 
 describe("BillingService Billing Module admin", () => {
-  let client: Client;
+  let client: Pool;
   let outputDirectory: string;
 
   beforeEach(async () => {
-    client = createClient({ url: ":memory:" });
+    client = createTestPool();
     outputDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "m5kdev-billing-admin-"));
     await createTables(client);
     await seedOrg(client);
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
     await fs.rm(outputDirectory, { recursive: true, force: true });
   });
 

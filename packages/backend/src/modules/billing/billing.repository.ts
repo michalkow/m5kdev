@@ -17,7 +17,7 @@ import {
 import type { QueryInput } from "@m5kdev/commons/modules/schemas/query.schema";
 import type { InferSelectModel } from "drizzle-orm";
 import { and, count, desc, eq, inArray, isNull, like, ne, type SQL } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { err, ok } from "neverthrow";
 import type { Stripe } from "stripe";
 import { posthogCapture } from "../../utils/posthog";
@@ -29,7 +29,7 @@ import { mergeSessionCreateParams } from "./billing.merge";
 
 const schema = { ...auth, ...billing };
 type Schema = typeof schema;
-type Orm = LibSQLDatabase<Schema>;
+type Orm = NodePgDatabase<Schema>;
 
 const ACCESS_STATUSES = ["active", "trialing", "past_due"] as const;
 const OPEN_STATUSES: readonly string[] = [

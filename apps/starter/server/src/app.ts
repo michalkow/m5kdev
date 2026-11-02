@@ -2,6 +2,7 @@
 import { createBackendApp } from "@m5kdev/backend/app";
 import { shutdownTelemetry } from "@m5kdev/backend/lib/otel";
 // m5k:ai:start
+import { defineBackendModule } from "@m5kdev/backend/app";
 import { AIModule } from "@m5kdev/backend/modules/ai/ai.module";
 // m5k:ai:end
 import { createBetterAuth } from "@m5kdev/backend/modules/auth/auth.lib";
@@ -31,7 +32,13 @@ import {
 import { NOTIFICATION_KINDS } from "@starter-app/shared/modules/notification/notification.constants";
 // m5k:notifications:end
 // m5k:ai:start
-import { mastra, openrouter } from "./modules/conversation/conversation.mastra";
+import {
+  conversationStorage,
+  mastra,
+  openrouter,
+  verifyConversationPersistence,
+} from "./modules/conversation/conversation.mastra";
+import { conversationVectorSchema } from "./modules/conversation/conversation.persistence";
 // m5k:ai:end
 // m5k:workflows:start
 import { DemoWorkflowModule } from "./modules/demo-workflow/demo-workflow.module";
@@ -44,27 +51,15 @@ import * as schema from "./schema";
 
 const appUrl = process.env.VITE_APP_URL ?? "http://localhost:5173";
 const serverUrl = process.env.VITE_SERVER_URL ?? "http://localhost:8080";
-const databaseUrl = process.env.DATABASE_URL ?? "file:./local.db";
-const syncUrl = process.env.TURSO_DATABASE_URL;
-const authToken = process.env.TURSO_AUTH_TOKEN;
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error("DATABASE_URL must point to the runtime PgBouncer connection");
 // m5k:workflows:start
 const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
 // m5k:workflows:end
 const resendApiKey = process.env.RESEND_API_KEY;
 const enableWaitlist = process.env.VITE_ENABLE_WAITLIST === "true";
 
-const connection =
-  syncUrl && authToken
-    ? {
-        url: databaseUrl,
-        syncUrl,
-        authToken,
-        syncInterval: 60,
-        readYourWrites: true,
-      }
-    : {
-        url: databaseUrl,
-      };
+const connection = { connectionString: databaseUrl };
 
 export const builtBackendApp = createBackendApp(
   {
@@ -129,6 +124,15 @@ export const builtBackendApp = createBackendApp(
     // m5k:ai:start
     new AIModule({
       libs: { mastra, openrouter },
+      vectorStore: {
+        connectionString: process.env.VECTOR_DATABASE_URL || databaseUrl,
+        schemaName: conversationVectorSchema,
+      },
+    }),
+    defineBackendModule({
+      id: "conversation-persistence",
+      startup: verifyConversationPersistence,
+      shutdown: () => conversationStorage.close(),
     }),
     // m5k:ai:end
     // m5k:files:start

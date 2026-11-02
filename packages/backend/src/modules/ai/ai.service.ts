@@ -24,6 +24,7 @@ import { jsonrepair } from "jsonrepair";
 import { err, ok } from "neverthrow";
 import type Replicate from "replicate";
 import type { ZodString, ZodType, z } from "zod";
+import { ServerError } from "../../utils/errors";
 import { withSpan } from "../../utils/telemetry";
 import type { RequiredServiceActor } from "../base/base.actor";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
@@ -148,12 +149,38 @@ function readAgentMemory(agent: unknown): unknown | Promise<unknown> | undefined
   return getMemory.call(agent);
 }
 
+async function memoryThreadExists(params: {
+  memory: unknown;
+  threadId: string;
+  resourceId: string;
+}): Promise<boolean> {
+  if (typeof params.memory !== "object" || params.memory === null) return false;
+  const getThreadById = Reflect.get(params.memory, "getThreadById");
+  if (typeof getThreadById !== "function") return true;
+  const thread: unknown = await getThreadById.call(params.memory, { threadId: params.threadId });
+  if (thread === null) return false;
+  if (
+    typeof thread !== "object" ||
+    !("resourceId" in thread) ||
+    thread.resourceId !== params.resourceId
+  ) {
+    throw new ServerError({
+      code: "NOT_FOUND",
+      layer: "service",
+      layerName: "AIService",
+      message: "Thread not found",
+    });
+  }
+  return true;
+}
+
 async function recallMemoryMessages(params: {
   memory: unknown;
   threadId: string;
   resourceId: string;
 }): Promise<unknown[]> {
   if (typeof params.memory !== "object" || params.memory === null) return [];
+  if (!(await memoryThreadExists(params))) return [];
   const recall = Reflect.get(params.memory, "recall");
   if (typeof recall !== "function") return [];
   const result: unknown = await recall.call(params.memory, {
@@ -438,6 +465,16 @@ export class AIService<MastraInstance extends Mastra> extends BaseService<
     if (resolved.isErr()) return err(resolved.error);
 
     const memory = await readAgentMemory(resolved.value);
+    if (memory && params.threadId) {
+      const ownership = await this.throwablePromise(() =>
+        memoryThreadExists({
+          memory,
+          threadId: params.threadId!,
+          resourceId: params.actor.userId,
+        })
+      );
+      if (ownership.isErr()) return err(ownership.error);
+    }
     const streamParams = memory
       ? {
           messages: lastUserMessages(params.messages),
