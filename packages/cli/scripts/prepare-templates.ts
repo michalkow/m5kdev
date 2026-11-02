@@ -114,6 +114,7 @@ const FEATURE_MANIFEST = {
       paths: [
         "apps/webapp/src/modules/conversation/",
         "apps/server/src/modules/conversation/",
+        "apps/server/mastra.ts",
         "apps/shared/src/modules/conversation/",
         "apps/e2e/tests/conversation.spec.ts",
       ],
@@ -145,9 +146,11 @@ const FEATURE_MANIFEST = {
       { pattern: "**/fly.toml", policy: "ignore" },
       { pattern: "**/drizzle/*.sql", policy: "ignore" },
       { pattern: "**/drizzle/meta/**", policy: "ignore" },
+      { pattern: "**/drizzle-postgresql/**", policy: "ignore" },
       { pattern: "apps/server/db.ts", policy: "ensure" },
       { pattern: "apps/server/db.e2e.ts", policy: "ensure" },
       { pattern: "apps/server/drizzle.config.ts", policy: "ensure" },
+      { pattern: "apps/server/src/drizzle.schema.ts", policy: "ensure" },
       { pattern: "GLOSSARY.md", policy: "ensure" },
       { pattern: "docs/agents/**", policy: "ensure" },
       { pattern: "docs/adr/**", policy: "ensure" },
@@ -175,6 +178,7 @@ function tokenize(content: string): string {
     .replaceAll("@starter-app", "{{PACKAGE_SCOPE}}")
     .replaceAll("M5 Starter", "{{APP_NAME}}")
     .replaceAll("starter-app", "{{APP_SLUG}}")
+    .replace(/^(\s*"mastra:init":.*)$/m, "// m5k:ai:start\n$1\n// m5k:ai:end")
     .replace(/"(@m5kdev\/[a-z-]+)": "workspace:\*"/g, `"$1": "${MANAGED_CATALOG_SPECIFIER}"`)
     .replaceAll('"catalog:"', `"${MANAGED_CATALOG_SPECIFIER}"`);
 }

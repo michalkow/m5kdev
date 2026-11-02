@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { oauthClients } from "./auth.oauth.db";
 
 export interface McpDcrRestoreStore {
@@ -12,7 +12,7 @@ export interface McpDcrRestoreStore {
 export class McpDcrOauthClientRepository implements McpDcrRestoreStore {
   constructor(
     private readonly input: {
-      orm: LibSQLDatabase<Record<string, unknown>>;
+      orm: NodePgDatabase<Record<string, unknown>>;
       oauthClients: typeof oauthClients;
     }
   ) {}

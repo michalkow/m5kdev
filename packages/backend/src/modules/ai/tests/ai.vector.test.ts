@@ -1,49 +1,149 @@
+import { PgVector, PostgresStore } from "@mastra/pg";
+import { createTestPool } from "../../../test/postgresql";
+import { AiVectorRepository } from "../ai.repository";
 import { createAiVectorStore } from "../ai.vector";
 
-jest.mock("@mastra/libsql", () => ({
-  LibSQLVector: jest.fn().mockImplementation((config: { id: string; url: string }) => ({
-    id: config.id,
-    url: config.url,
-    close: jest.fn(),
-  })),
-}));
+const namespace = `vector_test_${process.pid}`;
 
-describe("createAiVectorStore", () => {
-  const env = { NODE_ENV: "development" } as Record<string, string | undefined>;
+describe("PostgreSQL embedding persistence", () => {
+  const pool = createTestPool();
+  let provisioner: PgVector;
+  let runtime: PgVector;
 
-  it("rejects a local vector file that matches context.databaseUrl", () => {
-    expect(() =>
-      createAiVectorStore({ localUrl: "file:./local.db" }, { env, databaseUrl: "file:./local.db" })
-    ).toThrow(/must not share the app database file/);
+  beforeAll(async () => {
+    await pool.query(`CREATE SCHEMA "${namespace}"`);
+    provisioner = new PgVector({
+      id: "provision",
+      connectionString: process.env.TEST_DATABASE_DIRECT_URL!,
+      schemaName: namespace,
+    });
+    await provisioner.createIndex({
+      indexName: "mastra_embeddings",
+      dimension: 3,
+      metric: "cosine",
+      buildIndex: false,
+    });
+    runtime = createAiVectorStore({
+      connectionString: process.env.TEST_DATABASE_URL,
+      schemaName: namespace,
+    });
   });
 
-  it("uses context.databaseUrl over env.DATABASE_URL for the conflict check", () => {
-    expect(() =>
-      createAiVectorStore(
-        { localUrl: "file:./local.db" },
-        {
-          env: { ...env, DATABASE_URL: "file:./other.db" },
-          databaseUrl: "file:./local.db",
-        }
-      )
-    ).toThrow(/must not share the app database file/);
+  beforeEach(async () => {
+    await pool.query(`TRUNCATE "${namespace}".mastra_embeddings`);
   });
 
-  it("falls back to env.DATABASE_URL when context.databaseUrl is unset", () => {
-    expect(() =>
-      createAiVectorStore(
-        { localUrl: "file:./local.db" },
-        { env: { ...env, DATABASE_URL: "file:./local.db" } }
-      )
-    ).toThrow(/must not share the app database file/);
+  afterAll(async () => {
+    await runtime?.disconnect();
+    await provisioner?.disconnect();
+    await pool.query(`DROP SCHEMA "${namespace}" CASCADE`);
+    await pool.end();
   });
 
-  it("allows a distinct local vector file when the app database is configured programmatically", () => {
-    const store = createAiVectorStore(
-      { localUrl: "file:./vector.db" },
-      { env, databaseUrl: "file:./local.db" }
+  it("rejects removed local-file configuration", () => {
+    expect(() => createAiVectorStore({ connectionString: "file:./vector.db" })).toThrow(
+      /PostgreSQL/
     );
+  });
 
-    expect(store).toMatchObject({ url: "file:./vector.db" });
+  it("persists embeddings with metadata through the runtime connection", async () => {
+    const repository = new AiVectorRepository(runtime);
+    const result = await repository.upsertEmbeddings({
+      indexName: "mastra_embeddings",
+      embed: { embeddings: [[1, 0, 0]], chunks: [{ text: 'quote " and \\ and %' }] },
+      metadata: { userId: "personal-user", document: { kind: "example" } },
+    });
+    expect(result.isOk()).toBe(true);
+    expect((await runtime.describeIndex({ indexName: "mastra_embeddings" })).count).toBe(1);
+    const matches = await runtime.query({
+      indexName: "mastra_embeddings",
+      queryVector: [1, 0, 0],
+      topK: 1,
+    });
+    expect(matches[0]?.metadata).toEqual({
+      userId: "personal-user",
+      document: { kind: "example" },
+      text: 'quote " and \\ and %',
+    });
+  });
+
+  it("rejects dimension mismatches without losing existing vectors", async () => {
+    const repository = new AiVectorRepository(runtime);
+    await runtime.upsert({
+      indexName: "mastra_embeddings",
+      vectors: [[1, 0, 0]],
+      ids: ["preserved"],
+    });
+    const result = await repository.upsertEmbeddings({
+      indexName: "mastra_embeddings",
+      embed: { embeddings: [[1, 0]], chunks: [{ text: "invalid" }] },
+    });
+    expect(result.isErr()).toBe(true);
+    expect((await runtime.describeIndex({ indexName: "mastra_embeddings" })).count).toBe(1);
+  });
+
+  it("keeps personal Threads durable across storage restart and resource-scoped", async () => {
+    const provisionerStorage = new PostgresStore({
+      id: "thread-init",
+      connectionString: process.env.TEST_DATABASE_DIRECT_URL!,
+      schemaName: namespace,
+    });
+    try {
+      await provisionerStorage.init();
+      const memory = await provisionerStorage.getStore("memory");
+      await memory!.saveThread({
+        thread: {
+          id: "conversation-1",
+          resourceId: "user-1",
+          title: "Durable conversation",
+          createdAt: new Date("2026-01-01T00:00:00Z"),
+          updatedAt: new Date("2026-01-01T00:00:00Z"),
+        },
+      });
+      await memory!.saveMessages({
+        messages: [
+          {
+            id: "message-1",
+            threadId: "conversation-1",
+            resourceId: "user-1",
+            role: "user",
+            createdAt: new Date("2026-01-01T00:00:00Z"),
+            content: { format: 2, parts: [{ type: "text", text: "Persisted across restart" }] },
+          },
+        ],
+      });
+    } finally {
+      await provisionerStorage.close();
+    }
+    const restarted = new PostgresStore({
+      id: "thread-runtime",
+      connectionString: process.env.TEST_DATABASE_URL!,
+      schemaName: namespace,
+      disableInit: true,
+    });
+    try {
+      const memory = await restarted.getStore("memory");
+      expect(
+        await memory!.getThreadById({ threadId: "conversation-1", resourceId: "user-1" })
+      ).toMatchObject({
+        id: "conversation-1",
+        resourceId: "user-1",
+        title: "Durable conversation",
+      });
+      expect(
+        await memory!.getThreadById({ threadId: "conversation-1", resourceId: "other-user" })
+      ).toBeNull();
+      expect(
+        (await memory!.listMessages({ threadId: "conversation-1", resourceId: "user-1" })).messages
+      ).toMatchObject([
+        { id: "message-1", content: { parts: [{ text: "Persisted across restart" }] } },
+      ]);
+      expect(
+        (await memory!.listMessages({ threadId: "conversation-1", resourceId: "other-user" }))
+          .messages
+      ).toEqual([]);
+    } finally {
+      await restarted.close();
+    }
   });
 });

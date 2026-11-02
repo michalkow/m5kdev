@@ -979,8 +979,7 @@ describe("scaffoldProject", () => {
     );
     expect(flyToml).toContain('app = "deploy-desk-app"');
     expect(flyToml).toContain('primary_region = "iad"');
-    expect(flyToml).toContain('source = "libsql_data"');
-    expect(flyToml).toContain('destination = "/app/data"');
+    expect(flyToml).not.toContain("[[mounts]]");
     expect(flyToml).toContain('memory = "1gb"');
     expect(flyToml).toContain("internal_port = 8080");
     expect(flyToml).toContain("force_https = true");
@@ -991,7 +990,8 @@ describe("scaffoldProject", () => {
       path.join(result.targetDirectory, "apps/shared/.env.production.example"),
       "utf8"
     );
-    expect(envExample).toContain("DATABASE_URL=file:/app/data/local.db");
+    expect(envExample).toContain("DATABASE_URL=");
+    expect(envExample).toContain("DATABASE_DIRECT_URL=");
     expect(envExample).toContain("REDIS_URL");
     expect(envExample).not.toContain("{{");
 

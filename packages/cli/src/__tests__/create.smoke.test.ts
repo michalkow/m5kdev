@@ -44,10 +44,6 @@ maybeDescribe("create command smoke test", () => {
         ok: true,
       });
 
-      await execFileAsync("pnpm", ["--filter", "./apps/server", "generate:schema"], {
-        cwd: result.targetDirectory,
-        env: process.env,
-      });
       await execFileAsync("pnpm", ["check-types"], {
         cwd: result.targetDirectory,
         env: process.env,
@@ -56,7 +52,11 @@ maybeDescribe("create command smoke test", () => {
         cwd: result.targetDirectory,
         env: process.env,
       });
-      await execFileAsync("pnpm", ["--filter", "./apps/server", "sync"], {
+      await execFileAsync("pnpm", ["--filter", "./apps/server", "drizzle:migrate"], {
+        cwd: result.targetDirectory,
+        env: process.env,
+      });
+      await execFileAsync("pnpm", ["--filter", "./apps/server", "drizzle:seed"], {
         cwd: result.targetDirectory,
         env: process.env,
       });

@@ -1,28 +1,29 @@
-import { createClient } from "@libsql/client";
 import type { QueryFilter } from "@m5kdev/commons/modules/schemas/query.schema";
 import { queryFiltersToMatch } from "@m5kdev/commons/modules/schemas/queryMatch";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
-import { drizzle } from "drizzle-orm/libsql";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { boolean, integer, pgSchema, text, timestamp } from "drizzle-orm/pg-core";
+import { createTestPool } from "../test/postgresql";
 import { BaseTableRepository } from "./base.repository";
 
-const matchItems = sqliteTable("match_items", {
+const testSchema = `match_test_${process.pid}`;
+const matchItems = pgSchema(testSchema).table("match_items", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   status: text("status").notNull(),
   age: integer("age").notNull(),
-  featured: integer("featured", { mode: "boolean" }).notNull(),
-  publishedAt: integer("published_at", { mode: "timestamp" }).notNull(),
-  startsAt: integer("starts_at", { mode: "timestamp" }).notNull(),
-  endsAt: integer("ends_at", { mode: "timestamp" }),
-  tags: text("tags", { mode: "json" }).notNull().$type<string[]>(),
+  featured: boolean("featured").notNull(),
+  publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  endsAt: timestamp("ends_at", { withTimezone: true }),
+  tags: text("tags").array().notNull(),
   memberId: text("member_id").notNull(),
-  deletedAt: integer("deleted_at", { mode: "timestamp" }),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
 const schema = { matchItems };
 type Schema = typeof schema;
-type Orm = LibSQLDatabase<Schema>;
+type Orm = NodePgDatabase<Schema>;
 
 class MatchItemRepository extends BaseTableRepository<
   Orm,
@@ -93,24 +94,25 @@ function rowIds(result: { rows: { id: string }[] }): string[] {
 }
 
 describe("BaseTableRepository matchList / matchFind", () => {
-  const client = createClient({ url: ":memory:" });
+  const client = createTestPool();
   const orm = drizzle(client, { schema }) as Orm;
   const repo = new MatchItemRepository({ orm, schema, table: matchItems });
 
   beforeAll(async () => {
-    await client.execute(`
-      CREATE TABLE match_items (
+    await client.query(`CREATE SCHEMA "${testSchema}"`);
+    await client.query(`
+      CREATE TABLE "${testSchema}".match_items (
         id TEXT PRIMARY KEY NOT NULL,
         name TEXT NOT NULL,
         status TEXT NOT NULL,
         age INTEGER NOT NULL,
-        featured INTEGER NOT NULL,
-        published_at INTEGER NOT NULL,
-        starts_at INTEGER NOT NULL,
-        ends_at INTEGER,
-        tags TEXT NOT NULL,
+        featured BOOLEAN NOT NULL,
+        published_at TIMESTAMPTZ NOT NULL,
+        starts_at TIMESTAMPTZ NOT NULL,
+        ends_at TIMESTAMPTZ,
+        tags TEXT[] NOT NULL,
         member_id TEXT NOT NULL,
-        deleted_at INTEGER
+        deleted_at TIMESTAMPTZ
       );
     `);
 
@@ -177,6 +179,11 @@ describe("BaseTableRepository matchList / matchFind", () => {
         memberId: "m3",
       },
     ]);
+  });
+
+  afterAll(async () => {
+    await client.query(`DROP SCHEMA "${testSchema}" CASCADE`);
+    await client.end();
   });
 
   it("returns matching rows for a shorthand equality match", async () => {

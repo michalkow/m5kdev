@@ -1,5 +1,5 @@
 import type { Mastra } from "@mastra/core";
-import { LibSQLVector } from "@mastra/libsql";
+import { PgVector } from "@mastra/pg";
 import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import type Replicate from "replicate";
 import { createBackendRouterMap } from "../../app";
@@ -32,9 +32,9 @@ export type AIModuleConfig<MastraInstance extends Mastra, Namespace extends stri
   /**
    * Either a preconfigured store (caller owns its lifecycle) or a config the
    * module resolves via {@link createAiVectorStore} and closes on shutdown:
-   * remote URLs are used directly, a local file only as a dev fallback.
+   * PostgreSQL uses a runtime connection; initialization is an explicit deployment step.
    */
-  vectorStore?: LibSQLVector | AiVectorStoreConfig;
+  vectorStore?: PgVector | AiVectorStoreConfig;
 };
 
 type AIModuleDeps = { auth: AuthModule };
@@ -65,7 +65,7 @@ export class AIModule<
   readonly id = "ai";
   override readonly dependsOn = ["auth"] as const;
 
-  private ownedVectorStore?: LibSQLVector;
+  private ownedVectorStore?: PgVector;
 
   constructor(private readonly config: AIModuleConfig<MastraInstance, Namespace>) {
     super();
@@ -74,9 +74,9 @@ export class AIModule<
   private resolveVectorStore(args: {
     env: Record<string, string | undefined>;
     databaseUrl?: string;
-  }): LibSQLVector | undefined {
+  }): PgVector | undefined {
     if (!this.config.vectorStore) return undefined;
-    if (this.config.vectorStore instanceof LibSQLVector) return this.config.vectorStore;
+    if (this.config.vectorStore instanceof PgVector) return this.config.vectorStore;
     this.ownedVectorStore ??= createAiVectorStore(this.config.vectorStore, {
       env: args.env,
       databaseUrl: args.databaseUrl,
@@ -98,7 +98,7 @@ export class AIModule<
   }
 
   override async shutdown() {
-    await this.ownedVectorStore?.close();
+    await this.ownedVectorStore?.disconnect();
   }
 
   override services({ repositories }: ModuleServicesContext<AIModuleDeps, AIModuleRepositories>) {

@@ -39,7 +39,7 @@ That choice is what lets the framework go further than wiring:
 | Monorepo | pnpm workspaces + Turborepo |
 | HTTP server | Express |
 | API | tRPC (typed end to end via `AppRouter`) |
-| Database | Drizzle ORM on libSQL/SQLite |
+| Database | Drizzle ORM on PostgreSQL; pgvector for embeddings |
 | Auth | Better Auth (organizations, invitations, API keys, admin) |
 | Jobs / queues | BullMQ on Redis |
 | Email | Resend + React Email templates |

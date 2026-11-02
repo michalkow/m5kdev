@@ -1,5 +1,6 @@
-import { type Client, createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
+import { drizzle } from "drizzle-orm/node-postgres";
+import type { Pool } from "pg";
+import { createTestPool, prepareTestSchema } from "../../../test/postgresql";
 import * as authTables from "../../auth/auth.db";
 import { AuthOrganizationRepository, AuthUserRepository } from "../../auth/auth.repository";
 import { mcpAllowlistEntries } from "../mcp.db";
@@ -21,94 +22,95 @@ export const mcpTestSchema = {
   mcpAllowlistEntries,
 };
 
-export async function createMcpTables(client: Client): Promise<void> {
-  await client.execute(`
-    CREATE TABLE users (
+export async function createMcpTables(client: Pool): Promise<void> {
+  const namespace = await prepareTestSchema(client);
+  await client.query(`
+    CREATE TABLE "${namespace}".users (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
-      email_verified INTEGER NOT NULL,
+      email_verified BOOLEAN NOT NULL,
       image TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
       role TEXT,
-      banned INTEGER,
+      banned BOOLEAN,
       ban_reason TEXT,
-      ban_expires INTEGER,
-      preferences TEXT DEFAULT '{}',
-      metadata TEXT DEFAULT '{}',
+      ban_expires TIMESTAMPTZ,
+      preferences JSONB DEFAULT '{}',
+      metadata JSONB DEFAULT '{}',
       onboarding INTEGER,
-      flags TEXT DEFAULT '[]',
+      flags TEXT[] DEFAULT '{}',
       locale TEXT,
-      closed_at INTEGER
+      closed_at TIMESTAMPTZ
     );
   `);
-  await client.execute(`
-    CREATE TABLE organizations (
+  await client.query(`
+    CREATE TABLE "${namespace}".organizations (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
       slug TEXT UNIQUE,
       logo TEXT,
       type TEXT,
       parent_id TEXT,
-      created_at INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
       onboarding INTEGER,
-      preferences TEXT DEFAULT '{}',
-      metadata TEXT DEFAULT '{}',
-      flags TEXT DEFAULT '[]',
+      preferences JSONB DEFAULT '{}',
+      metadata JSONB DEFAULT '{}',
+      flags TEXT[] DEFAULT '{}',
       locale TEXT,
       currency TEXT,
       stripe_customer_id TEXT UNIQUE,
       stripe_sandbox_customer_id TEXT UNIQUE,
-      billing_exempt INTEGER NOT NULL DEFAULT 0,
-      allow_cardless_trial INTEGER NOT NULL DEFAULT 0,
-      cardless_trial_consumed TEXT DEFAULT '{}',
-      closed_at INTEGER
+      billing_exempt BOOLEAN NOT NULL DEFAULT false,
+      allow_cardless_trial BOOLEAN NOT NULL DEFAULT false,
+      cardless_trial_consumed JSONB DEFAULT '{}',
+      closed_at TIMESTAMPTZ
     );
   `);
-  await client.execute(`
-    CREATE TABLE members (
+  await client.query(`
+    CREATE TABLE "${namespace}".members (
       id TEXT PRIMARY KEY NOT NULL,
-      organization_id TEXT NOT NULL REFERENCES organizations(id),
-      user_id TEXT REFERENCES users(id),
+      organization_id TEXT NOT NULL REFERENCES "${namespace}".organizations(id),
+      user_id TEXT REFERENCES "${namespace}".users(id),
       email TEXT,
       name TEXT NOT NULL DEFAULT '',
       image TEXT,
       role TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      deleted_at INTEGER,
-      preferences TEXT DEFAULT '{}',
-      metadata TEXT DEFAULT '{}',
+      created_at TIMESTAMPTZ NOT NULL,
+      deleted_at TIMESTAMPTZ,
+      preferences JSONB DEFAULT '{}',
+      metadata JSONB DEFAULT '{}',
       onboarding INTEGER,
-      flags TEXT DEFAULT '[]'
+      flags TEXT[] DEFAULT '{}'
     );
   `);
-  await client.execute(`
-    CREATE TABLE invitations (
+  await client.query(`
+    CREATE TABLE "${namespace}".invitations (
       id TEXT PRIMARY KEY NOT NULL,
       organization_id TEXT NOT NULL,
       member_id TEXT,
       email TEXT NOT NULL,
       role TEXT,
       status TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      expires_at INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
       inviter_id TEXT NOT NULL
     );
   `);
-  await client.execute(`
-    CREATE TABLE mcp_allowlist_entries (
+  await client.query(`
+    CREATE TABLE "${namespace}".mcp_allowlist_entries (
       id TEXT PRIMARY KEY NOT NULL,
       oauth_client_id TEXT NOT NULL,
-      user_id TEXT NOT NULL REFERENCES users(id),
-      organization_id TEXT NOT NULL REFERENCES organizations(id),
-      created_at INTEGER NOT NULL,
+      user_id TEXT NOT NULL REFERENCES "${namespace}".users(id),
+      organization_id TEXT NOT NULL REFERENCES "${namespace}".organizations(id),
+      created_at TIMESTAMPTZ NOT NULL,
       UNIQUE (oauth_client_id, user_id, organization_id)
     );
   `);
 }
 
-export async function seedMcpFixture(client: Client): Promise<void> {
+export async function seedMcpFixture(client: Pool): Promise<void> {
   const orm = drizzle(client, { schema: mcpTestSchema });
   await orm.insert(authTables.users).values({
     id: MCP_USER_ID,
@@ -170,7 +172,7 @@ export async function seedMcpFixture(client: Client): Promise<void> {
   ]);
 }
 
-export function createMcpService(client: Client): {
+export function createMcpService(client: Pool): {
   mcp: McpService;
   organizations: AuthOrganizationRepository;
 } {
@@ -196,6 +198,6 @@ export function createMcpService(client: Client): {
   };
 }
 
-export function createMcpMemoryClient(): Client {
-  return createClient({ url: ":memory:" });
+export function createMcpTestPool(): Pool {
+  return createTestPool();
 }

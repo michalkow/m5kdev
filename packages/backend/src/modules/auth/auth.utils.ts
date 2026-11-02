@@ -1,11 +1,11 @@
 import { and, desc, eq, gte, isNull } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { v4 as uuidv4 } from "uuid";
 import * as auth from "./auth.db";
 
 const schema = { ...auth };
 type Schema = typeof schema;
-export type Orm = LibSQLDatabase<Schema>;
+export type Orm = NodePgDatabase<Schema>;
 
 export async function getNewOrganization<O extends Orm, S extends Schema>(
   orm: O,
@@ -93,10 +93,7 @@ export async function getActiveOrganization<O extends Orm, S extends Schema>(
     const [activeMember] = await orm
       .select({ id: schema.members.id, role: schema.members.role })
       .from(schema.members)
-      .innerJoin(
-        schema.organizations,
-        eq(schema.members.organizationId, schema.organizations.id)
-      )
+      .innerJoin(schema.organizations, eq(schema.members.organizationId, schema.organizations.id))
       .where(
         and(
           eq(schema.members.id, organizationMemberId),
@@ -125,10 +122,7 @@ export async function getActiveOrganization<O extends Orm, S extends Schema>(
         role: schema.members.role,
       })
       .from(schema.members)
-      .innerJoin(
-        schema.organizations,
-        eq(schema.members.organizationId, schema.organizations.id)
-      )
+      .innerJoin(schema.organizations, eq(schema.members.organizationId, schema.organizations.id))
       .orderBy(desc(schema.members.createdAt))
       .where(
         and(
@@ -221,10 +215,7 @@ export async function createOrganizationWithOwner<O extends Orm, S extends Schem
       const owned = await tx
         .select({ currency: schema.organizations.currency })
         .from(schema.members)
-        .innerJoin(
-          schema.organizations,
-          eq(schema.members.organizationId, schema.organizations.id)
-        )
+        .innerJoin(schema.organizations, eq(schema.members.organizationId, schema.organizations.id))
         .where(
           and(
             eq(schema.members.userId, user.id),
@@ -253,7 +244,8 @@ export async function createOrganizationWithOwner<O extends Orm, S extends Schem
       })
       .returning();
 
-    if (!organization) throw new Error("createOrganizationWithOwner: Failed to create organization");
+    if (!organization)
+      throw new Error("createOrganizationWithOwner: Failed to create organization");
 
     const [member] = await tx
       .insert(schema.members)

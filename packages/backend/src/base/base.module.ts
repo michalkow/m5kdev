@@ -1,5 +1,5 @@
 import type { AnyRouter } from "@trpc/server";
-import type { SQLiteTableWithColumns } from "drizzle-orm/sqlite-core";
+import type { PgTableWithColumns } from "drizzle-orm/pg-core";
 import type {
   BackendAppAuthFactoryContext,
   BackendModuleAuthContext,
@@ -14,7 +14,7 @@ import type {
 import type { BetterAuth } from "../modules/auth/auth.lib";
 
 type AnyRecord = Record<string, any>;
-export type TableMap = Record<string, SQLiteTableWithColumns<any>>;
+export type TableMap = Record<string, PgTableWithColumns<any>>;
 
 /** Allow `never` / `{}` as “no deps” in first generic (e.g. legacy `BaseModule<never>`). */
 export type BaseModuleDeps =

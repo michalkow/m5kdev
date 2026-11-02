@@ -27,6 +27,8 @@ Apps own the Mastra instance. Starter keeps that construction in
 ```ts
 import { Mastra } from "@mastra/core";
 import { Agent } from "@mastra/core/agent";
+import { Memory } from "@mastra/memory";
+import { PostgresStore } from "@mastra/pg";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createBackendApp } from "@m5kdev/backend/app";
 import { AIModule } from "@m5kdev/backend/modules/ai/ai.module";
@@ -35,14 +37,23 @@ const openrouter = createOpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY ?? "",
 });
 
+const storage = new PostgresStore({
+  id: "app-mastra",
+  connectionString: process.env.MASTRA_DATABASE_URL || process.env.DATABASE_URL!,
+  schemaName: process.env.MASTRA_DATABASE_SCHEMA ?? "mastra",
+  disableInit: true,
+});
+
 const assistant = new Agent({
   id: "assistant",
   name: "Assistant",
   instructions: "You are a helpful assistant.",
+  memory: new Memory({ storage, options: { semanticRecall: false } }),
   model: openrouter.chat("google/gemini-2.5-flash", { usage: { include: true } }),
 });
 
 const mastra = new Mastra({
+  storage,
   agents: { assistant },
 });
 
@@ -56,7 +67,10 @@ createBackendApp(config, [
       repairModel: GPT_5_MINI,
       removeMDash: true,
     },
-    vectorStore, // LibSQLVector, enables embedding storage
+    vectorStore: {
+      connectionString: process.env.VECTOR_DATABASE_URL || process.env.DATABASE_URL!,
+      schemaName: process.env.VECTOR_DATABASE_SCHEMA ?? "vectors",
+    },
     enableIdeogram: true, // requires IDEOGRAM_API_KEY
   }),
 ]);
@@ -64,6 +78,10 @@ createBackendApp(config, [
 
 Depends on `auth` (usage rows are attributed to users). `libs.mastra` is
 optional — OpenRouter `generateText` / `generateObject` work without agents.
+The app owns the injected storage and closes it during shutdown. Provision
+storage and the embedding index through direct connections before startup;
+see Starter's `mastra.ts` and `conversation.persistence.ts` for the complete
+initialization and readiness lifecycle.
 
 ## Service API
 
@@ -120,7 +138,8 @@ markers), the same opt-in as Files and Workflows. `--yes` does not enable it.
 When the flag is on:
 
 - `AIModule` is registered with an app-owned Mastra Agent (`assistant`) and
-  OpenRouter. The Agent has no Memory — the webapp Conversation is session-only.
+  OpenRouter. The Agent uses durable PostgreSQL-backed Mastra Memory. Personal
+  Threads use UserId as resource and Conversation id as thread id.
   Do not import `createAgent` / `createMastra`; they were removed in 0.34.0.
 - Schema exports `chats` and `ai_usage`. After adding those tables, generate
   and apply a Drizzle migration; do not hand-edit SQL.
@@ -135,7 +154,13 @@ is omitted. Expo create does not add Conversation UI.
 `IDEOGRAM_API_KEY` when `enableIdeogram` is set; OpenRouter/Replicate clients
 are constructed in app code with their own keys. Starter Conversation uses
 `OPENROUTER_API_KEY`. The Kernel no longer reads `MASTRA_MAIN_DATABASE_URL` /
-`MASTRA_VECTOR_DATABASE_URL` — pass storage on your `Mastra` instance if needed.
+`MASTRA_VECTOR_DATABASE_URL`. Starter composes `PostgresStore` and `Memory` on
+the app-owned Agent and Mastra instance. Runtime uses `DATABASE_URL` through
+PgBouncer; provisioning uses `DATABASE_DIRECT_URL`. Optional `MASTRA_DATABASE_URL`
+and `VECTOR_DATABASE_URL` overrides each have a corresponding direct URL.
+Keep `app`, `mastra`, and `vectors` schemas separately owned. Provision pgvector
+in `public` and run `mastra:init` before startup; normal startup never initializes
+storage. The adapter retains its supported `mastra_` table names.
 
 ## Related docs
 

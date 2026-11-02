@@ -1,10 +1,11 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { type Client, createClient } from "@libsql/client";
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/libsql";
+import { drizzle } from "drizzle-orm/node-postgres";
+import type { Pool } from "pg";
 import { resolveOrganizationActor } from "../../../base/base.actor";
+import { createTestPool, prepareTestSchema } from "../../../test/postgresql";
 import * as auth from "../auth.db";
 import { invitationSchemas, organizationSchemas } from "../auth.dto";
 import { AuthOrganizationRepository } from "../auth.repository";
@@ -14,78 +15,79 @@ import {
   OrganizationCurrencyError,
 } from "../auth.utils";
 
-async function createTables(client: Client): Promise<void> {
-  await client.execute(`
-    CREATE TABLE users (
+async function createTables(client: Pool): Promise<void> {
+  const namespace = await prepareTestSchema(client);
+  await client.query(`
+    CREATE TABLE "${namespace}".users (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
-      email_verified INTEGER NOT NULL,
+      email_verified BOOLEAN NOT NULL,
       image TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
       role TEXT,
-      banned INTEGER,
+      banned BOOLEAN,
       ban_reason TEXT,
-      ban_expires INTEGER,
-      preferences TEXT DEFAULT '{}',
-      metadata TEXT DEFAULT '{}',
+      ban_expires TIMESTAMPTZ,
+      preferences JSONB DEFAULT '{}',
+      metadata JSONB DEFAULT '{}',
       onboarding INTEGER,
-      flags TEXT DEFAULT '[]',
+      flags TEXT[] DEFAULT '{}',
       locale TEXT,
-      closed_at INTEGER
+      closed_at TIMESTAMPTZ
     );
   `);
-  await client.execute(`
-    CREATE TABLE organizations (
+  await client.query(`
+    CREATE TABLE "${namespace}".organizations (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
       slug TEXT UNIQUE,
       logo TEXT,
       type TEXT,
       parent_id TEXT,
-      created_at INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
       onboarding INTEGER,
-      preferences TEXT DEFAULT '{}',
-      metadata TEXT DEFAULT '{}',
-      flags TEXT DEFAULT '[]',
+      preferences JSONB DEFAULT '{}',
+      metadata JSONB DEFAULT '{}',
+      flags TEXT[] DEFAULT '{}',
       locale TEXT,
       currency TEXT,
       stripe_customer_id TEXT UNIQUE,
       stripe_sandbox_customer_id TEXT UNIQUE,
-      billing_exempt INTEGER NOT NULL DEFAULT 0,
-      allow_cardless_trial INTEGER NOT NULL DEFAULT 0,
-      cardless_trial_consumed TEXT DEFAULT '{}',
-      closed_at INTEGER
+      billing_exempt BOOLEAN NOT NULL DEFAULT false,
+      allow_cardless_trial BOOLEAN NOT NULL DEFAULT false,
+      cardless_trial_consumed JSONB DEFAULT '{}',
+      closed_at TIMESTAMPTZ
     );
   `);
-  await client.execute(`
-    CREATE TABLE members (
+  await client.query(`
+    CREATE TABLE "${namespace}".members (
       id TEXT PRIMARY KEY NOT NULL,
-      organization_id TEXT NOT NULL REFERENCES organizations(id),
-      user_id TEXT REFERENCES users(id),
+      organization_id TEXT NOT NULL REFERENCES "${namespace}".organizations(id),
+      user_id TEXT REFERENCES "${namespace}".users(id),
       email TEXT,
       name TEXT NOT NULL DEFAULT '',
       image TEXT,
       role TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      deleted_at INTEGER,
-      preferences TEXT DEFAULT '{}',
-      metadata TEXT DEFAULT '{}',
+      created_at TIMESTAMPTZ NOT NULL,
+      deleted_at TIMESTAMPTZ,
+      preferences JSONB DEFAULT '{}',
+      metadata JSONB DEFAULT '{}',
       onboarding INTEGER,
-      flags TEXT DEFAULT '[]'
+      flags TEXT[] DEFAULT '{}'
     );
   `);
-  await client.execute(`
-    CREATE TABLE sessions (
+  await client.query(`
+    CREATE TABLE "${namespace}".sessions (
       id TEXT PRIMARY KEY NOT NULL,
-      expires_at INTEGER NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
       token TEXT NOT NULL UNIQUE,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL,
       ip_address TEXT,
       user_agent TEXT,
-      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES "${namespace}".users(id) ON DELETE CASCADE,
       impersonated_by TEXT,
       active_organization_id TEXT,
       active_organization_member_id TEXT,
@@ -93,33 +95,33 @@ async function createTables(client: Client): Promise<void> {
       active_organization_type TEXT
     );
   `);
-  await client.execute(`
-    CREATE TABLE invitations (
+  await client.query(`
+    CREATE TABLE "${namespace}".invitations (
       id TEXT PRIMARY KEY NOT NULL,
-      organization_id TEXT NOT NULL REFERENCES organizations(id),
-      member_id TEXT REFERENCES members(id),
+      organization_id TEXT NOT NULL REFERENCES "${namespace}".organizations(id),
+      member_id TEXT REFERENCES "${namespace}".members(id),
       email TEXT NOT NULL,
       role TEXT,
       status TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      expires_at INTEGER NOT NULL,
-      inviter_id TEXT NOT NULL REFERENCES users(id)
+      created_at TIMESTAMPTZ NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      inviter_id TEXT NOT NULL REFERENCES "${namespace}".users(id)
     );
   `);
 }
 
 describe("createOrganizationWithOwner", () => {
-  let client: Client;
+  let client: Pool;
   let dbDir: string;
 
   beforeEach(async () => {
     dbDir = await fs.mkdtemp(path.join(os.tmpdir(), "auth-org-create-"));
-    client = createClient({ url: `file:${path.join(dbDir, "test.db")}` });
+    client = createTestPool();
     await createTables(client);
   });
 
   afterEach(async () => {
-    client.close();
+    await client.end();
     await fs.rm(dbDir, { recursive: true, force: true });
   });
 
@@ -315,17 +317,17 @@ describe("createOrganizationWithOwner", () => {
 });
 
 describe("getActiveOrganization", () => {
-  let client: Client;
+  let client: Pool;
   let dbDir: string;
 
   beforeEach(async () => {
     dbDir = await fs.mkdtemp(path.join(os.tmpdir(), "auth-active-org-"));
-    client = createClient({ url: `file:${path.join(dbDir, "test.db")}` });
+    client = createTestPool();
     await createTables(client);
   });
 
   afterEach(async () => {
-    client.close();
+    await client.end();
     await fs.rm(dbDir, { recursive: true, force: true });
   });
 
@@ -558,17 +560,17 @@ describe("getActiveOrganization", () => {
 });
 
 describe("listOrganizationMembers tRPC output", () => {
-  let client: Client;
+  let client: Pool;
   let dbDir: string;
 
   beforeEach(async () => {
     dbDir = await fs.mkdtemp(path.join(os.tmpdir(), "auth-member-list-"));
-    client = createClient({ url: `file:${path.join(dbDir, "test.db")}` });
+    client = createTestPool();
     await createTables(client);
   });
 
   afterEach(async () => {
-    client.close();
+    await client.end();
     await fs.rm(dbDir, { recursive: true, force: true });
   });
 

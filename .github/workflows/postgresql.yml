@@ -1,0 +1,61 @@
+name: PostgreSQL integration
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: m5kdev_test
+          POSTGRES_USER: m5kdev
+          POSTGRES_PASSWORD: m5kdev
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U m5kdev -d m5kdev_test"
+          --health-interval 2s --health-timeout 2s --health-retries 30
+    env:
+      TEST_DATABASE_URL: postgresql://m5kdev@127.0.0.1:56432/m5kdev_test
+      TEST_DATABASE_DIRECT_URL: postgresql://m5kdev@127.0.0.1:55432/m5kdev_test
+      PGPASSWORD: m5kdev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --registry=https://registry.npmjs.org
+      - name: Prepare transaction pooling and pgvector
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pgbouncer postgresql-client
+          psql "$TEST_DATABASE_DIRECT_URL" -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public'
+          printf '"m5kdev" ""\n' > /tmp/m5kdev-users.txt
+          cat > /tmp/m5kdev-pgbouncer.ini <<'EOF'
+          [databases]
+          m5kdev_test = host=127.0.0.1 port=55432 dbname=m5kdev_test
+          [pgbouncer]
+          listen_addr = 127.0.0.1
+          listen_port = 56432
+          unix_socket_dir = /tmp
+          auth_type = trust
+          auth_file = /tmp/m5kdev-users.txt
+          pool_mode = transaction
+          default_pool_size = 5
+          pidfile = /tmp/m5kdev-pgbouncer.pid
+          logfile = /tmp/m5kdev-pgbouncer.log
+          EOF
+          pgbouncer -d /tmp/m5kdev-pgbouncer.ini
+      - run: pnpm --filter @m5kdev/backend... build
+      - run: pnpm --filter @m5kdev/backend check-types
+      - run: pnpm --filter @m5kdev/backend exec jest --runInBand

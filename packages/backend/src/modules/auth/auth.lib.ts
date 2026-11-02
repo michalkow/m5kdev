@@ -21,7 +21,7 @@ import {
 } from "better-auth/api";
 import { admin, lastLoginMethod, magicLink, organization } from "better-auth/plugins";
 import { and, desc, eq, gte, type InferSelectModel } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { TFunction } from "i18next";
 import { z } from "zod";
 import type { BackendAppMetadata } from "../../app";
@@ -50,7 +50,7 @@ const schema = { ...auth, ...oauth };
 type Schema = typeof schema;
 /** Auth tables `createBetterAuth` queries. Caller schemas may add app tables and omit MCP/oauth. */
 type AuthQuerySchema = typeof auth;
-export type Orm = LibSQLDatabase<Schema>;
+export type Orm = NodePgDatabase<Schema>;
 
 export type User = InferSelectModel<typeof auth.users>;
 export type Session = InferSelectModel<typeof auth.sessions>;
@@ -421,7 +421,7 @@ export function createBetterAuth<
       },
     },
     database: drizzleAdapter(orm, {
-      provider: "sqlite",
+      provider: "pg",
       schema,
       usePlural: true,
     }),

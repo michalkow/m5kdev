@@ -1,5 +1,5 @@
 import { and, count, desc, eq, gte, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
@@ -13,6 +13,7 @@ import {
   waitlistSchema,
   waitlistSchemas,
 } from "./auth.dto";
+import { oauthAccessTokens, oauthRefreshTokens } from "./auth.oauth.db";
 import {
   attachUserToInvitedMember as attachUserToInvitedMemberRow,
   softDeleteOrganizationMember,
@@ -20,7 +21,7 @@ import {
 
 const schema = { ...auth };
 type Schema = typeof schema;
-type Orm = LibSQLDatabase<Schema>;
+type Orm = NodePgDatabase<Schema>;
 type UserRow = typeof auth.users.$inferSelect;
 type OrganizationRow = typeof auth.organizations.$inferSelect;
 type MemberRow = typeof auth.members.$inferSelect;
@@ -59,8 +60,8 @@ export class AuthUserRepository extends BaseTableRepository<
     return this.throwableQuery(async () => {
       await this.orm.delete(this.schema.sessions).where(eq(this.schema.sessions.userId, userId));
       await this.orm.delete(this.schema.apikeys).where(eq(this.schema.apikeys.userId, userId));
-      await this.orm.run(sql`delete from oauth_access_tokens where user_id = ${userId}`);
-      await this.orm.run(sql`delete from oauth_refresh_tokens where user_id = ${userId}`);
+      await this.orm.delete(oauthAccessTokens).where(eq(oauthAccessTokens.userId, userId));
+      await this.orm.delete(oauthRefreshTokens).where(eq(oauthRefreshTokens.userId, userId));
     });
   }
 
@@ -82,8 +83,8 @@ export class AuthUserRepository extends BaseTableRepository<
         .where(eq(this.schema.members.userId, userId));
       await this.orm.delete(this.schema.sessions).where(eq(this.schema.sessions.userId, userId));
       await this.orm.delete(this.schema.apikeys).where(eq(this.schema.apikeys.userId, userId));
-      await this.orm.run(sql`delete from oauth_access_tokens where user_id = ${userId}`);
-      await this.orm.run(sql`delete from oauth_refresh_tokens where user_id = ${userId}`);
+      await this.orm.delete(oauthAccessTokens).where(eq(oauthAccessTokens.userId, userId));
+      await this.orm.delete(oauthRefreshTokens).where(eq(oauthRefreshTokens.userId, userId));
       await this.orm.delete(this.schema.users).where(eq(this.schema.users.id, userId));
       return { id: userId };
     });
@@ -322,7 +323,10 @@ export class AuthOrganizationRepository extends BaseTableRepository<
         .select({ id: this.schema.organizations.id })
         .from(this.schema.organizations)
         .where(
-          and(eq(this.schema.organizations.id, organizationId), isNull(this.schema.organizations.closedAt))
+          and(
+            eq(this.schema.organizations.id, organizationId),
+            isNull(this.schema.organizations.closedAt)
+          )
         )
         .limit(1)
     );
@@ -1300,11 +1304,7 @@ export class AuthWaitlistRepository extends BaseTableRepository<
   async validateWaitlistCode(code: string, tx?: Orm): ServerResultAsync<{ status: string }> {
     const db = tx ?? this.orm;
     const waitlistResult = await this.throwableQuery(() =>
-      db
-        .select()
-        .from(this.schema.waitlist)
-        .where(eq(this.schema.waitlist.code, code))
-        .limit(1)
+      db.select().from(this.schema.waitlist).where(eq(this.schema.waitlist.code, code)).limit(1)
     );
     if (waitlistResult.isErr()) return err(waitlistResult.error);
     const [waitlist] = waitlistResult.value;

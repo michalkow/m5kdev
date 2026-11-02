@@ -1,24 +1,24 @@
-import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { boolean, integer, jsonb, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { v4 as uuidv4 } from "uuid";
+import { appDatabaseSchema } from "../../base/database.schema";
 import { sessions, users } from "./auth.db";
 
-const timestamp = (name: string) => integer(name, { mode: "timestamp" });
-const booleanFlag = (name: string) => integer(name, { mode: "boolean" });
-const jsonText = (name: string) => text(name, { mode: "json" });
+const timestampColumn = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
+const booleanFlag = (name: string) => boolean(name);
 
-export const jwks = sqliteTable("jwks", {
+export const jwks = appDatabaseSchema.table("jwks", {
   id: text("id").primaryKey().$default(uuidv4),
   publicKey: text("public_key").notNull(),
   privateKey: text("private_key").notNull(),
-  createdAt: timestamp("created_at")
+  createdAt: timestampColumn("created_at")
     .notNull()
     .$default(() => new Date()),
-  expiresAt: timestamp("expires_at"),
+  expiresAt: timestampColumn("expires_at"),
   alg: text("alg"),
   crv: text("crv"),
 });
 
-export const oauthClients = sqliteTable("oauth_clients", {
+export const oauthClients = appDatabaseSchema.table("oauth_clients", {
   id: text("id").primaryKey().$default(uuidv4),
   clientId: text("client_id").notNull().unique(),
   clientSecret: text("client_secret"),
@@ -27,55 +27,55 @@ export const oauthClients = sqliteTable("oauth_clients", {
   skipConsent: booleanFlag("skip_consent"),
   enableEndSession: booleanFlag("enable_end_session"),
   subjectType: text("subject_type"),
-  scopes: jsonText("scopes").$type<string[]>(),
-  clientCredentialsScopes: jsonText("client_credentials_scopes").$type<string[]>().default([]),
+  scopes: text("scopes").array().$type<string[]>(),
+  clientCredentialsScopes: text("client_credentials_scopes").array().$type<string[]>().default([]),
   userId: text("user_id").references(() => users.id),
-  createdAt: timestamp("created_at").$default(() => new Date()),
-  updatedAt: timestamp("updated_at").$default(() => new Date()),
+  createdAt: timestampColumn("created_at").$default(() => new Date()),
+  updatedAt: timestampColumn("updated_at").$default(() => new Date()),
   name: text("name"),
   uri: text("uri"),
   icon: text("icon"),
-  contacts: jsonText("contacts").$type<string[]>(),
+  contacts: text("contacts").array().$type<string[]>(),
   tos: text("tos"),
   policy: text("policy"),
   softwareId: text("software_id"),
   softwareVersion: text("software_version"),
   softwareStatement: text("software_statement"),
-  redirectUris: jsonText("redirect_uris").notNull().$type<string[]>(),
-  postLogoutRedirectUris: jsonText("post_logout_redirect_uris").$type<string[]>(),
+  redirectUris: text("redirect_uris").array().notNull().$type<string[]>(),
+  postLogoutRedirectUris: text("post_logout_redirect_uris").array().$type<string[]>(),
   backchannelLogoutUri: text("backchannel_logout_uri"),
   backchannelLogoutSessionRequired: booleanFlag("backchannel_logout_session_required"),
   tokenEndpointAuthMethod: text("token_endpoint_auth_method"),
   applicationType: text("application_type"),
   jwks: text("jwks"),
   jwksUri: text("jwks_uri"),
-  grantTypes: jsonText("grant_types").$type<string[]>(),
-  responseTypes: jsonText("response_types").$type<string[]>(),
+  grantTypes: text("grant_types").array().$type<string[]>(),
+  responseTypes: text("response_types").array().$type<string[]>(),
   requirePKCE: booleanFlag("require_pkce"),
   dpopBoundAccessTokens: booleanFlag("dpop_bound_access_tokens").default(false),
   referenceId: text("reference_id"),
-  metadata: jsonText("metadata").$type<Record<string, unknown>>(),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
 });
 
-export const oauthResources = sqliteTable("oauth_resources", {
+export const oauthResources = appDatabaseSchema.table("oauth_resources", {
   id: text("id").primaryKey().$default(uuidv4),
   identifier: text("identifier").notNull().unique(),
   name: text("name").notNull(),
-  accessTokenTtl: integer("access_token_ttl", { mode: "number" }),
-  refreshTokenTtl: integer("refresh_token_ttl", { mode: "number" }),
+  accessTokenTtl: integer("access_token_ttl"),
+  refreshTokenTtl: integer("refresh_token_ttl"),
   signingAlgorithm: text("signing_algorithm"),
   signingKeyId: text("signing_key_id"),
-  allowedScopes: jsonText("allowed_scopes").$type<string[]>(),
-  customClaims: jsonText("custom_claims").$type<Record<string, unknown>>(),
+  allowedScopes: text("allowed_scopes").array().$type<string[]>(),
+  customClaims: jsonb("custom_claims").$type<Record<string, unknown>>(),
   dpopBoundAccessTokensRequired: booleanFlag("dpop_bound_access_tokens_required").default(false),
   disabled: booleanFlag("disabled").default(false),
-  createdAt: timestamp("created_at").$default(() => new Date()),
-  updatedAt: timestamp("updated_at").$default(() => new Date()),
-  policyVersion: integer("policy_version", { mode: "number" }).default(1),
-  metadata: jsonText("metadata").$type<Record<string, unknown>>(),
+  createdAt: timestampColumn("created_at").$default(() => new Date()),
+  updatedAt: timestampColumn("updated_at").$default(() => new Date()),
+  policyVersion: integer("policy_version").default(1),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
 });
 
-export const oauthClientResources = sqliteTable(
+export const oauthClientResources = appDatabaseSchema.table(
   "oauth_client_resources",
   {
     id: text("id").primaryKey().$default(uuidv4),
@@ -85,13 +85,13 @@ export const oauthClientResources = sqliteTable(
     resourceId: text("resource_id")
       .notNull()
       .references(() => oauthResources.identifier, { onDelete: "cascade" }),
-    metadata: jsonText("metadata").$type<Record<string, unknown>>(),
-    createdAt: timestamp("created_at").$default(() => new Date()),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: timestampColumn("created_at").$default(() => new Date()),
   },
   (t) => [uniqueIndex("oauth_client_resources_client_resource_unique").on(t.clientId, t.resourceId)]
 );
 
-export const oauthRefreshTokens = sqliteTable("oauth_refresh_tokens", {
+export const oauthRefreshTokens = appDatabaseSchema.table("oauth_refresh_tokens", {
   id: text("id").primaryKey().$default(uuidv4),
   token: text("token").notNull().unique(),
   clientId: text("client_id")
@@ -103,22 +103,22 @@ export const oauthRefreshTokens = sqliteTable("oauth_refresh_tokens", {
     .references(() => users.id),
   referenceId: text("reference_id"),
   authorizationCodeId: text("authorization_code_id"),
-  resources: jsonText("resources").$type<string[]>(),
-  requestedUserInfoClaims: jsonText("requested_user_info_claims").$type<string[]>(),
-  expiresAt: timestamp("expires_at").notNull(),
-  createdAt: timestamp("created_at")
+  resources: text("resources").array().$type<string[]>(),
+  requestedUserInfoClaims: text("requested_user_info_claims").array().$type<string[]>(),
+  expiresAt: timestampColumn("expires_at").notNull(),
+  createdAt: timestampColumn("created_at")
     .notNull()
     .$default(() => new Date()),
-  revoked: timestamp("revoked"),
-  rotatedAt: timestamp("rotated_at"),
+  revoked: timestampColumn("revoked"),
+  rotatedAt: timestampColumn("rotated_at"),
   rotationReplayResponse: text("rotation_replay_response"),
-  rotationReplayExpiresAt: timestamp("rotation_replay_expires_at"),
-  authTime: timestamp("auth_time"),
-  confirmation: jsonText("confirmation").$type<Record<string, unknown>>(),
-  scopes: jsonText("scopes").notNull().$type<string[]>(),
+  rotationReplayExpiresAt: timestampColumn("rotation_replay_expires_at"),
+  authTime: timestampColumn("auth_time"),
+  confirmation: jsonb("confirmation").$type<Record<string, unknown>>(),
+  scopes: text("scopes").array().notNull().$type<string[]>(),
 });
 
-export const oauthAccessTokens = sqliteTable("oauth_access_tokens", {
+export const oauthAccessTokens = appDatabaseSchema.table("oauth_access_tokens", {
   id: text("id").primaryKey().$default(uuidv4),
   token: text("token").unique(),
   clientId: text("client_id")
@@ -128,37 +128,37 @@ export const oauthAccessTokens = sqliteTable("oauth_access_tokens", {
   userId: text("user_id").references(() => users.id),
   referenceId: text("reference_id"),
   authorizationCodeId: text("authorization_code_id"),
-  resources: jsonText("resources").$type<string[]>(),
-  requestedUserInfoClaims: jsonText("requested_user_info_claims").$type<string[]>(),
+  resources: text("resources").array().$type<string[]>(),
+  requestedUserInfoClaims: text("requested_user_info_claims").array().$type<string[]>(),
   refreshId: text("refresh_id").references(() => oauthRefreshTokens.id),
-  expiresAt: timestamp("expires_at").notNull(),
-  createdAt: timestamp("created_at")
+  expiresAt: timestampColumn("expires_at").notNull(),
+  createdAt: timestampColumn("created_at")
     .notNull()
     .$default(() => new Date()),
-  revoked: timestamp("revoked"),
-  confirmation: jsonText("confirmation").$type<Record<string, unknown>>(),
-  scopes: jsonText("scopes").notNull().$type<string[]>(),
+  revoked: timestampColumn("revoked"),
+  confirmation: jsonb("confirmation").$type<Record<string, unknown>>(),
+  scopes: text("scopes").array().notNull().$type<string[]>(),
 });
 
-export const oauthConsents = sqliteTable("oauth_consents", {
+export const oauthConsents = appDatabaseSchema.table("oauth_consents", {
   id: text("id").primaryKey().$default(uuidv4),
   clientId: text("client_id")
     .notNull()
     .references(() => oauthClients.clientId),
   userId: text("user_id").references(() => users.id),
   referenceId: text("reference_id"),
-  resources: jsonText("resources").$type<string[]>(),
-  requestedUserInfoClaims: jsonText("requested_user_info_claims").$type<string[]>(),
-  scopes: jsonText("scopes").notNull().$type<string[]>(),
-  createdAt: timestamp("created_at")
+  resources: text("resources").array().$type<string[]>(),
+  requestedUserInfoClaims: text("requested_user_info_claims").array().$type<string[]>(),
+  scopes: text("scopes").array().notNull().$type<string[]>(),
+  createdAt: timestampColumn("created_at")
     .notNull()
     .$default(() => new Date()),
-  updatedAt: timestamp("updated_at")
+  updatedAt: timestampColumn("updated_at")
     .notNull()
     .$default(() => new Date()),
 });
 
-export const oauthClientAssertions = sqliteTable("oauth_client_assertions", {
+export const oauthClientAssertions = appDatabaseSchema.table("oauth_client_assertions", {
   id: text("id").primaryKey(),
-  expiresAt: timestamp("expires_at").notNull(),
+  expiresAt: timestampColumn("expires_at").notNull(),
 });

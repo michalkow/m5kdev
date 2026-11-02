@@ -1,8 +1,9 @@
-import { type Client, createClient } from "@libsql/client";
+import type { Pool } from "pg";
 import { createBackendApp } from "./app";
 import { AuthModule } from "./modules/auth/auth.module";
 import { BaseModule, type TableMap } from "./modules/base/base.module";
 import { WorkflowModule } from "./modules/workflow/workflow.module";
+import { createTestPool } from "./test/postgresql";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {
@@ -17,14 +18,14 @@ jest.mock("better-auth/node", () => ({
 }));
 
 describe("createBackendApp", () => {
-  let client: Client;
+  let client: Pool;
 
   beforeEach(() => {
-    client = createClient({ url: ":memory:" });
+    client = createTestPool();
   });
 
   afterEach(async () => {
-    await client.close?.();
+    await client.end();
   });
 
   it("resolves required dependencies in build order instead of registration order", () => {
