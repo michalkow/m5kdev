@@ -16,6 +16,20 @@ import {
 const REPO_ROOT = path.resolve(__dirname, "../../../..");
 
 describe("consumer catalog", () => {
+  it("keeps every Kernel Better Auth companion on the consumer's exact auth version", () => {
+    const backend = JSON.parse(
+      fs.readFileSync(path.join(REPO_ROOT, "packages/backend/package.json"), "utf8")
+    );
+    const workspace = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8"));
+    const version = workspace.catalog["better-auth"];
+    expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+    // MCP's ranged transitive provider dependency can otherwise drift on fresh installs.
+    expect(backend.dependencies["@better-auth/oauth-provider"]).toBe(version);
+    for (const [name, dependencyVersion] of Object.entries(backend.dependencies)) {
+      if (name.startsWith("@better-auth/")) expect(dependencyVersion).toBe(version);
+    }
+  });
+
   it("derives a sorted feature superset from starter manifests and authoritative versions", () => {
     const catalog = buildConsumerCatalog({
       repoRoot: REPO_ROOT,

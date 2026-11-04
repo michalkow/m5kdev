@@ -1,0 +1,25 @@
+name: Starter deployment contracts
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  starter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm --filter create-m5kdev... install --frozen-lockfile --registry=https://registry.npmjs.org
+      - run: pnpm --filter create-m5kdev prepare:templates
+      - name: Verify generated Docker inputs and dependency pins
+        run: pnpm --filter create-m5kdev exec jest -c jest.config.ts src/__tests__/create.test.ts src/__tests__/catalog.test.ts --runInBand
+      - name: Import auth from a fresh consumer install
+        run: pnpm --filter create-m5kdev test:auth-install --runInBand

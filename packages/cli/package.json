@@ -26,6 +26,7 @@
     "check-types": "tsc --noEmit",
     "test": "jest -c jest.config.ts",
     "test:smoke": "CLI_SMOKE=1 jest -c jest.config.ts src/__tests__/create.smoke.test.ts",
+    "test:auth-install": "CLI_AUTH_SMOKE=1 jest -c jest.config.ts src/__tests__/auth-install.smoke.test.ts",
     "prepare:templates": "tsx scripts/prepare-templates.ts"
   },
   "dependencies": {
