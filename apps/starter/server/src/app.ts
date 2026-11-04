@@ -141,9 +141,9 @@ export const builtBackendApp = createBackendApp(
     // m5k:workflows:start
     new WorkflowModule({
       queues: {
-        fast: { concurrency: 5 },
+        "starter-app-main": { concurrency: 5 },
       },
-      defaultQueue: "fast",
+      defaultQueue: "starter-app-main",
       defaults: {
         timeout: 60_000,
         jobOptions: { removeOnComplete: { age: 3600 } },

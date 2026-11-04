@@ -602,9 +602,19 @@ describe("scaffoldProject", () => {
     );
     expect(appTs).toContain("WorkflowModule");
     expect(appTs).toContain("DemoWorkflowModule");
-    expect(appTs).toContain('defaultQueue: "fast"');
+    expect(appTs).toContain('defaultQueue: "workflow-desk-main"');
+    expect(appTs).toContain('"workflow-desk-main": { concurrency: 5 }');
     expect(appTs).toContain("redis:");
     expect(appTs).not.toContain("m5k:");
+
+    const demoWorkflow = await fs.readFile(
+      path.join(
+        result.targetDirectory,
+        "apps/server/src/modules/demo-workflow/demo-workflow.service.ts"
+      ),
+      "utf8"
+    );
+    expect(demoWorkflow).toContain('queue: "workflow-desk-main"');
 
     const schema = await fs.readFile(
       path.join(result.targetDirectory, "apps/server/src/schema.ts"),

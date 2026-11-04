@@ -27,7 +27,7 @@ export class DemoWorkflowService extends BaseService<
     this.demoPingJob = this.service.workflow
       .job<DemoPingJobPayload>({
         name: DEMO_PING_JOB_NAME,
-        queue: "fast",
+        queue: "starter-app-main",
         meta: (payload) => ({ userId: payload.userId }),
       })
       .handle(async (payload) => {
