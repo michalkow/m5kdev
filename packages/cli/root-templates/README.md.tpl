@@ -116,3 +116,52 @@ use `vectors`. Run reviewed app migrations and, when AI is selected, `mastra:ini
 through direct connections before starting the server. Redis and database URLs
 are server secrets, not image layers. No local database volume is required.
 // m5k:server:end
+
+## GitHub Actions deployment
+
+Pushes to `main` deploy only the affected Fly app:
+
+- `.github/workflows/deploy-landing.yml` deploys changes in `apps/landing/**`.
+// m5k:server:start
+- `.github/workflows/deploy-app.yml` deploys changes in `apps/server/**`,
+  `apps/shared/**`, or `apps/email/**`.
+// m5k:server:end
+// m5k:webapp:start
+  Changes in `apps/webapp/**` also deploy the product app, which serves the baked SPA.
+// m5k:webapp:end
+
+Root package, lockfile, workspace, `.npmrc`, and `.dockerignore` changes deploy
+both available targets. Editing a workflow deploys its target. Each workflow
+also has a **Run workflow** button in GitHub Actions; select `main`. Other
+branches do not deploy. Deploys to each target run one at a time.
+
+Before enabling deployment:
+
+1. Run `pnpm install` and commit `pnpm-lock.yaml`; CI uses a frozen lockfile.
+2. Create the Fly apps as shown above and commit their configured `fly.toml`
+   files. Provision required services before the first deployment.
+3. In GitHub **Settings → Secrets and variables → Actions**, add these
+   repository secrets:
+
+| Secret | Value |
+| --- | --- |
+| `FLY_API_TOKEN_LANDING` | App-scoped deploy token for `{{APP_SLUG}}-landing`. |
+| `LANDING_ENV_PRODUCTION` | Complete contents of your filled-in `apps/landing/.env.production`. |
+// m5k:server:start
+| `FLY_API_TOKEN_APP` | App-scoped deploy token for `{{APP_SLUG}}-app`. |
+| `APP_ENV_PRODUCTION` | Complete contents of your filled-in `apps/shared/.env.production`. |
+// m5k:server:end
+
+Create each token locally with `fly tokens create deploy --app <fly-app-name>`
+and store the full output as its corresponding GitHub secret. See
+[Fly's GitHub Actions setup](https://fly.io/docs/launch/continuous-deployment-with-github-actions/).
+Use the actual Fly names if you customized `fly.toml`.
+
+The workflows temporarily write the env files, import runtime secrets, then run
+the existing deploy commands with build secrets and the public Vite cache key.
+They remove the env files afterward; never commit production env files.
+After changing a GitHub secret, manually run the affected workflow to apply it.
+// m5k:server:start
+Database migrations and optional Mastra initialization remain explicit operator
+steps; the deploy workflow does not run them.
+// m5k:server:end

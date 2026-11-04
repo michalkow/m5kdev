@@ -1026,6 +1026,96 @@ describe("scaffoldProject", () => {
   });
 
   it.each(["web", "expo", "both", "landing"] as const)(
+    "ships independent Fly workflows for the %s scaffold",
+    async (platform) => {
+      const result = await scaffoldProject({
+        targetDirectory: `deploy-${platform}`,
+        appName: "Deploy Fixture",
+        appDescription: "GitHub Actions deployment.",
+        platform,
+        yes: true,
+        force: false,
+        skipInstall: true,
+        skipGit: true,
+      });
+      const rootPackage = JSON.parse(
+        await fs.readFile(path.join(result.targetDirectory, "package.json"), "utf8")
+      );
+      const workflowDirectory = path.join(result.targetDirectory, ".github/workflows");
+      expect(
+        (await fs.readdir(workflowDirectory)).filter((name) => name.startsWith("deploy-")).sort()
+      ).toEqual(
+        platform === "landing" ? ["deploy-landing.yml"] : ["deploy-app.yml", "deploy-landing.yml"]
+      );
+
+      const targets = platform === "landing" ? ["landing"] : ["landing", "app"];
+      for (const target of targets) {
+        const source = await fs.readFile(
+          path.join(workflowDirectory, `deploy-${target}.yml`),
+          "utf8"
+        );
+        expect(source).not.toContain("m5k:");
+        const workflow = parse(source);
+        expect(workflow.on.push.branches).toEqual(["main"]);
+        expect(workflow.on).toHaveProperty("workflow_dispatch");
+        expect(workflow.on).not.toHaveProperty("pull_request");
+        expect(workflow.jobs.deploy.if).toBe("github.ref == 'refs/heads/main'");
+
+        const paths: string[] = workflow.on.push.paths;
+        const triggers = (file: string) => paths.some((pattern) => path.matchesGlob(file, pattern));
+        expect(triggers("apps/landing/src/LandingPage.tsx")).toBe(target === "landing");
+        expect(triggers("apps/server/src/index.ts")).toBe(target === "app");
+        expect(triggers("apps/shared/src/modules/app/app.constants.ts")).toBe(target === "app");
+        expect(triggers("apps/email/src/resources.ts")).toBe(target === "app");
+        expect(triggers("apps/webapp/src/App.tsx")).toBe(target === "app" && platform !== "expo");
+        expect(triggers("pnpm-lock.yaml")).toBe(true);
+        expect(triggers("pnpm-workspace.yaml")).toBe(true);
+        expect(triggers("package.json")).toBe(true);
+        expect(triggers(".dockerignore")).toBe(true);
+        expect(triggers(`.github/workflows/deploy-${target}.yml`)).toBe(true);
+        expect(triggers("README.md")).toBe(false);
+        expect(triggers("apps/expo/src/index.ts")).toBe(false);
+        expect(triggers("apps/e2e/tests/standard.spec.ts")).toBe(false);
+
+        const step = workflow.jobs.deploy.steps.find(
+          (entry: { env?: Record<string, string> }) => entry.env?.FLY_API_TOKEN
+        );
+        // GitHub expressions survive the CLI's own template rendering.
+        expect(step.env.FLY_API_TOKEN).toBe(
+          `\${{ secrets.FLY_API_TOKEN_${target.toUpperCase()} }}`
+        );
+        expect(step.env.ENV_PRODUCTION).toBe(
+          `\${{ secrets.${target.toUpperCase()}_ENV_PRODUCTION }}`
+        );
+        expect(step.run).toContain(`pnpm ${target}:secrets`);
+        expect(step.run).toContain(`pnpm ${target}:deploy`);
+        const deployScript: string = rootPackage.scripts[`${target}:deploy`];
+        const secretScript: string = rootPackage.scripts[`${target}:secrets`];
+        expect(deployScript).toContain("m5kdev-fly-deploy");
+        expect(secretScript).toContain("m5kdev-fly-secrets");
+        for (const flag of ["config", "dockerfile"]) {
+          const relativePath = deployScript.match(new RegExp(`--${flag} (\\S+)`))?.[1];
+          if (!relativePath) throw new Error(`Missing --${flag} in ${target}:deploy`);
+          await expect(
+            fs.stat(path.join(result.targetDirectory, relativePath))
+          ).resolves.toBeTruthy();
+        }
+        const envPath = deployScript.match(/--env (\S+)/)?.[1];
+        expect(envPath).toBeDefined();
+        expect(step.run).toContain(`> ${envPath}`);
+        expect(secretScript).toContain(`--env ${envPath}`);
+        await expect(
+          fs.stat(path.join(result.targetDirectory, `${envPath}.example`))
+        ).resolves.toBeTruthy();
+        expect(workflow.jobs.deploy.steps.at(-1)).toMatchObject({
+          if: "always()",
+          run: `rm -f ${envPath}`,
+        });
+      }
+    }
+  );
+
+  it.each(["web", "expo", "both", "landing"] as const)(
     "ships complete Docker inputs for the %s scaffold",
     async (platform) => {
       const result = await scaffoldProject({
@@ -1422,6 +1512,9 @@ describe("landing-only platform upgrade", () => {
     expect(update.applied).toBe(true);
     expect(update.conflicts).toEqual([]);
 
+    await expect(
+      fs.stat(path.join(result.targetDirectory, ".github/workflows/deploy-app.yml"))
+    ).resolves.toBeTruthy();
     await expect(
       fs.stat(path.join(result.targetDirectory, "apps/server/package.json"))
     ).resolves.toBeTruthy();
