@@ -29,6 +29,7 @@
     "@better-auth/api-key": "1.7.3",
     "@better-auth/cimd": "1.7.3",
     "@better-auth/mcp": "1.7.3",
+    "@better-auth/oauth-provider": "1.7.3",
     "@modelcontextprotocol/server": "2.0.0",
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/client-sts": "catalog:",

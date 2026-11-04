@@ -1071,6 +1071,15 @@ describe("scaffoldProject", () => {
       );
       expect(caddyfile).toContain(":8080");
       expect(caddyfile).toContain("try_files {path} /index.html");
+      const landingDockerfile = await fs.readFile(
+        path.join(result.targetDirectory, "apps/landing/Dockerfile"),
+        "utf8"
+      );
+      const runtime = landingDockerfile.slice(landingDockerfile.lastIndexOf("\nFROM "));
+      expect(runtime).toContain("FROM caddy:2-alpine AS runtime");
+      expect(runtime).toContain("COPY apps/landing/Caddyfile /etc/caddy/Caddyfile");
+      expect(runtime).toContain("COPY --from=build /app/apps/landing/dist/ /srv/");
+      expect(runtime).not.toMatch(/\b(?:npm|pnpm|vite)\b/);
       const state = JSON.parse(
         await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8")
       );
