@@ -92,6 +92,8 @@ EMPTY=
       "apps/shared/fly.toml",
       "--dockerfile",
       "apps/shared/Dockerfile",
+      "--build-arg",
+      expect.stringMatching(/^VITE_CONFIG_HASH=[a-f0-9]{64}$/),
       "--build-secret",
       "ALL_SECRETS=export VITE_APP_URL='https://example.com'\nexport REDIS_URL='redis://x'",
       "--build-secret",
@@ -99,6 +101,32 @@ EMPTY=
       "--build-secret",
       "REDIS_URL=redis://x",
     ]);
+  });
+
+  it("invalidates frontend builds only when public VITE configuration changes", async () => {
+    const envPath = path.join(tempRoot, ".env.production");
+    const deploy = async (body: string) => {
+      await fs.promises.writeFile(envPath, body);
+      runFlyDeploy({ config: "fly.toml", dockerfile: "Dockerfile", env: envPath });
+      const args = spawnSyncMock.mock.calls.at(-1)?.[1];
+      const cacheKey = args?.find((arg) => arg.startsWith("VITE_CONFIG_HASH="));
+      expect(cacheKey).toMatch(/^VITE_CONFIG_HASH=[a-f0-9]{64}$/);
+      return cacheKey;
+    };
+
+    const original = await deploy("VITE_URL=https://example.com\nVITE_NAME=App\nSECRET=one\n");
+    expect(
+      await deploy(
+        '# reordered and quoted\nSECRET=two\nVITE_NAME="App"\nVITE_URL=https://example.com\n'
+      )
+    ).toBe(original);
+    expect(
+      await deploy("VITE_URL=https://other.example.com\nVITE_NAME=App\nSECRET=one\n")
+    ).not.toBe(original);
+    expect(await deploy("VITE_URL=https://example.com\nSECRET=one\n")).not.toBe(original);
+    expect(
+      await deploy("VITE_URL=https://example.com\nVITE_NAME=App\nVITE_NEW=yes\nSECRET=one\n")
+    ).not.toBe(original);
   });
 
   it("runFlySecrets imports the env file over stdin", async () => {

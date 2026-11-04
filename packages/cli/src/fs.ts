@@ -33,6 +33,7 @@ const TEXT_BASENAMES = new Set([
   ".npmrc",
   ".dockerignore",
   "Dockerfile",
+  "Caddyfile",
 ]);
 
 /** Feature marker blocks: lines between `// m5k:<feature>:start` and `// m5k:<feature>:end`. */

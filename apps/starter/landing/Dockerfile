@@ -1,39 +1,25 @@
 # syntax = docker/dockerfile:1
 
-FROM node:24-slim AS base
-
-LABEL fly_launch_runtime="NodeJS"
-
+FROM node:24-slim AS dependencies
 WORKDIR /app
-
 ENV NODE_ENV=production
+RUN npm install -g pnpm@10.13.1 && pnpm config set store-dir /pnpm/store
+# Workspace configuration owns overrides; omit root development tooling.
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/landing/package.json ./apps/landing/
+RUN --mount=type=cache,id=starter-app-pnpm,target=/pnpm/store \
+    pnpm --filter=@starter-app/landing... install --frozen-lockfile --prod=false
 
-FROM base AS build
-
-RUN apt-get update -qq && \
-    apt-get install -y python-is-python3 pkg-config build-essential ca-certificates && \
-    update-ca-certificates
-
-RUN npm install -g pnpm@10.13.1
-
-COPY --link . .
-
-RUN pnpm install --frozen-lockfile --prod=false
-
-# Frontend bake needs VITE_* from the operator env file. The wrapper passes
-# ALL_SECRETS (every key) plus per-key --build-secret flags.
+FROM dependencies AS build
+COPY apps/landing ./apps/landing
+# The wrapper supplies a hash of public VITE_* values to invalidate this step
+# when build configuration changes, without exposing runtime secrets.
+ARG VITE_CONFIG_HASH
 RUN --mount=type=secret,id=ALL_SECRETS,required=false \
     if [ -f /run/secrets/ALL_SECRETS ]; then . /run/secrets/ALL_SECRETS; fi && \
     pnpm --filter=@starter-app/landing build
 
-RUN pnpm --filter=@starter-app/landing deploy --prod --legacy /deploy
-RUN cp -r /app/apps/landing/dist /deploy/dist
-
-FROM base
-
-COPY --from=build /deploy /app
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-
-WORKDIR /app
-
-CMD ["npm", "run", "start"]
+FROM caddy:2-alpine AS runtime
+COPY apps/landing/Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /app/apps/landing/dist/ /srv/
+EXPOSE 8080

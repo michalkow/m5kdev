@@ -1,4 +1,5 @@
 import { type SpawnSyncReturns, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 
 export interface RunFlyDeployOptions {
@@ -74,12 +75,20 @@ function assertFlyStatus(result: SpawnSyncReturns<Buffer | string>): void {
 export function runFlyDeploy(options: RunFlyDeployOptions): void {
   assertEnvFile(options.env);
   const vars = parseDotenv(readFileSync(options.env, "utf8"));
+  // Only public frontend configuration affects the baked SPA. Sorting keeps
+  // dotenv formatting/order and runtime secret rotations out of the cache key.
+  const publicConfig = Object.entries(vars)
+    .filter(([key]) => key.startsWith("VITE_"))
+    .sort(([left], [right]) => left.localeCompare(right));
+  const viteConfigHash = createHash("sha256").update(JSON.stringify(publicConfig)).digest("hex");
   const args = [
     "deploy",
     "-c",
     options.config,
     "--dockerfile",
     options.dockerfile,
+    "--build-arg",
+    `VITE_CONFIG_HASH=${viteConfigHash}`,
     "--build-secret",
     `ALL_SECRETS=${toExportScript(vars)}`,
   ];

@@ -97,7 +97,16 @@ pnpm landing:deploy
 `landing:deploy` reads that app’s `.env.production` and forwards every key as
 `fly deploy --build-secret` via Kernel bins (`m5kdev-fly-deploy` /
 `m5kdev-fly-secrets`). A missing env file errors with a copy-the-example
-message.
+message. The wrapper also passes a cache key for public `VITE_*` values, so
+configuration changes rebuild the frontend without invalidating dependency
+installation. Direct Docker/Fly builds must supply `VITE_CONFIG_HASH` themselves.
+
+Docker installs dependencies from manifests before copying source, and reuses
+downloads through a BuildKit pnpm store cache. Keep pnpm overrides in
+`pnpm-workspace.yaml`; root development tooling is excluded from the images.
+If you add local workspace dependencies or install inputs such as patches, add
+their files to the appropriate Docker stages. The landing runtime serves only
+compiled assets with Caddy (`apps/landing/Caddyfile`), including SPA route fallback.
 // m5k:server:start
 `app:deploy` does the same for the product image. Provision provider-neutral
 PostgreSQL with pgvector in `public` and a transaction-mode PgBouncer endpoint.

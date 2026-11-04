@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { parse } from "yaml";
 import { scaffoldProject } from "../create";
 import { diagnoseManagedRepo } from "../doctor";
 import * as fsHelpers from "../fs";
@@ -971,14 +972,16 @@ describe("scaffoldProject", () => {
     expect(dockerfile).toContain("FROM node:24-slim");
     expect(dockerfile).not.toContain("24.11.0");
     expect(dockerfile).toContain("pnpm@10.13.1");
-    expect(dockerfile).toContain("pnpm install --frozen-lockfile --prod=false");
+    expect(dockerfile).toContain(
+      "pnpm --filter=@deploy-desk/server... install --frozen-lockfile --prod=false"
+    );
     expect(dockerfile).toContain("required=false");
     expect(dockerfile).toContain("pnpm --filter=@deploy-desk/server build");
     expect(dockerfile).toContain("pnpm --filter=@deploy-desk/webapp build");
     expect(dockerfile).toContain(
       "pnpm --filter=@deploy-desk/server deploy --prod --legacy /deploy"
     );
-    expect(dockerfile).toContain("/deploy/client");
+    expect(dockerfile).toContain("COPY --from=webapp-build /app/apps/webapp/dist/ ./client/");
     expect(dockerfile).toContain('CMD ["node", "index.js"]');
     expect(dockerfile).not.toContain("m5k:webapp");
     expect(dockerfile).not.toContain("{{");
@@ -1021,6 +1024,59 @@ describe("scaffoldProject", () => {
     );
     expect(appTs).toContain('spa: { root: "./client" }');
   });
+
+  it.each(["web", "expo", "both", "landing"] as const)(
+    "ships complete Docker inputs for the %s scaffold",
+    async (platform) => {
+      const result = await scaffoldProject({
+        targetDirectory: `docker-${platform}`,
+        appName: "Docker Fixture",
+        appDescription: "Docker build inputs.",
+        platform,
+        yes: true,
+        force: false,
+        skipInstall: true,
+        skipGit: true,
+      });
+      const workspace = parse(
+        await fs.readFile(path.join(result.targetDirectory, "pnpm-workspace.yaml"), "utf8")
+      );
+      expect(workspace.overrides).toEqual({ "drizzle-orm>@libsql/client": "-" });
+
+      const dockerfiles = ["apps/landing/Dockerfile"];
+      if (platform !== "landing") dockerfiles.push("apps/shared/Dockerfile");
+      for (const dockerfilePath of dockerfiles) {
+        const dockerfile = await fs.readFile(
+          path.join(result.targetDirectory, dockerfilePath),
+          "utf8"
+        );
+        const stages = new Set([...dockerfile.matchAll(/^FROM .+ AS (\S+)$/gm)].map((m) => m[1]));
+        for (const line of dockerfile.split("\n").filter((line) => line.startsWith("COPY "))) {
+          const from = line.match(/--from=(\S+)/);
+          if (from) {
+            expect(stages.has(from[1])).toBe(true);
+            continue;
+          }
+          for (const source of line.split(/\s+/).slice(1, -1)) {
+            // The initial pnpm install creates this after scaffolding.
+            if (source === "pnpm-lock.yaml") continue;
+            await expect(fs.stat(path.join(result.targetDirectory, source))).resolves.toBeTruthy();
+          }
+        }
+      }
+
+      const caddyfile = await fs.readFile(
+        path.join(result.targetDirectory, "apps/landing/Caddyfile"),
+        "utf8"
+      );
+      expect(caddyfile).toContain(":8080");
+      expect(caddyfile).toContain("try_files {path} /index.html");
+      const state = JSON.parse(
+        await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8")
+      );
+      expect(state.files["apps/landing/Caddyfile"].kind).toBe("text");
+    }
+  );
 
   it("always ships Landing and strips webapp image stages for expo-only create", async () => {
     const web = await scaffoldProject({
@@ -1117,7 +1173,7 @@ describe("scaffoldProject", () => {
     );
     expect(expoDocker).toContain("pnpm --filter=@landing-expo/server build");
     expect(expoDocker).not.toContain("webapp build");
-    expect(expoDocker).not.toContain("/deploy/client");
+    expect(expoDocker).not.toContain("webapp");
     await expect(fs.stat(path.join(expo.targetDirectory, "apps/webapp"))).rejects.toMatchObject({
       code: "ENOENT",
     });

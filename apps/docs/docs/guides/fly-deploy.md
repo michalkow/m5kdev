@@ -22,10 +22,10 @@ paths. The `fly` CLI must be on PATH.
 | Product (server + baked webapp) | `apps/shared/Dockerfile` | `<app-slug>-app` in new apps | none; externally hosted PostgreSQL |
 | Landing (public site) | `apps/landing/Dockerfile` | `<app-slug>-landing` | none |
 
-There is **one** root `.dockerignore`. Do not add a dockerignore next to a
-Dockerfile — Docker only reads the ignore file at the build context root.
-From 0.37.0 it also ignores SQLite `*.db`, `*.db-wal`, `*.db-shm`, and
-`*.db-info`.
+The starter uses **one** root `.dockerignore` for both images. Its recursive
+patterns exclude environment files, dependencies, local databases, build
+outputs, and test reports at every workspace depth. A plain `.dockerignore`
+beside a Dockerfile does not apply to a repository-root build context.
 
 The Kernel serves the baked SPA when `createBackendApp` is given
 `spa: { root: "./client" }` and that directory exists. Local Vite on port 5173
@@ -40,6 +40,14 @@ is unchanged: there is no `./client` directory, so the Kernel skips the SPA.
   The frontend build mounts them with `required=false` so a dry run without
   secrets still builds. Vite `VITE_*` values are baked into the SPA at image
   build.
+- The deploy wrapper also supplies `VITE_CONFIG_HASH`, a stable SHA-256 hash of
+  sorted `VITE_*` keys and values. Docker does not invalidate secret mounts when
+  their contents change; this argument ensures the baked frontend updates when
+  public configuration changes. Runtime-only secret changes do not rebuild it.
+  When invoking Docker or Fly directly, supply
+  `--build-arg VITE_CONFIG_HASH=<hash-of-public-VITE-values>` alongside the build
+  secrets, and change the hash whenever a public value is added, removed, or
+  changed. Keep private runtime values out of build arguments.
 - **Runtime secrets** — `pnpm app:secrets` / `pnpm landing:secrets` import the
   same file (`fly secrets import`). Use this for `REDIS_URL`, `DATABASE_URL`,
   `BETTER_AUTH_SECRET`, and anything the Node process reads after boot.
@@ -70,7 +78,42 @@ pnpm landing:deploy
 ```
 
 Default Fly region in the starter is `iad`, 1gb shared CPU, `PORT=8080`,
-`force_https`, `min_machines_running = 1`.
+`force_https`, `min_machines_running = 0`.
+
+## Build caching and runtime images
+
+Dependency stages copy the lockfile, workspace configuration, and required app
+manifests before installing. Only the selected app and its local dependencies
+are installed. A BuildKit cache mount at `/pnpm/store` reuses package downloads
+when an install layer needs rebuilding. This cache belongs to the builder;
+switching builders or clearing its storage can still cause a cold build.
+
+Keep pnpm settings such as `overrides` in `pnpm-workspace.yaml`. The image omits
+the root `package.json` so pnpm does not install root development tools and the
+deploy CLI. Existing apps adopting these Dockerfiles must move their root
+`pnpm.overrides` entries into the workspace file and regenerate their pnpm
+lockfile if needed. Copy any additional install inputs, such as patches or
+registry configuration, before the install step; supply registry credentials
+through build secrets.
+
+Server compilation, webapp compilation, and production dependency packaging
+are separate stages. Server-only source edits do not rebuild the SPA, whose
+server imports are type-only. The runtime image copies production dependencies,
+compiled server output, and frontend assets into separate layers. Add explicit
+copies for any additional runtime assets your app requires. When introducing
+local workspace dependencies, add their manifests to the appropriate dependency
+stages and their source to the stages that consume or package them.
+
+The landing image contains Caddy and the compiled `dist` files. Its
+`apps/landing/Caddyfile` serves on port 8080, compresses responses, and falls back
+to `index.html` for client routes. Node and frontend build dependencies remain
+in the build stage; `vite preview` is only for local previewing.
+
+To check cache behavior, compare a no-change build, a server-only edit, a
+webapp-only edit, and a public `VITE_*` change on the same builder. Dependency
+install layers should stay cached for source/configuration edits, and only the
+affected compilation stages should rerun. Check the build log's context transfer
+and image push steps separately from Fly machine rollout.
 
 Before starting the product image, provision PostgreSQL and pgvector in `public`,
 apply the app's maintainer-generated PostgreSQL migration history through the

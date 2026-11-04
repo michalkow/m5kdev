@@ -53,6 +53,7 @@ const TEXT_BASENAMES = new Set([
   ".npmrc",
   ".dockerignore",
   "Dockerfile",
+  "Caddyfile",
 ]);
 
 /** Paths (relative to the starter root) never emitted into templates. */
