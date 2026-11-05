@@ -1,5 +1,18 @@
 # @m5kdev/backend
 
+## 0.43.1
+
+### Patch Changes
+
+- 7d09d8a: Pass a hash of public `VITE_*` values as `VITE_CONFIG_HASH` on Fly deploy so frontend image rebuilds follow configuration changes without invalidating dependency layers.
+  
+  Ship layered Dockerfiles that install from workspace manifests with a persistent pnpm store cache, copy only the apps each image needs, and ignore nested secrets, build artifacts, and unused apps.
+  
+  Serve landing as compiled static files with Caddy, and keep pnpm overrides in `pnpm-workspace.yaml` so root development tooling stays out of the image.
+- 2acfcc9: Pin the Kernel's Better Auth OAuth provider to the same version as Better Auth and its MCP companions so fresh consumer installs cannot resolve a newer provider that crashes against the pinned core.
+- @m5kdev/commons@0.43.1
+  - @m5kdev/config@0.43.1
+
 ## 0.43.0
 
 ### Minor Changes

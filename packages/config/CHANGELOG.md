@@ -1,5 +1,9 @@
 # @m5kdev/config
 
+## 0.43.1
+
+No changes in this release.
+
 ## 0.43.0
 
 No changes in this release.

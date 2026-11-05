@@ -1,5 +1,13 @@
 # @m5kdev/module-pdf
 
+## 0.43.1
+
+### Patch Changes
+
+- Updated dependencies [7d09d8a]
+- Updated dependencies [2acfcc9]
+  - @m5kdev/backend@0.43.1
+
 ## 0.43.0
 
 ### Patch Changes
