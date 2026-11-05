@@ -91,7 +91,7 @@ const FEATURE_MANIFEST = {
     },
     server: {
       kind: "platform",
-      paths: ["apps/server/", "apps/email/", "apps/shared/"],
+      paths: ["apps/server/", "apps/email/", "apps/shared/", ".github/workflows/deploy-app.yml"],
     },
     billing: { kind: "module", label: "Billing", paths: [] },
     files: {

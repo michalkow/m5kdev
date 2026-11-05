@@ -80,6 +80,51 @@ pnpm landing:deploy
 Default Fly region in the starter is `iad`, 1gb shared CPU, `PORT=8080`,
 `force_https`, `min_machines_running = 0`.
 
+## GitHub Actions deployment
+
+Generated repositories include two independent workflows for pushes to `main`:
+
+| Workflow | App changes that trigger deployment |
+| --- | --- |
+| `.github/workflows/deploy-landing.yml` | `apps/landing/**` |
+| `.github/workflows/deploy-app.yml` | `apps/server/**`, `apps/webapp/**`, `apps/shared/**`, `apps/email/**` |
+
+Landing-only projects omit the product workflow. Expo-only projects keep the
+product workflow for their backend and omit the webapp path. Native Expo builds
+are not deployed by these workflows.
+
+Changes to root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`,
+or `.dockerignore` trigger both available targets. Changes to a workflow trigger
+its own target. Unrelated source changes do not deploy. This uses GitHub's
+[push branch and path filters](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore).
+
+Complete the first-deploy prerequisites above and commit `pnpm-lock.yaml` before
+pushing. CI installs with `--frozen-lockfile`. In the generated repository's
+**Settings → Secrets and variables → Actions**, create:
+
+| Repository secret | Value |
+| --- | --- |
+| `FLY_API_TOKEN_LANDING` | Deploy token scoped to the landing Fly app. |
+| `LANDING_ENV_PRODUCTION` | Complete filled-in `apps/landing/.env.production` contents. |
+| `FLY_API_TOKEN_APP` | Deploy token scoped to the product Fly app; omit for landing-only. |
+| `APP_ENV_PRODUCTION` | Complete filled-in `apps/shared/.env.production` contents; omit for landing-only. |
+
+Generate each token locally with `fly tokens create deploy --app <fly-app-name>`
+and store its full output in the corresponding secret. Names must match the
+committed `fly.toml` files. See [Fly's GitHub Actions guide](https://fly.io/docs/launch/continuous-deployment-with-github-actions/).
+
+The workflows write temporary production env files, call the existing
+`landing:secrets` / `app:secrets` and deploy scripts from the repository root,
+then remove the files even after failure. Runtime secrets and public frontend
+configuration use the same path as local deployment. Database migrations and
+optional Mastra initialization remain operator steps.
+
+Each target serializes deployments without cancelling an active rollout. Both
+workflows support **Run workflow** from `main`; use it after updating GitHub
+secrets, which do not themselves trigger a push event. Other branches cannot
+deploy through these workflows. Existing managed apps can receive the workflows
+through `create-m5kdev update`; configure their secrets before the first run.
+
 ## Build caching and runtime images
 
 Dependency stages copy the lockfile, workspace configuration, and required app
