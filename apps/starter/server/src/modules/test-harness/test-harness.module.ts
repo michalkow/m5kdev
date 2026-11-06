@@ -44,6 +44,11 @@ export class TestHarnessModule extends BaseModule<
   override readonly dbDependsOn = ["auth"] as const;
 
   override express({ db, infra }: ModuleExpressContext<Record<string, never>>) {
+    // Playwright e2e uses NODE_ENV=development; Fly/Docker set production.
+    if (process.env.NODE_ENV === "production") {
+      return;
+    }
+
     infra.express.get("/__auth-e2e/user.json", async (req: Request, res: Response) => {
       const email = normalizedEmail(req.query.email);
       if (!email) {
