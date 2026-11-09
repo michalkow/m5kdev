@@ -114,7 +114,8 @@ Set `DATABASE_URL` to the runtime pool and `DATABASE_DIRECT_URL` to the direct
 database endpoint. App migrations own `app`; Mastra owns `mastra` and vectors
 use `vectors`. Run reviewed app migrations and, when AI is selected, `mastra:init`
 through direct connections before starting the server. Redis and database URLs
-are server secrets, not image layers. No local database volume is required.
+are server secrets, not image layers. The product `fly.toml` has no `[[mounts]]`:
+PostgreSQL is hosted outside the Fly machine, so do not create a volume.
 // m5k:server:end
 
 ## GitHub Actions deployment

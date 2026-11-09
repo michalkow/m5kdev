@@ -17,10 +17,13 @@ paths. The `fly` CLI must be on PATH.
 
 ## What ships
 
-| App | Image | Fly name | Volume |
-| --- | --- | --- | --- |
-| Product (server + baked webapp) | `apps/shared/Dockerfile` | `<app-slug>-app` in new apps | none; externally hosted PostgreSQL |
-| Landing (public site) | `apps/landing/Dockerfile` | `<app-slug>-landing` | none |
+| App | Image | Fly name |
+| --- | --- | --- |
+| Product (server + baked webapp) | `apps/shared/Dockerfile` | `<app-slug>-app` in new apps |
+| Landing (public site) | `apps/landing/Dockerfile` | `<app-slug>-landing` |
+
+Neither app mounts a Fly volume. PostgreSQL is hosted outside the machine, so
+`fly.toml` has no `[[mounts]]` and first deploy does not run `fly volumes create`.
 
 The starter uses **one** root `.dockerignore` for both images. Its recursive
 patterns exclude environment files, dependencies, local databases, build
@@ -63,8 +66,9 @@ cp apps/landing/.env.production.example apps/landing/.env.production
 Product examples require a PostgreSQL `DATABASE_URL` routed through PgBouncer
 for runtime and a separate `DATABASE_DIRECT_URL` for migration/provisioning jobs.
 They also document `REDIS_URL`. Use one database per app/environment with
-separately owned `app`, `mastra`, and `vectors` schemas. No local database volume
-is required. Keep the direct connection secret out of frontend values.
+separately owned `app`, `mastra`, and `vectors` schemas. Keep the direct
+connection secret out of frontend values. Do not store the database on a Fly
+volume; that was the libSQL file replica.
 
 ## First deploy
 
@@ -78,7 +82,8 @@ pnpm landing:deploy
 ```
 
 Default Fly region in the starter is `iad`, 1gb shared CPU, `PORT=8080`,
-`force_https`, `min_machines_running = 0`.
+`force_https`, `min_machines_running = 0`. Do not create a volume or add
+`[[mounts]]`.
 
 ## GitHub Actions deployment
 
@@ -163,9 +168,11 @@ and image push steps separately from Fly machine rollout.
 Before starting the product image, provision PostgreSQL and pgvector in `public`,
 apply the app's maintainer-generated PostgreSQL migration history through the
 direct connection, and run `mastra:init` when AI is enabled. Initialization is
-an explicit deployment step, not a runtime auto-migration. Remove legacy SQLite
-mounts only after backing up and validating the data transfer; do not delete a
-production volume as part of an unverified cutover.
+an explicit deployment step, not a runtime auto-migration.
+
+Apps still mounting `libsql_data` from before 0.42.0 should remove that volume
+only after a verified data transfer. See
+[PostgreSQL and pgvector in 0.42.0](/guides/v0.42.0-postgresql-pgvector-migration).
 
 ## `create-m5kdev update` and fly.toml
 

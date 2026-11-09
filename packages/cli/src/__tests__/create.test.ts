@@ -999,6 +999,11 @@ describe("scaffoldProject", () => {
     expect(flyToml).toContain("min_machines_running = 0");
     expect(flyToml).not.toContain("{{");
 
+    const readme = await fs.readFile(path.join(result.targetDirectory, "README.md"), "utf8");
+    expect(readme).not.toContain("fly volumes create");
+    expect(readme).not.toContain("libsql_data");
+    expect(readme).toContain("has no `[[mounts]]`");
+
     const envExample = await fs.readFile(
       path.join(result.targetDirectory, "apps/shared/.env.production.example"),
       "utf8"
