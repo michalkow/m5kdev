@@ -605,6 +605,8 @@ describe("scaffoldProject", () => {
     expect(appTs).toContain("DemoWorkflowModule");
     expect(appTs).toContain('defaultQueue: "workflow-desk-main"');
     expect(appTs).toContain('"workflow-desk-main": { concurrency: 5 }');
+    // Canary shares the Production database: workers run, recurring jobs do not.
+    expect(appTs).toContain('schedulers: process.env.APP_ENV !== "canary"');
     expect(appTs).toContain("redis:");
     expect(appTs).not.toContain("m5k:");
 

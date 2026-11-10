@@ -30,6 +30,12 @@ export interface WorkflowServiceConfig {
    * each other's jobs. `WorkflowModule` defaults it to `<APP_SLUG>-<APP_ENV>`.
    */
   prefix: string;
+  /**
+   * Register BullMQ job schedulers (crons, including the reconcile sweep).
+   * Default true. Canary sets false: it shares the Production database, so its
+   * recurring jobs would run twice. Workers start either way.
+   */
+  schedulers?: boolean;
   queues: Record<string, WorkflowQueueConfig>;
   defaultQueue: string;
   defaults?: {

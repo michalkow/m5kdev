@@ -104,6 +104,8 @@ export class WorkflowService extends Base {
     meterName: "@m5kdev/backend",
     enableMetrics: true,
   });
+  /** When false, {@link WorkflowRegistry} registers no job schedulers. */
+  readonly schedulers: boolean;
   /** Picked up by WorkflowRegistry.registerService — heals rows whose queue events were missed. */
   readonly reconcileCron?: WorkflowCronDefinition;
 
@@ -113,6 +115,7 @@ export class WorkflowService extends Base {
   ) {
     super("workflow");
     this.queueConfigs = config.queues;
+    this.schedulers = config.schedulers ?? true;
 
     this.connection = config.connection;
 

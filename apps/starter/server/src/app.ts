@@ -153,6 +153,9 @@ export const builtBackendApp = createBackendApp(
         jobOptions: { removeOnComplete: { age: 3600 } },
       },
       reconcile: { enabled: true },
+      // Canary shares the Production database: its workers run, but recurring
+      // jobs (and the reconcile sweep) stay with Production.
+      schedulers: process.env.APP_ENV !== "canary",
     }),
     new DemoWorkflowModule(),
     // m5k:workflows:end
