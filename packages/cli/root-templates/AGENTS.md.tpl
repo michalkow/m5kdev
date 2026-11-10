@@ -33,6 +33,13 @@
 // m5k:webapp:end
 
 Read the matching `.cursor/rules` guide before editing a module file.
+
+## Database migrations
+
+- Create migrations only with `drizzle:generate`. Never hand-write or edit migration SQL, journal entries, or snapshots, and never use `generate --custom`. Stop and ask if drizzle-kit prompts about a rename.
+- Apply migrations with `drizzle:migrate` only to the local or Development database in `apps/shared/.env`. Staging, Canary, and Production are migrated by the deploy workflow.
+- Every migration must be backward-compatible with the code currently in Production. Drops and renames ship later, through a `migration-contract` issue.
+- See `.cursor/rules/database-migrations.mdc`.
 // m5k:server:end
 
 ## Agent skills

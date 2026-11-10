@@ -927,6 +927,47 @@ describe("scaffoldProject", () => {
     }
   );
 
+  it("ships PostgreSQL module guides and one agent migration policy", async () => {
+    const result = await scaffoldProject({
+      targetDirectory: "migration-policy",
+      appName: "Migration Policy",
+      appDescription: "Agent migration policy fixture.",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+    const read = (relative: string) =>
+      fs.readFile(path.join(result.targetDirectory, relative), "utf8");
+
+    for (const guide of ["module-db-guide.mdc", "module-repository-guide.mdc"]) {
+      const content = await read(`.cursor/rules/${guide}`);
+      expect(content).not.toMatch(/sqlite|libsql/i);
+    }
+    const dbGuide = await read(".cursor/rules/module-db-guide.mdc");
+    expect(dbGuide).toContain("drizzle-orm/pg-core");
+    expect(dbGuide).toContain("drizzle-postgresql/");
+    expect(dbGuide).not.toMatch(/`drizzle\/`/);
+    expect(await read(".cursor/rules/module-repository-guide.mdc")).toContain("NodePgDatabase");
+
+    const migrations = await read(".cursor/rules/database-migrations.mdc");
+    expect(migrations).toContain("drizzle:generate");
+    expect(migrations).toContain("--custom");
+    expect(migrations).toContain("migration-contract");
+    expect(migrations).toMatch(/currently in Production/);
+    expect(migrations).toMatch(/never regenerate/i);
+
+    const claude = await read("CLAUDE.md");
+    const agents = await read("AGENTS.md");
+    expect(claude).toContain(".cursor/rules/database-migrations.mdc");
+    expect(agents).toContain(".cursor/rules/database-migrations.mdc");
+    expect(claude).not.toMatch(/must not generate/i);
+    for (const doc of [claude, agents]) {
+      expect(doc).toContain("drizzle:generate");
+      expect(doc).toMatch(/never hand-write or edit migration SQL/i);
+    }
+  });
+
   it("requires Node >=24 and ships product Deploy home files", async () => {
     const result = await scaffoldProject({
       targetDirectory: "deploy-desk",
