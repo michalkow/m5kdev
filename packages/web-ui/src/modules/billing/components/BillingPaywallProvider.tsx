@@ -1,6 +1,7 @@
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { BillingProvider } from "@m5kdev/frontend/modules/billing/components/BillingProvider";
+import { EntitlementProvider } from "@m5kdev/frontend/modules/billing/components/EntitlementProvider";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
@@ -37,7 +38,7 @@ export function BillingPaywallProvider({
         </>
       }
     >
-      {children}
+      <EntitlementProvider>{children}</EntitlementProvider>
     </BillingProvider>
   );
 }

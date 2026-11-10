@@ -6,16 +6,17 @@ sidebar_position: 3
 
 The billing module is the Stripe paywall: Plan catalog, Checkout, Billing Portal,
 webhook-driven Subscription sync, and plan-selection UI. The Customer is the
-Organization (ADR-0017).
+Organization (ADR-0017). When a catalog defines Capabilities, Billing also owns
+Organization Entitlements (ADR-0034).
 
 ## Package map
 
 | Package | What it owns |
 | --- | --- |
-| `@m5kdev/commons` | `StripePlan` / `StripePlansConfig` types, billing schema, plan utilities. |
-| `@m5kdev/backend` | `BillingModule`: `subscriptions` table, repository, `BillingService`, Stripe HTTP, tRPC procedures. |
-| `@m5kdev/frontend` | `BillingProvider` and `useSubscription`. |
-| `@m5kdev/web-ui` | `BillingPaywallProvider`, `BillingRouter`, plan select pages, invoice page, beta page, `BillingAdminRouter`. |
+| `@m5kdev/commons` | `StripePlan` / `StripePlansConfig` types, billing schema, plan utilities, Capability catalog helpers. |
+| `@m5kdev/backend` | `BillingModule`: `subscriptions` table, repository, `BillingService`, `BillingPermissionService`, Stripe HTTP, tRPC procedures. |
+| `@m5kdev/frontend` | `BillingProvider`, `useSubscription`, `EntitlementProvider`, `useEntitlements`. |
+| `@m5kdev/web-ui` | `BillingPaywallProvider`, `EntitlementGate`, `BillingRouter`, plan select pages, invoice page, beta page, `BillingAdminRouter`. |
 
 ## Plan configuration
 
@@ -98,6 +99,117 @@ required, Trial starts on that Price. When a card is required, Checkout uses it
 in place of `defaultPriceId`, so the Owner can Checkout later from any device.
 Without a stored Price (none picked, not on the Trial Plan, or Stripe was down at
 sign-up), Billing falls back to the default Price.
+
+## Organization Entitlements
+
+Billing owns Organization Entitlements. There is no Entitlement Backend Module,
+no Entitlement tables, and no Stripe Entitlements API. A Grant never creates a
+Capability. See ADR-0034 (`docs/adr/0034-billing-owns-organization-entitlements.md`).
+
+App shared defines Capability keys and immutable Bundles. Each Plan names 1..N
+Bundle revisions. At evaluation time, a current-environment ACCESS_STATUS
+Subscription contributes those Bundles (the Assignment is derived, not stored).
+`billingExempt` allows every Capability currently in the catalog, including keys
+added after the flag. Otherwise the Capability is denied. Apps that omit Billing
+(Starter) stay Grant-only.
+
+```ts
+import {
+  booleanCapability,
+  composeCapabilities,
+  defineBundles,
+  defineCapabilities,
+} from "@m5kdev/commons/modules/billing/billing.entitlements";
+
+const capabilities = composeCapabilities(
+  defineCapabilities({
+    "resources.analyze": booleanCapability(),
+  }),
+  defineCapabilities({
+    "apps.typeorb": booleanCapability(),
+    "typeorb.publish": booleanCapability(),
+  })
+);
+
+const entitlements = defineBundles(capabilities, {
+  "brain@1": ["resources.analyze"],
+  "typeorb@1": ["apps.typeorb", "typeorb.publish", "resources.analyze"],
+});
+
+const plansConfig: StripePlansConfig = {
+  defaultCurrency: "usd",
+  entitlements,
+  production: [
+    {
+      name: "pro",
+      bundles: ["typeorb@1"],
+      products: { /* ... */ },
+    },
+  ],
+  sandbox: [/* sandbox Price ids */],
+};
+```
+
+Duplicate Capability keys fail when `composeCapabilities` runs (typically while
+the catalog module loads). Unknown Bundle names on **production or sandbox**
+Plans fail in `getEnvironmentPlans` and again when `BillingModule` constructs.
+An omitted `bundles` list contributes nothing. A second brand is a Plan switch,
+not a second Subscription: one row per Organization per environment stays unique.
+
+### Procedure chain
+
+Services that check Capabilities extend `BillingPermissionService` and declare
+`billing` in their service map. Chain Entitlement after OrganizationActor and
+before Grant. The array means every listed Capability. Jobs call
+`BillingService.requireAll` directly. Grant-only services stay on
+`BasePermissionService`. Kernel `base/` does not import Billing.
+
+```ts
+import { BillingPermissionService } from "@m5kdev/backend/modules/billing/billing.permission-service";
+
+class TypeOrbService extends BillingPermissionService<
+  { typeOrb: TypeOrbRepository },
+  { billing: BillingService }
+> {
+  readonly publish = this.procedure("publish")
+    .requireAuth("organization")
+    .requireEntitlements(["typeorb.publish"])
+    .access({ action: "publish" })
+    .handle(({ ctx }) => this.publishPost(ctx.actor));
+}
+```
+
+Entitlement denial is `FORBIDDEN` with `{ kind: "entitlement", capabilities, reason }`.
+Grant `FORBIDDEN` has no Entitlement context. Unknown Capability keys are
+`BAD_REQUEST`, not a denial.
+
+`skipPlanCheck` on `BillingProvider` is chrome only: it skips the Plan page and
+does not mark Capabilities allowed. `billingExempt` is the Organization overlay
+that allows the full catalog.
+
+### Snapshot and gate
+
+Members load one Organization-scoped snapshot from `billing.getEntitlements`.
+Query identity includes Organization id. `BillingPaywallProvider` wraps
+`EntitlementProvider` around its children, including when `skipPlanCheck` skips
+paywall chrome, so compose that wrap in `Providers.tsx`. `EntitlementGate`
+renders pending, error, denied, or allowed. A failed snapshot is error, not
+denied. The frontend snapshot is not authoritative; the server check is.
+
+```tsx
+import { EntitlementGate } from "@m5kdev/web-ui/modules/billing/components/EntitlementGate";
+
+<BillingPaywallProvider planPage={<BillingPlanSelect plans={plans} />} skipPlanCheck={false}>
+  <EntitlementGate
+    capabilities={["apps.typeorb"]}
+    pending={<Spinner />}
+    error={<ErrorState />}
+    denied={<UpgradePrompt />}
+  >
+    <TypeOrbApp />
+  </EntitlementGate>
+</BillingPaywallProvider>
+```
 
 ## Backend
 
@@ -182,6 +294,9 @@ succeeds if Stripe is down; the paywall shows until a Subscription exists.
 - `getActiveSubscription`, `listInvoices` — Organization-scoped reads. Access
   includes current-environment `active`, `trialing`, and `past_due`. A sandbox
   ACCESS_STATUS does not grant production (ADR-0024).
+- `evaluate`, `requireAll`, `snapshot` — Organization Entitlements from the
+  current-environment Plan Bundles, or the full catalog when `billingExempt`.
+  Unknown Capability keys error. Jobs call `requireAll`.
 - `adjustBillableSeats` — Seat billing quantity (no-op when Seat billing is off).
 - `cancelOrganizationSubscription` — cancel in Stripe, keep the Customer.
 - AdminActor Billing Module admin (ADR-0022, ADR-0023): list Organizations and Coupons,
@@ -231,6 +346,7 @@ Organization-scoped.
 | Procedure | Description |
 | --- | --- |
 | `billing.getActiveSubscription` | Current accessible Subscription or `null`. Includes `ownerMustAddPaymentMethod` for the Owner after a consumed cardless Trial when the catalog requires a card, the switch is off, status is `trialing`, and there is no default payment method |
+| `billing.getEntitlements` | Organization Entitlement snapshot (allowed Capability keys and per-key reasons). Query identity includes Organization id |
 | `billing.getTrialPriceId` | Trial Price picked at sign-up (from Stripe Customer metadata) or `null` |
 | `billing.listInvoices` | Stripe invoices for the Organization Customer |
 
@@ -261,6 +377,11 @@ to Admin panel (`/admin`) for User-role admin on their own session. Do not put
 An exempt Organization also skips the subscription query. When
 `ownerMustAddPaymentMethod` is true, `BillingPaywallProvider` shows a full-page
 Billing Portal prompt instead of the app.
+
+Product chrome that depends on Capabilities wraps `EntitlementProvider` and
+`EntitlementGate`. `skipPlanCheck` does not force Capabilities allowed; the
+snapshot and `.requireEntitlements` remain the authority. `billingExempt`
+Organizations receive every catalog Capability on that snapshot.
 
 `@m5kdev/web-ui` provides `BillingRouter` with
 `BillingPlanSelect` (1..N Plans), `BillingSinglePlanSelect`, `BillingInvoicePage`,
@@ -322,3 +443,4 @@ constructed in app code with your secret key. Include
 - ADR-0024 (`docs/adr/0024-subscription-per-stripe-environment.md`)
 - ADR-0026 (`docs/adr/0026-organization-allow-cardless-trial.md`)
 - ADR-0027 (`docs/adr/0027-billing-checkout-portal-session-create-overlay.md`)
+- ADR-0034 (`docs/adr/0034-billing-owns-organization-entitlements.md`)

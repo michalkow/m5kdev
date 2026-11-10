@@ -30,6 +30,7 @@ export type {
   ServiceProcedureAccessEntitiesConfig,
   ServiceProcedureAccessStateConfig,
   ServiceProcedureArgs,
+  ServiceProcedureAuthContext,
   ServiceProcedureBuilder,
   ServiceProcedureContext,
   ServiceProcedureContextFilteredInput,

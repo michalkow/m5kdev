@@ -1,3 +1,8 @@
+import {
+  assertBundlesNameKnownCapabilities,
+  composeCapabilities,
+  type EntitlementCatalog,
+} from "./billing.entitlements";
 import type {
   ResolvedStripePlans,
   StripePlan,
@@ -9,6 +14,11 @@ export const getEnvironmentPlans = (
   plansConfig: StripePlansConfig,
   environment = "sandbox"
 ): ResolvedStripePlans => {
+  assertEntitlementCatalog({
+    production: plansConfig.production,
+    sandbox: plansConfig.sandbox,
+    entitlements: plansConfig.entitlements,
+  });
   const isProduction = environment === "production";
   const plans = isProduction ? plansConfig.production : plansConfig.sandbox;
   return {
@@ -19,8 +29,58 @@ export const getEnvironmentPlans = (
     defaultCurrency: plansConfig.defaultCurrency,
     seatBilling: plansConfig.seatBilling ?? false,
     nonBillableRoleKeys: plansConfig.nonBillableRoleKeys ?? [],
+    entitlements: plansConfig.entitlements,
+    productionPlans: plansConfig.production,
+    sandboxPlans: plansConfig.sandbox,
   };
 };
+
+export function assertEntitlementCatalog({
+  plans,
+  production,
+  sandbox,
+  entitlements,
+}: {
+  plans?: readonly StripePlan[];
+  production?: readonly StripePlan[];
+  sandbox?: readonly StripePlan[];
+  entitlements?: EntitlementCatalog;
+}): void {
+  if (entitlements) {
+    composeCapabilities(entitlements.capabilities);
+    assertBundlesNameKnownCapabilities(entitlements.capabilities, entitlements.bundles);
+  }
+  const bundles = entitlements?.bundles ?? {};
+  const planLists = [plans, production, sandbox].filter(
+    (list): list is readonly StripePlan[] => list != null
+  );
+  for (const list of planLists) {
+    for (const plan of list) {
+      for (const bundleName of plan.bundles ?? []) {
+        if (!(bundleName in bundles)) {
+          throw new Error(`Plan ${plan.name} names unknown Bundle ${bundleName}`);
+        }
+      }
+    }
+  }
+}
+
+export function capabilitiesOfPlan({
+  plan,
+  entitlements,
+}: {
+  plan: StripePlan | undefined;
+  entitlements?: EntitlementCatalog;
+}): string[] {
+  if (!plan || !entitlements) return [];
+  const allowed = new Set<string>();
+  for (const bundleName of plan.bundles ?? []) {
+    for (const key of entitlements.bundles[bundleName] ?? []) {
+      allowed.add(key);
+    }
+  }
+  return [...allowed];
+}
 
 export const formatPlanAmount = ({
   unitAmount,

@@ -44,7 +44,7 @@ export type ServiceProcedureLoadedResource<TOutput> = NonNullable<
 export type ServiceProcedureResultLike<T> = T | ServerResult<T> | Promise<T | ServerResult<T>>;
 export type ServiceProcedureContextFilterScope = ActorScope | "member";
 export type ServiceProcedureContextFilteredInput<TInput> = Extract<NonNullable<TInput>, QueryInput>;
-type ServiceProcedureAuthContext<
+export type ServiceProcedureAuthContext<
   Scope extends ActorScope,
   TCtx extends ServiceProcedureContext = ServiceProcedureContext,
 > = Omit<

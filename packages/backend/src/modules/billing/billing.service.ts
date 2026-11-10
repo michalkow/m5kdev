@@ -1,3 +1,4 @@
+import { unknownCapabilities } from "@m5kdev/commons/modules/billing/billing.entitlements";
 import {
   type ActiveSubscription,
   applyAdminCouponInputSchema,
@@ -9,12 +10,15 @@ import {
   type CreateAdminSubscriptionInput,
   cancelAdminSubscriptionInputSchema,
   createAdminSubscriptionInputSchema,
+  type EntitlementDecision,
+  type EntitlementSnapshot,
   organizationIdInputSchema,
   setAdminAllowCardlessTrialInputSchema,
   setAdminBillingExemptInputSchema,
   setOrganizationCurrencyInputSchema,
 } from "@m5kdev/commons/modules/billing/billing.schema";
 import {
+  capabilitiesOfPlan,
   catalogCurrencyKeys,
   findDefaultTrialPrice,
   findPriceCurrency,
@@ -27,6 +31,7 @@ import { posthogCapture } from "../../utils/posthog";
 import type { OrganizationContext } from "../../utils/trpc";
 import type * as authTables from "../auth/auth.db";
 import { resolveOrganizationCurrency } from "../auth/auth.utils";
+import type { AuthenticatedActor } from "../base/base.actor";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import { BasePermissionService } from "../base/base.service";
 import type { EmailService } from "../email/email.service";
@@ -239,6 +244,104 @@ export class BillingService extends BasePermissionService<
     }
 
     return ok(true);
+  }
+
+  async evaluate(
+    actor: AuthenticatedActor,
+    capability: string
+  ): ServerResultAsync<EntitlementDecision> {
+    const snapshot = await this.deriveEntitlements(actor);
+    if (snapshot.isErr()) return err(snapshot.error);
+    const decision = snapshot.value.capabilities[capability];
+    if (!decision) {
+      return this.error("BAD_REQUEST", `Unknown Capability ${capability}`, {
+        context: { kind: "entitlement", capabilities: [capability] },
+      });
+    }
+    return ok(decision);
+  }
+
+  async requireAll(
+    actor: AuthenticatedActor,
+    capabilities: readonly string[]
+  ): ServerResultAsync<true> {
+    const snapshot = await this.deriveEntitlements(actor);
+    if (snapshot.isErr()) return err(snapshot.error);
+    const unknown = unknownCapabilities(snapshot.value.capabilities, capabilities);
+    if (unknown.length > 0) {
+      return this.error("BAD_REQUEST", `Unknown Capability ${unknown[0]}`, {
+        context: { kind: "entitlement", capabilities: unknown },
+      });
+    }
+    const missing = capabilities.filter(
+      (capability) => snapshot.value.capabilities[capability]?.allowed !== true
+    );
+    if (missing.length === 0) return ok(true);
+    const reason = snapshot.value.capabilities[missing[0] ?? ""]?.reason ?? "missing_capability";
+    return this.error("FORBIDDEN", "Entitlement denied", {
+      context: { kind: "entitlement", capabilities: missing, reason },
+    });
+  }
+
+  async snapshot(ctx: OrganizationContext): ServerResultAsync<EntitlementSnapshot> {
+    const organizationId = ctx.actor.organizationId;
+    if (!organizationId) return this.error("FORBIDDEN", "Organization is required");
+    const readGuard = this.accessGuard(ctx.actor, "read", { organizationId });
+    if (readGuard.isErr()) return err(readGuard.error);
+    return this.deriveEntitlements(ctx.actor);
+  }
+
+  private async deriveEntitlements(
+    actor: AuthenticatedActor
+  ): ServerResultAsync<EntitlementSnapshot> {
+    const organizationId = actor.organizationId;
+    if (!organizationId) return this.error("FORBIDDEN", "Organization is required");
+
+    const catalogKeys = Object.keys(this.repository.billing.entitlements?.capabilities ?? {});
+    const emptyDecisions = Object.fromEntries(
+      catalogKeys.map((capability) => [
+        capability,
+        { capability, allowed: false, reason: "no_subscription" as const },
+      ])
+    );
+
+    const organization = await this.repository.billing.getOrganizationById(organizationId);
+    if (organization.isErr()) return err(organization.error);
+    if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
+
+    if (organization.value.billingExempt) {
+      const capabilities = Object.fromEntries(
+        catalogKeys.map((capability) => [
+          capability,
+          { capability, allowed: true, reason: "allowed" as const },
+        ])
+      );
+      return ok({ organizationId, allowed: catalogKeys, capabilities });
+    }
+
+    const subscription = await this.repository.billing.getAccessibleSubscription(organizationId);
+    if (subscription.isErr()) return err(subscription.error);
+    if (!subscription.value) {
+      return ok({ organizationId, allowed: [], capabilities: emptyDecisions });
+    }
+
+    const planName = subscription.value.plan;
+    const plan = this.repository.billing.plans.find((entry) => entry.name === planName);
+    const allowedKeys = capabilitiesOfPlan({
+      plan,
+      entitlements: this.repository.billing.entitlements,
+    });
+    const allowed = new Set(allowedKeys);
+    const capabilities: Record<string, EntitlementDecision> = {};
+    for (const capability of catalogKeys) {
+      const isAllowed = allowed.has(capability);
+      capabilities[capability] = {
+        capability,
+        allowed: isAllowed,
+        reason: isAllowed ? "allowed" : "missing_capability",
+      };
+    }
+    return ok({ organizationId, allowed: [...allowed], capabilities });
   }
 
   async getActiveSubscription(
