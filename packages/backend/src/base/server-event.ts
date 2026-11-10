@@ -5,7 +5,6 @@ import type { Logger } from "pino";
 
 export { SERVER_EVENT_SUBSCRIBE_PATH };
 
-const CHANNEL_PREFIX = "m5kdev:server-event:";
 const KEEPALIVE_MS = 15_000;
 
 export interface ServerEventEmitInput {
@@ -25,7 +24,22 @@ export interface ServerEventBus {
   close(): void;
 }
 
-export function createServerEventBus(options: { redis?: IORedis; logger: Logger }): ServerEventBus {
+/**
+ * Redis channel prefix for Server events: `<slug>:<database scope>:server-event:`.
+ * The scope names the database, not the Deployment environment, so Canary and
+ * Production (one database) share events while Staging and other apps do not.
+ */
+export function serverEventChannelPrefix(input: { slug: string; scope: string }): string {
+  return `${input.slug}:${input.scope}:server-event:`;
+}
+
+export function createServerEventBus(options: {
+  redis?: IORedis;
+  logger: Logger;
+  /** See {@link serverEventChannelPrefix}. */
+  channelPrefix: string;
+}): ServerEventBus {
+  const CHANNEL_PREFIX = options.channelPrefix;
   const connections = new Map<string, Set<Response>>();
   const keepalives = new Map<Response, ReturnType<typeof setInterval>>();
   let subscriber: IORedis | undefined;

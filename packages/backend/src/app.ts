@@ -41,6 +41,7 @@ import {
   createServerEventBus,
   SERVER_EVENT_SUBSCRIBE_PATH,
   type ServerEventBus,
+  serverEventChannelPrefix,
 } from "./base/server-event";
 import { type AppI18n, type BackendAppI18nResources, createAppI18n } from "./i18n/app-i18n";
 import type * as authTables from "./modules/auth/auth.db";
@@ -369,6 +370,13 @@ export type BackendAppConfig = {
   onShutdown?: () => void | Promise<void>;
   spa?: {
     root: string;
+  };
+  serverEvents?: {
+    /**
+     * Database scope for Server event channels. Defaults to `APP_ENV`, with
+     * `canary` mapped to `production` because both use the Production database.
+     */
+    scope?: string;
   };
 };
 
@@ -725,7 +733,16 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   const dbClientState = createDbClient(config.db);
   const redisState = createRedisClient(config.redis);
   const resendState = createResendClient(config.resend);
-  const serverEvents = createServerEventBus({ redis: redisState.redis, logger });
+  const serverEvents = createServerEventBus({
+    redis: redisState.redis,
+    logger,
+    channelPrefix: serverEventChannelPrefix({
+      slug: appConfig.slug,
+      scope:
+        config.serverEvents?.scope ??
+        (appConfig.environment === "canary" ? "production" : appConfig.environment),
+    }),
+  });
   const infra = {
     express: expressApp,
     redis: redisState.redis,
