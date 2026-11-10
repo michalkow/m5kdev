@@ -1,11 +1,11 @@
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as dotenv from "dotenv";
 import { is } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 
 const DATABASE_COMMANDS = ["reset", "migrate", "seed"] as const;
 type DatabaseCommand = (typeof DATABASE_COMMANDS)[number];
@@ -23,6 +23,14 @@ export interface RunDbConfig<TSchema extends Record<string, unknown>> {
   readonly databaseSchema?: string;
   readonly disposable?: boolean;
   readonly migrationsFolder?: string;
+  /** PostgreSQL schema holding Drizzle's migration history. Default `drizzle`. */
+  readonly migrationsSchema?: string;
+  /** `lock_timeout` for the migration session. Default `5s`. */
+  readonly lockTimeout?: string;
+  /** `statement_timeout` for the migration session. Default `5min`. */
+  readonly statementTimeout?: string;
+  /** Progress output. Never receives connection strings. Default `console.info`. */
+  readonly log?: (message: string) => void;
 }
 
 export interface DefineDrizzleKitConfigOptions {
@@ -84,6 +92,86 @@ function resetSchema<TSchema extends Record<string, unknown>>(
   return namespace;
 }
 
+const DEFAULT_MIGRATIONS_SCHEMA = "drizzle";
+
+/** Host, port and database name only — never user or password. */
+function describeTarget(url: string): string {
+  const target = new URL(url);
+  return `${target.hostname}${target.port ? `:${target.port}` : ""}${target.pathname}`;
+}
+
+/** Journal tags Drizzle will apply: entries newer than the latest applied migration. */
+async function pendingMigrations(
+  session: PoolClient,
+  migrationsFolder: string,
+  migrationsSchema: string
+): Promise<string[]> {
+  const journal = JSON.parse(
+    await readFile(join(migrationsFolder, "meta", "_journal.json"), "utf8")
+  ) as { entries: { tag: string; when: number }[] };
+  const table = await session.query<{ exists: boolean }>(
+    "SELECT to_regclass($1) IS NOT NULL AS exists",
+    [`${quoteIdentifier(migrationsSchema)}."__drizzle_migrations"`]
+  );
+  let lastApplied = Number.NEGATIVE_INFINITY;
+  if (table.rows[0]?.exists) {
+    const latest = await session.query<{ created_at: string | null }>(
+      `SELECT max(created_at)::text AS created_at FROM ${quoteIdentifier(migrationsSchema)}."__drizzle_migrations"`
+    );
+    if (latest.rows[0]?.created_at) lastApplied = Number(latest.rows[0].created_at);
+  }
+  return journal.entries.filter((entry) => entry.when > lastApplied).map((entry) => entry.tag);
+}
+const DEFAULT_LOCK_TIMEOUT = "5s";
+const DEFAULT_STATEMENT_TIMEOUT = "5min";
+
+/**
+ * Apply pending migrations on one session that holds a PostgreSQL advisory lock,
+ * so concurrent runners (a deploy and an agent) wait instead of racing. Lock and
+ * statement timeouts stop a blocked ALTER TABLE from stalling live traffic.
+ */
+async function migrateWithLock<TSchema extends Record<string, unknown>>(
+  pool: Pool,
+  config: RunDbConfig<TSchema>,
+  migrationsFolder: string,
+  url: string
+): Promise<void> {
+  const migrationsSchema = config.migrationsSchema ?? DEFAULT_MIGRATIONS_SCHEMA;
+  const log = config.log ?? ((message: string) => console.info(message));
+  const session = await pool.connect();
+  try {
+    await session.query("SELECT set_config('statement_timeout', $1, false)", [
+      config.statementTimeout ?? DEFAULT_STATEMENT_TIMEOUT,
+    ]);
+    // A concurrent runner waits for the advisory lock (bounded by statement_timeout);
+    // lock_timeout applies only to the migration statements themselves.
+    await session.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [
+      `m5kdev:migrate:${migrationsSchema}`,
+    ]);
+    await session.query("SELECT set_config('lock_timeout', $1, false)", [
+      config.lockTimeout ?? DEFAULT_LOCK_TIMEOUT,
+    ]);
+    try {
+      const pending = await pendingMigrations(session, migrationsFolder, migrationsSchema);
+      log(
+        `Migrating ${describeTarget(url)} (${migrationsSchema}): ${pending.length} pending${
+          pending.length ? `\n${pending.map((tag) => `  - ${tag}`).join("\n")}` : ""
+        }`
+      );
+      await migrate(drizzle(session, { schema: config.schema }), {
+        migrationsFolder,
+        migrationsSchema,
+      });
+    } finally {
+      await session.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [
+        `m5kdev:migrate:${migrationsSchema}`,
+      ]);
+    }
+  } finally {
+    session.release();
+  }
+}
+
 export async function runDb<TSchema extends Record<string, unknown>>(
   config: RunDbConfig<TSchema>
 ): Promise<void> {
@@ -119,7 +207,7 @@ export async function runDb<TSchema extends Record<string, unknown>>(
   try {
     const orm = drizzle(client, { schema: config.schema });
     if (command === "migrate") {
-      await migrate(orm, { migrationsFolder });
+      await migrateWithLock(client, config, migrationsFolder, url);
     } else if (command === "seed") {
       await config.seed?.({ orm, schema: config.schema, client });
     } else {
