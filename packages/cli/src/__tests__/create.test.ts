@@ -968,6 +968,23 @@ describe("scaffoldProject", () => {
     }
   });
 
+  it("ships deployment environment vocabulary in the glossary", async () => {
+    const result = await scaffoldProject({
+      targetDirectory: "environment-glossary",
+      appName: "Environment Glossary",
+      appDescription: "Glossary fixture.",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+    const glossary = await fs.readFile(path.join(result.targetDirectory, "GLOSSARY.md"), "utf8");
+    expect(glossary).toContain("**Deployment environment**:");
+    expect(glossary).toContain("**Promotion PR**:");
+    expect(glossary).toContain("**Environment namespace**:");
+    expect(glossary).not.toContain("m5k:");
+  });
+
   it("requires Node >=24 and ships product Deploy home files", async () => {
     const result = await scaffoldProject({
       targetDirectory: "deploy-desk",

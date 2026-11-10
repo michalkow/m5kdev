@@ -171,8 +171,8 @@ Zod schemas and constants in `apps/*/shared` or `@m5kdev/commons` that server an
 _Avoid_: DTO (server select/output helpers), types package, API spec; calling this package the Fly app
 
 **Deploy home**:
-Where the product image’s Docker and Fly files live: `apps/shared` (Dockerfile, fly.toml, production env example). The image runs server plus a baked webapp. Repo-root `.dockerignore` is the build-context ignore file. Root `app:deploy` / `app:secrets` call Kernel bins (`m5kdev-fly-deploy` / `m5kdev-fly-secrets`); the wrappers are not Starter copies ([ADR-0009](docs/adr/0009-kernel-owns-fly-commands.md)). A Landing-only scaffolded app has no Deploy home.
-_Avoid_: Shared contract (that is Zod/constants); treating `apps/shared` as a runnable Node service; a top-level `deploy/` folder; dockerignore copies beside the Dockerfile; app-owned `fly-deploy.mjs` duplicates; requiring Deploy home for Landing to exist
+Where the product image’s Docker and Fly files live: `apps/shared` (Dockerfile, one Fly config and one env example per Deployment environment). The image runs server plus a baked webapp, built separately for each Deployment environment from its own branch. Repo-root `.dockerignore` is the build-context ignore file. Root `app:deploy` / `app:secrets` call Kernel bins (`m5kdev-fly-deploy` / `m5kdev-fly-secrets`); the wrappers are not Starter copies ([ADR-0009](docs/adr/0009-kernel-owns-fly-commands.md)). Migrations do not run from the image ([ADR-0035](docs/adr/0035-migrations-run-in-github-actions.md)). A Landing-only scaffolded app has no Deploy home.
+_Avoid_: Shared contract (that is Zod/constants); treating `apps/shared` as a runnable Node service; a top-level `deploy/` folder; dockerignore copies beside the Dockerfile; app-owned `fly-deploy.mjs` duplicates; requiring Deploy home for Landing to exist; a single production-only Fly config or env example
 
 **Procedure**:
 A request-bound Service method built with `this.procedure("name")`: input, auth, resource load, Grant check, then handler.
@@ -234,6 +234,20 @@ _Avoid_: Frontend; Expo importing this package; treating a `modules/` folder as 
 The `@m5kdev/expo` package: Expo-only adapters (native push). The Starter Expo app may import it; Frontend stays platform-agnostic.
 _Avoid_: the Starter Expo app (`apps/*/expo`); putting Expo APIs in Frontend or Web UI
 
+### Deployment
+
+**Deployment environment**:
+Where an app runs, named by `APP_ENV`: `local`, `development`, `staging`, `canary`, or `production`. Development and Production always exist; Staging and Canary are optional, chosen at create time. Each deployed environment follows one Git branch (`main`, `staging`, `canary`, `production`) and GitHub Actions deploys it on merge. Canary and Production share the Production database; Development and Staging have their own.
+_Avoid_: `NODE_ENV` as the environment (it is `production` on every deployed app); stage; tier
+
+**Environment namespace**:
+The BullMQ prefix `<APP_SLUG>-<APP_ENV>` that keeps one Deployment environment's queues, queue events, and workers apart from another's on a shared Redis. Semantic queue names stay the same in every environment.
+_Avoid_: prefixing queue names by hand; ioredis `keyPrefix`; a default namespace
+
+**Promotion PR**:
+A pull request that moves tested code to the next Deployment environment's branch: `main` → `staging` → `canary` → `production`, skipping environments the app does not have. Only the expected source branch may open one; it merges with a merge commit, and the deploy checks the branch's tree matches a tested source commit ([ADR-0036](docs/adr/0036-each-environment-builds-from-its-branch.md)).
+_Avoid_: hotfix commits on a release branch; feature PRs into a release branch; image promotion
+
 ### Product surfaces
 
 **Admin panel**:
@@ -249,7 +263,7 @@ The public marketing site package (`apps/landing`). Own Fly app, separate from t
 _Avoid_: Webapp (the authenticated SPA baked into the product image); treating Landing as requiring a server or Deploy home
 
 **Workflow**:
-A persisted background run (optional cron). Status: `queued` | `running` | `completed` | `failed`. Payload is serializable ids and typed input, not a request. Org-scoped runs stamp MemberId.
+A persisted background run (optional cron). Status: `queued` | `running` | `completed` | `failed`. Payload is serializable ids and typed input, not a request. Org-scoped runs stamp MemberId. Each row records the Deployment environment that enqueued it; reconcile and lifecycle updates only touch rows of their own environment, so Canary never reconciles Production's runs ([ADR-0037](docs/adr/0037-canary-workers-without-schedulers.md)).
 _Avoid_: Job, Queue, Task, Recurrence (that is the repeating-event store)
 
 **Recurrence**:
