@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { EntitlementCatalog } from "./billing.entitlements";
 import type { stripeEnvironmentSchema } from "./billing.schema";
 
 export type StripePlanPrice = {
@@ -23,6 +24,8 @@ export type StripePlan = {
     days: number;
     seats?: number;
   };
+  /** Immutable Bundle revisions this Plan contributes when ACCESS_STATUS. Omitted means none. */
+  bundles?: readonly string[];
 };
 
 export type StripePlansConfig = {
@@ -33,6 +36,7 @@ export type StripePlansConfig = {
   nonBillableRoleKeys?: readonly string[];
   production: StripePlan[];
   sandbox: StripePlan[];
+  entitlements?: EntitlementCatalog;
 };
 
 export type StripeEnvironment = z.infer<typeof stripeEnvironmentSchema>;
@@ -45,4 +49,5 @@ export type ResolvedStripePlans = {
   defaultCurrency: string;
   seatBilling: boolean;
   nonBillableRoleKeys: readonly string[];
+  entitlements?: EntitlementCatalog;
 };

@@ -1,3 +1,4 @@
+import type { EntitlementCatalog } from "@m5kdev/commons/modules/billing/billing.entitlements";
 import type {
   AdminOrganizationBillingRow,
   BillingCoupon,
@@ -9,6 +10,7 @@ import type {
   StripePlan,
 } from "@m5kdev/commons/modules/billing/billing.types";
 import {
+  assertEntitlementCatalog,
   findDefaultTrialPrice,
   findPlanByPriceId,
   findPriceCurrency,
@@ -88,6 +90,7 @@ export class BillingRepository extends BaseTableRepository<
   public defaultCurrency: string;
   public seatBilling: boolean;
   public nonBillableRoleKeys: readonly string[];
+  public entitlements?: EntitlementCatalog;
   private readonly checkoutSessionCreate?: Partial<Stripe.Checkout.SessionCreateParams>;
   private readonly billingPortalSessionCreate?: Partial<Stripe.BillingPortal.SessionCreateParams>;
 
@@ -112,6 +115,8 @@ export class BillingRepository extends BaseTableRepository<
     this.defaultCurrency = config.defaultCurrency;
     this.seatBilling = config.seatBilling;
     this.nonBillableRoleKeys = config.nonBillableRoleKeys;
+    this.entitlements = config.entitlements;
+    assertEntitlementCatalog({ plans: this.plans, entitlements: this.entitlements });
     if (!this.defaultCurrency) {
       throw new Error("Billing catalog requires defaultCurrency");
     }

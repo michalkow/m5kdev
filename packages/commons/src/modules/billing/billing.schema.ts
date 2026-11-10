@@ -108,6 +108,28 @@ export const billingAdminListOutputSchema = queryListOutput(
   environment: stripeEnvironmentSchema,
 });
 
+export const entitlementDecisionReasonSchema = z.enum([
+  "allowed",
+  "no_subscription",
+  "missing_capability",
+]);
+
+export const entitlementDecisionSchema = z.object({
+  capability: z.string(),
+  allowed: z.boolean(),
+  reason: entitlementDecisionReasonSchema,
+});
+
+export const entitlementSnapshotSchema = z.object({
+  organizationId: z.string(),
+  allowed: z.array(z.string()),
+  capabilities: z.record(z.string(), entitlementDecisionSchema),
+});
+
+export type EntitlementDecisionReason = z.infer<typeof entitlementDecisionReasonSchema>;
+export type EntitlementDecision = z.infer<typeof entitlementDecisionSchema>;
+export type EntitlementSnapshot = z.infer<typeof entitlementSnapshotSchema>;
+
 export type BillingCoupon = z.infer<typeof billingCouponSchema>;
 export type CreateAdminSubscriptionInput = z.infer<typeof createAdminSubscriptionInputSchema>;
 export type SetAdminBillingExemptInput = z.infer<typeof setAdminBillingExemptInputSchema>;

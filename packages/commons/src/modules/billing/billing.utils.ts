@@ -1,3 +1,4 @@
+import type { EntitlementCatalog } from "./billing.entitlements";
 import type {
   ResolvedStripePlans,
   StripePlan,
@@ -19,8 +20,51 @@ export const getEnvironmentPlans = (
     defaultCurrency: plansConfig.defaultCurrency,
     seatBilling: plansConfig.seatBilling ?? false,
     nonBillableRoleKeys: plansConfig.nonBillableRoleKeys ?? [],
+    entitlements: plansConfig.entitlements,
   };
 };
+
+export function assertEntitlementCatalog({
+  plans,
+  entitlements,
+}: {
+  plans: readonly StripePlan[];
+  entitlements?: EntitlementCatalog;
+}): void {
+  const bundles = entitlements?.bundles ?? {};
+  const capabilities = entitlements?.capabilities ?? {};
+  for (const [bundleName, keys] of Object.entries(bundles)) {
+    for (const key of keys) {
+      if (!(key in capabilities)) {
+        throw new Error(`Bundle ${bundleName} names unknown Capability ${key}`);
+      }
+    }
+  }
+  for (const plan of plans) {
+    for (const bundleName of plan.bundles ?? []) {
+      if (!(bundleName in bundles)) {
+        throw new Error(`Plan ${plan.name} names unknown Bundle ${bundleName}`);
+      }
+    }
+  }
+}
+
+export function capabilitiesOfPlan({
+  plan,
+  entitlements,
+}: {
+  plan: StripePlan | undefined;
+  entitlements?: EntitlementCatalog;
+}): string[] {
+  if (!plan || !entitlements) return [];
+  const allowed = new Set<string>();
+  for (const bundleName of plan.bundles ?? []) {
+    for (const key of entitlements.bundles[bundleName] ?? []) {
+      allowed.add(key);
+    }
+  }
+  return [...allowed];
+}
 
 export const formatPlanAmount = ({
   unitAmount,

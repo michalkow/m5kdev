@@ -1,6 +1,12 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import {
+  booleanCapability,
+  composeCapabilities,
+  defineBundles,
+  defineCapabilities,
+} from "@m5kdev/commons/modules/billing/billing.entitlements";
 import type {
   ResolvedStripePlans,
   StripePlan,
@@ -3389,5 +3395,199 @@ describe("BillingService Billing Module admin", () => {
     )._unsafeUnwrap();
     expect(sandboxListed.rows[0]?.subscription?.stripeSubscriptionId).toBe("sub_trial");
     expect(sandboxListed.rows[0]?.subscription?.environment).toBe("sandbox");
+  });
+});
+
+const resourceCapabilities = defineCapabilities({
+  "resources.analyze": booleanCapability(),
+});
+const typeOrbCapabilities = defineCapabilities({
+  "apps.typeorb": booleanCapability(),
+  "typeorb.publish": booleanCapability(),
+});
+const knowledgeCapabilities = defineCapabilities({
+  "apps.knowledge": booleanCapability(),
+});
+const entitlementCatalog = defineBundles(
+  composeCapabilities(resourceCapabilities, typeOrbCapabilities, knowledgeCapabilities),
+  {
+    "brain@1": ["resources.analyze"],
+    "typeorb@1": ["apps.typeorb", "typeorb.publish", "resources.analyze"],
+    "knowledge@1": ["apps.knowledge", "resources.analyze"],
+  }
+);
+
+function entitledCatalog(overrides: Partial<ResolvedStripePlans> = {}): ResolvedStripePlans {
+  return catalog({
+    entitlements: entitlementCatalog,
+    plans: [{ ...plan, bundles: ["typeorb@1"] }],
+    ...overrides,
+  });
+}
+
+describe("BillingService Organization Entitlements", () => {
+  let client: Pool;
+  let outputDirectory: string;
+
+  beforeEach(async () => {
+    client = createTestPool();
+    outputDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "m5kdev-billing-entitlements-"));
+    await createTables(client);
+    await seedOrg(client);
+  });
+
+  afterEach(async () => {
+    await client.end();
+    await fs.rm(outputDirectory, { recursive: true, force: true });
+  });
+
+  it("throws when a Plan names an unknown Bundle", () => {
+    const stripe = createStripeStub({});
+    expect(() =>
+      createBackendApp(
+        {
+          db: { client },
+          schema: { ...authTables, ...billingTables },
+          email: { mode: "store", from: "no-reply@example.com", outputDirectory },
+        },
+        [
+          new EmailModule(requiredTemplates),
+          new BillingModule(
+            { stripe },
+            entitledCatalog({ plans: [{ ...plan, bundles: ["missing@1"] }] })
+          ),
+        ] as const
+      )
+    ).toThrow("Plan pro names unknown Bundle missing@1");
+  });
+
+  it("throws when composing duplicate Capability keys", () => {
+    expect(() =>
+      composeCapabilities(
+        defineCapabilities({ "resources.analyze": booleanCapability() }),
+        defineCapabilities({ "resources.analyze": booleanCapability() })
+      )
+    ).toThrow("Duplicate Capability resources.analyze");
+  });
+
+  it("denies Capabilities when the Organization has no ACCESS_STATUS Subscription", async () => {
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+
+    const denied = await billing.requireAll(memberCtx().actor, ["typeorb.publish"]);
+    expect(denied.isErr()).toBe(true);
+    if (denied.isOk()) throw new Error("expected denial");
+    expect(denied.error.code).toBe("FORBIDDEN");
+    expect(denied.error.context).toEqual({
+      kind: "entitlement",
+      capabilities: ["typeorb.publish"],
+      reason: "no_subscription",
+    });
+  });
+
+  it("allows Plan Bundles for an ACCESS_STATUS Subscription and denies the rest", async () => {
+    await insertOrgSubscription(client, {
+      id: "sub_entitled",
+      environment: "production",
+      stripeCustomerId: CUSTOMER_ID,
+      stripeSubscriptionId: "sub_live",
+      status: "active",
+    });
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+
+    const allowed = await billing.requireAll(memberCtx().actor, [
+      "apps.typeorb",
+      "typeorb.publish",
+      "resources.analyze",
+    ]);
+    expect(allowed.isOk()).toBe(true);
+
+    const knowledge = await billing.requireAll(memberCtx().actor, ["apps.knowledge"]);
+    expect(knowledge.isErr()).toBe(true);
+    if (knowledge.isOk()) throw new Error("expected denial");
+    expect(knowledge.error.context).toMatchObject({
+      kind: "entitlement",
+      capabilities: ["apps.knowledge"],
+      reason: "missing_capability",
+    });
+
+    const snapshot = (await billing.snapshot(memberCtx().actor))._unsafeUnwrap();
+    expect(snapshot.allowed).toEqual(
+      expect.arrayContaining(["apps.typeorb", "typeorb.publish", "resources.analyze"])
+    );
+    expect(snapshot.allowed).not.toContain("apps.knowledge");
+    expect(snapshot.capabilities["apps.knowledge"]?.reason).toBe("missing_capability");
+    expect(snapshot.capabilities["typeorb.publish"]?.allowed).toBe(true);
+  });
+
+  it("allows every catalog Capability when billingExempt even without a Subscription", async () => {
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+    await billing.setAdminBillingExempt(
+      { organizationId: ORG_ID, billingExempt: true },
+      adminCtx()
+    );
+
+    const all = await billing.requireAll(memberCtx().actor, [
+      "apps.knowledge",
+      "typeorb.publish",
+      "resources.analyze",
+    ]);
+    expect(all.isOk()).toBe(true);
+  });
+
+  it("does not use a sandbox ACCESS_STATUS for production Entitlements", async () => {
+    await insertOrgSubscription(client, {
+      id: "sub_sandbox",
+      environment: "sandbox",
+      status: "active",
+    });
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+
+    const denied = await billing.requireAll(memberCtx().actor, ["typeorb.publish"]);
+    expect(denied.isErr()).toBe(true);
+    if (denied.isOk()) throw new Error("expected denial");
+    expect(denied.error.context).toMatchObject({ reason: "no_subscription" });
+  });
+
+  it("errors on an unknown Capability instead of denying", async () => {
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+
+    const unknown = await billing.requireAll(memberCtx().actor, ["not.a.capability"]);
+    expect(unknown.isErr()).toBe(true);
+    if (unknown.isOk()) throw new Error("expected error");
+    expect(unknown.error.code).toBe("BAD_REQUEST");
+    expect(unknown.error.context).toMatchObject({
+      kind: "entitlement",
+      capabilities: ["not.a.capability"],
+    });
   });
 });
