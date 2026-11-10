@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pgSchema, text } from "drizzle-orm/pg-core";
 import { runDb } from "./db";
 import { createTestPool } from "./test/postgresql";
 
@@ -27,9 +28,14 @@ async function writeHistory(statements: string[]): Promise<string> {
   return folder;
 }
 
-async function migrate(config: Parameters<typeof runDb>[0]): Promise<void> {
+const widgets = pgSchema(namespace).table("widgets", { id: text("id").primaryKey() });
+const widgetHistory = [
+  `CREATE SCHEMA "${namespace}";\n--> statement-breakpoint\nCREATE TABLE "${namespace}"."widgets" ("id" text PRIMARY KEY);`,
+];
+
+async function migrate(config: Parameters<typeof runDb>[0], name = "migrate"): Promise<void> {
   const previous = process.argv;
-  process.argv = ["node", "db.ts", "migrate"];
+  process.argv = ["node", "db.ts", name];
   try {
     await runDb(config);
   } finally {
@@ -119,5 +125,97 @@ describe("migrate Database command", () => {
     expect(output).toContain("0000_fixture");
     expect(output).not.toContain("never-logged-secret");
     expect(output).not.toContain(direct.username + ":");
+  });
+
+  describe("rebuild", () => {
+    const rebuild = (config: Parameters<typeof runDb>[0]) => migrate(config, "rebuild");
+    const columns = async () =>
+      (
+        await pool.query<{ column_name: string }>(
+          "SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = 'widgets' ORDER BY column_name",
+          [namespace]
+        )
+      ).rows.map((row) => row.column_name);
+
+    it("restores the schema the migration history describes after out-of-band drift", async () => {
+      process.env.DATABASE_DISPOSABLE = "true";
+      folder = await writeHistory(widgetHistory);
+      const config = {
+        schema: { widgets },
+        databaseSchema: namespace,
+        migrationsFolder: folder,
+        migrationsSchema,
+        log: () => {},
+      };
+      await migrate(config);
+      await pool.query(`ALTER TABLE "${namespace}"."widgets" ADD COLUMN "stray" text`);
+
+      await rebuild(config);
+
+      expect(await columns()).toEqual(["id"]);
+    });
+
+    it("rebuilds a database whose app schema does not exist yet", async () => {
+      process.env.DATABASE_DISPOSABLE = "true";
+      folder = await writeHistory(widgetHistory);
+
+      await rebuild({
+        schema: { widgets },
+        databaseSchema: namespace,
+        migrationsFolder: folder,
+        migrationsSchema,
+        log: () => {},
+      });
+
+      expect(await columns()).toEqual(["id"]);
+    });
+
+    it("refuses a database that is not marked disposable", async () => {
+      delete process.env.DATABASE_DISPOSABLE;
+      folder = await writeHistory(widgetHistory);
+      await expect(
+        rebuild({
+          schema: { widgets },
+          databaseSchema: namespace,
+          migrationsFolder: folder,
+          migrationsSchema,
+          log: () => {},
+        })
+      ).rejects.toThrow(/DATABASE_DISPOSABLE=true/);
+    });
+
+    it("keeps other schemas' data and refuses to cascade through their foreign keys", async () => {
+      process.env.DATABASE_DISPOSABLE = "true";
+      folder = await writeHistory(widgetHistory);
+      const config = {
+        schema: { widgets },
+        databaseSchema: namespace,
+        migrationsFolder: folder,
+        migrationsSchema,
+        log: () => {},
+      };
+      const other = `other_${process.pid}`;
+      await migrate(config);
+      await pool.query(
+        `CREATE SCHEMA "${other}"; CREATE TABLE "${other}".notes (id text PRIMARY KEY); INSERT INTO "${other}".notes VALUES ('kept')`
+      );
+      try {
+        await rebuild(config);
+        expect((await pool.query(`SELECT id FROM "${other}".notes`)).rows).toEqual([
+          { id: "kept" },
+        ]);
+
+        await pool.query(`INSERT INTO "${namespace}".widgets VALUES ('w1')`);
+        await pool.query(
+          `CREATE TABLE "${other}".links (widget_id text REFERENCES "${namespace}".widgets(id))`
+        );
+        await expect(rebuild(config)).rejects.toThrow(/foreign key/i);
+        expect((await pool.query(`SELECT id FROM "${namespace}".widgets`)).rows).toEqual([
+          { id: "w1" },
+        ]);
+      } finally {
+        await pool.query(`DROP SCHEMA "${other}" CASCADE`);
+      }
+    });
   });
 });

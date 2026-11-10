@@ -1008,6 +1008,14 @@ describe("scaffoldProject", () => {
     expect(productionExample).toMatch(/^APP_ENV=production$/m);
     expect(productionExample).toMatch(/^APP_SLUG=environment-config$/m);
 
+    const serverPackage = JSON.parse(await read("apps/server/package.json")) as {
+      scripts: Record<string, string>;
+    };
+    expect(serverPackage.scripts["drizzle:rebuild"]).toBe(
+      "tsx --env-file=../shared/.env db.ts rebuild"
+    );
+    expect(await read("CLAUDE.md")).toContain("drizzle:rebuild");
+
     const appTs = await read("apps/server/src/app.ts");
     expect(appTs).toContain("requireEnvValue");
     expect(appTs).not.toContain('process.env.BETTER_AUTH_SECRET ??');

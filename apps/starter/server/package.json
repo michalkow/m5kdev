@@ -15,7 +15,8 @@
     "drizzle:studio": "drizzle-kit studio",
     "mastra:init": "tsx --env-file=../shared/.env mastra.ts",
     "drizzle:seed": "tsx --env-file=../shared/.env db.ts seed",
-    "drizzle:reset": "tsx --env-file=../shared/.env db.ts reset"
+    "drizzle:reset": "tsx --env-file=../shared/.env db.ts reset",
+    "drizzle:rebuild": "tsx --env-file=../shared/.env db.ts rebuild"
   },
   "dependencies": {
     "@starter-app/email": "workspace:*",

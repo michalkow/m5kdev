@@ -159,7 +159,7 @@ The table map the app composes from Backend Module tables plus its own tables. O
 _Avoid_: generated schema as the source of truth; Kernel merging tables the app did not compose; a second composition root in the Database config
 
 **Database command**:
-A one-shot Kernel operation on the app database: migrate, seed, or disposable reset. Dispatch and direct-connection pool construction belong to the Kernel; the app supplies App schema, migration history, and optional seed. Runtime uses a separate pooled connection. Reset truncates only app-owned data and preserves Mastra/vector schemas ([ADR-0033](docs/adr/0033-postgresql-only-persistence.md)).
+A one-shot Kernel operation on the app database: migrate, seed, disposable reset, or disposable rebuild. Migrate holds an advisory lock with lock and statement timeouts. Rebuild drops the app-owned schema and migration history and re-applies every migration, for a Development database that drifted. Dispatch and direct-connection pool construction belong to the Kernel; the app supplies App schema, migration history, and optional seed. Runtime uses a separate pooled connection. Reset truncates only app-owned data and preserves Mastra/vector schemas ([ADR-0033](docs/adr/0033-postgresql-only-persistence.md)).
 _Avoid_: replica sync; runtime auto-migrations; resetting Mastra/vector data with app reset; Starter Template copies of Database commands
 
 **Database config**:

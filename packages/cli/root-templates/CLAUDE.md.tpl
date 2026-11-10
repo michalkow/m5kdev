@@ -59,10 +59,13 @@ pnpm --filter ./apps/server drizzle:generate  # generate migrations from *.db.ts
 pnpm --filter ./apps/server drizzle:migrate   # apply migrations
 pnpm --filter ./apps/server drizzle:seed      # seed the local database
 pnpm --filter ./apps/server drizzle:reset     # reset the local database
+pnpm --filter ./apps/server drizzle:rebuild   # drop and re-migrate a disposable database (Development drift)
 pnpm --filter ./apps/server drizzle:studio    # inspect the database
 ```
 
 First-time setup: `pnpm install`, then `drizzle:migrate` and `drizzle:seed`, then `pnpm dev`.
+
+If parallel branches leave the shared Development database out of step with `main`, rebuild it: set `DATABASE_DISPOSABLE=true` for that database, run `drizzle:rebuild` (drops the app schema and migration history, then re-applies every migration; Mastra and vector schemas are kept), then `drizzle:seed`.
 // m5k:test-harness:start
 
 End-to-end tests: `pnpm --filter ./apps/e2e test:e2e` (Playwright).

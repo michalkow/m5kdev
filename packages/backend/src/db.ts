@@ -7,7 +7,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import { Pool, type PoolClient } from "pg";
 
-const DATABASE_COMMANDS = ["reset", "migrate", "seed"] as const;
+const DATABASE_COMMANDS = ["reset", "migrate", "seed", "rebuild"] as const;
 type DatabaseCommand = (typeof DATABASE_COMMANDS)[number];
 
 export interface RunDbSeedContext<TSchema extends Record<string, unknown>> {
@@ -94,6 +94,37 @@ function resetSchema<TSchema extends Record<string, unknown>>(
 
 const DEFAULT_MIGRATIONS_SCHEMA = "drizzle";
 
+/**
+ * Drop the app-owned schema and Drizzle's migration history so the next migrate
+ * replays every migration. Refuses when another schema has a foreign key into the
+ * app schema, so Mastra/vector data and structure are never cascaded away.
+ */
+async function dropAppSchema(
+  session: PoolClient,
+  namespace: string,
+  migrationsSchema: string
+): Promise<void> {
+  const dependents = await session.query<{ name: string }>(
+    `SELECT conrelid::regclass::text AS name
+       FROM pg_constraint
+      WHERE contype = 'f'
+        AND confrelid IN (SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1)
+        AND conrelid NOT IN (SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1)`,
+    [namespace]
+  );
+  if (dependents.rows.length > 0) {
+    throw new Error(
+      `Rebuild refuses to drop ${namespace}: foreign keys from ${dependents.rows
+        .map((row) => row.name)
+        .join(", ")} reference it`
+    );
+  }
+  await session.query(`DROP SCHEMA IF EXISTS ${quoteIdentifier(namespace)} CASCADE`);
+  await session.query(
+    `DROP TABLE IF EXISTS ${quoteIdentifier(migrationsSchema)}."__drizzle_migrations"`
+  );
+}
+
 /** Host, port and database name only — never user or password. */
 function describeTarget(url: string): string {
   const target = new URL(url);
@@ -134,7 +165,9 @@ async function migrateWithLock<TSchema extends Record<string, unknown>>(
   pool: Pool,
   config: RunDbConfig<TSchema>,
   migrationsFolder: string,
-  url: string
+  url: string,
+  /** Runs while holding the migration lock, before pending migrations are read. */
+  beforeMigrate?: (session: PoolClient) => Promise<void>
 ): Promise<void> {
   const migrationsSchema = config.migrationsSchema ?? DEFAULT_MIGRATIONS_SCHEMA;
   const log = config.log ?? ((message: string) => console.info(message));
@@ -152,6 +185,7 @@ async function migrateWithLock<TSchema extends Record<string, unknown>>(
       config.lockTimeout ?? DEFAULT_LOCK_TIMEOUT,
     ]);
     try {
+      await beforeMigrate?.(session);
       const pending = await pendingMigrations(session, migrationsFolder, migrationsSchema);
       log(
         `Migrating ${describeTarget(url)} (${migrationsSchema}): ${pending.length} pending${
@@ -186,7 +220,7 @@ export async function runDb<TSchema extends Record<string, unknown>>(
   }
   let namespace: string | undefined;
   const migrationsFolder = config.migrationsFolder ?? "./drizzle-postgresql";
-  if (command === "migrate") {
+  if (command === "migrate" || command === "rebuild") {
     try {
       await access(join(migrationsFolder, "meta", "_journal.json"));
     } catch {
@@ -195,10 +229,10 @@ export async function runDb<TSchema extends Record<string, unknown>>(
       );
     }
   }
-  if (command === "reset") {
+  if (command === "reset" || command === "rebuild") {
     if (!(config.disposable ?? process.env.DATABASE_DISPOSABLE === "true")) {
       throw new Error(
-        "Reset requires DATABASE_DISPOSABLE=true for an explicitly disposable environment"
+        `${command === "reset" ? "Reset" : "Rebuild"} requires DATABASE_DISPOSABLE=true for an explicitly disposable environment`
       );
     }
     namespace = resetSchema(config);
@@ -208,6 +242,10 @@ export async function runDb<TSchema extends Record<string, unknown>>(
     const orm = drizzle(client, { schema: config.schema });
     if (command === "migrate") {
       await migrateWithLock(client, config, migrationsFolder, url);
+    } else if (command === "rebuild") {
+      await migrateWithLock(client, config, migrationsFolder, url, (session) =>
+        dropAppSchema(session, namespace!, config.migrationsSchema ?? DEFAULT_MIGRATIONS_SCHEMA)
+      );
     } else if (command === "seed") {
       await config.seed?.({ orm, schema: config.schema, client });
     } else {
