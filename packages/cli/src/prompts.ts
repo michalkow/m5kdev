@@ -4,7 +4,11 @@ import { DEFAULT_APP_NAME, getDefaultDescription } from "./constants";
 import { getTemplateRoot } from "./paths";
 import { slugifyAppName, toDisplayName } from "./strings";
 import type { BackendModuleChoice } from "./template";
-import { listBackendModuleChoices, loadTemplateManifest } from "./template";
+import {
+  LANDING_ONLY_ENVIRONMENTS_ERROR,
+  listBackendModuleChoices,
+  loadTemplateManifest,
+} from "./template";
 import {
   type AppPlatform,
   type CreateCommandOptions,
@@ -150,7 +154,7 @@ export async function resolveCreateCommandOptions(
     resolved.testHarness = false;
     resolved.modules = resolved.modules ?? [];
     if (resolved.environments?.length) {
-      throw new Error("Deployment environments need the product app; Landing-only apps have none.");
+      throw new Error(LANDING_ONLY_ENVIRONMENTS_ERROR);
     }
     resolved.environments = [];
     return resolved;

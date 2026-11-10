@@ -10,6 +10,8 @@
     "check-types": "turbo run check-types",
     "test": "turbo run test",
     // m5k:server:start
+    "app:deploy": "node -e \"const s=require('./package.json').scripts;console.error('Use pnpm app:deploy:<environment> — one of: '+Object.keys(s).filter(k=>k.startsWith('app:deploy:')).map(k=>k.split(':')[2]).join(', '));process.exit(1)\"",
+    "app:secrets": "node -e \"const s=require('./package.json').scripts;console.error('Use pnpm app:secrets:<environment> — one of: '+Object.keys(s).filter(k=>k.startsWith('app:secrets:')).map(k=>k.split(':')[2]).join(', '));process.exit(1)\"",
     "app:deploy:development": "m5kdev-fly-deploy --config apps/shared/fly.development.toml --dockerfile apps/shared/Dockerfile --env apps/shared/.env.development",
     "app:secrets:development": "m5kdev-fly-secrets --config apps/shared/fly.development.toml --env apps/shared/.env.development",
     // m5k:env-staging:start

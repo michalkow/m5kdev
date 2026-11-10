@@ -24,7 +24,8 @@ const TEXT_EXTENSIONS = new Set([
   ".mdc",
   ".toml",
 ]);
-const TEXT_BASENAMES = new Set([
+/** Extensionless file names treated as text templates; shared with `scripts/prepare-templates.ts`. */
+export const TEXT_BASENAMES: ReadonlySet<string> = new Set([
   ".gitignore",
   ".env",
   ".env.example",

@@ -21,6 +21,7 @@ import {
   readCatalog,
   renderConsumerWorkspace,
 } from "../src/catalog";
+import { TEXT_BASENAMES } from "../src/fs";
 
 const CLI_ROOT = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(CLI_ROOT, "../..");
@@ -43,23 +44,6 @@ const TEXT_EXTENSIONS = new Set([
   ".yml",
   ".txt",
   ".toml",
-]);
-const TEXT_BASENAMES = new Set([
-  ".gitignore",
-  ".env",
-  ".env.example",
-  ".env.production",
-  ".env.production.example",
-  ".env.development",
-  ".env.development.example",
-  ".env.staging",
-  ".env.staging.example",
-  ".env.canary",
-  ".env.canary.example",
-  ".npmrc",
-  ".dockerignore",
-  "Dockerfile",
-  "Caddyfile",
 ]);
 
 /** Paths (relative to the starter root) never emitted into templates. */

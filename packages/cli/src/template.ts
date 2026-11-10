@@ -83,6 +83,10 @@ export function listBackendModuleChoices(manifest: TemplateFeatureManifest): Bac
     }));
 }
 
+/** Optional Deployment environments are refused for apps without the product stack. */
+export const LANDING_ONLY_ENVIRONMENTS_ERROR =
+  "Deployment environments need the product app; Landing-only apps have none.";
+
 /** Template feature id for an optional Deployment environment, e.g. `env-canary`. */
 export function environmentFeature(environment: OptionalEnvironment): string {
   return `env-${environment}`;

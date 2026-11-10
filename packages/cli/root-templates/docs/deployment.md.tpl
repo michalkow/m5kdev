@@ -161,6 +161,11 @@ Production gets it.
 - Its workers run and write real Production data. Its schedulers stay off
   (`APP_ENV=canary`), so recurring jobs run only once, from Production.
 - Use test accounts. Anything you do on Canary changes Production data.
+- Do not trigger jobs with a deterministic job id (`id` on a Workflow job) on
+  Canary yet. Workflow rows are still unique by job id alone, so a deterministic
+  id Production has already used cannot also be recorded by Canary: the job
+  runs, but its Workflow row write fails and is logged. Random-id jobs are fine.
+  A later m5kdev release drops that constraint (michalkow/m5kdev#59).
 
 1. `fly apps create {{APP_SLUG}}-canary`, then
    `fly tokens create deploy --app {{APP_SLUG}}-canary`.

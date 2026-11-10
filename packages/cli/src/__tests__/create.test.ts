@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -605,8 +606,9 @@ describe("scaffoldProject", () => {
     expect(appTs).toContain("DemoWorkflowModule");
     expect(appTs).toContain('defaultQueue: "workflow-desk-main"');
     expect(appTs).toContain('"workflow-desk-main": { concurrency: 5 }');
-    // Canary shares the Production database: workers run, recurring jobs do not.
-    expect(appTs).toContain('schedulers: process.env.APP_ENV !== "canary"');
+    // The Kernel turns schedulers off where the environment shares another's
+    // database (Canary); the app does not set it by hand.
+    expect(appTs).not.toContain("schedulers:");
     expect(appTs).toContain("redis:");
     expect(appTs).not.toContain("m5k:");
 
@@ -1223,7 +1225,19 @@ describe("scaffoldProject", () => {
     expect(rootPackage.scripts?.["app:secrets:development"]).toBe(
       "m5kdev-fly-secrets --config apps/shared/fly.development.toml --env apps/shared/.env.development"
     );
-    expect(rootPackage.scripts?.["app:deploy"]).toBeUndefined();
+    // A bare `pnpm app:deploy` / `app:secrets` names the per-environment scripts and fails.
+    for (const kind of ["deploy", "secrets"]) {
+      const script = rootPackage.scripts?.[`app:${kind}`];
+      if (!script) throw new Error(`Missing app:${kind} script`);
+      const run = spawnSync("sh", ["-c", script], {
+        cwd: result.targetDirectory,
+        encoding: "utf8",
+      });
+      expect(run.status).toBe(1);
+      expect(run.stderr).toContain(
+        `Use pnpm app:${kind}:<environment> — one of: development, production`
+      );
+    }
 
     const dockerignore = await fs.readFile(
       path.join(result.targetDirectory, ".dockerignore"),

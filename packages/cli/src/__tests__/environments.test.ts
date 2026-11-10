@@ -60,6 +60,11 @@ describe("optional Deployment environments", () => {
         expect(await exists(`apps/shared/fly.${environment}.toml`)).toBe(enabled);
         expect(await exists(`apps/shared/.env.${environment}.example`)).toBe(enabled);
         expect(rootPackage.scripts[`app:deploy:${environment}`] !== undefined).toBe(enabled);
+        const bareDeploy = spawnSync("sh", ["-c", rootPackage.scripts["app:deploy"] ?? ""], {
+          cwd: result.targetDirectory,
+          encoding: "utf8",
+        });
+        expect(bareDeploy.stderr.includes(environment)).toBe(enabled);
         if (enabled) {
           expect(await read(`apps/shared/fly.${environment}.toml`)).toContain(
             `app = "env-app-${environment}"`
@@ -176,6 +181,97 @@ describe("optional Deployment environments", () => {
       await fs.readFile(path.join(existing.targetDirectory, ".m5kdev.json"), "utf8")
     ) as { template: { features: string[] } };
     expect(state.template.features).toContain("env-canary");
+  });
+
+  describe("update for an app that predates per-environment Fly configs", () => {
+    const legacyFlyToml = `app = "legacy-desk-api"
+primary_region = "fra"
+
+[build]
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  processes = ["app"]
+
+[[vm]]
+  memory = "1gb"
+`;
+    const healthCheck = `
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "30s"
+    timeout = "5s"
+    method = "GET"
+    path = "/healthz"
+`;
+
+    const legacyApp = async (flyToml: string) => {
+      const app = await scaffoldProject({
+        targetDirectory: "legacy-desk",
+        appName: "Legacy Desk",
+        appDescription: "Update fixture.",
+        yes: true,
+        force: false,
+        skipInstall: true,
+        skipGit: true,
+      });
+      const shared = path.join(app.targetDirectory, "apps/shared");
+      const development = await fs.readFile(path.join(shared, "fly.development.toml"), "utf8");
+      await fs.rm(path.join(shared, "fly.development.toml"));
+      await fs.rm(path.join(shared, "fly.production.toml"));
+      await fs.writeFile(path.join(shared, "fly.toml"), flyToml);
+      return { root: app.targetDirectory, shared, development };
+    };
+
+    const update = async (repoRoot: string) => {
+      const { updateManagedRepo } = await import("../update");
+      return updateManagedRepo({
+        repoRoot,
+        dryRun: false,
+        skipInstall: true,
+        yes: true,
+        assertClean: async () => undefined,
+        install: async () => undefined,
+      });
+    };
+
+    it("keeps the Fly app name in fly.production.toml, adds the /healthz check and fly.development.toml", async () => {
+      const app = await legacyApp(legacyFlyToml);
+
+      const result = await update(app.root);
+
+      expect(result.conflicts).toEqual([]);
+      const production = await fs.readFile(path.join(app.shared, "fly.production.toml"), "utf8");
+      expect(production.startsWith(legacyFlyToml)).toBe(true);
+      expect(production.match(/path = "\/healthz"/g)).toHaveLength(1);
+      expect(await fs.readFile(path.join(app.shared, "fly.development.toml"), "utf8")).toBe(
+        app.development
+      );
+      // fly.toml stays until the maintainer removes it; the change says so.
+      expect(await fs.readFile(path.join(app.shared, "fly.toml"), "utf8")).toBe(legacyFlyToml);
+      const productionChange = result.changes.find(
+        (change) => change.path === "apps/shared/fly.production.toml"
+      );
+      expect(productionChange?.reason).toContain("apps/shared/fly.toml");
+      expect(result.changes.map((change) => change.path)).toContain(
+        "apps/shared/fly.development.toml"
+      );
+    });
+
+    it("does not add a second /healthz check when fly.toml already has one", async () => {
+      const withCheck = legacyFlyToml.replace("[[vm]]", `${healthCheck.trimStart()}\n[[vm]]`);
+      const app = await legacyApp(withCheck);
+
+      await update(app.root);
+
+      expect(await fs.readFile(path.join(app.shared, "fly.production.toml"), "utf8")).toBe(
+        withCheck
+      );
+    });
   });
 
   it("takes --environments on create and rejects unknown names", async () => {
