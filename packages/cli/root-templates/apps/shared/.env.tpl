@@ -1,3 +1,7 @@
+# Deployment environment (local | development | staging | canary | production)
+APP_ENV=local
+APP_SLUG={{APP_SLUG}}
+
 # Auth
 BETTER_AUTH_SECRET={{BETTER_AUTH_SECRET}}
 

@@ -985,6 +985,35 @@ describe("scaffoldProject", () => {
     expect(glossary).not.toContain("m5k:");
   });
 
+  it("configures the Deployment environment and fails closed outside local", async () => {
+    const result = await scaffoldProject({
+      targetDirectory: "environment-config",
+      appName: "Environment Config",
+      appDescription: "Environment fixture.",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+    const read = (relative: string) =>
+      fs.readFile(path.join(result.targetDirectory, relative), "utf8");
+
+    const localEnv = await read("apps/shared/.env");
+    expect(localEnv).toMatch(/^APP_ENV=local$/m);
+    expect(localEnv).toMatch(/^APP_SLUG=environment-config$/m);
+    const example = await read("apps/shared/.env.example");
+    expect(example).toMatch(/^APP_ENV=local$/m);
+    expect(example).toMatch(/^APP_SLUG=environment-config$/m);
+    const productionExample = await read("apps/shared/.env.production.example");
+    expect(productionExample).toMatch(/^APP_ENV=production$/m);
+    expect(productionExample).toMatch(/^APP_SLUG=environment-config$/m);
+
+    const appTs = await read("apps/server/src/app.ts");
+    expect(appTs).toContain("requireEnvValue");
+    expect(appTs).not.toContain('process.env.BETTER_AUTH_SECRET ??');
+    expect(appTs).not.toContain("NODE_ENV");
+  });
+
   it("requires Node >=24 and ships product Deploy home files", async () => {
     const result = await scaffoldProject({
       targetDirectory: "deploy-desk",

@@ -78,6 +78,8 @@ function serverEnv(profile: E2EProfile, expo: boolean): Record<string, string> {
     BETTER_AUTH_SECRET: "auth-e2e-local-secret-auth-e2e-local-secret",
     SYSTEM_NOTIFICATION_EMAIL: "ops@auth-e2e.local",
     NODE_ENV: "development",
+    APP_ENV: "local",
+    APP_SLUG: "starter-app",
     // hermetic: a real key in the invoking shell would flip email mode to
     // "send" and the stored-email assertions would find nothing
     RESEND_API_KEY: "",

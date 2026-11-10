@@ -407,7 +407,7 @@ describe("createBackendApp HTTP shell", () => {
   it("does not reflect Origin when no web URL is configured", async () => {
     const built = createBackendApp({
       db: { client },
-      env: { VITE_APP_URL: undefined },
+      env: { APP_ENV: "local", APP_SLUG: "m5kdev-test", VITE_APP_URL: undefined },
     });
     built.express.app.get("/ping", (_req, res) => {
       res.json({ ok: true });

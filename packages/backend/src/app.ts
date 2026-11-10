@@ -33,6 +33,11 @@ import { Pool, type PoolConfig } from "pg";
 import type { Logger } from "pino";
 import { Resend } from "resend";
 import {
+  type DeploymentEnvironment,
+  isDeployedEnvironment,
+  parseAppEnvironment,
+} from "./base/environment";
+import {
   createServerEventBus,
   SERVER_EVENT_SUBSCRIBE_PATH,
   type ServerEventBus,
@@ -159,6 +164,10 @@ export type BackendAppEmailOptions = {
 
 type ResolvedBackendAppMetadata = {
   name?: string;
+  /** `APP_ENV` — see {@link parseAppEnvironment}. */
+  environment: DeploymentEnvironment;
+  /** `APP_SLUG` */
+  slug: string;
   urls: {
     web?: string;
     api?: string;
@@ -395,11 +404,21 @@ function normalizeAppConfig(
   config: BackendAppConfig["app"],
   env: Record<string, string | undefined>
 ): ResolvedBackendAppMetadata {
+  const { environment, slug } = parseAppEnvironment(env);
   const webUrl = config?.urls?.web ?? env.VITE_APP_URL;
   const apiUrl = config?.urls?.api ?? env.VITE_SERVER_URL;
+  if (environment !== "local") {
+    if (!webUrl)
+      throw new Error(`VITE_APP_URL (or app.urls.web) must be set when APP_ENV=${environment}`);
+    if (!apiUrl) {
+      throw new Error(`VITE_SERVER_URL (or app.urls.api) must be set when APP_ENV=${environment}`);
+    }
+  }
 
   return {
     name: config?.name,
+    environment,
+    slug,
     urls: {
       web: webUrl,
       api: apiUrl,
@@ -420,7 +439,7 @@ function normalizeEmailConfig(
   env: Record<string, string | undefined>
 ): ResolvedBackendAppEmailOptions {
   return {
-    mode: config?.mode ?? (env.NODE_ENV === "development" ? "log" : "send"),
+    mode: config?.mode ?? (isDeployedEnvironment(env) ? "send" : "log"),
     from: config?.from ?? env.EMAIL_FROM ?? env.RESEND_FROM,
     systemNotificationEmail: config?.systemNotificationEmail ?? env.SYSTEM_NOTIFICATION_EMAIL,
     outputDirectory: config?.outputDirectory ?? ".emails",

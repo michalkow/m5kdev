@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { isDeployedEnvironment } from "../../base/environment";
 import { BaseModule, type ModuleExpressContext, type TableMap } from "../base/base.module";
 import type { EmailModule } from "./email.module";
 import type { EmailService, StoredEmail, StoredEmailSummary } from "./email.service";
@@ -129,7 +130,7 @@ export class EmailPreviewModule extends BaseModule<
 
   override express({ deps, infra }: ModuleExpressContext<EmailPreviewModuleDeps>) {
     const emailService = deps.email.services.email as EmailService;
-    if (emailService.mode !== "store" || process.env.NODE_ENV === "production") {
+    if (emailService.mode !== "store" || isDeployedEnvironment()) {
       return;
     }
 

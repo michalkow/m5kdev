@@ -1,5 +1,6 @@
 // biome-ignore-all assist/source/organizeImports: feature-gated module imports stay in marker blocks
 import { createBackendApp } from "@m5kdev/backend/app";
+import { isDeployedEnvironment, requireEnvValue } from "@m5kdev/backend/base/environment";
 import { shutdownTelemetry } from "@m5kdev/backend/lib/otel";
 // m5k:ai:start
 import { defineBackendModule } from "@m5kdev/backend/app";
@@ -49,12 +50,13 @@ import { TestHarnessModule } from "./modules/test-harness/test-harness.module";
 // m5k:test-harness:end
 import * as schema from "./schema";
 
-const appUrl = process.env.VITE_APP_URL ?? "http://localhost:5173";
-const serverUrl = process.env.VITE_SERVER_URL ?? "http://localhost:8080";
+// Local fallbacks apply only when APP_ENV=local; deployed environments fail at boot.
+const appUrl = requireEnvValue("VITE_APP_URL", { localDefault: "http://localhost:5173" });
+const serverUrl = requireEnvValue("VITE_SERVER_URL", { localDefault: "http://localhost:8080" });
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL must point to the runtime PgBouncer connection");
 // m5k:workflows:start
-const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
+const redisUrl = requireEnvValue("REDIS_URL", { localDefault: "redis://127.0.0.1:6379" });
 // m5k:workflows:end
 const resendApiKey = process.env.RESEND_API_KEY;
 const enableWaitlist = process.env.VITE_ENABLE_WAITLIST === "true";
@@ -109,7 +111,9 @@ export const builtBackendApp = createBackendApp(
               process.env.PROVISIONED_EMAIL_DOMAIN ?? "provisioned.starter-app.local",
           },
           options: {
-            secret: process.env.BETTER_AUTH_SECRET ?? "QJvCmK9UBuHAWbNr2vV3ROVt8XrBYV5d",
+            secret: requireEnvValue("BETTER_AUTH_SECRET", {
+              localDefault: "QJvCmK9UBuHAWbNr2vV3ROVt8XrBYV5d",
+            }),
           },
         });
       },
@@ -156,7 +160,7 @@ export const builtBackendApp = createBackendApp(
     new NotificationModule({ kinds: NOTIFICATION_KINDS }),
     // m5k:notifications:end
     new PostsModule(),
-    new EmailPreviewModule({ allowDelete: process.env.NODE_ENV !== "production" }),
+    new EmailPreviewModule({ allowDelete: !isDeployedEnvironment() }),
     // m5k:test-harness:start
     new TestHarnessModule(),
     // m5k:test-harness:end
