@@ -73,7 +73,9 @@ End-to-end tests: `pnpm --filter ./apps/e2e test:e2e` (Playwright).
 
 Runtime uses PostgreSQL through PgBouncer (`DATABASE_URL`); migrations and initialization require `DATABASE_DIRECT_URL`. Keep app, Mastra, and vector schemas separately owned. Start the local PostgreSQL/PgBouncer Compose stack and provision pgvector before applying migrations.
 
-Migrations: agents run `drizzle:generate` to create migrations and may run `drizzle:migrate` against the local or Development database in `apps/shared/.env` only. Never hand-write or edit migration SQL, journal entries, or snapshots, and never use `generate --custom`. Every migration must be backward-compatible with the code currently in Production. Read `.cursor/rules/database-migrations.mdc` before changing a table. Local auth emails are written to `apps/server/.emails`. Demo login: `admin@{{APP_SLUG}}.local` / `password1234`.
+Migrations: agents run `drizzle:generate` to create migrations and may run `drizzle:migrate` against the local or Development database in `apps/shared/.env` only. Never hand-write or edit migration SQL, journal entries, or snapshots, and never use `generate --custom`. Every migration must be backward-compatible with the code currently in Production. Read `.cursor/rules/database-migrations.mdc` before changing a table.
+
+Deployment environments: Development (`main`) and Production (`production`) deploy from GitHub Actions on merge, migrating first. Feature PRs target `main` only, and behaviour follows `APP_ENV`, never `NODE_ENV`. Read `docs/agents/environments.md` before touching configuration, jobs, or deploy files; human setup is in `docs/deployment.md`. Local auth emails are written to `apps/server/.emails`. Demo login: `admin@{{APP_SLUG}}.local` / `password1234`.
 // m5k:server:end
 
 // m5k:server:start

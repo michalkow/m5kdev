@@ -99,6 +99,8 @@ const FEATURE_MANIFEST = {
         "apps/shared/",
         ".github/workflows/deploy-app.yml",
         ".github/workflows/promotion.yml",
+        "docs/deployment.md",
+        "docs/agents/environments.md",
       ],
     },
     billing: { kind: "module", label: "Billing", paths: [] },

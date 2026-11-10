@@ -1129,6 +1129,60 @@ describe("scaffoldProject", () => {
     expect(source).not.toContain("APP_ENV_PRODUCTION");
   });
 
+  it("ships a deployment guide and an environments agent doc that match the workflows", async () => {
+    const scaffold = (targetDirectory: string, platform?: "landing") =>
+      scaffoldProject({
+        targetDirectory,
+        appName: "Guide Desk",
+        appDescription: "Deployment guide fixture.",
+        ...(platform ? { platform } : {}),
+        yes: true,
+        force: false,
+        skipInstall: true,
+        skipGit: true,
+      });
+    const web = await scaffold("guide-desk");
+    const read = (relative: string) =>
+      fs.readFile(path.join(web.targetDirectory, relative), "utf8");
+
+    const guide = await read("docs/deployment.md");
+    const agentDoc = await read("docs/agents/environments.md");
+    for (const doc of [guide, agentDoc]) {
+      expect(doc).not.toContain("{{");
+      expect(doc).not.toContain("m5k:");
+    }
+    expect(guide).toContain("guide-desk-development");
+    expect(guide).toContain("guide-desk-production");
+    expect(guide).toMatch(/eviction/i);
+    expect(guide).toMatch(/merge commit/i);
+    expect(guide).toContain("drizzle:rebuild");
+    expect(guide).toMatch(/never rolled back/i);
+    const workflowSecrets = new Set<string>();
+    for (const name of ["deploy-app.yml", "promotion.yml"]) {
+      const source = await read(`.github/workflows/${name}`);
+      for (const match of source.matchAll(/secrets\.([A-Z_]+)/g)) workflowSecrets.add(match[1]!);
+    }
+    expect([...workflowSecrets].sort()).toEqual(["APP_ENV_FILE", "DATABASE_DIRECT_URL", "FLY_API_TOKEN"]);
+    for (const secret of workflowSecrets) expect(guide).toContain(`\`${secret}\``);
+    expect(guide).toContain("Promotion PR");
+
+    expect(agentDoc).toContain("APP_ENV");
+    expect(agentDoc).toMatch(/NODE_ENV/);
+    expect(agentDoc).toMatch(/feature PRs/i);
+    expect(agentDoc).toMatch(/Production database/);
+    for (const root of ["AGENTS.md", "CLAUDE.md"]) {
+      expect(await read(root)).toContain("docs/agents/environments.md");
+    }
+
+    const landing = await scaffold("guide-desk-landing", "landing");
+    await expect(
+      fs.stat(path.join(landing.targetDirectory, "docs/deployment.md"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      fs.stat(path.join(landing.targetDirectory, "docs/agents/environments.md"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("requires Node >=24 and ships product Deploy home files", async () => {
     const result = await scaffoldProject({
       targetDirectory: "deploy-desk",

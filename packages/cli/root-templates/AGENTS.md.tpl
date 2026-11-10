@@ -40,6 +40,10 @@ Read the matching `.cursor/rules` guide before editing a module file.
 - Apply migrations with `drizzle:migrate` only to the local or Development database in `apps/shared/.env`. Staging, Canary, and Production are migrated by the deploy workflow.
 - Every migration must be backward-compatible with the code currently in Production. Drops and renames ship later, through a `migration-contract` issue.
 - See `.cursor/rules/database-migrations.mdc`.
+
+## Deployment environments
+
+Development (`main`) and Production (`production`) deploy from GitHub Actions on merge. Feature PRs target `main` only; read `APP_ENV`, never `NODE_ENV`. See `docs/agents/environments.md` (rules) and `docs/deployment.md` (setup).
 // m5k:server:end
 
 ## Agent skills
