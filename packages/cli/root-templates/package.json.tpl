@@ -8,6 +8,7 @@
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "check-types": "turbo run check-types",
+    "test": "turbo run test",
     // m5k:server:start
     "app:deploy": "m5kdev-fly-deploy --config apps/shared/fly.toml --dockerfile apps/shared/Dockerfile --env apps/shared/.env.production",
     "app:secrets": "m5kdev-fly-secrets --config apps/shared/fly.toml --env apps/shared/.env.production",

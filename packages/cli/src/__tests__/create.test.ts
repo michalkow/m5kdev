@@ -1022,6 +1022,50 @@ describe("scaffoldProject", () => {
     expect(appTs).not.toContain("NODE_ENV");
   });
 
+  it("checks migrations in CI without secrets", async () => {
+    const scaffold = (targetDirectory: string, platform?: "landing") =>
+      scaffoldProject({
+        targetDirectory,
+        appName: "Migration Checks",
+        appDescription: "CI fixture.",
+        ...(platform ? { platform } : {}),
+        yes: true,
+        force: false,
+        skipInstall: true,
+        skipGit: true,
+      });
+    const web = await scaffold("migration-checks");
+    const workflowSource = await fs.readFile(
+      path.join(web.targetDirectory, ".github/workflows/check.yml"),
+      "utf8"
+    );
+    expect(workflowSource).not.toContain("secrets.");
+    expect(workflowSource).not.toContain("m5k:");
+    const workflow = parse(workflowSource) as {
+      jobs: { check: { steps: { run?: string; with?: Record<string, unknown> }[] } };
+    };
+    const steps = workflow.jobs.check.steps;
+    const runs = steps.map((step) => step.run ?? "").join("\n");
+    expect(steps.find((step) => step.with?.["fetch-depth"] === 0)).toBeTruthy();
+    expect(runs).toContain("pnpm test");
+    expect(runs).toContain("drizzle-kit check");
+    expect(runs).toContain("drizzle:generate");
+    expect(runs).toContain("m5kdev-migration-check --folder apps/server/drizzle-postgresql");
+
+    const rootPackage = JSON.parse(
+      await fs.readFile(path.join(web.targetDirectory, "package.json"), "utf8")
+    ) as { scripts: Record<string, string> };
+    expect(rootPackage.scripts.test).toBe("turbo run test");
+
+    const landing = await scaffold("migration-checks-landing", "landing");
+    const landingWorkflow = await fs.readFile(
+      path.join(landing.targetDirectory, ".github/workflows/check.yml"),
+      "utf8"
+    );
+    expect(landingWorkflow).not.toContain("drizzle");
+    expect(landingWorkflow).not.toContain("m5k:");
+  });
+
   it("requires Node >=24 and ships product Deploy home files", async () => {
     const result = await scaffoldProject({
       targetDirectory: "deploy-desk",
