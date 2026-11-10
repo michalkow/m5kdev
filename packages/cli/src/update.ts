@@ -15,8 +15,14 @@ import { getTemplateRoot } from "./paths";
 import { resolveHarnessAndModuleOptions } from "./prompts";
 import { type BaseTemplateProvider, reconcileTemplates } from "./reconcile";
 import { getCliVersion, type ManagedState, readManagedState, STATE_FILE_NAME } from "./state";
-import { getEnabledFeatures, withImpliedFeatures } from "./template";
-import type { AppPlatform } from "./types";
+import {
+  environmentFeature,
+  getEnabledFeatures,
+  hasProductStack,
+  loadTemplateManifest,
+  withImpliedFeatures,
+} from "./template";
+import type { AppPlatform, OptionalEnvironment } from "./types";
 
 const execFileAsync = promisify(execFile);
 
@@ -28,6 +34,8 @@ export interface UpdateCommandOptions {
   platform?: AppPlatform;
   testHarness?: boolean;
   modules?: string[];
+  /** Add optional Deployment environments (staging, canary) to the app. */
+  environments?: OptionalEnvironment[];
   baseProvider?: BaseTemplateProvider;
   /** Test seam; published commands always use the embedded production registry. */
   registry?: readonly MigrationDefinition[];
@@ -62,7 +70,32 @@ async function assertCleanGit(repoRoot: string): Promise<void> {
   }
 }
 
+/** Add optional Deployment environments to managed state; existing ones are kept. */
+function withEnvironments(
+  state: ManagedState,
+  environments: readonly OptionalEnvironment[] | undefined
+): ManagedState {
+  if (!environments?.length) return state;
+  if (!hasProductStack(state.template.features)) {
+    throw new Error("Deployment environments need the product app; Landing-only apps have none.");
+  }
+  const features = new Set(state.template.features);
+  for (const environment of environments) features.add(environmentFeature(environment));
+  return { ...state, template: { ...state.template, features: [...features].sort() } };
+}
+
 async function resolveUpgradeState(options: {
+  state: ManagedState;
+  platform?: AppPlatform;
+  yes: boolean;
+  testHarness?: boolean;
+  modules?: string[];
+  environments?: OptionalEnvironment[];
+}): Promise<ManagedState> {
+  return withEnvironments(await resolvePlatformUpgrade(options), options.environments);
+}
+
+async function resolvePlatformUpgrade(options: {
   state: ManagedState;
   platform?: AppPlatform;
   yes: boolean;
@@ -111,6 +144,46 @@ function overlayEnv(base: string, overlay: string): string {
     else next = `${next}${next.endsWith("\n") || next.length === 0 ? "" : "\n"}${assignment}\n`;
   }
   return next;
+}
+
+/**
+ * Fly configs are `ignore` on update so app names and regions stay the app's.
+ * When `update --environments` enables an environment, its own Deploy home files
+ * are new to the app, so add the ones that are missing.
+ */
+async function planNewEnvironmentFiles(options: {
+  repoRoot: string;
+  templateRoot: string;
+  previous: ManagedState;
+  state: ManagedState;
+  changes: ChangeSet;
+}): Promise<void> {
+  const before = new Set(options.previous.template.features);
+  const added = options.state.template.features.filter(
+    (feature) => feature.startsWith("env-") && !before.has(feature)
+  );
+  if (added.length === 0) return;
+  const manifest = loadTemplateManifest(options.templateRoot);
+  const paths = new Set(added.flatMap((feature) => manifest.features[feature]?.paths ?? []));
+  const files = await collectTemplateFiles(
+    options.templateRoot,
+    { ...options.state.template.context, betterAuthSecret: "ignored-by-managed-state" },
+    { enabledFeatures: withImpliedFeatures(new Set(options.state.template.features)) }
+  );
+  for (const file of files) {
+    if (!paths.has(file.relativePath) || options.changes.changes.has(file.relativePath)) continue;
+    const present = await fs
+      .access(path.join(options.repoRoot, file.relativePath))
+      .then(() => true)
+      .catch(() => false);
+    if (present) continue;
+    options.changes.addChange({
+      kind: "add",
+      path: file.relativePath,
+      content: file.content,
+      reason: "Add Deploy home file for a new Deployment environment",
+    });
+  }
 }
 
 async function planLandingEnvMigration(options: {
@@ -177,6 +250,7 @@ export async function updateManagedRepo(options: UpdateCommandOptions): Promise<
     yes: Boolean(options.yes),
     testHarness: options.testHarness,
     modules: options.modules,
+    environments: options.environments,
   });
   if (!options.dryRun) await (options.assertClean ?? assertCleanGit)(options.repoRoot);
 
@@ -196,6 +270,13 @@ export async function updateManagedRepo(options: UpdateCommandOptions): Promise<
       changes: reconciliation.changes,
     });
   }
+  await planNewEnvironmentFiles({
+    repoRoot: options.repoRoot,
+    templateRoot,
+    previous: state,
+    state: upgradedState,
+    changes: reconciliation.changes,
+  });
   const registry = options.registry ?? getMigrationRegistry();
   const pending = getPendingMigrations(upgradedState, targetVersion, registry);
   const appliedMigrations: string[] = [];

@@ -12,6 +12,14 @@
     // m5k:server:start
     "app:deploy:development": "m5kdev-fly-deploy --config apps/shared/fly.development.toml --dockerfile apps/shared/Dockerfile --env apps/shared/.env.development",
     "app:secrets:development": "m5kdev-fly-secrets --config apps/shared/fly.development.toml --env apps/shared/.env.development",
+    // m5k:env-staging:start
+    "app:deploy:staging": "m5kdev-fly-deploy --config apps/shared/fly.staging.toml --dockerfile apps/shared/Dockerfile --env apps/shared/.env.staging",
+    "app:secrets:staging": "m5kdev-fly-secrets --config apps/shared/fly.staging.toml --env apps/shared/.env.staging",
+    // m5k:env-staging:end
+    // m5k:env-canary:start
+    "app:deploy:canary": "m5kdev-fly-deploy --config apps/shared/fly.canary.toml --dockerfile apps/shared/Dockerfile --env apps/shared/.env.canary",
+    "app:secrets:canary": "m5kdev-fly-secrets --config apps/shared/fly.canary.toml --env apps/shared/.env.canary",
+    // m5k:env-canary:end
     "app:deploy:production": "m5kdev-fly-deploy --config apps/shared/fly.production.toml --dockerfile apps/shared/Dockerfile --env apps/shared/.env.production",
     "app:secrets:production": "m5kdev-fly-secrets --config apps/shared/fly.production.toml --env apps/shared/.env.production",
     // m5k:server:end

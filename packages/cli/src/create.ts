@@ -56,6 +56,7 @@ export async function scaffoldProject(
     platform,
     testHarness: Boolean(options.testHarness),
     modules: options.modules ?? [],
+    environments: options.environments ?? [],
   });
   const manifest = loadTemplateManifest(templateDirectory);
   const templateFeatures = withImpliedFeatures(enabledFeatures);

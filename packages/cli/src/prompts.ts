@@ -5,7 +5,12 @@ import { getTemplateRoot } from "./paths";
 import { slugifyAppName, toDisplayName } from "./strings";
 import type { BackendModuleChoice } from "./template";
 import { listBackendModuleChoices, loadTemplateManifest } from "./template";
-import type { AppPlatform, CreateCommandOptions } from "./types";
+import {
+  type AppPlatform,
+  type CreateCommandOptions,
+  OPTIONAL_ENVIRONMENTS,
+  type OptionalEnvironment,
+} from "./types";
 
 function requireInteractive(yes: boolean): void {
   if (!yes && !process.stdin.isTTY) {
@@ -38,6 +43,25 @@ export function parsePlatform(value: string): AppPlatform | undefined {
     return normalized;
   }
   return undefined;
+}
+
+/** Parse `canary`, `staging`, `both`, `none`, or a comma-separated list. Order follows the chain. */
+export function parseEnvironmentsAnswer(answer: string): OptionalEnvironment[] {
+  const trimmed = answer.trim().toLowerCase();
+  if (!trimmed || trimmed === "none" || trimmed === "n") return [];
+  if (trimmed === "both") return [...OPTIONAL_ENVIRONMENTS];
+  const selected = new Set<string>();
+  for (const raw of trimmed.split(",")) {
+    const id = raw.trim();
+    if (!id) continue;
+    if (!(OPTIONAL_ENVIRONMENTS as readonly string[]).includes(id)) {
+      throw new Error(
+        `Unknown Deployment environment "${id}". Use staging, canary, both, or none.`
+      );
+    }
+    selected.add(id);
+  }
+  return OPTIONAL_ENVIRONMENTS.filter((environment) => selected.has(environment));
 }
 
 export function formatBackendModulesPrompt(choices: readonly BackendModuleChoice[]): string {
@@ -125,7 +149,15 @@ export async function resolveCreateCommandOptions(
     }
     resolved.testHarness = false;
     resolved.modules = resolved.modules ?? [];
+    if (resolved.environments?.length) {
+      throw new Error("Deployment environments need the product app; Landing-only apps have none.");
+    }
+    resolved.environments = [];
     return resolved;
+  }
+
+  if (resolved.environments === undefined) {
+    resolved.environments = await resolveEnvironmentsOption({ yes: Boolean(resolved.yes) });
   }
 
   if (resolved.testHarness === undefined || resolved.modules === undefined) {
@@ -167,6 +199,20 @@ export async function resolveHarnessAndModuleOptions(options: {
     }
   }
   return { testHarness: Boolean(resolved.testHarness), modules: resolved.modules ?? [] };
+}
+
+export async function resolveEnvironmentsOption(options: {
+  yes: boolean;
+  environments?: OptionalEnvironment[];
+}): Promise<OptionalEnvironment[]> {
+  if (options.environments !== undefined) return options.environments;
+  requireInteractive(options.yes);
+  if (options.yes) return [];
+  const answer = await promptValue(
+    "Optional Deployment environments besides Development and Production — staging, canary, both, or none",
+    "none"
+  );
+  return parseEnvironmentsAnswer(answer);
 }
 
 function pathBaseName(value: string): string {

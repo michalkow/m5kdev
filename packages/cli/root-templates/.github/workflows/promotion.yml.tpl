@@ -6,6 +6,12 @@ name: Promotion PR
 on:
   pull_request:
     branches:
+      # m5k:env-staging:start
+      - staging
+      # m5k:env-staging:end
+      # m5k:env-canary:start
+      - canary
+      # m5k:env-canary:end
       - production
 
 permissions:
@@ -17,10 +23,25 @@ jobs:
     steps:
       - name: Require the expected source branch
         run: |
-          case "$GITHUB_BASE_REF" in
-            production) expected=main ;;
-            *) echo "No promotion rule for $GITHUB_BASE_REF." >&2; exit 1 ;;
-          esac
+          # Promotion chain: each branch is promoted from the one before it.
+          chain="main"
+          # m5k:env-staging:start
+          chain="$chain staging"
+          # m5k:env-staging:end
+          # m5k:env-canary:start
+          chain="$chain canary"
+          # m5k:env-canary:end
+          chain="$chain production"
+          expected=
+          previous=
+          for branch in $chain; do
+            if [ "$branch" = "$GITHUB_BASE_REF" ]; then expected=$previous; break; fi
+            previous=$branch
+          done
+          if [ -z "$expected" ]; then
+            echo "No promotion rule for $GITHUB_BASE_REF." >&2
+            exit 1
+          fi
           if [ "$GITHUB_HEAD_REF" != "$expected" ]; then
             echo "Promote into $GITHUB_BASE_REF only from $expected (this PR is from $GITHUB_HEAD_REF)." >&2
             exit 1

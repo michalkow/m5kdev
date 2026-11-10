@@ -7,10 +7,25 @@ branch.
 | Environment | Branch | Fly app | Database | Schedulers |
 | --- | --- | --- | --- | --- |
 | Development | `main` | `{{APP_SLUG}}-development` | Neon `development` branch | on |
+// m5k:env-staging:start
+| Staging | `staging` | `{{APP_SLUG}}-staging` | Neon `staging` branch, derived from Production | on |
+// m5k:env-staging:end
+// m5k:env-canary:start
+| Canary | `canary` | `{{APP_SLUG}}-canary` | Production database (shared with Production) | off |
+// m5k:env-canary:end
 | Production | `production` | `{{APP_SLUG}}-production` | Neon `production` branch | on |
 
-Feature PRs target `main`. Code reaches Production through a **Promotion PR**
-from `main` into `production`.
+Feature PRs target `main`. Code moves along the promotion chain one
+**Promotion PR** at a time, each from the branch before it:
+
+1. `main`
+// m5k:env-staging:start
+1. `staging`
+// m5k:env-staging:end
+// m5k:env-canary:start
+1. `canary`
+// m5k:env-canary:end
+1. `production`
 
 Every deploy runs in this order (`.github/workflows/deploy-app.yml`):
 
@@ -113,13 +128,60 @@ it.
    Promotion PRs with a **merge commit**; never squash or rebase them. Feature
    PRs into `main` may squash.
 
+// m5k:env-staging:start
+### Staging
+
+Staging rehearses a release on its own copy of Production data.
+
+1. In Neon, create a `staging` branch **from `production`**, never from
+   `development`.
+2. Before a rehearsal, reset it from `production` in Neon. A reset overwrites
+   Staging's data and schema, so keep nothing on Staging that only lives there.
+   If Production holds personal data, mask it before testers or external
+   services see it.
+3. `fly apps create {{APP_SLUG}}-staging`, then
+   `fly tokens create deploy --app {{APP_SLUG}}-staging`.
+4. `cp apps/shared/.env.staging.example apps/shared/.env.staging`, using the
+   Staging branch's URLs.
+5. Create the GitHub environment `staging` with the same three secrets. Allow
+   only the `staging` branch to deploy to it.
+6. Create and protect the `staging` branch, and require the **Promotion PR**
+   check on it.
+
+Schedulers run on Staging, so test recurring jobs here.
+// m5k:env-staging:end
+// m5k:env-canary:start
+### Canary
+
+Canary runs the next release against the **Production database** before
+Production gets it.
+
+- Canary's deploy migrates the Production database. Production's own deploy
+  then finds nothing pending.
+- Its workers run and write real Production data. Its schedulers stay off
+  (`APP_ENV=canary`), so recurring jobs run only once, from Production.
+- Use test accounts. Anything you do on Canary changes Production data.
+
+1. `fly apps create {{APP_SLUG}}-canary`, then
+   `fly tokens create deploy --app {{APP_SLUG}}-canary`.
+2. `cp apps/shared/.env.canary.example apps/shared/.env.canary`, using
+   **Production's** database URLs. Give Canary its own `VITE_APP_URL` and
+   `VITE_SERVER_URL`.
+3. Create the GitHub environment `canary` with the same three secrets. Its
+   `DATABASE_DIRECT_URL` is Production's. Allow only the `canary` branch to
+   deploy to it, and consider required reviewers, since it migrates Production.
+4. Create and protect the `canary` branch, and require the **Promotion PR**
+   check on it.
+// m5k:env-canary:end
+
 ## Releasing
 
 1. Merge feature PRs into `main`. Development migrates and deploys.
 2. Test on Development.
-3. Open a Promotion PR from `main` into `production`. The **Promotion PR** check
-   fails for any other source branch.
-4. Merge it with a merge commit. Production migrates and deploys.
+3. Open a Promotion PR into the next branch in the chain. The **Promotion PR**
+   check fails for any other source branch.
+4. Merge it with a merge commit. That environment migrates and deploys. Test
+   it, then promote again until the release reaches `production`.
 
 New commits on `main` while you test do not enter the release. The Promotion PR
 carries only what `main` held when you opened or updated it.

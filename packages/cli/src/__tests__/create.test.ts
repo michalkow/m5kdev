@@ -1020,7 +1020,7 @@ describe("scaffoldProject", () => {
 
     const appTs = await read("apps/server/src/app.ts");
     expect(appTs).toContain("requireEnvValue");
-    expect(appTs).not.toContain('process.env.BETTER_AUTH_SECRET ??');
+    expect(appTs).not.toContain("process.env.BETTER_AUTH_SECRET ??");
     expect(appTs).not.toContain("NODE_ENV");
   });
 
@@ -1111,8 +1111,10 @@ describe("scaffoldProject", () => {
     expect(workflow.concurrency["cancel-in-progress"]).toBe(false);
     expect(workflow.concurrency.group).toContain("github.ref_name");
     const resolve = workflow.jobs.resolve?.steps.map((step) => step.run ?? "").join("\n") ?? "";
-    expect(resolve).toContain("main) environment=development");
-    expect(resolve).toContain("production) environment=production");
+    // Default chain: main (Development) → production. Behaviour is exercised in promotion.test.ts.
+    expect(resolve).toContain('chain="main"');
+    expect(resolve).toContain('chain="$chain production"');
+    expect(resolve).not.toMatch(/staging|canary/);
     const { migrate, deploy } = workflow.jobs;
     expect(migrate?.needs).toEqual("resolve");
     expect(migrate?.environment).toBe("${{ needs.resolve.outputs.environment }}");
@@ -1162,7 +1164,11 @@ describe("scaffoldProject", () => {
       const source = await read(`.github/workflows/${name}`);
       for (const match of source.matchAll(/secrets\.([A-Z_]+)/g)) workflowSecrets.add(match[1]!);
     }
-    expect([...workflowSecrets].sort()).toEqual(["APP_ENV_FILE", "DATABASE_DIRECT_URL", "FLY_API_TOKEN"]);
+    expect([...workflowSecrets].sort()).toEqual([
+      "APP_ENV_FILE",
+      "DATABASE_DIRECT_URL",
+      "FLY_API_TOKEN",
+    ]);
     for (const secret of workflowSecrets) expect(guide).toContain(`\`${secret}\``);
     expect(guide).toContain("Promotion PR");
 

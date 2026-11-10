@@ -32,6 +32,10 @@ const TEXT_BASENAMES = new Set([
   ".env.production.example",
   ".env.development",
   ".env.development.example",
+  ".env.staging",
+  ".env.staging.example",
+  ".env.canary",
+  ".env.canary.example",
   ".npmrc",
   ".dockerignore",
   "Dockerfile",
@@ -176,7 +180,8 @@ export function applyFeatureMarkers(content: string, enabledFeatures: ReadonlySe
 
     const [, feature, edge] = match;
     if (edge === "start") {
-      if (!enabledFeatures.has(feature)) skippingFeature = feature;
+      // Only the outermost disabled block decides; nested blocks inside it stay skipped.
+      if (skippingFeature === undefined && !enabledFeatures.has(feature)) skippingFeature = feature;
     } else if (skippingFeature === feature) {
       skippingFeature = undefined;
     }

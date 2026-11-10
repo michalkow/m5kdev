@@ -2,7 +2,7 @@ import { scaffoldProject } from "./create";
 import { printDiagnosticReport } from "./diagnostics";
 import { diagnoseManagedRepo } from "./doctor";
 import { initializeManagedRepo } from "./init";
-import { parsePlatform } from "./prompts";
+import { parseEnvironmentsAnswer, parsePlatform } from "./prompts";
 import type { CreateCommandOptions } from "./types";
 import { updateManagedRepo } from "./update";
 
@@ -14,7 +14,7 @@ interface ParsedCli {
 }
 
 const COMMANDS = new Set(["create", "init", "doctor", "update"]);
-const STRING_FLAGS = new Set(["name", "description", "platform"]);
+const STRING_FLAGS = new Set(["name", "description", "platform", "environments"]);
 const BOOLEAN_FLAGS = new Set([
   "yes",
   "force",
@@ -66,6 +66,7 @@ async function runCreate(parsed: ParsedCli): Promise<void> {
     "name",
     "description",
     "platform",
+    "environments",
     "with-test-harness",
     "yes",
     "force",
@@ -122,7 +123,15 @@ async function runDoctor(parsed: ParsedCli): Promise<void> {
 }
 
 async function runUpdate(parsed: ParsedCli): Promise<void> {
-  validateRepositoryCommand(parsed, ["dry-run", "skip-install", "json", "platform", "yes"]);
+  validateRepositoryCommand(parsed, [
+    "dry-run",
+    "skip-install",
+    "json",
+    "platform",
+    "environments",
+    "yes",
+  ]);
+  const environmentsOption = getStringOption(parsed.options, "environments");
   const platformOption = getStringOption(parsed.options, "platform");
   const platform = platformOption ? parsePlatform(platformOption) : undefined;
   if (platformOption && !platform) {
@@ -134,6 +143,7 @@ async function runUpdate(parsed: ParsedCli): Promise<void> {
     skipInstall: Boolean(parsed.options["skip-install"]),
     yes: Boolean(parsed.options.yes),
     platform,
+    environments: environmentsOption ? parseEnvironmentsAnswer(environmentsOption) : undefined,
   });
   if (parsed.options.json) {
     console.log(JSON.stringify(result, null, 2));
@@ -219,12 +229,14 @@ function toCreateCommandOptions(parsed: ParsedCli): CreateCommandOptions {
   if (platformOption && !platform) {
     throw new Error(`Invalid --platform "${platformOption}". Use web, expo, both, or landing.`);
   }
+  const environmentsOption = getStringOption(parsed.options, "environments");
   return {
     targetDirectory: parsed.directory,
     appName: getStringOption(parsed.options, "name"),
     appDescription: getStringOption(parsed.options, "description"),
     platform,
     testHarness: parsed.options["with-test-harness"] ? true : undefined,
+    environments: environmentsOption ? parseEnvironmentsAnswer(environmentsOption) : undefined,
     yes: Boolean(parsed.options.yes),
     force: Boolean(parsed.options.force),
     skipInstall: Boolean(parsed.options["skip-install"]),
@@ -260,6 +272,9 @@ function printHelp(command?: string): void {
     console.log("  --description <value>    Set the app description");
     console.log("  --platform <value>       web (default), expo, both, or landing");
     console.log("  --with-test-harness      Include the e2e test harness");
+    console.log(
+      "  --environments <value>   Optional Deployment environments: staging, canary, both, or none"
+    );
     console.log("  --yes                    Accept defaults for missing prompts");
     console.log("  --force                  Allow a non-empty directory");
     console.log("  --skip-install           Skip pnpm install");
@@ -274,6 +289,7 @@ function printHelp(command?: string): void {
   } else if (command === "update") {
     console.log("  --dry-run                Build the complete plan without writes");
     console.log("  --platform <value>       landing-only escape hatch: web, expo, or both");
+    console.log("  --environments <value>   Add Deployment environments: staging, canary, or both");
     console.log("  --yes                    Skip module and e2e prompts for --platform");
     console.log("  --skip-install           Apply sources without pnpm install");
     console.log("  --json                   Emit machine-readable output");

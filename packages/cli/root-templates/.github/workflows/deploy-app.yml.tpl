@@ -7,6 +7,12 @@ on:
   push:
     branches:
       - main
+      # m5k:env-staging:start
+      - staging
+      # m5k:env-staging:end
+      # m5k:env-canary:start
+      - canary
+      # m5k:env-canary:end
       - production
     paths:
       - 'apps/server/**'
@@ -49,11 +55,31 @@ jobs:
         # tree must equal the tree of a commit on that branch. This runs before
         # the migrate job, so untested code never migrates a database.
         run: |
-          case "$GITHUB_REF_NAME" in
-            main) environment=development; source= ;;
-            production) environment=production; source=main ;;
-            *) echo "Branch $GITHUB_REF_NAME has no Deployment environment." >&2; exit 1 ;;
-          esac
+          # Promotion chain: each branch is promoted from the one before it.
+          chain="main"
+          # m5k:env-staging:start
+          chain="$chain staging"
+          # m5k:env-staging:end
+          # m5k:env-canary:start
+          chain="$chain canary"
+          # m5k:env-canary:end
+          chain="$chain production"
+          source=
+          previous=
+          found=
+          for branch in $chain; do
+            if [ "$branch" = "$GITHUB_REF_NAME" ]; then
+              source=$previous
+              found=1
+              break
+            fi
+            previous=$branch
+          done
+          if [ -z "$found" ]; then
+            echo "Branch $GITHUB_REF_NAME has no Deployment environment." >&2
+            exit 1
+          fi
+          if [ "$GITHUB_REF_NAME" = "main" ]; then environment=development; else environment=$GITHUB_REF_NAME; fi
           if [ -n "$source" ]; then
             git fetch --quiet --no-tags origin "$source"
             tree=$(git rev-parse 'HEAD^{tree}')
