@@ -106,11 +106,12 @@ describe("migrate Database command", () => {
     }
   }, 10_000);
 
-  it("logs the target database and pending migrations without credentials", async () => {
+  it("logs the Deployment environment, target database and pending migrations without credentials", async () => {
     folder = await writeHistory([`CREATE SCHEMA "${namespace}";`]);
     const direct = new URL(environment.TEST_DATABASE_DIRECT_URL ?? "");
     direct.password = "never-logged-secret";
     process.env.DATABASE_DIRECT_URL = direct.toString();
+    process.env.APP_ENV = "staging";
     const lines: string[] = [];
 
     await migrate({
@@ -123,8 +124,24 @@ describe("migrate Database command", () => {
     const output = lines.join("\n");
     expect(output).toContain(`${direct.hostname}:${direct.port}${direct.pathname}`);
     expect(output).toContain("0000_fixture");
+    expect(output).toContain("APP_ENV=staging");
     expect(output).not.toContain("never-logged-secret");
     expect(output).not.toContain(direct.username + ":");
+  });
+
+  it("omits the Deployment environment from the log when APP_ENV is unset", async () => {
+    folder = await writeHistory([`CREATE SCHEMA "${namespace}";`]);
+    delete process.env.APP_ENV;
+    const lines: string[] = [];
+
+    await migrate({
+      schema: {},
+      migrationsFolder: folder,
+      migrationsSchema,
+      log: (line) => lines.push(line),
+    });
+
+    expect(lines.join("\n")).not.toContain("APP_ENV");
   });
 
   describe("rebuild", () => {

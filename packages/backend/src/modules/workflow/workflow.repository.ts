@@ -6,6 +6,7 @@ import type {
 import { and, asc, eq, inArray, lt, type SQL, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { err, ok } from "neverthrow";
+import type { DeploymentEnvironment } from "../../base/environment";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseRepository } from "../base/base.repository";
 import { workflows } from "./workflow.db";
@@ -25,10 +26,10 @@ type Orm = NodePgDatabase<Schema>;
  */
 export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<string, never>> {
   /** Deployment environment whose rows this repository reads and writes. */
-  readonly environment: string;
+  readonly environment: DeploymentEnvironment;
 
   constructor(
-    options: { orm: Orm; schema: Schema; environment: string },
+    options: { orm: Orm; schema: Schema; environment: DeploymentEnvironment },
     repository?: Record<string, never>
   ) {
     super(options, repository);

@@ -51,6 +51,14 @@ export function parseAppEnvironment(env: EnvSource = process.env): AppEnvironmen
 }
 
 /**
+ * The Deployment environment whose database this environment uses. Canary shares
+ * the Production database; every other environment owns its own.
+ */
+export function databaseScope(environment: DeploymentEnvironment): DeploymentEnvironment {
+  return environment === "canary" ? "production" : environment;
+}
+
+/**
  * True when `APP_ENV` names a deployed environment. Unset or `local` is not
  * deployed, so one-shot scripts and tests keep local behaviour.
  */

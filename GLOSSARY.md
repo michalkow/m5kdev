@@ -242,7 +242,7 @@ _Avoid_: `NODE_ENV` as the environment (it is `production` on every deployed app
 
 **Environment namespace**:
 The BullMQ prefix `<APP_SLUG>-<APP_ENV>` that keeps one Deployment environment's queues, queue events, and workers apart from another's on a shared Redis. Semantic queue names stay the same in every environment.
-_Avoid_: prefixing queue names by hand; ioredis `keyPrefix`; a default namespace
+_Avoid_: prefixing queue names by hand; ioredis `keyPrefix`; a BullMQ prefix that ignores `APP_ENV` (such as BullMQ's default `bull`)
 
 **Promotion PR**:
 A pull request that moves tested code to the next Deployment environment's branch: `main` → `staging` → `canary` → `production`, skipping environments the app does not have. Only the expected source branch may open one; it merges with a merge commit, and the deploy checks the branch's tree matches a tested source commit ([ADR-0036](docs/adr/0036-each-environment-builds-from-its-branch.md)).
@@ -263,7 +263,7 @@ The public marketing site package (`apps/landing`). Own Fly app, separate from t
 _Avoid_: Webapp (the authenticated SPA baked into the product image); treating Landing as requiring a server or Deploy home
 
 **Workflow**:
-A persisted background run (optional cron). Status: `queued` | `running` | `completed` | `failed`. Payload is serializable ids and typed input, not a request. Org-scoped runs stamp MemberId. Each row records the Deployment environment that enqueued it; reconcile and lifecycle updates only touch rows of their own environment, so Canary never reconciles Production's runs ([ADR-0037](docs/adr/0037-canary-workers-without-schedulers.md)).
+A persisted background run (optional cron). Status: `queued` | `running` | `completed` | `failed`. Payload is serializable ids and typed input, not a request. Org-scoped runs stamp MemberId. Each row records the Deployment environment that enqueued it; reconcile and lifecycle updates only touch rows of their own environment, so Canary never reconciles Production's runs ([ADR-0037](docs/adr/0037-canary-workers-without-schedulers.md)). The `environment` column's default `'production'` is the backward-compatible migration value for existing rows (and for code from the previous release that does not write it); it is not a default namespace, since the Kernel always writes `APP_ENV`.
 _Avoid_: Job, Queue, Task, Recurrence (that is the repeating-event store)
 
 **Recurrence**:

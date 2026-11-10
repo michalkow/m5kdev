@@ -18,17 +18,26 @@ describe("FileModule Deployment environment", () => {
     process.env.NODE_ENV = previous.NODE_ENV;
   });
 
-  const objectStoreFor = (appEnv: string, nodeEnv: string) => {
-    process.env.APP_ENV = appEnv;
-    process.env.NODE_ENV = nodeEnv;
+  const objectStoreFor = (
+    environment: string,
+    processEnv: { APP_ENV: string; NODE_ENV: string }
+  ) => {
+    // The validated appConfig decides, not whatever process.env says.
+    process.env.APP_ENV = processEnv.APP_ENV;
+    process.env.NODE_ENV = processEnv.NODE_ENV;
     const repositories = new FileModule({ buckets: ["app-bucket"] }).repositories({
       db: { orm: {}, schema: { files } },
+      appConfig: { environment, slug: "editorial-desk" },
     } as never);
     return repositories.fileS3;
   };
 
-  it("uses the local object store only when APP_ENV is local", () => {
-    expect(objectStoreFor("local", "production")).toBeInstanceOf(LocalFileObjectStore);
-    expect(objectStoreFor("staging", "development")).not.toBeInstanceOf(LocalFileObjectStore);
+  it("uses the local object store only when the Deployment environment is local", () => {
+    expect(objectStoreFor("local", { APP_ENV: "staging", NODE_ENV: "production" })).toBeInstanceOf(
+      LocalFileObjectStore
+    );
+    expect(
+      objectStoreFor("staging", { APP_ENV: "local", NODE_ENV: "development" })
+    ).not.toBeInstanceOf(LocalFileObjectStore);
   });
 });

@@ -11,7 +11,7 @@ import { trimStack } from "./stack";
 // OTel log correlation (trace_id/span_id) and OTLP export are wired here so they
 // work under ESM/tsx. initTelemetry() must run before this module is first imported.
 // Deployed environments (APP_ENV set and not `local`) log raw JSON; local logs are pretty.
-const isProduction = isDeployedEnvironment();
+const isDeployed = isDeployedEnvironment();
 const otelLogsEnabled = Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT);
 
 type ErrorLike = Error & {
@@ -66,7 +66,7 @@ export const logger = pino({
   },
   // Pretty console in dev; raw structured JSON in production (full data for
   // log aggregation, no pino-pretty on the hot path).
-  ...(isProduction
+  ...(isDeployed
     ? {}
     : {
         transport: {

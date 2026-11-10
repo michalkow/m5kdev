@@ -2,6 +2,7 @@ import { createBullBoard } from "@bull-board/api";
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import { ExpressAdapter } from "@bull-board/express";
 import { createBackendRouterMap } from "../../app";
+import { databaseScope } from "../../base/environment";
 import type { AuthModule } from "../auth/auth.module";
 import {
   BaseModule,
@@ -82,12 +83,22 @@ export class WorkflowModule<const Namespace extends string = "workflow"> extends
       throw new Error(`Workflow module "${this.id}" requires Redis in createBackendApp(...)`);
     }
 
-    const { namespace: _namespace, boardPath: _boardPath, prefix, ...serviceConfig } = this.config;
+    const {
+      namespace: _namespace,
+      boardPath: _boardPath,
+      prefix,
+      schedulers,
+      ...serviceConfig
+    } = this.config;
+    const { environment, slug } = appConfig;
 
     return {
       workflow: new WorkflowService(repositories.workflow, {
         ...serviceConfig,
-        prefix: prefix ?? `${appConfig.slug}-${appConfig.environment}`,
+        prefix: prefix ?? `${slug}-${environment}`,
+        // Recurring jobs run only where the environment owns its database, so
+        // Canary (Production database) never runs them twice.
+        schedulers: schedulers ?? databaseScope(environment) === environment,
         connection: infra.redis.duplicate(),
       }),
     };

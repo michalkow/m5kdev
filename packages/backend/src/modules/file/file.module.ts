@@ -1,7 +1,6 @@
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createBackendRouterMap } from "../../app";
-import { isDeployedEnvironment } from "../../base/environment";
 import type { AuthModule } from "../auth/auth.module";
 import type { Base } from "../base/base.abstract";
 import type { Grant } from "../base/base.grants";
@@ -47,11 +46,6 @@ type FileModuleRouters = {
   file: ReturnType<typeof createFileTRPC>;
 };
 
-/** Deployed environments use S3; `APP_ENV=local` (or unset) uses the local object store. */
-function usesS3(): boolean {
-  return isDeployedEnvironment();
-}
-
 function defaultBuckets(): string[] {
   const envBucket = process.env.AWS_S3_BUCKET;
   return envBucket ? [envBucket] : [];
@@ -90,15 +84,20 @@ export class FileModule extends BaseModule<
     this.fileTypes = config.fileTypes;
   }
 
-  override repositories({ db }: ModuleRepositoriesContext<FileModuleDeps, FileModuleTables>) {
+  override repositories({
+    db,
+    appConfig,
+  }: ModuleRepositoriesContext<FileModuleDeps, FileModuleTables>) {
     const defaultBucket = this.buckets[0] ?? process.env.AWS_S3_BUCKET ?? "local-s3";
-    const fileS3: FileObjectStore & Base = usesS3()
-      ? new FileS3Repository()
-      : new LocalFileObjectStore({
-          root: path.join(tmpdir(), "m5kdev-file-s3"),
-          publicBaseUrl: localStorePublicBaseUrl(),
-          defaultBucket,
-        });
+    // Deployed environments use S3; only `local` uses the local object store.
+    const fileS3: FileObjectStore & Base =
+      appConfig.environment !== "local"
+        ? new FileS3Repository()
+        : new LocalFileObjectStore({
+            root: path.join(tmpdir(), "m5kdev-file-s3"),
+            publicBaseUrl: localStorePublicBaseUrl(),
+            defaultBucket,
+          });
     if (fileS3 instanceof LocalFileObjectStore) {
       this.localStore = fileS3;
     }
@@ -166,8 +165,9 @@ export class FileModule extends BaseModule<
     services,
     authMiddleware,
     deps,
+    appConfig,
   }: ModuleExpressContext<FileModuleDeps, FileModuleServices>) {
-    if (this.localStore && !usesS3()) {
+    if (this.localStore && appConfig.environment === "local") {
       infra.express.use(FILE_S3_MOCK_MOUNT, createMockS3Router(this.localStore));
     }
     if (!authMiddleware) return;

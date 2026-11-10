@@ -2,6 +2,7 @@ import type { WorkflowStatus } from "@m5kdev/commons/modules/workflow/workflow.c
 import { integer, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { v4 as uuidv4 } from "uuid";
 import { appDatabaseSchema, jsonbValue } from "../../base/database.schema";
+import type { DeploymentEnvironment } from "../../base/environment";
 import { users } from "../auth/auth.db";
 
 export const workflows = appDatabaseSchema.table(
@@ -13,7 +14,7 @@ export const workflows = appDatabaseSchema.table(
      * Deployment environment that enqueued the run (`APP_ENV`). With `queueName`
      * and `jobId` it rebuilds the BullMQ key `<slug>-<environment>:<queue>:<job>`.
      */
-    environment: text("environment").notNull().default("production"),
+    environment: text("environment").$type<DeploymentEnvironment>().notNull().default("production"),
     /**
      * @deprecated The global unique on `job_id` is kept only so code from the
      * previous release (`ON CONFLICT (job_id)`) keeps working while Canary runs

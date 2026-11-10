@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-import { isDeployedEnvironment } from "../../base/environment";
 import { BaseModule, type ModuleExpressContext, type TableMap } from "../base/base.module";
 import type { EmailModule } from "./email.module";
 import type { EmailService, StoredEmail, StoredEmailSummary } from "./email.service";
@@ -128,9 +127,9 @@ export class EmailPreviewModule extends BaseModule<
     this.allowDelete = options.allowDelete ?? false;
   }
 
-  override express({ deps, infra }: ModuleExpressContext<EmailPreviewModuleDeps>) {
+  override express({ deps, infra, appConfig }: ModuleExpressContext<EmailPreviewModuleDeps>) {
     const emailService = deps.email.services.email as EmailService;
-    if (emailService.mode !== "store" || isDeployedEnvironment()) {
+    if (emailService.mode !== "store" || appConfig.environment !== "local") {
       return;
     }
 

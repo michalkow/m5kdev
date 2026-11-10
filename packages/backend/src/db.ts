@@ -156,21 +156,32 @@ async function pendingMigrations(
 const DEFAULT_LOCK_TIMEOUT = "5s";
 const DEFAULT_STATEMENT_TIMEOUT = "5min";
 
+interface MigrateWithLockOptions<TSchema extends Record<string, unknown>> {
+  readonly pool: Pool;
+  readonly config: RunDbConfig<TSchema>;
+  readonly migrationsFolder: string;
+  readonly migrationsSchema: string;
+  readonly url: string;
+  /** Runs while holding the migration lock, before pending migrations are read. */
+  readonly beforeMigrate?: (session: PoolClient) => Promise<void>;
+}
+
 /**
  * Apply pending migrations on one session that holds a PostgreSQL advisory lock,
  * so concurrent runners (a deploy and an agent) wait instead of racing. Lock and
  * statement timeouts stop a blocked ALTER TABLE from stalling live traffic.
  */
-async function migrateWithLock<TSchema extends Record<string, unknown>>(
-  pool: Pool,
-  config: RunDbConfig<TSchema>,
-  migrationsFolder: string,
-  url: string,
-  /** Runs while holding the migration lock, before pending migrations are read. */
-  beforeMigrate?: (session: PoolClient) => Promise<void>
-): Promise<void> {
-  const migrationsSchema = config.migrationsSchema ?? DEFAULT_MIGRATIONS_SCHEMA;
+async function migrateWithLock<TSchema extends Record<string, unknown>>({
+  pool,
+  config,
+  migrationsFolder,
+  migrationsSchema,
+  url,
+  beforeMigrate,
+}: MigrateWithLockOptions<TSchema>): Promise<void> {
   const log = config.log ?? ((message: string) => console.info(message));
+  const lockKey = `m5kdev:migrate:${migrationsSchema}`;
+  const appEnv = process.env.APP_ENV?.trim();
   const session = await pool.connect();
   try {
     await session.query("SELECT set_config('statement_timeout', $1, false)", [
@@ -178,9 +189,7 @@ async function migrateWithLock<TSchema extends Record<string, unknown>>(
     ]);
     // A concurrent runner waits for the advisory lock (bounded by statement_timeout);
     // lock_timeout applies only to the migration statements themselves.
-    await session.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [
-      `m5kdev:migrate:${migrationsSchema}`,
-    ]);
+    await session.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [lockKey]);
     await session.query("SELECT set_config('lock_timeout', $1, false)", [
       config.lockTimeout ?? DEFAULT_LOCK_TIMEOUT,
     ]);
@@ -188,7 +197,9 @@ async function migrateWithLock<TSchema extends Record<string, unknown>>(
       await beforeMigrate?.(session);
       const pending = await pendingMigrations(session, migrationsFolder, migrationsSchema);
       log(
-        `Migrating ${describeTarget(url)} (${migrationsSchema}): ${pending.length} pending${
+        `Migrating ${describeTarget(url)} (${migrationsSchema})${
+          appEnv ? ` for APP_ENV=${appEnv}` : ""
+        }: ${pending.length} pending${
           pending.length ? `\n${pending.map((tag) => `  - ${tag}`).join("\n")}` : ""
         }`
       );
@@ -197,9 +208,7 @@ async function migrateWithLock<TSchema extends Record<string, unknown>>(
         migrationsSchema,
       });
     } finally {
-      await session.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [
-        `m5kdev:migrate:${migrationsSchema}`,
-      ]);
+      await session.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [lockKey]);
     }
   } finally {
     session.release();
@@ -220,6 +229,7 @@ export async function runDb<TSchema extends Record<string, unknown>>(
   }
   let namespace: string | undefined;
   const migrationsFolder = config.migrationsFolder ?? "./drizzle-postgresql";
+  const migrationsSchema = config.migrationsSchema ?? DEFAULT_MIGRATIONS_SCHEMA;
   if (command === "migrate" || command === "rebuild") {
     try {
       await access(join(migrationsFolder, "meta", "_journal.json"));
@@ -240,12 +250,14 @@ export async function runDb<TSchema extends Record<string, unknown>>(
   const client = new Pool({ connectionString: url, max: 1 });
   try {
     const orm = drizzle(client, { schema: config.schema });
+    const migrateOptions = { pool: client, config, migrationsFolder, migrationsSchema, url };
     if (command === "migrate") {
-      await migrateWithLock(client, config, migrationsFolder, url);
+      await migrateWithLock(migrateOptions);
     } else if (command === "rebuild") {
-      await migrateWithLock(client, config, migrationsFolder, url, (session) =>
-        dropAppSchema(session, namespace!, config.migrationsSchema ?? DEFAULT_MIGRATIONS_SCHEMA)
-      );
+      await migrateWithLock({
+        ...migrateOptions,
+        beforeMigrate: (session) => dropAppSchema(session, namespace!, migrationsSchema),
+      });
     } else if (command === "seed") {
       await config.seed?.({ orm, schema: config.schema, client });
     } else {

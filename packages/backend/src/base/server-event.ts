@@ -39,7 +39,7 @@ export function createServerEventBus(options: {
   /** See {@link serverEventChannelPrefix}. */
   channelPrefix: string;
 }): ServerEventBus {
-  const CHANNEL_PREFIX = options.channelPrefix;
+  const channelPrefix = options.channelPrefix;
   const connections = new Map<string, Set<Response>>();
   const keepalives = new Map<Response, ReturnType<typeof setInterval>>();
   let subscriber: IORedis | undefined;
@@ -65,9 +65,9 @@ export function createServerEventBus(options: {
 
   if (options.redis) {
     subscriber = options.redis.duplicate();
-    void subscriber.psubscribe(`${CHANNEL_PREFIX}*`);
+    void subscriber.psubscribe(`${channelPrefix}*`);
     subscriber.on("pmessage", (_pattern: string, channel: string, message: string) => {
-      const userId = channel.startsWith(CHANNEL_PREFIX) ? channel.slice(CHANNEL_PREFIX.length) : "";
+      const userId = channel.startsWith(channelPrefix) ? channel.slice(channelPrefix.length) : "";
       if (!userId) return;
       try {
         JSON.parse(message);
@@ -111,7 +111,7 @@ export function createServerEventBus(options: {
     for (const userId of uniqueUserIds) {
       if (options.redis) {
         void options.redis
-          .publish(`${CHANNEL_PREFIX}${userId}`, serialized)
+          .publish(`${channelPrefix}${userId}`, serialized)
           .catch((err: unknown) => {
             options.logger.error({ err, userId }, "Server event Redis publish failed");
           });

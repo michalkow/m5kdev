@@ -34,6 +34,7 @@ import type { Logger } from "pino";
 import { Resend } from "resend";
 import {
   type DeploymentEnvironment,
+  databaseScope,
   isDeployedEnvironment,
   parseAppEnvironment,
 } from "./base/environment";
@@ -763,9 +764,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     logger,
     channelPrefix: serverEventChannelPrefix({
       slug: appConfig.slug,
-      scope:
-        config.serverEvents?.scope ??
-        (appConfig.environment === "canary" ? "production" : appConfig.environment),
+      scope: config.serverEvents?.scope ?? databaseScope(appConfig.environment),
     }),
   });
   const infra = {

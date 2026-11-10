@@ -131,31 +131,26 @@ describe("EmailPreviewModule HTTP", () => {
   });
 
   it("does not mount preview in a deployed environment even when mode is store", async () => {
-    const previousAppEnv = process.env.APP_ENV;
-    process.env.APP_ENV = "staging";
-    try {
-      const built = createBackendApp(
-        {
-          db: { client },
-          app: {
-            urls: { web: "http://localhost:5173", api: "http://localhost:8080" },
-          },
-          email: {
-            mode: "store",
-            from: "no-reply@example.com",
-            outputDirectory,
-          },
+    const built = createBackendApp(
+      {
+        db: { client },
+        env: { APP_ENV: "staging", APP_SLUG: "editorial-desk" },
+        app: {
+          urls: { web: "http://localhost:5173", api: "http://localhost:8080" },
         },
-        [new EmailModule(templates), new EmailPreviewModule()] as const
-      );
+        email: {
+          mode: "store",
+          from: "no-reply@example.com",
+          outputDirectory,
+        },
+      },
+      [new EmailModule(templates), new EmailPreviewModule()] as const
+    );
 
-      await withServer(built.express.app, async (baseUrl) => {
-        const response = await fetch(`${baseUrl}/__emails`);
-        expect(response.status).toBe(404);
-      });
-    } finally {
-      process.env.APP_ENV = previousAppEnv;
-    }
+    await withServer(built.express.app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/__emails`);
+      expect(response.status).toBe(404);
+    });
   });
 
   it("uses mountPath in inbox and detail links", async () => {
