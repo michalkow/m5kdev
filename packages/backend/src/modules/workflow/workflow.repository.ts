@@ -24,6 +24,31 @@ type Orm = NodePgDatabase<Schema>;
  * same row.
  */
 export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<string, never>> {
+  /** Deployment environment whose rows this repository reads and writes. */
+  readonly environment: string;
+
+  constructor(
+    options: { orm: Orm; schema: Schema; environment: string },
+    repository?: Record<string, never>
+  ) {
+    super(options, repository);
+    this.environment = options.environment;
+  }
+
+  /** Rows of this Deployment environment only. */
+  private inEnvironment(): SQL {
+    return eq(this.schema.workflows.environment, this.environment);
+  }
+
+  /** Conflict target: one row per environment, queue and job. */
+  private get conflictTarget() {
+    return [
+      this.schema.workflows.environment,
+      this.schema.workflows.queueName,
+      this.schema.workflows.jobId,
+    ];
+  }
+
   /** `status` is terminal — SQL predicate against the existing row. */
   private terminalStatus(): SQL {
     return sql`${this.schema.workflows.status} IN ('completed', 'failed')`;
@@ -41,7 +66,11 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
         .select()
         .from(this.schema.workflows)
         .where(
-          and(eq(this.schema.workflows.jobId, jobId), eq(this.schema.workflows.userId, userId))
+          and(
+            this.inEnvironment(),
+            eq(this.schema.workflows.jobId, jobId),
+            eq(this.schema.workflows.userId, userId)
+          )
         )
     );
     if (wfResult.isErr()) return err(wfResult.error);
@@ -58,7 +87,10 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
     userId: string;
   }): ServerResultAsync<WorkflowListOutputSchema> {
     const { ConditionBuilder } = this.helpers;
-    const condition = new ConditionBuilder([eq(this.schema.workflows.userId, userId)]);
+    const condition = new ConditionBuilder([
+      this.inEnvironment(),
+      eq(this.schema.workflows.userId, userId),
+    ]);
     if (status) condition.push(inArray(this.schema.workflows.status, status));
     if (jobName) condition.push(eq(this.schema.workflows.jobName, jobName));
 
@@ -124,6 +156,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
       this.orm
         .insert(this.schema.workflows)
         .values({
+          environment: this.environment,
           userId,
           jobId,
           jobName,
@@ -136,7 +169,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
           updatedAt: now,
         })
         .onConflictDoUpdate({
-          target: this.schema.workflows.jobId,
+          target: this.conflictTarget,
           set: this.addedConflictSet(triggeredAt ?? now),
         })
         .returning()
@@ -165,6 +198,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
         .insert(this.schema.workflows)
         .values(
           data.map((d) => ({
+            environment: this.environment,
             userId: d.userId,
             jobId: d.jobId,
             jobName: d.jobName,
@@ -178,7 +212,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
           }))
         )
         .onConflictDoUpdate({
-          target: this.schema.workflows.jobId,
+          target: this.conflictTarget,
           set: this.addedConflictSet(triggeredAt ?? now),
         })
         .returning()
@@ -206,6 +240,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
       this.orm
         .insert(this.schema.workflows)
         .values({
+          environment: this.environment,
           jobId,
           jobName,
           queueName,
@@ -219,7 +254,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
           updatedAt: now,
         })
         .onConflictDoUpdate({
-          target: this.schema.workflows.jobId,
+          target: this.conflictTarget,
           set: {
             // a stale active event must never resurrect a terminal row
             status: sql`CASE WHEN ${terminal} THEN ${this.schema.workflows.status} ELSE 'running' END`,
@@ -255,6 +290,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
       this.orm
         .insert(this.schema.workflows)
         .values({
+          environment: this.environment,
           jobId,
           jobName: jobName ?? "__unknown__",
           queueName,
@@ -268,7 +304,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
           updatedAt: now,
         })
         .onConflictDoUpdate({
-          target: this.schema.workflows.jobId,
+          target: this.conflictTarget,
           set: {
             // first terminal status wins; never flip failed -> completed
             status: sql`CASE WHEN ${terminal} THEN ${this.schema.workflows.status} ELSE 'completed' END`,
@@ -310,6 +346,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
       this.orm
         .insert(this.schema.workflows)
         .values({
+          environment: this.environment,
           jobId,
           jobName: jobName ?? "__unknown__",
           queueName,
@@ -323,7 +360,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
           updatedAt: now,
         })
         .onConflictDoUpdate({
-          target: this.schema.workflows.jobId,
+          target: this.conflictTarget,
           set: {
             // first terminal status wins; never flip completed -> failed
             status: sql`CASE WHEN ${terminal} THEN ${this.schema.workflows.status} ELSE 'failed' END`,
@@ -354,6 +391,7 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
         .from(this.schema.workflows)
         .where(
           and(
+            this.inEnvironment(),
             inArray(this.schema.workflows.status, ["queued", "running"]),
             lt(this.schema.workflows.updatedAt, before)
           )
@@ -366,12 +404,18 @@ export class WorkflowRepository extends BaseRepository<Orm, Schema, Record<strin
   }
 
   /** Bump `updatedAt` after confirming the job is still alive in Redis. */
-  async touch(jobId: string): ServerResultAsync<void> {
+  async touch(jobId: string, queueName: string): ServerResultAsync<void> {
     const result = await this.throwableQuery(() =>
       this.orm
         .update(this.schema.workflows)
         .set({ updatedAt: new Date() })
-        .where(eq(this.schema.workflows.jobId, jobId))
+        .where(
+          and(
+            this.inEnvironment(),
+            eq(this.schema.workflows.queueName, queueName),
+            eq(this.schema.workflows.jobId, jobId)
+          )
+        )
     );
     if (result.isErr()) return err(result.error);
     return ok(undefined);

@@ -8,6 +8,13 @@
       "when": 1793634297401,
       "tag": "0000_glorious_warhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794337664055,
+      "tag": "0001_flaky_madame_masque",
+      "breakpoints": true
     }
   ]
 }

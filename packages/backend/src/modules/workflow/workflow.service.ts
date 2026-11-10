@@ -775,7 +775,7 @@ export class WorkflowService extends Base {
           });
         } else {
           // waiting/delayed/prioritized/etc — alive; bump so it isn't re-checked immediately
-          await this.workflowRepository.touch(row.jobId);
+          await this.workflowRepository.touch(row.jobId, row.queueName);
         }
       } catch (error) {
         this.handleUnknownError(error).addContext({

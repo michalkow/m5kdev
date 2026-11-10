@@ -62,11 +62,13 @@ export class WorkflowModule<const Namespace extends string = "workflow"> extends
 
   override repositories({
     db,
+    appConfig,
   }: ModuleRepositoriesContext<WorkflowModuleDeps, WorkflowModuleTables>) {
     return {
       workflow: new WorkflowRepository({
         orm: db.orm,
         schema: db.schema,
+        environment: appConfig.environment,
       }),
     };
   }

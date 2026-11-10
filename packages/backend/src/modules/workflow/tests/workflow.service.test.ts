@@ -640,7 +640,7 @@ describe("WorkflowService", () => {
 
       await service.reconcile();
 
-      expect(repo.touch).toHaveBeenCalledWith("wait-1");
+      expect(repo.touch).toHaveBeenCalledWith("wait-1", "fast");
     });
   });
 

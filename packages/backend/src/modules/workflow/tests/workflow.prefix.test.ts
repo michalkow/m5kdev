@@ -37,7 +37,9 @@ function workflowService(
 }
 
 function prefixesOf(mock: unknown): unknown[] {
-  return (mock as jest.Mock).mock.calls.map(([, options]) => (options as { prefix?: string }).prefix);
+  return (mock as jest.Mock).mock.calls.map(
+    ([, options]) => (options as { prefix?: string }).prefix
+  );
 }
 
 describe("Workflow Environment namespace", () => {
