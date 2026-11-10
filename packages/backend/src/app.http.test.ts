@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import express, { type Express } from "express";
-import type { Pool } from "pg";
+import { Pool } from "pg";
 import { createBackendApp, defineBackendModule } from "./app";
 import type { AuthMiddleware } from "./modules/auth/auth.middleware";
 import { createBillingRouter } from "./modules/billing/billing.router";
@@ -478,6 +478,38 @@ describe("createBackendApp HTTP shell", () => {
 
     afterEach(async () => {
       await fs.rm(spaRoot, { recursive: true, force: true });
+    });
+
+    it("answers /healthz with the Deployment environment instead of the SPA", async () => {
+      const built = createBackendApp({
+        db: { client },
+        spa: { root: spaRoot },
+      });
+
+      await withServer(built.express.app, async (baseUrl) => {
+        const response = await fetch(`${baseUrl}/healthz`);
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ status: "ok", environment: "local" });
+      });
+    });
+
+    it("answers /healthz with 503 when PostgreSQL is unreachable", async () => {
+      const unreachable = new Pool({
+        connectionString: "postgresql://nobody@127.0.0.1:1/none",
+        connectionTimeoutMillis: 500,
+      });
+      const built = createBackendApp({ db: { client: unreachable } });
+      try {
+        await withServer(built.express.app, async (baseUrl) => {
+          const response = await fetch(`${baseUrl}/healthz`);
+          expect(response.status).toBe(503);
+          const body = await response.json();
+          expect(body).toEqual({ status: "unavailable", environment: "local" });
+          expect(JSON.stringify(body)).not.toContain("nobody");
+        });
+      } finally {
+        await unreachable.end();
+      }
     });
 
     it("serves index.html for GET / when spa.root exists", async () => {

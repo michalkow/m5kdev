@@ -696,6 +696,30 @@ function applyCors({
   expressApp.use(cors(corsOptions));
 }
 
+export const HEALTH_CHECK_PATH = "/healthz";
+
+/**
+ * Kernel liveness for Fly checks and post-deploy smoke tests: 200 with the
+ * Deployment environment when PostgreSQL answers, 503 otherwise. No auth, no
+ * connection details. Registered before modules and the baked SPA.
+ */
+function applyHealthCheck(options: {
+  expressApp: Express;
+  client: Pool;
+  appConfig: ResolvedBackendAppMetadata;
+}): void {
+  const { expressApp, client, appConfig } = options;
+  expressApp.get(HEALTH_CHECK_PATH, async (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+      await client.query("SELECT 1");
+      res.status(200).json({ status: "ok", environment: appConfig.environment });
+    } catch {
+      res.status(503).json({ status: "unavailable", environment: appConfig.environment });
+    }
+  });
+}
+
 function applyBakedSpa(options: { expressApp: Express; spa: BackendAppConfig["spa"] }): void {
   const { expressApp, spa } = options;
   if (!spa?.root) {
@@ -731,6 +755,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   const expressApp = config.express ?? express();
   applyCors({ expressApp, config, appConfig });
   const dbClientState = createDbClient(config.db);
+  applyHealthCheck({ expressApp, client: dbClientState.client, appConfig });
   const redisState = createRedisClient(config.redis);
   const resendState = createResendClient(config.resend);
   const serverEvents = createServerEventBus({
