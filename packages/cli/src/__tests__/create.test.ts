@@ -1068,6 +1068,67 @@ describe("scaffoldProject", () => {
     expect(landingWorkflow).not.toContain("m5k:");
   });
 
+  it("deploys Development from main and Production from production after migrating", async () => {
+    const result = await scaffoldProject({
+      targetDirectory: "branch-deploys",
+      appName: "Branch Deploys",
+      appDescription: "Deployment environment fixture.",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+    const read = (relative: string) =>
+      fs.readFile(path.join(result.targetDirectory, relative), "utf8");
+
+    for (const environment of ["development", "production"]) {
+      const fly = await read(`apps/shared/fly.${environment}.toml`);
+      expect(fly).toContain(`app = "branch-deploys-${environment}"`);
+      expect(fly).toContain('path = "/healthz"');
+      expect(fly).not.toContain("release_command");
+      expect(fly).not.toContain("{{");
+      const example = await read(`apps/shared/.env.${environment}.example`);
+      expect(example).toMatch(new RegExp(`^APP_ENV=${environment}$`, "m"));
+      expect(example).toContain("DATABASE_DIRECT_URL=");
+    }
+    expect(await read("apps/shared/Dockerfile")).not.toMatch(/migrate/i);
+
+    const source = await read(".github/workflows/deploy-app.yml");
+    expect(source).not.toContain("m5k:");
+    const workflow = parse(source) as {
+      on: { push: { branches: string[] } };
+      concurrency: { group: string; "cancel-in-progress": boolean };
+      jobs: Record<
+        string,
+        {
+          needs?: string | string[];
+          environment?: string;
+          steps: { run?: string; env?: Record<string, string> }[];
+        }
+      >;
+    };
+    expect(workflow.on.push.branches).toEqual(["main", "production"]);
+    expect(workflow.concurrency["cancel-in-progress"]).toBe(false);
+    expect(workflow.concurrency.group).toContain("github.ref_name");
+    const resolve = workflow.jobs.resolve?.steps.map((step) => step.run ?? "").join("\n") ?? "";
+    expect(resolve).toContain("main) environment=development");
+    expect(resolve).toContain("production) environment=production");
+    const { migrate, deploy } = workflow.jobs;
+    expect(migrate?.needs).toEqual("resolve");
+    expect(migrate?.environment).toBe("${{ needs.resolve.outputs.environment }}");
+    expect(deploy?.needs).toEqual(["resolve", "migrate"]);
+    expect(deploy?.environment).toBe("${{ needs.resolve.outputs.environment }}");
+    const migrateStep = migrate?.steps.find((step) => step.run?.includes("db.ts migrate"));
+    expect(migrateStep?.env).toEqual({
+      DATABASE_DIRECT_URL: "${{ secrets.DATABASE_DIRECT_URL }}",
+    });
+    const deployRuns = deploy?.steps.map((step) => step.run ?? "").join("\n") ?? "";
+    expect(deployRuns).toContain('pnpm "app:secrets:$ENVIRONMENT"');
+    expect(deployRuns).toContain('pnpm "app:deploy:$ENVIRONMENT"');
+    expect(source).toContain("secrets.APP_ENV_FILE");
+    expect(source).not.toContain("APP_ENV_PRODUCTION");
+  });
+
   it("requires Node >=24 and ships product Deploy home files", async () => {
     const result = await scaffoldProject({
       targetDirectory: "deploy-desk",
@@ -1090,11 +1151,19 @@ describe("scaffoldProject", () => {
     expect(rootPackage.engines?.node).toBe(">=24");
     expect(rootPackage.packageManager).toBe("pnpm@10.13.1");
     expect(rootPackage.devDependencies?.["@m5kdev/backend"]).toBe("catalog:m5kdev");
-    expect(rootPackage.scripts?.["app:deploy"]).toContain("m5kdev-fly-deploy");
-    expect(rootPackage.scripts?.["app:deploy"]).toContain("apps/shared/fly.toml");
-    expect(rootPackage.scripts?.["app:deploy"]).toContain("apps/shared/Dockerfile");
-    expect(rootPackage.scripts?.["app:secrets"]).toContain("m5kdev-fly-secrets");
-    expect(rootPackage.scripts?.["app:secrets"]).toContain("apps/shared/.env.production");
+    expect(rootPackage.scripts?.["app:deploy:production"]).toBe(
+      "m5kdev-fly-deploy --config apps/shared/fly.production.toml --dockerfile apps/shared/Dockerfile --env apps/shared/.env.production"
+    );
+    expect(rootPackage.scripts?.["app:secrets:production"]).toBe(
+      "m5kdev-fly-secrets --config apps/shared/fly.production.toml --env apps/shared/.env.production"
+    );
+    expect(rootPackage.scripts?.["app:deploy:development"]).toBe(
+      "m5kdev-fly-deploy --config apps/shared/fly.development.toml --dockerfile apps/shared/Dockerfile --env apps/shared/.env.development"
+    );
+    expect(rootPackage.scripts?.["app:secrets:development"]).toBe(
+      "m5kdev-fly-secrets --config apps/shared/fly.development.toml --env apps/shared/.env.development"
+    );
+    expect(rootPackage.scripts?.["app:deploy"]).toBeUndefined();
 
     const dockerignore = await fs.readFile(
       path.join(result.targetDirectory, ".dockerignore"),
@@ -1127,11 +1196,14 @@ describe("scaffoldProject", () => {
     expect(dockerfile).not.toContain("m5k:webapp");
     expect(dockerfile).not.toContain("{{");
 
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "apps/shared/fly.toml"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
     const flyToml = await fs.readFile(
-      path.join(result.targetDirectory, "apps/shared/fly.toml"),
+      path.join(result.targetDirectory, "apps/shared/fly.production.toml"),
       "utf8"
     );
-    expect(flyToml).toContain('app = "deploy-desk-app"');
+    expect(flyToml).toContain('app = "deploy-desk-production"');
     expect(flyToml).toContain('primary_region = "iad"');
     expect(flyToml).not.toContain("[[mounts]]");
     expect(flyToml).toContain('memory = "1gb"');
@@ -1143,7 +1215,7 @@ describe("scaffoldProject", () => {
     const readme = await fs.readFile(path.join(result.targetDirectory, "README.md"), "utf8");
     expect(readme).not.toContain("fly volumes create");
     expect(readme).not.toContain("libsql_data");
-    expect(readme).toContain("has no `[[mounts]]`");
+    expect(readme).toContain("have no `[[mounts]]`");
 
     const envExample = await fs.readFile(
       path.join(result.targetDirectory, "apps/shared/.env.production.example"),
@@ -1163,6 +1235,7 @@ describe("scaffoldProject", () => {
 
     const gitignore = await fs.readFile(path.join(result.targetDirectory, ".gitignore"), "utf8");
     expect(gitignore).toMatch(/\.env\.production/);
+    expect(gitignore).toMatch(/\.env\.development/);
 
     const appTs = await fs.readFile(
       path.join(result.targetDirectory, "apps/server/src/app.ts"),
@@ -1194,8 +1267,36 @@ describe("scaffoldProject", () => {
         platform === "landing" ? ["deploy-landing.yml"] : ["deploy-app.yml", "deploy-landing.yml"]
       );
 
-      const targets = platform === "landing" ? ["landing"] : ["landing", "app"];
-      for (const target of targets) {
+      if (platform !== "landing") {
+        const appSource = await fs.readFile(path.join(workflowDirectory, "deploy-app.yml"), "utf8");
+        const appWorkflow = parse(appSource);
+        const appPaths: string[] = appWorkflow.on.push.paths;
+        const appTriggers = (file: string) =>
+          appPaths.some((pattern) => path.matchesGlob(file, pattern));
+        expect(appTriggers("apps/landing/src/LandingPage.tsx")).toBe(false);
+        expect(appTriggers("apps/server/src/index.ts")).toBe(true);
+        expect(appTriggers("apps/webapp/src/App.tsx")).toBe(platform !== "expo");
+        expect(appTriggers("apps/expo/src/index.ts")).toBe(false);
+        expect(appTriggers(".github/workflows/deploy-app.yml")).toBe(true);
+        for (const environment of ["development", "production"]) {
+          const deployScript: string = rootPackage.scripts[`app:deploy:${environment}`];
+          for (const flag of ["config", "dockerfile"]) {
+            const relativePath = deployScript.match(new RegExp(`--${flag} (\\S+)`))?.[1];
+            if (!relativePath) throw new Error(`Missing --${flag} in app:deploy:${environment}`);
+            await expect(
+              fs.stat(path.join(result.targetDirectory, relativePath))
+            ).resolves.toBeTruthy();
+          }
+          const envPath = deployScript.match(/--env (\S+)/)?.[1];
+          expect(envPath).toBe(`apps/shared/.env.${environment}`);
+          expect(rootPackage.scripts[`app:secrets:${environment}`]).toContain(`--env ${envPath}`);
+          await expect(
+            fs.stat(path.join(result.targetDirectory, `${envPath}.example`))
+          ).resolves.toBeTruthy();
+        }
+      }
+
+      for (const target of ["landing"]) {
         const source = await fs.readFile(
           path.join(workflowDirectory, `deploy-${target}.yml`),
           "utf8"

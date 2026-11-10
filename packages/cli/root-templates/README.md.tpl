@@ -72,9 +72,10 @@ with `pnpm dlx create-m5kdev@<version> init`.
 
 ## Deploy (Fly.io)
 
-The Dockerfile is the portable image. Fly is the adapter this starter ships —
-`fly.toml` is ignored by `create-m5kdev update` so your app name and region stay
-yours.
+The Dockerfile is the portable image. Fly is the adapter this starter ships.
+Each Deployment environment has its own Fly config (`apps/shared/fly.development.toml`,
+`apps/shared/fly.production.toml`, and `apps/landing/fly.toml`); `create-m5kdev update`
+ignores them so your app names and regions stay yours.
 
 `.env*` files are excluded from the image. Copy the examples, then pass values
 as Fly **build secrets** and **runtime secrets**.
@@ -85,9 +86,11 @@ cp apps/landing/.env.production.example apps/landing/.env.production
 cp apps/shared/.env.production.example apps/shared/.env.production
 # fill in URLs, BETTER_AUTH_SECRET, REDIS_URL, …
 
-fly apps create {{APP_SLUG}}-app
-pnpm app:secrets
-pnpm app:deploy
+fly apps create {{APP_SLUG}}-production
+pnpm app:secrets:production
+pnpm app:deploy:production
+# Development: the same with .env.development, {{APP_SLUG}}-development, and
+# app:secrets:development / app:deploy:development
 // m5k:server:end
 fly apps create {{APP_SLUG}}-landing
 pnpm landing:secrets
@@ -108,13 +111,13 @@ If you add local workspace dependencies or install inputs such as patches, add
 their files to the appropriate Docker stages. The landing runtime serves only
 compiled assets with Caddy (`apps/landing/Caddyfile`), including SPA route fallback.
 // m5k:server:start
-`app:deploy` does the same for the product image. Provision provider-neutral
+`app:deploy:<environment>` does the same for the product image. Provision provider-neutral
 PostgreSQL with pgvector in `public` and a transaction-mode PgBouncer endpoint.
 Set `DATABASE_URL` to the runtime pool and `DATABASE_DIRECT_URL` to the direct
 database endpoint. App migrations own `app`; Mastra owns `mastra` and vectors
 use `vectors`. Run reviewed app migrations and, when AI is selected, `mastra:init`
 through direct connections before starting the server. Redis and database URLs
-are server secrets, not image layers. The product `fly.toml` has no `[[mounts]]`:
+are server secrets, not image layers. The product Fly configs (one per environment) have no `[[mounts]]`:
 PostgreSQL is hosted outside the Fly machine, so do not create a volume.
 // m5k:server:end
 
@@ -125,7 +128,9 @@ Pushes to `main` deploy only the affected Fly app:
 - `.github/workflows/deploy-landing.yml` deploys changes in `apps/landing/**`.
 // m5k:server:start
 - `.github/workflows/deploy-app.yml` deploys changes in `apps/server/**`,
-  `apps/shared/**`, or `apps/email/**`.
+  `apps/shared/**`, or `apps/email/**`. A push to `main` deploys Development; a
+  push to `production` (a merged Promotion PR from `main`) deploys Production.
+  Each run first migrates that environment's database, then deploys.
 // m5k:server:end
 // m5k:webapp:start
   Changes in `apps/webapp/**` also deploy the product app, which serves the baked SPA.
@@ -149,8 +154,17 @@ Before enabling deployment:
 | `FLY_API_TOKEN_LANDING` | App-scoped deploy token for `{{APP_SLUG}}-landing`. |
 | `LANDING_ENV_PRODUCTION` | Complete contents of your filled-in `apps/landing/.env.production`. |
 // m5k:server:start
-| `FLY_API_TOKEN_APP` | App-scoped deploy token for `{{APP_SLUG}}-app`. |
-| `APP_ENV_PRODUCTION` | Complete contents of your filled-in `apps/shared/.env.production`. |
+// m5k:server:end
+
+// m5k:server:start
+The product app uses **GitHub environments** named `development` and
+`production` (Settings → Environments). Add these secrets to each environment:
+
+| Environment secret | Value |
+| --- | --- |
+| `FLY_API_TOKEN` | App-scoped deploy token for `{{APP_SLUG}}-<environment>`. |
+| `APP_ENV_FILE` | Complete contents of that environment's filled-in `apps/shared/.env.<environment>`. |
+| `DATABASE_DIRECT_URL` | Direct (non-pooled) PostgreSQL URL of that environment's database. Only the migrate step sees it. |
 // m5k:server:end
 
 Create each token locally with `fly tokens create deploy --app <fly-app-name>`
@@ -163,6 +177,6 @@ the existing deploy commands with build secrets and the public Vite cache key.
 They remove the env files afterward; never commit production env files.
 After changing a GitHub secret, manually run the affected workflow to apply it.
 // m5k:server:start
-Database migrations and optional Mastra initialization remain explicit operator
-steps; the deploy workflow does not run them.
+The deploy workflow's migrate job applies pending migrations before each deploy.
+Optional Mastra initialization remains an explicit operator step.
 // m5k:server:end

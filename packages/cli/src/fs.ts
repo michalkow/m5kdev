@@ -30,6 +30,8 @@ const TEXT_BASENAMES = new Set([
   ".env.example",
   ".env.production",
   ".env.production.example",
+  ".env.development",
+  ".env.development.example",
   ".npmrc",
   ".dockerignore",
   "Dockerfile",
