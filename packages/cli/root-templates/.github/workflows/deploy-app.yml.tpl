@@ -38,14 +38,30 @@ jobs:
     outputs:
       environment: ${{ steps.environment.outputs.environment }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          # The tree check reads the source branch's history.
+          fetch-depth: 0
       - id: environment
-        name: Map branch to Deployment environment
+        name: Map branch to Deployment environment and check its tree
+        # Each environment rebuilds from its own branch (ADR-0036). A release
+        # branch may only carry code that was tested on its source branch: its
+        # tree must equal the tree of a commit on that branch. This runs before
+        # the migrate job, so untested code never migrates a database.
         run: |
           case "$GITHUB_REF_NAME" in
-            main) environment=development ;;
-            production) environment=production ;;
+            main) environment=development; source= ;;
+            production) environment=production; source=main ;;
             *) echo "Branch $GITHUB_REF_NAME has no Deployment environment." >&2; exit 1 ;;
           esac
+          if [ -n "$source" ]; then
+            git fetch --quiet --no-tags origin "$source"
+            tree=$(git rev-parse 'HEAD^{tree}')
+            if ! git log --format=%T "origin/$source" | grep -qx "$tree"; then
+              echo "$GITHUB_REF_NAME does not match any commit on $source. Deploy it only through a Promotion PR from $source; never commit to $GITHUB_REF_NAME directly." >&2
+              exit 1
+            fi
+          fi
           echo "environment=$environment" >> "$GITHUB_OUTPUT"
 
   migrate:
