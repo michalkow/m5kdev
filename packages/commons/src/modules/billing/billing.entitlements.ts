@@ -36,10 +36,17 @@ type UnionCapabilityFragments<T extends readonly Record<string, BooleanCapabilit
           : unknown)
     : Record<string, never>;
 
-export function defineBundles<C extends Record<string, BooleanCapability>>(
-  capabilities: C,
-  bundles: Record<string, readonly (keyof C & string)[]>
-): EntitlementCatalog<C> {
+export function unknownCapabilities(
+  catalog: Record<string, unknown>,
+  requested: readonly string[]
+): string[] {
+  return requested.filter((capability) => !(capability in catalog));
+}
+
+export function assertBundlesNameKnownCapabilities(
+  capabilities: Record<string, BooleanCapability>,
+  bundles: Record<string, readonly string[]>
+): void {
   for (const [bundleName, keys] of Object.entries(bundles)) {
     for (const key of keys) {
       if (!(key in capabilities)) {
@@ -47,6 +54,13 @@ export function defineBundles<C extends Record<string, BooleanCapability>>(
       }
     }
   }
+}
+
+export function defineBundles<C extends Record<string, BooleanCapability>>(
+  capabilities: C,
+  bundles: Record<string, readonly (keyof C & string)[]>
+): EntitlementCatalog<C> {
+  assertBundlesNameKnownCapabilities(capabilities, bundles);
   return { capabilities, bundles };
 }
 

@@ -1,4 +1,8 @@
-import type { EntitlementCatalog } from "./billing.entitlements";
+import {
+  assertBundlesNameKnownCapabilities,
+  composeCapabilities,
+  type EntitlementCatalog,
+} from "./billing.entitlements";
 import type {
   ResolvedStripePlans,
   StripePlan,
@@ -10,6 +14,11 @@ export const getEnvironmentPlans = (
   plansConfig: StripePlansConfig,
   environment = "sandbox"
 ): ResolvedStripePlans => {
+  assertEntitlementCatalog({
+    production: plansConfig.production,
+    sandbox: plansConfig.sandbox,
+    entitlements: plansConfig.entitlements,
+  });
   const isProduction = environment === "production";
   const plans = isProduction ? plansConfig.production : plansConfig.sandbox;
   return {
@@ -21,29 +30,36 @@ export const getEnvironmentPlans = (
     seatBilling: plansConfig.seatBilling ?? false,
     nonBillableRoleKeys: plansConfig.nonBillableRoleKeys ?? [],
     entitlements: plansConfig.entitlements,
+    productionPlans: plansConfig.production,
+    sandboxPlans: plansConfig.sandbox,
   };
 };
 
 export function assertEntitlementCatalog({
   plans,
+  production,
+  sandbox,
   entitlements,
 }: {
-  plans: readonly StripePlan[];
+  plans?: readonly StripePlan[];
+  production?: readonly StripePlan[];
+  sandbox?: readonly StripePlan[];
   entitlements?: EntitlementCatalog;
 }): void {
-  const bundles = entitlements?.bundles ?? {};
-  const capabilities = entitlements?.capabilities ?? {};
-  for (const [bundleName, keys] of Object.entries(bundles)) {
-    for (const key of keys) {
-      if (!(key in capabilities)) {
-        throw new Error(`Bundle ${bundleName} names unknown Capability ${key}`);
-      }
-    }
+  if (entitlements) {
+    composeCapabilities(entitlements.capabilities);
+    assertBundlesNameKnownCapabilities(entitlements.capabilities, entitlements.bundles);
   }
-  for (const plan of plans) {
-    for (const bundleName of plan.bundles ?? []) {
-      if (!(bundleName in bundles)) {
-        throw new Error(`Plan ${plan.name} names unknown Bundle ${bundleName}`);
+  const bundles = entitlements?.bundles ?? {};
+  const planLists = [plans, production, sandbox].filter(
+    (list): list is readonly StripePlan[] => list != null
+  );
+  for (const list of planLists) {
+    for (const plan of list) {
+      for (const bundleName of plan.bundles ?? []) {
+        if (!(bundleName in bundles)) {
+          throw new Error(`Plan ${plan.name} names unknown Bundle ${bundleName}`);
+        }
       }
     }
   }

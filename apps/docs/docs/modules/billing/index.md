@@ -150,9 +150,11 @@ const plansConfig: StripePlansConfig = {
 };
 ```
 
-Duplicate Capability keys and unknown Bundle names fail boot. An omitted
-`bundles` list contributes nothing. A second brand is a Plan switch, not a
-second Subscription: one row per Organization per environment stays unique.
+Duplicate Capability keys fail when `composeCapabilities` runs (typically while
+the catalog module loads). Unknown Bundle names on **production or sandbox**
+Plans fail in `getEnvironmentPlans` and again when `BillingModule` constructs.
+An omitted `bundles` list contributes nothing. A second brand is a Plan switch,
+not a second Subscription: one row per Organization per environment stays unique.
 
 ### Procedure chain
 
@@ -188,26 +190,24 @@ that allows the full catalog.
 ### Snapshot and gate
 
 Members load one Organization-scoped snapshot from `billing.getEntitlements`.
-Query identity includes Organization id. Compose `EntitlementProvider` in
-`Providers.tsx` (inside `BillingPaywallProvider` children). `EntitlementGate`
+Query identity includes Organization id. `BillingPaywallProvider` wraps
+`EntitlementProvider` around its children, including when `skipPlanCheck` skips
+paywall chrome, so compose that wrap in `Providers.tsx`. `EntitlementGate`
 renders pending, error, denied, or allowed. A failed snapshot is error, not
 denied. The frontend snapshot is not authoritative; the server check is.
 
 ```tsx
-import { EntitlementProvider } from "@m5kdev/frontend/modules/billing/components/EntitlementProvider";
 import { EntitlementGate } from "@m5kdev/web-ui/modules/billing/components/EntitlementGate";
 
 <BillingPaywallProvider planPage={<BillingPlanSelect plans={plans} />} skipPlanCheck={false}>
-  <EntitlementProvider>
-    <EntitlementGate
-      capabilities={["apps.typeorb"]}
-      pending={<Spinner />}
-      error={<ErrorState />}
-      denied={<UpgradePrompt />}
-    >
-      <TypeOrbApp />
-    </EntitlementGate>
-  </EntitlementProvider>
+  <EntitlementGate
+    capabilities={["apps.typeorb"]}
+    pending={<Spinner />}
+    error={<ErrorState />}
+    denied={<UpgradePrompt />}
+  >
+    <TypeOrbApp />
+  </EntitlementGate>
 </BillingPaywallProvider>
 ```
 

@@ -1,3 +1,4 @@
+import { unknownCapabilities } from "@m5kdev/commons/modules/billing/billing.entitlements";
 import { useEntitlements } from "@m5kdev/frontend/modules/billing/hooks/useEntitlements";
 import type { ReactNode } from "react";
 
@@ -21,7 +22,7 @@ export function EntitlementGate({
   if (isError) return error ?? null;
   if (isPending || !snapshot) return pending ?? null;
 
-  const unknown = capabilities.filter((capability) => !(capability in snapshot.capabilities));
+  const unknown = unknownCapabilities(snapshot.capabilities, capabilities);
   if (unknown.length > 0) return error ?? null;
 
   const allowed = capabilities.every(

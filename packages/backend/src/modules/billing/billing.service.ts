@@ -1,3 +1,4 @@
+import { unknownCapabilities } from "@m5kdev/commons/modules/billing/billing.entitlements";
 import {
   type ActiveSubscription,
   applyAdminCouponInputSchema,
@@ -249,7 +250,7 @@ export class BillingService extends BasePermissionService<
     actor: AuthenticatedActor,
     capability: string
   ): ServerResultAsync<EntitlementDecision> {
-    const snapshot = await this.snapshot(actor);
+    const snapshot = await this.deriveEntitlements(actor);
     if (snapshot.isErr()) return err(snapshot.error);
     const decision = snapshot.value.capabilities[capability];
     if (!decision) {
@@ -264,11 +265,9 @@ export class BillingService extends BasePermissionService<
     actor: AuthenticatedActor,
     capabilities: readonly string[]
   ): ServerResultAsync<true> {
-    const snapshot = await this.snapshot(actor);
+    const snapshot = await this.deriveEntitlements(actor);
     if (snapshot.isErr()) return err(snapshot.error);
-    const unknown = capabilities.filter(
-      (capability) => !(capability in snapshot.value.capabilities)
-    );
+    const unknown = unknownCapabilities(snapshot.value.capabilities, capabilities);
     if (unknown.length > 0) {
       return this.error("BAD_REQUEST", `Unknown Capability ${unknown[0]}`, {
         context: { kind: "entitlement", capabilities: unknown },
@@ -284,7 +283,17 @@ export class BillingService extends BasePermissionService<
     });
   }
 
-  async snapshot(actor: AuthenticatedActor): ServerResultAsync<EntitlementSnapshot> {
+  async snapshot(ctx: OrganizationContext): ServerResultAsync<EntitlementSnapshot> {
+    const organizationId = ctx.actor.organizationId;
+    if (!organizationId) return this.error("FORBIDDEN", "Organization is required");
+    const readGuard = this.accessGuard(ctx.actor, "read", { organizationId });
+    if (readGuard.isErr()) return err(readGuard.error);
+    return this.deriveEntitlements(ctx.actor);
+  }
+
+  private async deriveEntitlements(
+    actor: AuthenticatedActor
+  ): ServerResultAsync<EntitlementSnapshot> {
     const organizationId = actor.organizationId;
     if (!organizationId) return this.error("FORBIDDEN", "Organization is required");
 

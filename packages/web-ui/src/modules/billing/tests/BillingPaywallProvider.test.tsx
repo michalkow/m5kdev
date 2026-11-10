@@ -30,6 +30,16 @@ jest.mock(
   { virtual: true }
 );
 
+jest.mock(
+  "@m5kdev/frontend/modules/billing/components/EntitlementProvider",
+  () => ({
+    EntitlementProvider: ({ children }: { children: ReactNode }) => (
+      <div data-entitlement-provider="true">{children}</div>
+    ),
+  }),
+  { virtual: true }
+);
+
 jest.mock("@m5kdev/frontend/modules/auth/hooks/useSession", () => ({
   useSession: jest.fn(),
 }));
@@ -178,6 +188,18 @@ describe("BillingPaywallProvider", () => {
     expect(markup).not.toContain("Plan page");
     expect(markup).not.toContain("Unpaid Co");
     expect(markup).not.toContain("/admin");
+  });
+
+  it("still wraps children in EntitlementProvider when skipPlanCheck is set", () => {
+    const markup = renderPaywall({ skipPlanCheck: true });
+    expect(markup).toContain("data-entitlement-provider");
+    expect(markup).toContain("App shell");
+  });
+
+  it("does not mount EntitlementProvider on the unpaid Plan page", () => {
+    const markup = renderPaywall();
+    expect(markup).not.toContain("data-entitlement-provider");
+    expect(markup).toContain("Plan page");
   });
 
   it("renders children without Plan-page chrome when BillingProvider would show the app", () => {

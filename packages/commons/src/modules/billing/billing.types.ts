@@ -50,4 +50,7 @@ export type ResolvedStripePlans = {
   seatBilling: boolean;
   nonBillableRoleKeys: readonly string[];
   entitlements?: EntitlementCatalog;
+  /** Full catalog Plan lists; Billing boot-validates both even when `plans` is the current environment. */
+  productionPlans?: readonly StripePlan[];
+  sandboxPlans?: readonly StripePlan[];
 };

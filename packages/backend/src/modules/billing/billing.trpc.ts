@@ -30,7 +30,7 @@ export function createBillingTRPC(
     getEntitlements: organizationProcedure
       .output(entitlementSnapshotSchema)
       .query(async ({ ctx }) => {
-        return handleTRPCResult(await billingService.snapshot(ctx.actor));
+        return handleTRPCResult(await billingService.snapshot(ctx));
       }),
 
     getTrialPriceId: organizationProcedure.output(z.string().nullable()).query(async ({ ctx }) => {

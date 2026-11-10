@@ -116,7 +116,12 @@ export class BillingRepository extends BaseTableRepository<
     this.seatBilling = config.seatBilling;
     this.nonBillableRoleKeys = config.nonBillableRoleKeys;
     this.entitlements = config.entitlements;
-    assertEntitlementCatalog({ plans: this.plans, entitlements: this.entitlements });
+    assertEntitlementCatalog({
+      plans: this.plans,
+      production: config.productionPlans,
+      sandbox: config.sandboxPlans,
+      entitlements: this.entitlements,
+    });
     if (!this.defaultCurrency) {
       throw new Error("Billing catalog requires defaultCurrency");
     }

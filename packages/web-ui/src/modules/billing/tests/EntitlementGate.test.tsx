@@ -95,10 +95,13 @@ describe("EntitlementGate", () => {
   it("does not treat skipPlanCheck as every Capability allowed", () => {
     stubEntitlements({ snapshot: snapshot() });
     const markup = renderToStaticMarkup(
-      <EntitlementGate capabilities={["apps.knowledge"]} denied={<div>Denied</div>}>
-        <div>Allowed despite skipPlanCheck</div>
-      </EntitlementGate>
+      <div data-skip-plan-check="true">
+        <EntitlementGate capabilities={["apps.knowledge"]} denied={<div>Denied</div>}>
+          <div>Allowed despite skipPlanCheck</div>
+        </EntitlementGate>
+      </div>
     );
+    expect(markup).toContain("data-skip-plan-check");
     expect(markup).toContain("Denied");
     expect(markup).not.toContain("Allowed despite skipPlanCheck");
   });
