@@ -989,6 +989,30 @@ describe("scaffoldProject", () => {
     expect(glossary).not.toContain("m5k:");
   });
 
+  it.each([
+    ["3D Studio", "3d-studio"],
+    ["X", "x"],
+  ])("writes an APP_SLUG the Kernel accepts for %s", async (appName, slug) => {
+    const result = await scaffoldProject({
+      targetDirectory: slug,
+      appName,
+      appDescription: "Slug fixture.",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+    const localEnv = await fs.readFile(
+      path.join(result.targetDirectory, "apps/shared/.env"),
+      "utf8"
+    );
+    const appSlug = localEnv.match(/^APP_SLUG=(.*)$/m)?.[1];
+    expect(appSlug).toBe(slug);
+    // Same pattern as APP_SLUG_PATTERN in packages/backend/src/base/environment.ts,
+    // which `createBackendApp` enforces at boot. The CLI cannot import the Kernel.
+    expect(appSlug).toMatch(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/);
+  });
+
   it("configures the Deployment environment and fails closed outside local", async () => {
     const result = await scaffoldProject({
       targetDirectory: "environment-config",

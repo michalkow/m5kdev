@@ -207,6 +207,44 @@ const HEALTH_CHECK_BLOCK = `
  * region and machines) plus the /healthz check; Development comes from the
  * template. `fly.toml` is left for the maintainer to delete.
  */
+/**
+ * The Kernel requires `APP_ENV` and `APP_SLUG` at boot, but local env files are
+ * `ignore` on update. Append only the keys a file lacks; never change a value.
+ */
+async function planDeploymentEnvironmentKeys(options: {
+  repoRoot: string;
+  state: ManagedState;
+  changes: ChangeSet;
+}): Promise<void> {
+  if (!hasProductStack(options.state.template.features)) return;
+  const files: { path: string; environment: string }[] = [
+    { path: "apps/shared/.env", environment: "local" },
+    { path: "apps/shared/.env.production", environment: "production" },
+  ];
+  for (const file of files) {
+    const plannedChange = options.changes.changes.get(file.path);
+    const planned = plannedChange?.content?.toString("utf8");
+    const current =
+      planned ??
+      (await fs.readFile(path.join(options.repoRoot, file.path), "utf8").catch(() => undefined));
+    if (current === undefined) continue;
+    const wanted: [string, string][] = [
+      ["APP_ENV", file.environment],
+      ["APP_SLUG", options.state.template.context.appSlug],
+    ];
+    const missing = wanted.filter(([key]) => !new RegExp(`^${key}=`, "m").test(current));
+    if (missing.length === 0) continue;
+    const lines = missing.map(([key, value]) => `${key}=${value}`).join("\n");
+    const separator = current.length === 0 || current.endsWith("\n") ? "" : "\n";
+    options.changes.addChange({
+      kind: plannedChange?.kind === "add" ? "add" : "modify",
+      path: file.path,
+      content: Buffer.from(`${current}${separator}${lines}\n`),
+      reason: `Add ${missing.map(([key]) => key).join(" and ")} (required by the Kernel at boot)`,
+    });
+  }
+}
+
 async function planPerEnvironmentFlyFiles(options: {
   repoRoot: string;
   templateRoot: string;
@@ -362,6 +400,11 @@ export async function updateManagedRepo(options: UpdateCommandOptions): Promise<
       changes: reconciliation.changes,
     });
   }
+  await planDeploymentEnvironmentKeys({
+    repoRoot: options.repoRoot,
+    state: upgradedState,
+    changes: reconciliation.changes,
+  });
   await planPerEnvironmentFlyFiles({
     repoRoot: options.repoRoot,
     templateRoot,

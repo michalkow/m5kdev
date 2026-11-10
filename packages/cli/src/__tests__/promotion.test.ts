@@ -65,16 +65,21 @@ describe("Promotion PRs", () => {
 
   it("accepts a PR into production only from main", () => {
     expect(workflows["promotion.yml"]?.on.pull_request?.branches).toEqual(["production"]);
-    const check = (head: string) =>
+    const check = (head: string, headRepo = "acme/promotion-app") =>
       runScript(tempRoot, promotionScript(), {
         GITHUB_BASE_REF: "production",
         GITHUB_HEAD_REF: head,
+        GITHUB_REPOSITORY: "acme/promotion-app",
+        HEAD_REPO: headRepo,
       });
 
     expect(check("main").status).toBe(0);
     const feature = check("feature/login");
     expect(feature.status).not.toBe(0);
     expect(feature.stderr).toContain("main");
+    const fork = check("main", "someone/promotion-app");
+    expect(fork.status).not.toBe(0);
+    expect(fork.stderr).toContain("fork");
   });
 
   describe("tree check before deploying a release branch", () => {

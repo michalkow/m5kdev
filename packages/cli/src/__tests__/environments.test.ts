@@ -122,7 +122,13 @@ describe("optional Deployment environments", () => {
       ).run;
       const accepts = (base: string, head: string) =>
         spawnSync("bash", ["-e", "-c", script], {
-          env: { ...process.env, GITHUB_BASE_REF: base, GITHUB_HEAD_REF: head },
+          env: {
+            ...process.env,
+            GITHUB_BASE_REF: base,
+            GITHUB_HEAD_REF: head,
+            GITHUB_REPOSITORY: "acme/chain-app",
+            HEAD_REPO: "acme/chain-app",
+          },
         }).status === 0;
 
       for (let index = 1; index < branches.length; index += 1) {
@@ -260,6 +266,43 @@ primary_region = "fra"
       expect(result.changes.map((change) => change.path)).toContain(
         "apps/shared/fly.development.toml"
       );
+    });
+
+    it("adds the missing APP_ENV and APP_SLUG to local env files and keeps other values", async () => {
+      const app = await legacyApp(legacyFlyToml);
+      const envPath = path.join(app.shared, ".env");
+      const productionPath = path.join(app.shared, ".env.production");
+      const legacyEnv = (await fs.readFile(envPath, "utf8"))
+        .replace(/^APP_ENV=.*\n/m, "")
+        .replace(/^APP_SLUG=.*\n/m, "")
+        .replace(/^DATABASE_SCHEMA=.*$/m, "DATABASE_SCHEMA=custom");
+      await fs.writeFile(envPath, legacyEnv);
+      const legacyProduction = "APP_SLUG=kept-slug\nVITE_APP_URL=https://legacy.example\n";
+      await fs.writeFile(productionPath, legacyProduction);
+
+      const result = await update(app.root);
+
+      expect(result.conflicts).toEqual([]);
+      const env = await fs.readFile(envPath, "utf8");
+      expect(env.startsWith(legacyEnv)).toBe(true);
+      expect(env).toMatch(/^APP_ENV=local$/m);
+      expect(env).toMatch(/^APP_SLUG=legacy-desk$/m);
+      expect(env).toMatch(/^DATABASE_SCHEMA=custom$/m);
+      const production = await fs.readFile(productionPath, "utf8");
+      expect(production.startsWith(legacyProduction)).toBe(true);
+      expect(production).toMatch(/^APP_ENV=production$/m);
+      expect(production.match(/^APP_SLUG=/gm)).toEqual(["APP_SLUG="]);
+      expect(production).toMatch(/^APP_SLUG=kept-slug$/m);
+
+      const second = await update(app.root);
+      expect(second.changes.map((change) => change.path)).not.toEqual(
+        expect.arrayContaining(["apps/shared/.env"])
+      );
+      expect(second.changes.map((change) => change.path)).not.toEqual(
+        expect.arrayContaining(["apps/shared/.env.production"])
+      );
+      expect(await fs.readFile(envPath, "utf8")).toBe(env);
+      expect(await fs.readFile(productionPath, "utf8")).toBe(production);
     });
 
     it("does not add a second /healthz check when fly.toml already has one", async () => {

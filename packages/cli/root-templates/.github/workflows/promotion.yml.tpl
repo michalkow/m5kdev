@@ -22,7 +22,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Require the expected source branch
+        env:
+          # A branch name alone is not enough: a fork can name its branch `main`.
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
         run: |
+          if [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "Promotion PRs must come from a branch of $GITHUB_REPOSITORY, not from a fork ($HEAD_REPO)." >&2
+            exit 1
+          fi
           # Promotion chain: each branch is promoted from the one before it.
           chain="main"
           # m5k:env-staging:start

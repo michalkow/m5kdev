@@ -21,7 +21,11 @@ export interface AppEnvironment {
   readonly slug: string;
 }
 
-const APP_SLUG_PATTERN = /^[a-z][a-z0-9-]*[a-z0-9]$/;
+/**
+ * Lowercase letters and digits, dashes only between them. Matches what
+ * `create-m5kdev` derives from an app name (for example `3d-studio` or `x`).
+ */
+const APP_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 function isDeploymentEnvironment(value: string): value is DeploymentEnvironment {
   return (DEPLOYMENT_ENVIRONMENTS as readonly string[]).includes(value);
@@ -44,7 +48,7 @@ export function parseAppEnvironment(env: EnvSource = process.env): AppEnvironmen
   const slug = env.APP_SLUG?.trim();
   if (!slug || !APP_SLUG_PATTERN.test(slug)) {
     throw new Error(
-      "APP_SLUG must be a lowercase slug (letters, digits, and dashes, starting with a letter)"
+      "APP_SLUG must be a lowercase slug (letters, digits, and dashes, not starting or ending with a dash)"
     );
   }
   return { environment, slug };
