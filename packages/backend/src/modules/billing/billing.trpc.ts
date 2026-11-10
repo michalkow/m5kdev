@@ -6,6 +6,7 @@ import {
   billingCouponListOutputSchema,
   cancelAdminSubscriptionInputSchema,
   createAdminSubscriptionInputSchema,
+  entitlementSnapshotSchema,
   organizationIdInputSchema,
   setAdminAllowCardlessTrialInputSchema,
   setAdminBillingExemptInputSchema,
@@ -24,6 +25,12 @@ export function createBillingTRPC(
       .output(activeSubscriptionSchema.nullable())
       .query(async ({ ctx }) => {
         return handleTRPCResult(await billingService.getActiveSubscription(ctx));
+      }),
+
+    getEntitlements: organizationProcedure
+      .output(entitlementSnapshotSchema)
+      .query(async ({ ctx }) => {
+        return handleTRPCResult(await billingService.snapshot(ctx.actor));
       }),
 
     getTrialPriceId: organizationProcedure.output(z.string().nullable()).query(async ({ ctx }) => {

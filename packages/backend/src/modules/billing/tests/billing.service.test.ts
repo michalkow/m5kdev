@@ -13,17 +13,20 @@ import type {
 } from "@m5kdev/commons/modules/billing/billing.types";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
+import { ok } from "neverthrow";
 import type { Pool } from "pg";
 import type { FunctionComponent } from "react";
 import type Stripe from "stripe";
 import { createBackendApp } from "../../../app";
 import { createServiceActor } from "../../../base/base.actor";
+import type { ResourceGrant } from "../../../base/base.grants";
 import { createTestPool, prepareTestSchema } from "../../../test/postgresql";
 import * as authTables from "../../auth/auth.db";
 import { EmailModule } from "../../email/email.module";
 import type { EmailTemplates } from "../../email/email.service";
 import * as billingTables from "../billing.db";
 import { BillingModule } from "../billing.module";
+import { BillingPermissionService } from "../billing.permission-service";
 import type { BillingService } from "../billing.service";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
@@ -3590,4 +3593,118 @@ describe("BillingService Organization Entitlements", () => {
       capabilities: ["not.a.capability"],
     });
   });
+
+  it("denies Entitlements on the Procedure chain before Grants run", async () => {
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+    const service = createPublishService(billing, memberWriteAll);
+
+    const denied = await service.publish(undefined, memberCtx());
+    expect(denied.isErr()).toBe(true);
+    if (denied.isOk()) throw new Error("expected denial");
+    expect(denied.error.code).toBe("FORBIDDEN");
+    expect(denied.error.context).toEqual({
+      kind: "entitlement",
+      capabilities: ["typeorb.publish"],
+      reason: "no_subscription",
+    });
+  });
+
+  it("still requires the resource Grant when the Organization is Entitled", async () => {
+    await insertOrgSubscription(client, {
+      id: "sub_entitled_grant",
+      environment: "production",
+      stripeCustomerId: CUSTOMER_ID,
+      stripeSubscriptionId: "sub_live",
+      status: "active",
+    });
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+    const service = createPublishService(billing, ownerWriteAll);
+
+    const denied = await service.publish(undefined, memberCtx());
+    expect(denied.isErr()).toBe(true);
+    if (denied.isOk()) throw new Error("expected grant denial");
+    expect(denied.error.code).toBe("FORBIDDEN");
+    expect(denied.error.context).not.toMatchObject({ kind: "entitlement" });
+  });
+
+  it("allows an Entitled Member who also has the resource Grant", async () => {
+    await insertOrgSubscription(client, {
+      id: "sub_entitled_ok",
+      environment: "production",
+      stripeCustomerId: CUSTOMER_ID,
+      stripeSubscriptionId: "sub_live",
+      status: "active",
+    });
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+    const service = createPublishService(billing, memberWriteAll);
+
+    const allowed = await service.publish(undefined, memberCtx());
+    expect(allowed.isOk()).toBe(true);
+    if (allowed.isErr()) throw new Error("expected allow");
+    expect(allowed.value).toEqual({ published: true });
+  });
+
+  it("fails without OrganizationActor the same way other auth steps do", async () => {
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+    const service = createPublishService(billing, memberWriteAll);
+
+    const denied = await service.publish(undefined, {
+      actor: createServiceActor({ userId: USER_ID, userRole: "user" }),
+      user: { id: USER_ID, email: USER_EMAIL, name: "Pat" },
+      session: { id: "sess", userId: USER_ID },
+    } as never);
+    expect(denied.isErr()).toBe(true);
+    if (denied.isOk()) throw new Error("expected auth failure");
+    expect(denied.error.code).toBe("BAD_REQUEST");
+  });
 });
+
+const memberWriteAll: ResourceGrant[] = [
+  { action: "write", level: "organization", role: "member", access: "all" },
+];
+const ownerWriteAll: ResourceGrant[] = [
+  { action: "write", level: "organization", role: "owner", access: "all" },
+];
+
+function createPublishService(billing: BillingService, grants: ResourceGrant[]) {
+  class PublishService extends BillingPermissionService<
+    Record<string, never>,
+    { billing: BillingService }
+  > {
+    constructor() {
+      super({} as Record<string, never>, { billing }, grants);
+    }
+
+    readonly publish = this.procedure("publish")
+      .requireAuth("organization")
+      .requireEntitlements(["typeorb.publish"])
+      .access({ action: "write" })
+      .handle(() => ok({ published: true }));
+  }
+
+  return new PublishService();
+}
