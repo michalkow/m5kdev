@@ -119,12 +119,14 @@ export class WorkflowService extends Base {
     for (const queueName of Object.keys(config.queues)) {
       const queue = new Queue(queueName, {
         connection: this.connection.duplicate(),
+        prefix: config.prefix,
         telemetry: this.telemetry,
       });
       this.queues.set(queueName, queue);
 
       const events = new QueueEvents(queueName, {
         connection: this.connection.duplicate(),
+        prefix: config.prefix,
       });
       this.attachLifecycleListeners(events, queueName);
       this.queueEvents.set(queueName, events);
@@ -323,6 +325,7 @@ export class WorkflowService extends Base {
       ...queueConfig.defaultWorkerOptions,
       ...overrides,
       connection: this.connection.duplicate(),
+      prefix: this.config.prefix,
       concurrency: overrides?.concurrency ?? queueConfig.concurrency,
       telemetry: this.telemetry,
     };

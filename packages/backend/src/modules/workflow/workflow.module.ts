@@ -18,9 +18,15 @@ import type { WorkflowServiceConfig } from "./workflow.types";
 
 export type WorkflowModuleConfig<Namespace extends string = string> = Omit<
   WorkflowServiceConfig,
-  "connection"
+  "connection" | "prefix"
 > & {
+  /** tRPC router namespace. Defaults to `workflow`. */
   namespace?: Namespace;
+  /**
+   * Environment namespace (BullMQ `prefix`). Defaults to `<APP_SLUG>-<APP_ENV>`;
+   * override only to keep a legacy prefix during a migration.
+   */
+  prefix?: string;
   /**
    * Express mount path for Bull Board. Defaults to `/admin/queues`.
    * Pass `null` to skip mounting the board.
@@ -68,16 +74,18 @@ export class WorkflowModule<const Namespace extends string = "workflow"> extends
   override services({
     repositories,
     infra,
+    appConfig,
   }: ModuleServicesContext<WorkflowModuleDeps, WorkflowModuleRepositories>) {
     if (!infra.redis) {
       throw new Error(`Workflow module "${this.id}" requires Redis in createBackendApp(...)`);
     }
 
-    const { namespace: _namespace, boardPath: _boardPath, ...serviceConfig } = this.config;
+    const { namespace: _namespace, boardPath: _boardPath, prefix, ...serviceConfig } = this.config;
 
     return {
       workflow: new WorkflowService(repositories.workflow, {
         ...serviceConfig,
+        prefix: prefix ?? `${appConfig.slug}-${appConfig.environment}`,
         connection: infra.redis.duplicate(),
       }),
     };

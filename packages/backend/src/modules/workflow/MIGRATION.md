@@ -51,6 +51,8 @@ export const workflowRepository = new WorkflowRepository({ orm, schema });
 import { WorkflowService } from "@m5kdev/backend/modules/workflow/workflow.service";
 export const workflowService = new WorkflowService(workflowRepository, {
   connection: { host: "localhost", port: 6379 },
+  // Environment namespace: BullMQ prefix `<APP_SLUG>-<APP_ENV>` (WorkflowModule sets it for you).
+  prefix: "my-app-production",
   queues: {
     fast: { concurrency: 10 },
     slow: { concurrency: 2 },

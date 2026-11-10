@@ -24,6 +24,12 @@ export interface WorkflowQueueConfig {
 
 export interface WorkflowServiceConfig {
   connection: IORedis;
+  /**
+   * Environment namespace: the BullMQ `prefix` on every queue, queue-events
+   * listener and worker, so Deployment environments sharing one Redis never take
+   * each other's jobs. `WorkflowModule` defaults it to `<APP_SLUG>-<APP_ENV>`.
+   */
+  prefix: string;
   queues: Record<string, WorkflowQueueConfig>;
   defaultQueue: string;
   defaults?: {
