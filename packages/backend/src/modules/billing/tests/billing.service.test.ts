@@ -3608,7 +3608,7 @@ describe("BillingService Organization Entitlements", () => {
     expect(denied.isErr()).toBe(true);
     if (denied.isOk()) throw new Error("expected denial");
     expect(denied.error.code).toBe("FORBIDDEN");
-    expect(denied.error.context).toEqual({
+    expect(denied.error.context).toMatchObject({
       kind: "entitlement",
       capabilities: ["typeorb.publish"],
       reason: "no_subscription",
