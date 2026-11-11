@@ -1,0 +1,26 @@
+_metadata:
+  major_version: 2
+  minor_version: 1
+display_information:
+  name: m5kdev Releases
+  description: Posts GitHub Actions release notifications into a Slack channel.
+  background_color: "#111827"
+features:
+  bot_user:
+    display_name: m5kdev Releases
+    always_online: true
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: false
+    messages_tab_read_only_enabled: true
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - chat:write.public
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
+  incoming_webhooks:
+    incoming_webhooks_enabled: false
