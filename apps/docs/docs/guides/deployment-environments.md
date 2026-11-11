@@ -8,6 +8,9 @@ Production always exist; choose Staging, Canary, or both with
 (migrations run in GitHub Actions), ADR-0036 (each environment builds from its
 branch), and ADR-0037 (Canary workers without schedulers).
 
+Upgrading an app created before 0.44.0? Follow the
+[Deployment environments migration](./v0.44.0-deployment-environments-migration.md).
+
 A scaffolded m5kdev app runs in these Deployment environments. Each one
 follows a Git branch, and GitHub Actions deploys it when a pull request merges into that
 branch.
