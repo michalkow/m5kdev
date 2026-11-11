@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -605,6 +606,9 @@ describe("scaffoldProject", () => {
     expect(appTs).toContain("DemoWorkflowModule");
     expect(appTs).toContain('defaultQueue: "workflow-desk-main"');
     expect(appTs).toContain('"workflow-desk-main": { concurrency: 5 }');
+    // The Kernel turns schedulers off where the environment shares another's
+    // database (Canary); the app does not set it by hand.
+    expect(appTs).not.toContain("schedulers:");
     expect(appTs).toContain("redis:");
     expect(appTs).not.toContain("m5k:");
 
@@ -927,6 +931,290 @@ describe("scaffoldProject", () => {
     }
   );
 
+  it("ships PostgreSQL module guides and one agent migration policy", async () => {
+    const result = await scaffoldProject({
+      targetDirectory: "migration-policy",
+      appName: "Migration Policy",
+      appDescription: "Agent migration policy fixture.",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+    const read = (relative: string) =>
+      fs.readFile(path.join(result.targetDirectory, relative), "utf8");
+
+    for (const guide of ["module-db-guide.mdc", "module-repository-guide.mdc"]) {
+      const content = await read(`.cursor/rules/${guide}`);
+      expect(content).not.toMatch(/sqlite|libsql/i);
+    }
+    const dbGuide = await read(".cursor/rules/module-db-guide.mdc");
+    expect(dbGuide).toContain("drizzle-orm/pg-core");
+    expect(dbGuide).toContain("drizzle-postgresql/");
+    expect(dbGuide).not.toMatch(/`drizzle\/`/);
+    expect(await read(".cursor/rules/module-repository-guide.mdc")).toContain("NodePgDatabase");
+
+    const migrations = await read(".cursor/rules/database-migrations.mdc");
+    expect(migrations).toContain("drizzle:generate");
+    expect(migrations).toContain("--custom");
+    expect(migrations).toContain("migration-contract");
+    expect(migrations).toMatch(/currently in Production/);
+    expect(migrations).toMatch(/never regenerate/i);
+
+    const claude = await read("CLAUDE.md");
+    const agents = await read("AGENTS.md");
+    expect(claude).toContain(".cursor/rules/database-migrations.mdc");
+    expect(agents).toContain(".cursor/rules/database-migrations.mdc");
+    expect(claude).not.toMatch(/must not generate/i);
+    for (const doc of [claude, agents]) {
+      expect(doc).toContain("drizzle:generate");
+      expect(doc).toMatch(/never hand-write or edit migration SQL/i);
+    }
+  });
+
+  it("ships deployment environment vocabulary in the glossary", async () => {
+    const result = await scaffoldProject({
+      targetDirectory: "environment-glossary",
+      appName: "Environment Glossary",
+      appDescription: "Glossary fixture.",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+    const glossary = await fs.readFile(path.join(result.targetDirectory, "GLOSSARY.md"), "utf8");
+    expect(glossary).toContain("**Deployment environment**:");
+    expect(glossary).toContain("**Promotion PR**:");
+    expect(glossary).toContain("**Environment namespace**:");
+    expect(glossary).not.toContain("m5k:");
+  });
+
+  it.each([
+    ["3D Studio", "3d-studio"],
+    ["X", "x"],
+  ])("writes an APP_SLUG the Kernel accepts for %s", async (appName, slug) => {
+    const result = await scaffoldProject({
+      targetDirectory: slug,
+      appName,
+      appDescription: "Slug fixture.",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+    const localEnv = await fs.readFile(
+      path.join(result.targetDirectory, "apps/shared/.env"),
+      "utf8"
+    );
+    const appSlug = localEnv.match(/^APP_SLUG=(.*)$/m)?.[1];
+    expect(appSlug).toBe(slug);
+    // Same pattern as APP_SLUG_PATTERN in packages/backend/src/base/environment.ts,
+    // which `createBackendApp` enforces at boot. The CLI cannot import the Kernel.
+    expect(appSlug).toMatch(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/);
+  });
+
+  it("configures the Deployment environment and fails closed outside local", async () => {
+    const result = await scaffoldProject({
+      targetDirectory: "environment-config",
+      appName: "Environment Config",
+      appDescription: "Environment fixture.",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+    const read = (relative: string) =>
+      fs.readFile(path.join(result.targetDirectory, relative), "utf8");
+
+    const localEnv = await read("apps/shared/.env");
+    expect(localEnv).toMatch(/^APP_ENV=local$/m);
+    expect(localEnv).toMatch(/^APP_SLUG=environment-config$/m);
+    const example = await read("apps/shared/.env.example");
+    expect(example).toMatch(/^APP_ENV=local$/m);
+    expect(example).toMatch(/^APP_SLUG=environment-config$/m);
+    const productionExample = await read("apps/shared/.env.production.example");
+    expect(productionExample).toMatch(/^APP_ENV=production$/m);
+    expect(productionExample).toMatch(/^APP_SLUG=environment-config$/m);
+
+    const serverPackage = JSON.parse(await read("apps/server/package.json")) as {
+      scripts: Record<string, string>;
+    };
+    expect(serverPackage.scripts["drizzle:rebuild"]).toBe(
+      "tsx --env-file=../shared/.env db.ts rebuild"
+    );
+    expect(await read("CLAUDE.md")).toContain("drizzle:rebuild");
+
+    const appTs = await read("apps/server/src/app.ts");
+    expect(appTs).toContain("requireEnvValue");
+    expect(appTs).not.toContain("process.env.BETTER_AUTH_SECRET ??");
+    expect(appTs).not.toContain("NODE_ENV");
+  });
+
+  it("checks migrations in CI without secrets", async () => {
+    const scaffold = (targetDirectory: string, platform?: "landing") =>
+      scaffoldProject({
+        targetDirectory,
+        appName: "Migration Checks",
+        appDescription: "CI fixture.",
+        ...(platform ? { platform } : {}),
+        yes: true,
+        force: false,
+        skipInstall: true,
+        skipGit: true,
+      });
+    const web = await scaffold("migration-checks");
+    const workflowSource = await fs.readFile(
+      path.join(web.targetDirectory, ".github/workflows/check.yml"),
+      "utf8"
+    );
+    expect(workflowSource).not.toContain("secrets.");
+    expect(workflowSource).not.toContain("m5k:");
+    const workflow = parse(workflowSource) as {
+      jobs: { check: { steps: { run?: string; with?: Record<string, unknown> }[] } };
+    };
+    const steps = workflow.jobs.check.steps;
+    const runs = steps.map((step) => step.run ?? "").join("\n");
+    expect(steps.find((step) => step.with?.["fetch-depth"] === 0)).toBeTruthy();
+    expect(runs).toContain("pnpm test");
+    expect(runs).toContain("drizzle-kit check");
+    expect(runs).toContain("drizzle:generate");
+    expect(runs).toContain("m5kdev-migration-check --folder apps/server/drizzle-postgresql");
+
+    const rootPackage = JSON.parse(
+      await fs.readFile(path.join(web.targetDirectory, "package.json"), "utf8")
+    ) as { scripts: Record<string, string> };
+    expect(rootPackage.scripts.test).toBe("turbo run test");
+
+    const landing = await scaffold("migration-checks-landing", "landing");
+    const landingWorkflow = await fs.readFile(
+      path.join(landing.targetDirectory, ".github/workflows/check.yml"),
+      "utf8"
+    );
+    expect(landingWorkflow).not.toContain("drizzle");
+    expect(landingWorkflow).not.toContain("m5k:");
+  });
+
+  it("deploys Development from main and Production from production after migrating", async () => {
+    const result = await scaffoldProject({
+      targetDirectory: "branch-deploys",
+      appName: "Branch Deploys",
+      appDescription: "Deployment environment fixture.",
+      yes: true,
+      force: false,
+      skipInstall: true,
+      skipGit: true,
+    });
+    const read = (relative: string) =>
+      fs.readFile(path.join(result.targetDirectory, relative), "utf8");
+
+    for (const environment of ["development", "production"]) {
+      const fly = await read(`apps/shared/fly.${environment}.toml`);
+      expect(fly).toContain(`app = "branch-deploys-${environment}"`);
+      expect(fly).toContain('path = "/healthz"');
+      expect(fly).not.toContain("release_command");
+      expect(fly).not.toContain("{{");
+      const example = await read(`apps/shared/.env.${environment}.example`);
+      expect(example).toMatch(new RegExp(`^APP_ENV=${environment}$`, "m"));
+      expect(example).toContain("DATABASE_DIRECT_URL=");
+    }
+    expect(await read("apps/shared/Dockerfile")).not.toMatch(/migrate/i);
+
+    const source = await read(".github/workflows/deploy-app.yml");
+    expect(source).not.toContain("m5k:");
+    const workflow = parse(source) as {
+      on: { push: { branches: string[] } };
+      concurrency: { group: string; "cancel-in-progress": boolean };
+      jobs: Record<
+        string,
+        {
+          needs?: string | string[];
+          environment?: string;
+          steps: { run?: string; env?: Record<string, string> }[];
+        }
+      >;
+    };
+    expect(workflow.on.push.branches).toEqual(["main", "production"]);
+    expect(workflow.concurrency["cancel-in-progress"]).toBe(false);
+    expect(workflow.concurrency.group).toContain("github.ref_name");
+    const resolve = workflow.jobs.resolve?.steps.map((step) => step.run ?? "").join("\n") ?? "";
+    // Default chain: main (Development) → production. Behaviour is exercised in promotion.test.ts.
+    expect(resolve).toContain('chain="main"');
+    expect(resolve).toContain('chain="$chain production"');
+    expect(resolve).not.toMatch(/staging|canary/);
+    const { migrate, deploy } = workflow.jobs;
+    expect(migrate?.needs).toEqual("resolve");
+    expect(migrate?.environment).toBe("${{ needs.resolve.outputs.environment }}");
+    expect(deploy?.needs).toEqual(["resolve", "migrate"]);
+    expect(deploy?.environment).toBe("${{ needs.resolve.outputs.environment }}");
+    const migrateStep = migrate?.steps.find((step) => step.run?.includes("db.ts migrate"));
+    expect(migrateStep?.env).toEqual({
+      DATABASE_DIRECT_URL: "${{ secrets.DATABASE_DIRECT_URL }}",
+    });
+    const deployRuns = deploy?.steps.map((step) => step.run ?? "").join("\n") ?? "";
+    expect(deployRuns).toContain('pnpm "app:secrets:$ENVIRONMENT"');
+    expect(deployRuns).toContain('pnpm "app:deploy:$ENVIRONMENT"');
+    expect(source).toContain("secrets.APP_ENV_FILE");
+    expect(source).not.toContain("APP_ENV_PRODUCTION");
+  });
+
+  it("ships a deployment guide and an environments agent doc that match the workflows", async () => {
+    const scaffold = (targetDirectory: string, platform?: "landing") =>
+      scaffoldProject({
+        targetDirectory,
+        appName: "Guide Desk",
+        appDescription: "Deployment guide fixture.",
+        ...(platform ? { platform } : {}),
+        yes: true,
+        force: false,
+        skipInstall: true,
+        skipGit: true,
+      });
+    const web = await scaffold("guide-desk");
+    const read = (relative: string) =>
+      fs.readFile(path.join(web.targetDirectory, relative), "utf8");
+
+    const guide = await read("docs/deployment.md");
+    const agentDoc = await read("docs/agents/environments.md");
+    for (const doc of [guide, agentDoc]) {
+      expect(doc).not.toContain("{{");
+      expect(doc).not.toContain("m5k:");
+    }
+    expect(guide).toContain("guide-desk-development");
+    expect(guide).toContain("guide-desk-production");
+    expect(guide).toMatch(/eviction/i);
+    expect(guide).toMatch(/merge commit/i);
+    expect(guide).toContain("drizzle:rebuild");
+    expect(guide).toMatch(/never rolled back/i);
+    const workflowSecrets = new Set<string>();
+    for (const name of ["deploy-app.yml", "promotion.yml"]) {
+      const source = await read(`.github/workflows/${name}`);
+      for (const match of source.matchAll(/secrets\.([A-Z_]+)/g)) workflowSecrets.add(match[1]!);
+    }
+    expect([...workflowSecrets].sort()).toEqual([
+      "APP_ENV_FILE",
+      "DATABASE_DIRECT_URL",
+      "FLY_API_TOKEN",
+    ]);
+    for (const secret of workflowSecrets) expect(guide).toContain(`\`${secret}\``);
+    expect(guide).toContain("Promotion PR");
+
+    expect(agentDoc).toContain("APP_ENV");
+    expect(agentDoc).toMatch(/NODE_ENV/);
+    expect(agentDoc).toMatch(/feature PRs/i);
+    expect(agentDoc).toMatch(/Production database/);
+    for (const root of ["AGENTS.md", "CLAUDE.md"]) {
+      expect(await read(root)).toContain("docs/agents/environments.md");
+    }
+
+    const landing = await scaffold("guide-desk-landing", "landing");
+    await expect(
+      fs.stat(path.join(landing.targetDirectory, "docs/deployment.md"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      fs.stat(path.join(landing.targetDirectory, "docs/agents/environments.md"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("requires Node >=24 and ships product Deploy home files", async () => {
     const result = await scaffoldProject({
       targetDirectory: "deploy-desk",
@@ -949,11 +1237,31 @@ describe("scaffoldProject", () => {
     expect(rootPackage.engines?.node).toBe(">=24");
     expect(rootPackage.packageManager).toBe("pnpm@10.13.1");
     expect(rootPackage.devDependencies?.["@m5kdev/backend"]).toBe("catalog:m5kdev");
-    expect(rootPackage.scripts?.["app:deploy"]).toContain("m5kdev-fly-deploy");
-    expect(rootPackage.scripts?.["app:deploy"]).toContain("apps/shared/fly.toml");
-    expect(rootPackage.scripts?.["app:deploy"]).toContain("apps/shared/Dockerfile");
-    expect(rootPackage.scripts?.["app:secrets"]).toContain("m5kdev-fly-secrets");
-    expect(rootPackage.scripts?.["app:secrets"]).toContain("apps/shared/.env.production");
+    expect(rootPackage.scripts?.["app:deploy:production"]).toBe(
+      "m5kdev-fly-deploy --config apps/shared/fly.production.toml --dockerfile apps/shared/Dockerfile --env apps/shared/.env.production"
+    );
+    expect(rootPackage.scripts?.["app:secrets:production"]).toBe(
+      "m5kdev-fly-secrets --config apps/shared/fly.production.toml --env apps/shared/.env.production"
+    );
+    expect(rootPackage.scripts?.["app:deploy:development"]).toBe(
+      "m5kdev-fly-deploy --config apps/shared/fly.development.toml --dockerfile apps/shared/Dockerfile --env apps/shared/.env.development"
+    );
+    expect(rootPackage.scripts?.["app:secrets:development"]).toBe(
+      "m5kdev-fly-secrets --config apps/shared/fly.development.toml --env apps/shared/.env.development"
+    );
+    // A bare `pnpm app:deploy` / `app:secrets` names the per-environment scripts and fails.
+    for (const kind of ["deploy", "secrets"]) {
+      const script = rootPackage.scripts?.[`app:${kind}`];
+      if (!script) throw new Error(`Missing app:${kind} script`);
+      const run = spawnSync("sh", ["-c", script], {
+        cwd: result.targetDirectory,
+        encoding: "utf8",
+      });
+      expect(run.status).toBe(1);
+      expect(run.stderr).toContain(
+        `Use pnpm app:${kind}:<environment> — one of: development, production`
+      );
+    }
 
     const dockerignore = await fs.readFile(
       path.join(result.targetDirectory, ".dockerignore"),
@@ -986,11 +1294,14 @@ describe("scaffoldProject", () => {
     expect(dockerfile).not.toContain("m5k:webapp");
     expect(dockerfile).not.toContain("{{");
 
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "apps/shared/fly.toml"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
     const flyToml = await fs.readFile(
-      path.join(result.targetDirectory, "apps/shared/fly.toml"),
+      path.join(result.targetDirectory, "apps/shared/fly.production.toml"),
       "utf8"
     );
-    expect(flyToml).toContain('app = "deploy-desk-app"');
+    expect(flyToml).toContain('app = "deploy-desk-production"');
     expect(flyToml).toContain('primary_region = "iad"');
     expect(flyToml).not.toContain("[[mounts]]");
     expect(flyToml).toContain('memory = "1gb"');
@@ -1002,7 +1313,7 @@ describe("scaffoldProject", () => {
     const readme = await fs.readFile(path.join(result.targetDirectory, "README.md"), "utf8");
     expect(readme).not.toContain("fly volumes create");
     expect(readme).not.toContain("libsql_data");
-    expect(readme).toContain("has no `[[mounts]]`");
+    expect(readme).toContain("have no `[[mounts]]`");
 
     const envExample = await fs.readFile(
       path.join(result.targetDirectory, "apps/shared/.env.production.example"),
@@ -1022,6 +1333,7 @@ describe("scaffoldProject", () => {
 
     const gitignore = await fs.readFile(path.join(result.targetDirectory, ".gitignore"), "utf8");
     expect(gitignore).toMatch(/\.env\.production/);
+    expect(gitignore).toMatch(/\.env\.development/);
 
     const appTs = await fs.readFile(
       path.join(result.targetDirectory, "apps/server/src/app.ts"),
@@ -1053,8 +1365,36 @@ describe("scaffoldProject", () => {
         platform === "landing" ? ["deploy-landing.yml"] : ["deploy-app.yml", "deploy-landing.yml"]
       );
 
-      const targets = platform === "landing" ? ["landing"] : ["landing", "app"];
-      for (const target of targets) {
+      if (platform !== "landing") {
+        const appSource = await fs.readFile(path.join(workflowDirectory, "deploy-app.yml"), "utf8");
+        const appWorkflow = parse(appSource);
+        const appPaths: string[] = appWorkflow.on.push.paths;
+        const appTriggers = (file: string) =>
+          appPaths.some((pattern) => path.matchesGlob(file, pattern));
+        expect(appTriggers("apps/landing/src/LandingPage.tsx")).toBe(false);
+        expect(appTriggers("apps/server/src/index.ts")).toBe(true);
+        expect(appTriggers("apps/webapp/src/App.tsx")).toBe(platform !== "expo");
+        expect(appTriggers("apps/expo/src/index.ts")).toBe(false);
+        expect(appTriggers(".github/workflows/deploy-app.yml")).toBe(true);
+        for (const environment of ["development", "production"]) {
+          const deployScript: string = rootPackage.scripts[`app:deploy:${environment}`];
+          for (const flag of ["config", "dockerfile"]) {
+            const relativePath = deployScript.match(new RegExp(`--${flag} (\\S+)`))?.[1];
+            if (!relativePath) throw new Error(`Missing --${flag} in app:deploy:${environment}`);
+            await expect(
+              fs.stat(path.join(result.targetDirectory, relativePath))
+            ).resolves.toBeTruthy();
+          }
+          const envPath = deployScript.match(/--env (\S+)/)?.[1];
+          expect(envPath).toBe(`apps/shared/.env.${environment}`);
+          expect(rootPackage.scripts[`app:secrets:${environment}`]).toContain(`--env ${envPath}`);
+          await expect(
+            fs.stat(path.join(result.targetDirectory, `${envPath}.example`))
+          ).resolves.toBeTruthy();
+        }
+      }
+
+      for (const target of ["landing"]) {
         const source = await fs.readFile(
           path.join(workflowDirectory, `deploy-${target}.yml`),
           "utf8"

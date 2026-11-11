@@ -268,6 +268,10 @@ export class WorkflowRegistry {
       );
     }
 
+    // Without schedulers (Canary) leave Redis job schedulers alone entirely: neither
+    // upsert crons nor prune — another environment may own the recurring jobs.
+    if (this.workflowService.schedulers === false) return;
+
     const allowedCronKeysByQueue = new Map<string, Set<string>>();
     for (const [name, entry] of this.handlers) {
       if (entry.kind !== "cron") continue;

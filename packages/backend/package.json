@@ -14,7 +14,8 @@
   ],
   "bin": {
     "m5kdev-fly-deploy": "./dist/src/fly-deploy.mjs",
-    "m5kdev-fly-secrets": "./dist/src/fly-secrets.mjs"
+    "m5kdev-fly-secrets": "./dist/src/fly-secrets.mjs",
+    "m5kdev-migration-check": "./dist/src/migration-check-cli.mjs"
   },
   "scripts": {
     "version:patch": "npm version patch",

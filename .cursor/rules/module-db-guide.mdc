@@ -5,52 +5,97 @@ alwaysApply: false
 
 # Module DB File Style Guide
 
-This guide captures conventions observed in module database files (e.g., `context.db.ts`).
+Conventions for database table definitions in Kernel, Optional Backend Module,
+and app modules. The table is the **source of truth** for the module: the DTO
+derives its Zod schemas from it. PostgreSQL is the only supported dialect
+(ADR-0033). Kernel tables import `appDatabaseSchema` and `jsonbValue`
+relatively from `base/database.schema`.
 
 ## Conventions
 
-- Import enum-like constants from shared constants: `@appname/shared/modules/[feature]/[feature].constants`.
-- Define tables with Drizzle's `sqliteTable` as `table` alias.
+- Import enum-like constants from shared constants: `@appname/shared/modules/<module>/<module>.constants`.
+- Import auth tables for foreign keys: `import { users, organizations, members } from "@m5kdev/backend/modules/auth/auth.db"`.
+- Define tables with `appDatabaseSchema.table(...)` from `@m5kdev/backend/base/database.schema`, so every app table lives in the app-owned PostgreSQL schema (`DATABASE_SCHEMA`). Column builders come from `drizzle-orm/pg-core`.
 - Use `uuidv4` as the default for string IDs via `.$default(uuidv4)`.
-- Represent booleans with `integer(..., { mode: "boolean" })` and `.default(false)`.
-- Represent timestamps with `integer(..., { mode: "timestamp" })`.
-  - `createdAt`: `integer("created_at", { mode: "timestamp" }).notNull().$default(() => new Date())`
-  - `updatedAt`: `integer("updated_at", { mode: "timestamp" })`
-  - `deletedAt`: `integer("updated_at", { mode: "timestamp" })`
-- JSON columns: `text("array", { mode: "json" }).default([]).$type<string[]>()` or `text("object", { mode: "json" }).default({}).$type<Record<string, unknown>>()`.
-- Use `references(() => otherTable.id, { onDelete: "cascade" })` for FKs if not nullable and `{ onDelete: "set null" }` when nullable.
+- Represent booleans with `boolean("col")` and `.notNull().default(false)` when the value is required.
+- Represent timestamps with `timestamp(..., { withTimezone: true, mode: "date" })`.
+  - `createdAt`: `timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().$default(() => new Date())`
+  - `updatedAt`: `timestamp("updated_at", { withTimezone: true, mode: "date" })`
+  - `deletedAt`: `timestamp("deleted_at", { withTimezone: true, mode: "date" })`
+- JSON values use native JSONB: `jsonbValue("col")` from `@m5kdev/backend/base/database.schema`, typed with `.$type<...>()`. Scalar lists use native arrays: `text("tags").array().$default(() => []).$type<string[]>()`. Do not store JSON or arrays as serialized text.
+- Use `references(() => otherTable.id, { onDelete: "cascade" })` for non-nullable FKs and `{ onDelete: "set null" }` for nullable FKs.
 - Composite join tables define primary keys with `primaryKey({ columns: [t.aId, t.bId] })`.
 - Table names are plural; column names are snake_case at DB level, camelCase in code.
+- Inline union types are acceptable for simple status columns: `.$type<"draft" | "published">()`.
+- Include `deletedAt` when the module needs soft deletes — `queryList`
+  automatically excludes soft-deleted rows when the column exists.
+
+## Registration and migrations
+
+- Register every new table in `apps/server/src/schema.ts` with a plain
+  re-export: `export { posts } from "./modules/posts/posts.db";`. The schema
+  file is maintained by hand — there is no generation step.
+- After changing tables, run `drizzle:generate`. It writes a migration to
+  `drizzle-postgresql/` from the table definitions. Never hand-write or edit
+  migration SQL and never edit files under `drizzle-postgresql/meta/`.
+- Every table change must be backward-compatible with the code currently in
+  Production. Read `.cursor/rules/database-migrations.mdc` before changing a
+  table: removing or renaming a field here generates a destructive migration.
+
+## File Location
+
+```
+apps/<app>/server/src/modules/<module>/<module>.db.ts
+```
 
 ## Example
 
 ```typescript
-import { SOME_TYPES } from "@app/shared/modules/feature/feature.constants";
-import { users } from "@m5kdev/backend/modules/auth/auth.db";
-import { integer, primaryKey, sqliteTable as table, text } from "drizzle-orm/sqlite-core";
+import { appDatabaseSchema, jsonbValue } from "@m5kdev/backend/base/database.schema";
+import { members, organizations, users } from "@m5kdev/backend/modules/auth/auth.db";
+import { boolean, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
 import { v4 as uuidv4 } from "uuid";
 
-export const items = table("items", {
+export const posts = appDatabaseSchema.table("posts", {
   id: text("id").primaryKey().$default(uuidv4),
-  type: text("type", { enum: SOME_TYPES }).notNull(),
+  authorUserId: text("author_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  memberId: text("member_id").references(() => members.id, {
+    onDelete: "set null",
+  }),
+  organizationId: text("organization_id").references(() => organizations.id, {
+    onDelete: "set null",
+  }),
   title: text("title").notNull(),
-  flags: text("flags", { mode: "json" }).default([]).$type<string[]>(),
-  deletedAt: integer("deleted_at", { mode: "timestamp" }),
-  archivedAt: integer("archived_at", { mode: "timestamp" }),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$default(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
+  slug: text("slug").notNull().unique(),
+  excerpt: text("excerpt"),
+  content: text("content").notNull(),
+  status: text("status").$type<"draft" | "published">().notNull().default("draft"),
+  tags: text("tags")
+    .array()
+    .$default(() => [])
+    .$type<string[]>(),
+  metadata: jsonbValue("metadata").$type<Record<string, unknown>>(),
+  publishedAt: timestamp("published_at", { withTimezone: true, mode: "date" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+    .notNull()
+    .$default(() => new Date()),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }),
+  deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
 });
 
-export const itemsUsers = table(
-  "items_users",
+export const postsUsers = appDatabaseSchema.table(
+  "posts_users",
   {
-    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    itemId: text("item_id").notNull().references(() => items.id, { onDelete: "cascade" }),
-    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
-    createdAt: integer("created_at", { mode: "timestamp" }).notNull().$default(() => new Date()),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    postId: text("post_id")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    pinned: boolean("pinned").notNull().default(false),
   },
-  (t) => [primaryKey({ columns: [t.userId, t.itemId] })]
+  (t) => [primaryKey({ columns: [t.userId, t.postId] })]
 );
 ```
-

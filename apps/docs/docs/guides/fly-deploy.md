@@ -5,8 +5,10 @@ sidebar_position: 8
 # Deploy with Docker and Fly.io
 
 The **Dockerfile** is the portable artifact: any host that can build from the
-repo root can run it. **Fly.io** is the adapter this starter ships (`fly.toml`,
-`app:deploy` / `landing:deploy`). Other hosts are not documented as shipped.
+repo root can run it. **Fly.io** is the adapter this starter ships (one Fly
+config per Deployment environment, `app:deploy:<environment>` /
+`landing:deploy`). Other hosts are not documented as shipped. The branch and
+environment model is in [Deployment environments](/guides/deployment-environments).
 
 Generated apps need **Node.js >= 24**. Images use `node:24-slim` and pnpm from
 `packageManager` (`pnpm@10.13.1`).
@@ -19,11 +21,11 @@ paths. The `fly` CLI must be on PATH.
 
 | App | Image | Fly name |
 | --- | --- | --- |
-| Product (server + baked webapp) | `apps/shared/Dockerfile` | `<app-slug>-app` in new apps |
+| Product (server + baked webapp) | `apps/shared/Dockerfile` | `<app-slug>-development`, `<app-slug>-production` |
 | Landing (public site) | `apps/landing/Dockerfile` | `<app-slug>-landing` |
 
 Neither app mounts a Fly volume. PostgreSQL is hosted outside the machine, so
-`fly.toml` has no `[[mounts]]` and first deploy does not run `fly volumes create`.
+the Fly configs have no `[[mounts]]` and first deploy does not run `fly volumes create`.
 
 The starter uses **one** root `.dockerignore` for both images. Its recursive
 patterns exclude environment files, dependencies, local databases, build
@@ -38,7 +40,7 @@ is unchanged: there is no `./client` directory, so the Kernel skips the SPA.
 
 `.env*` stays out of the image (root `.dockerignore`).
 
-- **Build secrets** — forwarded by `app:deploy` / `landing:deploy` as
+- **Build secrets** — forwarded by `app:deploy:<environment>` / `landing:deploy` as
   `fly deploy --build-secret` for **every** key in that app’s `.env.production`.
   The frontend build mounts them with `required=false` so a dry run without
   secrets still builds. Vite `VITE_*` values are baked into the SPA at image
@@ -51,7 +53,7 @@ is unchanged: there is no `./client` directory, so the Kernel skips the SPA.
   `--build-arg VITE_CONFIG_HASH=<hash-of-public-VITE-values>` alongside the build
   secrets, and change the hash whenever a public value is added, removed, or
   changed. Keep private runtime values out of build arguments.
-- **Runtime secrets** — `pnpm app:secrets` / `pnpm landing:secrets` import the
+- **Runtime secrets** — `pnpm app:secrets:<environment>` / `pnpm landing:secrets` import the
   same file (`fly secrets import`). Use this for `REDIS_URL`, `DATABASE_URL`,
   `BETTER_AUTH_SECRET`, and anything the Node process reads after boot.
 
@@ -59,6 +61,7 @@ Copy the examples first. A missing `.env.production` errors with a
 copy-the-example message.
 
 ```sh
+cp apps/shared/.env.development.example apps/shared/.env.development
 cp apps/shared/.env.production.example apps/shared/.env.production
 cp apps/landing/.env.production.example apps/landing/.env.production
 ```
@@ -73,11 +76,12 @@ volume; that was the libSQL file replica.
 ## First deploy
 
 ```sh
-fly apps create <app-slug>-app
+fly apps create <app-slug>-development
+fly apps create <app-slug>-production
 fly apps create <app-slug>-landing
-pnpm app:secrets
+pnpm app:secrets:production
 pnpm landing:secrets
-pnpm app:deploy
+pnpm app:deploy:production
 pnpm landing:deploy
 ```
 
@@ -87,7 +91,10 @@ Default Fly region in the starter is `iad`, 1gb shared CPU, `PORT=8080`,
 
 ## GitHub Actions deployment
 
-Generated repositories include two independent workflows for pushes to `main`:
+Generated repositories include two independent deploy workflows. Landing deploys
+on pushes to `main`. The product app deploys Development on pushes to `main` and
+Production on pushes to `production`, migrating first; see
+[Deployment environments](/guides/deployment-environments).
 
 | Workflow | App changes that trigger deployment |
 | --- | --- |
@@ -111,18 +118,21 @@ pushing. CI installs with `--frozen-lockfile`. In the generated repository's
 | --- | --- |
 | `FLY_API_TOKEN_LANDING` | Deploy token scoped to the landing Fly app. |
 | `LANDING_ENV_PRODUCTION` | Complete filled-in `apps/landing/.env.production` contents. |
-| `FLY_API_TOKEN_APP` | Deploy token scoped to the product Fly app; omit for landing-only. |
-| `APP_ENV_PRODUCTION` | Complete filled-in `apps/shared/.env.production` contents; omit for landing-only. |
+
+The product app uses GitHub **environments** (`development`, `production`)
+instead of repository secrets. Each environment holds `FLY_API_TOKEN`,
+`APP_ENV_FILE`, and `DATABASE_DIRECT_URL`.
 
 Generate each token locally with `fly tokens create deploy --app <fly-app-name>`
 and store its full output in the corresponding secret. Names must match the
-committed `fly.toml` files. See [Fly's GitHub Actions guide](https://fly.io/docs/launch/continuous-deployment-with-github-actions/).
+committed Fly configs. See [Fly's GitHub Actions guide](https://fly.io/docs/launch/continuous-deployment-with-github-actions/).
 
 The workflows write temporary production env files, call the existing
 `landing:secrets` / `app:secrets` and deploy scripts from the repository root,
 then remove the files even after failure. Runtime secrets and public frontend
-configuration use the same path as local deployment. Database migrations and
-optional Mastra initialization remain operator steps.
+configuration use the same path as local deployment. The product workflow's
+migrate job applies migrations before each deploy; optional Mastra
+initialization remains an operator step.
 
 Each target serializes deployments without cancelling an active rollout. Both
 workflows support **Run workflow** from `main`; use it after updating GitHub
@@ -166,9 +176,10 @@ affected compilation stages should rerun. Check the build log's context transfer
 and image push steps separately from Fly machine rollout.
 
 Before starting the product image, provision PostgreSQL and pgvector in `public`,
-apply the app's maintainer-generated PostgreSQL migration history through the
-direct connection, and run `mastra:init` when AI is enabled. Initialization is
-an explicit deployment step, not a runtime auto-migration.
+let the deploy workflow apply the PostgreSQL migration history through the
+direct connection, and run `mastra:init` when AI is enabled. Migration is a
+GitHub Actions step before deploy, never a runtime auto-migration or a Fly
+release command.
 
 Apps still mounting `libsql_data` from before 0.42.0 should remove that volume
 only after a verified data transfer. See
@@ -176,7 +187,7 @@ only after a verified data transfer. See
 
 ## `create-m5kdev update` and fly.toml
 
-`create-m5kdev update` **ignores** `**/fly.toml` and `**/.env.production`.
+`create-m5kdev update` **ignores** `**/fly.toml`, `**/fly.*.toml`, `**/.env.production`, and `**/.env.development`.
 Existing apps keep their Fly app name, region, and secrets file. Dockerfiles
 and `.env.production.example` still merge.
 

@@ -1,3 +1,4 @@
+import { isDeployedEnvironment } from "../../base/environment";
 /**
  * Better Auth CIMD 1.7.2 rejects loopback `client_id` URLs. Starter e2e therefore
  * uses an HTTPS `.test` client id and serves the document in-process so the
@@ -8,7 +9,7 @@ export const E2E_MCP_CIMD_CLIENT_NAME = "Starter e2e MCP client";
 export const E2E_MCP_CIMD_REDIRECT_URI = "http://127.0.0.1/callback";
 
 export function isE2eMcpCimdEnabled(): boolean {
-  return process.env.M5K_MCP_E2E_CIMD === "1" && process.env.NODE_ENV !== "production";
+  return process.env.M5K_MCP_E2E_CIMD === "1" && !isDeployedEnvironment();
 }
 
 function requestUrl(input: string | URL | Request): string {

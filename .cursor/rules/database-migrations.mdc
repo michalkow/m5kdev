@@ -1,0 +1,92 @@
+---
+globs: packages/backend/src/modules/**/*.db.ts,packages/module-*/src/**/*.db.ts,apps/**/server/src/modules/**/*.db.ts,apps/**/server/drizzle-postgresql/**
+alwaysApply: false
+---
+
+# Database Migrations
+
+Migrations are the app's schema history. They are generated from the table
+definitions (`*.db.ts`), applied to each database independently, and never
+rolled back. Read this before changing a table or touching the migration
+folder.
+
+## How migrations are made and applied
+
+- Generate migrations only with `drizzle:generate`. It writes SQL, a journal
+  entry, and a snapshot to `drizzle-postgresql/` from the table definitions.
+- Never hand-write or edit migration SQL, journal entries, or snapshots, and
+  never use `drizzle-kit generate --custom`. Every migration must be
+  reproducible from the table definitions.
+- If drizzle-kit asks an interactive question (for example, whether a column
+  was renamed or created), stop and ask the user. The answer decides whether
+  data is dropped.
+- Agents may apply migrations with `drizzle:migrate` only to the local or
+  Development database named in the app's shared `.env`. Staging, Canary, and
+  Production are migrated only by the GitHub Actions deploy workflow, before
+  each deploy.
+- Never regenerate a migration that has already been applied to Development.
+  If review asks for a schema change, change the table definition again and
+  generate a follow-up migration. Deleting and regenerating applies the change
+  twice or fails.
+- Migrations already merged to `main` are frozen. CI fails if their SQL,
+  journal entry, or snapshot changes.
+
+## Backward compatibility (required)
+
+Every migration must work with the code **currently in Production**. Canary
+migrates the Production database while Production's previous code is still
+serving, and a rollback redeploys earlier code against the migrated schema.
+
+Allowed in one release:
+
+- New tables.
+- New columns that are nullable or have a default.
+- New indexes on small tables.
+- Widening a type (for example `varchar(50)` to `text`).
+
+Not allowed in one release:
+
+- Dropping or renaming a table or column.
+- Narrowing or changing a column type.
+- `SET NOT NULL` on an existing column.
+- Removing an enum value, or adding a check constraint, unique constraint, or
+  foreign key that existing rows may violate.
+- Long-running data rewrites inside a migration.
+
+## Expand, then contract later
+
+Change incompatible schema in two or more releases:
+
+1. **Expand**: add the new table or column. Ship code that writes both the old
+   and new shape, or reads the new shape with a fallback.
+2. **Migrate data**: backfill with a Workflow job, not migration SQL. Backfills
+   must be resumable and safe to re-run.
+3. **Switch**: ship code that only uses the new shape.
+4. **Contract**: drop the old column or table in a later release.
+
+Removing a field from a table definition makes `drizzle:generate` emit a
+`DROP`. So, in the release that stops using a column, keep the column in
+`*.db.ts` and mark it:
+
+```typescript
+/** @deprecated Not read or written since <release>. Drop in contract issue #<number>. */
+legacyTitle: text("legacy_title"),
+```
+
+Then open a GitHub issue labelled `migration-contract` naming the column and
+the release that stopped using it. The drop ships only after that release has
+been in Production long enough that rolling back to code that still used the
+column is no longer an option.
+
+## Rollback
+
+A rollback redeploys earlier code. It never reverses a migration. Keep the
+previous release compatible with the current schema until the rollback window
+has passed.
+
+## Kernel and Optional Backend Module tables
+
+A Kernel or Optional Backend Module table change reaches every consumer app,
+which must generate its own migration. The same compatibility rules apply to
+consumer Production databases: expand in one release, contract in a later
+one, and describe the consumer steps in `MIGRATING.md`.

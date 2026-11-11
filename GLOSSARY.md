@@ -119,7 +119,7 @@ _Avoid_: multiple Owners as a product feature; inviting Owner; org members UI as
 ### Composition
 
 **Kernel**:
-`createBackendApp` — the composition root that wires PostgreSQL/Drizzle, Redis, Better Auth, modules, tRPC, Express, startup, and shutdown ([ADR-0003](docs/adr/0003-kernel-owns-express-http-shell.md)). It owns the Express instance, JSON and CORS defaults (origin from the app web URL; library allowed headers), HTTP listen (PORT, all interfaces), and SIGINT/SIGTERM when it is listening. Signal shutdown closes Server event streams, then HTTP, then the rest of Kernel shutdown, then app `onShutdown`, then process exit. JSON and CORS defaults may be mapped; a map that omits a default drops it. Callers may pass an Express instance that has not already applied json/CORS; the Kernel still applies that shell. Opt-in baked SPA serving (`spa.root`, skip if missing) is also Kernel HTTP shell ([ADR-0006](docs/adr/0006-kernel-owns-baked-spa.md)). Server events (SSE subscribe) are Kernel HTTP shell and Kernel infrastructure ([ADR-0010](docs/adr/0010-kernel-owns-server-events.md)). Other extra HTTP belongs on a Backend Module `express` hook. Extra shutdown work (telemetry) registers on the Kernel, not a starter signal handler. One-shot Database commands are Kernel-owned and must not boot that HTTP shell, Redis, or queues ([ADR-0005](docs/adr/0005-kernel-owns-database-commands.md)).
+`createBackendApp` — the composition root that wires PostgreSQL/Drizzle, Redis, Better Auth, modules, tRPC, Express, startup, and shutdown ([ADR-0003](docs/adr/0003-kernel-owns-express-http-shell.md)). It owns the Express instance, JSON and CORS defaults (origin from the app web URL; library allowed headers), HTTP listen (PORT, all interfaces), and SIGINT/SIGTERM when it is listening. Signal shutdown closes Server event streams, then HTTP, then the rest of Kernel shutdown, then app `onShutdown`, then process exit. JSON and CORS defaults may be mapped; a map that omits a default drops it. Callers may pass an Express instance that has not already applied json/CORS; the Kernel still applies that shell. `GET /healthz` (200 with the Deployment environment when PostgreSQL answers, 503 otherwise) is Kernel HTTP shell, registered before modules and the SPA. Opt-in baked SPA serving (`spa.root`, skip if missing) is also Kernel HTTP shell ([ADR-0006](docs/adr/0006-kernel-owns-baked-spa.md)). Server events (SSE subscribe) are Kernel HTTP shell and Kernel infrastructure ([ADR-0010](docs/adr/0010-kernel-owns-server-events.md)). Other extra HTTP belongs on a Backend Module `express` hook. Extra shutdown work (telemetry) registers on the Kernel, not a starter signal handler. One-shot Database commands are Kernel-owned and must not boot that HTTP shell, Redis, or queues ([ADR-0005](docs/adr/0005-kernel-owns-database-commands.md)).
 _Avoid_: Framework (the stack is composable, not closed), App (that is the product), app-owned CORS as the default path; booting createBackendApp to reset or seed; ad-hoc `express.static` in starter `app.ts`
 
 **Backend Module**:
@@ -131,7 +131,7 @@ _Avoid_: Package, Plugin, Feature (when you mean the server module), Model; `bac
 _Avoid_: Utils Backend Module; calling Base "the module" as if it were Auth; BillingPermissionService (that is Billing)
 
 **Server event**:
-A Kernel-owned, one-way HTTP Server-Sent Event that a resource was created, updated, or deleted. It is addressed to a UserId. It names the resource, its id, that change, and organizationId or null (a tag, not the audience). An optional snapshot of the entity may ride along. Services emit Server events through Auth; emitting to an Organization's Members is Auth resolving Memberships, not a bus audience. The authenticated User subscribes on one stream. The bus does not enforce Grants on snapshots. Not a Core Module. See [ADR-0010](docs/adr/0010-kernel-owns-server-events.md).
+A Kernel-owned, one-way HTTP Server-Sent Event that a resource was created, updated, or deleted. It is addressed to a UserId. It names the resource, its id, that change, and organizationId or null (a tag, not the audience). An optional snapshot of the entity may ride along. Services emit Server events through Auth; emitting to an Organization's Members is Auth resolving Memberships, not a bus audience. The authenticated User subscribes on one stream. The bus does not enforce Grants on snapshots. Redis channels are scoped by app slug and database (`<slug>:<scope>:server-event:`), so Canary and Production share Server events and Staging does not ([ADR-0037](docs/adr/0037-canary-workers-without-schedulers.md)). Not a Core Module. See [ADR-0010](docs/adr/0010-kernel-owns-server-events.md).
 _Avoid_: organization-addressed fan-out; WebSocket; Subscription (that is Billing); Notification (that may consume one); Action (that is Grant); Inbound callback; Backend Module
 
 **Core Module**:
@@ -159,7 +159,7 @@ The table map the app composes from Backend Module tables plus its own tables. O
 _Avoid_: generated schema as the source of truth; Kernel merging tables the app did not compose; a second composition root in the Database config
 
 **Database command**:
-A one-shot Kernel operation on the app database: migrate, seed, or disposable reset. Dispatch and direct-connection pool construction belong to the Kernel; the app supplies App schema, migration history, and optional seed. Runtime uses a separate pooled connection. Reset truncates only app-owned data and preserves Mastra/vector schemas ([ADR-0033](docs/adr/0033-postgresql-only-persistence.md)).
+A one-shot Kernel operation on the app database: migrate, seed, disposable reset, or disposable rebuild. Migrate holds an advisory lock with lock and statement timeouts. Rebuild drops the app-owned schema and migration history and re-applies every migration, for a Development database that drifted. Dispatch and direct-connection pool construction belong to the Kernel; the app supplies App schema, migration history, and optional seed. Runtime uses a separate pooled connection. Reset truncates only app-owned data and preserves Mastra/vector schemas ([ADR-0033](docs/adr/0033-postgresql-only-persistence.md)).
 _Avoid_: replica sync; runtime auto-migrations; resetting Mastra/vector data with app reset; Starter Template copies of Database commands
 
 **Database config**:
@@ -171,8 +171,8 @@ Zod schemas and constants in `apps/*/shared` or `@m5kdev/commons` that server an
 _Avoid_: DTO (server select/output helpers), types package, API spec; calling this package the Fly app
 
 **Deploy home**:
-Where the product image’s Docker and Fly files live: `apps/shared` (Dockerfile, fly.toml, production env example). The image runs server plus a baked webapp. Repo-root `.dockerignore` is the build-context ignore file. Root `app:deploy` / `app:secrets` call Kernel bins (`m5kdev-fly-deploy` / `m5kdev-fly-secrets`); the wrappers are not Starter copies ([ADR-0009](docs/adr/0009-kernel-owns-fly-commands.md)). A Landing-only scaffolded app has no Deploy home.
-_Avoid_: Shared contract (that is Zod/constants); treating `apps/shared` as a runnable Node service; a top-level `deploy/` folder; dockerignore copies beside the Dockerfile; app-owned `fly-deploy.mjs` duplicates; requiring Deploy home for Landing to exist
+Where the product image’s Docker and Fly files live: `apps/shared` (Dockerfile, one Fly config and one env example per Deployment environment). The image runs server plus a baked webapp, built separately for each Deployment environment from its own branch. Repo-root `.dockerignore` is the build-context ignore file. Root `app:deploy:<environment>` / `app:secrets:<environment>` call Kernel bins (`m5kdev-fly-deploy` / `m5kdev-fly-secrets`); the wrappers are not Starter copies ([ADR-0009](docs/adr/0009-kernel-owns-fly-commands.md)). Migrations do not run from the image ([ADR-0035](docs/adr/0035-migrations-run-in-github-actions.md)). A Landing-only scaffolded app has no Deploy home.
+_Avoid_: Shared contract (that is Zod/constants); treating `apps/shared` as a runnable Node service; a top-level `deploy/` folder; dockerignore copies beside the Dockerfile; app-owned `fly-deploy.mjs` duplicates; requiring Deploy home for Landing to exist; a single production-only Fly config or env example
 
 **Procedure**:
 A request-bound Service method built with `this.procedure("name")`: input, auth, resource load, Grant check, then handler.
@@ -234,6 +234,20 @@ _Avoid_: Frontend; Expo importing this package; treating a `modules/` folder as 
 The `@m5kdev/expo` package: Expo-only adapters (native push). The Starter Expo app may import it; Frontend stays platform-agnostic.
 _Avoid_: the Starter Expo app (`apps/*/expo`); putting Expo APIs in Frontend or Web UI
 
+### Deployment
+
+**Deployment environment**:
+Where an app runs, named by `APP_ENV`: `local`, `development`, `staging`, `canary`, or `production`. Development and Production always exist; Staging and Canary are optional, chosen at create time. Each deployed environment follows one Git branch (`main`, `staging`, `canary`, `production`) and GitHub Actions deploys it on merge. Canary and Production share the Production database; Development and Staging have their own.
+_Avoid_: `NODE_ENV` as the environment (it is `production` on every deployed app); stage; tier
+
+**Environment namespace**:
+The BullMQ prefix `<APP_SLUG>-<APP_ENV>` that keeps one Deployment environment's queues, queue events, and workers apart from another's on a shared Redis. Semantic queue names stay the same in every environment.
+_Avoid_: prefixing queue names by hand; ioredis `keyPrefix`; a BullMQ prefix that ignores `APP_ENV` (such as BullMQ's default `bull`)
+
+**Promotion PR**:
+A pull request that moves tested code to the next Deployment environment's branch: `main` → `staging` → `canary` → `production`, skipping environments the app does not have. Only the expected source branch may open one; it merges with a merge commit, and the deploy checks the branch's tree matches a tested source commit ([ADR-0036](docs/adr/0036-each-environment-builds-from-its-branch.md)).
+_Avoid_: hotfix commits on a release branch; feature PRs into a release branch; image promotion
+
 ### Product surfaces
 
 **Admin panel**:
@@ -249,7 +263,7 @@ The public marketing site package (`apps/landing`). Own Fly app, separate from t
 _Avoid_: Webapp (the authenticated SPA baked into the product image); treating Landing as requiring a server or Deploy home
 
 **Workflow**:
-A persisted background run (optional cron). Status: `queued` | `running` | `completed` | `failed`. Payload is serializable ids and typed input, not a request. Org-scoped runs stamp MemberId.
+A persisted background run (optional cron). Status: `queued` | `running` | `completed` | `failed`. Payload is serializable ids and typed input, not a request. Org-scoped runs stamp MemberId. Each row records the Deployment environment that enqueued it; reconcile and lifecycle updates only touch rows of their own environment, so Canary never reconciles Production's runs ([ADR-0037](docs/adr/0037-canary-workers-without-schedulers.md)). The `environment` column's default `'production'` is the backward-compatible migration value for existing rows (and for code from the previous release that does not write it); it is not a default namespace, since the Kernel always writes `APP_ENV`.
 _Avoid_: Job, Queue, Task, Recurrence (that is the repeating-event store)
 
 **Recurrence**:

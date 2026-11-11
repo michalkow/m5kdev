@@ -2,6 +2,7 @@ import { createBullBoard } from "@bull-board/api";
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import { ExpressAdapter } from "@bull-board/express";
 import { createBackendRouterMap } from "../../app";
+import { databaseScope } from "../../base/environment";
 import type { AuthModule } from "../auth/auth.module";
 import {
   BaseModule,
@@ -18,9 +19,15 @@ import type { WorkflowServiceConfig } from "./workflow.types";
 
 export type WorkflowModuleConfig<Namespace extends string = string> = Omit<
   WorkflowServiceConfig,
-  "connection"
+  "connection" | "prefix"
 > & {
+  /** tRPC router namespace. Defaults to `workflow`. */
   namespace?: Namespace;
+  /**
+   * Environment namespace (BullMQ `prefix`). Defaults to `<APP_SLUG>-<APP_ENV>`;
+   * override only to keep a legacy prefix during a migration.
+   */
+  prefix?: string;
   /**
    * Express mount path for Bull Board. Defaults to `/admin/queues`.
    * Pass `null` to skip mounting the board.
@@ -56,11 +63,13 @@ export class WorkflowModule<const Namespace extends string = "workflow"> extends
 
   override repositories({
     db,
+    appConfig,
   }: ModuleRepositoriesContext<WorkflowModuleDeps, WorkflowModuleTables>) {
     return {
       workflow: new WorkflowRepository({
         orm: db.orm,
         schema: db.schema,
+        environment: appConfig.environment,
       }),
     };
   }
@@ -68,16 +77,28 @@ export class WorkflowModule<const Namespace extends string = "workflow"> extends
   override services({
     repositories,
     infra,
+    appConfig,
   }: ModuleServicesContext<WorkflowModuleDeps, WorkflowModuleRepositories>) {
     if (!infra.redis) {
       throw new Error(`Workflow module "${this.id}" requires Redis in createBackendApp(...)`);
     }
 
-    const { namespace: _namespace, boardPath: _boardPath, ...serviceConfig } = this.config;
+    const {
+      namespace: _namespace,
+      boardPath: _boardPath,
+      prefix,
+      schedulers,
+      ...serviceConfig
+    } = this.config;
+    const { environment, slug } = appConfig;
 
     return {
       workflow: new WorkflowService(repositories.workflow, {
         ...serviceConfig,
+        prefix: prefix ?? `${slug}-${environment}`,
+        // Recurring jobs run only where the environment owns its database, so
+        // Canary (Production database) never runs them twice.
+        schedulers: schedulers ?? databaseScope(environment) === environment,
         connection: infra.redis.duplicate(),
       }),
     };

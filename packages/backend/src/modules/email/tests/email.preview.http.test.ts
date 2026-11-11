@@ -130,14 +130,13 @@ describe("EmailPreviewModule HTTP", () => {
     });
   });
 
-  it("does not mount preview in production even when mode is store", async () => {
-    process.env.NODE_ENV = "production";
-
+  it("does not mount preview in a deployed environment even when mode is store", async () => {
     const built = createBackendApp(
       {
         db: { client },
+        env: { APP_ENV: "staging", APP_SLUG: "editorial-desk" },
         app: {
-          urls: { web: "http://localhost:5173" },
+          urls: { web: "http://localhost:5173", api: "http://localhost:8080" },
         },
         email: {
           mode: "store",

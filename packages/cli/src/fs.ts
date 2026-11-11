@@ -24,12 +24,19 @@ const TEXT_EXTENSIONS = new Set([
   ".mdc",
   ".toml",
 ]);
-const TEXT_BASENAMES = new Set([
+/** Extensionless file names treated as text templates; shared with `scripts/prepare-templates.ts`. */
+export const TEXT_BASENAMES: ReadonlySet<string> = new Set([
   ".gitignore",
   ".env",
   ".env.example",
   ".env.production",
   ".env.production.example",
+  ".env.development",
+  ".env.development.example",
+  ".env.staging",
+  ".env.staging.example",
+  ".env.canary",
+  ".env.canary.example",
   ".npmrc",
   ".dockerignore",
   "Dockerfile",
@@ -174,7 +181,8 @@ export function applyFeatureMarkers(content: string, enabledFeatures: ReadonlySe
 
     const [, feature, edge] = match;
     if (edge === "start") {
-      if (!enabledFeatures.has(feature)) skippingFeature = feature;
+      // Only the outermost disabled block decides; nested blocks inside it stay skipped.
+      if (skippingFeature === undefined && !enabledFeatures.has(feature)) skippingFeature = feature;
     } else if (skippingFeature === feature) {
       skippingFeature = undefined;
     }

@@ -287,6 +287,26 @@ describe("WorkflowRegistry", () => {
       expect(mockRemoveJobScheduler).toHaveBeenCalledWith("fast", "workflow.reconcile");
     });
 
+    it("starts workers but never upserts or removes schedulers when schedulers are off", async () => {
+      const registry = new WorkflowRegistry({
+        ...mockService,
+        schedulers: false,
+      } as unknown as WorkflowService);
+      registry.register(
+        createMockCronDefinition("nightly", "fast", { pattern: "0 3 * * *" }),
+        jest.fn().mockResolvedValue(undefined)
+      );
+      registry.register(createMockDefinition("jobA", "fast"), jest.fn().mockResolvedValue("ok"));
+      mockGetJobSchedulers.mockResolvedValue([{ key: "nightly", name: "nightly" }]);
+
+      await registry.start();
+
+      expect(mockCreateWorker).toHaveBeenCalledWith("fast", expect.any(Function), {});
+      expect(mockUpsertCronScheduler).not.toHaveBeenCalled();
+      expect(mockRemoveJobScheduler).not.toHaveBeenCalled();
+      await expect(capturedProcessor?.({ name: "jobA", data: {} } as never)).resolves.toBe("ok");
+    });
+
     it("rejects if called twice", async () => {
       const registry = new WorkflowRegistry(mockService as WorkflowService);
       registry.register(createMockDefinition("jobA"), jest.fn().mockResolvedValue(undefined));

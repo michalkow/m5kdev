@@ -21,6 +21,7 @@ import {
   readCatalog,
   renderConsumerWorkspace,
 } from "../src/catalog";
+import { TEXT_BASENAMES } from "../src/fs";
 
 const CLI_ROOT = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(CLI_ROOT, "../..");
@@ -43,17 +44,6 @@ const TEXT_EXTENSIONS = new Set([
   ".yml",
   ".txt",
   ".toml",
-]);
-const TEXT_BASENAMES = new Set([
-  ".gitignore",
-  ".env",
-  ".env.example",
-  ".env.production",
-  ".env.production.example",
-  ".npmrc",
-  ".dockerignore",
-  "Dockerfile",
-  "Caddyfile",
 ]);
 
 /** Paths (relative to the starter root) never emitted into templates. */
@@ -91,7 +81,25 @@ const FEATURE_MANIFEST = {
     },
     server: {
       kind: "platform",
-      paths: ["apps/server/", "apps/email/", "apps/shared/", ".github/workflows/deploy-app.yml"],
+      paths: [
+        "apps/server/",
+        "apps/email/",
+        "apps/shared/",
+        ".github/workflows/deploy-app.yml",
+        ".github/workflows/promotion.yml",
+        "docs/deployment.md",
+        "docs/agents/environments.md",
+      ],
+    },
+    "env-staging": {
+      kind: "environment",
+      label: "Staging",
+      paths: ["apps/shared/fly.staging.toml", "apps/shared/.env.staging.example"],
+    },
+    "env-canary": {
+      kind: "environment",
+      label: "Canary",
+      paths: ["apps/shared/fly.canary.toml", "apps/shared/.env.canary.example"],
     },
     billing: { kind: "module", label: "Billing", paths: [] },
     files: {
@@ -144,7 +152,11 @@ const FEATURE_MANIFEST = {
       { pattern: "**/.env", policy: "ignore" },
       { pattern: ".env.production", policy: "ignore" },
       { pattern: "**/.env.production", policy: "ignore" },
+      { pattern: "**/.env.development", policy: "ignore" },
+      { pattern: "**/.env.staging", policy: "ignore" },
+      { pattern: "**/.env.canary", policy: "ignore" },
       { pattern: "**/fly.toml", policy: "ignore" },
+      { pattern: "**/fly.*.toml", policy: "ignore" },
       { pattern: "**/drizzle/*.sql", policy: "ignore" },
       { pattern: "**/drizzle/meta/**", policy: "ignore" },
       { pattern: "**/drizzle-postgresql/**", policy: "ignore" },

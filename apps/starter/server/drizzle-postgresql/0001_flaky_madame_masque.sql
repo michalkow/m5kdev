@@ -1,0 +1,2 @@
+ALTER TABLE "app"."workflows" ADD COLUMN "environment" text DEFAULT 'production' NOT NULL;--> statement-breakpoint
+ALTER TABLE "app"."workflows" ADD CONSTRAINT "workflows_environment_queue_job_unique" UNIQUE("environment","queue_name","job_id");

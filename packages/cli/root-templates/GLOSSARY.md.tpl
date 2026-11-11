@@ -151,7 +151,7 @@ _Avoid_: Server event, Device
 # m5k:workflows:start
 
 **Workflow**:
-A persisted background run. Org-scoped runs stamp MemberId.
+A persisted background run. Org-scoped runs stamp MemberId. Each row records the Deployment environment that enqueued it; reconcile and lifecycle updates only touch rows of their own environment.
 _Avoid_: Job, Queue, Task, Recurrence
 # m5k:workflows:end
 # m5k:tags:start
@@ -178,4 +178,18 @@ _Avoid_: Webhook (when you mean this vs Stripe Subscription sync); Connection
 A repeating calendar pattern stored as a row. Not a Workflow.
 _Avoid_: Workflow, cron
 # m5k:recurrence:end
+
+### Deployment
+
+**Deployment environment**:
+Where the app runs, named by `APP_ENV`: `local`, `development`, `staging`, `canary`, or `production`. Development and Production always exist; Staging and Canary are optional. Each deployed environment follows one Git branch and is deployed by GitHub Actions on merge. Canary and Production share the Production database.
+_Avoid_: `NODE_ENV` as the environment (it is `production` on every deployed app); stage; tier
+
+**Environment namespace**:
+The BullMQ prefix `<APP_SLUG>-<APP_ENV>` that keeps one Deployment environment's queues apart from another's on a shared Redis. Queue names stay the same in every environment.
+_Avoid_: prefixing queue names by hand; ioredis `keyPrefix`
+
+**Promotion PR**:
+A pull request that moves tested code to the next Deployment environment's branch: `main` → `staging` → `canary` → `production`, skipping environments the app does not have. Only the expected source branch may open one, and it merges with a merge commit.
+_Avoid_: hotfix commits on a release branch; feature PRs into a release branch
 # m5k:server:end

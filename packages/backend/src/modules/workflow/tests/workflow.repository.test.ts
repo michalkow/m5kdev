@@ -12,7 +12,10 @@ type Orm = NodePgDatabase<Schema>;
 describe("WorkflowRepository.started", () => {
   const client = createTestPool();
   const orm = drizzle(client, { schema: workflowSchema }) as Orm;
-  const repo = new WorkflowRepository({ orm, schema: workflowSchema }, {});
+  const repo = new WorkflowRepository(
+    { orm, schema: workflowSchema, environment: "production" },
+    {}
+  );
 
   beforeAll(async () => {
     const namespace = await prepareTestSchema(client);
@@ -20,6 +23,7 @@ describe("WorkflowRepository.started", () => {
       CREATE TABLE "${namespace}".workflows (
         id TEXT PRIMARY KEY NOT NULL,
         user_id TEXT,
+        environment TEXT NOT NULL DEFAULT 'production',
         job_id TEXT NOT NULL UNIQUE,
         job_name TEXT NOT NULL,
         queue_name TEXT NOT NULL,
@@ -33,7 +37,8 @@ describe("WorkflowRepository.started", () => {
         finished_at TIMESTAMPTZ,
         processed_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL,
-        updated_at TIMESTAMPTZ NOT NULL
+        updated_at TIMESTAMPTZ NOT NULL,
+        UNIQUE (environment, queue_name, job_id)
       );
     `);
   });
