@@ -85,8 +85,9 @@ export function AuthProvider({
   const signOut = useCallback(() => {
     resolvedAuthClient.signOut().then(() => {
       setSession(null);
+      onSession?.(null);
     });
-  }, [resolvedAuthClient]);
+  }, [onSession, resolvedAuthClient]);
 
   // Show loading screen while checking authentication status
   if (isLoading) {

@@ -46,7 +46,7 @@ describe("PostHog generated app", () => {
     expect(await read("apps/server/src/instrumentation.ts")).toContain("initPosthog()");
     expect(await read("apps/server/src/app.ts")).toContain("shutdownPosthog()");
     expect(await read("apps/webapp/src/Providers.tsx")).toContain("AppErrorBoundary");
-    expect(await read("apps/webapp/src/utils/posthog.ts")).toContain(
+    expect(await read("apps/webapp/src/utils/posthog.utils.ts")).toContain(
       "capture_unhandled_rejections: true"
     );
     expect(await read("apps/webapp/vite.config.ts")).toContain("@posthog/rollup-plugin");

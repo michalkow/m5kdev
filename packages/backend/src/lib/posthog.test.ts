@@ -14,7 +14,10 @@ describe("PostHog backend error delivery", () => {
     }>;
   }> = [];
 
+  let previousKey: string | undefined;
   beforeEach(() => {
+    previousKey = process.env.VITE_PUBLIC_POSTHOG_KEY;
+    delete process.env.VITE_PUBLIC_POSTHOG_KEY;
     batches.length = 0;
     jest.spyOn(globalThis, "fetch").mockImplementation(async (_url, options) => {
       let body = Buffer.from(options?.body as string | Uint8Array);
@@ -26,6 +29,8 @@ describe("PostHog backend error delivery", () => {
   afterEach(async () => {
     await shutdownPosthog();
     jest.restoreAllMocks();
+    if (previousKey === undefined) delete process.env.VITE_PUBLIC_POSTHOG_KEY;
+    else process.env.VITE_PUBLIC_POSTHOG_KEY = previousKey;
   });
 
   it("delivers a correlated exception once even when analytics capture is suppressed", async () => {
@@ -59,6 +64,20 @@ describe("PostHog backend error delivery", () => {
       "payment provider unavailable"
     );
   });
+  it("flushes pending errors then prevents retired clients from sending after shutdown", async () => {
+    const client = initPosthog({ apiKey: "phc_test", host: "https://posthog.test" });
+    client?.captureException(new Error("before shutdown"));
+    await shutdownPosthog();
+    client?.captureException(new Error("after shutdown"));
+    await client?.flush();
+    const exceptions = batches
+      .flatMap((batch) => batch.batch ?? [])
+      .filter((event) => event.event === "$exception");
+    expect(exceptions).toHaveLength(1);
+    expect(JSON.stringify(exceptions[0])).toContain("before shutdown");
+    expect(initPosthog({ apiKey: " demo " })).toBeUndefined();
+  });
+
   it("keeps expected 4xx failures out of PostHog", async () => {
     initPosthog({ apiKey: "phc_test", host: "https://posthog.test" });
     captureServerError(new ServerError({ code: "FORBIDDEN" }), {
@@ -70,7 +89,7 @@ describe("PostHog backend error delivery", () => {
     ).toEqual([]);
   });
 
-  it.each([undefined, "", "demo"])(
+  it.each([undefined, "", "demo", " demo "])(
     "does not initialize or send without a configured key (%s)",
     async (apiKey) => {
       expect(initPosthog({ apiKey, host: "https://posthog.test" })).toBeUndefined();

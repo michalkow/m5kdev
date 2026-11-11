@@ -69,7 +69,11 @@ export const builtBackendApp = createBackendApp(
     db: connection,
     schema,
     onShutdown: async () => {
-      await Promise.all([shutdownPosthog(), shutdownTelemetry()]);
+      const results = await Promise.allSettled([shutdownPosthog(), shutdownTelemetry()]);
+      const failures = results.flatMap((result) =>
+        result.status === "rejected" ? [result.reason] : []
+      );
+      if (failures.length > 0) throw new AggregateError(failures, "Failed to flush observability");
     },
     app: {
       name: APP_NAME,

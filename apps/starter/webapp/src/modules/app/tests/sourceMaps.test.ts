@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const webapp = path.resolve(__dirname, "..");
+const webapp = path.resolve(__dirname, "../../../..");
 const vite = path.join(path.dirname(require.resolve("vite/package.json")), "bin/vite.js");
 
 describe("Vite source map artifacts", () => {

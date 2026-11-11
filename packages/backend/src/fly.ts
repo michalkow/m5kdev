@@ -79,10 +79,10 @@ export function runFlyDeploy(options: RunFlyDeployOptions): void {
   const vars = parseDotenv(readFileSync(options.env, "utf8"));
   // Public SPA values and private source map upload configuration affect this
   // build. Other runtime secret rotations must not invalidate the webapp layer.
-  const publicConfig = Object.entries(vars)
+  const buildConfig = Object.entries(vars)
     .filter(([key]) => key.startsWith("VITE_") || POSTHOG_UPLOAD_KEYS.has(key))
     .sort(([left], [right]) => left.localeCompare(right));
-  const viteConfigHash = createHash("sha256").update(JSON.stringify(publicConfig)).digest("hex");
+  const viteConfigHash = createHash("sha256").update(JSON.stringify(buildConfig)).digest("hex");
   const args = [
     "deploy",
     "-c",

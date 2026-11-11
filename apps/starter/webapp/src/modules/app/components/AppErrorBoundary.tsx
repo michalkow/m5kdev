@@ -17,6 +17,8 @@ function AppErrorFallback() {
   );
 }
 
+// React exposes componentDidCatch/getDerivedStateFromError only through class
+// components; this infrastructure boundary is the narrow exception to function components.
 export class AppErrorBoundary extends Component<
   PropsWithChildren<{ client?: PostHog }>,
   { failed: boolean }

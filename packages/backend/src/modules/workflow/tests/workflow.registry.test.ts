@@ -520,7 +520,7 @@ describe("WorkflowRegistry", () => {
         id: "job-1",
         name: "import",
         data: { userId: "user-1", organizationId: "org-1" },
-        opts: { attempts: 2 },
+        opts: { attempts: 2, m5kdev: { userId: "metadata-user" } },
         attemptsMade: 1,
       };
       failed(job, error);
@@ -530,7 +530,7 @@ describe("WorkflowRegistry", () => {
         {
           error: expect.any(Error),
           properties: expect.objectContaining({
-            "user.id": "user-1",
+            "user.id": "metadata-user",
             "organization.id": "org-1",
             layer: "workflow",
             context: expect.objectContaining({ jobId: "job-1", attemptsMade: 2 }),

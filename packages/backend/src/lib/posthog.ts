@@ -13,9 +13,10 @@ export function initPosthog({
 } = {}): PostHog | undefined {
   const existing = getPosthog();
   if (existing) return existing;
-  if (!apiKey?.trim() || apiKey === "demo") return undefined;
+  const normalizedKey = apiKey?.trim();
+  if (!normalizedKey || normalizedKey === "demo") return undefined;
 
-  const client = new PostHog(apiKey, { host, enableExceptionAutocapture: true });
+  const client = new PostHog(normalizedKey, { host, enableExceptionAutocapture: true });
   setPosthog(client);
   setErrorReporter({
     captureException(error, properties) {
@@ -38,5 +39,11 @@ export async function shutdownPosthog(): Promise<void> {
   const client = getPosthog();
   setPosthog(undefined);
   setErrorReporter(undefined);
-  await client?.shutdown();
+  try {
+    await client?.shutdown();
+  } finally {
+    // The SDK retains retired autocapture clients. Opt out after flushing so a
+    // process that stays alive cannot send later errors to the retired project.
+    await client?.disable();
+  }
 }

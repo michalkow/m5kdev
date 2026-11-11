@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import { initBrowserPosthog } from "./utils/posthog";
+import { initBrowserPosthog } from "./utils/posthog.utils";
 import "./index.css";
 import "./utils/i18n";
 

@@ -2,12 +2,7 @@ import type { Job, Worker } from "bullmq";
 import { captureServerError, ServerError } from "../../utils/errors";
 import { logger as rootLogger } from "../../utils/logger";
 import { runWithPosthogRequestState } from "../../utils/posthog";
-import {
-  actorTelemetryFromJobData,
-  runWithActorTelemetry,
-  serializeSpanValue,
-  withSpan,
-} from "../../utils/telemetry";
+import { runWithActorTelemetry, serializeSpanValue, withSpan } from "../../utils/telemetry";
 import type { WorkflowService } from "./workflow.service";
 import type {
   RegisteredHandler,
@@ -15,6 +10,7 @@ import type {
   WorkflowJobDefinition,
   WorkflowJobDefinitionBase,
 } from "./workflow.types";
+import { workflowActorTelemetry } from "./workflow.utils";
 
 const SCHEDULER_LIST_BATCH = 100;
 
@@ -196,7 +192,7 @@ export class WorkflowRegistry {
           }
 
           return runWithPosthogRequestState({ disableCapture: false }, () =>
-            runWithActorTelemetry(actorTelemetryFromJobData(job.data), () =>
+            runWithActorTelemetry(workflowActorTelemetry(job), () =>
               withSpan(
                 {
                   name:
@@ -246,7 +242,7 @@ export class WorkflowRegistry {
       );
 
       worker.on("failed", (job, error) => {
-        runWithActorTelemetry(actorTelemetryFromJobData(job?.data), () =>
+        runWithActorTelemetry(workflowActorTelemetry(job), () =>
           this.captureJobFailure(queueName, job, error)
         );
       });
