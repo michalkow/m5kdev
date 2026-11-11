@@ -153,6 +153,8 @@ Before enabling deployment:
 | --- | --- |
 | `FLY_API_TOKEN_LANDING` | App-scoped deploy token for `{{APP_SLUG}}-landing`. |
 | `LANDING_ENV_PRODUCTION` | Complete contents of your filled-in `apps/landing/.env.production`. |
+| `SLACK_BOT_TOKEN` | Optional. Bot User OAuth Token (`xoxb-...`) for release pings. |
+| `SLACK_CHANNEL_ID` | Optional. Channel ID (`C...`) for `[{{APP_SLUG}}]: Published app\|landing v…` messages. |
 // m5k:server:start
 // m5k:server:end
 

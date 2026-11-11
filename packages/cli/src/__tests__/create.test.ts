@@ -1155,6 +1155,8 @@ describe("scaffoldProject", () => {
     expect(deployRuns).toContain('pnpm "app:deploy:$ENVIRONMENT"');
     expect(source).toContain("secrets.APP_ENV_FILE");
     expect(source).not.toContain("APP_ENV_PRODUCTION");
+    expect(source).toContain("[branch-deploys]: Published app v");
+    expect(source).toContain("slackapi/slack-github-action@v4.0.0");
   });
 
   it("ships a deployment guide and an environments agent doc that match the workflows", async () => {
@@ -1194,6 +1196,8 @@ describe("scaffoldProject", () => {
       "APP_ENV_FILE",
       "DATABASE_DIRECT_URL",
       "FLY_API_TOKEN",
+      "SLACK_BOT_TOKEN",
+      "SLACK_CHANNEL_ID",
     ]);
     for (const secret of workflowSecrets) expect(guide).toContain(`\`${secret}\``);
     expect(guide).toContain("Promotion PR");
@@ -1376,6 +1380,8 @@ describe("scaffoldProject", () => {
         expect(appTriggers("apps/webapp/src/App.tsx")).toBe(platform !== "expo");
         expect(appTriggers("apps/expo/src/index.ts")).toBe(false);
         expect(appTriggers(".github/workflows/deploy-app.yml")).toBe(true);
+        expect(appSource).toContain("[deploy-fixture]: Published app v");
+        expect(appSource).toContain("slackapi/slack-github-action@v4.0.0");
         for (const environment of ["development", "production"]) {
           const deployScript: string = rootPackage.scripts[`app:deploy:${environment}`];
           for (const flag of ["config", "dockerfile"]) {
@@ -1456,6 +1462,8 @@ describe("scaffoldProject", () => {
           if: "always()",
           run: `rm -f ${envPath}`,
         });
+        expect(source).toContain("[deploy-fixture]: Published landing v");
+        expect(source).toContain("slackapi/slack-github-action@v4.0.0");
       }
     }
   );

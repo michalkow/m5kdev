@@ -118,6 +118,18 @@ deploys should wait for approval.
 After changing a secret, run the **Deploy app** workflow on that branch to apply
 it.
 
+Optional **repository** secrets post a Slack message after a successful
+Production deploy (and after landing deploys on `main`). Leave them unset to
+skip the ping.
+
+| Secret | Value |
+| --- | --- |
+| `SLACK_BOT_TOKEN` | Bot User OAuth Token (`xoxb-...`) from a Slack app with `chat:write`. |
+| `SLACK_CHANNEL_ID` | Channel ID (`C...`) to post into. Invite the bot to private channels. |
+
+Messages look like `[{{APP_SLUG}}]: Published app v<apps/server/package.json version>`
+and `[{{APP_SLUG}}]: Published landing v<apps/landing/package.json version>`.
+
 ### 6. Branches and protection
 
 1. Create the `production` branch from `main` and push it.

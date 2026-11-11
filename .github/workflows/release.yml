@@ -1,0 +1,43 @@
+name: Release
+
+# Changesets tag every publishable package at the same Semver (ADR-0018).
+# Notify once, from the create-m5kdev tag that follows a successful publish.
+on:
+  push:
+    tags:
+      - "create-m5kdev@*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Slack notification
+        id: slack
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+        run: |
+          if [ -z "$SLACK_BOT_TOKEN" ] || [ -z "$SLACK_CHANNEL_ID" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping Slack notification (SLACK_BOT_TOKEN or SLACK_CHANNEL_ID unset)."
+            exit 0
+          fi
+          version=$(node -p "require('./packages/backend/package.json').version")
+          {
+            echo "enabled=true"
+            echo "text=[m5kdev]: Published framework v${version}"
+          } >> "$GITHUB_OUTPUT"
+      - name: Notify Slack
+        if: steps.slack.outputs.enabled == 'true'
+        uses: slackapi/slack-github-action@v4.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: ${{ secrets.SLACK_CHANNEL_ID }}
+            text: ${{ toJSON(steps.slack.outputs.text) }}

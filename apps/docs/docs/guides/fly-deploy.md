@@ -118,6 +118,8 @@ pushing. CI installs with `--frozen-lockfile`. In the generated repository's
 | --- | --- |
 | `FLY_API_TOKEN_LANDING` | Deploy token scoped to the landing Fly app. |
 | `LANDING_ENV_PRODUCTION` | Complete filled-in `apps/landing/.env.production` contents. |
+| `SLACK_BOT_TOKEN` | Optional. Bot User OAuth Token (`xoxb-...`) for release pings. Unset skips the ping. |
+| `SLACK_CHANNEL_ID` | Optional. Channel ID (`C...`) for `[app-slug]: Published app\|landing v…` messages. |
 
 The product app uses GitHub **environments** (`development`, `production`)
 instead of repository secrets. Each environment holds `FLY_API_TOKEN`,
