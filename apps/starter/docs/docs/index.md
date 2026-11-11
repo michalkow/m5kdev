@@ -10,3 +10,9 @@ can do and how to do it. On a phone, open the menu to see the topics.
 Each guide explains the steps to follow and what to expect afterward. You can
 read this help site without signing in. Use **Help** in the product to return
 here whenever you need it.
+
+## If the webapp stops working
+
+If you see **Something went wrong**, select **Reload page** to try again. If the
+problem continues, contact support and describe what you were doing before the
+error appeared.

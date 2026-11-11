@@ -202,5 +202,10 @@
       "eyebrow": "Framework Starter",
       "tagline": "A minimal m5kdev starter with auth, tRPC, and one polished posts module."
     }
+  },
+  "errors": {
+    "title": "Something went wrong",
+    "body": "Reload the page to try again. If the problem continues, contact support.",
+    "reload": "Reload page"
   }
 }
