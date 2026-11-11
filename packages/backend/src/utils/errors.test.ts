@@ -9,6 +9,7 @@ import {
   ServerError,
   setErrorReporter,
 } from "./errors";
+import { runWithPosthogRequestState } from "./posthog";
 import { runWithActorTelemetry } from "./telemetry";
 
 describe("reportError otel", () => {
@@ -162,5 +163,29 @@ describe("backend error capture", () => {
     ]);
     expect(error.cause).toBe(cause);
     expect(error.toJSON()).toHaveProperty("errorEventId", "error-event-id");
+  });
+
+  it("defers reporting so a later terminal capture can run", () => {
+    const captures: Array<{ error: unknown; properties: unknown }> = [];
+    setErrorReporter({
+      captureException(error, properties) {
+        captures.push({ error, properties });
+        return "deferred-event-id";
+      },
+    });
+    const error = new ServerError({
+      code: "INTERNAL_SERVER_ERROR",
+      layer: "workflow",
+      layerName: "Import",
+    });
+    const log = { error() {}, warn() {}, debug() {} };
+    runWithPosthogRequestState({ disableCapture: false, deferExceptionCapture: true }, () => {
+      captureServerError(error, { logger: log });
+    });
+    expect(captures).toEqual([]);
+    expect(error.logged).toBe(false);
+    captureServerError(error, { logger: log });
+    expect(captures).toHaveLength(1);
+    expect(error.logged).toBe(true);
   });
 });

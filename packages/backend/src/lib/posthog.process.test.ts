@@ -62,4 +62,30 @@ describe("PostHog automatic process exception delivery", () => {
     },
     20000
   );
+
+  it("does not send later unhandled errors to a retired client", () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "posthog-process-"));
+    const output = path.join(directory, "delivery.json");
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [
+          "--import",
+          require.resolve("tsx"),
+          "--unhandled-rejections=warn",
+          path.resolve(__dirname, "../test/fixtures/posthog-autocapture.cjs"),
+          output,
+          "after-shutdown",
+        ],
+        { encoding: "utf8", timeout: 15000 }
+      );
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(0);
+      if (!fs.existsSync(output)) throw new Error(result.stderr + result.stdout);
+      const delivery = JSON.parse(fs.readFileSync(output, "utf8"));
+      expect(delivery.exceptions).toEqual([]);
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  }, 20000);
 });

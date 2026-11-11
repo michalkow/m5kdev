@@ -4,6 +4,7 @@ import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { camel } from "radashi";
 import type { ServerErrorLayer } from "../modules/base/base.types";
 import { logger } from "./logger";
+import { isExceptionCaptureDeferred } from "./posthog";
 import { extractOrigin, trimStack } from "./stack";
 import { getActorTelemetrySpanAttributes } from "./telemetry";
 
@@ -138,6 +139,9 @@ export function captureServerError(
   }: { logger?: CaptureLogger; level?: "error" | "warn" | "debug" } = {}
 ): ServerError {
   if (error.logged) return error;
+  // Workflow attempts defer until the terminal failed event so retries cannot
+  // report, and `logged` cannot suppress the capture that adds job context.
+  if (isExceptionCaptureDeferred()) return error;
   error.logged = true;
 
   const critical = error.is5xxError();
@@ -178,7 +182,7 @@ export function getErrorReporter(): ErrorReporter | undefined {
   return globalThis.m5ErrorReporter;
 }
 
-export function setErrorReporter(reporter: ErrorReporter | undefined) {
+export function setErrorReporter(reporter: ErrorReporter | undefined): void {
   globalThis.m5ErrorReporter = reporter;
 }
 

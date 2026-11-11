@@ -28,6 +28,15 @@ globalThis.fetch = async (_url, options) => {
 
 async function main() {
   const client = initPosthog({ apiKey: "phc_process", host: "https://posthog.test" });
+  if (mode === "after-shutdown") {
+    await shutdownPosthog();
+    void Promise.reject(new Error("after shutdown"));
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    await client.flush();
+    persist();
+    return;
+  }
   runWithActorTelemetry({ userId: "request-user", organizationId: "request-org" }, () => {
     trace.getTracer("process-regression").startActiveSpan("detached", (span) => {
       spanContext = span.spanContext();
