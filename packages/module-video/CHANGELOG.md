@@ -1,5 +1,12 @@
 # @m5kdev/module-video
 
+## 0.45.0
+
+### Patch Changes
+
+- Updated dependencies [b3b7cb8]
+  - @m5kdev/backend@0.45.0
+
 ## 0.44.0
 
 ### Patch Changes

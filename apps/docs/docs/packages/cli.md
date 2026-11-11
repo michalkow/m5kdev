@@ -18,10 +18,10 @@ are **Node.js >= 24**.
 ## Commands
 
 ```sh
-pnpm dlx create-m5kdev@0.34.0 [directory] [create options]
-pnpm dlx create-m5kdev@0.34.0 init [--yes] [--force] [--json]
-pnpm dlx create-m5kdev@0.34.0 doctor [--full] [--json]
-pnpm dlx create-m5kdev@0.34.0 update [--dry-run] [--skip-install] [--json] [--platform web|expo|both] [--yes]
+pnpm dlx create-m5kdev@0.45.0 [directory] [create options]
+pnpm dlx create-m5kdev@0.45.0 init [--yes] [--force] [--json]
+pnpm dlx create-m5kdev@0.45.0 doctor [--full] [--json]
+pnpm dlx create-m5kdev@0.45.0 update [--dry-run] [--skip-install] [--json] [--platform web|expo|both] [--yes]
 ```
 
 A first positional argument that is not a command is treated as `create`.
@@ -175,6 +175,13 @@ Root `.dockerignore` now ignores SQLite `*.db` / wal / shm files (see the Fly
 runbook). There is no registry `id` for these upgrades.
 
 Operational Fly runbook: [Deploy with Docker and Fly.io](/guides/fly-deploy).
+
+## 0.45.0 upgrades
+
+1. [PostHog error tracking](/guides/v0.45.0-posthog-error-tracking-migration)
+2. Public product help is additive. `update` can add the `apps/docs` scaffold;
+   existing apps keep working without it. See
+   [Public product help](/packages/cli#public-product-help).
 
 ## Package rule
 

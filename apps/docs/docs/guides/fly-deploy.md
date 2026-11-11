@@ -7,7 +7,7 @@ sidebar_position: 8
 The **Dockerfile** is the portable artifact: any host that can build from the
 repo root can run it. **Fly.io** is the adapter this starter ships (one Fly
 config per Deployment environment, `app:deploy:<environment>` /
-`landing:deploy`). Other hosts are not documented as shipped. The branch and
+`landing:deploy` / `docs:deploy`). Other hosts are not documented as shipped. The branch and
 environment model is in [Deployment environments](/guides/deployment-environments).
 
 Generated apps need **Node.js >= 24**. Images use `node:24-slim` and pnpm from
@@ -23,11 +23,14 @@ paths. The `fly` CLI must be on PATH.
 | --- | --- | --- |
 | Product (server + baked webapp) | `apps/shared/Dockerfile` | `<app-slug>-development`, `<app-slug>-production` |
 | Landing (public site) | `apps/landing/Dockerfile` | `<app-slug>-landing` |
+| Product help (static Docusaurus) | `apps/docs/Dockerfile` | `<app-slug>-docs` |
 
-Neither app mounts a Fly volume. PostgreSQL is hosted outside the machine, so
+None of these apps mounts a Fly volume. PostgreSQL is hosted outside the machine, so
 the Fly configs have no `[[mounts]]` and first deploy does not run `fly volumes create`.
+The help site is Caddy serving static files on a shared CPU with 256 MB RAM; it
+needs no database, Redis, or runtime secrets.
 
-The starter uses **one** root `.dockerignore` for both images. Its recursive
+The starter uses **one** root `.dockerignore` for every image. Its recursive
 patterns exclude environment files, dependencies, local databases, build
 outputs, and test reports at every workspace depth. A plain `.dockerignore`
 beside a Dockerfile does not apply to a repository-root build context.
@@ -40,11 +43,12 @@ is unchanged: there is no `./client` directory, so the Kernel skips the SPA.
 
 `.env*` stays out of the image (root `.dockerignore`).
 
-- **Build secrets** — forwarded by `app:deploy:<environment>` / `landing:deploy` as
-  `fly deploy --build-secret` for **every** key in that app’s `.env.production`.
-  The frontend build mounts them with `required=false` so a dry run without
-  secrets still builds. Vite `VITE_*` values are baked into the SPA at image
-  build.
+- **Build secrets** — forwarded by `app:deploy:<environment>` / `landing:deploy` /
+  `docs:deploy` as `fly deploy --build-secret` for **every** key in that app’s
+  `.env.production`. The frontend build mounts them with `required=false` so a dry
+  run without secrets still builds. Vite `VITE_*` values are baked into the SPA
+  at image build. Docs production env is only public URL configuration
+  (`VITE_DOCS_URL`).
 - The deploy wrapper also supplies `VITE_CONFIG_HASH`, a stable SHA-256 hash of
   sorted `VITE_*` keys and values. Docker does not invalidate secret mounts when
   their contents change; this argument ensures the baked frontend updates when
@@ -64,6 +68,7 @@ copy-the-example message.
 cp apps/shared/.env.development.example apps/shared/.env.development
 cp apps/shared/.env.production.example apps/shared/.env.production
 cp apps/landing/.env.production.example apps/landing/.env.production
+cp apps/docs/.env.production.example apps/docs/.env.production
 ```
 
 Product examples require a PostgreSQL `DATABASE_URL` routed through PgBouncer
@@ -79,10 +84,12 @@ volume; that was the libSQL file replica.
 fly apps create <app-slug>-development
 fly apps create <app-slug>-production
 fly apps create <app-slug>-landing
+fly apps create <app-slug>-docs
 pnpm app:secrets:production
 pnpm landing:secrets
 pnpm app:deploy:production
 pnpm landing:deploy
+pnpm docs:deploy
 ```
 
 Default Fly region in the starter is `iad`, 1gb shared CPU, `PORT=8080`,
@@ -91,13 +98,14 @@ Default Fly region in the starter is `iad`, 1gb shared CPU, `PORT=8080`,
 
 ## GitHub Actions deployment
 
-Generated repositories include two independent deploy workflows. Landing deploys
-on pushes to `main`. The product app deploys Development on pushes to `main` and
-Production on pushes to `production`, migrating first; see
+Generated repositories include independent deploy workflows. Landing and product
+help deploy on pushes to `main`. The product app deploys Development on pushes
+to `main` and Production on pushes to `production`, migrating first; see
 [Deployment environments](/guides/deployment-environments).
 
 | Workflow | App changes that trigger deployment |
 | --- | --- |
+| `.github/workflows/deploy-docs.yml` | `apps/docs/**` |
 | `.github/workflows/deploy-landing.yml` | `apps/landing/**` |
 | `.github/workflows/deploy-app.yml` | `apps/server/**`, `apps/webapp/**`, `apps/shared/**`, `apps/email/**` |
 
@@ -116,6 +124,8 @@ pushing. CI installs with `--frozen-lockfile`. In the generated repository's
 
 | Repository secret | Value |
 | --- | --- |
+| `FLY_API_TOKEN_DOCS` | Deploy token scoped to the docs Fly app. |
+| `DOCS_ENV_PRODUCTION` | Complete filled-in `apps/docs/.env.production` contents (`VITE_DOCS_URL`). |
 | `FLY_API_TOKEN_LANDING` | Deploy token scoped to the landing Fly app. |
 | `LANDING_ENV_PRODUCTION` | Complete filled-in `apps/landing/.env.production` contents. |
 | `SLACK_BOT_TOKEN` | Optional. Bot User OAuth Token (`xoxb-...`) for release pings. Unset skips the ping. |
@@ -130,11 +140,12 @@ and store its full output in the corresponding secret. Names must match the
 committed Fly configs. See [Fly's GitHub Actions guide](https://fly.io/docs/launch/continuous-deployment-with-github-actions/).
 
 The workflows write temporary production env files, call the existing
-`landing:secrets` / `app:secrets` and deploy scripts from the repository root,
-then remove the files even after failure. Runtime secrets and public frontend
-configuration use the same path as local deployment. The product workflow's
-migrate job applies migrations before each deploy; optional Mastra
-initialization remains an operator step.
+`docs:deploy` / `landing:secrets` / `app:secrets` and deploy scripts from the
+repository root, then remove the files even after failure. Runtime secrets and
+public frontend configuration use the same path as local deployment. Docs
+deployment does not import runtime secrets. The product workflow's migrate job
+applies migrations before each deploy; optional Mastra initialization remains an
+operator step.
 
 Each target serializes deployments without cancelling an active rollout. Both
 workflows support **Run workflow** from `main`; use it after updating GitHub
@@ -170,6 +181,11 @@ The landing image contains Caddy and the compiled `dist` files. Its
 `apps/landing/Caddyfile` serves on port 8080, compresses responses, and falls back
 to `index.html` for client routes. Node and frontend build dependencies remain
 in the build stage; `vite preview` is only for local previewing.
+
+The docs image is the same pattern for Docusaurus output: Caddy on port 8080
+from `apps/docs/Caddyfile`. Deep links serve their own pages; unknown paths
+return the help site's 404 page. Customize the public URL with `VITE_DOCS_URL`
+for docs, web, and Landing, and `EXPO_PUBLIC_DOCS_URL` for Expo.
 
 To check cache behavior, compare a no-change build, a server-only edit, a
 webapp-only edit, and a public `VITE_*` change on the same builder. Dependency

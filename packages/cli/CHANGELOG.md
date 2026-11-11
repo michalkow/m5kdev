@@ -1,5 +1,21 @@
 # create-m5kdev
 
+## 0.45.0
+
+### Minor Changes
+
+- b3b7cb8: Replace Sentry reporter imports, hints, and sentryEventId with optional PostHog initialization, flat error properties, and errorEventId, preserving causes, capture-once behavior, Actor identity, and OpenTelemetry context across services, HTTP, Workflows, and unhandled process failures.
+  Capture browser and React failures with authenticated User/Organization context and a translated recovery screen; make session-owned sign-out awaitable so logout and account closure clear reporting identity before navigation.
+  Upload matching Vite source maps privately per Deployment environment, delete maps after successful upload, keep upload credentials out of browser and runtime configuration, and invalidate build caches when upload configuration changes.
+  Align Starter and generated apps, declare Express 5 types as a backend peer and Node test types in Webapp, preserve optional feature boundaries, and document the 0.45.0 consumer migration.
+
+### Patch Changes
+
+- 503f555: Scaffold a public Docusaurus help site for every app, with guides matching the selected platforms and features and Help links from the product and landing page.
+  Include a lightweight Fly configuration, a dedicated docs deployment command, and an independent GitHub Actions deployment workflow.
+  Require agents through generated AGENTS.md and CLAUDE.md instructions to update plain-language end-user guides alongside user-facing feature changes.
+  Preserve customized guides during managed updates and check documentation builds in generated CI.
+
 ## 0.44.0
 
 ### Minor Changes

@@ -50,6 +50,8 @@ wiring in routers or tRPC files.
 
 OpenTelemetry tracing and correlated Pino logging are opt-in via
 `import "./instrumentation"` first in the server entry and `OTEL_*` environment
-variables. Pass `onShutdown: shutdownTelemetry` to `createBackendApp`. See
-[Telemetry migration](/guides/telemetry-migration) and
+variables. Initialize optional PostHog after OTel, then flush both clients in
+Kernel `onShutdown`. See
+[Telemetry migration](/guides/telemetry-migration),
+[PostHog error tracking](/guides/v0.45.0-posthog-error-tracking-migration), and
 [Kernel Express HTTP shell](/guides/v0.33.0-kernel-express-http-shell-migration).

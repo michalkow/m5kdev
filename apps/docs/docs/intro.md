@@ -217,6 +217,30 @@ is 9.10.4.
 
 - [Express 5.3.0](/guides/v0.41.0-express-v5-migration)
 
+## Upgrading to 0.42.0 {#upgrade-0-42-0}
+
+Complete 0.41.0 first. PostgreSQL is the only app SQL dialect; pgvector replaces
+the libSQL vector adapter. Package installation alone does not migrate data.
+
+- [PostgreSQL and pgvector](/guides/v0.42.0-postgresql-pgvector-migration)
+
+## Upgrading to 0.44.0 {#upgrade-0-44-0}
+
+Complete 0.42.0 first. Every Kernel app must set `APP_ENV` and `APP_SLUG` and
+move to per-environment deploys.
+
+- [Deployment environments](/guides/v0.44.0-deployment-environments-migration)
+
+## Upgrading to 0.45.0 {#upgrade-0-45-0}
+
+Complete 0.44.0 first. PostHog replaces Sentry for backend and browser errors.
+Apps that already use error reporting, custom reporter adapters, or Sentry log
+fields must migrate those contracts. Public product help is additive: new apps
+include it, and `m5kdev update` can add the scaffold to an existing app.
+
+- [PostHog error tracking](/guides/v0.45.0-posthog-error-tracking-migration)
+- Public product help: [CLI package](/packages/cli#public-product-help)
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module

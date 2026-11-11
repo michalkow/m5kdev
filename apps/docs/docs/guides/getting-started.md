@@ -8,17 +8,23 @@ Scaffold an app with the CLI, then read by [module](/modules) or
 [package](/packages).
 
 ```sh
-pnpm dlx create-m5kdev@0.34.0
+pnpm dlx create-m5kdev@0.45.0
 ```
 
 `--yes` scaffolds web with always-on modules only. Interactive create prompts
 for Backend Modules (`files`, `workflows`, `ai`, …). Full command list:
-[CLI package](/packages/cli). Existing apps: [0.34.0 upgrades](/#upgrade-0-34-0).
+[CLI package](/packages/cli). Existing apps: start from the upgrade section for
+your current version on the [documentation home](/).
 
 ## Docs site
 
-The docs site is a private workspace app at `apps/docs`. It uses Docusaurus with
-the docs plugin mounted at `/`, so documentation is the first screen.
+The framework documentation you are reading is this repository's private
+workspace app at `apps/docs` (port 3000). Generated apps also include a public
+product help site at `apps/docs` (port 3001); see
+[Public product help](/packages/cli#public-product-help).
+
+The framework site uses Docusaurus with the docs plugin mounted at `/`, so
+documentation is the first screen.
 
 ## Run locally
 

@@ -20,7 +20,7 @@ below. Existing apps follow the migration steps in this guide.
 | `@m5kdev/backend` | `initTelemetry` / `shutdownTelemetry` in `lib/otel.ts`; automatic spans on HTTP, Express, tRPC, service procedures, repository queries, and DB calls; Pino log correlation (`trace_id`, `span_id`) and OTLP log export in `utils/logger.ts`. |
 | `@m5kdev/backend` | BullMQ OpenTelemetry via `bullmq-otel` on workflow `Queue` / `Worker` instances; OTLP metrics exporter when `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT` is set. |
 | `@m5kdev/backend` | `withSpan`, `getTracer`, and `serializeSpanValue` helpers in `utils/telemetry.ts` for custom spans in app services. |
-| App server | `instrumentation.ts` bootstraps telemetry before the rest of the app loads; `createBackendApp({ onShutdown: shutdownTelemetry })` flushes on Kernel shutdown. |
+| App server | `instrumentation.ts` bootstraps telemetry before the rest of the app loads; Kernel `onShutdown` flushes OTel. From 0.45.0, initialize optional PostHog after OTel and flush both clients. |
 | App shared `.env` | Optional `OTEL_*` variables documented in `.env.example`. |
 
 ## Database migration
@@ -59,9 +59,11 @@ void (async () => {
 })();
 ```
 
-Pass `onShutdown: shutdownTelemetry` in `createBackendApp`. Do not register
-SIGINT/SIGTERM or close HTTP in `index.ts`. The Kernel listens and shuts down;
-`onShutdown` runs after HTTP close. See
+Pass OTel shutdown through Kernel `onShutdown`. From 0.45.0, also initialize
+optional PostHog after `initTelemetry` and flush both clients together; see
+[PostHog error tracking](/guides/v0.45.0-posthog-error-tracking-migration).
+Do not register SIGINT/SIGTERM or close HTTP in `index.ts`. The Kernel listens
+and shuts down; `onShutdown` runs after HTTP close. See
 [Kernel Express HTTP shell](/guides/v0.33.0-kernel-express-http-shell-migration).
 
 On startup you should see a line similar to:
@@ -256,7 +258,8 @@ that pattern if you want e2e traces in your observability backend; set
 1. Ensure `@m5kdev/backend` is on a version that includes `lib/otel` and tracing middleware (upgrade the workspace package if needed).
 2. Add `apps/<app>/server/src/instrumentation.ts`.
 3. Add `import "./instrumentation"` as the first import in `apps/<app>/server/src/index.ts`.
-4. Pass `onShutdown: shutdownTelemetry` to `createBackendApp`.
+4. Pass OTel shutdown through Kernel `onShutdown`. From 0.45.0, flush PostHog
+   there as well.
 5. Document `OTEL_*` variables in `apps/<app>/shared/.env.example`.
 6. Configure OTLP env vars for environments where you want export (staging, production, or local SigNoz).
 7. Restart the server and confirm `[otel] tracing enabled` on boot.
