@@ -154,7 +154,11 @@ const FEATURE_MANIFEST = {
       kind: "module",
       label: "Notifications",
       experimental: true,
-      paths: ["apps/docs/docs/notifications-web.md", "apps/docs/docs/notifications-mobile.md"],
+      paths: [
+        "apps/webapp/src/modules/notification/",
+        "apps/docs/docs/notifications-web.md",
+        "apps/docs/docs/notifications-mobile.md",
+      ],
     },
     tags: { kind: "module", label: "Tags", experimental: true, paths: [] },
     connect: { kind: "module", label: "Connect", experimental: true, paths: [] },

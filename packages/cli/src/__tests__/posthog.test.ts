@@ -25,6 +25,15 @@ describe("PostHog generated app", () => {
       skipGit: true,
     });
     const read = (file: string) => fs.readFile(path.join(result.targetDirectory, file), "utf8");
+    const layout = await read("apps/webapp/src/Layout.tsx");
+    expect(layout).not.toContain("m5k:");
+    expect(layout).not.toContain("NotificationSidebarInbox");
+    expect(layout).not.toContain("BellIcon");
+    await expect(
+      fs.stat(path.join(result.targetDirectory, "apps/webapp/src/modules/notification"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    const webappPackage = JSON.parse(await read("apps/webapp/package.json"));
+    expect(webappPackage.devDependencies["@types/node"]).toBe("catalog:m5kdev");
     const workspace = parse(await read("pnpm-workspace.yaml"));
     // The Node SDK stays an internal Kernel dependency, not an app-facing pin.
     expect(workspace.catalogs.m5kdev["posthog-node"]).toBeUndefined();

@@ -83,7 +83,7 @@ export function AuthProvider({
   }, []);
 
   const signOut = useCallback(() => {
-    resolvedAuthClient.signOut().then(() => {
+    return resolvedAuthClient.signOut().then(() => {
       setSession(null);
       onSession?.(null);
     });

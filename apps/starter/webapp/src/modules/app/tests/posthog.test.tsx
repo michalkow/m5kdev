@@ -1,9 +1,11 @@
 import { AuthProvider } from "@m5kdev/frontend/modules/auth/components/AuthProvider";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
+import { AuthUserLogoutRoute } from "@m5kdev/web-ui/modules/auth/components/AuthUserLogoutRoute";
 import i18n from "i18next";
 import { act, type ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
 import { initReactI18next } from "react-i18next";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router";
 import { initBrowserPosthog, syncBrowserPosthogIdentity } from "../../../utils/posthog.utils";
 import { AppErrorBoundary } from "../components/AppErrorBoundary";
 
@@ -162,7 +164,8 @@ describe("browser and React error capture", () => {
       signOut: jest.fn().mockResolvedValue(undefined),
     };
     function SessionActions() {
-      const { registerSession, signOut } = useSession();
+      const { registerSession } = useSession();
+      const navigate = useNavigate();
       return (
         <>
           <button
@@ -174,7 +177,7 @@ describe("browser and React error capture", () => {
           >
             Refresh
           </button>
-          <button type="button" data-action="logout" onClick={signOut}>
+          <button type="button" data-action="logout" onClick={() => navigate("/logout")}>
             Sign out
           </button>
         </>
@@ -189,7 +192,16 @@ describe("browser and React error capture", () => {
             authClient={authClient as unknown as ComponentProps<typeof AuthProvider>["authClient"]}
             onSession={(session) => syncBrowserPosthogIdentity(client, session)}
           >
-            <SessionActions />
+            <MemoryRouter>
+              <Routes>
+                <Route path="/" element={<SessionActions />} />
+                <Route
+                  path="/logout"
+                  element={<AuthUserLogoutRoute loader={<span>Signing out</span>} />}
+                />
+                <Route path="/login" element={<span>Signed out</span>} />
+              </Routes>
+            </MemoryRouter>
           </AuthProvider>
         );
       });
@@ -204,6 +216,7 @@ describe("browser and React error capture", () => {
       await act(async () => {
         container.querySelector<HTMLButtonElement>('[data-action="logout"]')?.click();
       });
+      expect(container.textContent).toBe("Signed out");
       client?.captureException(new Error("after logout"));
       const exceptions = events.filter((event) => event.event === "$exception");
       expect(exceptions[0]?.properties).toMatchObject({
