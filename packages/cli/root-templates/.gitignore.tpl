@@ -1,6 +1,8 @@
 node_modules
 .turbo
 dist
+build
+.docusaurus
 coverage
 *.tsbuildinfo
 *.db

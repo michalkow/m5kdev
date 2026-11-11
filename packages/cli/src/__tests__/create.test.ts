@@ -1366,7 +1366,9 @@ describe("scaffoldProject", () => {
       expect(
         (await fs.readdir(workflowDirectory)).filter((name) => name.startsWith("deploy-")).sort()
       ).toEqual(
-        platform === "landing" ? ["deploy-landing.yml"] : ["deploy-app.yml", "deploy-landing.yml"]
+        platform === "landing"
+          ? ["deploy-docs.yml", "deploy-landing.yml"]
+          : ["deploy-app.yml", "deploy-docs.yml", "deploy-landing.yml"]
       );
 
       if (platform !== "landing") {
@@ -1486,7 +1488,7 @@ describe("scaffoldProject", () => {
       );
       expect(workspace.overrides).toEqual({ "drizzle-orm>@libsql/client": "-" });
 
-      const dockerfiles = ["apps/landing/Dockerfile"];
+      const dockerfiles = ["apps/landing/Dockerfile", "apps/docs/Dockerfile"];
       if (platform !== "landing") dockerfiles.push("apps/shared/Dockerfile");
       for (const dockerfilePath of dockerfiles) {
         const dockerfile = await fs.readFile(

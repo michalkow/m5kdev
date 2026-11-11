@@ -26,7 +26,11 @@
     "cs:version": "pnpm dlx @changesets/cli version",
     "cs:deploy": "read -p 'Message: ' msg && pnpm cs:add -m \"$msg\" && pnpm cs:version && pnpm build && pnpm dlx @changesets/cli publish && git push --follow-tags && git add . && git commit -m \"$msg\" && git push",
     "knip": "knip",
-    "test:e2e": "pnpm --filter @starter-app/e2e test:e2e"
+    "test:e2e": "pnpm --filter @starter-app/e2e test:e2e",
+    "starter:docs:dev": "pnpm --filter @starter-app/docs dev",
+    "starter:docs:build": "pnpm --filter @starter-app/docs build",
+    "starter:docs:serve": "pnpm --filter @starter-app/docs serve",
+    "starter:docs:deploy": "node packages/backend/dist/src/fly-deploy.mjs --config apps/starter/docs/fly.toml --dockerfile apps/starter/docs/Dockerfile --env apps/starter/docs/.env.production"
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",

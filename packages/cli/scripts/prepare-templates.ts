@@ -50,6 +50,8 @@ const TEXT_EXTENSIONS = new Set([
 const EXCLUDED = [
   "node_modules",
   "dist",
+  "build",
+  ".docusaurus",
   ".turbo",
   ".expo",
   ".e2e",
@@ -59,6 +61,7 @@ const EXCLUDED = [
   "local.db",
   "tsconfig.tsbuildinfo",
   // real env files — the CLI renders .env from root-templates with a fresh secret
+  "docs/.env.production",
   "shared/.env",
   "shared/.env.example",
 ];
@@ -73,15 +76,23 @@ const FEATURE_MANIFEST = {
     },
     webapp: {
       kind: "platform",
-      paths: ["apps/webapp/"],
+      paths: [
+        "apps/webapp/",
+        "apps/docs/docs/posts.md",
+        "apps/docs/docs/files.md",
+        "apps/docs/docs/conversation.md",
+        "apps/docs/docs/workflows.md",
+        "apps/docs/docs/notifications-web.md",
+      ],
     },
     expo: {
       kind: "platform",
-      paths: ["apps/expo/"],
+      paths: ["apps/expo/", "apps/docs/docs/notifications-mobile.md"],
     },
     server: {
       kind: "platform",
       paths: [
+        "apps/docs/docs/signing-in.md",
         "apps/server/",
         "apps/email/",
         "apps/shared/",
@@ -105,13 +116,18 @@ const FEATURE_MANIFEST = {
     files: {
       kind: "module",
       label: "Files",
-      paths: ["apps/webapp/src/modules/files/", "apps/e2e/tests/files.spec.ts"],
+      paths: [
+        "apps/webapp/src/modules/files/",
+        "apps/docs/docs/files.md",
+        "apps/e2e/tests/files.spec.ts",
+      ],
     },
     workflows: {
       kind: "module",
       label: "Workflows",
       paths: [
         "apps/webapp/src/modules/workflows/",
+        "apps/docs/docs/workflows.md",
         "apps/server/src/modules/demo-workflow/",
         "apps/shared/src/modules/demo-workflow/",
         "apps/e2e/tests/workflow.spec.ts",
@@ -123,6 +139,7 @@ const FEATURE_MANIFEST = {
       paths: [
         "apps/webapp/src/modules/conversation/",
         "apps/server/src/modules/conversation/",
+        "apps/docs/docs/conversation.md",
         "apps/server/mastra.ts",
         "apps/shared/src/modules/conversation/",
         "apps/e2e/tests/conversation.spec.ts",
@@ -137,7 +154,7 @@ const FEATURE_MANIFEST = {
       kind: "module",
       label: "Notifications",
       experimental: true,
-      paths: [],
+      paths: ["apps/docs/docs/notifications-web.md", "apps/docs/docs/notifications-mobile.md"],
     },
     tags: { kind: "module", label: "Tags", experimental: true, paths: [] },
     connect: { kind: "module", label: "Connect", experimental: true, paths: [] },
@@ -164,6 +181,7 @@ const FEATURE_MANIFEST = {
       { pattern: "apps/server/db.e2e.ts", policy: "ensure" },
       { pattern: "apps/server/drizzle.config.ts", policy: "ensure" },
       { pattern: "apps/server/src/drizzle.schema.ts", policy: "ensure" },
+      { pattern: "apps/docs/docs/**", policy: "ensure" },
       { pattern: "GLOSSARY.md", policy: "ensure" },
       { pattern: "docs/agents/**", policy: "ensure" },
       { pattern: "docs/adr/**", policy: "ensure" },

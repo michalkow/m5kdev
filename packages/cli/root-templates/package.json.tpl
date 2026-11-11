@@ -9,6 +9,10 @@
     "lint:fix": "turbo run lint:fix",
     "check-types": "turbo run check-types",
     "test": "turbo run test",
+    "docs:dev": "pnpm --filter ./apps/docs dev",
+    "docs:build": "pnpm --filter ./apps/docs build",
+    "docs:serve": "pnpm --filter ./apps/docs serve",
+    "docs:deploy": "m5kdev-fly-deploy --config apps/docs/fly.toml --dockerfile apps/docs/Dockerfile --env apps/docs/.env.production",
     // m5k:server:start
     "app:deploy": "node -e \"const s=require('./package.json').scripts;console.error('Use pnpm app:deploy:<environment> — one of: '+Object.keys(s).filter(k=>k.startsWith('app:deploy:')).map(k=>k.split(':')[2]).join(', '));process.exit(1)\"",
     "app:secrets": "node -e \"const s=require('./package.json').scripts;console.error('Use pnpm app:secrets:<environment> — one of: '+Object.keys(s).filter(k=>k.startsWith('app:secrets:')).map(k=>k.split(':')[2]).join(', '));process.exit(1)\"",

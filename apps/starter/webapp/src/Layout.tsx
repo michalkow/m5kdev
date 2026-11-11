@@ -10,8 +10,8 @@ import { AuthUtilityImpersonationBanner } from "@m5kdev/web-ui/modules/auth/comp
 // m5k:notifications:start
 import { NotificationSidebarInbox } from "@m5kdev/web-ui/modules/notification/components/NotificationSidebarInbox";
 // m5k:notifications:end
-import { APP_NAME } from "@starter-app/shared/modules/app/app.constants";
-import { BellIcon, FileIcon, UsersIcon } from "lucide-react";
+import { APP_NAME, APP_SLUG } from "@starter-app/shared/modules/app/app.constants";
+import { BellIcon, CircleHelpIcon, FileIcon, UsersIcon } from "lucide-react";
 // m5k:ai:start
 import { SparklesIcon } from "lucide-react";
 // m5k:ai:end
@@ -93,6 +93,15 @@ export function Layout() {
                   label: t("layout.navigation.members"),
                   icon: <UsersIcon />,
                   link: "/organization/members",
+                },
+                {
+                  label: t("layout.navigation.help"),
+                  icon: <CircleHelpIcon />,
+                  link:
+                    import.meta.env.VITE_DOCS_URL ??
+                    (import.meta.env.DEV
+                      ? "http://localhost:3001"
+                      : `https://${APP_SLUG}-docs.fly.dev`),
                 },
               ]}
               navigationState={navigationState}

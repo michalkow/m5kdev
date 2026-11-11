@@ -174,3 +174,11 @@ Issues and specs live in this repository's GitHub Issues. Use the connected GitH
 
 Single-context: one root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
 
+
+## Product documentation
+
+Before completing a Starter task that adds, changes, or removes user-facing
+behavior, update its end-user guides in `apps/starter/docs/docs/` in the same
+change. Read `docs/agents/product-documentation.md` for audience, content, and
+verification rules. Keep the equivalent generated-app instructions in
+`packages/cli/root-templates/AGENTS.md.tpl` and `CLAUDE.md.tpl` aligned.

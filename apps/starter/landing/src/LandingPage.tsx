@@ -1,7 +1,10 @@
-import { Card } from "@heroui/react";
+import { Card, Link } from "@heroui/react";
 
 export function LandingPage() {
   const appName = import.meta.env.VITE_APP_NAME ?? "M5 Starter";
+  const docsUrl =
+    import.meta.env.VITE_DOCS_URL ??
+    (import.meta.env.DEV ? "http://localhost:3001" : "https://starter-app-docs.fly.dev");
 
   return (
     <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-6 py-16">
@@ -25,6 +28,9 @@ export function LandingPage() {
             An AI SaaS workspace.
           </Card.Description>
         </Card.Header>
+        <Card.Footer className="px-8 pb-8 sm:px-10 sm:pb-10">
+          <Link href={docsUrl}>Help</Link>
+        </Card.Footer>
       </Card>
     </main>
   );

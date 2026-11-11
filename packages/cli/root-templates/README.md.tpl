@@ -4,6 +4,7 @@
 
 ## Workspace
 
+- `apps/docs` contains public product help, with an independent Fly deployment.
 - `apps/landing` contains the public marketing site (one page) and its Fly adapter.
 // m5k:server:start
 - `apps/shared` contains shared contracts, constants, and the product Deploy home (Dockerfile, `fly.toml`).
@@ -55,6 +56,21 @@ pnpm check-types
 pnpm lint
 ```
 
+## Product help
+
+`pnpm docs:dev` runs the public help site at `http://localhost:3001`.
+`pnpm docs:build` checks links and writes static files to `apps/docs/build`;
+`pnpm docs:serve` previews that build. The product's **Help** link opens this
+site without requiring sign-in. Guides live in `apps/docs/docs/` and describe
+what people can do in this app, using plain language and actual screen labels.
+Keep them current with feature changes; see `docs/agents/product-documentation.md`.
+
+The default published URL is `https://{{APP_SLUG}}-docs.fly.dev`. For a custom
+domain, set `VITE_DOCS_URL` in the docs production env file and in the web and
+landing build configuration; set `EXPO_PUBLIC_DOCS_URL` in Expo. For a physical
+phone in development, set the Expo URL to your computer's reachable LAN address
+on port 3001. Web and landing use localhost in development by default.
+
 ## Managed framework updates
 
 This app records its generated baseline in `.m5kdev.json`. The updater is run
@@ -74,13 +90,14 @@ with `pnpm dlx create-m5kdev@<version> init`.
 
 The Dockerfile is the portable image. Fly is the adapter this starter ships.
 Each Deployment environment has its own Fly config (`apps/shared/fly.development.toml`,
-`apps/shared/fly.production.toml`, and `apps/landing/fly.toml`); `create-m5kdev update`
+`apps/shared/fly.production.toml`, `apps/landing/fly.toml`, and `apps/docs/fly.toml`); `create-m5kdev update`
 ignores them so your app names and regions stay yours.
 
 `.env*` files are excluded from the image. Copy the examples, then pass values
 as Fly **build secrets** and **runtime secrets**.
 
 ```sh
+cp apps/docs/.env.production.example apps/docs/.env.production
 cp apps/landing/.env.production.example apps/landing/.env.production
 // m5k:server:start
 cp apps/shared/.env.production.example apps/shared/.env.production
@@ -95,7 +112,19 @@ pnpm app:deploy:production
 fly apps create {{APP_SLUG}}-landing
 pnpm landing:secrets
 pnpm landing:deploy
+
+fly apps create {{APP_SLUG}}-docs
+pnpm docs:deploy
+# Optional: keep one docs machine rather than Fly's initial redundant pair.
+fly scale count 1 --app {{APP_SLUG}}-docs
 ```
+
+`docs:deploy` builds and deploys the help site independently. Its runtime is
+Caddy serving static files on a shared CPU with 256 MB RAM, stopping when idle.
+It needs no database, Redis, volume, or runtime secrets. Its `.env.production`
+contains only public build configuration; the deploy command passes it through
+the Kernel's build-secret mechanism. Deep links serve their own pages and
+unknown paths return the help site's 404 page.
 
 `landing:deploy` reads that app’s `.env.production` and forwards every key as
 `fly deploy --build-secret` via Kernel bins (`m5kdev-fly-deploy` /
@@ -125,6 +154,7 @@ PostgreSQL is hosted outside the Fly machine, so do not create a volume.
 
 Pushes to `main` deploy only the affected Fly app:
 
+- `.github/workflows/deploy-docs.yml` deploys changes in `apps/docs/**`.
 - `.github/workflows/deploy-landing.yml` deploys changes in `apps/landing/**`.
 // m5k:server:start
 - `.github/workflows/deploy-app.yml` deploys changes in `apps/server/**`,
@@ -137,7 +167,7 @@ Pushes to `main` deploy only the affected Fly app:
 // m5k:webapp:end
 
 Root package, lockfile, workspace, `.npmrc`, and `.dockerignore` changes deploy
-both available targets. Editing a workflow deploys its target. Each workflow
+all available targets. Editing a workflow deploys its target. Each workflow
 also has a **Run workflow** button in GitHub Actions; select `main`. Other
 branches do not deploy. Deploys to each target run one at a time.
 
@@ -151,6 +181,8 @@ Before enabling deployment:
 
 | Secret | Value |
 | --- | --- |
+| `FLY_API_TOKEN_DOCS` | App-scoped deploy token for `{{APP_SLUG}}-docs`. |
+| `DOCS_ENV_PRODUCTION` | Complete contents of `apps/docs/.env.production` (`VITE_DOCS_URL`). |
 | `FLY_API_TOKEN_LANDING` | App-scoped deploy token for `{{APP_SLUG}}-landing`. |
 | `LANDING_ENV_PRODUCTION` | Complete contents of your filled-in `apps/landing/.env.production`. |
 | `SLACK_BOT_TOKEN` | Optional. Bot User OAuth Token (`xoxb-...`) for release pings. |
@@ -174,7 +206,7 @@ and store the full output as its corresponding GitHub secret. See
 [Fly's GitHub Actions setup](https://fly.io/docs/launch/continuous-deployment-with-github-actions/).
 Use the actual Fly names if you customized `fly.toml`.
 
-The workflows temporarily write the env files, import runtime secrets, then run
+The workflows temporarily write the env files, import runtime secrets where needed, then run
 the existing deploy commands with build secrets and the public Vite cache key.
 They remove the env files afterward; never commit production env files.
 After changing a GitHub secret, manually run the affected workflow to apply it.
