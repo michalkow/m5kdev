@@ -96,7 +96,8 @@
     "neverthrow": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@types/express": "catalog:"
   },
   "devDependencies": {
     "@jest/globals": "catalog:",

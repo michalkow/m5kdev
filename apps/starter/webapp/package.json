@@ -54,6 +54,7 @@
     "jest": "catalog:",
     "jest-environment-jsdom": "catalog:",
     "ts-jest": "catalog:",
-    "@types/jest": "catalog:"
+    "@types/jest": "catalog:",
+    "@types/node": "catalog:"
   }
 }

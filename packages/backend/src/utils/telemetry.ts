@@ -3,6 +3,7 @@ import type { IncomingMessage } from "node:http";
 import { type Span, SpanStatusCode, type Tracer, trace } from "@opentelemetry/api";
 import type { Result } from "neverthrow";
 import { annotateSpanWithError, type ServerError } from "./errors";
+import { getPosthog } from "./posthog";
 
 const TRACER_NAME = "@m5kdev/backend";
 const MAX_SPAN_VALUE_LENGTH = 4096;
@@ -77,7 +78,16 @@ export function runWithActorTelemetry<T>(attrs: ActorTelemetry, callback: () => 
   const merged = mergeActorTelemetry(actorTelemetryStorage.getStore(), attrs);
   const activeSpan = trace.getActiveSpan();
   if (activeSpan) applyActorTelemetryToSpan(activeSpan, merged);
-  return actorTelemetryStorage.run(merged, callback);
+  return actorTelemetryStorage.run(merged, () => {
+    const posthog = getPosthog();
+    if (!posthog) return callback();
+    // SDK process listeners snapshot this request scope and the active OTel span.
+    // Its native crash/flush handlers remain in charge of unhandled exceptions.
+    return posthog.withContext(
+      { distinctId: merged.userId, properties: getActorTelemetrySpanAttributes() },
+      callback
+    );
+  });
 }
 export function getTracer(): Tracer {
   return trace.getTracer(TRACER_NAME);
