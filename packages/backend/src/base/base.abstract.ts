@@ -45,7 +45,7 @@ export abstract class Base {
     Error.captureStackTrace?.(serverError, this.error);
     serverError.refreshOrigin();
     // capture at creation so the error survives even if the Result is dropped;
-    // log: false only demotes the log line to debug, Sentry still gets 5xx
+    // log: false only demotes the log line to debug, PostHog still gets 5xx
     captureServerError(serverError, {
       logger: this.logger,
       level: log ? undefined : "debug",

@@ -263,7 +263,7 @@ export function handleTRPCBoundaryError({
         type,
         code: error.code,
         origin: cause.origin,
-        sentryEventId: cause.sentryEventId,
+        errorEventId: cause.errorEventId,
       },
       error.message
     );

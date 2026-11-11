@@ -1,3 +1,4 @@
+import { setErrorReporter } from "../../../utils/errors";
 import { WorkflowRegistry } from "../workflow.registry";
 import type { WorkflowService } from "../workflow.service";
 import type {
@@ -498,6 +499,48 @@ describe("WorkflowRegistry", () => {
 
       expect(mockCreateWorker).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("reports terminal worker failures with the job's identity after request context ends", async () => {
+    const previousReporter = globalThis.m5ErrorReporter;
+    const captures: Array<{ error: unknown; properties: unknown }> = [];
+    setErrorReporter({
+      captureException(error, properties) {
+        captures.push({ error, properties });
+        return "job-event";
+      },
+    });
+    try {
+      const registry = new WorkflowRegistry(mockService as WorkflowService);
+      registry.register(createMockDefinition("import"), async () => {});
+      await registry.start();
+      const failed = mockWorkerOn.mock.calls.find(([event]) => event === "failed")?.[1];
+      const error = new Error("import failed");
+      const job = {
+        id: "job-1",
+        name: "import",
+        data: { userId: "user-1", organizationId: "org-1" },
+        opts: { attempts: 2 },
+        attemptsMade: 1,
+      };
+      failed(job, error);
+      expect(captures).toEqual([]);
+      failed({ ...job, attemptsMade: 2 }, error);
+      expect(captures).toEqual([
+        {
+          error: expect.any(Error),
+          properties: expect.objectContaining({
+            "user.id": "user-1",
+            "organization.id": "org-1",
+            layer: "workflow",
+            context: expect.objectContaining({ jobId: "job-1", attemptsMade: 2 }),
+          }),
+        },
+      ]);
+      await registry.stop();
+    } finally {
+      setErrorReporter(previousReporter);
+    }
   });
 
   describe("stop()", () => {

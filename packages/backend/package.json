@@ -61,7 +61,6 @@
     "@opentelemetry/sdk-trace-node": "catalog:",
     "@opentelemetry/semantic-conventions": "catalog:",
     "@posthog/ai": "catalog:",
-    "@sentry/node": "catalog:",
     "ai": "catalog:",
     "@parse/node-apn": "catalog:",
     "bullmq": "catalog:",

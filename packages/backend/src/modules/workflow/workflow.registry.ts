@@ -246,7 +246,9 @@ export class WorkflowRegistry {
       );
 
       worker.on("failed", (job, error) => {
-        this.captureJobFailure(queueName, job, error);
+        runWithActorTelemetry(actorTelemetryFromJobData(job?.data), () =>
+          this.captureJobFailure(queueName, job, error)
+        );
       });
 
       worker.on("error", (error) => {
@@ -361,7 +363,7 @@ export class WorkflowRegistry {
   /**
    * Terminal capture for background job failures — jobs never reach a request
    * boundary, so this is their only chance to be reported. Intermediate retry
-   * attempts only log a warn; the final attempt is captured (Sentry for 5xx).
+   * attempts only log a warn; the final attempt is captured (PostHog for 5xx).
    */
   private captureJobFailure(queueName: string, job: Job | undefined, error: Error): void {
     const context = {
@@ -390,7 +392,7 @@ export class WorkflowRegistry {
             ...context,
             code: error.code,
             origin: error.origin,
-            sentryEventId: error.sentryEventId,
+            errorEventId: error.errorEventId,
           },
           `Job failed: ${error.message}`
         );

@@ -10,7 +10,7 @@ export function getPosthog(): PostHog | undefined {
   return globalThis.m5Posthog;
 }
 
-export function setPosthog(posthog: PostHog) {
+export function setPosthog(posthog: PostHog | undefined) {
   globalThis.m5Posthog = posthog;
 }
 

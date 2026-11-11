@@ -1,6 +1,7 @@
 // biome-ignore-all assist/source/organizeImports: feature-gated module imports stay in marker blocks
 import { createBackendApp } from "@m5kdev/backend/app";
 import { isDeployedEnvironment, requireEnvValue } from "@m5kdev/backend/base/environment";
+import { shutdownPosthog } from "@m5kdev/backend/lib/posthog";
 import { shutdownTelemetry } from "@m5kdev/backend/lib/otel";
 // m5k:ai:start
 import { defineBackendModule } from "@m5kdev/backend/app";
@@ -67,7 +68,9 @@ export const builtBackendApp = createBackendApp(
   {
     db: connection,
     schema,
-    onShutdown: shutdownTelemetry,
+    onShutdown: async () => {
+      await Promise.all([shutdownPosthog(), shutdownTelemetry()]);
+    },
     app: {
       name: APP_NAME,
       urls: {

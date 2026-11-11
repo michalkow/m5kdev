@@ -1,11 +1,11 @@
-import { SpanStatusCode, trace } from "@opentelemetry/api";
-import type { captureException } from "@sentry/node";
+import { isSpanContextValid, SpanStatusCode, trace } from "@opentelemetry/api";
 import { type TRPC_ERROR_CODE_KEY, TRPCError } from "@trpc/server";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { camel } from "radashi";
 import type { ServerErrorLayer } from "../modules/base/base.types";
 import { logger } from "./logger";
 import { extractOrigin, trimStack } from "./stack";
+import { getActorTelemetrySpanAttributes } from "./telemetry";
 
 export type { ServerErrorLayer };
 export class ServerError extends Error {
@@ -17,7 +17,7 @@ export class ServerError extends Error {
   origin?: string;
   /** Set by captureServerError: the error has been logged (and reported when 5xx). */
   logged = false;
-  sentryEventId?: string;
+  errorEventId?: string;
 
   constructor({
     code,
@@ -87,7 +87,7 @@ export class ServerError extends Error {
       message: this.message,
       origin: this.origin,
       context: this.context,
-      sentryEventId: this.sentryEventId,
+      errorEventId: this.errorEventId,
       stack: trimStack(this.stack),
       // Shallow representation of cause to avoid cycles
       cause:
@@ -126,7 +126,7 @@ export class ServerError extends Error {
 type CaptureLogger = Pick<typeof logger, "error" | "warn" | "debug">;
 
 /**
- * Terminal capture point for a ServerError: report to Sentry when 5xx and log once.
+ * Terminal capture point for a ServerError: report to PostHog when 5xx and log once.
  * Safe to call from multiple places — subsequent calls are no-ops (`logged` guard),
  * so errors are captured where they happen and boundaries only echo.
  */
@@ -142,7 +142,7 @@ export function captureServerError(
 
   const critical = error.is5xxError();
   if (critical) {
-    error.sentryEventId = reportError(error);
+    error.errorEventId = reportError(error);
   }
 
   // code/layerName/origin drive the pretty message line (and are ignored as keys)
@@ -154,7 +154,7 @@ export function captureServerError(
   };
   const logLevel = level ?? (critical ? "error" : "warn");
   if (critical) {
-    // err carries trimmed stack, context, and sentryEventId via the err serializer
+    // err carries trimmed stack, context, and errorEventId via the err serializer
     log[logLevel]({ ...fields, err: error }, error.message);
   } else {
     // expected failure: one line, no stack
@@ -163,12 +163,12 @@ export function captureServerError(
   return error;
 }
 
+export type ErrorProperties = Record<string, unknown>;
+
 export type ErrorReporter = {
-  captureException: (
-    err: Parameters<typeof captureException>[0],
-    hint?: Parameters<typeof captureException>[1]
-  ) => string;
+  captureException: (error: unknown, properties?: ErrorProperties) => string | undefined;
 };
+
 declare global {
   // eslint-disable-next-line no-var
   var m5ErrorReporter: ErrorReporter | undefined;
@@ -178,13 +178,13 @@ export function getErrorReporter(): ErrorReporter | undefined {
   return globalThis.m5ErrorReporter;
 }
 
-export function setErrorReporter(reporter: ErrorReporter) {
+export function setErrorReporter(reporter: ErrorReporter | undefined) {
   globalThis.m5ErrorReporter = reporter;
 }
 
 /**
  * Flatten `error.cause` messages for span attributes / status text.
- * Sentry walks the cause chain; SigNoz span status/events do not unless we attach them.
+ * PostHog walks the cause chain; SigNoz span status/events do not unless we attach them.
  */
 export function formatErrorCauseChain(error: Error, maxDepth = 5): string | undefined {
   const parts: string[] = [];
@@ -222,7 +222,7 @@ export function annotateSpanWithError(
     if (causeChain) {
       span.setAttribute("error.cause", causeChain);
     }
-    // Record the deepest cause so exception.message matches what Sentry shows.
+    // Record the deepest cause so exception.message matches what PostHog shows.
     span.recordException(rootErrorCause(err));
     return;
   }
@@ -255,33 +255,35 @@ function recordErrorOnActiveSpan(err: ServerError | Error | unknown): void {
   annotateSpanWithError(span, err);
 }
 
-export function reportError(
-  err: ServerError | Error | unknown,
-  hint?: Parameters<typeof captureException>[1]
-): string | undefined {
-  let eventHint = hint;
+export function reportError(error: unknown, properties: ErrorProperties = {}): string | undefined {
+  // OTel annotations must survive an unconfigured or unavailable error destination.
+  recordErrorOnActiveSpan(error);
   const reporter = getErrorReporter();
-  if (!reporter) {
-    logger.error("[reportError] No error reporter set!");
-    return;
+  if (!reporter) return undefined;
+
+  const spanContext = trace.getActiveSpan()?.spanContext();
+  const context = {
+    ...properties,
+    ...(error instanceof ServerError
+      ? {
+          layer: error.layer,
+          layerName: error.layerName,
+          code: error.code,
+          message: error.message,
+          clientMessage: error.clientMessage,
+          origin: error.origin,
+          context: error.context,
+        }
+      : {}),
+    ...getActorTelemetrySpanAttributes(),
+    ...(spanContext && isSpanContextValid(spanContext)
+      ? { trace_id: spanContext.traceId, span_id: spanContext.spanId }
+      : {}),
+  };
+  try {
+    return reporter.captureException(error, context);
+  } catch (captureError) {
+    logger.warn({ err: captureError }, "Error reporting failed");
+    return undefined;
   }
-  if (err instanceof ServerError) {
-    const hintExtra = (hint as { extra?: Record<string, unknown> } | undefined)?.extra;
-    // Merge - don't clobber caller-provided hint
-    eventHint = {
-      ...hint,
-      extra: {
-        ...(hintExtra ?? {}),
-        layer: err.layer,
-        layerName: err.layerName,
-        code: err.code,
-        message: err.message,
-        clientMessage: err.clientMessage,
-        origin: err.origin,
-        context: err.context,
-      },
-    } as Parameters<typeof captureException>[1];
-  }
-  recordErrorOnActiveSpan(err);
-  return reporter.captureException(err, eventHint);
 }

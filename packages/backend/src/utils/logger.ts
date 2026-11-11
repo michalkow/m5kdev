@@ -21,12 +21,12 @@ type ErrorLike = Error & {
   origin?: string;
   context?: Record<string, unknown>;
   clientMessage?: string;
-  sentryEventId?: string;
+  errorEventId?: string;
 };
 
 /**
  * Serializer for the `err` key. Duck-typed against ServerError (no import to
- * avoid a cycle with errors.ts). Stacks are trimmed for logs — Sentry receives
+ * avoid a cycle with errors.ts). Stacks are trimmed for logs — PostHog receives
  * the real exception object with the full stack via reportError.
  */
 function errSerializer(err: unknown) {
@@ -41,7 +41,7 @@ function errSerializer(err: unknown) {
     ...(e.layerName ? { layerName: e.layerName } : {}),
     ...(e.origin ? { origin: e.origin } : {}),
     ...(e.context ? { context: e.context } : {}),
-    ...(e.sentryEventId ? { sentryEventId: e.sentryEventId } : {}),
+    ...(e.errorEventId ? { errorEventId: e.errorEventId } : {}),
     ...(e.cause instanceof Error
       ? { cause: { type: e.cause.name, message: e.cause.message, stack: trimStack(e.cause.stack) } }
       : e.cause !== undefined
