@@ -51,6 +51,32 @@ jobs:
           printf '%s\n' "$ENV_PRODUCTION" > apps/landing/.env.production
           pnpm landing:secrets
           pnpm landing:deploy
+      - name: Prepare Slack notification
+        id: slack
+        if: success()
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+        run: |
+          if [ -z "$SLACK_BOT_TOKEN" ] || [ -z "$SLACK_CHANNEL_ID" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping Slack notification (SLACK_BOT_TOKEN or SLACK_CHANNEL_ID unset)."
+            exit 0
+          fi
+          version=$(node -p "require('./apps/landing/package.json').version")
+          {
+            echo "enabled=true"
+            echo "text=[{{APP_SLUG}}]: Published landing v${version}"
+          } >> "$GITHUB_OUTPUT"
+      - name: Notify Slack
+        if: steps.slack.outputs.enabled == 'true'
+        uses: slackapi/slack-github-action@v4.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: ${{ secrets.SLACK_CHANNEL_ID }}
+            text: ${{ toJSON(steps.slack.outputs.text) }}
       - name: Remove production env file
         if: always()
         run: rm -f apps/landing/.env.production

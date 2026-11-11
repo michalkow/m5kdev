@@ -127,9 +127,9 @@ export class EmailPreviewModule extends BaseModule<
     this.allowDelete = options.allowDelete ?? false;
   }
 
-  override express({ deps, infra }: ModuleExpressContext<EmailPreviewModuleDeps>) {
+  override express({ deps, infra, appConfig }: ModuleExpressContext<EmailPreviewModuleDeps>) {
     const emailService = deps.email.services.email as EmailService;
-    if (emailService.mode !== "store" || process.env.NODE_ENV === "production") {
+    if (emailService.mode !== "store" || appConfig.environment !== "local") {
       return;
     }
 

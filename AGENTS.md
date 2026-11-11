@@ -81,8 +81,9 @@ Do not import services into repositories.
 - Repository methods may accept optional `tx`.
 - Inside transaction callbacks, use `tx` consistently.
 - Do not mix `this.orm` queries with `tx` in the same transaction flow.
-- Never create Drizzle migration files manually or automatically in-agent.
-- When schema changes require migrations, stop and ask the user to run the project migration generation command.
+- Create migrations only with the app's `drizzle:generate` command. Never hand-write or edit migration SQL, journal entries, or snapshots, and never use `drizzle-kit generate --custom`. Stop and ask the user if drizzle-kit prompts about a rename.
+- Apply migrations with `drizzle:migrate` only to a local or Development database. Staging, Canary, and Production are migrated by the deploy workflow.
+- Every migration must be backward-compatible with the code currently in Production; drops and renames ship in a later release through a `migration-contract` issue. See `.cursor/rules/database-migrations.mdc`.
 
 ## Result and Error Pattern
 

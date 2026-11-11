@@ -8,8 +8,8 @@ import {
   detectResources,
   envDetector,
   processDetector,
-  resourceFromAttributes,
   type Resource,
+  resourceFromAttributes,
 } from "@opentelemetry/resources";
 import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
 import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
@@ -20,6 +20,7 @@ import { applyTrpcAttributesOnHttpSpan } from "../utils/telemetry";
 
 export interface TelemetryInitOptions {
   serviceName: string;
+  /** Deployment environment (`APP_ENV`); console span export only when `local` or unset. */
   env?: string;
 }
 
@@ -30,7 +31,7 @@ function resolveTraceExporter(env: string | undefined) {
     return new OTLPTraceExporter();
   }
 
-  if (env !== "production") {
+  if (!env || env === "local") {
     return new ConsoleSpanExporter();
   }
 
@@ -51,7 +52,7 @@ function createResource(serviceName: string): Resource {
 
 export function initTelemetry({
   serviceName,
-  env = process.env.NODE_ENV,
+  env = process.env.APP_ENV,
 }: TelemetryInitOptions): void {
   if (sdk || process.env.OTEL_SDK_DISABLED === "true") return;
 

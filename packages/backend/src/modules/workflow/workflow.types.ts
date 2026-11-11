@@ -24,6 +24,19 @@ export interface WorkflowQueueConfig {
 
 export interface WorkflowServiceConfig {
   connection: IORedis;
+  /**
+   * Environment namespace: the BullMQ `prefix` on every queue, queue-events
+   * listener and worker, so Deployment environments sharing one Redis never take
+   * each other's jobs. `WorkflowModule` defaults it to `<APP_SLUG>-<APP_ENV>`.
+   */
+  prefix: string;
+  /**
+   * Register BullMQ job schedulers (crons, including the reconcile sweep).
+   * Default true. `WorkflowModule` defaults it to whether the Deployment
+   * environment owns its database (see `databaseScope`), so Canary, which shares
+   * the Production database, runs no recurring jobs. Workers start either way.
+   */
+  schedulers?: boolean;
   queues: Record<string, WorkflowQueueConfig>;
   defaultQueue: string;
   defaults?: {

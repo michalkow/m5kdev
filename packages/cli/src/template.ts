@@ -1,10 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import type {
-  AppPlatform,
-  TemplateFeatureKind,
-  TemplateFeatureManifest,
-  TemplateFilePolicy,
+import {
+  type AppPlatform,
+  OPTIONAL_ENVIRONMENTS,
+  type OptionalEnvironment,
+  type TemplateFeatureKind,
+  type TemplateFeatureManifest,
+  type TemplateFilePolicy,
 } from "./types";
 
 export const PRODUCT_STACK_FEATURE = "server";
@@ -81,16 +83,38 @@ export function listBackendModuleChoices(manifest: TemplateFeatureManifest): Bac
     }));
 }
 
+/** Optional Deployment environments are refused for apps without the product stack. */
+export const LANDING_ONLY_ENVIRONMENTS_ERROR =
+  "Deployment environments need the product app; Landing-only apps have none.";
+
+/** Template feature id for an optional Deployment environment, e.g. `env-canary`. */
+export function environmentFeature(environment: OptionalEnvironment): string {
+  return `env-${environment}`;
+}
+
+export function enabledEnvironments(features: Iterable<string>): OptionalEnvironment[] {
+  const enabled = new Set(features);
+  return OPTIONAL_ENVIRONMENTS.filter((environment) =>
+    enabled.has(environmentFeature(environment))
+  );
+}
+
 export function getEnabledFeatures(options: {
   platform: AppPlatform;
   testHarness: boolean;
   modules?: readonly string[];
+  environments?: readonly OptionalEnvironment[];
 }): Set<string> {
   const enabled = new Set<string>();
   if (options.platform !== "expo" && options.platform !== "landing") enabled.add("webapp");
   if (options.platform !== "web" && options.platform !== "landing") enabled.add("expo");
   if (options.testHarness) enabled.add("test-harness");
   for (const id of options.modules ?? []) enabled.add(id);
+  if (options.platform !== "landing") {
+    for (const environment of options.environments ?? []) {
+      enabled.add(environmentFeature(environment));
+    }
+  }
   return enabled;
 }
 

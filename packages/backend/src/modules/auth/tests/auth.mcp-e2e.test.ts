@@ -19,15 +19,18 @@ describe("e2e MCP CIMD fetch", () => {
     process.env.NODE_ENV = previousNodeEnv;
   });
 
-  it("is enabled only for the e2e flag outside production", () => {
+  it("is enabled only for the e2e flag in the local Deployment environment", () => {
+    const previousAppEnv = process.env.APP_ENV;
     process.env.M5K_MCP_E2E_CIMD = "1";
-    process.env.NODE_ENV = "development";
+    process.env.APP_ENV = "local";
+    process.env.NODE_ENV = "production";
     expect(isE2eMcpCimdEnabled()).toBe(true);
 
-    process.env.NODE_ENV = "production";
+    process.env.APP_ENV = "development";
+    process.env.NODE_ENV = "development";
     expect(isE2eMcpCimdEnabled()).toBe(false);
 
-    process.env.NODE_ENV = "development";
+    process.env.APP_ENV = previousAppEnv;
     delete process.env.M5K_MCP_E2E_CIMD;
     expect(isE2eMcpCimdEnabled()).toBe(false);
   });

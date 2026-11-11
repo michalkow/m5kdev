@@ -104,6 +104,8 @@ export class WorkflowService extends Base {
     meterName: "@m5kdev/backend",
     enableMetrics: true,
   });
+  /** When false, {@link WorkflowRegistry} registers no job schedulers. */
+  readonly schedulers: boolean;
   /** Picked up by WorkflowRegistry.registerService — heals rows whose queue events were missed. */
   readonly reconcileCron?: WorkflowCronDefinition;
 
@@ -113,18 +115,21 @@ export class WorkflowService extends Base {
   ) {
     super("workflow");
     this.queueConfigs = config.queues;
+    this.schedulers = config.schedulers ?? true;
 
     this.connection = config.connection;
 
     for (const queueName of Object.keys(config.queues)) {
       const queue = new Queue(queueName, {
         connection: this.connection.duplicate(),
+        prefix: config.prefix,
         telemetry: this.telemetry,
       });
       this.queues.set(queueName, queue);
 
       const events = new QueueEvents(queueName, {
         connection: this.connection.duplicate(),
+        prefix: config.prefix,
       });
       this.attachLifecycleListeners(events, queueName);
       this.queueEvents.set(queueName, events);
@@ -323,6 +328,7 @@ export class WorkflowService extends Base {
       ...queueConfig.defaultWorkerOptions,
       ...overrides,
       connection: this.connection.duplicate(),
+      prefix: this.config.prefix,
       concurrency: overrides?.concurrency ?? queueConfig.concurrency,
       telemetry: this.telemetry,
     };
@@ -769,7 +775,7 @@ export class WorkflowService extends Base {
           });
         } else {
           // waiting/delayed/prioritized/etc — alive; bump so it isn't re-checked immediately
-          await this.workflowRepository.touch(row.jobId);
+          await this.workflowRepository.touch(row.jobId, row.queueName);
         }
       } catch (error) {
         this.handleUnknownError(error).addContext({

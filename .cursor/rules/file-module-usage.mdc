@@ -63,4 +63,4 @@ Allowlist buckets via `FileModule` `buckets`. Allowed MIME types live in `fileTy
 
 ## Schema
 
-`files` has `userId` / `memberId` / `organizationId`, unique `(bucket, key)`, status `PENDING | UPLOADED | DELETED | FAILED`. There is no `teamId`. When schema changes need a migration, ask the user to run the project migration generation command; do not write Drizzle migration files in-agent.
+`files` has `userId` / `memberId` / `organizationId`, unique `(bucket, key)`, status `PENDING | UPLOADED | DELETED | FAILED`. There is no `teamId`. When schema changes need a migration, follow `.cursor/rules/database-migrations.mdc`: generate it with `drizzle:generate`, never by hand.

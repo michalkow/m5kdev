@@ -81,8 +81,24 @@ Auth requirement on a Procedure: `user` | `organization` | `admin`.
 _Avoid_: Level (that is Grants), Role, Access; `team`
 
 **Grant**:
-A flattened permission tuple: resource, level (`user` | `organization`), role, Action, Access. Declared in `<module>.grants.ts`.
-_Avoid_: Permission, Policy, ACL, CASL statement, AccessModule (removed; Access is Grant width only); Grant level `team`
+A flattened permission tuple: resource, level (`user` | `organization`), role, Action, Access. Declared in `<module>.grants.ts`. Answers whether this Member may perform that Action on those resources. A Grant never creates a Capability.
+_Avoid_: Permission, Policy, ACL, CASL statement, AccessModule (removed; Access is Grant width only); Grant level `team`; Entitlement; Capability
+
+**Capability**:
+A stable, code-defined key for an Organization-level product ability (`resources.analyze`, `typeorb.publish`). Guards name Capabilities. Not a Plan, Bundle, Grant, or feature flag.
+_Avoid_: Entitlement (that is the resolved right); Plan; Feature; flag; treating a brand or app name as the guard key
+
+**Entitlement**:
+An Organization's current right to a Capability. It is the union of Bundles on the current-environment ACCESS_STATUS Subscription's Plan, or every Capability in the app catalog when the Organization is billingExempt. Absent both, the Capability is denied. A protected operation needs a live OrganizationActor, the required Entitlements, and the resource Grant; Entitlement is decided before Grant. Every listed Capability must be present. Owned by Billing; apps that omit Billing have no Entitlement checks. The frontend snapshot is not authoritative. See [ADR-0034](docs/adr/0034-billing-owns-organization-entitlements.md).
+_Avoid_: Grant; Feature flag; Member-specific app assignment; calling an Assignment an Entitlement at a call site; string globs (`resources.*`); treating skipPlanCheck as every Capability allowed; a Backend Module named Entitlement
+
+**Bundle**:
+An immutable named revision of Capabilities assigned together (`knowledge@1`, `typeorb@1`, `brain@1`). A Plan names one or more Bundles. Removing that Plan's Subscription removes those contributions.
+_Avoid_: Plan (that is the commercial offering); Capability; Grant; Entitlement; editing a Bundle in place; per-Capability overrides (not in v1); Stripe Feature
+
+**Assignment**:
+The Bundles implied by an Organization's current-environment ACCESS_STATUS Subscription Plan, derived at evaluation time from that Plan's `bundles`. Not a table. It ends when that Subscription leaves ACCESS_STATUS. `billingExempt` does not create Assignments; it allows every catalog Capability instead.
+_Avoid_: Grant; Entitlement (that is the resolved Capability set); a persisted entitlements table; Organization flags; Override; Stripe Entitlements API
 
 **Action**:
 Canonical Grant verbs: `read`, `write`, `delete`, `publish`.
@@ -103,7 +119,7 @@ _Avoid_: multiple Owners as a product feature; inviting Owner; org members UI as
 ### Composition
 
 **Kernel**:
-`createBackendApp` — the composition root that wires PostgreSQL/Drizzle, Redis, Better Auth, modules, tRPC, Express, startup, and shutdown ([ADR-0003](docs/adr/0003-kernel-owns-express-http-shell.md)). It owns the Express instance, JSON and CORS defaults (origin from the app web URL; library allowed headers), HTTP listen (PORT, all interfaces), and SIGINT/SIGTERM when it is listening. Signal shutdown closes Server event streams, then HTTP, then the rest of Kernel shutdown, then app `onShutdown`, then process exit. JSON and CORS defaults may be mapped; a map that omits a default drops it. Callers may pass an Express instance that has not already applied json/CORS; the Kernel still applies that shell. Opt-in baked SPA serving (`spa.root`, skip if missing) is also Kernel HTTP shell ([ADR-0006](docs/adr/0006-kernel-owns-baked-spa.md)). Server events (SSE subscribe) are Kernel HTTP shell and Kernel infrastructure ([ADR-0010](docs/adr/0010-kernel-owns-server-events.md)). Other extra HTTP belongs on a Backend Module `express` hook. Extra shutdown work (telemetry) registers on the Kernel, not a starter signal handler. One-shot Database commands are Kernel-owned and must not boot that HTTP shell, Redis, or queues ([ADR-0005](docs/adr/0005-kernel-owns-database-commands.md)).
+`createBackendApp` — the composition root that wires PostgreSQL/Drizzle, Redis, Better Auth, modules, tRPC, Express, startup, and shutdown ([ADR-0003](docs/adr/0003-kernel-owns-express-http-shell.md)). It owns the Express instance, JSON and CORS defaults (origin from the app web URL; library allowed headers), HTTP listen (PORT, all interfaces), and SIGINT/SIGTERM when it is listening. Signal shutdown closes Server event streams, then HTTP, then the rest of Kernel shutdown, then app `onShutdown`, then process exit. JSON and CORS defaults may be mapped; a map that omits a default drops it. Callers may pass an Express instance that has not already applied json/CORS; the Kernel still applies that shell. `GET /healthz` (200 with the Deployment environment when PostgreSQL answers, 503 otherwise) is Kernel HTTP shell, registered before modules and the SPA. Opt-in baked SPA serving (`spa.root`, skip if missing) is also Kernel HTTP shell ([ADR-0006](docs/adr/0006-kernel-owns-baked-spa.md)). Server events (SSE subscribe) are Kernel HTTP shell and Kernel infrastructure ([ADR-0010](docs/adr/0010-kernel-owns-server-events.md)). Other extra HTTP belongs on a Backend Module `express` hook. Extra shutdown work (telemetry) registers on the Kernel, not a starter signal handler. One-shot Database commands are Kernel-owned and must not boot that HTTP shell, Redis, or queues ([ADR-0005](docs/adr/0005-kernel-owns-database-commands.md)).
 _Avoid_: Framework (the stack is composable, not closed), App (that is the product), app-owned CORS as the default path; booting createBackendApp to reset or seed; ad-hoc `express.static` in starter `app.ts`
 
 **Backend Module**:
@@ -112,10 +128,10 @@ _Avoid_: Package, Plugin, Feature (when you mean the server module), Model; `bac
 
 **Kernel infrastructure**:
 `BaseModule`, `BaseService` / `BasePermissionService`, Grants, Procedures, Actors, repositories, list/match query helpers, and Server events. Not a Backend Module — do not pass Base to `createBackendApp`. Canonical import `@m5kdev/backend/base/*` (`./modules/base/*` still re-exports).
-_Avoid_: Utils Backend Module; calling Base "the module" as if it were Auth
+_Avoid_: Utils Backend Module; calling Base "the module" as if it were Auth; BillingPermissionService (that is Billing)
 
 **Server event**:
-A Kernel-owned, one-way HTTP Server-Sent Event that a resource was created, updated, or deleted. It is addressed to a UserId. It names the resource, its id, that change, and organizationId or null (a tag, not the audience). An optional snapshot of the entity may ride along. Services emit Server events through Auth; emitting to an Organization's Members is Auth resolving Memberships, not a bus audience. The authenticated User subscribes on one stream. The bus does not enforce Grants on snapshots. Not a Core Module. See [ADR-0010](docs/adr/0010-kernel-owns-server-events.md).
+A Kernel-owned, one-way HTTP Server-Sent Event that a resource was created, updated, or deleted. It is addressed to a UserId. It names the resource, its id, that change, and organizationId or null (a tag, not the audience). An optional snapshot of the entity may ride along. Services emit Server events through Auth; emitting to an Organization's Members is Auth resolving Memberships, not a bus audience. The authenticated User subscribes on one stream. The bus does not enforce Grants on snapshots. Redis channels are scoped by app slug and database (`<slug>:<scope>:server-event:`), so Canary and Production share Server events and Staging does not ([ADR-0037](docs/adr/0037-canary-workers-without-schedulers.md)). Not a Core Module. See [ADR-0010](docs/adr/0010-kernel-owns-server-events.md).
 _Avoid_: organization-addressed fan-out; WebSocket; Subscription (that is Billing); Notification (that may consume one); Action (that is Grant); Inbound callback; Backend Module
 
 **Core Module**:
@@ -143,7 +159,7 @@ The table map the app composes from Backend Module tables plus its own tables. O
 _Avoid_: generated schema as the source of truth; Kernel merging tables the app did not compose; a second composition root in the Database config
 
 **Database command**:
-A one-shot Kernel operation on the app database: migrate, seed, or disposable reset. Dispatch and direct-connection pool construction belong to the Kernel; the app supplies App schema, migration history, and optional seed. Runtime uses a separate pooled connection. Reset truncates only app-owned data and preserves Mastra/vector schemas ([ADR-0033](docs/adr/0033-postgresql-only-persistence.md)).
+A one-shot Kernel operation on the app database: migrate, seed, disposable reset, or disposable rebuild. Migrate holds an advisory lock with lock and statement timeouts. Rebuild drops the app-owned schema and migration history and re-applies every migration, for a Development database that drifted. Dispatch and direct-connection pool construction belong to the Kernel; the app supplies App schema, migration history, and optional seed. Runtime uses a separate pooled connection. Reset truncates only app-owned data and preserves Mastra/vector schemas ([ADR-0033](docs/adr/0033-postgresql-only-persistence.md)).
 _Avoid_: replica sync; runtime auto-migrations; resetting Mastra/vector data with app reset; Starter Template copies of Database commands
 
 **Database config**:
@@ -155,8 +171,8 @@ Zod schemas and constants in `apps/*/shared` or `@m5kdev/commons` that server an
 _Avoid_: DTO (server select/output helpers), types package, API spec; calling this package the Fly app
 
 **Deploy home**:
-Where the product image’s Docker and Fly files live: `apps/shared` (Dockerfile, fly.toml, production env example). The image runs server plus a baked webapp. Repo-root `.dockerignore` is the build-context ignore file. Root `app:deploy` / `app:secrets` call Kernel bins (`m5kdev-fly-deploy` / `m5kdev-fly-secrets`); the wrappers are not Starter copies ([ADR-0009](docs/adr/0009-kernel-owns-fly-commands.md)). A Landing-only scaffolded app has no Deploy home.
-_Avoid_: Shared contract (that is Zod/constants); treating `apps/shared` as a runnable Node service; a top-level `deploy/` folder; dockerignore copies beside the Dockerfile; app-owned `fly-deploy.mjs` duplicates; requiring Deploy home for Landing to exist
+Where the product image’s Docker and Fly files live: `apps/shared` (Dockerfile, one Fly config and one env example per Deployment environment). The image runs server plus a baked webapp, built separately for each Deployment environment from its own branch. Repo-root `.dockerignore` is the build-context ignore file. Root `app:deploy:<environment>` / `app:secrets:<environment>` call Kernel bins (`m5kdev-fly-deploy` / `m5kdev-fly-secrets`); the wrappers are not Starter copies ([ADR-0009](docs/adr/0009-kernel-owns-fly-commands.md)). Migrations do not run from the image ([ADR-0035](docs/adr/0035-migrations-run-in-github-actions.md)). A Landing-only scaffolded app has no Deploy home.
+_Avoid_: Shared contract (that is Zod/constants); treating `apps/shared` as a runnable Node service; a top-level `deploy/` folder; dockerignore copies beside the Dockerfile; app-owned `fly-deploy.mjs` duplicates; requiring Deploy home for Landing to exist; a single production-only Fly config or env example
 
 **Procedure**:
 A request-bound Service method built with `this.procedure("name")`: input, auth, resource load, Grant check, then handler.
@@ -218,6 +234,20 @@ _Avoid_: Frontend; Expo importing this package; treating a `modules/` folder as 
 The `@m5kdev/expo` package: Expo-only adapters (native push). The Starter Expo app may import it; Frontend stays platform-agnostic.
 _Avoid_: the Starter Expo app (`apps/*/expo`); putting Expo APIs in Frontend or Web UI
 
+### Deployment
+
+**Deployment environment**:
+Where an app runs, named by `APP_ENV`: `local`, `development`, `staging`, `canary`, or `production`. Development and Production always exist; Staging and Canary are optional, chosen at create time. Each deployed environment follows one Git branch (`main`, `staging`, `canary`, `production`) and GitHub Actions deploys it on merge. Canary and Production share the Production database; Development and Staging have their own.
+_Avoid_: `NODE_ENV` as the environment (it is `production` on every deployed app); stage; tier
+
+**Environment namespace**:
+The BullMQ prefix `<APP_SLUG>-<APP_ENV>` that keeps one Deployment environment's queues, queue events, and workers apart from another's on a shared Redis. Semantic queue names stay the same in every environment.
+_Avoid_: prefixing queue names by hand; ioredis `keyPrefix`; a BullMQ prefix that ignores `APP_ENV` (such as BullMQ's default `bull`)
+
+**Promotion PR**:
+A pull request that moves tested code to the next Deployment environment's branch: `main` → `staging` → `canary` → `production`, skipping environments the app does not have. Only the expected source branch may open one; it merges with a merge commit, and the deploy checks the branch's tree matches a tested source commit ([ADR-0036](docs/adr/0036-each-environment-builds-from-its-branch.md)).
+_Avoid_: hotfix commits on a release branch; feature PRs into a release branch; image promotion
+
 ### Product surfaces
 
 **Admin panel**:
@@ -233,7 +263,7 @@ The public marketing site package (`apps/landing`). Own Fly app, separate from t
 _Avoid_: Webapp (the authenticated SPA baked into the product image); treating Landing as requiring a server or Deploy home
 
 **Workflow**:
-A persisted background run (optional cron). Status: `queued` | `running` | `completed` | `failed`. Payload is serializable ids and typed input, not a request. Org-scoped runs stamp MemberId.
+A persisted background run (optional cron). Status: `queued` | `running` | `completed` | `failed`. Payload is serializable ids and typed input, not a request. Org-scoped runs stamp MemberId. Each row records the Deployment environment that enqueued it; reconcile and lifecycle updates only touch rows of their own environment, so Canary never reconciles Production's runs ([ADR-0037](docs/adr/0037-canary-workers-without-schedulers.md)). The `environment` column's default `'production'` is the backward-compatible migration value for existing rows (and for code from the previous release that does not write it); it is not a default namespace, since the Kernel always writes `APP_ENV`.
 _Avoid_: Job, Queue, Task, Recurrence (that is the repeating-event store)
 
 **Recurrence**:
@@ -277,8 +307,8 @@ An inventoried S3 object: a `files` row plus the object at `(bucket, key)`. Name
 _Avoid_: Upload (the action), Asset, Attachment, Blob; a local-disk object as a File; an S3 object with no row; path (that is key); Team as a File owner; storing a presigned URL or S3 key on another entity (store File id)
 
 **Plan**:
-Named commercial offering in app code (`StripePlan` / `StripePlansConfig`). Not a database row. Not a Stripe Product. A Plan cites one Stripe Product id per currency and 1..N Prices under each Product. The catalog names a Trial Plan per currency. Seat billing is a catalog switch, not a per-Plan field. See [ADR-0017](docs/adr/0017-billing-org-paywall-seat-billing-opt-in.md), [ADR-0019](docs/adr/0019-billing-prices-per-currency-product.md), and [ADR-0020](docs/adr/0020-trial-price-at-start-card-catalog-switch.md).
-_Avoid_: Product (that is the per-currency Stripe Product); Tier; Subscription; `limits` / `group`; treating monthly/quarterly/yearly as separate Plans; `annualDiscountPriceId` as a unique field; a single global trial Plan name when currencies disagree
+Named commercial offering in app code (`StripePlan` / `StripePlansConfig`). Not a database row. Not a Stripe Product. A Plan cites one Stripe Product id per currency and 1..N Prices under each Product. When Entitlements are in use, the Plan names 1..N Bundle revisions (a brand Plan lists that brand plus shared brain Bundles; an all-in-one Plan lists every included Bundle). The catalog names a Trial Plan per currency. Seat billing is a catalog switch, not a per-Plan field. See [ADR-0017](docs/adr/0017-billing-org-paywall-seat-billing-opt-in.md), [ADR-0019](docs/adr/0019-billing-prices-per-currency-product.md), [ADR-0020](docs/adr/0020-trial-price-at-start-card-catalog-switch.md), and [ADR-0034](docs/adr/0034-billing-owns-organization-entitlements.md).
+_Avoid_: Product (that is the per-currency Stripe Product); Tier; Subscription; Bundle (the Plan names Bundles; it is not one); `limits` / `group`; treating monthly/quarterly/yearly as separate Plans; `annualDiscountPriceId` as a unique field; a single global trial Plan name when currencies disagree; Stripe Feature
 
 **Price**:
 One recurring option on a Plan: Stripe Price id, currency, interval, interval_count, unit amount, and optional `freeTrialDays`. Monthly, quarterly, and yearly are Prices on the same Plan. The Trial Plan's Product may name one default Price for Trial.
@@ -317,16 +347,16 @@ An app-level switch on `StripePlansConfig`. On: Stripe quantity is the count of 
 _Avoid_: usage/metered billing; mixing on and off across Plans; billed Memberships when the switch is off; Seat as a synonym for Membership
 
 **billingExempt**:
-An Organization boolean. When true, that Organization is exempt from the paywall and from Seat billing. AdminActor sets it on Billing Module admin; new Organizations start false; children do not inherit. See [ADR-0023](docs/adr/0023-organization-billing-exempt.md).
-_Avoid_: skipPlanCheck (that is the app-wide BillingProvider override); skip subscription check as the Kernel noun; grandfathered; Coupon as the bypass; stuffing this into Organization flags; using this to start Trial without a card (that is allowCardlessTrial)
+An Organization boolean. When true, that Organization is exempt from the paywall and from Seat billing, and when Entitlements are in use it is allowed every Capability currently in the app catalog (including Capabilities added after the flag was set). AdminActor sets it on Billing Module admin; new Organizations start false; children do not inherit. See [ADR-0023](docs/adr/0023-organization-billing-exempt.md) and [ADR-0034](docs/adr/0034-billing-owns-organization-entitlements.md).
+_Avoid_: skipPlanCheck (that is the app-wide BillingProvider override and does not grant Capabilities); skip subscription check as the Kernel noun; grandfathered; Coupon as the bypass; stuffing this into Organization flags; using this to start Trial without a card (that is allowCardlessTrial)
 
 **allowCardlessTrial**:
 An Organization boolean. AdminActor may waive catalog `trialRequiresPaymentMethod` for this Organization: Kernel starts at most one cardless Trial per Stripe environment (picked-at-sign-up Price else default Trial Price) without Checkout. It does not skip the paywall (that is billingExempt). New Organizations start false; children do not inherit. Clearing it while trialing keeps access and sends the Owner to Billing Portal for a card; turning it on again drops that gate. After that Trial ends they pay via Checkout; Admin Create Subscription with trialDays remains. See [ADR-0026](docs/adr/0026-organization-allow-cardless-trial.md).
 _Avoid_: billingExempt; skip credit card check as the Kernel noun; a second cardless Trial via the switch; stuffing this into Organization flags; using Checkout to add a card onto the open Trial
 
 **Subscription**:
-Local row re-synced from Stripe; Stripe is the source of truth. The billed party is the Organization, not a User. One mutable row per Organization per Stripe environment (`production` | `sandbox`), the same split as Customer and Plan catalogs. Paywall, admin, Checkout, and Seat billing use this process environment's row only. Stamp MemberId for attribution; do not key billing by UserId. Access while the current-environment status is `active`, `trialing`, or `past_due`, or while the Organization is billingExempt. See [ADR-0017](docs/adr/0017-billing-org-paywall-seat-billing-opt-in.md), [ADR-0023](docs/adr/0023-organization-billing-exempt.md), and [ADR-0024](docs/adr/0024-subscription-per-stripe-environment.md).
-_Avoid_: Plan, personal User subscription; Stripe customer linkage on the User; one row shared across live and test Stripe; a sandbox ACCESS_STATUS granting production access
+Local row re-synced from Stripe; Stripe is the source of truth. The billed party is the Organization, not a User. One mutable row per Organization per Stripe environment (`production` | `sandbox`), the same split as Customer and Plan catalogs. Paywall, admin, Checkout, and Seat billing use this process environment's row only. Stamp MemberId for attribution; do not key billing by UserId. Access while the current-environment status is `active`, `trialing`, or `past_due`, or while the Organization is billingExempt. When Entitlements are in use, a current-environment ACCESS_STATUS Subscription is the source of that Plan's Bundle Assignments; it does not use the Stripe Entitlements API. See [ADR-0017](docs/adr/0017-billing-org-paywall-seat-billing-opt-in.md), [ADR-0023](docs/adr/0023-organization-billing-exempt.md), [ADR-0024](docs/adr/0024-subscription-per-stripe-environment.md), and [ADR-0034](docs/adr/0034-billing-owns-organization-entitlements.md).
+_Avoid_: Plan, personal User subscription; Stripe customer linkage on the User; one row shared across live and test Stripe; a sandbox ACCESS_STATUS granting production access; treating skipPlanCheck as every Capability allowed
 
 **Tag**:
 A polymorphic label attached to any resource type via taggings. Ownership is UserId (personal), MemberId (Member-owned), or organizationId (org-shared).

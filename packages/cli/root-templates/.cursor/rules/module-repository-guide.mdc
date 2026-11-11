@@ -28,12 +28,12 @@ apps/<app>/server/src/modules/<module>/<module>.repository.ts
 ## Orm/Schema Type Pattern
 
 ```typescript
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { posts } from "./posts.db";
 
 const schema = { posts };
 type Schema = typeof schema;
-type Orm = LibSQLDatabase<Schema>;
+type Orm = NodePgDatabase<Schema>;
 ```
 
 ## Prefer Built-in Base Methods (Strong Default)

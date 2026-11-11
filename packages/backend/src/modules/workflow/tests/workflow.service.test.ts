@@ -90,6 +90,7 @@ function createService(repo = createMockRepository()) {
         duplicate: mockDuplicate,
         disconnect: mockDisconnect,
       } as unknown as IORedis,
+      prefix: "m5kdev-test-local",
       queues: {
         fast: { concurrency: 10, defaultJobOptions: { attempts: 3 } },
         slow: { concurrency: 2 },
@@ -577,6 +578,7 @@ describe("WorkflowService", () => {
       const repo = createMockRepository();
       const disabled = new WorkflowService(repo, {
         connection: { duplicate: mockDuplicate, disconnect: mockDisconnect } as unknown as IORedis,
+        prefix: "m5kdev-test-local",
         queues: { fast: {} },
         defaultQueue: "fast",
         reconcile: { enabled: false },
@@ -638,7 +640,7 @@ describe("WorkflowService", () => {
 
       await service.reconcile();
 
-      expect(repo.touch).toHaveBeenCalledWith("wait-1");
+      expect(repo.touch).toHaveBeenCalledWith("wait-1", "fast");
     });
   });
 

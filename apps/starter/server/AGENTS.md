@@ -51,7 +51,7 @@ apps/server/src/modules/<module>/
 - Server event: emit through Auth from a job `.handle` when the UI must refresh a change the trigger mutation did not return. See `.cursor/rules/server-event-emit.mdc`.
 // m5k:workflows:end
 - `index.ts` calls `builtBackendApp.start()`, which listens and handles SIGINT/SIGTERM. Extra shutdown work (telemetry) is `onShutdown` on `createBackendApp`.
-- After changing Drizzle tables, run `pnpm --filter ./apps/server drizzle:generate` then `drizzle:migrate` — do not hand-edit SQL migrations in this repo.
+- After changing Drizzle tables, run `pnpm --filter ./apps/server drizzle:generate`, then `drizzle:migrate` against the local or Development database only. Never hand-write or edit migration SQL; keep every migration backward-compatible with Production (see `.cursor/rules/database-migrations.mdc`).
 
 // m5k:mcp:start
 - `McpModule` is registered in `app.ts`. MCP clients authenticate with Better Auth MCP OAuth (not API keys). Compose `auth.oauth.db` plus `mcpAllowlistEntries`. Posts exposes `list-posts` / `create-post` through `meta.mcp` on its tRPC procedures. Omit the module to disable MCP.

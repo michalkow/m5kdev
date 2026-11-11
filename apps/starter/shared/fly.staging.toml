@@ -1,0 +1,32 @@
+app = "starter-app-staging"
+primary_region = "iad"
+
+# Staging Deployment environment (branch `staging`). Its own Neon branch,
+# derived from Production; schedulers on, for release rehearsals.
+# Deployed by .github/workflows/deploy-app.yml after its migrate job. Migrations
+# run in GitHub Actions, never from the image or a Fly release step (ADR-0035).
+
+[build]
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "30s"
+    timeout = "5s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1

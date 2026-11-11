@@ -46,10 +46,6 @@ type FileModuleRouters = {
   file: ReturnType<typeof createFileTRPC>;
 };
 
-function isProduction(): boolean {
-  return process.env.NODE_ENV === "production";
-}
-
 function defaultBuckets(): string[] {
   const envBucket = process.env.AWS_S3_BUCKET;
   return envBucket ? [envBucket] : [];
@@ -88,15 +84,20 @@ export class FileModule extends BaseModule<
     this.fileTypes = config.fileTypes;
   }
 
-  override repositories({ db }: ModuleRepositoriesContext<FileModuleDeps, FileModuleTables>) {
+  override repositories({
+    db,
+    appConfig,
+  }: ModuleRepositoriesContext<FileModuleDeps, FileModuleTables>) {
     const defaultBucket = this.buckets[0] ?? process.env.AWS_S3_BUCKET ?? "local-s3";
-    const fileS3: FileObjectStore & Base = isProduction()
-      ? new FileS3Repository()
-      : new LocalFileObjectStore({
-          root: path.join(tmpdir(), "m5kdev-file-s3"),
-          publicBaseUrl: localStorePublicBaseUrl(),
-          defaultBucket,
-        });
+    // Deployed environments use S3; only `local` uses the local object store.
+    const fileS3: FileObjectStore & Base =
+      appConfig.environment !== "local"
+        ? new FileS3Repository()
+        : new LocalFileObjectStore({
+            root: path.join(tmpdir(), "m5kdev-file-s3"),
+            publicBaseUrl: localStorePublicBaseUrl(),
+            defaultBucket,
+          });
     if (fileS3 instanceof LocalFileObjectStore) {
       this.localStore = fileS3;
     }
@@ -164,8 +165,9 @@ export class FileModule extends BaseModule<
     services,
     authMiddleware,
     deps,
+    appConfig,
   }: ModuleExpressContext<FileModuleDeps, FileModuleServices>) {
-    if (this.localStore && !isProduction()) {
+    if (this.localStore && appConfig.environment === "local") {
       infra.express.use(FILE_S3_MOCK_MOUNT, createMockS3Router(this.localStore));
     }
     if (!authMiddleware) return;

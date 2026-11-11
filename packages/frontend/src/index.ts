@@ -31,6 +31,8 @@ export * from "./modules/auth/hooks/useOrganizationAccess";
 export * from "./modules/auth/hooks/useSession";
 export * from "./modules/auth/hooks/useUserOrganizations";
 export * from "./modules/billing/components/BillingProvider";
+export * from "./modules/billing/components/EntitlementProvider";
+export * from "./modules/billing/hooks/useEntitlements";
 export * from "./modules/billing/hooks/useSubscription";
 export * from "./modules/file/fetchFileDownloadUrl";
 export * from "./modules/file/fileDownloadPath";

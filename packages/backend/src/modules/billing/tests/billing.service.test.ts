@@ -1,23 +1,32 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import {
+  booleanCapability,
+  composeCapabilities,
+  defineBundles,
+  defineCapabilities,
+} from "@m5kdev/commons/modules/billing/billing.entitlements";
 import type {
   ResolvedStripePlans,
   StripePlan,
 } from "@m5kdev/commons/modules/billing/billing.types";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
+import { ok } from "neverthrow";
 import type { Pool } from "pg";
 import type { FunctionComponent } from "react";
 import type Stripe from "stripe";
 import { createBackendApp } from "../../../app";
 import { createServiceActor } from "../../../base/base.actor";
+import type { ResourceGrant } from "../../../base/base.grants";
 import { createTestPool, prepareTestSchema } from "../../../test/postgresql";
 import * as authTables from "../../auth/auth.db";
 import { EmailModule } from "../../email/email.module";
 import type { EmailTemplates } from "../../email/email.service";
 import * as billingTables from "../billing.db";
 import { BillingModule } from "../billing.module";
+import { BillingPermissionService } from "../billing.permission-service";
 import type { BillingService } from "../billing.service";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
@@ -3391,3 +3400,393 @@ describe("BillingService Billing Module admin", () => {
     expect(sandboxListed.rows[0]?.subscription?.environment).toBe("sandbox");
   });
 });
+
+const resourceCapabilities = defineCapabilities({
+  "resources.analyze": booleanCapability(),
+});
+const typeOrbCapabilities = defineCapabilities({
+  "apps.typeorb": booleanCapability(),
+  "typeorb.publish": booleanCapability(),
+});
+const knowledgeCapabilities = defineCapabilities({
+  "apps.knowledge": booleanCapability(),
+});
+const entitlementCatalog = defineBundles(
+  composeCapabilities(resourceCapabilities, typeOrbCapabilities, knowledgeCapabilities),
+  {
+    "brain@1": ["resources.analyze"],
+    "typeorb@1": ["apps.typeorb", "typeorb.publish", "resources.analyze"],
+    "knowledge@1": ["apps.knowledge", "resources.analyze"],
+  }
+);
+
+function entitledCatalog(overrides: Partial<ResolvedStripePlans> = {}): ResolvedStripePlans {
+  return catalog({
+    entitlements: entitlementCatalog,
+    plans: [{ ...plan, bundles: ["typeorb@1"] }],
+    ...overrides,
+  });
+}
+
+describe("BillingService Organization Entitlements", () => {
+  let client: Pool;
+  let outputDirectory: string;
+
+  beforeEach(async () => {
+    client = createTestPool();
+    outputDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "m5kdev-billing-entitlements-"));
+    await createTables(client);
+    await seedOrg(client);
+  });
+
+  afterEach(async () => {
+    await client.end();
+    await fs.rm(outputDirectory, { recursive: true, force: true });
+  });
+
+  it("throws when a Plan names an unknown Bundle", () => {
+    const stripe = createStripeStub({});
+    expect(() =>
+      createBackendApp(
+        {
+          db: { client },
+          schema: { ...authTables, ...billingTables },
+          email: { mode: "store", from: "no-reply@example.com", outputDirectory },
+        },
+        [
+          new EmailModule(requiredTemplates),
+          new BillingModule(
+            { stripe },
+            entitledCatalog({ plans: [{ ...plan, bundles: ["missing@1"] }] })
+          ),
+        ] as const
+      )
+    ).toThrow("Plan pro names unknown Bundle missing@1");
+  });
+
+  it("denies Capabilities when the Organization has no ACCESS_STATUS Subscription", async () => {
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+
+    const denied = await billing.requireAll(memberCtx().actor, ["typeorb.publish"]);
+    expect(denied.isErr()).toBe(true);
+    if (denied.isOk()) throw new Error("expected denial");
+    expect(denied.error.code).toBe("FORBIDDEN");
+    expect(denied.error.context).toEqual({
+      kind: "entitlement",
+      capabilities: ["typeorb.publish"],
+      reason: "no_subscription",
+    });
+  });
+
+  it("allows Plan Bundles for an ACCESS_STATUS Subscription and denies the rest", async () => {
+    await insertOrgSubscription(client, {
+      id: "sub_entitled",
+      environment: "production",
+      stripeCustomerId: CUSTOMER_ID,
+      stripeSubscriptionId: "sub_live",
+      status: "active",
+    });
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+
+    const allowed = await billing.requireAll(memberCtx().actor, [
+      "apps.typeorb",
+      "typeorb.publish",
+      "resources.analyze",
+    ]);
+    expect(allowed.isOk()).toBe(true);
+
+    const knowledge = await billing.requireAll(memberCtx().actor, ["apps.knowledge"]);
+    expect(knowledge.isErr()).toBe(true);
+    if (knowledge.isOk()) throw new Error("expected denial");
+    expect(knowledge.error.context).toMatchObject({
+      kind: "entitlement",
+      capabilities: ["apps.knowledge"],
+      reason: "missing_capability",
+    });
+
+    const snapshot = (await billing.snapshot(memberCtx()))._unsafeUnwrap();
+    expect(snapshot.allowed).toEqual(
+      expect.arrayContaining(["apps.typeorb", "typeorb.publish", "resources.analyze"])
+    );
+    expect(snapshot.allowed).not.toContain("apps.knowledge");
+    expect(snapshot.capabilities["apps.knowledge"]?.reason).toBe("missing_capability");
+    expect(snapshot.capabilities["typeorb.publish"]?.allowed).toBe(true);
+    expect(Object.keys(snapshot).sort()).toEqual(["allowed", "capabilities", "organizationId"]);
+    expect(JSON.stringify(snapshot)).not.toMatch(/price_|cus_|prod_/);
+  });
+
+  it("allows Trial ACCESS_STATUS Plan Bundles", async () => {
+    await insertOrgSubscription(client, {
+      id: "sub_trial_entitled",
+      environment: "production",
+      stripeCustomerId: CUSTOMER_ID,
+      stripeSubscriptionId: "sub_trial",
+      status: "trialing",
+    });
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+
+    const allowed = await billing.requireAll(memberCtx().actor, ["typeorb.publish"]);
+    expect(allowed.isOk()).toBe(true);
+    const decided = (await billing.evaluate(memberCtx().actor, "typeorb.publish"))._unsafeUnwrap();
+    expect(decided).toEqual({
+      capability: "typeorb.publish",
+      allowed: true,
+      reason: "allowed",
+    });
+  });
+
+  it("denies Capabilities when the Subscription is canceled", async () => {
+    await insertOrgSubscription(client, {
+      id: "sub_canceled",
+      environment: "production",
+      stripeCustomerId: CUSTOMER_ID,
+      stripeSubscriptionId: "sub_dead",
+      status: "canceled",
+    });
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+
+    const denied = await billing.requireAll(memberCtx().actor, ["typeorb.publish"]);
+    expect(denied.isErr()).toBe(true);
+    if (denied.isOk()) throw new Error("expected denial");
+    expect(denied.error.context).toMatchObject({ reason: "no_subscription" });
+  });
+
+  it("contributes no Capabilities when the Plan omits bundles", async () => {
+    await insertOrgSubscription(client, {
+      id: "sub_no_bundles",
+      environment: "production",
+      stripeCustomerId: CUSTOMER_ID,
+      stripeSubscriptionId: "sub_live",
+      status: "active",
+    });
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog({ plans: [plan] }),
+    });
+
+    const denied = await billing.requireAll(memberCtx().actor, ["typeorb.publish"]);
+    expect(denied.isErr()).toBe(true);
+    if (denied.isOk()) throw new Error("expected denial");
+    expect(denied.error.context).toMatchObject({
+      kind: "entitlement",
+      capabilities: ["typeorb.publish"],
+      reason: "missing_capability",
+    });
+  });
+
+  it("evaluate errors on an unknown Capability", async () => {
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+
+    const unknown = await billing.evaluate(memberCtx().actor, "not.a.capability");
+    expect(unknown.isErr()).toBe(true);
+    if (unknown.isOk()) throw new Error("expected error");
+    expect(unknown.error.code).toBe("BAD_REQUEST");
+  });
+
+  it("allows every catalog Capability when billingExempt even without a Subscription", async () => {
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+    await billing.setAdminBillingExempt(
+      { organizationId: ORG_ID, billingExempt: true },
+      adminCtx()
+    );
+
+    const all = await billing.requireAll(memberCtx().actor, [
+      "apps.knowledge",
+      "typeorb.publish",
+      "resources.analyze",
+    ]);
+    expect(all.isOk()).toBe(true);
+  });
+
+  it("does not use a sandbox ACCESS_STATUS for production Entitlements", async () => {
+    await insertOrgSubscription(client, {
+      id: "sub_sandbox",
+      environment: "sandbox",
+      status: "active",
+    });
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+
+    const denied = await billing.requireAll(memberCtx().actor, ["typeorb.publish"]);
+    expect(denied.isErr()).toBe(true);
+    if (denied.isOk()) throw new Error("expected denial");
+    expect(denied.error.context).toMatchObject({ reason: "no_subscription" });
+  });
+
+  it("errors on an unknown Capability instead of denying", async () => {
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+
+    const unknown = await billing.requireAll(memberCtx().actor, ["not.a.capability"]);
+    expect(unknown.isErr()).toBe(true);
+    if (unknown.isOk()) throw new Error("expected error");
+    expect(unknown.error.code).toBe("BAD_REQUEST");
+    expect(unknown.error.context).toMatchObject({
+      kind: "entitlement",
+      capabilities: ["not.a.capability"],
+    });
+  });
+
+  it("denies Entitlements on the Procedure chain before Grants run", async () => {
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+    const service = createPublishService(billing, memberWriteAll);
+
+    const denied = await service.publish(undefined, memberCtx());
+    expect(denied.isErr()).toBe(true);
+    if (denied.isOk()) throw new Error("expected denial");
+    expect(denied.error.code).toBe("FORBIDDEN");
+    expect(denied.error.context).toMatchObject({
+      kind: "entitlement",
+      capabilities: ["typeorb.publish"],
+      reason: "no_subscription",
+    });
+  });
+
+  it("still requires the resource Grant when the Organization is Entitled", async () => {
+    await insertOrgSubscription(client, {
+      id: "sub_entitled_grant",
+      environment: "production",
+      stripeCustomerId: CUSTOMER_ID,
+      stripeSubscriptionId: "sub_live",
+      status: "active",
+    });
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+    const service = createPublishService(billing, ownerWriteAll);
+
+    const denied = await service.publish(undefined, memberCtx());
+    expect(denied.isErr()).toBe(true);
+    if (denied.isOk()) throw new Error("expected grant denial");
+    expect(denied.error.code).toBe("FORBIDDEN");
+    expect(denied.error.context).not.toMatchObject({ kind: "entitlement" });
+  });
+
+  it("allows an Entitled Member who also has the resource Grant", async () => {
+    await insertOrgSubscription(client, {
+      id: "sub_entitled_ok",
+      environment: "production",
+      stripeCustomerId: CUSTOMER_ID,
+      stripeSubscriptionId: "sub_live",
+      status: "active",
+    });
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+    const service = createPublishService(billing, memberWriteAll);
+
+    const allowed = await service.publish(undefined, memberCtx());
+    expect(allowed.isOk()).toBe(true);
+    if (allowed.isErr()) throw new Error("expected allow");
+    expect(allowed.value).toEqual({ published: true });
+  });
+
+  it("fails without OrganizationActor the same way other auth steps do", async () => {
+    const billing = await bootBilling({
+      client,
+      templates: requiredTemplates,
+      outputDirectory,
+      stripe: createStripeStub({}),
+      catalog: entitledCatalog(),
+    });
+    const service = createPublishService(billing, memberWriteAll);
+
+    const denied = await service.publish(undefined, {
+      actor: createServiceActor({ userId: USER_ID, userRole: "user" }),
+      user: { id: USER_ID, email: USER_EMAIL, name: "Pat" },
+      session: { id: "sess", userId: USER_ID },
+    } as never);
+    expect(denied.isErr()).toBe(true);
+    if (denied.isOk()) throw new Error("expected auth failure");
+    expect(denied.error.code).toBe("BAD_REQUEST");
+  });
+});
+
+const memberWriteAll: ResourceGrant[] = [
+  { action: "write", level: "organization", role: "member", access: "all" },
+];
+const ownerWriteAll: ResourceGrant[] = [
+  { action: "write", level: "organization", role: "owner", access: "all" },
+];
+
+function createPublishService(billing: BillingService, grants: ResourceGrant[]) {
+  class PublishService extends BillingPermissionService<
+    Record<string, never>,
+    { billing: BillingService }
+  > {
+    constructor() {
+      super({} as Record<string, never>, { billing }, grants);
+    }
+
+    readonly publish = this.procedure("publish")
+      .requireAuth("organization")
+      .requireEntitlements(["typeorb.publish"])
+      .access({ action: "write" })
+      .handle(() => ok({ published: true }));
+  }
+
+  return new PublishService();
+}

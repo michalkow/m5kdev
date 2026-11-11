@@ -33,9 +33,16 @@ import { Pool, type PoolConfig } from "pg";
 import type { Logger } from "pino";
 import { Resend } from "resend";
 import {
+  type DeploymentEnvironment,
+  databaseScope,
+  isDeployedEnvironment,
+  parseAppEnvironment,
+} from "./base/environment";
+import {
   createServerEventBus,
   SERVER_EVENT_SUBSCRIBE_PATH,
   type ServerEventBus,
+  serverEventChannelPrefix,
 } from "./base/server-event";
 import { type AppI18n, type BackendAppI18nResources, createAppI18n } from "./i18n/app-i18n";
 import type * as authTables from "./modules/auth/auth.db";
@@ -159,6 +166,10 @@ export type BackendAppEmailOptions = {
 
 type ResolvedBackendAppMetadata = {
   name?: string;
+  /** `APP_ENV` — see {@link parseAppEnvironment}. */
+  environment: DeploymentEnvironment;
+  /** `APP_SLUG` */
+  slug: string;
   urls: {
     web?: string;
     api?: string;
@@ -361,6 +372,13 @@ export type BackendAppConfig = {
   spa?: {
     root: string;
   };
+  serverEvents?: {
+    /**
+     * Database scope for Server event channels. Defaults to `APP_ENV`, with
+     * `canary` mapped to `production` because both use the Production database.
+     */
+    scope?: string;
+  };
 };
 
 export function defineBackendModule<const T extends BackendModuleDefinition>(
@@ -395,11 +413,21 @@ function normalizeAppConfig(
   config: BackendAppConfig["app"],
   env: Record<string, string | undefined>
 ): ResolvedBackendAppMetadata {
+  const { environment, slug } = parseAppEnvironment(env);
   const webUrl = config?.urls?.web ?? env.VITE_APP_URL;
   const apiUrl = config?.urls?.api ?? env.VITE_SERVER_URL;
+  if (environment !== "local") {
+    if (!webUrl)
+      throw new Error(`VITE_APP_URL (or app.urls.web) must be set when APP_ENV=${environment}`);
+    if (!apiUrl) {
+      throw new Error(`VITE_SERVER_URL (or app.urls.api) must be set when APP_ENV=${environment}`);
+    }
+  }
 
   return {
     name: config?.name,
+    environment,
+    slug,
     urls: {
       web: webUrl,
       api: apiUrl,
@@ -420,7 +448,7 @@ function normalizeEmailConfig(
   env: Record<string, string | undefined>
 ): ResolvedBackendAppEmailOptions {
   return {
-    mode: config?.mode ?? (env.NODE_ENV === "development" ? "log" : "send"),
+    mode: config?.mode ?? (isDeployedEnvironment(env) ? "send" : "log"),
     from: config?.from ?? env.EMAIL_FROM ?? env.RESEND_FROM,
     systemNotificationEmail: config?.systemNotificationEmail ?? env.SYSTEM_NOTIFICATION_EMAIL,
     outputDirectory: config?.outputDirectory ?? ".emails",
@@ -669,6 +697,30 @@ function applyCors({
   expressApp.use(cors(corsOptions));
 }
 
+export const HEALTH_CHECK_PATH = "/healthz";
+
+/**
+ * Kernel liveness for Fly checks and post-deploy smoke tests: 200 with the
+ * Deployment environment when PostgreSQL answers, 503 otherwise. No auth, no
+ * connection details. Registered before modules and the baked SPA.
+ */
+function applyHealthCheck(options: {
+  expressApp: Express;
+  client: Pool;
+  appConfig: ResolvedBackendAppMetadata;
+}): void {
+  const { expressApp, client, appConfig } = options;
+  expressApp.get(HEALTH_CHECK_PATH, async (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+      await client.query("SELECT 1");
+      res.status(200).json({ status: "ok", environment: appConfig.environment });
+    } catch {
+      res.status(503).json({ status: "unavailable", environment: appConfig.environment });
+    }
+  });
+}
+
 function applyBakedSpa(options: { expressApp: Express; spa: BackendAppConfig["spa"] }): void {
   const { expressApp, spa } = options;
   if (!spa?.root) {
@@ -704,9 +756,17 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   const expressApp = config.express ?? express();
   applyCors({ expressApp, config, appConfig });
   const dbClientState = createDbClient(config.db);
+  applyHealthCheck({ expressApp, client: dbClientState.client, appConfig });
   const redisState = createRedisClient(config.redis);
   const resendState = createResendClient(config.resend);
-  const serverEvents = createServerEventBus({ redis: redisState.redis, logger });
+  const serverEvents = createServerEventBus({
+    redis: redisState.redis,
+    logger,
+    channelPrefix: serverEventChannelPrefix({
+      slug: appConfig.slug,
+      scope: config.serverEvents?.scope ?? databaseScope(appConfig.environment),
+    }),
+  });
   const infra = {
     express: expressApp,
     redis: redisState.redis,

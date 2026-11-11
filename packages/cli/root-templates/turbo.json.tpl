@@ -18,6 +18,9 @@
       "inputs": ["$TURBO_DEFAULT$", "tsconfig.json", "tsconfig.*.json"],
       "outputs": ["tsconfig.tsbuildinfo", "**/*.tsbuildinfo", "dist/tsconfig.lib.tsbuildinfo"]
     },
+    "test": {
+      "dependsOn": ["^build"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

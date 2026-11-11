@@ -59,16 +59,23 @@ pnpm --filter ./apps/server drizzle:generate  # generate migrations from *.db.ts
 pnpm --filter ./apps/server drizzle:migrate   # apply migrations
 pnpm --filter ./apps/server drizzle:seed      # seed the local database
 pnpm --filter ./apps/server drizzle:reset     # reset the local database
+pnpm --filter ./apps/server drizzle:rebuild   # drop and re-migrate a disposable database (Development drift)
 pnpm --filter ./apps/server drizzle:studio    # inspect the database
 ```
 
 First-time setup: `pnpm install`, then `drizzle:migrate` and `drizzle:seed`, then `pnpm dev`.
+
+If parallel branches leave the shared Development database out of step with `main`, rebuild it: set `DATABASE_DISPOSABLE=true` for that database, run `drizzle:rebuild` (drops the app schema and migration history, then re-applies every migration; Mastra and vector schemas are kept), then `drizzle:seed`.
 // m5k:test-harness:start
 
 End-to-end tests: `pnpm --filter ./apps/e2e test:e2e` (Playwright).
 // m5k:test-harness:end
 
-Runtime uses PostgreSQL through PgBouncer (`DATABASE_URL`); migrations and initialization require `DATABASE_DIRECT_URL`. Keep app, Mastra, and vector schemas separately owned. Start the local PostgreSQL/PgBouncer Compose stack and provision pgvector before applying reviewed migrations. Agents must not generate or hand-author migration SQL or metadata. Local auth emails are written to `apps/server/.emails`. Demo login: `admin@{{APP_SLUG}}.local` / `password1234`.
+Runtime uses PostgreSQL through PgBouncer (`DATABASE_URL`); migrations and initialization require `DATABASE_DIRECT_URL`. Keep app, Mastra, and vector schemas separately owned. Start the local PostgreSQL/PgBouncer Compose stack and provision pgvector before applying migrations.
+
+Migrations: agents run `drizzle:generate` to create migrations and may run `drizzle:migrate` against the local or Development database in `apps/shared/.env` only. Never hand-write or edit migration SQL, journal entries, or snapshots, and never use `generate --custom`. Every migration must be backward-compatible with the code currently in Production. Read `.cursor/rules/database-migrations.mdc` before changing a table.
+
+Deployment environments: Development (`main`) and Production (`production`) deploy from GitHub Actions on merge, migrating first. Feature PRs target `main` only, and behaviour follows `APP_ENV`, never `NODE_ENV`. Read `docs/agents/environments.md` before touching configuration, jobs, or deploy files; human setup is in `docs/deployment.md`. Local auth emails are written to `apps/server/.emails`. Demo login: `admin@{{APP_SLUG}}.local` / `password1234`.
 // m5k:server:end
 
 // m5k:server:start
@@ -90,7 +97,7 @@ A module lives in `apps/server/src/modules/<name>/` and follows a strict file an
 <name>.module.ts      composition unit wiring the above into one class
 ```
 
-Clients infer all row/list types from `AppRouter` (`inferRouterOutputs`) — never hand-mirror server types anywhere. Never write Drizzle migrations by hand; change `*.db.ts`, register new tables in `src/schema.ts`, then run `drizzle:generate` + `drizzle:migrate`.
+Clients infer all row/list types from `AppRouter` (`inferRouterOutputs`) — never hand-mirror server types anywhere. Change `*.db.ts`, register new tables in `src/schema.ts`, then run `drizzle:generate` and apply it to the local or Development database with `drizzle:migrate` (see `.cursor/rules/database-migrations.mdc`).
 
 Roles are defined in `apps/shared/src/modules/app/` and passed through both `createBackendApp` metadata and the frontend config provider; when adding roles, extend the module `*.grants.ts` files to match.
 // m5k:webapp:start
@@ -123,6 +130,7 @@ The framework's detailed conventions live in `.cursor/rules/*.mdc`. Cursor appli
 | Guide | Read before touching |
 | --- | --- |
 | `.cursor/rules/module-db-guide.mdc` | `apps/server/src/modules/**/*.db.ts` |
+| `.cursor/rules/database-migrations.mdc` | `apps/server/src/modules/**/*.db.ts`, `apps/server/drizzle-postgresql/**` |
 | `.cursor/rules/module-dto-guide.mdc` | `apps/server/src/modules/**/*.dto.ts` |
 | `.cursor/rules/module-repository-guide.mdc` | `apps/server/src/modules/**/*.repository.ts` |
 | `.cursor/rules/module-service-guide.mdc` | `apps/server/src/modules/**/*.service.ts` |

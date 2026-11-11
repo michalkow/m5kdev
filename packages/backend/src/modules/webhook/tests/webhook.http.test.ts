@@ -92,7 +92,7 @@ describe("Inbound callback HTTP", () => {
         db: { client },
         schema: { ...webhookTables },
         app: { urls: { api: API_URL, web: "http://localhost:5173" } },
-        env: { WEBHOOK_SECRET: PROCESS_SECRET },
+        env: { APP_ENV: "local", APP_SLUG: "m5kdev-test", WEBHOOK_SECRET: PROCESS_SECRET },
       },
       [new WebhookModule("/hooks")] as const
     );
@@ -130,7 +130,7 @@ describe("Inbound callback HTTP", () => {
         db: { client },
         schema: { ...webhookTables },
         app: { urls: { api: API_URL, web: "http://localhost:5173" } },
-        env: { WEBHOOK_SECRET: PROCESS_SECRET },
+        env: { APP_ENV: "local", APP_SLUG: "m5kdev-test", WEBHOOK_SECRET: PROCESS_SECRET },
       },
       [new WebhookModule()] as const
     );
@@ -169,7 +169,7 @@ describe("Inbound callback HTTP", () => {
         db: { client },
         schema: { ...webhookTables },
         app: { urls: { api: API_URL, web: "http://localhost:5173" } },
-        env: { WEBHOOK_SECRET: PROCESS_SECRET },
+        env: { APP_ENV: "local", APP_SLUG: "m5kdev-test", WEBHOOK_SECRET: PROCESS_SECRET },
       },
       [new WebhookModule()] as const
     );
@@ -198,7 +198,7 @@ describe("Inbound callback HTTP", () => {
         db: { client },
         schema: { ...webhookTables },
         app: { urls: { api: API_URL, web: "http://localhost:5173" } },
-        env: { WEBHOOK_SECRET: PROCESS_SECRET },
+        env: { APP_ENV: "local", APP_SLUG: "m5kdev-test", WEBHOOK_SECRET: PROCESS_SECRET },
       },
       [new WebhookModule()] as const
     );
