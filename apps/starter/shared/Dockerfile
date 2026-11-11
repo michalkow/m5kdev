@@ -47,7 +47,8 @@ COPY apps/shared ./apps/shared
 # Server imports in the SPA are type-only and are erased by Vite.
 COPY apps/webapp ./apps/webapp
 # Secret contents do not affect Docker's cache key. The Fly wrapper hashes the
-# public VITE_* configuration; direct builds must supply this argument too.
+# public VITE_* and private PostHog upload configuration; direct builds must
+# supply this argument too. Upload secrets are mounted only for this RUN.
 ARG VITE_CONFIG_HASH
 RUN --mount=type=secret,id=ALL_SECRETS,required=false \
     if [ -f /run/secrets/ALL_SECRETS ]; then . /run/secrets/ALL_SECRETS; fi && \

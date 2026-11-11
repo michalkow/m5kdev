@@ -144,6 +144,9 @@ catalogs:
     '@posthog/ai':
       specifier: 6.2.0
       version: 6.2.0
+    '@posthog/rollup-plugin':
+      specifier: 1.6.4
+      version: 1.6.4
     '@radix-ui/react-alert-dialog':
       specifier: 1.1.6
       version: 1.1.6
@@ -1109,6 +1112,9 @@ importers:
       '@m5kdev/config':
         specifier: workspace:*
         version: link:../../../packages/config
+      '@posthog/rollup-plugin':
+        specifier: 'catalog:'
+        version: 1.6.4(rollup@4.62.2)
       '@starter-app/server':
         specifier: workspace:*
         version: link:../server
@@ -6208,11 +6214,24 @@ packages:
     peerDependencies:
       posthog-node: ^5.0.0
 
+  '@posthog/cli@0.19.3':
+    resolution: {integrity: sha512-jR33tYxUGbBJszHZyEGKaliQNk3XJeMqk1AnJQwakzqg0eTsbIUtblt3deGFN1lJpghqRB/l9+Q5rxsHZ6cPYA==}
+    engines: {node: '>=14.14', npm: '>=6'}
+    hasBin: true
+
   '@posthog/core@1.43.1':
     resolution: {integrity: sha512-hGM8f5sp3we6Em/RQHXbmyYm554hUx9+9jhf92ZQgDS4/xW72KHyZiO9wcFye+qAx2cJAOhOCDIznmO1FV8IbA==}
 
   '@posthog/core@1.67.1':
     resolution: {integrity: sha512-Fq8YySx3G2ggxKV/dLf5nfbQocB3/yU6TNSGIyRvVynizrIW8tZfB2HQ/13cY61PoU+cNzvKch+B7Ac+OUkORw==}
+
+  '@posthog/plugin-utils@2.0.1':
+    resolution: {integrity: sha512-ZiQfUcgY65EjF2vkqL4Aau6sx0aqvSWoXaGSGu9Solnmv6e6VRjQbAU0SCKbxpJxcEsCJof9vmvnrFTQIEOUAQ==}
+
+  '@posthog/rollup-plugin@1.6.4':
+    resolution: {integrity: sha512-T2BnNw9wqodg+Xx75Aq7Nm0wtHanvD4amlc1KJnJ/oTE76bN3okl+Cwm30WvoGSVFnrzumDYF2lrsJejplCmgw==}
+    peerDependencies:
+      rollup: '>= 4.0.0'
 
   '@posthog/types@1.397.0':
     resolution: {integrity: sha512-Pa7FtsBo3V0XrhY4y8Xquwp8U07syuZ2IGQdlsRyxhz0yejQLceFjI58UssCXE5zDCDj3km5l7H3ufD6rHChCg==}
@@ -25090,6 +25109,10 @@ snapshots:
       - utf-8-validate
       - ws
 
+  '@posthog/cli@0.19.3':
+    dependencies:
+      detect-libc: 2.1.2
+
   '@posthog/core@1.43.1':
     dependencies:
       '@posthog/types': 1.397.0
@@ -25097,6 +25120,17 @@ snapshots:
   '@posthog/core@1.67.1':
     dependencies:
       '@posthog/types': 1.424.0
+
+  '@posthog/plugin-utils@2.0.1':
+    dependencies:
+      cross-spawn: 7.0.6
+
+  '@posthog/rollup-plugin@1.6.4(rollup@4.62.2)':
+    dependencies:
+      '@posthog/cli': 0.19.3
+      '@posthog/plugin-utils': 2.0.1
+      magic-string: 0.30.21
+      rollup: 4.62.2
 
   '@posthog/types@1.397.0': {}
 

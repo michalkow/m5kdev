@@ -38,6 +38,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@posthog/rollup-plugin": "catalog:",
     "@starter-app/server": "workspace:*",
     "@m5kdev/config": "workspace:*",
     "@tailwindcss/vite": "catalog:",

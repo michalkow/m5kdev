@@ -129,6 +129,38 @@ EMPTY=
     ).not.toBe(original);
   });
 
+  it("invalidates the SPA build when private upload configuration changes", async () => {
+    const envPath = path.join(tempRoot, ".env.production");
+    const deploy = async (key: string, project: string, host: string) => {
+      await fs.promises.writeFile(
+        envPath,
+        `VITE_URL=https://app.test\nPOSTHOG_API_KEY=${key}\nPOSTHOG_PROJECT_ID=${project}\nPOSTHOG_HOST=${host}\n`
+      );
+      runFlyDeploy({ config: "fly.toml", dockerfile: "Dockerfile", env: envPath });
+      const args = spawnSyncMock.mock.calls.at(-1)?.[1];
+      return args?.find((arg) => arg.startsWith("VITE_CONFIG_HASH="));
+    };
+    const initial = await deploy("secret-one", "42", "https://us.posthog.com");
+    expect(await deploy("secret-two", "42", "https://us.posthog.com")).not.toBe(initial);
+    expect(await deploy("secret-one", "43", "https://us.posthog.com")).not.toBe(initial);
+    expect(await deploy("secret-one", "42", "https://eu.posthog.com")).not.toBe(initial);
+  });
+
+  it("keeps private source map configuration out of runtime secrets", async () => {
+    const envPath = path.join(tempRoot, ".env.production");
+    await fs.promises.writeFile(
+      envPath,
+      "# runtime\nDATABASE_URL=postgres://runtime\nPOSTHOG_API_KEY=phx_private\nPOSTHOG_PROJECT_ID=42\nPOSTHOG_HOST=https://us.posthog.com\nVITE_PUBLIC_POSTHOG_KEY=phc_public\n"
+    );
+    runFlySecrets({ config: "fly.toml", env: envPath });
+    const body = spawnSyncMock.mock.calls[0]?.[2]?.input?.toString() ?? "";
+    expect(parseDotenv(body)).toEqual({
+      DATABASE_URL: "postgres://runtime",
+      VITE_PUBLIC_POSTHOG_KEY: "phc_public",
+    });
+    expect(body).not.toContain("phx_private");
+  });
+
   it("runFlySecrets imports the env file over stdin", async () => {
     const envPath = path.join(tempRoot, ".env.production");
     const body = "REDIS_URL=redis://x\n";

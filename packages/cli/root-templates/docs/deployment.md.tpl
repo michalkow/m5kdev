@@ -246,3 +246,49 @@ why every migration must stay compatible with the previous release.
 work from a clean checkout of that environment's branch. A manual deploy
 **does not migrate**. Run the **Deploy app** workflow instead whenever you
 can.
+
+// m5k:webapp:start
+## PostHog errors and source maps
+
+`VITE_PUBLIC_POSTHOG_KEY` is the public ingestion token, shared by the server and
+Webapp; `VITE_PUBLIC_POSTHOG_HOST` is its ingestion host. Empty or `demo` tokens
+leave PostHog disabled. Server 5xx and terminal failures when Workflow is registered, browser errors,
+unhandled rejections, and React render failures use PostHog Error Tracking.
+Expected 4xx responses remain local warnings. Server shutdown flushes pending
+PostHog events alongside OpenTelemetry.
+
+To upload Webapp source maps during a deployment, add the following to that
+Deployment environment's `APP_ENV_FILE` GitHub secret (or local ignored
+`apps/shared/.env.<environment>`):
+
+```dotenv
+POSTHOG_API_KEY=<personal-api-key-with-error-tracking-write-access>
+POSTHOG_PROJECT_ID=<numeric-project-id>
+POSTHOG_HOST=https://us.posthog.com
+```
+
+Use `https://eu.posthog.com` for EU Cloud. The personal API key is separate from
+the public `VITE_PUBLIC_POSTHOG_KEY`. Never add a `VITE_` prefix to upload
+credentials. Set the key and project ID together; leave both empty to skip
+uploads. No additional public runtime configuration is needed.
+
+`app:deploy:<environment>` mounts these values as BuildKit secrets for the Vite
+build. `app:secrets:<environment>` excludes all three upload variables from Fly
+runtime secrets. If you previously imported them manually, remove them with
+`fly secrets unset POSTHOG_API_KEY POSTHOG_PROJECT_ID POSTHOG_HOST --app <app-name>`.
+The existing `VITE_CONFIG_HASH` build argument includes public configuration and
+upload configuration, so enabling/changing uploads rebuilds the matching assets.
+Other runtime secret rotations do not invalidate this layer. Direct Docker/Fly
+builds must provide a new `VITE_CONFIG_HASH` when changing upload configuration.
+
+The official Rollup plugin injects chunk identifiers before writing assets,
+uploads those exact chunks and hidden maps, and deletes maps after success.
+An upload failure fails the build; maps remain in the failed builder for diagnosis
+and are never deployed by that failed build. Verify uploads in PostHog's symbol
+sets and provoke one deliberate browser exception to check readable frames.
+
+For a local upload, load the private values from `apps/shared/.env` and run
+`pnpm --filter {{PACKAGE_SCOPE}}/webapp build`. Builds without upload credentials
+need no network access for source map uploading. Turbo forwards and hashes the
+same configuration variables; Fly's Docker build invokes Vite directly.
+// m5k:webapp:end
