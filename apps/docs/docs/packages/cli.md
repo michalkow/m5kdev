@@ -37,7 +37,7 @@ A first positional argument that is not a command is treated as `create`.
 | `--force` | Allow a non-empty directory |
 | `--skip-install` / `--skip-git` | Skip `pnpm install` / `git init` |
 
-`--platform landing` is Landing only: no Kernel (server, Email), no Webapp, no
+`--platform landing` includes Landing and public product help: no Kernel (server, Email), no Webapp, no
 Expo, and no Deploy home. Env lives in `apps/landing`. That shape has no
 Waitlist. `--yes` without `--platform` stays `web`. `--with-test-harness` with
 landing is refused. Decision record: `docs/adr/0025-landing-only-create-has-no-kernel.md`.
@@ -50,11 +50,11 @@ that prompt. Landing-only create skips those prompts.
 Create writes root `GLOSSARY.md` (kernel tenancy and access language;
 optional-module nouns are feature-gated), `docs/agents/` (GitHub issue tracker,
 domain docs, triage labels), and `docs/adr/`. Landing-only keeps `docs/agents`
-and an empty Language section. `m5kdev update` **ensures** those paths if they
+and the Product documentation term without server-domain language. `m5kdev update` **ensures** those paths if they
 are missing and does not overwrite local glossary edits.
 
 Always-on for `web` / `expo` / `both` in Starter: Auth, Email, Posts, Email
-preview, Landing, Deploy home. Kernel infrastructure is not a selectable
+preview, Landing, product help, Deploy home. Kernel infrastructure is not a selectable
 module. Expo-only still includes a server.
 
 | Id | What selecting it does |
@@ -71,6 +71,32 @@ module. Expo-only still includes a server.
 (`@m5kdev/module-clay`, `docx`, `pdf`, `social`, `video`). Pin those by hand
 on the Managed catalog. See
 [Core vs Optional](/guides/v0.34.0-core-optional-backend-modules-migration).
+
+### Public product help
+
+Every generated app includes a Docusaurus site in `apps/docs`, including
+Landing-only and Expo-only apps. This is end-user product help; the framework
+site you are reading remains developer documentation. Initial guides follow
+the selected platforms and optional features.
+
+Run `pnpm docs:dev` (port 3001), `pnpm docs:build`, or `pnpm docs:serve`.
+The product and Landing link to help. The default public URL is
+`https://<app-slug>-docs.fly.dev`; customize it with `VITE_DOCS_URL` for docs,
+web, and Landing, and `EXPO_PUBLIC_DOCS_URL` for Expo.
+
+`apps/docs/fly.toml` and `apps/docs/Dockerfile` deploy the static site with Caddy
+on a shared CPU and 256 MB RAM, with idle autostop. Copy the adjacent
+`.env.production.example` to `.env.production`, create the configured Fly app,
+and run `pnpm docs:deploy` from the generated repository root. The independent
+`deploy-docs.yml` workflow deploys from `main` using `FLY_API_TOKEN_DOCS` and
+`DOCS_ENV_PRODUCTION`. No product server, database, or runtime secrets are needed.
+
+Generated `AGENTS.md` and `CLAUDE.md` require agents to update affected guides
+before completing user-facing feature work. The detailed rules are in
+`docs/agents/product-documentation.md`. Guides use actual UI labels and explain
+user goals, steps, outcomes, and limitations in plain language. Framework
+updates ensure missing guide files while preserving local guide content;
+Fly config and production env files remain app-owned.
 
 ### init / doctor / update
 

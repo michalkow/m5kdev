@@ -29,6 +29,7 @@
 **/test-results
 **/playwright-report
 **/.turbo
+**/.docusaurus
 **/.expo
 **/build
 **/dist

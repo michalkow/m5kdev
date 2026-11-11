@@ -203,11 +203,15 @@ An object of Match query predicates keyed by column. Values are a match, an oper
 _Avoid_: Filter document, Mongo filter, Filter object, QueryFilter
 
 **Starter**:
-`apps/starter` — the reference product: `server`, `webapp`, `landing`, `expo`, `email`, `e2e`, `shared`.
+`apps/starter` — the reference product: `server`, `webapp`, `landing`, `docs`, `expo`, `email`, `e2e`, `shared`.
 _Avoid_: Example, Template (CLI templates live in `packages/cli`)
 
+**Product documentation**:
+Public help for the people using an App: its features, tasks, expected results, and limitations, written for its audience's technical knowledge. Every scaffolded App includes a Docusaurus help site, deployed separately from the product and Landing.
+_Avoid_: framework documentation; developer guides; using the public help site for engineering or agent instructions
+
 **Release**:
-One Semver version shared by every publishable `@m5kdev/*` package and `create-m5kdev`. Starter apps and the docs site are not part of a Release. See [ADR-0018](docs/adr/0018-one-release-for-publishable-packages.md).
+One Semver version shared by every publishable `@m5kdev/*` package and `create-m5kdev`. Starter apps and the framework documentation site are not part of a Release. See [ADR-0018](docs/adr/0018-one-release-for-publishable-packages.md).
 _Avoid_: Project; independent package versions; Managed catalog (that is the third-party pins for a Release)
 
 **Managed catalog**:

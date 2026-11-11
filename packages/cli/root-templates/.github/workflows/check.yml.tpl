@@ -26,6 +26,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm check-types
       - run: pnpm test
+      - run: pnpm docs:build
       # m5k:server:start
       - name: Check migrations match table definitions
         # drizzle-kit needs a PostgreSQL URL in its config but never connects for

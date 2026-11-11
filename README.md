@@ -126,3 +126,14 @@ See [AGENTS.md](AGENTS.md) for full layer boundaries and conventions.
 ## License
 
 [GPL-3.0-only](LICENSE).
+
+## Starter product help
+
+`apps/starter/docs` is public, end-user product help, separate from the framework
+docs in `apps/docs`. Run `pnpm starter:docs:dev` (port 3001) or
+`pnpm starter:docs:build`. Generated apps receive this site as `apps/docs`,
+Help links, and an independent `docs:deploy` command and GitHub Actions workflow.
+The Starter's `starter:docs:deploy` command uses the built Backend Fly command
+and the adjacent `.env.production` (copy `.env.production.example` first).
+Create the Fly app named in the config before deploying. Agent maintenance
+rules live in `docs/agents/product-documentation.md`.

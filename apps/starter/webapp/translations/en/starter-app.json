@@ -19,6 +19,7 @@
       "organization": "Organization",
       "account": "Account",
       "members": "Members",
+      "help": "Help",
       "notifications": "Notifications",
       "childOrgs": "Child orgs",
       "orgPreferences": "Org preferences",

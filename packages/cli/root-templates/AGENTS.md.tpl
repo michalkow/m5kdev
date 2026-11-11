@@ -9,6 +9,7 @@
 ## Repository Structure
 
 - `apps/landing` holds the public one-page site and its Fly adapter.
+- `apps/docs` holds the public product help site and its independent Fly adapter.
 // m5k:server:start
 - `apps/shared` holds shared Zod schemas, constants, and the product Deploy home.
 - `apps/server` holds the backend composition root, modules, auth wiring, and database scripts.
@@ -45,6 +46,12 @@ Read the matching `.cursor/rules` guide before editing a module file.
 
 Development (`main`) and Production (`production`) deploy from GitHub Actions on merge. Feature PRs target `main` only; read `APP_ENV`, never `NODE_ENV`. See `docs/agents/environments.md` (rules) and `docs/deployment.md` (setup).
 // m5k:server:end
+
+## Product documentation
+
+Before completing a task that adds, changes, or removes user-facing behavior,
+update the affected end-user guides in `apps/docs/docs/` in the same change.
+Read `docs/agents/product-documentation.md` for audience, content, and verification rules.
 
 ## Agent skills
 

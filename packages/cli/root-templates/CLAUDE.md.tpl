@@ -34,12 +34,19 @@ The framework owns the plumbing (auth, database wiring, tRPC composition, permis
 - `apps/expo` — Expo (React Native) app sharing the same server and shared contracts.
 // m5k:expo:end
 - `apps/landing` — public one-page site (app name, pitch) with its own Dockerfile and `fly.toml`.
+- `apps/docs` — public product help with its own Dockerfile, `fly.toml`, and `docs:deploy` command.
 // m5k:server:start
 - `apps/email` — email templates and the local delivery registry.
 // m5k:server:end
 // m5k:test-harness:start
 - `apps/e2e` — Playwright end-to-end tests; the server exposes a test-harness module for them.
 // m5k:test-harness:end
+
+## Product documentation
+
+Before completing a task that adds, changes, or removes user-facing behavior,
+update the affected end-user guides in `apps/docs/docs/` in the same change.
+Read `docs/agents/product-documentation.md` for audience, content, and verification rules.
 
 ## Commands
 
