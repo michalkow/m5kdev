@@ -264,6 +264,8 @@ that pattern if you want e2e traces in your observability backend; set
 
 ## Related docs
 
+- [PostHog error tracking migration](/guides/v0.45.0-posthog-error-tracking-migration)
+
 - [Backend package](/packages/backend)
 - [Kernel Express HTTP shell](/guides/v0.33.0-kernel-express-http-shell-migration)
 - [Getting started](/guides/getting-started)

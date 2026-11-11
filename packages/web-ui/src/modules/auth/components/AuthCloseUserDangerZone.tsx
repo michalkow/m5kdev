@@ -1,7 +1,6 @@
 import { Button, Card, FieldError, Form, Input, Label, TextField, toast } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useMutation } from "@tanstack/react-query";
 import { type FormEvent, type ReactElement, useState } from "react";
@@ -10,7 +9,7 @@ import { useNavigate } from "react-router";
 
 export function AuthCloseUserDangerZone(): ReactElement {
   const { t } = useTranslation("web-ui");
-  const { data: session } = useSession();
+  const { data: session, signOut } = useSession();
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const navigate = useNavigate();
   const email = session?.user?.email ?? "";
@@ -19,7 +18,7 @@ export function AuthCloseUserDangerZone(): ReactElement {
   const { mutate: closeUser, isPending } = useMutation(
     trpc.auth.closeUser.mutationOptions({
       onSuccess: () => {
-        void authClient.signOut().then(() => {
+        void signOut().then(() => {
           navigate("/login");
         });
       },
@@ -43,12 +42,7 @@ export function AuthCloseUserDangerZone(): ReactElement {
       <Card.Content>
         <Form onSubmit={handleSubmit}>
           <div className="flex flex-col gap-4">
-            <TextField
-              name="email"
-              isRequired
-              value={typedEmail}
-              onChange={setTypedEmail}
-            >
+            <TextField name="email" isRequired value={typedEmail} onChange={setTypedEmail}>
               <Label>{t("web-ui:preferences.dangerZone.emailLabel")}</Label>
               <Input placeholder={email} autoComplete="off" />
               <FieldError />

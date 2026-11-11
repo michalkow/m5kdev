@@ -72,15 +72,17 @@ function assertFlyStatus(result: SpawnSyncReturns<Buffer | string>): void {
   }
 }
 
+const POSTHOG_UPLOAD_KEYS = new Set(["POSTHOG_API_KEY", "POSTHOG_PROJECT_ID", "POSTHOG_HOST"]);
+
 export function runFlyDeploy(options: RunFlyDeployOptions): void {
   assertEnvFile(options.env);
   const vars = parseDotenv(readFileSync(options.env, "utf8"));
-  // Only public frontend configuration affects the baked SPA. Sorting keeps
-  // dotenv formatting/order and runtime secret rotations out of the cache key.
-  const publicConfig = Object.entries(vars)
-    .filter(([key]) => key.startsWith("VITE_"))
+  // Public SPA values and private source map upload configuration affect this
+  // build. Other runtime secret rotations must not invalidate the webapp layer.
+  const buildConfig = Object.entries(vars)
+    .filter(([key]) => key.startsWith("VITE_") || POSTHOG_UPLOAD_KEYS.has(key))
     .sort(([left], [right]) => left.localeCompare(right));
-  const viteConfigHash = createHash("sha256").update(JSON.stringify(publicConfig)).digest("hex");
+  const viteConfigHash = createHash("sha256").update(JSON.stringify(buildConfig)).digest("hex");
   const args = [
     "deploy",
     "-c",
@@ -100,9 +102,21 @@ export function runFlyDeploy(options: RunFlyDeployOptions): void {
 
 export function runFlySecrets(options: RunFlySecretsOptions): void {
   assertEnvFile(options.env);
+  // Keep source-map upload credentials confined to BuildKit. Preserve the rest
+  // verbatim, including quoting and comments understood by Fly's dotenv reader.
+  const runtimeEnv = readFileSync(options.env, "utf8")
+    .split(/(?<=\n)/)
+    .filter((line) => {
+      const key = line
+        .slice(0, line.indexOf("="))
+        .trim()
+        .replace(/^export\s+/, "");
+      return !POSTHOG_UPLOAD_KEYS.has(key);
+    })
+    .join("");
   assertFlyStatus(
     spawnSync("fly", ["secrets", "import", "-c", options.config], {
-      input: readFileSync(options.env),
+      input: Buffer.from(runtimeEnv),
       stdio: ["pipe", "inherit", "inherit"],
     })
   );

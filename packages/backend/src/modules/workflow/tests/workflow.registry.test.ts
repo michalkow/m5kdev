@@ -1,3 +1,4 @@
+import { captureServerError, ServerError, setErrorReporter } from "../../../utils/errors";
 import { WorkflowRegistry } from "../workflow.registry";
 import type { WorkflowService } from "../workflow.service";
 import type {
@@ -498,6 +499,117 @@ describe("WorkflowRegistry", () => {
 
       expect(mockCreateWorker).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("reports terminal worker failures with the job's identity after request context ends", async () => {
+    const previousReporter = globalThis.m5ErrorReporter;
+    const captures: Array<{ error: unknown; properties: unknown }> = [];
+    setErrorReporter({
+      captureException(error, properties) {
+        captures.push({ error, properties });
+        return "job-event";
+      },
+    });
+    try {
+      const registry = new WorkflowRegistry(mockService as WorkflowService);
+      registry.register(createMockDefinition("import"), async () => {});
+      await registry.start();
+      const failed = mockWorkerOn.mock.calls.find(([event]) => event === "failed")?.[1];
+      const error = new Error("import failed");
+      const job = {
+        id: "job-1",
+        name: "import",
+        data: { userId: "user-1", organizationId: "org-1" },
+        opts: { attempts: 2, m5kdev: { userId: "metadata-user" } },
+        attemptsMade: 1,
+      };
+      failed(job, error);
+      expect(captures).toEqual([]);
+      failed({ ...job, attemptsMade: 2 }, error);
+      expect(captures).toEqual([
+        {
+          error: expect.any(Error),
+          properties: expect.objectContaining({
+            "user.id": "metadata-user",
+            "organization.id": "org-1",
+            layer: "workflow",
+            context: expect.objectContaining({ jobId: "job-1", attemptsMade: 2 }),
+          }),
+        },
+      ]);
+      await registry.stop();
+    } finally {
+      setErrorReporter(previousReporter);
+    }
+  });
+
+  it("reports a handler ServerError only after the terminal attempt", async () => {
+    const previousReporter = globalThis.m5ErrorReporter;
+    const captures: Array<{ error: unknown; properties: unknown }> = [];
+    const silentLog = { error() {}, warn() {}, debug() {} };
+    setErrorReporter({
+      captureException(error, properties) {
+        captures.push({ error, properties });
+        return "job-event";
+      },
+    });
+    try {
+      const registry = new WorkflowRegistry(mockService as WorkflowService);
+      registry.register(createMockDefinition("import"), async () => {
+        const error = new ServerError({
+          code: "INTERNAL_SERVER_ERROR",
+          layer: "service",
+          layerName: "Import",
+          message: "import failed",
+        });
+        captureServerError(error, { logger: silentLog });
+        return {
+          isErr: () => true,
+          isOk: () => false,
+          error,
+        };
+      });
+      await registry.start();
+      const processor = expectCapturedProcessor(capturedProcessor);
+      const failed = mockWorkerOn.mock.calls.find(([event]) => event === "failed")?.[1];
+      const job = {
+        id: "job-1",
+        name: "import",
+        data: { userId: "user-1" },
+        opts: { attempts: 2, m5kdev: { userId: "metadata-user" } },
+        attemptsMade: 1,
+      };
+
+      let attemptError: unknown;
+      await processor(job).catch((error) => {
+        attemptError = error;
+      });
+      expect(attemptError).toBeInstanceOf(ServerError);
+      expect(attemptError).toMatchObject({ logged: false });
+      expect(captures).toEqual([]);
+      failed(job, attemptError);
+      expect(captures).toEqual([]);
+
+      job.attemptsMade = 2;
+      await processor(job).catch((error) => {
+        attemptError = error;
+      });
+      failed({ ...job, attemptsMade: 2 }, attemptError);
+      expect(captures).toEqual([
+        {
+          error: attemptError,
+          properties: expect.objectContaining({
+            "user.id": "metadata-user",
+            layer: "service",
+            context: expect.objectContaining({ jobId: "job-1", attemptsMade: 2 }),
+          }),
+        },
+      ]);
+      expect(attemptError).toMatchObject({ logged: true });
+      await registry.stop();
+    } finally {
+      setErrorReporter(previousReporter);
+    }
   });
 
   describe("stop()", () => {

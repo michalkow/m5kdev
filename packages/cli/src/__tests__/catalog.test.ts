@@ -16,6 +16,16 @@ import {
 const REPO_ROOT = path.resolve(__dirname, "../../../..");
 
 describe("consumer catalog", () => {
+  it("declares Express 5 types at the published Kernel boundary", () => {
+    const backend = JSON.parse(
+      fs.readFileSync(path.join(REPO_ROOT, "packages/backend/package.json"), "utf8")
+    );
+    const workspace = parse(fs.readFileSync(path.join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8"));
+    // Public Kernel declarations expose Express; dev-only types disappear on install.
+    expect(backend.peerDependencies["@types/express"]).toBe("catalog:");
+    expect(workspace.catalog["@types/express"]).toMatch(/^5\./);
+  });
+
   it("keeps every Kernel Better Auth companion on the consumer's exact auth version", () => {
     const backend = JSON.parse(
       fs.readFileSync(path.join(REPO_ROOT, "packages/backend/package.json"), "utf8")

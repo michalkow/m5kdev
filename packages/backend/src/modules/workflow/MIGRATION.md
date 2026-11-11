@@ -227,7 +227,7 @@ const workers = createWorkflowWorkers(
     slow: { connection, concurrency: 2 },
   },
   jobs,
-  (error) => sentry.captureException(error),
+  (error) => reportError(error),
 );
 ```
 

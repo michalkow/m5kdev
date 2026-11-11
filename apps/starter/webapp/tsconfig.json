@@ -10,7 +10,8 @@
       "@/components/*": ["./src/components/*"],
       "@/modules/*": ["./src/modules/*"],
       "@/utils/*": ["./src/utils/*"]
-    }
+    },
+    "types": ["vite/client", "jest", "node"]
   },
   "include": ["src"],
   "exclude": ["dist", "node_modules"]

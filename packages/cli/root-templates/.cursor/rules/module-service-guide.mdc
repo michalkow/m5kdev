@@ -362,6 +362,6 @@ export class PostsService extends BasePermissionService<
 
 1. Keep procedures as `readonly` class properties.
 2. `.loadResource()` before `.access({ entityStep })` — it 404s on missing rows for free.
-3. Return `this.error("NOT_FOUND")` / `this.error("FORBIDDEN")` for expected failures; reserve 5xx codes for server faults (they report to Sentry).
+3. Return `this.error("NOT_FOUND")` / `this.error("FORBIDDEN")` for expected failures; reserve 5xx codes for server faults (they report to PostHog).
 4. Keep pure helpers (slugify, excerpt) in `<module>.utils.ts`.
 5. Propagate `err(...)` from repository results rather than throwing.

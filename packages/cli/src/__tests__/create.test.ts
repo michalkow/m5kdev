@@ -59,9 +59,9 @@ describe("scaffoldProject", () => {
       path.join(result.targetDirectory, "apps/shared/src/modules/app/app.constants.ts"),
       "utf8"
     );
-    // global providers are composed in App.tsx
+    // Global providers are composed in Providers.tsx.
     const providers = await fs.readFile(
-      path.join(result.targetDirectory, "apps/webapp/src/App.tsx"),
+      path.join(result.targetDirectory, "apps/webapp/src/Providers.tsx"),
       "utf8"
     );
     const appTs = await fs.readFile(
@@ -638,7 +638,7 @@ describe("scaffoldProject", () => {
     expect(router).toContain('path="workflows"');
 
     const webappApp = await fs.readFile(
-      path.join(result.targetDirectory, "apps/webapp/src/App.tsx"),
+      path.join(result.targetDirectory, "apps/webapp/src/Providers.tsx"),
       "utf8"
     );
     const serverEventProvider = await fs.readFile(

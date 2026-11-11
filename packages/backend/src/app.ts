@@ -58,6 +58,7 @@ import { mountMcpOAuthDiscovery } from "./modules/mcp/mcp.discovery";
 import { mcpResourceUrl } from "./modules/mcp/mcp.types";
 import { WorkflowRegistry } from "./modules/workflow/workflow.registry";
 import { WorkflowService } from "./modules/workflow/workflow.service";
+import { handleHTTPBoundaryError } from "./utils/http-errors";
 import { logger as rootLogger } from "./utils/logger";
 import {
   createAuthContext,
@@ -1010,6 +1011,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   }
 
   applyBakedSpa({ expressApp, spa: config.spa });
+  expressApp.use(handleHTTPBoundaryError);
 
   if (workflowRuntime) {
     for (const module of orderedModules) {

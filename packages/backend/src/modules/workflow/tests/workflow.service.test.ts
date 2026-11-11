@@ -405,6 +405,24 @@ describe("WorkflowService", () => {
       );
     });
 
+    it("queues resolved user metadata separately from the unchanged handler payload", async () => {
+      const { service } = createService();
+      const def = service.job({ name: "metadata", meta: () => ({ userId: "meta-user" }) });
+      await def.trigger({ userId: "payload-user", value: 42 }, { userId: "override-user" });
+      expect(mockQueueAdd).toHaveBeenCalledWith(
+        "metadata",
+        { userId: "payload-user", value: 42 },
+        expect.objectContaining({ m5kdev: { userId: "override-user" } })
+      );
+      await def.triggerMany([{ userId: "payload-user", value: 43 }]);
+      expect(mockQueueAddBulk).toHaveBeenCalledWith([
+        expect.objectContaining({
+          data: { userId: "payload-user", value: 43 },
+          opts: expect.objectContaining({ m5kdev: { userId: "meta-user" } }),
+        }),
+      ]);
+    });
+
     it("calls repository.added with correct metadata", async () => {
       const { service, repo } = createService();
       const def = service.job<{ userId: string; data: string }>({

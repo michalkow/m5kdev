@@ -10,12 +10,14 @@ export function getPosthog(): PostHog | undefined {
   return globalThis.m5Posthog;
 }
 
-export function setPosthog(posthog: PostHog) {
+export function setPosthog(posthog: PostHog | undefined): void {
   globalThis.m5Posthog = posthog;
 }
 
 type PosthogRequestState = {
   disableCapture: boolean;
+  /** Skip PostHog exception capture so a later terminal boundary can report once. */
+  deferExceptionCapture?: boolean;
 };
 
 const posthogRequestState = new AsyncLocalStorage<PosthogRequestState>();
@@ -26,6 +28,10 @@ export function runWithPosthogRequestState<T>(state: PosthogRequestState, callba
 
 export function isPosthogCaptureDisabled(): boolean {
   return posthogRequestState.getStore()?.disableCapture ?? false;
+}
+
+export function isExceptionCaptureDeferred(): boolean {
+  return posthogRequestState.getStore()?.deferExceptionCapture === true;
 }
 
 export function posthogCapture(

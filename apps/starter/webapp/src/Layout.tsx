@@ -1,5 +1,4 @@
 // biome-ignore-all assist/source/organizeImports: feature-gated lucide icons stay in marker blocks
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { AppShell } from "@m5kdev/web-ui/modules/app/components/AppShell";
 import { AppSidebarContent } from "@m5kdev/web-ui/modules/app/components/AppSidebarContent";
@@ -9,9 +8,10 @@ import { AuthOrganizationSelect } from "@m5kdev/web-ui/modules/auth/components/A
 import { AuthUtilityImpersonationBanner } from "@m5kdev/web-ui/modules/auth/components/AuthUtilityImpersonationBanner";
 // m5k:notifications:start
 import { NotificationSidebarInbox } from "@m5kdev/web-ui/modules/notification/components/NotificationSidebarInbox";
+import { BellIcon } from "lucide-react";
 // m5k:notifications:end
 import { APP_NAME, APP_SLUG } from "@starter-app/shared/modules/app/app.constants";
-import { BellIcon, CircleHelpIcon, FileIcon, UsersIcon } from "lucide-react";
+import { CircleHelpIcon, FileIcon, UsersIcon } from "lucide-react";
 // m5k:ai:start
 import { SparklesIcon } from "lucide-react";
 // m5k:ai:end
@@ -29,15 +29,15 @@ import { StarterWebPush } from "./modules/notification/StarterWebPush";
 // m5k:notifications:end
 
 export function Layout() {
-  const { data: session } = useSession();
+  const { data: session, signOut } = useSession();
   const { t } = useTranslation("starter-app");
   const navigate = useNavigate();
 
   // ephemeral UI state: which collapsible sidebar groups are open
   const [navigationState, setNavigationState] = useState<Record<string, boolean>>({});
 
-  const onSignOut = () => {
-    authClient.signOut();
+  const onSignOut = async () => {
+    await signOut();
     navigate("/login");
   };
 

@@ -43,8 +43,9 @@ export const TEXT_BASENAMES: ReadonlySet<string> = new Set([
   "Caddyfile",
 ]);
 
-/** Feature marker blocks: lines between `// m5k:<feature>:start` and `// m5k:<feature>:end`. */
-const MARKER_PATTERN = /^[ \t]*(?:\/\/|#)[ \t]*m5k:([a-z-]+):(start|end)[ \t]*$/;
+/** Feature marker blocks use line comments or JSX comments around feature content. */
+const MARKER_PATTERN =
+  /^[ \t]*(?:\/\/|#|\{\/\*)[ \t]*m5k:([a-z-]+):(start|end)(?:[ \t]*\*\/\})?[ \t]*$/;
 
 export interface CopyTemplateOptions {
   /** Repo-root-relative path prefixes to skip entirely (disabled features). */

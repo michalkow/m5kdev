@@ -47,3 +47,9 @@ OPENROUTER_API_KEY=
 RESEND_API_KEY=
 VITE_PUBLIC_POSTHOG_KEY=demo
 VITE_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
+
+# Optional PostHog source map uploads (build only; never prefix these with VITE_).
+# Use a personal API key with error tracking write access, not the public ingestion key.
+POSTHOG_API_KEY=
+POSTHOG_PROJECT_ID=
+POSTHOG_HOST=https://us.posthog.com

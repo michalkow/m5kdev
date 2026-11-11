@@ -27,6 +27,8 @@ import type {
   WorkflowServiceConfig,
 } from "./workflow.types";
 
+import { type WorkflowJobOptions, workflowActorTelemetry } from "./workflow.utils";
+
 const DEFAULT_TIMEOUT = 60_000;
 const DEFAULT_AWAIT_CONCURRENCY = 10;
 const DEFAULT_RECONCILE_PATTERN = "*/5 * * * *";
@@ -428,12 +430,6 @@ export class WorkflowService extends Base {
 
   // -- Private helpers --
 
-  private static readUserIdFromJobData(data: unknown): string | undefined {
-    if (data === null || typeof data !== "object") return undefined;
-    const v = (data as { userId?: unknown }).userId;
-    return typeof v === "string" && v.length > 0 ? v : undefined;
-  }
-
   private getQueue(queueName: string): Queue {
     const queue = this.queues.get(queueName);
     if (!queue) {
@@ -503,10 +499,12 @@ export class WorkflowService extends Base {
     const meta = this.resolveMeta(resolved, payload, overrides);
     const triggeredAt = new Date();
 
-    const job = await queue.add(resolved.name, payload, {
+    const options: WorkflowJobOptions = {
       ...mergedOptions,
       jobId,
-    });
+      m5kdev: meta.userId ? { userId: meta.userId } : undefined,
+    };
+    const job = await queue.add(resolved.name, payload, options);
 
     if (!job?.id) {
       throw new Error("Failed to add job to queue");
@@ -551,12 +549,17 @@ export class WorkflowService extends Base {
     const mergedOptions = this.mergeJobOptions(resolved, overrides);
     const triggeredAt = new Date();
 
-    const bulkData = payloads.map((payload) => {
+    const metadata = payloads.map((payload) => this.resolveMeta(resolved, payload, overrides));
+    const bulkData = payloads.map((payload, i) => {
       const jobId = resolved.idFn ? resolved.idFn(payload) : uuidv4();
       return {
         name: resolved.name,
         data: payload,
-        opts: { ...mergedOptions, jobId },
+        opts: {
+          ...mergedOptions,
+          jobId,
+          m5kdev: metadata[i].userId ? { userId: metadata[i].userId } : undefined,
+        },
       };
     });
 
@@ -568,7 +571,7 @@ export class WorkflowService extends Base {
 
     const metaEntries = payloads.flatMap((payload, i) => {
       if (WorkflowService.wasDeduplicated(jobs[i], triggeredAt)) return [];
-      const meta = this.resolveMeta(resolved, payload, overrides);
+      const meta = metadata[i];
       return [
         {
           userId: meta.userId,
@@ -663,7 +666,7 @@ export class WorkflowService extends Base {
           if (state !== "active") return;
 
           const jobName = job.name ?? "__unknown__";
-          const userId = WorkflowService.readUserIdFromJobData(job.data);
+          const userId = workflowActorTelemetry(job).userId;
           const result = await this.workflowRepository.started({
             jobId,
             jobName,
@@ -771,7 +774,7 @@ export class WorkflowService extends Base {
             jobId: row.jobId,
             jobName: job.name ?? row.jobName,
             queueName: row.queueName,
-            userId: WorkflowService.readUserIdFromJobData(job.data),
+            userId: workflowActorTelemetry(job).userId,
           });
         } else {
           // waiting/delayed/prioritized/etc — alive; bump so it isn't re-checked immediately
