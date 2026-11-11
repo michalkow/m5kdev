@@ -1,5 +1,11 @@
 # @m5kdev/frontend
 
+## 0.44.0
+
+### Patch Changes
+
+- @m5kdev/commons@0.44.0
+
 ## 0.43.1
 
 ### Patch Changes
