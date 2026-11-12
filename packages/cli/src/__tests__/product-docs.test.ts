@@ -195,6 +195,31 @@ describe("generated public product help", () => {
     ).toContain('= "standalone"');
   });
 
+  it.each(["web", "expo", "both"] as const)(
+    "bundles server-hosted help for %s without changing Landing",
+    async (platform) => {
+      const { targetDirectory } = await scaffoldProject({
+        targetDirectory: path.join(tempRoot, "server"),
+        platform,
+        docsHosting: "server",
+        yes: true,
+        force: false,
+        skipInstall: true,
+        skipGit: true,
+      });
+      const read = (file: string) => fs.readFile(path.join(targetDirectory, file), "utf8");
+      expect(await read("apps/documentation.ts")).toContain('= "server"');
+      expect(await read("apps/server/src/app.ts")).toContain(
+        'documentation: { root: "./documentation" }'
+      );
+      expect(await read("apps/shared/Dockerfile")).toContain(
+        "COPY --from=docs-build /app/apps/docs/build/ ./documentation/"
+      );
+      expect(await read("apps/landing/Dockerfile")).not.toContain("docs-build");
+      expect(await read(".github/workflows/deploy-app.yml")).toContain("apps/docs/**");
+    }
+  );
+
   it.each(["server", "invalid"])(
     "rejects unsupported %s hosting for Landing-only",
     async (docsHosting) => {

@@ -1,10 +1,12 @@
+// m5k:docs-server:start
+
+// m5k:docs-server:end
 // biome-ignore-all assist/source/organizeImports: feature-gated module imports stay in marker blocks
-import { createBackendApp } from "@m5kdev/backend/app";
-import { isDeployedEnvironment, requireEnvValue } from "@m5kdev/backend/base/environment";
-import { shutdownPosthog } from "@m5kdev/backend/lib/posthog";
-import { shutdownTelemetry } from "@m5kdev/backend/lib/otel";
 // m5k:ai:start
-import { defineBackendModule } from "@m5kdev/backend/app";
+import { createBackendApp, defineBackendModule } from "@m5kdev/backend/app";
+import { isDeployedEnvironment, requireEnvValue } from "@m5kdev/backend/base/environment";
+import { shutdownTelemetry } from "@m5kdev/backend/lib/otel";
+import { shutdownPosthog } from "@m5kdev/backend/lib/posthog";
 import { AIModule } from "@m5kdev/backend/modules/ai/ai.module";
 // m5k:ai:end
 import { createBetterAuth } from "@m5kdev/backend/modules/auth/auth.lib";
@@ -32,6 +34,7 @@ import {
 } from "@starter-app/shared/modules/app/app.constants";
 // m5k:notifications:start
 import { NOTIFICATION_KINDS } from "@starter-app/shared/modules/notification/notification.constants";
+import { DOCUMENTATION_HOST } from "../../documentation";
 // m5k:notifications:end
 // m5k:ai:start
 import {
@@ -88,6 +91,11 @@ export const builtBackendApp = createBackendApp(
       resources: emailResources,
     },
     spa: { root: "./client" },
+    // m5k:docs-server:start
+    ...(["server"].includes(DOCUMENTATION_HOST)
+      ? { documentation: { root: "./documentation" } }
+      : {}),
+    // m5k:docs-server:end
     // m5k:workflows:start
     redis: {
       url: redisUrl,

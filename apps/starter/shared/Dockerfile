@@ -57,6 +57,20 @@ RUN --mount=type=secret,id=ALL_SECRETS,required=false \
     pnpm --filter=@starter-app/webapp build
 # m5k:webapp:end
 
+# m5k:docs-server:start
+FROM server-deps AS docs-dependencies
+COPY apps/docs/package.json ./apps/docs/
+RUN --mount=type=cache,id=starter-app-pnpm,target=/pnpm/store \
+    pnpm --filter=@starter-app/docs... install --frozen-lockfile --prod=false
+FROM docs-dependencies AS docs-build
+COPY apps/locales.ts apps/documentation.ts ./apps/
+COPY apps/docs ./apps/docs
+ARG VITE_CONFIG_HASH
+RUN --mount=type=secret,id=ALL_SECRETS,required=false \
+    if [ -f /run/secrets/ALL_SECRETS ]; then . /run/secrets/ALL_SECRETS; fi && \
+    pnpm --filter=@starter-app/docs build
+# m5k:docs-server:end
+
 FROM base AS runtime
 COPY --from=tooling /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=production-deps /deploy/node_modules ./node_modules
@@ -65,4 +79,7 @@ COPY --from=server-build /app/apps/server/dist/ ./
 # m5k:webapp:start
 COPY --from=webapp-build /app/apps/webapp/dist/ ./client/
 # m5k:webapp:end
+# m5k:docs-server:start
+COPY --from=docs-build /app/apps/docs/build/ ./documentation/
+# m5k:docs-server:end
 CMD ["node", "index.js"]

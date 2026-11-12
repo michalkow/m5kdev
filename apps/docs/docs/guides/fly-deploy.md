@@ -228,3 +228,16 @@ Apps still shipping Starter `fly-*.mjs` copies: [Kernel Fly deploy commands in 0
 
 Production `VITE_APP_URL` and `VITE_SERVER_URL` are operator env (often the
 same public origin). The Kernel does not rewrite them.
+
+## Server-hosted product help
+
+Choose `--docs-host server` during creation. The product Dockerfile builds all
+documentation locales and copies the output alongside the Webapp; Expo-only
+products receive the same help build without a Webapp. The generated server
+opts into `documentation: { root: "./documentation" }` in `createBackendApp`.
+The Kernel redirects `/documentation` to `/documentation/`, serves guide and
+asset URLs, and returns a documentation 404 for unknown help paths before the
+Webapp fallback. A missing build directory skips static mounting in development.
+Set `VITE_DOCS_URL` to the complete public URL, or let server mode derive it from
+`VITE_SERVER_URL`. Build and deploy through the selected Deployment environment's
+normal product workflow; help changes trigger that workflow in server mode.

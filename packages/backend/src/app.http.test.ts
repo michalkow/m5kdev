@@ -91,6 +91,63 @@ describe("createBackendApp HTTP shell", () => {
     await client.end();
   });
 
+  it("serves documentation deep links and assets before the SPA and keeps documentation 404s", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "m5kdev-documentation-"));
+    const docs = path.join(root, "docs");
+    const spa = path.join(root, "spa");
+    await fs.mkdir(path.join(docs, "en-GB", "posts"), { recursive: true });
+    await fs.mkdir(spa);
+    await fs.writeFile(path.join(docs, "index.html"), "Documentation home");
+    await fs.writeFile(path.join(docs, "en-GB/posts/index.html"), "UK posts guide");
+    await fs.writeFile(path.join(docs, "asset.js"), "window.docs = true;");
+    await fs.writeFile(path.join(docs, "404.html"), "Documentation page not found");
+    await fs.writeFile(path.join(spa, "index.html"), "Product SPA");
+    const built = createBackendApp({
+      db: { client },
+      spa: { root: spa },
+      documentation: { root: docs },
+    });
+    try {
+      await withServer(built.express.app, async (baseUrl) => {
+        const redirect = await fetch(`${baseUrl}/documentation?lang=en`, { redirect: "manual" });
+        expect(redirect.status).toBe(308);
+        expect(redirect.headers.get("location")).toBe("/documentation/?lang=en");
+        for (const [route, content] of [
+          ["/documentation/", "Documentation home"],
+          ["/documentation/en-GB/posts/", "UK posts guide"],
+          ["/documentation/asset.js", "window.docs = true;"],
+          ["/product-route", "Product SPA"],
+        ]) {
+          const response = await fetch(`${baseUrl}${route}`);
+          expect(response.status).toBe(200);
+          expect(await response.text()).toBe(content);
+        }
+        for (const route of ["/documentation/missing", "/documentation/missing.js"]) {
+          const response = await fetch(`${baseUrl}${route}`);
+          expect(response.status).toBe(404);
+          expect(await response.text()).toBe("Documentation page not found");
+        }
+        const head = await fetch(`${baseUrl}/documentation/en-GB/posts/`, { method: "HEAD" });
+        expect(head.status).toBe(200);
+        expect(await head.text()).toBe("");
+      });
+    } finally {
+      await built.shutdown();
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the server usable without a local documentation build", async () => {
+    const built = createBackendApp({
+      db: { client },
+      documentation: { root: path.join(os.tmpdir(), "m5kdev-docs-not-built", "missing") },
+    });
+    await withServer(built.express.app, async (baseUrl) => {
+      expect((await fetch(`${baseUrl}/documentation/`)).status).toBe(404);
+      expect((await fetch(`${baseUrl}/healthz`)).status).toBe(200);
+    });
+  });
+
   it("allows credentialed CORS from the app web URL", async () => {
     const built = createBackendApp({
       db: { client },

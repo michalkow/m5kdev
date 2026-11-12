@@ -1,3 +1,4 @@
+import { useAuthLocale } from "@m5kdev/frontend/modules/auth/hooks/useAuthLocale";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { type Href, Link, Redirect } from "expo-router";
 import { Button, Card, Typography } from "heroui-native";
@@ -6,6 +7,7 @@ import { getDocsUrl } from "../config";
 
 export default function PostsScreen() {
   const { data: session } = useSession();
+  const { locale } = useAuthLocale();
 
   if (!session) {
     return <Redirect href="/login" />;
@@ -40,7 +42,7 @@ export default function PostsScreen() {
         </Link>
         <Button
           variant="outline"
-          onPress={() => void Linking.openURL(getDocsUrl(session.user.locale ?? undefined))}
+          onPress={() => void Linking.openURL(getDocsUrl(locale ?? undefined))}
         >
           Help
         </Button>

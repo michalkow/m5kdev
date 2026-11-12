@@ -373,6 +373,10 @@ export type BackendAppConfig = {
   spa?: {
     root: string;
   };
+  documentation?: {
+    /** Static Docusaurus build served publicly at /documentation. */
+    root: string;
+  };
   serverEvents?: {
     /**
      * Database scope for Server event channels. Defaults to `APP_ENV`, with
@@ -722,6 +726,23 @@ function applyHealthCheck(options: {
   });
 }
 
+function applyProductDocumentation(options: {
+  expressApp: Express;
+  documentation: BackendAppConfig["documentation"];
+}): void {
+  if (!options.documentation?.root) return;
+  const root = path.resolve(options.documentation.root);
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return;
+  options.expressApp.get(/^\/documentation$/, (req, res) => {
+    res.redirect(308, req.originalUrl.replace(/(?=\?|$)/, "/"));
+  });
+  options.expressApp.use("/documentation", express.static(root), (_req, res) => {
+    res.status(404).sendFile(path.join(root, "404.html"), (error) => {
+      if (error && !res.headersSent) res.status(404).type("text").send("Documentation not found");
+    });
+  });
+}
+
 function applyBakedSpa(options: { expressApp: Express; spa: BackendAppConfig["spa"] }): void {
   const { expressApp, spa } = options;
   if (!spa?.root) {
@@ -1010,6 +1031,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     });
   }
 
+  applyProductDocumentation({ expressApp, documentation: config.documentation });
   applyBakedSpa({ expressApp, spa: config.spa });
   expressApp.use(handleHTTPBoundaryError);
 

@@ -7,3 +7,11 @@ The product Fly image is server plus a Vite-built webapp copied to `spa.root` (S
 - **Starter `app.ts` after `createBackendApp`** (MyJournal) — rejected: repeats the stale-convention problem ADR-0003 removed for CORS/listen.
 - **Backend Module `express` hook** — rejected for this case: every scaffolded server would copy the same static + SPA-fallback glue; that is shell, not module HTTP.
 - **Always serve `./client` when `NODE_ENV=production`** — rejected: hidden env control flow; opt-in `spa.root` is explicit and skips when the directory is absent.
+
+## Product documentation
+
+When server hosting is selected, `documentation.root` explicitly opts into
+public Docusaurus output at `/documentation`. The Kernel serves its static
+pages before the Webapp fallback and keeps documentation 404s inside that mount.
+Like the baked SPA, a missing build directory skips mounting for local development.
+Landing remains the default documentation host; standalone hosting remains available.
