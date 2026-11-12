@@ -49,6 +49,9 @@ Development (`main`) and Production (`production`) deploy from GitHub Actions on
 
 ## Product documentation
 
+Maintain guides and navigation in every configured app locale, including regional
+variants, whenever user-facing behavior or supported locales change.
+
 Before completing a task that adds, changes, or removes user-facing behavior,
 update the affected end-user guides in `apps/docs/docs/` in the same change.
 Read `docs/agents/product-documentation.md` for audience, content, and verification rules.

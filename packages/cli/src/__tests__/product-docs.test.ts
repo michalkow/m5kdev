@@ -55,6 +55,19 @@ describe("generated public product help", () => {
         [...guides].sort()
       );
       const config = await read("apps/docs/docusaurus.config.ts");
+      expect(config).toContain("APP_LOCALE_CONFIG");
+      expect(config).toContain('type: "localeDropdown"');
+      expect(await read("apps/locales.ts")).toContain('code: "en_GB"');
+      expect(
+        (
+          await fs.readdir(
+            path.join(
+              targetDirectory,
+              "apps/docs/i18n/en-GB/docusaurus-plugin-content-docs/current"
+            )
+          )
+        ).sort()
+      ).toEqual([...guides].sort());
       expect(config).toContain("Public Help Help");
       expect(config).toContain("https://public-help-docs.fly.dev");
       expect(config).not.toMatch(/starter-app|m5kdev.local|{{/);

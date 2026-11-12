@@ -1,5 +1,27 @@
+import fs from "node:fs";
+import path from "node:path";
 import type * as Preset from "@docusaurus/preset-classic";
 import type { Config } from "@docusaurus/types";
+
+import { APP_LOCALE_CONFIG } from "../locales";
+
+const languageTag = (locale: string) => locale.replaceAll("_", "-");
+const defaultLocale = languageTag(APP_LOCALE_CONFIG.defaultLocale);
+const locales = APP_LOCALE_CONFIG.locales.map(({ code }) => languageTag(code));
+const guides = fs
+  .readdirSync(path.join(__dirname, "docs"), { recursive: true })
+  .filter((file): file is string => typeof file === "string" && /\.mdx?$/.test(file));
+for (const locale of locales.filter((code) => code !== defaultLocale)) {
+  for (const guide of guides) {
+    if (
+      !fs.existsSync(
+        path.join(__dirname, "i18n", locale, "docusaurus-plugin-content-docs/current", guide)
+      )
+    ) {
+      throw new Error(`Missing product documentation translation: ${locale}/${guide}`);
+    }
+  }
+}
 
 const config: Config = {
   title: "M5 Starter Help",
@@ -7,6 +29,16 @@ const config: Config = {
   url: process.env.VITE_DOCS_URL ?? "https://starter-app-docs.fly.dev",
   baseUrl: "/",
   trailingSlash: true,
+  i18n: {
+    defaultLocale,
+    locales,
+    localeConfigs: Object.fromEntries(
+      APP_LOCALE_CONFIG.locales.map(({ code, displayName }) => [
+        languageTag(code),
+        { label: displayName, htmlLang: languageTag(code) },
+      ])
+    ),
+  },
   onBrokenLinks: "throw",
   markdown: { hooks: { onBrokenMarkdownLinks: "throw" } },
   future: { faster: { rspackBundler: true, swcJsLoader: true } },
@@ -20,7 +52,7 @@ const config: Config = {
     ],
   ],
   themeConfig: {
-    navbar: { title: "M5 Starter Help" },
+    navbar: { title: "M5 Starter Help", items: [{ type: "localeDropdown", position: "right" }] },
     colorMode: { respectPrefersColorScheme: true },
   } satisfies Preset.ThemeConfig,
 };

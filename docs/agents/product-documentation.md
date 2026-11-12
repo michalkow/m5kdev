@@ -8,7 +8,7 @@ Before completing a task that adds, changes, or removes user-facing behavior:
 
 1. Read the affected guides and inspect the finished behavior, visible labels,
    access requirements, and limitations.
-2. Update those guides in the same change. Add a guide for a new user task;
+2. Update those guides and every supported locale in the same change. Add a guide for a new user task;
    revise existing instructions for changed behavior; remove obsolete advice
    and repair links when a feature is removed. Cover fixes when they change
    what a user needs to know or do.
@@ -31,3 +31,16 @@ feature task is complete only when its affected documentation matches the app.
 The sidebar is generated from the guide files. Keep paths stable when practical;
 update incoming links whenever a path changes. App-specific guides belong to
 the app: framework updates must preserve their local content.
+
+## Locales
+
+`apps/locales.ts` (Starter: `apps/starter/locales.ts`) is the locale source for
+both the app and Docusaurus. Region tags such as `en_GB` become `en-GB` in docs.
+Maintain translated guides under `i18n/<locale>/docusaurus-plugin-content-docs/current`
+and translated navigation under `i18n/<locale>/docusaurus-theme-classic` in the
+help-site package. Match the default guide set in each locale; the build rejects
+missing guide translations. Update affected headings, links, navigation labels,
+and screenshots in every locale when behavior changes. When adding a locale,
+provide its complete guides and Docusaurus UI translations before completing work.
+Run the full multi-locale build; a single-locale development server does not
+verify the other languages. Preserve app-authored translations during updates.

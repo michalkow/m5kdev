@@ -186,6 +186,7 @@ const FEATURE_MANIFEST = {
       { pattern: "apps/server/drizzle.config.ts", policy: "ensure" },
       { pattern: "apps/server/src/drizzle.schema.ts", policy: "ensure" },
       { pattern: "apps/docs/docs/**", policy: "ensure" },
+      { pattern: "apps/docs/i18n/**", policy: "ensure" },
       { pattern: "GLOSSARY.md", policy: "ensure" },
       { pattern: "docs/agents/**", policy: "ensure" },
       { pattern: "docs/adr/**", policy: "ensure" },

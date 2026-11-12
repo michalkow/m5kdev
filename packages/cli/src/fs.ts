@@ -77,7 +77,16 @@ export async function collectTemplateFiles(
 
     if (relativePath === "template.manifest.json") continue;
 
-    if (excludePrefixes.some((prefix) => matchesExcludedPrefix(relativePath, prefix))) {
+    const guidePath = relativePath.replace(
+      /^apps\/docs\/i18n\/[^/]+\/docusaurus-plugin-content-docs\/current\//,
+      "apps/docs/docs/"
+    );
+    if (
+      excludePrefixes.some(
+        (prefix) =>
+          matchesExcludedPrefix(relativePath, prefix) || matchesExcludedPrefix(guidePath, prefix)
+      )
+    ) {
       continue;
     }
 
