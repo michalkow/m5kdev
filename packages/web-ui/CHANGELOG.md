@@ -1,5 +1,12 @@
 # @m5kdev/web-ui
 
+## 0.45.1
+
+### Patch Changes
+
+- @m5kdev/frontend@0.45.1
+  - @m5kdev/commons@0.45.1
+
 ## 0.45.0
 
 ### Minor Changes

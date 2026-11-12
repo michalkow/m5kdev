@@ -18,10 +18,10 @@ are **Node.js >= 24**.
 ## Commands
 
 ```sh
-pnpm dlx create-m5kdev@0.45.0 [directory] [create options]
-pnpm dlx create-m5kdev@0.45.0 init [--yes] [--force] [--json]
-pnpm dlx create-m5kdev@0.45.0 doctor [--full] [--json]
-pnpm dlx create-m5kdev@0.45.0 update [--dry-run] [--skip-install] [--json] [--platform web|expo|both] [--yes]
+pnpm dlx create-m5kdev@0.45.1 [directory] [create options]
+pnpm dlx create-m5kdev@0.45.1 init [--yes] [--force] [--json]
+pnpm dlx create-m5kdev@0.45.1 doctor [--full] [--json]
+pnpm dlx create-m5kdev@0.45.1 update [--dry-run] [--skip-install] [--json] [--platform web|expo|both] [--yes]
 ```
 
 A first positional argument that is not a command is treated as `create`.
@@ -198,6 +198,14 @@ Operational Fly runbook: [Deploy with Docker and Fly.io](/guides/fly-deploy).
 2. Public product help is additive. `update` can add the `apps/docs` scaffold;
    existing apps keep working without it. See
    [Public product help](/packages/cli#public-product-help).
+
+## 0.45.1 upgrades
+
+Localized product help and configurable hosting. Existing apps keep working
+without source, schema, catalog, env, or bootstrap changes. New apps default to
+Landing hosting; `update` preserves the current host and translated guides.
+Legacy apps without a selection stay on standalone hosting. See
+[Public product help](/packages/cli#public-product-help).
 
 ## Package rule
 

@@ -8,7 +8,7 @@ Scaffold an app with the CLI, then read by [module](/modules) or
 [package](/packages).
 
 ```sh
-pnpm dlx create-m5kdev@0.45.0
+pnpm dlx create-m5kdev@0.45.1
 ```
 
 `--yes` scaffolds web with always-on modules only. Interactive create prompts

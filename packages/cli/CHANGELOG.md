@@ -1,5 +1,13 @@
 # create-m5kdev
 
+## 0.45.1
+
+### Patch Changes
+
+- d475b42: Serve explicitly configured public product documentation at `/documentation` before the Webapp fallback, with static guide routes and documentation 404s.
+  
+  Generate product help for every configured app locale and offer Landing, server, or standalone hosting during installation, defaulting new apps to Landing while preserving existing apps' hosting and translated guides during updates.
+
 ## 0.45.0
 
 ### Minor Changes

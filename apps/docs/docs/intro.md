@@ -241,6 +241,15 @@ include it, and `m5kdev update` can add the scaffold to an existing app.
 - [PostHog error tracking](/guides/v0.45.0-posthog-error-tracking-migration)
 - Public product help: [CLI package](/packages/cli#public-product-help)
 
+## Upgrading to 0.45.1 {#upgrade-0-45-1}
+
+Complete 0.45.0 first. Product help covers every configured app locale. New apps
+default to Landing hosting; existing apps keep their host and translated guides.
+No source, schema, catalog, env, or bootstrap change is required to keep
+working.
+
+- Public product help: [CLI package](/packages/cli#public-product-help)
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module
