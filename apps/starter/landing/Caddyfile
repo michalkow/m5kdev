@@ -1,6 +1,15 @@
 :8080 {
-	root * /srv
-	encode zstd gzip
-	try_files {path} /index.html
-	file_server
+  root * /srv
+  encode zstd gzip
+  # m5k:docs-landing:start
+  redir /documentation /documentation/ 308
+  handle_path /documentation/* {
+    root * /srv/documentation
+    file_server
+  }
+  # m5k:docs-landing:end
+  handle {
+    try_files {path} /index.html
+    file_server
+  }
 }

@@ -120,7 +120,17 @@ export async function collectTemplateFiles(
     const content = (await fs.readFile(sourcePath, "utf8")).replace(/\r\n?/g, "\n");
     files.push({
       content: Buffer.from(
-        applyFeatureMarkers(renderTemplate(content, context), enabledFeatures),
+        applyFeatureMarkers(
+          renderTemplate(content, context).replace(
+            /\{\{DOCS_HOSTING\}\}/g,
+            enabledFeatures.has("docs-landing")
+              ? "landing"
+              : enabledFeatures.has("docs-server")
+                ? "server"
+                : "standalone"
+          ),
+          enabledFeatures
+        ),
         "utf8"
       ),
       kind: "text",

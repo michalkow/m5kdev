@@ -9,7 +9,7 @@ RUN --mount=type=cache,id=starter-app-docs-pnpm,target=/pnpm/store \
     pnpm --filter=@starter-app/docs... install --frozen-lockfile --prod=false
 
 FROM dependencies AS build
-COPY apps/locales.ts ./apps/locales.ts
+COPY apps/locales.ts apps/documentation.ts ./apps/
 COPY apps/docs ./apps/docs
 # The Kernel deploy command hashes public VITE_* values for cache invalidation.
 ARG VITE_CONFIG_HASH

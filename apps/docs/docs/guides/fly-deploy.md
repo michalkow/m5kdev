@@ -17,13 +17,21 @@ Root scripts call Kernel bins (`m5kdev-fly-deploy` / `m5kdev-fly-secrets` from
 `@m5kdev/backend`). The app only passes `--config`, `--dockerfile`, and `--env`
 paths. The `fly` CLI must be on PATH.
 
+Product help is bundled with Landing at `/documentation` by default. The
+installer's `--docs-host` choice also supports `server` (bundled with the product
+image in each Deployment environment) and `standalone` (the separate docs image
+and credentials described below). Skip docs app creation, docs secrets, and the
+independent docs deployment unless standalone hosting was selected. Landing
+bundling works without a product server. A separately managed static host can
+serve the output of `pnpm docs:build`; configure its public URL before building.
+
 ## What ships
 
 | App | Image | Fly name |
 | --- | --- | --- |
 | Product (server + baked webapp) | `apps/shared/Dockerfile` | `<app-slug>-development`, `<app-slug>-production` |
 | Landing (public site) | `apps/landing/Dockerfile` | `<app-slug>-landing` |
-| Product help (static Docusaurus) | `apps/docs/Dockerfile` | `<app-slug>-docs` |
+| Product help (optional standalone Docusaurus) | `apps/docs/Dockerfile` | `<app-slug>-docs` |
 
 None of these apps mounts a Fly volume. PostgreSQL is hosted outside the machine, so
 the Fly configs have no `[[mounts]]` and first deploy does not run `fly volumes create`.

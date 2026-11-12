@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths:
       - 'apps/landing/**'
+      # m5k:docs-landing:start
+      - 'apps/docs/**'
+      - 'apps/locales.ts'
+      - 'apps/documentation.ts'
+      # m5k:docs-landing:end
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'

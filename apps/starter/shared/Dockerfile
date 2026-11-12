@@ -31,6 +31,7 @@ RUN --mount=type=cache,id=starter-app-pnpm,target=/pnpm/store \
     pnpm --filter=@starter-app/server deploy --prod --legacy /deploy
 
 FROM server-deps AS server-build
+COPY apps/locales.ts apps/documentation.ts ./apps/
 COPY apps/shared ./apps/shared
 COPY apps/email ./apps/email
 COPY apps/server ./apps/server
@@ -43,6 +44,7 @@ RUN --mount=type=cache,id=starter-app-pnpm,target=/pnpm/store \
     pnpm --filter=@starter-app/webapp... install --frozen-lockfile --prod=false
 
 FROM webapp-deps AS webapp-build
+COPY apps/locales.ts apps/documentation.ts ./apps/
 COPY apps/shared ./apps/shared
 # Server imports in the SPA are type-only and are erased by Vite.
 COPY apps/webapp ./apps/webapp

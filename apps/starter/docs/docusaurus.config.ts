@@ -3,6 +3,7 @@ import path from "node:path";
 import type * as Preset from "@docusaurus/preset-classic";
 import type { Config } from "@docusaurus/types";
 
+import { getDocumentationUrl } from "../documentation";
 import { APP_LOCALE_CONFIG } from "../locales";
 
 const languageTag = (locale: string) => locale.replaceAll("_", "-");
@@ -23,11 +24,14 @@ for (const locale of locales.filter((code) => code !== defaultLocale)) {
   }
 }
 
+const publicUrl = new URL(
+  getDocumentationUrl({ url: process.env.VITE_DOCS_URL, serverUrl: process.env.VITE_SERVER_URL })
+);
 const config: Config = {
   title: "M5 Starter Help",
   tagline: "Guides to getting things done with M5 Starter",
-  url: process.env.VITE_DOCS_URL ?? "https://starter-app-docs.fly.dev",
-  baseUrl: "/",
+  url: publicUrl.origin,
+  baseUrl: publicUrl.pathname,
   trailingSlash: true,
   i18n: {
     defaultLocale,

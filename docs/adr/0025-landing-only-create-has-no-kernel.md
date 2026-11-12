@@ -1,6 +1,6 @@
 # Landing-only create has no Kernel
 
-`create-m5kdev --platform landing` emits a pnpm workspace with Landing and public Product documentation. There is no server, Email, Webapp, Expo, or Deploy home; local app env lives in the Landing package; public help has its own production build configuration. Expo-only is unchanged (still a server). Starter still contains every package; its Landing is name and pitch only and does not link to the Webapp.
+`create-m5kdev --platform landing` emits a pnpm workspace with Landing and public Product documentation. There is no server, Email, Webapp, Expo, or Deploy home; local app env lives in the Landing package; public help is bundled with Landing at `/documentation` by default, with standalone hosting available. Expo-only is unchanged (still a server). Starter still contains every package; its Landing is name and pitch only and does not link to the Webapp.
 
 A landing-only app may later run `m5kdev update --platform web|expo|both`. That path only upgrades from Landing; it is not a general platform switcher and cannot downgrade. Upgrade keeps existing Landing sources, copies env into `apps/shared`, and then asks optional modules and e2e the same way create does.
 

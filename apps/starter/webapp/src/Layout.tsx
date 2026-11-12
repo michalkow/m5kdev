@@ -10,7 +10,7 @@ import { AuthUtilityImpersonationBanner } from "@m5kdev/web-ui/modules/auth/comp
 import { NotificationSidebarInbox } from "@m5kdev/web-ui/modules/notification/components/NotificationSidebarInbox";
 import { BellIcon } from "lucide-react";
 // m5k:notifications:end
-import { APP_NAME, APP_SLUG } from "@starter-app/shared/modules/app/app.constants";
+import { APP_NAME } from "@starter-app/shared/modules/app/app.constants";
 import { CircleHelpIcon, FileIcon, UsersIcon } from "lucide-react";
 // m5k:ai:start
 import { SparklesIcon } from "lucide-react";
@@ -28,9 +28,11 @@ import { useNavigate } from "react-router";
 import { StarterWebPush } from "./modules/notification/StarterWebPush";
 // m5k:notifications:end
 
+import { getDocumentationUrl } from "../../documentation";
+
 export function Layout() {
   const { data: session, signOut } = useSession();
-  const { t } = useTranslation("starter-app");
+  const { t, i18n } = useTranslation("starter-app");
   const navigate = useNavigate();
 
   // ephemeral UI state: which collapsible sidebar groups are open
@@ -97,11 +99,12 @@ export function Layout() {
                 {
                   label: t("layout.navigation.help"),
                   icon: <CircleHelpIcon />,
-                  link:
-                    import.meta.env.VITE_DOCS_URL ??
-                    (import.meta.env.DEV
-                      ? "http://localhost:3001"
-                      : `https://${APP_SLUG}-docs.fly.dev`),
+                  link: getDocumentationUrl({
+                    url: import.meta.env.VITE_DOCS_URL,
+                    serverUrl: import.meta.env.VITE_SERVER_URL,
+                    development: import.meta.env.DEV,
+                    locale: i18n.language,
+                  }),
                 },
               ]}
               navigationState={navigationState}

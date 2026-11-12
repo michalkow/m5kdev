@@ -70,6 +70,18 @@ const EXCLUDED = [
 const FEATURE_MANIFEST = {
   schemaVersion: 1,
   features: {
+    "docs-landing": { kind: "hosting", paths: [] },
+    "docs-server": { kind: "hosting", paths: [] },
+    "docs-standalone": {
+      kind: "hosting",
+      paths: [
+        "apps/docs/Dockerfile",
+        "apps/docs/Caddyfile",
+        "apps/docs/fly.toml",
+        "apps/docs/.env.production.example",
+        ".github/workflows/deploy-docs.yml",
+      ],
+    },
     "test-harness": {
       kind: "harness",
       paths: ["apps/e2e/", "apps/server/src/modules/test-harness/", "apps/server/db.e2e.ts"],
@@ -211,6 +223,10 @@ function isTextFile(filePath: string): boolean {
 
 function tokenize(content: string): string {
   return content
+    .replaceAll(
+      '"landing" satisfies DocumentationHosting',
+      '"{{DOCS_HOSTING}}" satisfies DocumentationHosting'
+    )
     .replaceAll("@starter-app", "{{PACKAGE_SCOPE}}")
     .replaceAll("M5 Starter", "{{APP_NAME}}")
     .replaceAll("starter-app", "{{APP_SLUG}}")
@@ -221,6 +237,10 @@ function tokenize(content: string): string {
 
 function tokenizePath(relPath: string): string {
   return relPath
+    .replaceAll(
+      '"landing" satisfies DocumentationHosting',
+      '"{{DOCS_HOSTING}}" satisfies DocumentationHosting'
+    )
     .replaceAll("@starter-app", "{{PACKAGE_SCOPE}}")
     .replaceAll("starter-app", "{{APP_SLUG}}");
 }

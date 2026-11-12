@@ -2,7 +2,7 @@ import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { type Href, Link, Redirect } from "expo-router";
 import { Button, Card, Typography } from "heroui-native";
 import { Linking, ScrollView, Text, View } from "react-native";
-import { docsUrl } from "../config";
+import { getDocsUrl } from "../config";
 
 export default function PostsScreen() {
   const { data: session } = useSession();
@@ -38,7 +38,10 @@ export default function PostsScreen() {
             Logout
           </Button>
         </Link>
-        <Button variant="outline" onPress={() => void Linking.openURL(docsUrl)}>
+        <Button
+          variant="outline"
+          onPress={() => void Linking.openURL(getDocsUrl(session.user.locale ?? undefined))}
+        >
           Help
         </Button>
       </View>

@@ -1,6 +1,7 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
+  "globalDependencies": ["apps/**/locales.ts", "apps/**/documentation.ts", "apps/locales.ts", "apps/documentation.ts"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

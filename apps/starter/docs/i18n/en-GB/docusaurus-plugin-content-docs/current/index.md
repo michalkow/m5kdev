@@ -15,6 +15,7 @@ here whenever you need it.
 
 Use the language menu at the top of this help site to choose a supported language.
 On a phone, open the menu first. Each language includes the same available guides.
+You can bookmark a guide or share its address; it opens without signing in.
 
 ## If the webapp stops working
 

@@ -6,8 +6,17 @@
     "jsx": "react-jsx",
     "noEmit": true,
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
-    "rootDir": "."
+    "rootDir": ".."
   },
   "exclude": ["node_modules"],
-  "include": ["src/**/*.ts", "db.ts", "db.e2e.ts", "drizzle/**/*.ts", "drizzle.config.ts", "tsup.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "db.ts",
+    "db.e2e.ts",
+    "drizzle/**/*.ts",
+    "drizzle.config.ts",
+    "tsup.config.ts",
+    "../locales.ts",
+    "../documentation.ts"
+  ]
 }
