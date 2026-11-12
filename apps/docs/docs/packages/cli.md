@@ -80,23 +80,39 @@ site you are reading remains developer documentation. Initial guides follow
 the selected platforms and optional features.
 
 Run `pnpm docs:dev` (port 3001), `pnpm docs:build`, or `pnpm docs:serve`.
-The product and Landing link to help. The default public URL is
-`https://<app-slug>-docs.fly.dev`; customize it with `VITE_DOCS_URL` for docs,
-web, and Landing, and `EXPO_PUBLIC_DOCS_URL` for Expo.
+Development serves one locale at the root URL; Help links use that root. Use
+`pnpm docs:dev -- --locale en-GB` to edit another locale, and build/serve to
+preview language switching across the full site.
+Help supports every locale in `apps/locales.ts`, including regional variants.
+Guides, navigation, and the language menu follow that shared configuration.
+The full build rejects missing guide translations.
 
-`apps/docs/fly.toml` and `apps/docs/Dockerfile` deploy the static site with Caddy
-on a shared CPU and 256 MB RAM, with idle autostop. Copy the adjacent
-`.env.production.example` to `.env.production`, create the configured Fly app,
-and run `pnpm docs:deploy` from the generated repository root. The independent
-`deploy-docs.yml` workflow deploys from `main` using `FLY_API_TOKEN_DOCS` and
-`DOCS_ENV_PRODUCTION`. No product server, database, or runtime secrets are needed.
+Installation asks where to host help. Use `--docs-host landing` (the default),
+`--docs-host server`, or `--docs-host standalone` for noninteractive installation.
+Landing bundles help at `/documentation` in the Landing image and deployment.
+Server mode bundles it with the product in every Deployment environment;
+`createBackendApp` explicitly serves it before the Webapp fallback. Server mode
+also works for Expo-only products and is unavailable for Landing-only apps.
+
+Standalone mode retains a Caddy Docker image and independent `deploy-docs.yml`
+workflow using `FLY_API_TOKEN_DOCS` and `DOCS_ENV_PRODUCTION`, or the static output
+can be copied to an independently managed web server. Bundled modes need no
+separate documentation deployment or docs-specific Fly credentials.
+
+Set `VITE_DOCS_URL` to the absolute public help URL, including its path, in both
+docs and client builds for a custom domain. Expo uses `EXPO_PUBLIC_DOCS_URL`.
+Keep `/documentation/` for bundled hosting; standalone builds can use `/` or a
+custom subpath. The standalone Docker image bakes matching Caddy routes during
+the build, so no runtime variable is required for the mount path. Help links use
+the selected host and current locale when known.
 
 Generated `AGENTS.md` and `CLAUDE.md` require agents to update affected guides
-before completing user-facing feature work. The detailed rules are in
-`docs/agents/product-documentation.md`. Guides use actual UI labels and explain
-user goals, steps, outcomes, and limitations in plain language. Framework
-updates ensure missing guide files while preserving local guide content;
-Fly config and production env files remain app-owned.
+and translations in every configured locale before completing user-facing work.
+Detailed rules live in `docs/agents/product-documentation.md`. Framework updates
+preserve app-written guides and translations. The hosting selection persists;
+legacy apps without a selection retain standalone hosting. When upgrading an
+existing app, move any custom locale configuration into `apps/locales.ts` and
+provide guides for all configured locales before building.
 
 ### init / doctor / update
 

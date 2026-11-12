@@ -77,7 +77,16 @@ export async function collectTemplateFiles(
 
     if (relativePath === "template.manifest.json") continue;
 
-    if (excludePrefixes.some((prefix) => matchesExcludedPrefix(relativePath, prefix))) {
+    const guidePath = relativePath.replace(
+      /^apps\/docs\/i18n\/[^/]+\/docusaurus-plugin-content-docs\/current\//,
+      "apps/docs/docs/"
+    );
+    if (
+      excludePrefixes.some(
+        (prefix) =>
+          matchesExcludedPrefix(relativePath, prefix) || matchesExcludedPrefix(guidePath, prefix)
+      )
+    ) {
       continue;
     }
 
@@ -111,7 +120,17 @@ export async function collectTemplateFiles(
     const content = (await fs.readFile(sourcePath, "utf8")).replace(/\r\n?/g, "\n");
     files.push({
       content: Buffer.from(
-        applyFeatureMarkers(renderTemplate(content, context), enabledFeatures),
+        applyFeatureMarkers(
+          renderTemplate(content, context).replace(
+            /\{\{DOCS_HOSTING\}\}/g,
+            enabledFeatures.has("docs-landing")
+              ? "landing"
+              : enabledFeatures.has("docs-server")
+                ? "server"
+                : "standalone"
+          ),
+          enabledFeatures
+        ),
         "utf8"
       ),
       kind: "text",

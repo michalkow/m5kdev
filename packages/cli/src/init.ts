@@ -74,6 +74,13 @@ async function inferFeatures(repoRoot: string): Promise<Set<string>> {
   if (await has("apps/webapp")) enabled.add("webapp");
   if (await has("apps/expo")) enabled.add("expo");
   if (await has("apps/e2e")) enabled.add("test-harness");
+  const documentation = await fs
+    .readFile(path.join(repoRoot, "apps/documentation.ts"), "utf8")
+    .catch(() => "");
+  const host =
+    documentation.match(/DOCUMENTATION_HOST\s*=\s*["'](landing|server|standalone)["']/)?.[1] ??
+    "standalone";
+  enabled.add(`docs-${host}`);
   return enabled;
 }
 

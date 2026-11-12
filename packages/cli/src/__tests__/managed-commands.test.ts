@@ -56,7 +56,7 @@ describe("managed repository commands", () => {
 
     const result = await initializeManagedRepo({ repoRoot, yes: true, force: false });
     expect(result.initialized).toBe(true);
-    expect(result.state.template.features).toEqual(["webapp"]);
+    expect(result.state.template.features).toEqual(["docs-landing", "webapp"]);
     expect(result.state.catalog).not.toHaveProperty("react-native-web");
     expect(result.report.diagnostics).not.toContainEqual(
       expect.objectContaining({ code: "CATALOG_ENTRY_MISSING" })
@@ -141,7 +141,7 @@ describe("landing-only managed repository commands", () => {
     await fs.rm(path.join(repoRoot, ".m5kdev.json"));
     const result = await initializeManagedRepo({ repoRoot, yes: true, force: false });
     expect(result.initialized).toBe(true);
-    expect(result.state.template.features).toEqual([]);
+    expect(result.state.template.features).toEqual(["docs-landing"]);
     expect(result.state.template.context.appName.length).toBeGreaterThan(0);
   });
 });

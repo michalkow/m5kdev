@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   type AppPlatform,
+  type DocumentationHosting,
   OPTIONAL_ENVIRONMENTS,
   type OptionalEnvironment,
   type TemplateFeatureKind,
@@ -13,6 +14,7 @@ export const PRODUCT_STACK_FEATURE = "server";
 
 export function withImpliedFeatures(enabled: ReadonlySet<string>): Set<string> {
   const next = new Set(enabled);
+  if (![...next].some((feature) => feature.startsWith("docs-"))) next.add("docs-standalone");
   if (next.has("webapp") || next.has("expo")) next.add(PRODUCT_STACK_FEATURE);
   return next;
 }
@@ -101,11 +103,13 @@ export function enabledEnvironments(features: Iterable<string>): OptionalEnviron
 
 export function getEnabledFeatures(options: {
   platform: AppPlatform;
+  docsHosting?: DocumentationHosting;
   testHarness: boolean;
   modules?: readonly string[];
   environments?: readonly OptionalEnvironment[];
 }): Set<string> {
   const enabled = new Set<string>();
+  if (options.docsHosting) enabled.add(`docs-${options.docsHosting}`);
   if (options.platform !== "expo" && options.platform !== "landing") enabled.add("webapp");
   if (options.platform !== "web" && options.platform !== "landing") enabled.add("expo");
   if (options.testHarness) enabled.add("test-harness");

@@ -5,8 +5,8 @@
     "importHelpers": true,
     "noEmit": true,
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
-    "rootDir": "."
+    "rootDir": ".."
   },
   "exclude": ["node_modules"],
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "../locales.ts", "../documentation.ts"]
 }

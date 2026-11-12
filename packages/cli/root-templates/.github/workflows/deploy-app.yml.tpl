@@ -20,6 +20,11 @@ on:
       - 'apps/webapp/**'
       # m5k:webapp:end
       - 'apps/shared/**'
+      - 'apps/locales.ts'
+      - 'apps/documentation.ts'
+      # m5k:docs-server:start
+      - 'apps/docs/**'
+      # m5k:docs-server:end
       - 'apps/email/**'
       - 'package.json'
       - 'pnpm-lock.yaml'

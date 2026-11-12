@@ -3,10 +3,10 @@
   "compilerOptions": {
     "baseUrl": ".",
     "ignoreDeprecations": "6.0",
-    "rootDir": ".",
+    "rootDir": "..",
     "outDir": "dist",
     "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo"
   },
-  "include": ["src"],
+  "include": ["src", "../locales.ts", "../documentation.ts"],
   "exclude": ["dist", "node_modules"]
 }

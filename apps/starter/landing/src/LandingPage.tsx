@@ -1,10 +1,14 @@
 import { Card, Link } from "@heroui/react";
+import { getDocumentationUrl } from "../../documentation";
 
 export function LandingPage() {
   const appName = import.meta.env.VITE_APP_NAME ?? "M5 Starter";
-  const docsUrl =
-    import.meta.env.VITE_DOCS_URL ??
-    (import.meta.env.DEV ? "http://localhost:3001" : "https://starter-app-docs.fly.dev");
+  const docsUrl = getDocumentationUrl({
+    url: import.meta.env.VITE_DOCS_URL,
+    serverUrl: import.meta.env.VITE_SERVER_URL,
+    development: import.meta.env.DEV,
+    locale: Intl.DateTimeFormat().resolvedOptions().locale,
+  });
 
   return (
     <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-6 py-16">

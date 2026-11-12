@@ -207,7 +207,7 @@ _Avoid_: Filter document, Mongo filter, Filter object, QueryFilter
 _Avoid_: Example, Template (CLI templates live in `packages/cli`)
 
 **Product documentation**:
-Public help for the people using an App: its features, tasks, expected results, and limitations, written for its audience's technical knowledge. Every scaffolded App includes a Docusaurus help site, deployed separately from the product and Landing.
+Public help for the people using an App: its features, tasks, expected results, and limitations, written for its audience's technical knowledge. Every scaffolded App includes a Docusaurus help site in all its supported locales (including regional variants), bundled with Landing by default; serving it with the product server or hosting it separately are alternatives.
 _Avoid_: framework documentation; developer guides; using the public help site for engineering or agent instructions
 
 **Release**:

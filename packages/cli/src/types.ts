@@ -1,4 +1,5 @@
 export type AppPlatform = "web" | "expo" | "both" | "landing";
+export type DocumentationHosting = "landing" | "server" | "standalone";
 
 /** Deployment environments beside the default Development and Production. */
 export const OPTIONAL_ENVIRONMENTS = ["staging", "canary"] as const;
@@ -9,6 +10,7 @@ export interface PromptValues {
   appName?: string;
   appDescription?: string;
   platform?: AppPlatform;
+  docsHosting?: DocumentationHosting;
   testHarness?: boolean;
   /** Optional Backend Module feature ids (billing, workflows, …). `--yes` defaults to none. */
   modules?: string[];
@@ -31,7 +33,7 @@ export interface TemplateContext {
   betterAuthSecret: string;
 }
 
-export type TemplateFeatureKind = "platform" | "harness" | "module" | "environment";
+export type TemplateFeatureKind = "platform" | "harness" | "module" | "environment" | "hosting";
 
 export interface TemplateFeatureConfig {
   paths: readonly string[];

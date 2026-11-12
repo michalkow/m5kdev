@@ -123,6 +123,11 @@ async function resolvePlatformUpgrade(options: {
     platform: options.platform,
     testHarness: extras.testHarness,
     modules: extras.modules,
+    docsHosting: current.has("docs-landing")
+      ? "landing"
+      : current.has("docs-server")
+        ? "server"
+        : "standalone",
   });
   return {
     ...options.state,

@@ -17,13 +17,21 @@ Root scripts call Kernel bins (`m5kdev-fly-deploy` / `m5kdev-fly-secrets` from
 `@m5kdev/backend`). The app only passes `--config`, `--dockerfile`, and `--env`
 paths. The `fly` CLI must be on PATH.
 
+Product help is bundled with Landing at `/documentation` by default. The
+installer's `--docs-host` choice also supports `server` (bundled with the product
+image in each Deployment environment) and `standalone` (the separate docs image
+and credentials described below). Skip docs app creation, docs secrets, and the
+independent docs deployment unless standalone hosting was selected. Landing
+bundling works without a product server. A separately managed static host can
+serve the output of `pnpm docs:build`; configure its public URL before building.
+
 ## What ships
 
 | App | Image | Fly name |
 | --- | --- | --- |
 | Product (server + baked webapp) | `apps/shared/Dockerfile` | `<app-slug>-development`, `<app-slug>-production` |
 | Landing (public site) | `apps/landing/Dockerfile` | `<app-slug>-landing` |
-| Product help (static Docusaurus) | `apps/docs/Dockerfile` | `<app-slug>-docs` |
+| Product help (optional standalone Docusaurus) | `apps/docs/Dockerfile` | `<app-slug>-docs` |
 
 None of these apps mounts a Fly volume. PostgreSQL is hosted outside the machine, so
 the Fly configs have no `[[mounts]]` and first deploy does not run `fly volumes create`.
@@ -220,3 +228,16 @@ Apps still shipping Starter `fly-*.mjs` copies: [Kernel Fly deploy commands in 0
 
 Production `VITE_APP_URL` and `VITE_SERVER_URL` are operator env (often the
 same public origin). The Kernel does not rewrite them.
+
+## Server-hosted product help
+
+Choose `--docs-host server` during creation. The product Dockerfile builds all
+documentation locales and copies the output alongside the Webapp; Expo-only
+products receive the same help build without a Webapp. The generated server
+opts into `documentation: { root: "./documentation" }` in `createBackendApp`.
+The Kernel redirects `/documentation` to `/documentation/`, serves guide and
+asset URLs, and returns a documentation 404 for unknown help paths before the
+Webapp fallback. A missing build directory skips static mounting in development.
+Set `VITE_DOCS_URL` to the complete public URL, or let server mode derive it from
+`VITE_SERVER_URL`. Build and deploy through the selected Deployment environment's
+normal product workflow; help changes trigger that workflow in server mode.

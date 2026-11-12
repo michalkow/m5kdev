@@ -12,7 +12,15 @@
     "docs:dev": "pnpm --filter ./apps/docs dev",
     "docs:build": "pnpm --filter ./apps/docs build",
     "docs:serve": "pnpm --filter ./apps/docs serve",
+    // m5k:docs-standalone:start
     "docs:deploy": "m5kdev-fly-deploy --config apps/docs/fly.toml --dockerfile apps/docs/Dockerfile --env apps/docs/.env.production",
+    // m5k:docs-standalone:end
+    // m5k:docs-landing:start
+    "docs:deploy": "pnpm landing:deploy",
+    // m5k:docs-landing:end
+    // m5k:docs-server:start
+    "docs:deploy": "pnpm app:deploy:production",
+    // m5k:docs-server:end
     // m5k:server:start
     "app:deploy": "node -e \"const s=require('./package.json').scripts;console.error('Use pnpm app:deploy:<environment> — one of: '+Object.keys(s).filter(k=>k.startsWith('app:deploy:')).map(k=>k.split(':')[2]).join(', '));process.exit(1)\"",
     "app:secrets": "node -e \"const s=require('./package.json').scripts;console.error('Use pnpm app:secrets:<environment> — one of: '+Object.keys(s).filter(k=>k.startsWith('app:secrets:')).map(k=>k.split(':')[2]).join(', '));process.exit(1)\"",

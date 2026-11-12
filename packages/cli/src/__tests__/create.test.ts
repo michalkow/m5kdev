@@ -174,7 +174,7 @@ describe("scaffoldProject", () => {
       template: { features: string[]; context: Record<string, unknown> };
       catalog: Record<string, string>;
     };
-    expect(managedState.template.features).toEqual(["webapp"]);
+    expect(managedState.template.features).toEqual(["docs-landing", "webapp"]);
     expect(managedState.catalog).not.toHaveProperty("react-native-web");
     expect(managedState.template.context).not.toHaveProperty("betterAuthSecret");
     expect(managedStateSource).not.toContain("BETTER_AUTH_SECRET");
@@ -269,7 +269,7 @@ describe("scaffoldProject", () => {
 
     const source = await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8");
     const state = JSON.parse(source) as { template: { features: string[] } };
-    expect(state.template.features).toEqual(["webapp"]);
+    expect(state.template.features).toEqual(["docs-landing", "webapp"]);
   });
 
   it("omits Files unless that Backend Module is selected", async () => {
@@ -355,7 +355,7 @@ describe("scaffoldProject", () => {
 
     const source = await fs.readFile(path.join(on.targetDirectory, ".m5kdev.json"), "utf8");
     const state = JSON.parse(source) as { template: { features: string[] } };
-    expect(state.template.features).toEqual(["files", "webapp"]);
+    expect(state.template.features).toEqual(["docs-landing", "files", "webapp"]);
   });
 
   it("omits McpModule unless that Backend Module is selected", async () => {
@@ -472,7 +472,7 @@ describe("scaffoldProject", () => {
 
     const source = await fs.readFile(path.join(on.targetDirectory, ".m5kdev.json"), "utf8");
     const state = JSON.parse(source) as { template: { features: string[] } };
-    expect(state.template.features).toEqual(["mcp", "webapp"]);
+    expect(state.template.features).toEqual(["docs-landing", "mcp", "webapp"]);
   });
 
   it("omits AI unless that Backend Module is selected", async () => {
@@ -583,7 +583,7 @@ describe("scaffoldProject", () => {
 
     const source = await fs.readFile(path.join(on.targetDirectory, ".m5kdev.json"), "utf8");
     const state = JSON.parse(source) as { template: { features: string[] } };
-    expect(state.template.features).toEqual(["ai", "webapp"]);
+    expect(state.template.features).toEqual(["ai", "docs-landing", "webapp"]);
   });
 
   it("keeps Workflows when that Backend Module is selected", async () => {
@@ -666,7 +666,7 @@ describe("scaffoldProject", () => {
 
     const source = await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8");
     const state = JSON.parse(source) as { template: { features: string[] } };
-    expect(state.template.features).toEqual(["webapp", "workflows"]);
+    expect(state.template.features).toEqual(["docs-landing", "webapp", "workflows"]);
   });
 
   it("keeps Notifications when that Backend Module is selected", async () => {
@@ -708,7 +708,12 @@ describe("scaffoldProject", () => {
 
     const source = await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8");
     const state = JSON.parse(source) as { template: { features: string[] } };
-    expect(state.template.features).toEqual(["notifications", "webapp", "workflows"]);
+    expect(state.template.features).toEqual([
+      "docs-landing",
+      "notifications",
+      "webapp",
+      "workflows",
+    ]);
   });
 
   it("keeps the Workflow Playwright spec only when Workflows and the test harness are both on", async () => {
@@ -920,7 +925,7 @@ describe("scaffoldProject", () => {
         template: { features: string[]; context: Record<string, unknown> };
         catalog: Record<string, string>;
       };
-      expect(state.template.features).toEqual(features);
+      expect(state.template.features).toEqual(["docs-landing", ...features].sort());
       if (new Set<string>(features).has("expo")) {
         expect(state.catalog).toHaveProperty("react-native-web", "^0.21.2");
       } else {
@@ -1366,9 +1371,7 @@ describe("scaffoldProject", () => {
       expect(
         (await fs.readdir(workflowDirectory)).filter((name) => name.startsWith("deploy-")).sort()
       ).toEqual(
-        platform === "landing"
-          ? ["deploy-docs.yml", "deploy-landing.yml"]
-          : ["deploy-app.yml", "deploy-docs.yml", "deploy-landing.yml"]
+        platform === "landing" ? ["deploy-landing.yml"] : ["deploy-app.yml", "deploy-landing.yml"]
       );
 
       if (platform !== "landing") {
@@ -1488,7 +1491,7 @@ describe("scaffoldProject", () => {
       );
       expect(workspace.overrides).toEqual({ "drizzle-orm>@libsql/client": "-" });
 
-      const dockerfiles = ["apps/landing/Dockerfile", "apps/docs/Dockerfile"];
+      const dockerfiles = ["apps/landing/Dockerfile"];
       if (platform !== "landing") dockerfiles.push("apps/shared/Dockerfile");
       for (const dockerfilePath of dockerfiles) {
         const dockerfile = await fs.readFile(
@@ -1733,7 +1736,7 @@ describe("scaffoldProject", () => {
       template: { features: string[] };
       catalog: Record<string, string>;
     };
-    expect(state.template.features).toEqual([]);
+    expect(state.template.features).toEqual(["docs-landing"]);
     expect(state.catalog).not.toHaveProperty("react-native-web");
   });
 
@@ -1908,7 +1911,7 @@ describe("landing-only platform upgrade", () => {
     const state = JSON.parse(
       await fs.readFile(path.join(result.targetDirectory, ".m5kdev.json"), "utf8")
     ) as { template: { features: string[] } };
-    expect(state.template.features).toEqual(["webapp"]);
+    expect(state.template.features).toEqual(["docs-landing", "webapp"]);
 
     const glossary = await fs.readFile(path.join(result.targetDirectory, "GLOSSARY.md"), "utf8");
     expect(glossary).toContain("**Organization**:");

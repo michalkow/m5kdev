@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'apps/docs/**'
+      - 'apps/locales.ts'
+      - 'apps/documentation.ts'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'

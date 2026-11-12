@@ -12,6 +12,7 @@ import {
 import {
   type AppPlatform,
   type CreateCommandOptions,
+  type DocumentationHosting,
   OPTIONAL_ENVIRONMENTS,
   type OptionalEnvironment,
 } from "./types";
@@ -34,6 +35,11 @@ async function promptValue(question: string, fallback?: string): Promise<string>
   } finally {
     rl.close();
   }
+}
+
+export function parseDocumentationHosting(value: string): DocumentationHosting {
+  if (value === "landing" || value === "server" || value === "standalone") return value;
+  throw new Error(`Invalid documentation hosting "${value}". Use landing, server, or standalone.`);
 }
 
 export function parsePlatform(value: string): AppPlatform | undefined {
@@ -143,6 +149,21 @@ export async function resolveCreateCommandOptions(
       }
       resolved.platform = platform;
     }
+  }
+
+  if (resolved.docsHosting === undefined) {
+    requireInteractive(resolved.yes);
+    resolved.docsHosting = resolved.yes
+      ? "landing"
+      : parseDocumentationHosting(
+          await promptValue("Documentation hosting — landing, server, or standalone", "landing")
+        );
+  }
+  resolved.docsHosting = parseDocumentationHosting(resolved.docsHosting);
+  if (resolved.platform === "landing" && resolved.docsHosting === "server") {
+    throw new Error(
+      "Server documentation hosting requires a product server; choose landing or standalone."
+    );
   }
 
   if (resolved.platform === "landing") {

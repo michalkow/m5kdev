@@ -2,7 +2,7 @@ import { scaffoldProject } from "./create";
 import { printDiagnosticReport } from "./diagnostics";
 import { diagnoseManagedRepo } from "./doctor";
 import { initializeManagedRepo } from "./init";
-import { parseEnvironmentsAnswer, parsePlatform } from "./prompts";
+import { parseDocumentationHosting, parseEnvironmentsAnswer, parsePlatform } from "./prompts";
 import type { CreateCommandOptions } from "./types";
 import { updateManagedRepo } from "./update";
 
@@ -14,7 +14,7 @@ interface ParsedCli {
 }
 
 const COMMANDS = new Set(["create", "init", "doctor", "update"]);
-const STRING_FLAGS = new Set(["name", "description", "platform", "environments"]);
+const STRING_FLAGS = new Set(["name", "description", "platform", "environments", "docs-host"]);
 const BOOLEAN_FLAGS = new Set([
   "yes",
   "force",
@@ -64,6 +64,7 @@ export async function runCli(argv: readonly string[]): Promise<void> {
 async function runCreate(parsed: ParsedCli): Promise<void> {
   validateOptions(parsed, [
     "name",
+    "docs-host",
     "description",
     "platform",
     "environments",
@@ -229,9 +230,11 @@ function toCreateCommandOptions(parsed: ParsedCli): CreateCommandOptions {
   if (platformOption && !platform) {
     throw new Error(`Invalid --platform "${platformOption}". Use web, expo, both, or landing.`);
   }
+  const docsHostingOption = getStringOption(parsed.options, "docs-host");
   const environmentsOption = getStringOption(parsed.options, "environments");
   return {
     targetDirectory: parsed.directory,
+    docsHosting: docsHostingOption ? parseDocumentationHosting(docsHostingOption) : undefined,
     appName: getStringOption(parsed.options, "name"),
     appDescription: getStringOption(parsed.options, "description"),
     platform,
@@ -271,6 +274,7 @@ function printHelp(command?: string): void {
     console.log("  --name <value>           Set the app name");
     console.log("  --description <value>    Set the app description");
     console.log("  --platform <value>       web (default), expo, both, or landing");
+    console.log("  --docs-host <value>      landing (default), server, or standalone");
     console.log("  --with-test-harness      Include the e2e test harness");
     console.log(
       "  --environments <value>   Optional Deployment environments: staging, canary, both, or none"
