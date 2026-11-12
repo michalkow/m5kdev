@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type * as Preset from "@docusaurus/preset-classic";
-import type { Config } from "@docusaurus/types";
+import type { Config, Plugin } from "@docusaurus/types";
 
 import { getDocumentationUrl } from "../documentation";
 import { APP_LOCALE_CONFIG } from "../locales";
@@ -24,8 +24,13 @@ for (const locale of locales.filter((code) => code !== defaultLocale)) {
   }
 }
 
+const development = process.env.NODE_ENV === "development";
 const publicUrl = new URL(
-  getDocumentationUrl({ url: process.env.VITE_DOCS_URL, serverUrl: process.env.VITE_SERVER_URL })
+  getDocumentationUrl({
+    url: process.env.VITE_DOCS_URL,
+    serverUrl: process.env.VITE_SERVER_URL,
+    development,
+  })
 );
 const config: Config = {
   title: "M5 Starter Help",
@@ -39,13 +44,33 @@ const config: Config = {
     localeConfigs: Object.fromEntries(
       APP_LOCALE_CONFIG.locales.map(({ code, displayName }) => [
         languageTag(code),
-        { label: displayName, htmlLang: languageTag(code) },
+        {
+          label: displayName,
+          htmlLang: languageTag(code),
+          ...(development ? { baseUrl: publicUrl.pathname } : {}),
+        },
       ])
     ),
   },
   onBrokenLinks: "throw",
   markdown: { hooks: { onBrokenMarkdownLinks: "throw" } },
   future: { faster: { rspackBundler: true, swcJsLoader: true } },
+  plugins: [
+    function standaloneStaticRoutes(): Plugin {
+      return {
+        name: "standalone-static-routes",
+        postBuild() {
+          const basePath = publicUrl.pathname;
+          const route =
+            basePath === "/"
+              ? "file_server\n"
+              : `redir ${basePath.slice(0, -1)} ${basePath} 308\nhandle_path ${basePath}* {\n  file_server\n}\nhandle {\n  respond 404\n}\n`;
+          // This public build metadata is copied beside Caddyfile, outside /srv.
+          fs.writeFileSync(path.join(__dirname, ".docusaurus/documentation.caddy"), route);
+        },
+      };
+    },
+  ],
   presets: [
     [
       "classic",

@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import ts from "typescript";
 import { parse } from "yaml";
 import { scaffoldProject } from "../create";
 import { getTemplateRoot } from "../paths";
@@ -217,6 +218,19 @@ describe("generated public product help", () => {
       );
       expect(await read("apps/landing/Dockerfile")).not.toContain("docs-build");
       expect(await read(".github/workflows/deploy-app.yml")).toContain("apps/docs/**");
+      const program = ts.createProgram([path.join(targetDirectory, "apps/server/src/app.ts")], {
+        noEmit: true,
+        noResolve: true,
+        target: ts.ScriptTarget.ESNext,
+        module: ts.ModuleKind.ESNext,
+        skipLibCheck: true,
+      });
+      expect(
+        program
+          .getSemanticDiagnostics()
+          .filter((diagnostic) => diagnostic.code === 2304)
+          .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, " "))
+      ).toEqual([]);
     }
   );
 

@@ -19,6 +19,8 @@ export function getDocumentationUrl(
       : ["server"].includes(host) && options.serverUrl
         ? `${options.serverUrl.replace(/\/$/, "")}/documentation/`
         : documentationUrls[host]);
+  // Docusaurus development serves one locale at the base path.
+  if (options.development) return `${base.replace(/\/$/, "")}/`;
   const locale =
     APP_LOCALE_CONFIG.locales.find(
       ({ code }) =>

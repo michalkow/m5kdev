@@ -19,5 +19,6 @@ RUN --mount=type=secret,id=ALL_SECRETS,required=false \
 
 FROM caddy:2-alpine AS runtime
 COPY apps/docs/Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /app/apps/docs/.docusaurus/documentation.caddy /etc/caddy/documentation.caddy
 COPY --from=build /app/apps/docs/build/ /srv/
 EXPOSE 8080

@@ -237,10 +237,6 @@ function tokenize(content: string): string {
 
 function tokenizePath(relPath: string): string {
   return relPath
-    .replaceAll(
-      '"landing" satisfies DocumentationHosting',
-      '"{{DOCS_HOSTING}}" satisfies DocumentationHosting'
-    )
     .replaceAll("@starter-app", "{{PACKAGE_SCOPE}}")
     .replaceAll("starter-app", "{{APP_SLUG}}");
 }

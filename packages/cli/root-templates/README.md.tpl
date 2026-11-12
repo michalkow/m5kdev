@@ -60,7 +60,9 @@ pnpm lint
 
 `pnpm docs:dev` runs the public help site at `http://localhost:3001`.
 `pnpm docs:build` checks links and writes static files to `apps/docs/build`;
-`pnpm docs:serve` previews that build. The product's **Help** link opens this
+`pnpm docs:serve` previews that build. Development serves one locale at the
+root URL; use `pnpm docs:dev -- --locale en-GB` to edit another locale, and the
+full build/serve commands to preview language switching. The product's **Help** link opens this
 site without requiring sign-in. Guides live in `apps/docs/docs/` and describe
 what people can do in this app, using plain language and actual screen labels.
 Keep them current with feature changes; see `docs/agents/product-documentation.md`.
@@ -81,6 +83,8 @@ and client build environments; Expo uses `EXPO_PUBLIC_DOCS_URL`. Include the
 `/documentation/` suffix for bundled hosting. Server mode can derive the origin
 from `VITE_SERVER_URL`. Standalone mode retains `apps/docs/Dockerfile` and its
 independent workflow, or you can copy `apps/docs/build` to any static web server.
+The standalone image includes build-generated Caddy routes for the configured
+base path; it needs no runtime environment variable for that path.
 For a physical phone in development, use a reachable LAN URL on port 3001.
 
 Locales live in `apps/locales.ts`. Docusaurus builds every supported locale,

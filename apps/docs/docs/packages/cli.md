@@ -80,6 +80,9 @@ site you are reading remains developer documentation. Initial guides follow
 the selected platforms and optional features.
 
 Run `pnpm docs:dev` (port 3001), `pnpm docs:build`, or `pnpm docs:serve`.
+Development serves one locale at the root URL; Help links use that root. Use
+`pnpm docs:dev -- --locale en-GB` to edit another locale, and build/serve to
+preview language switching across the full site.
 Help supports every locale in `apps/locales.ts`, including regional variants.
 Guides, navigation, and the language menu follow that shared configuration.
 The full build rejects missing guide translations.
@@ -99,7 +102,9 @@ separate documentation deployment or docs-specific Fly credentials.
 Set `VITE_DOCS_URL` to the absolute public help URL, including its path, in both
 docs and client builds for a custom domain. Expo uses `EXPO_PUBLIC_DOCS_URL`.
 Keep `/documentation/` for bundled hosting; standalone builds can use `/` or a
-custom subpath. Help links use the selected host and current locale when known.
+custom subpath. The standalone Docker image bakes matching Caddy routes during
+the build, so no runtime variable is required for the mount path. Help links use
+the selected host and current locale when known.
 
 Generated `AGENTS.md` and `CLAUDE.md` require agents to update affected guides
 and translations in every configured locale before completing user-facing work.
