@@ -101,9 +101,12 @@ export function AuthPublicSignupForm({
             })
             .then((res) => {
               if (res.data?.user) {
-                registerSession(() => {
-                  navigate("/");
-                });
+                registerSession(
+                  () => {
+                    navigate("/");
+                  },
+                  { signIn: true }
+                );
               } else if (res.error) {
                 toast.danger(t("web-ui:auth.errors.authentication"), {
                   description: res.error.message,

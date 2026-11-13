@@ -30,9 +30,12 @@ export function AuthPublicLoginForm({ providers }: { providers?: string[] }) {
       })
       .then((res) => {
         if (res.data?.user) {
-          registerSession(() => {
-            navigate(returnTo ?? "/");
-          });
+          registerSession(
+            () => {
+              navigate(returnTo ?? "/");
+            },
+            { signIn: true }
+          );
         } else if (res.error) {
           toast.danger(t("web-ui:auth.errors.authentication"), {
             description: res.error.message,

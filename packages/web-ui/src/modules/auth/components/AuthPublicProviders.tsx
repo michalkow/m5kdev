@@ -1,10 +1,10 @@
-import { Button, toast } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import { useTranslation } from "react-i18next";
 import { GoogleIcon } from "../../../icons/GoogleIcon";
 import { LinkedInIcon } from "../../../icons/LinkedInIcon";
 import { MicrosoftIcon } from "../../../icons/MicrosoftIcon";
+import { useAuthPublicSignIn } from "../hooks/useAuthPublicSignIn";
 import { resolvePublicLocale } from "../utils/authLocale";
 import { AuthPublicLastUsedBadge } from "./AuthPublicLastUsedBadge";
 
@@ -26,8 +26,7 @@ export function AuthPublicProviders({
   trialPriceId?: string | null;
 }) {
   const { t } = useTranslation();
-  const { appUrl, locales } = useAppConfig();
-  if (!providers || providers.length === 0) return null;
+  const { locales } = useAppConfig();
   const additionalData = {
     ...(code ? { waitlistInvitationCode: code } : {}),
     ...(invitation ? { organizationInvitationCode: invitation } : {}),
@@ -35,12 +34,8 @@ export function AuthPublicProviders({
     ...(trialPriceId ? { userPriceId: trialPriceId } : {}),
   };
 
-  const callbackURL = `${appUrl}${returnTo}`;
-  const handleSignIn = (result: { error?: unknown }) => {
-    if (result.error) {
-      toast.danger(t("web-ui:auth.errors.invitationCodeInvalid"));
-    }
-  };
+  const signIn = useAuthPublicSignIn({ returnTo, requestSignUp, additionalData });
+  if (!providers || providers.length === 0) return null;
 
   return (
     <>
@@ -52,14 +47,7 @@ export function AuthPublicProviders({
               variant="outline"
               className="w-full gap-2"
               onPress={() => {
-                authClient.signIn
-                  .social({
-                    provider: "google",
-                    requestSignUp,
-                    additionalData,
-                    callbackURL,
-                  })
-                  .then(handleSignIn);
+                void signIn("google");
               }}
             >
               <GoogleIcon className="h-5 w-5" />
@@ -74,14 +62,7 @@ export function AuthPublicProviders({
               variant="outline"
               className="w-full"
               onPress={() => {
-                authClient.signIn
-                  .social({
-                    provider: "linkedin",
-                    requestSignUp,
-                    additionalData,
-                    callbackURL,
-                  })
-                  .then(handleSignIn);
+                void signIn("linkedin");
               }}
             >
               <LinkedInIcon className="h-5 w-5" />
@@ -96,14 +77,7 @@ export function AuthPublicProviders({
               variant="outline"
               className="w-full"
               onPress={() => {
-                authClient.signIn
-                  .social({
-                    provider: "microsoft",
-                    requestSignUp,
-                    additionalData,
-                    callbackURL,
-                  })
-                  .then(handleSignIn);
+                void signIn("microsoft");
               }}
             >
               <MicrosoftIcon className="h-5 w-5" />

@@ -1,5 +1,5 @@
 import i18n from "i18next";
-import { Fragment, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AppConfigContext } from "../../app/components/AppConfigProvider";
 import { syncI18nLocale } from "../../app/utils/locale";
 import {
@@ -16,7 +16,7 @@ function sessionQuery(options?: RegisterSessionOptions):
       query: { disableCookieCache: true };
     }
   | undefined {
-  if (!options?.disableCookieCache) return undefined;
+  if (!options?.disableCookieCache && !options?.signIn) return undefined;
   return { query: { disableCookieCache: true } };
 }
 
@@ -26,12 +26,15 @@ export function AuthProvider({
   children,
   loader,
   onSession,
+  onSignIn,
 }: {
   authClient?: AuthClient;
   baseURL?: string;
   children: React.ReactNode;
   loader?: React.ReactNode;
   onSession?: (session: Session | null) => void;
+  /** A fresh successful sign-in, distinct from loading or refreshing a session. */
+  onSignIn?: (session: NonNullable<Session>) => void | Promise<void>;
 }) {
   const appConfig = useContext(AppConfigContext);
   const resolvedAuthClient = useMemo(
@@ -40,6 +43,11 @@ export function AuthProvider({
   );
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
+  const notifiedSignInSessions = useRef(new Set<string>());
+  const signInHandler = useRef(onSignIn);
+  useEffect(() => {
+    signInHandler.current = onSignIn;
+  }, [onSignIn]);
   const [i18nLanguage, setI18nLanguage] = useState(() => i18n.language);
 
   const registerSession = useCallback(
@@ -54,6 +62,22 @@ export function AuthProvider({
             void syncI18nLocale(userLocale);
           }
           onSession?.(nextSession);
+          if (
+            options?.signIn &&
+            nextSession &&
+            (options.signIn === true ||
+              nextSession.session.id !== options.signIn.previousSessionId) &&
+            !notifiedSignInSessions.current.has(nextSession.session.id)
+          ) {
+            notifiedSignInSessions.current.add(nextSession.session.id);
+            try {
+              void Promise.resolve(signInHandler.current?.(nextSession)).catch((error) => {
+                console.error("Sign-in callback failed:", error);
+              });
+            } catch (error) {
+              console.error("Sign-in callback failed:", error);
+            }
+          }
           onSuccess?.();
         })
         .catch((error) => {
@@ -96,7 +120,14 @@ export function AuthProvider({
 
   return (
     <authProviderContext.Provider
-      value={{ authClient: resolvedAuthClient, isLoading, data: session, signOut, registerSession }}
+      value={{
+        authClient: resolvedAuthClient,
+        isLoading,
+        hasSignInHandler: !!onSignIn,
+        data: session,
+        signOut,
+        registerSession,
+      }}
     >
       <Fragment key={i18nLanguage}>{children}</Fragment>
     </authProviderContext.Provider>

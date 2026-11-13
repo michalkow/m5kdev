@@ -5,17 +5,21 @@ export type AuthSession = ReturnType<M5KAuthClient["useSession"]>["data"];
 
 export interface RegisterSessionOptions {
   disableCookieCache?: boolean;
+  /** Only set after a successful authentication action, never for session refreshes. */
+  signIn?: boolean | { previousSessionId: string | null };
 }
 
 export const authProviderContext = createContext<{
   authClient: M5KAuthClient;
   isLoading: boolean;
+  hasSignInHandler?: boolean;
   data: AuthSession | null;
   signOut: () => Promise<void>;
   registerSession: (onSuccess?: () => void, options?: RegisterSessionOptions) => Promise<void>;
 }>({
   authClient: null as unknown as M5KAuthClient,
   isLoading: true,
+  hasSignInHandler: false,
   data: null,
   signOut: async () => {},
   registerSession: async () => {},

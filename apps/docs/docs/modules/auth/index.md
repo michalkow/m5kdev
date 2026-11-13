@@ -184,6 +184,70 @@ and [Workflow](/modules/workflow). Upgrade:
 locale then refreshes the session with cookie cache disabled;
 `AuthProvider` remounts children when the language changes.
 
+### Record successful sign-ins
+
+Pass `onSignIn` to `AuthProvider` to record an actual successful sign-in in an
+app-owned integration. The handler receives the confirmed authenticated session:
+
+```tsx
+<AuthProvider
+  onSignIn={(session) => {
+    analytics.capture("user_signed_in", { userId: session.user.id });
+  }}
+>
+  {children}
+</AuthProvider>
+```
+
+Shared email/password login, signup flows that explicitly sign the User in,
+and correlated successful OAuth returns invoke it after fetching the authenticated
+session and before navigation. Signup that waits for email verification does not invoke it. Initial session loading,
+page reloads, restored sessions, routine refreshes, Organization changes, failed
+authentication, and logout do not invoke it. Callback errors are reported to the
+console without failing sign-in; returned promises do not delay navigation.
+
+Keep using `onSession` for SDK identity synchronization: it also runs for initial
+loading, refreshes, Organization changes, and logout (`null`). It is not a
+sign-in event. Existing apps may omit `onSignIn`.
+
+For custom credential forms, call this only after successful authentication:
+
+```tsx
+registerSession(onSuccess, { signIn: true }); // registerSession comes from useSession()
+```
+
+This bypasses the cookie cache and notifies at most once per session in the mounted provider. Ordinary
+session refreshes should continue calling `registerSession()` without that flag.
+Direct custom auth-client calls and externally initiated Account claim magic
+links do not automatically notify this UI callback.
+
+### OAuth sign-in completion
+
+`AuthPublicRouter` includes the public `/auth/sign-in/:attemptId` route needed
+when `onSignIn` is configured. Apps that compose individual auth components must
+also mount the exported callback route outside protected routes:
+
+```tsx
+import { AuthPublicSignInCallbackRoute } from
+  "@m5kdev/web-ui/modules/auth/components/AuthPublicSignInCallbackRoute";
+
+<Route path="/auth/sign-in/:attemptId" element={<AuthPublicSignInCallbackRoute />} />
+```
+
+Shared provider buttons keep the intended destination (including its query and
+fragment), correlate the return in same-tab browser session storage, and confirm
+a new session with the cookie cache disabled. Starting a redirect does not
+notify. A successful return consumes the correlation before notifying, so Strict
+Mode, reloads, and repeated returns cannot replay the event. A return with the
+previous session or no authenticated session does not notify.
+
+OAuth recording requires same-origin app configuration and browser session
+storage. Attempts expire after 15 minutes. When storage is unavailable at
+initiation, authentication retains its original redirect without recording an
+event. Missing or expired return correlations navigate to `/` without recording.
+This client callback is suitable for app integrations, not a durable server
+audit log. Apps without `onSignIn` retain their original direct provider return.
+
 ## Web UI
 
 `@m5kdev/web-ui` ships route-level routers you mount in your app router:
