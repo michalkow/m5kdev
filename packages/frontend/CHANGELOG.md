@@ -1,5 +1,13 @@
 # @m5kdev/frontend
 
+## 0.45.2
+
+### Patch Changes
+
+- 7dfbaab: AuthProvider now calls an optional onSignIn callback only after a successful authentication action, not a session load or refresh.
+  Public login, signup, and OAuth flows record those completions, and AuthPublicRouter mounts `/auth/sign-in/:attemptId` so the callback also runs after social redirects.
+- @m5kdev/commons@0.45.2
+
 ## 0.45.1
 
 ### Patch Changes
