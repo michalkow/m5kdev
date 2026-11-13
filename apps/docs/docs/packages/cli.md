@@ -83,9 +83,11 @@ included so the engineering skills have repository context.
 
 When root `PROJECT.md` exists, agents read it as the App's **North Star**:
 why the project exists, its intended function and experience, and its priorities.
-It is purpose context rather than an architecture plan. Agents should flag a
-conflict before editing—for example, added response latency in a narrative
-game whose goals are fast, fun gameplay. The CLI does not create this file;
+It is purpose context rather than an architecture plan. Before a user-facing
+change, agents identify the intended outcome, prefer the simplest interaction,
+and justify extra controls/screens/steps with a concrete user need. They flag
+conflicts or trade-offs before editing, verify the complete journey reaches its
+outcome, and measure the path the user waits for when responsiveness matters. The CLI does not create this file;
 when it is absent, agents continue with the task's stated goals.
 
 Instructions point agents to an accessible local m5kdev checkout or the
@@ -213,8 +215,15 @@ snapshot, file policies). Bootstrap:
   documentation is configured. Missing required scripts are reported as blockers.
   Optional `@m5kdev/module-*` pins must lockstep with the Kernel
   (`CATALOG_VERSION_MISMATCH`).
-- `update --dry-run` plans without writes. Write mode needs a clean Git tree
-  and applies only conflict-free plans.
+- `update --dry-run` runs read-only preflight and plans without writes. Write
+  mode needs a clean Git tree and applies only conflict-free plans. Unsafe
+  metadata/symlink prerequisites block writes; repairable baseline installation
+  or configuration gaps remain visible without preventing reconciliation.
+- Update installs when dependency inputs changed **or** installed packages/bins
+  are missing or stale. With `--skip-install`, it reports installation as
+  outstanding. Installation failure leaves already-applied sources in place,
+  reports a blocker, and requires repair and verification rather than claiming
+  the upgrade worked.
 - `update --platform web|expo|both` is the landing-only escape hatch onto the
   always-on product stack for that platform. It keeps existing Landing sources,
   copies Landing env into Deploy home, then asks optional Backend Modules and
@@ -222,6 +231,21 @@ snapshot, file policies). Bootstrap:
   optional modules) and does not skip the clean Git check. The flag is refused
   on repos that already have a Webapp or Expo, and `--platform landing` cannot
   downgrade.
+
+Update JSON retains `applied` for template application and adds `preflight`,
+`postflight` (after application), and `verification`. Preflight is the original
+snapshot; postflight inspects the new source/installation state without running
+full validation. Text output labels both phases and outstanding checks. A
+blocked final check returns a nonzero exit status; configured-but-untested
+checks remain explicit even when source application succeeds.
+
+After applying the applicable automatic/manual/conditional upgrade guides, run
+the exact target release's `doctor --full`. Verify affected migration, CI,
+deployment, and documentation paths and complete user journeys with actual
+evidence. Neither an advanced template version nor reconciliation alone proves
+a working upgrade. CI/deploy/migration execution remains untested until it has
+its own evidence; doctor/update never execute those operations. The generated
+`docs/agents/upgrades.md` gives the sequence and reporting requirements.
 
 Agent-guidance updates remove unchanged managed `CLAUDE.md` and Cursor-rule
 files and install the current AGENTS guidance. If an obsolete file was

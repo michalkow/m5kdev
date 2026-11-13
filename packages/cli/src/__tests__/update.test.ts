@@ -106,6 +106,50 @@ describe("managed update", () => {
     await fs.rm(tempRoot, { recursive: true, force: true });
   });
 
+  it("repairs missing installation without a catalog change and separates preflight from verification", async () => {
+    const setup = await fixture(tempRoot, {
+      catalogVersion: "1.0.0",
+      source: "export const value = 1;\n",
+    });
+    const targetRoot = path.join(tempRoot, "target");
+    await makeTemplate(targetRoot, {
+      catalogVersion: "1.0.0",
+      source: "export const value = 1;\n",
+    });
+    const install = jest.fn(async (repoRoot: string) => {
+      const directory = path.join(repoRoot, "node_modules/dependency");
+      await fs.mkdir(directory, { recursive: true });
+      await fs.writeFile(
+        path.join(directory, "package.json"),
+        JSON.stringify({ name: "dependency", version: "1.0.0" })
+      );
+    });
+    const result = await updateManagedRepo({
+      repoRoot: setup.repoRoot,
+      dryRun: false,
+      skipInstall: false,
+      targetTemplateRoot: targetRoot,
+      targetVersion: "0.32.0",
+      baseProvider: setup.baseProvider,
+      assertClean: async () => undefined,
+      install,
+    });
+    expect(install).toHaveBeenCalledTimes(1);
+    expect(result.applied).toBe(true);
+    expect(result.dependenciesChanged).toBe(false);
+    expect(result.installRequired).toBe(false);
+    expect(result.preflight.verification).toContainEqual(
+      expect.objectContaining({ id: "dependencies:package.json", status: "blocked" })
+    );
+    expect(result.verification).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "dependencies:package.json", status: "verified" }),
+        expect.objectContaining({ id: "upgrade-guides", status: "configured-but-untested" }),
+        expect.objectContaining({ id: "upgrade-full", status: "configured-but-untested" }),
+      ])
+    );
+  });
+
   it.each([undefined, "AGENTS.md", "CLAUDE.md", ".cursor/rules/module-db-guide.mdc"])(
     "migrates legacy agent guidance while protecting customized %s and PROJECT.md",
     async (customizedPath) => {
@@ -205,11 +249,89 @@ describe("managed update", () => {
       baseProvider: setup.baseProvider,
     });
     expect(result.applied).toBe(false);
+    expect(result.preflight.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "DEPENDENCY_MISSING" })
+    );
+    expect(result.verification).toContainEqual(
+      expect.objectContaining({ id: "upgrade-full", status: "configured-but-untested" })
+    );
     expect(result.dependenciesChanged).toBe(true);
     expect(result.changes.map(({ path: filePath }) => filePath)).toEqual(
       expect.arrayContaining([".m5kdev.json", "pnpm-workspace.yaml", "source.ts"])
     );
     expect(await snapshot(setup.repoRoot)).toEqual(before);
+  });
+
+  it("reports a failed install as blocked after applying sources rather than claiming success", async () => {
+    const setup = await fixture(tempRoot, {
+      catalogVersion: "1.0.0",
+      source: "export const value = 1;\n",
+    });
+    const targetRoot = path.join(tempRoot, "target");
+    await makeTemplate(targetRoot, {
+      catalogVersion: "2.0.0",
+      source: "export const value = 2;\n",
+    });
+    const result = await updateManagedRepo({
+      repoRoot: setup.repoRoot,
+      dryRun: false,
+      skipInstall: false,
+      targetTemplateRoot: targetRoot,
+      targetVersion: "0.32.0",
+      baseProvider: setup.baseProvider,
+      assertClean: async () => undefined,
+      install: async () => {
+        throw new Error("private-install-output");
+      },
+    });
+    expect(result.applied).toBe(true);
+    expect(result.installRequired).toBe(true);
+    expect(result.postflight?.ok).toBe(false);
+    expect(result.postflight?.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "INSTALL_FAILED" })
+    );
+    expect(result.verification).toContainEqual(
+      expect.objectContaining({ id: "installation", status: "blocked" })
+    );
+    expect(JSON.stringify(result)).not.toContain("private-install-output");
+  });
+
+  it("blocks unsafe preflight paths before writing or installing", async () => {
+    const setup = await fixture(tempRoot, {
+      catalogVersion: "1.0.0",
+      source: "export const value = 1;\n",
+    });
+    const targetRoot = path.join(tempRoot, "target");
+    await makeTemplate(targetRoot, {
+      catalogVersion: "2.0.0",
+      source: "export const value = 2;\n",
+    });
+    const outside = path.join(tempRoot, "outside.ts");
+    await fs.writeFile(outside, "external source\n");
+    await fs.rm(path.join(setup.repoRoot, "source.ts"));
+    await fs.symlink(outside, path.join(setup.repoRoot, "source.ts"));
+    const before = await snapshot(setup.repoRoot);
+    const install = jest.fn();
+    const result = await updateManagedRepo({
+      repoRoot: setup.repoRoot,
+      dryRun: false,
+      skipInstall: false,
+      targetTemplateRoot: targetRoot,
+      targetVersion: "0.32.0",
+      baseProvider: setup.baseProvider,
+      assertClean: async () => undefined,
+      install,
+    });
+    expect(result.applied).toBe(false);
+    expect(result.preflight.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "MANAGED_PATH_SYMLINK" })
+    );
+    expect(result.verification).toContainEqual(
+      expect.objectContaining({ id: "preflight", status: "blocked" })
+    );
+    expect(install).not.toHaveBeenCalled();
+    expect(await snapshot(setup.repoRoot)).toEqual(before);
+    expect(await fs.readFile(outside, "utf8")).toBe("external source\n");
   });
 
   it("aborts a write-mode plan atomically on conflict", async () => {
@@ -252,7 +374,14 @@ describe("managed update", () => {
         catalogVersion: "2.0.0",
         source: "export const value = 1;\n",
       });
-      const install = jest.fn(async () => undefined);
+      const install = jest.fn(async (repoRoot: string) => {
+        const installed = path.join(repoRoot, "node_modules/dependency");
+        await fs.mkdir(installed, { recursive: true });
+        await fs.writeFile(
+          path.join(installed, "package.json"),
+          JSON.stringify({ name: "dependency", version: "2.0.0" })
+        );
+      });
       const result = await updateManagedRepo({
         repoRoot: setup.repoRoot,
         dryRun: false,

@@ -8,17 +8,23 @@
 
 ## Project North Star
 
-Before planning or changing the app, read root `PROJECT.md` when it exists.
-It describes why this project exists, its intended function and experience,
-and the priorities that make it successful. Treat it as the North Star for
-judging changes, rather than an architecture or implementation plan.
+Before planning a user-facing change, read root `PROJECT.md` when it exists
+and identify the outcome the change serves. It owns the product's goals,
+intended function and experience, and functional priorities; it describes why
+the project exists rather than its architecture or implementation.
 
-If a proposed change conflicts with those priorities, call out the conflict
-and its trade-off before making changes. For example, extra response latency
-may undermine a narrative game's goal of fast, fun gameplay even if the change
-is technically sound. The North Star provides context, not authorization for
-unrelated work or Production operations. If it is absent, continue with the
-task's stated goals; do not invent a North Star or require a new file.
+Prefer the simplest interaction that achieves the outcome. Justify additional
+controls, screens, and steps through a concrete user need. Flag conflicts with
+the project's goals or trade-offs before making changes.
+
+Verify the complete user journey reaches its intended outcome. When
+responsiveness matters, measure the path the user waits for, including the
+work that contributes to that wait. Report any journey or timing checks that
+could not be executed rather than assuming they passed.
+
+The North Star provides context, not authorization for unrelated work or
+Production operations. If it is absent, continue with the task's stated goals;
+do not invent a North Star or require a new file.
 
 ## Repository Structure
 
@@ -51,6 +57,15 @@ than assuming the default branch matches this app.
 If the task needs an upstream fix and access permits, work in that checkout
 and submit an upstream PR, following its own instructions and checks. Keep the
 app's integration compatible with its installed release until the fix is available.
+
+## Framework upgrades
+
+Before upgrading m5kdev, run the exact target release's `doctor` and read
+`docs/agents/upgrades.md`. Update runs automatic preflight; applying template
+changes alone does not establish a working upgrade. Complete the applicable
+guide steps, then run `doctor --full` and verify the affected paths explicitly.
+Report **Verified**, **Configured but untested**, or **Blocked** with scoped
+evidence and next steps; distinguish configured files from actual execution.
 
 ## Production operations
 

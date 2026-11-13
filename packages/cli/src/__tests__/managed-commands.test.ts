@@ -4,6 +4,7 @@ import path from "node:path";
 import { scaffoldProject } from "../create";
 import { diagnoseManagedRepo } from "../doctor";
 import { initializeManagedRepo } from "../init";
+import { runCli } from "../runCli";
 import { readManagedState } from "../state";
 
 describe("managed repository commands", () => {
@@ -192,6 +193,55 @@ describe("managed repository commands", () => {
         "MERGE_CONFLICT_MARKER",
       ])
     );
+  });
+
+  it.each(["doctor", "update"])(
+    "exposes verification evidence through %s JSON output",
+    async (command) => {
+      process.chdir(repoRoot);
+      const previousExitCode = process.exitCode;
+      const output = jest.spyOn(console, "log").mockImplementation(() => undefined);
+      try {
+        await runCli(
+          command === "doctor" ? ["doctor", "--json"] : ["update", "--dry-run", "--json"]
+        );
+        const report = JSON.parse(String(output.mock.calls[0]?.[0]));
+        expect(report.verification.length).toBeGreaterThan(0);
+        if (command === "doctor") {
+          expect(report.ok).toBe(false);
+          expect(report.verification).toContainEqual(
+            expect.objectContaining({ status: "blocked" })
+          );
+        } else {
+          expect(report.applied).toBe(false);
+          expect(report.preflight.diagnostics).toContainEqual(
+            expect.objectContaining({ code: "DEPENDENCY_MISSING" })
+          );
+          expect(report.verification).toContainEqual(
+            expect.objectContaining({ id: "upgrade-full", status: "configured-but-untested" })
+          );
+        }
+      } finally {
+        output.mockRestore();
+        process.exitCode = previousExitCode;
+      }
+    }
+  );
+
+  it("labels verified, configured but untested, and blocked checks in text output", async () => {
+    process.chdir(repoRoot);
+    const previousExitCode = process.exitCode;
+    const output = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      await runCli(["doctor"]);
+      const lines = output.mock.calls.flat().map(String);
+      expect(lines).toEqual(
+        expect.arrayContaining(["Verified:", "Configured but untested:", "Blocked:"])
+      );
+    } finally {
+      output.mockRestore();
+      process.exitCode = previousExitCode;
+    }
   });
 });
 

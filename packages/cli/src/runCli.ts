@@ -1,5 +1,5 @@
 import { scaffoldProject } from "./create";
-import { printDiagnosticReport } from "./diagnostics";
+import { printDiagnosticReport, printVerificationChecks } from "./diagnostics";
 import { diagnoseManagedRepo } from "./doctor";
 import { initializeManagedRepo } from "./init";
 import { parseDocumentationHosting, parseEnvironmentsAnswer, parsePlatform } from "./prompts";
@@ -149,8 +149,10 @@ async function runUpdate(parsed: ParsedCli): Promise<void> {
   if (parsed.options.json) {
     console.log(JSON.stringify(result, null, 2));
   } else {
+    console.log("Preflight diagnostics (before template changes):");
+    printDiagnosticReport(result.preflight);
     const action = result.dryRun ? "Planned" : result.applied ? "Applied" : "Blocked";
-    console.log(`${action} update ${result.fromVersion} -> ${result.targetVersion}.`);
+    console.log(`${action} template update ${result.fromVersion} -> ${result.targetVersion}.`);
     for (const change of result.changes) {
       console.log(`  ${change.kind.padEnd(6)} ${change.path} — ${change.reason}`);
     }
@@ -160,9 +162,19 @@ async function runUpdate(parsed: ParsedCli): Promise<void> {
     if (result.migrations.length > 0) console.log(`Migrations: ${result.migrations.join(", ")}`);
     if (result.installRequired) console.log("Dependencies changed. Run: pnpm install");
     if (result.changes.length === 0 && result.conflicts.length === 0)
-      console.log("Already up to date.");
+      console.log("Template sources are up to date; review upgrade verification separately.");
+    if (result.postflight) {
+      console.log("Post-application diagnostics:");
+      printDiagnosticReport({ ...result.postflight, verification: [] });
+    }
+    console.log("Upgrade verification (template application alone is not a working upgrade):");
+    printVerificationChecks(result.verification);
   }
-  if (result.conflicts.length > 0) process.exitCode = 1;
+  if (
+    result.conflicts.length > 0 ||
+    result.verification.some((check) => check.status === "blocked")
+  )
+    process.exitCode = 1;
 }
 
 export function parseCli(argv: readonly string[]): ParsedCli {
@@ -288,7 +300,9 @@ function printHelp(command?: string): void {
     console.log("  --force                  Replace existing managed state");
     console.log("  --json                   Emit machine-readable output");
   } else if (command === "doctor") {
-    console.log("  --full                   Also run check-types, lint, and build scripts");
+    console.log(
+      "  --full                   Run required typecheck/lint/build and configured docs build"
+    );
     console.log("  --json                   Emit machine-readable output");
   } else if (command === "update") {
     console.log("  --dry-run                Build the complete plan without writes");

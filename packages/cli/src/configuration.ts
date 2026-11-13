@@ -115,7 +115,7 @@ export async function inspectConfiguration(options: {
         });
         continue;
       }
-      const symlink = await findRepositorySymlink(repoRoot, file);
+      const symlink = await findRepositorySymlink(repoRoot, path.relative(repoRoot, absolute));
       if (symlink) {
         diagnostics.push({
           code: "MANAGED_PATH_SYMLINK",

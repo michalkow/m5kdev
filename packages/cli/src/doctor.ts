@@ -295,6 +295,14 @@ export async function diagnoseManagedRepo(options: DoctorOptions): Promise<Diagn
     ))
   );
 
+  verification.push({
+    id: "managed-source",
+    status: diagnostics.some((diagnostic) => diagnostic.severity === "error")
+      ? "blocked"
+      : "verified",
+    message:
+      "Inspected managed state, declared catalogs, file markers, and migration validators; this is a source check only.",
+  });
   const readiness = await inspectReadiness({
     repoRoot: options.repoRoot,
     state,

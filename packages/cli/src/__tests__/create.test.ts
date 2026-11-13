@@ -51,6 +51,12 @@ describe("scaffoldProject", () => {
       const agents = await read("AGENTS.md");
       expect(agents).toContain("PROJECT.md");
       expect(agents).toContain("North Star");
+      expect(agents).toMatch(/identify the outcome/);
+      expect(agents).toMatch(/concrete user need/);
+      expect(agents).toMatch(/complete user journey/);
+      expect(agents).toMatch(/measure the path the user waits for/);
+      expect(agents).toContain("doctor --full");
+      expect(agents).toContain("Configured but untested");
       expect(agents).toContain("before making changes");
       expect(agents).toContain("If it is absent, continue");
       expect(agents).toContain("https://github.com/michalkow/skills");

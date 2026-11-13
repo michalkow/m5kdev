@@ -4,6 +4,12 @@ import path from "node:path";
 import { promisify } from "node:util";
 import semver from "semver";
 import type { ChangeSet, PlannedChange, PlannedConflict } from "./changes";
+import {
+  createDiagnosticReport,
+  type DiagnosticReport,
+  type VerificationCheck,
+} from "./diagnostics";
+import { diagnoseManagedRepo } from "./doctor";
 import { collectTemplateFiles } from "./fs";
 import {
   getMigrationRegistry,
@@ -58,6 +64,18 @@ export interface UpdateResult {
   migrations: string[];
   dependenciesChanged: boolean;
   installRequired: boolean;
+  preflight: DiagnosticReport;
+  postflight?: DiagnosticReport;
+  verification: VerificationCheck[];
+}
+
+function installationRequired(report: DiagnosticReport): boolean {
+  return report.diagnostics.some(
+    ({ code, path: file }) =>
+      code === "DEPENDENCY_MISSING" ||
+      code.startsWith("INSTALLED_") ||
+      (code === "EXECUTABLE_MISSING" && Boolean(file))
+  );
 }
 
 async function assertCleanGit(repoRoot: string): Promise<void> {
@@ -379,6 +397,72 @@ export async function updateManagedRepo(options: UpdateCommandOptions): Promise<
       `The running CLI ${targetVersion} is older than managed state ${state.template.version}.`
     );
   }
+  const templateRoot = options.targetTemplateRoot ?? getTemplateRoot();
+  const diagnosticOptions = {
+    repoRoot: options.repoRoot,
+    templateRoot,
+    cliVersion: targetVersion,
+    registry: options.registry,
+  };
+  const preflight = await diagnoseManagedRepo({ ...diagnosticOptions, state });
+  const outstanding: VerificationCheck[] = [
+    {
+      id: "upgrade-guides",
+      status: "configured-but-untested",
+      message:
+        "Automatic template changes do not establish that manual/conditional guide steps are complete.",
+      suggestion: `Apply the applicable upgrade guides from ${state.template.version} to ${targetVersion}, including affected migration, CI, deployment, and documentation paths.`,
+    },
+    {
+      id: "upgrade-full",
+      status: "configured-but-untested",
+      message: "Full validation and complete user journeys have not been verified by update.",
+      suggestion: `After the guide steps, run pnpm dlx create-m5kdev@${targetVersion} doctor --full and record guide-specific execution evidence. Production operations require explicit user instruction.`,
+    },
+  ];
+  const result: UpdateResult = {
+    fromVersion: state.template.version,
+    targetVersion,
+    dryRun: options.dryRun,
+    applied: false,
+    changes: [],
+    conflicts: [],
+    migrations: [],
+    dependenciesChanged: false,
+    installRequired: installationRequired(preflight),
+    preflight,
+    verification: [...outstanding],
+  };
+  const unsafeCodes = new Set([
+    "STATE_INVALID",
+    "STATE_TEMPLATE_UNKNOWN",
+    "STATE_VERSION_INVALID",
+    "FEATURE_UNKNOWN",
+    "FEATURE_DUPLICATE",
+    "MANAGED_PATH_SYMLINK",
+    "CATALOG_INVALID",
+    "PACKAGE_JSON_UNREADABLE",
+  ]);
+  const unsafe = preflight.diagnostics.filter(
+    (diagnostic) =>
+      unsafeCodes.has(diagnostic.code) ||
+      (diagnostic.code === "EXECUTABLE_MISSING" &&
+        !diagnostic.path &&
+        diagnostic.message.includes("git"))
+  );
+  if (unsafe.length) {
+    result.conflicts = unsafe.map((diagnostic) => ({
+      path: diagnostic.path ?? ".m5kdev.json",
+      reason: `[${diagnostic.code}] ${diagnostic.message}`,
+    }));
+    result.verification.unshift({
+      id: "preflight",
+      status: "blocked",
+      message: "Unsafe source/state prerequisites prevent a write-mode update.",
+      suggestion: "Resolve the preflight errors before retrying.",
+    });
+    return result;
+  }
   const upgradedState = await resolveUpgradeState({
     state,
     platform: options.platform,
@@ -389,7 +473,6 @@ export async function updateManagedRepo(options: UpdateCommandOptions): Promise<
   });
   if (!options.dryRun) await (options.assertClean ?? assertCleanGit)(options.repoRoot);
 
-  const templateRoot = options.targetTemplateRoot ?? getTemplateRoot();
   const reconciliation = await reconcileTemplates({
     repoRoot: options.repoRoot,
     state: upgradedState,
@@ -467,30 +550,73 @@ export async function updateManagedRepo(options: UpdateCommandOptions): Promise<
     });
   }
 
-  const result: UpdateResult = {
-    fromVersion: state.template.version,
-    targetVersion,
-    dryRun: options.dryRun,
-    applied: false,
+  Object.assign(result, {
     changes: [...reconciliation.changes.changes.values()].map(
       ({ content: _content, ...change }) => change
     ),
     conflicts: [...reconciliation.changes.conflicts],
     migrations: appliedMigrations,
     dependenciesChanged: reconciliation.dependenciesChanged,
-    installRequired: reconciliation.dependenciesChanged && options.skipInstall,
-  };
-  if (options.dryRun || result.conflicts.length > 0) return result;
+    installRequired: reconciliation.dependenciesChanged || installationRequired(preflight),
+  });
+  if (options.dryRun || result.conflicts.length > 0) {
+    result.verification.unshift({
+      id: "template-update",
+      status: result.conflicts.length ? "blocked" : "configured-but-untested",
+      message: result.conflicts.length
+        ? "Template conflicts prevent application."
+        : "Dry-run only: no target source or installation has been applied.",
+      suggestion: result.conflicts.length
+        ? "Resolve the reported conflicts and retry."
+        : "Review the plan before applying it.",
+    });
+    return result;
+  }
 
   await reconciliation.changes.apply();
   result.applied = true;
-  if (reconciliation.dependenciesChanged && !options.skipInstall) {
-    if (options.install) await options.install(path.resolve(options.repoRoot));
-    else
-      await execFileAsync("pnpm", ["install"], {
-        cwd: path.resolve(options.repoRoot),
-        env: process.env,
-      });
+  let installFailed = false;
+  if (result.installRequired && !options.skipInstall) {
+    try {
+      if (options.install) await options.install(path.resolve(options.repoRoot));
+      else
+        await execFileAsync("pnpm", ["install"], {
+          cwd: path.resolve(options.repoRoot),
+          env: process.env,
+        });
+    } catch {
+      installFailed = true;
+    }
   }
+  const postflight = await diagnoseManagedRepo({
+    ...diagnosticOptions,
+    state: reconciliation.targetState,
+  });
+  if (installFailed) {
+    postflight.diagnostics.push({
+      code: "INSTALL_FAILED",
+      severity: "error",
+      message:
+        "Template changes were applied, but pnpm install failed. Rerun it to inspect the output.",
+      suggestion: "Run pnpm install and then doctor --full after completing the guides.",
+    });
+    postflight.verification.push({
+      id: "installation",
+      status: "blocked",
+      message: "Dependency installation failed after applying template changes.",
+      suggestion: "Resolve pnpm install errors, then rerun doctor --full.",
+    });
+  }
+  result.postflight = createDiagnosticReport(postflight.diagnostics, postflight.verification);
+  result.verification = [
+    {
+      id: "template-update",
+      status: "verified",
+      message: "Template changes were applied; this is not evidence of a working upgrade.",
+    },
+    ...postflight.verification,
+    ...outstanding,
+  ];
+  result.installRequired = installationRequired(postflight) || installFailed;
   return result;
 }
