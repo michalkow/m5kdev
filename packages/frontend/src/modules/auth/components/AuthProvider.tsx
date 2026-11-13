@@ -65,6 +65,8 @@ export function AuthProvider({
           if (
             options?.signIn &&
             nextSession &&
+            (options.signIn === true ||
+              nextSession.session.id !== options.signIn.previousSessionId) &&
             lastSignInSessionId.current !== nextSession.session.id
           ) {
             lastSignInSessionId.current = nextSession.session.id;
@@ -118,7 +120,14 @@ export function AuthProvider({
 
   return (
     <authProviderContext.Provider
-      value={{ authClient: resolvedAuthClient, isLoading, data: session, signOut, registerSession }}
+      value={{
+        authClient: resolvedAuthClient,
+        isLoading,
+        hasSignInHandler: !!onSignIn,
+        data: session,
+        signOut,
+        registerSession,
+      }}
     >
       <Fragment key={i18nLanguage}>{children}</Fragment>
     </authProviderContext.Provider>

@@ -3,12 +3,14 @@ import type { AuthSession } from "@m5kdev/frontend/modules/auth/auth.context";
 import { AuthProvider } from "@m5kdev/frontend/modules/auth/components/AuthProvider";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { AuthPublicLoginForm } from "@m5kdev/web-ui/modules/auth/components/AuthPublicLoginForm";
+import { AuthPublicProviders } from "@m5kdev/web-ui/modules/auth/components/AuthPublicProviders";
+import { AuthPublicSignInCallbackRoute } from "@m5kdev/web-ui/modules/auth/components/AuthPublicSignInCallbackRoute";
 import { AuthPublicSignupForm } from "@m5kdev/web-ui/modules/auth/components/AuthPublicSignupFormRoute";
 import i18n from "i18next";
-import { act, type ComponentProps } from "react";
+import { act, type ComponentProps, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { initReactI18next } from "react-i18next";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 
 // Substitute the external SDK and UI primitives; all project auth code runs unchanged.
 jest.mock("better-auth/react", () => ({ createAuthClient: () => ({}) }), { virtual: true });
@@ -41,6 +43,7 @@ jest.mock(
       Label: ({ children }: ComponentProps<"span">) => React.createElement("span", null, children),
       Input: () => null,
       FieldError: () => null,
+      Spinner: () => null,
       Button: ({
         children,
         type,
@@ -72,10 +75,10 @@ const signedInSession = {
 
 let container: HTMLDivElement;
 let root: Root;
-let currentSession: AuthSession = null;
+let currentSession: AuthSession | null = null;
 let client: {
   getSession: jest.Mock;
-  signIn: { email: jest.Mock };
+  signIn: { email: jest.Mock; social: jest.Mock };
   signUp: { email: jest.Mock };
   signOut: jest.Mock;
   getLastUsedLoginMethod: () => null;
@@ -88,9 +91,14 @@ beforeAll(async () => {
 
 beforeEach(() => {
   currentSession = null;
+  sessionStorage.clear();
   client = {
     getSession: jest.fn(async () => ({ data: currentSession })),
     signIn: {
+      social: jest.fn(async () => ({
+        data: { url: "https://provider.example/signin", redirect: true },
+        error: null,
+      })),
       email: jest.fn(async () => {
         currentSession = signedInSession;
         return { data: { user: signedInSession.user }, error: null };
@@ -112,6 +120,17 @@ afterEach(async () => {
   container.remove();
   jest.restoreAllMocks();
 });
+
+function CurrentLocation() {
+  const location = useLocation();
+  return (
+    <output data-location>
+      {location.pathname}
+      {location.search}
+      {location.hash}
+    </output>
+  );
+}
 
 function SessionActions() {
   const { registerSession, signOut } = useSession();
@@ -141,7 +160,8 @@ function SessionActions() {
 
 async function renderLogin(
   props: Omit<ComponentProps<typeof AuthProvider>, "children" | "authClient"> = {},
-  form = <AuthPublicLoginForm />
+  form = <AuthPublicLoginForm />,
+  initialEntry = "/login?returnTo=%2Freports"
 ) {
   await act(async () => {
     root.render(
@@ -153,9 +173,18 @@ async function renderLogin(
           {...props}
         >
           <SessionActions />
-          <MemoryRouter initialEntries={["/login?returnTo=%2Freports"]}>
+          <MemoryRouter initialEntries={[initialEntry]}>
+            <CurrentLocation />
             <Routes>
               <Route path="/login" element={form} />
+              <Route
+                path="/auth/sign-in/:attemptId"
+                element={
+                  <StrictMode>
+                    <AuthPublicSignInCallbackRoute />
+                  </StrictMode>
+                }
+              />
               <Route path="/" element={<span>Signed-in destination</span>} />
               <Route path="/reports" element={<span>Signed-in destination</span>} />
             </Routes>
@@ -268,4 +297,177 @@ it("does not record signup that waits for email verification", async () => {
   await submitLogin("signup");
   expect(onSignIn).not.toHaveBeenCalled();
   expect(container.textContent).toContain("verificationEmailSent");
+});
+
+it("records a correlated successful OAuth return once and preserves its destination", async () => {
+  const onSignIn = jest.fn();
+  await renderLogin(
+    { onSignIn },
+    <AuthPublicProviders providers={["google"]} returnTo="/reports?tab=recent#summary" />
+  );
+  await act(async () => {
+    container
+      .querySelector("button:not([data-action])")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  expect(client.signIn.social).toHaveBeenCalledTimes(1);
+  expect(onSignIn).not.toHaveBeenCalled();
+  const callbackURL = client.signIn.social.mock.calls[0][0].callbackURL;
+  expect(callbackURL).toMatch(/\/auth\/sign-in\//);
+  currentSession = signedInSession;
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await renderLogin({ onSignIn }, undefined, new URL(callbackURL).pathname);
+  expect(onSignIn).toHaveBeenCalledTimes(1);
+  expect(onSignIn).toHaveBeenCalledWith(signedInSession);
+  expect(container.textContent).toContain("Signed-in destination");
+  expect(container.querySelector("[data-location]")?.textContent).toBe(
+    "/reports?tab=recent#summary"
+  );
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await renderLogin({ onSignIn }, undefined, new URL(callbackURL).pathname);
+  expect(onSignIn).toHaveBeenCalledTimes(1);
+});
+
+async function startOAuth(
+  onSignIn = jest.fn(),
+  props: ComponentProps<typeof AuthPublicProviders> = {}
+) {
+  await renderLogin(
+    { onSignIn },
+    <AuthPublicProviders providers={["google"]} returnTo="/reports" {...props} />
+  );
+  await act(async () => {
+    container
+      .querySelector("button:not([data-action])")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  return client.signIn.social.mock.calls[0][0].callbackURL as string;
+}
+
+async function returnFromOAuth(callbackURL: string, onSignIn: jest.Mock) {
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await renderLogin({ onSignIn }, undefined, new URL(callbackURL).pathname);
+}
+
+it.each(["google", "linkedin", "microsoft"])(
+  "preserves provider signup data and records only successful completion (%s)",
+  async (provider) => {
+    const onSignIn = jest.fn();
+    const callbackURL = await startOAuth(onSignIn, {
+      providers: [provider],
+      requestSignUp: true,
+      code: "waitlist-1",
+      invitation: "invitation-1",
+      trialPriceId: "price-1",
+    });
+    expect(client.signIn.social).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider,
+        requestSignUp: true,
+        additionalData: {
+          waitlistInvitationCode: "waitlist-1",
+          organizationInvitationCode: "invitation-1",
+          userPriceId: "price-1",
+        },
+      })
+    );
+    expect(onSignIn).not.toHaveBeenCalled();
+    currentSession = signedInSession;
+    await returnFromOAuth(callbackURL, onSignIn);
+    expect(onSignIn).toHaveBeenCalledTimes(1);
+  }
+);
+
+it("does not record a provider return that merely restores the previous session", async () => {
+  currentSession = signedInSession;
+  const onSignIn = jest.fn();
+  const callbackURL = await startOAuth(onSignIn);
+  await returnFromOAuth(callbackURL, onSignIn);
+  expect(onSignIn).not.toHaveBeenCalled();
+  expect(container.querySelector("[data-location]")?.textContent).toBe("/reports");
+});
+
+it("does not record a provider return without an authenticated session", async () => {
+  const onSignIn = jest.fn();
+  const callbackURL = await startOAuth(onSignIn);
+  await returnFromOAuth(callbackURL, onSignIn);
+  expect(onSignIn).not.toHaveBeenCalled();
+});
+
+it("does not record an uncorrelated provider return even with an existing session", async () => {
+  currentSession = signedInSession;
+  const onSignIn = jest.fn();
+  await renderLogin({ onSignIn }, undefined, "/auth/sign-in/unknown-attempt");
+  expect(onSignIn).not.toHaveBeenCalled();
+  expect(container.querySelector("[data-location]")?.textContent).toBe("/");
+});
+
+it.each(["error", "reject"])(
+  "clears failed OAuth initiation so it cannot later count a session (%s)",
+  async (failure) => {
+    if (failure === "error")
+      client.signIn.social.mockResolvedValue({ data: null, error: { message: "Not allowed" } });
+    else client.signIn.social.mockRejectedValue(new Error("Network unavailable"));
+    const onSignIn = jest.fn();
+    const callbackURL = await startOAuth(onSignIn);
+    currentSession = signedInSession;
+    await returnFromOAuth(callbackURL, onSignIn);
+    expect(onSignIn).not.toHaveBeenCalled();
+  }
+);
+
+it("does not count cancelled OAuth when the User later reloads with a session", async () => {
+  const onSignIn = jest.fn();
+  await startOAuth(onSignIn);
+  currentSession = signedInSession;
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await renderLogin({ onSignIn });
+  expect(onSignIn).not.toHaveBeenCalled();
+});
+
+it("does not count expired OAuth attempts", async () => {
+  const onSignIn = jest.fn();
+  const callbackURL = await startOAuth(onSignIn);
+  currentSession = signedInSession;
+  jest.spyOn(Date, "now").mockReturnValue(Date.now() + 16 * 60 * 1000);
+  await returnFromOAuth(callbackURL, onSignIn);
+  expect(onSignIn).not.toHaveBeenCalled();
+});
+
+it("keeps redirects local even if a caller supplies an external destination", async () => {
+  const onSignIn = jest.fn();
+  const callbackURL = await startOAuth(onSignIn, { returnTo: "//external.example/path" });
+  currentSession = signedInSession;
+  await returnFromOAuth(callbackURL, onSignIn);
+  expect(onSignIn).toHaveBeenCalledTimes(1);
+  expect(container.querySelector("[data-location]")?.textContent).toBe("/");
+});
+
+it("retains the original OAuth redirect without a recording handler", async () => {
+  await renderLogin(
+    {},
+    <AuthPublicProviders providers={["google"]} returnTo="/reports?tab=recent#summary" />
+  );
+  await act(async () => {
+    container
+      .querySelector("button:not([data-action])")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  expect(client.signIn.social).toHaveBeenCalledWith(
+    expect.objectContaining({ callbackURL: "http://localhost/reports?tab=recent#summary" })
+  );
+});
+
+it("keeps OAuth usable when browser storage is unavailable", async () => {
+  jest.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new Error("Storage denied");
+  });
+  const onSignIn = jest.fn();
+  const callbackURL = await startOAuth(onSignIn);
+  expect(callbackURL).toBe("http://localhost/reports");
+  expect(onSignIn).not.toHaveBeenCalled();
 });

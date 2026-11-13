@@ -11,6 +11,7 @@ import { AuthPublicForgotPasswordRoute } from "./AuthPublicForgotPasswordRoute";
 import { AuthPublicLayout } from "./AuthPublicLayout";
 import { AuthPublicLoginRoute } from "./AuthPublicLoginRoute";
 import { AuthPublicResetPasswordRoute } from "./AuthPublicResetPasswordRoute";
+import { AuthPublicSignInCallbackRoute } from "./AuthPublicSignInCallbackRoute";
 import { AuthPublicSignupRoute } from "./AuthPublicSignupRoute";
 
 interface AuthRouterProps extends AuthOrganizationAcceptInvitationRouteProps {
@@ -29,6 +30,7 @@ export function AuthPublicRouter({
 }: AuthRouterProps) {
   return (
     <>
+      <Route path="/auth/sign-in/:attemptId" element={<AuthPublicSignInCallbackRoute />} />
       <Route
         path="/organization/accept-invitation"
         element={<AuthOrganizationAcceptInvitationRoute {...invitationProps} />}
