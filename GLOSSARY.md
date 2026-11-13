@@ -211,8 +211,8 @@ The purpose, intended experience, and functional priorities of a scaffolded App.
 _Avoid_: architecture plan, implementation guide, treating the North Star as a prescription for how to build the App
 
 **Product documentation**:
-Public help for the people using an App: its features, tasks, expected results, and limitations, written for its audience's technical knowledge. Every scaffolded App includes a Docusaurus help site in all its supported locales (including regional variants), bundled with Landing by default; serving it with the product server or hosting it separately are alternatives.
-_Avoid_: framework documentation; developer guides; using the public help site for engineering or agent instructions
+Public help for people using an App: screen and user-journey guides plus separate usage guides for any exposed backend API or MCP interface, written for each audience's technical knowledge. Every scaffolded App includes a Docusaurus help site in all its supported locales (including regional variants), bundled with Landing by default; serving it with the product server or hosting it separately are alternatives.
+_Avoid_: framework documentation; implementation and operations guides; using the public help site for engineering or agent instructions
 
 **Release**:
 One Semver version shared by every publishable `@m5kdev/*` package and `create-m5kdev`. Starter apps and the framework documentation site are not part of a Release. See [ADR-0018](docs/adr/0018-one-release-for-publishable-packages.md).

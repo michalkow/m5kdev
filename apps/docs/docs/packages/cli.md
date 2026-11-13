@@ -160,6 +160,12 @@ the selected host and current locale when known.
 
 Generated `AGENTS.md` instructions require agents to update affected guides
 and translations in every configured locale before completing user-facing work.
+Frontend help follows screens and user journeys: how to reach and interact with
+each screen, its controls, expected outcomes, and navigation. Apps that expose a
+backend API or MCP interface document consumer usage in separate sections from
+screen walkthroughs and from each other, including authentication, permissions,
+operations/tools, inputs/outputs, examples, limits, and errors. Implementation
+internals and operations instructions remain outside the public help site.
 Detailed rules live in `docs/agents/product-documentation.md`. Framework updates
 preserve app-written guides and translations. The hosting selection persists;
 legacy apps without a selection retain standalone hosting. When upgrading an
