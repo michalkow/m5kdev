@@ -12,7 +12,7 @@ export interface RegisterSessionOptions {
 export const authProviderContext = createContext<{
   authClient: M5KAuthClient;
   isLoading: boolean;
-  hasSignInHandler: boolean;
+  hasSignInHandler?: boolean;
   data: AuthSession | null;
   signOut: () => Promise<void>;
   registerSession: (onSuccess?: () => void, options?: RegisterSessionOptions) => Promise<void>;
