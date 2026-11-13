@@ -13,7 +13,7 @@ export function useAuthPublicSignIn({
   returnTo: string;
   requestSignUp: boolean;
   additionalData: Record<string, string>;
-}) {
+}): (provider: "google" | "linkedin" | "microsoft") => Promise<void> {
   const { appUrl } = useAppConfig();
   const authClient = useAuthClient();
   const { data: session, hasSignInHandler } = useSession();
@@ -21,7 +21,7 @@ export function useAuthPublicSignIn({
 
   return async (provider: "google" | "linkedin" | "microsoft") => {
     const redirect = hasSignInHandler
-      ? createSignInRedirect(appUrl, returnTo, session?.session.id ?? null)
+      ? createSignInRedirect({ appUrl, returnTo, previousSessionId: session?.session.id ?? null })
       : null;
     try {
       const result = await authClient.signIn.social({

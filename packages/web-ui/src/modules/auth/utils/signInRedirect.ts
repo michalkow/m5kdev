@@ -7,7 +7,7 @@ interface SignInRedirect {
   expiresAt: number;
 }
 
-function localDestination(returnTo: string, appUrl: string): string {
+function localDestination({ returnTo, appUrl }: { returnTo: string; appUrl: string }): string {
   const app = new URL(appUrl);
   const destination = new URL(returnTo, app);
   if (destination.origin !== app.origin) return "/";
@@ -15,18 +15,22 @@ function localDestination(returnTo: string, appUrl: string): string {
 }
 
 /** Browser-only correlation; never store credentials or session tokens. */
-export function createSignInRedirect(
-  appUrl: string,
-  returnTo: string,
-  previousSessionId: string | null
-): { callbackURL: string; clear: () => void } | null {
+export function createSignInRedirect({
+  appUrl,
+  returnTo,
+  previousSessionId,
+}: {
+  appUrl: string;
+  returnTo: string;
+  previousSessionId: string | null;
+}): { callbackURL: string; clear: () => void } | null {
   try {
     if (new URL(appUrl).origin !== window.location.origin) return null;
     const attemptId = crypto.randomUUID();
     const key = `${STORAGE_PREFIX}${attemptId}`;
     const attempt: SignInRedirect = {
       previousSessionId,
-      returnTo: localDestination(returnTo, appUrl),
+      returnTo: localDestination({ returnTo, appUrl }),
       expiresAt: Date.now() + ATTEMPT_LIFETIME_MS,
     };
     sessionStorage.setItem(key, JSON.stringify(attempt));
@@ -67,7 +71,7 @@ export function consumeSignInRedirect(attemptId: string): SignInRedirect | null 
       return null;
     return {
       previousSessionId: attempt.previousSessionId,
-      returnTo: localDestination(attempt.returnTo, window.location.origin),
+      returnTo: localDestination({ returnTo: attempt.returnTo, appUrl: window.location.origin }),
       expiresAt: attempt.expiresAt,
     };
   } catch {

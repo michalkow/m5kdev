@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router";
 import { consumeSignInRedirect } from "../utils/signInRedirect";
 
-export function useAuthPublicSignInCallback() {
+export function useAuthPublicSignInCallback(): void {
   const { attemptId } = useParams<{ attemptId: string }>();
   const { registerSession } = useSession();
   const navigate = useNavigate();

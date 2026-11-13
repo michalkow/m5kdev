@@ -7,7 +7,7 @@ import { AuthPublicProviders } from "@m5kdev/web-ui/modules/auth/components/Auth
 import { AuthPublicSignInCallbackRoute } from "@m5kdev/web-ui/modules/auth/components/AuthPublicSignInCallbackRoute";
 import { AuthPublicSignupForm } from "@m5kdev/web-ui/modules/auth/components/AuthPublicSignupFormRoute";
 import i18n from "i18next";
-import { act, type ComponentProps, StrictMode } from "react";
+import { act, type ComponentProps, type ReactElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { initReactI18next } from "react-i18next";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
@@ -121,7 +121,7 @@ afterEach(async () => {
   jest.restoreAllMocks();
 });
 
-function CurrentLocation() {
+function CurrentLocation(): ReactElement {
   const location = useLocation();
   return (
     <output data-location>
@@ -132,7 +132,7 @@ function CurrentLocation() {
   );
 }
 
-function SessionActions() {
+function SessionActions(): ReactElement {
   const { registerSession, signOut } = useSession();
   return (
     <>
@@ -158,11 +158,15 @@ function SessionActions() {
   );
 }
 
-async function renderLogin(
-  props: Omit<ComponentProps<typeof AuthProvider>, "children" | "authClient"> = {},
+async function renderLogin({
+  props = {},
   form = <AuthPublicLoginForm />,
-  initialEntry = "/login?returnTo=%2Freports"
-) {
+  initialEntry = "/login?returnTo=%2Freports",
+}: {
+  props?: Omit<ComponentProps<typeof AuthProvider>, "children" | "authClient">;
+  form?: ReactElement;
+  initialEntry?: string;
+} = {}): Promise<void> {
   await act(async () => {
     root.render(
       <AppConfigProvider
@@ -195,7 +199,7 @@ async function renderLogin(
   });
 }
 
-async function submitLogin(prefix = "login") {
+async function submitLogin(prefix = "login"): Promise<void> {
   const email = container.querySelector<HTMLInputElement>(`input[name="${prefix}-email"]`);
   const password = container.querySelector<HTMLInputElement>(`input[name="${prefix}-password"]`);
   if (!email || !password) throw new Error("Login fields are missing");
@@ -209,14 +213,16 @@ async function submitLogin(prefix = "login") {
 }
 
 it("reports the authenticated session once after successful email sign-in, before navigating", async () => {
+  let loginFormVisibleOnSignIn = false;
   const onSignIn = jest.fn(() => {
-    expect(container.querySelector("form")).not.toBeNull();
+    loginFormVisibleOnSignIn = container.querySelector("form") !== null;
   });
-  await renderLogin({ onSignIn });
+  await renderLogin({ props: { onSignIn } });
   expect(onSignIn).not.toHaveBeenCalled();
   await submitLogin();
   expect(onSignIn).toHaveBeenCalledTimes(1);
   expect(onSignIn).toHaveBeenCalledWith(signedInSession);
+  expect(loginFormVisibleOnSignIn).toBe(true);
   expect(container.textContent).toContain("Signed-in destination");
 });
 
@@ -224,7 +230,7 @@ it("does not record restored sessions, refreshes, Organization changes, or logou
   currentSession = signedInSession;
   const onSignIn = jest.fn();
   const onSession = jest.fn();
-  await renderLogin({ onSignIn, onSession });
+  await renderLogin({ props: { onSignIn, onSession } });
   expect(onSession).toHaveBeenLastCalledWith(signedInSession);
   currentSession = {
     ...signedInSession,
@@ -244,7 +250,7 @@ it("does not record restored sessions, refreshes, Organization changes, or logou
 it("does not record failed email authentication", async () => {
   client.signIn.email.mockResolvedValue({ data: null, error: { message: "Invalid password" } });
   const onSignIn = jest.fn();
-  await renderLogin({ onSignIn });
+  await renderLogin({ props: { onSignIn } });
   await submitLogin();
   expect(onSignIn).not.toHaveBeenCalled();
   expect(container.querySelector("form")).not.toBeNull();
@@ -253,7 +259,7 @@ it("does not record failed email authentication", async () => {
 it("requires a confirmed session even after a successful credential response", async () => {
   client.signIn.email.mockResolvedValue({ data: { user: signedInSession.user }, error: null });
   const onSignIn = jest.fn();
-  await renderLogin({ onSignIn });
+  await renderLogin({ props: { onSignIn } });
   await submitLogin();
   expect(onSignIn).not.toHaveBeenCalled();
 });
@@ -266,7 +272,7 @@ it.each(["throw", "reject"])(
       if (failure === "throw") throw new Error("Recording failed");
       return Promise.reject(new Error("Recording failed"));
     });
-    await renderLogin({ onSignIn });
+    await renderLogin({ props: { onSignIn } });
     await submitLogin();
     expect(onSignIn).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("Signed-in destination");
@@ -283,7 +289,7 @@ it.each([{ waitlist: true }, { invitation: "invite-1" }])(
   "records signup only when it explicitly signs in (%j)",
   async (signupProps) => {
     const onSignIn = jest.fn();
-    await renderLogin({ onSignIn }, <AuthPublicSignupForm {...signupProps} />);
+    await renderLogin({ props: { onSignIn }, form: <AuthPublicSignupForm {...signupProps} /> });
     await submitLogin("signup");
     expect(onSignIn).toHaveBeenCalledTimes(1);
     expect(onSignIn).toHaveBeenCalledWith(signedInSession);
@@ -293,7 +299,7 @@ it.each([{ waitlist: true }, { invitation: "invite-1" }])(
 
 it("does not record signup that waits for email verification", async () => {
   const onSignIn = jest.fn();
-  await renderLogin({ onSignIn }, <AuthPublicSignupForm />);
+  await renderLogin({ props: { onSignIn }, form: <AuthPublicSignupForm /> });
   await submitLogin("signup");
   expect(onSignIn).not.toHaveBeenCalled();
   expect(container.textContent).toContain("verificationEmailSent");
@@ -301,10 +307,10 @@ it("does not record signup that waits for email verification", async () => {
 
 it("records a correlated successful OAuth return once and preserves its destination", async () => {
   const onSignIn = jest.fn();
-  await renderLogin(
-    { onSignIn },
-    <AuthPublicProviders providers={["google"]} returnTo="/reports?tab=recent#summary" />
-  );
+  await renderLogin({
+    props: { onSignIn },
+    form: <AuthPublicProviders providers={["google"]} returnTo="/reports?tab=recent#summary" />,
+  });
   await act(async () => {
     container
       .querySelector("button:not([data-action])")
@@ -317,7 +323,7 @@ it("records a correlated successful OAuth return once and preserves its destinat
   currentSession = signedInSession;
   await act(async () => root.unmount());
   root = createRoot(container);
-  await renderLogin({ onSignIn }, undefined, new URL(callbackURL).pathname);
+  await renderLogin({ props: { onSignIn }, initialEntry: new URL(callbackURL).pathname });
   expect(onSignIn).toHaveBeenCalledTimes(1);
   expect(onSignIn).toHaveBeenCalledWith(signedInSession);
   expect(container.textContent).toContain("Signed-in destination");
@@ -326,18 +332,21 @@ it("records a correlated successful OAuth return once and preserves its destinat
   );
   await act(async () => root.unmount());
   root = createRoot(container);
-  await renderLogin({ onSignIn }, undefined, new URL(callbackURL).pathname);
+  await renderLogin({ props: { onSignIn }, initialEntry: new URL(callbackURL).pathname });
   expect(onSignIn).toHaveBeenCalledTimes(1);
 });
 
-async function startOAuth(
+async function startOAuth({
   onSignIn = jest.fn(),
-  props: ComponentProps<typeof AuthPublicProviders> = {}
-) {
-  await renderLogin(
-    { onSignIn },
-    <AuthPublicProviders providers={["google"]} returnTo="/reports" {...props} />
-  );
+  props = {},
+}: {
+  onSignIn?: jest.Mock;
+  props?: ComponentProps<typeof AuthPublicProviders>;
+} = {}): Promise<string> {
+  await renderLogin({
+    props: { onSignIn },
+    form: <AuthPublicProviders providers={["google"]} returnTo="/reports" {...props} />,
+  });
   await act(async () => {
     container
       .querySelector("button:not([data-action])")
@@ -346,22 +355,31 @@ async function startOAuth(
   return client.signIn.social.mock.calls[0][0].callbackURL as string;
 }
 
-async function returnFromOAuth(callbackURL: string, onSignIn: jest.Mock) {
+async function returnFromOAuth({
+  callbackURL,
+  onSignIn,
+}: {
+  callbackURL: string;
+  onSignIn: jest.Mock;
+}): Promise<void> {
   await act(async () => root.unmount());
   root = createRoot(container);
-  await renderLogin({ onSignIn }, undefined, new URL(callbackURL).pathname);
+  await renderLogin({ props: { onSignIn }, initialEntry: new URL(callbackURL).pathname });
 }
 
 it.each(["google", "linkedin", "microsoft"])(
   "preserves provider signup data and records only successful completion (%s)",
   async (provider) => {
     const onSignIn = jest.fn();
-    const callbackURL = await startOAuth(onSignIn, {
-      providers: [provider],
-      requestSignUp: true,
-      code: "waitlist-1",
-      invitation: "invitation-1",
-      trialPriceId: "price-1",
+    const callbackURL = await startOAuth({
+      onSignIn,
+      props: {
+        providers: [provider],
+        requestSignUp: true,
+        code: "waitlist-1",
+        invitation: "invitation-1",
+        trialPriceId: "price-1",
+      },
     });
     expect(client.signIn.social).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -376,7 +394,7 @@ it.each(["google", "linkedin", "microsoft"])(
     );
     expect(onSignIn).not.toHaveBeenCalled();
     currentSession = signedInSession;
-    await returnFromOAuth(callbackURL, onSignIn);
+    await returnFromOAuth({ callbackURL, onSignIn });
     expect(onSignIn).toHaveBeenCalledTimes(1);
   }
 );
@@ -384,23 +402,23 @@ it.each(["google", "linkedin", "microsoft"])(
 it("does not record a provider return that merely restores the previous session", async () => {
   currentSession = signedInSession;
   const onSignIn = jest.fn();
-  const callbackURL = await startOAuth(onSignIn);
-  await returnFromOAuth(callbackURL, onSignIn);
+  const callbackURL = await startOAuth({ onSignIn });
+  await returnFromOAuth({ callbackURL, onSignIn });
   expect(onSignIn).not.toHaveBeenCalled();
   expect(container.querySelector("[data-location]")?.textContent).toBe("/reports");
 });
 
 it("does not record a provider return without an authenticated session", async () => {
   const onSignIn = jest.fn();
-  const callbackURL = await startOAuth(onSignIn);
-  await returnFromOAuth(callbackURL, onSignIn);
+  const callbackURL = await startOAuth({ onSignIn });
+  await returnFromOAuth({ callbackURL, onSignIn });
   expect(onSignIn).not.toHaveBeenCalled();
 });
 
 it("does not record an uncorrelated provider return even with an existing session", async () => {
   currentSession = signedInSession;
   const onSignIn = jest.fn();
-  await renderLogin({ onSignIn }, undefined, "/auth/sign-in/unknown-attempt");
+  await renderLogin({ props: { onSignIn }, initialEntry: "/auth/sign-in/unknown-attempt" });
   expect(onSignIn).not.toHaveBeenCalled();
   expect(container.querySelector("[data-location]")?.textContent).toBe("/");
 });
@@ -412,46 +430,49 @@ it.each(["error", "reject"])(
       client.signIn.social.mockResolvedValue({ data: null, error: { message: "Not allowed" } });
     else client.signIn.social.mockRejectedValue(new Error("Network unavailable"));
     const onSignIn = jest.fn();
-    const callbackURL = await startOAuth(onSignIn);
+    const callbackURL = await startOAuth({ onSignIn });
     currentSession = signedInSession;
-    await returnFromOAuth(callbackURL, onSignIn);
+    await returnFromOAuth({ callbackURL, onSignIn });
     expect(onSignIn).not.toHaveBeenCalled();
   }
 );
 
 it("does not count cancelled OAuth when the User later reloads with a session", async () => {
   const onSignIn = jest.fn();
-  await startOAuth(onSignIn);
+  await startOAuth({ onSignIn });
   currentSession = signedInSession;
   await act(async () => root.unmount());
   root = createRoot(container);
-  await renderLogin({ onSignIn });
+  await renderLogin({ props: { onSignIn } });
   expect(onSignIn).not.toHaveBeenCalled();
 });
 
 it("does not count expired OAuth attempts", async () => {
   const onSignIn = jest.fn();
-  const callbackURL = await startOAuth(onSignIn);
+  const callbackURL = await startOAuth({ onSignIn });
   currentSession = signedInSession;
   jest.spyOn(Date, "now").mockReturnValue(Date.now() + 16 * 60 * 1000);
-  await returnFromOAuth(callbackURL, onSignIn);
+  await returnFromOAuth({ callbackURL, onSignIn });
   expect(onSignIn).not.toHaveBeenCalled();
 });
 
 it("keeps redirects local even if a caller supplies an external destination", async () => {
   const onSignIn = jest.fn();
-  const callbackURL = await startOAuth(onSignIn, { returnTo: "//external.example/path" });
+  const callbackURL = await startOAuth({
+    onSignIn,
+    props: { returnTo: "//external.example/path" },
+  });
   currentSession = signedInSession;
-  await returnFromOAuth(callbackURL, onSignIn);
+  await returnFromOAuth({ callbackURL, onSignIn });
   expect(onSignIn).toHaveBeenCalledTimes(1);
   expect(container.querySelector("[data-location]")?.textContent).toBe("/");
 });
 
 it("retains the original OAuth redirect without a recording handler", async () => {
-  await renderLogin(
-    {},
-    <AuthPublicProviders providers={["google"]} returnTo="/reports?tab=recent#summary" />
-  );
+  await renderLogin({
+    props: {},
+    form: <AuthPublicProviders providers={["google"]} returnTo="/reports?tab=recent#summary" />,
+  });
   await act(async () => {
     container
       .querySelector("button:not([data-action])")
@@ -467,7 +488,7 @@ it("keeps OAuth usable when browser storage is unavailable", async () => {
     throw new Error("Storage denied");
   });
   const onSignIn = jest.fn();
-  const callbackURL = await startOAuth(onSignIn);
+  const callbackURL = await startOAuth({ onSignIn });
   expect(callbackURL).toBe("http://localhost/reports");
   expect(onSignIn).not.toHaveBeenCalled();
 });
