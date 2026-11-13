@@ -8,6 +8,12 @@ Turn every pending Changeset into one published release.
 
 Stop at the first failed step. Do not retry. Report the failure and leave later steps undone.
 
+# Pre-flight
+
+Make sure you are on the `main` branch. Run `git pull` to make sure brach is up to date. Stop on any `git pull` errros (like merge conflicts).
+
+# Steps
+
 ## 1. Read pending Changesets
 
 Read every `.changeset/*.md` except `README.md`.
