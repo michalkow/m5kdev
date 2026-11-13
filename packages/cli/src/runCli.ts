@@ -151,7 +151,16 @@ async function runUpdate(parsed: ParsedCli): Promise<void> {
   } else {
     console.log("Preflight diagnostics (before template changes):");
     printDiagnosticReport(result.preflight);
-    const action = result.dryRun ? "Planned" : result.applied ? "Applied" : "Blocked";
+    const blockedBeforeApplication =
+      result.conflicts.length > 0 ||
+      result.verification.some((check) => check.id === "preflight" && check.status === "blocked");
+    const action = blockedBeforeApplication
+      ? "Blocked"
+      : result.dryRun
+        ? "Planned"
+        : result.applied
+          ? "Applied"
+          : "Blocked";
     console.log(`${action} template update ${result.fromVersion} -> ${result.targetVersion}.`);
     for (const change of result.changes) {
       console.log(`  ${change.kind.padEnd(6)} ${change.path} — ${change.reason}`);
@@ -160,7 +169,12 @@ async function runUpdate(parsed: ParsedCli): Promise<void> {
       console.log(`  conflict ${conflict.path} — ${conflict.reason}`);
     }
     if (result.migrations.length > 0) console.log(`Migrations: ${result.migrations.join(", ")}`);
-    if (result.installRequired) console.log("Dependencies changed. Run: pnpm install");
+    if (result.installRequired)
+      console.log(
+        result.dependenciesChanged
+          ? "Dependencies changed. Run: pnpm install"
+          : "Installation is outstanding. Run: pnpm install"
+      );
     if (result.changes.length === 0 && result.conflicts.length === 0)
       console.log("Template sources are up to date; review upgrade verification separately.");
     if (result.postflight) {

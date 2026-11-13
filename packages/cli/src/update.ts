@@ -449,6 +449,7 @@ export async function updateManagedRepo(options: UpdateCommandOptions): Promise<
       (diagnostic.code === "REQUIRED_PATH_MISSING" &&
         (diagnostic.path === "package.json" || diagnostic.path === "pnpm-workspace.yaml")) ||
       (diagnostic.code === "EXECUTABLE_MISSING" &&
+        !options.dryRun &&
         !diagnostic.path &&
         diagnostic.message.includes("git"))
   );

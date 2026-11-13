@@ -353,6 +353,31 @@ describe("managed repository commands", () => {
       process.exitCode = previousExitCode;
     }
   });
+
+  it.each([true, false])(
+    "reports unsafe dry-run vs outstanding installation truthfully (unsafe: %s)",
+    async (unsafe) => {
+      process.chdir(repoRoot);
+      if (unsafe) await fs.rm(path.join(repoRoot, "pnpm-workspace.yaml"));
+      const previousExitCode = process.exitCode;
+      const output = jest.spyOn(console, "log").mockImplementation(() => undefined);
+      try {
+        await runCli(["update", "--dry-run"]);
+        const lines = output.mock.calls.flat().map(String);
+        if (unsafe) {
+          expect(lines.some((line) => line.startsWith("Blocked template update"))).toBe(true);
+          expect(lines.some((line) => line.startsWith("Planned template update"))).toBe(false);
+          expect(process.exitCode).toBe(1);
+        } else {
+          expect(lines).toContain("Installation is outstanding. Run: pnpm install");
+          expect(lines).not.toContain("Dependencies changed. Run: pnpm install");
+        }
+      } finally {
+        output.mockRestore();
+        process.exitCode = previousExitCode;
+      }
+    }
+  );
 });
 
 describe("landing-only managed repository commands", () => {

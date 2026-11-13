@@ -368,6 +368,101 @@ describe("managed update", () => {
     expect(await snapshot(setup.repoRoot)).toEqual(before);
   });
 
+  it.each([true, false])(
+    "keeps missing Git as evidence while allowing only dry-run planning (dry-run: %s)",
+    async (dryRun) => {
+      const setup = await fixture(tempRoot, {
+        catalogVersion: "1.0.0",
+        source: "export const value = 1;\n",
+      });
+      const targetRoot = path.join(tempRoot, "target");
+      await makeTemplate(targetRoot, {
+        catalogVersion: "2.0.0",
+        source: "export const value = 2;\n",
+      });
+      const commands = path.join(tempRoot, "commands");
+      await fs.mkdir(commands);
+      await fs.writeFile(
+        path.join(commands, process.platform === "win32" ? "pnpm.cmd" : "pnpm"),
+        "fixture command",
+        { mode: 0o755 }
+      );
+      const previousPath = process.env.PATH;
+      const before = await snapshot(setup.repoRoot);
+      try {
+        process.env.PATH = commands;
+        const result = await updateManagedRepo({
+          repoRoot: setup.repoRoot,
+          dryRun,
+          skipInstall: true,
+          targetTemplateRoot: targetRoot,
+          targetVersion: "0.32.0",
+          baseProvider: setup.baseProvider,
+          assertClean: async () => undefined,
+        });
+        expect(result.applied).toBe(false);
+        expect(result.preflight.diagnostics).toContainEqual(
+          expect.objectContaining({
+            code: "EXECUTABLE_MISSING",
+            message: expect.stringContaining("git"),
+          })
+        );
+        if (dryRun) {
+          expect(result.conflicts).toEqual([]);
+          expect(result.changes).toContainEqual(expect.objectContaining({ path: "source.ts" }));
+        } else {
+          expect(result.conflicts.length).toBeGreaterThan(0);
+        }
+        expect(await snapshot(setup.repoRoot)).toEqual(before);
+      } finally {
+        if (previousPath === undefined) delete process.env.PATH;
+        else process.env.PATH = previousPath;
+      }
+    }
+  );
+
+  it("reports a dry-run merge as blocked when Git is unavailable instead of throwing", async () => {
+    const setup = await fixture(tempRoot, {
+      catalogVersion: "1.0.0",
+      source: "export const value = 1;\n",
+    });
+    const targetRoot = path.join(tempRoot, "target");
+    await makeTemplate(targetRoot, {
+      catalogVersion: "2.0.0",
+      source: "export const value = 2;\n",
+    });
+    await fs.appendFile(path.join(setup.repoRoot, "source.ts"), "// App customization\n");
+    const commands = path.join(tempRoot, "commands");
+    await fs.mkdir(commands);
+    await fs.writeFile(
+      path.join(commands, process.platform === "win32" ? "pnpm.cmd" : "pnpm"),
+      "fixture command",
+      { mode: 0o755 }
+    );
+    const previousPath = process.env.PATH;
+    const before = await snapshot(setup.repoRoot);
+    try {
+      process.env.PATH = commands;
+      const result = await updateManagedRepo({
+        repoRoot: setup.repoRoot,
+        dryRun: true,
+        skipInstall: true,
+        targetTemplateRoot: targetRoot,
+        targetVersion: "0.32.0",
+        baseProvider: setup.baseProvider,
+      });
+      expect(result.applied).toBe(false);
+      expect(result.conflicts).toContainEqual(expect.objectContaining({ path: "source.ts" }));
+      expect(result.verification).toContainEqual(
+        expect.objectContaining({ id: "template-update", status: "blocked" })
+      );
+      expect(await snapshot(setup.repoRoot)).toEqual(before);
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+    }
+  });
+
   it("aborts a write-mode plan atomically on conflict", async () => {
     const setup = await fixture(tempRoot, {
       catalogVersion: "1.0.0",
