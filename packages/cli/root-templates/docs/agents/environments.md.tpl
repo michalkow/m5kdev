@@ -27,7 +27,7 @@ human setup lives in `docs/deployment.md`.
   environment must fail at boot instead of falling back.
 - Migrations: generate with `drizzle:generate`, apply only to the local or
   Development database, and keep them backward-compatible with Production. See
-  `.cursor/rules/database-migrations.mdc`. The deploy workflow migrates
+  `docs/agents/database-migrations.md`. The deploy workflow migrates
   deployed environments; there is no other path to the Production database.
 - Recurring jobs (Workflow crons) run only where schedulers are on. Do not
   build features that depend on a cron in an environment that has them off.

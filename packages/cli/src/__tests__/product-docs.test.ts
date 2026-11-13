@@ -81,9 +81,7 @@ describe("generated public product help", () => {
       expect(pkg.scripts["docs:deploy"]).toContain("m5kdev-fly-deploy --config apps/docs/fly.toml");
       expect(pkg.scripts["docs:build"]).toBe("pnpm --filter ./apps/docs build");
       expect(await read("apps/landing/src/LandingPage.tsx")).toContain("getDocumentationUrl");
-      for (const agentFile of ["AGENTS.md", "CLAUDE.md"]) {
-        expect(await read(agentFile)).toContain("docs/agents/product-documentation.md");
-      }
+      expect(await read("AGENTS.md")).toContain("docs/agents/product-documentation.md");
       const source = await read(".github/workflows/deploy-docs.yml");
       const workflow = parse(source);
       const triggers = (file: string) =>

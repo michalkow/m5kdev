@@ -206,6 +206,10 @@ _Avoid_: Filter document, Mongo filter, Filter object, QueryFilter
 `apps/starter` — the reference product: `server`, `webapp`, `landing`, `docs`, `expo`, `email`, `e2e`, `shared`.
 _Avoid_: Example, Template (CLI templates live in `packages/cli`)
 
+**Project North Star**:
+The purpose, intended experience, and functional priorities of a scaffolded App. It is the reference for judging whether a proposed change serves that App’s goals.
+_Avoid_: architecture plan, implementation guide, treating the North Star as a prescription for how to build the App
+
 **Product documentation**:
 Public help for the people using an App: its features, tasks, expected results, and limitations, written for its audience's technical knowledge. Every scaffolded App includes a Docusaurus help site in all its supported locales (including regional variants), bundled with Landing by default; serving it with the product server or hosting it separately are alternatives.
 _Avoid_: framework documentation; developer guides; using the public help site for engineering or agent instructions

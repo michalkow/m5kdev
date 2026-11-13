@@ -209,7 +209,7 @@ Never commit to `production` directly. Fix on `main` and promote again.
 
 Every migration must work with the code that is **currently in Production**,
 because the deploy migrates before the new code starts and a rollback
-redeploys older code. Read `.cursor/rules/database-migrations.mdc` before
+redeploys older code. Read `docs/agents/database-migrations.md` before
 changing a table: expand in one release and contract (drop or rename) in a
 later one.
 

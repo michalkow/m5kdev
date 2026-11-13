@@ -24,6 +24,86 @@ describe("scaffoldProject", () => {
   });
 
   it.each(["web", "expo", "both", "landing"] as const)(
+    "ships coherent AGENTS guidance using global skills for %s apps",
+    async (platform) => {
+      const { targetDirectory } = await scaffoldProject({
+        targetDirectory: "guided-app",
+        appName: "Guided App",
+        appDescription: "An app with a North Star.",
+        platform,
+        modules: platform === "landing" ? [] : ["workflows"],
+        force: false,
+        yes: true,
+        skipInstall: true,
+        skipGit: true,
+      });
+      const read = (file: string) => fs.readFile(path.join(targetDirectory, file), "utf8");
+      await expect(fs.stat(path.join(targetDirectory, "CLAUDE.md"))).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+      await expect(fs.stat(path.join(targetDirectory, ".cursor"))).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+      // The scaffold points at the developer's purpose document without inventing one.
+      await expect(fs.stat(path.join(targetDirectory, "PROJECT.md"))).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+      const agents = await read("AGENTS.md");
+      expect(agents).toContain("PROJECT.md");
+      expect(agents).toContain("North Star");
+      expect(agents).toContain("before making changes");
+      expect(agents).toContain("If it is absent, continue");
+      expect(agents).toContain("https://github.com/michalkow/skills");
+      expect(agents).toMatch(/globally\s+installed/);
+      expect(agents).toContain("https://github.com/michalkow/m5kdev");
+      expect(agents).toContain("/Users/michalkow/Projects/m5kdev");
+      expect(agents).toContain("installed version");
+      expect(agents).toContain("upstream PR");
+      expect(agents).toMatch(/explicit user\s+instruction/);
+      expect(agents).toContain("Production");
+      expect(agents).toContain("docs/agents/issue-tracker.md");
+      expect(agents).toContain("docs/agents/triage-labels.md");
+      expect(agents).toContain("docs/agents/domain.md");
+      expect(agents).not.toContain(".cursor/");
+      expect(agents).not.toContain("CLAUDE.md");
+      expect(agents).not.toContain("m5k:");
+      if (platform !== "landing") {
+        expect(agents).toContain("rule-module-service");
+        expect(agents).toContain("rule-module-prompt");
+        expect(agents).toContain("rule-server-event-emit");
+        expect(agents).toContain("without asking for confirmation");
+        expect(agents).toContain("BasePermissionService");
+        expect(agents).toContain("handleTRPCResult");
+        const migrations = await read("docs/agents/database-migrations.md");
+        expect(migrations).toContain("Never hand-write or edit migration SQL");
+        expect(migrations).toContain("explicit user instruction");
+        expect(migrations).toContain("Migrations already merged to `main` are frozen");
+        expect(migrations).not.toContain("globs:");
+        for (const file of [
+          "apps/server/AGENTS.md",
+          "docs/agents/environments.md",
+          "docs/deployment.md",
+        ]) {
+          expect(await read(file)).not.toContain(".cursor/");
+        }
+      } else {
+        expect(agents).not.toContain("rule-module-service");
+        expect(agents).not.toContain("apps/server");
+        await expect(read("docs/agents/database-migrations.md")).rejects.toMatchObject({
+          code: "ENOENT",
+        });
+      }
+      if (platform === "web" || platform === "both") {
+        expect(agents).toContain("rule-frontend-component");
+        expect(agents).toContain("HeroUI v3");
+        expect(await read("apps/webapp/AGENTS.md")).not.toContain(".cursor/");
+      } else {
+        expect(agents).not.toContain("rule-frontend-component");
+      }
+    }
+  );
+
+  it.each(["web", "expo", "both", "landing"] as const)(
     "includes usable local Changesets tooling for %s apps",
     async (platform) => {
       const { targetDirectory } = await scaffoldProject({
@@ -109,10 +189,12 @@ describe("scaffoldProject", () => {
     });
 
     await expect(fs.stat(path.join(result.targetDirectory, "AGENTS.md"))).resolves.toBeTruthy();
-    await expect(fs.stat(path.join(result.targetDirectory, "CLAUDE.md"))).resolves.toBeTruthy();
-    await expect(
-      fs.stat(path.join(result.targetDirectory, ".cursor/rules/server-event-emit.mdc"))
-    ).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(result.targetDirectory, "CLAUDE.md"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(fs.stat(path.join(result.targetDirectory, ".cursor"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
     await expect(
       fs.stat(path.join(result.targetDirectory, "apps/server/src/modules/posts/posts.service.ts"))
     ).resolves.toBeTruthy();
@@ -149,7 +231,7 @@ describe("scaffoldProject", () => {
     expect(rootAgents).toContain("apps/shared/src/modules/posts/");
     expect(rootAgents).toContain("apps/server/src/modules/posts/");
     expect(rootAgents).toContain("apps/webapp/src/modules/posts/");
-    expect(rootAgents).toContain("Read the matching `.cursor/rules` guide");
+    expect(rootAgents).toContain("rule-module-db");
     expect(rootAgents).toContain("## Agent skills");
     expect(rootAgents).toContain("docs/agents/issue-tracker.md");
     expect(rootAgents).toContain("docs/agents/triage-labels.md");
@@ -181,18 +263,10 @@ describe("scaffoldProject", () => {
       fs.stat(path.join(result.targetDirectory, "docs/adr/.gitkeep"))
     ).resolves.toBeTruthy();
 
-    const rootClaude = await fs.readFile(path.join(result.targetDirectory, "CLAUDE.md"), "utf8");
-    expect(rootClaude).toContain("Editorial Desk");
-    expect(rootClaude).toContain("A clean newsroom starter.");
-    expect(rootClaude).toContain(".cursor/rules/module-db-guide.mdc");
-    expect(rootClaude).toContain(".cursor/rules/server-event-emit.mdc");
-    expect(rootClaude).toContain("`apps/webapp`");
-    expect(rootClaude).toContain("## Agent skills");
-    expect(rootClaude).toContain("docs/agents/issue-tracker.md");
-    // web platform without the test harness: expo and e2e marker blocks are stripped
-    expect(rootClaude).not.toContain("apps/expo");
-    expect(rootClaude).not.toContain("apps/e2e");
-    expect(rootClaude).not.toContain("m5k:");
+    // Disabled platform/harness sections are stripped from the common instruction file.
+    expect(rootAgents).not.toContain("apps/expo");
+    expect(rootAgents).not.toContain("apps/e2e");
+    expect(rootAgents).not.toContain("m5k:");
     expect(sharedEnv).toContain("VITE_APP_NAME=Editorial Desk");
     expect(sharedEnv).not.toContain("{{APP_NAME}}");
     expect(appConstants).toContain('APP_NAME = "Editorial Desk"');
@@ -1010,7 +1084,7 @@ describe("scaffoldProject", () => {
     }
   );
 
-  it("ships PostgreSQL module guides and one agent migration policy", async () => {
+  it("ships global module skill pointers and one agent migration policy", async () => {
     const result = await scaffoldProject({
       targetDirectory: "migration-policy",
       appName: "Migration Policy",
@@ -1023,32 +1097,20 @@ describe("scaffoldProject", () => {
     const read = (relative: string) =>
       fs.readFile(path.join(result.targetDirectory, relative), "utf8");
 
-    for (const guide of ["module-db-guide.mdc", "module-repository-guide.mdc"]) {
-      const content = await read(`.cursor/rules/${guide}`);
-      expect(content).not.toMatch(/sqlite|libsql/i);
-    }
-    const dbGuide = await read(".cursor/rules/module-db-guide.mdc");
-    expect(dbGuide).toContain("drizzle-orm/pg-core");
-    expect(dbGuide).toContain("drizzle-postgresql/");
-    expect(dbGuide).not.toMatch(/`drizzle\/`/);
-    expect(await read(".cursor/rules/module-repository-guide.mdc")).toContain("NodePgDatabase");
-
-    const migrations = await read(".cursor/rules/database-migrations.mdc");
+    const migrations = await read("docs/agents/database-migrations.md");
     expect(migrations).toContain("drizzle:generate");
     expect(migrations).toContain("--custom");
     expect(migrations).toContain("migration-contract");
     expect(migrations).toMatch(/currently in Production/);
     expect(migrations).toMatch(/never regenerate/i);
 
-    const claude = await read("CLAUDE.md");
     const agents = await read("AGENTS.md");
-    expect(claude).toContain(".cursor/rules/database-migrations.mdc");
-    expect(agents).toContain(".cursor/rules/database-migrations.mdc");
-    expect(claude).not.toMatch(/must not generate/i);
-    for (const doc of [claude, agents]) {
-      expect(doc).toContain("drizzle:generate");
-      expect(doc).toMatch(/never hand-write or edit migration SQL/i);
-    }
+    expect(agents).toContain("rule-module-db");
+    expect(agents).toContain("rule-module-repository");
+    expect(agents).toContain("docs/agents/database-migrations.md");
+    expect(agents).not.toMatch(/must not generate/i);
+    expect(agents).toContain("drizzle:generate");
+    expect(agents).toMatch(/never hand-write or edit migration SQL/i);
   });
 
   it("ships deployment environment vocabulary in the glossary", async () => {
@@ -1121,7 +1183,7 @@ describe("scaffoldProject", () => {
     expect(serverPackage.scripts["drizzle:rebuild"]).toBe(
       "tsx --env-file=../shared/.env db.ts rebuild"
     );
-    expect(await read("CLAUDE.md")).toContain("drizzle:rebuild");
+    expect(await read("AGENTS.md")).toContain("drizzle:rebuild");
 
     const appTs = await read("apps/server/src/app.ts");
     expect(appTs).toContain("requireEnvValue");
@@ -1285,9 +1347,7 @@ describe("scaffoldProject", () => {
     expect(agentDoc).toMatch(/NODE_ENV/);
     expect(agentDoc).toMatch(/feature PRs/i);
     expect(agentDoc).toMatch(/Production database/);
-    for (const root of ["AGENTS.md", "CLAUDE.md"]) {
-      expect(await read(root)).toContain("docs/agents/environments.md");
-    }
+    expect(await read("AGENTS.md")).toContain("docs/agents/environments.md");
 
     const landing = await scaffold("guide-desk-landing", "landing");
     await expect(

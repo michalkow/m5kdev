@@ -72,6 +72,37 @@ module. Expo-only still includes a server.
 on the Managed catalog. See
 [Core vs Optional](/guides/v0.34.0-core-optional-backend-modules-migration).
 
+### Agent instructions
+
+Every platform receives a root `AGENTS.md`, with additional server/webapp
+instructions when applicable. The scaffold assumes the required rule skills
+from [michalkow/skills](https://github.com/michalkow/skills) are installed
+globally; it installs no local skill copies and ships no `CLAUDE.md` or Cursor
+rules. The existing GitHub Issues, triage-label, glossary, and ADR setup is
+included so the engineering skills have repository context.
+
+When root `PROJECT.md` exists, agents read it as the App's **North Star**:
+why the project exists, its intended function and experience, and its priorities.
+It is purpose context rather than an architecture plan. Agents should flag a
+conflict before editing—for example, added response latency in a narrative
+game whose goals are fast, fun gameplay. The CLI does not create this file;
+when it is absent, agents continue with the task's stated goals.
+
+Instructions point agents to an accessible local m5kdev checkout or the
+[upstream repository](https://github.com/michalkow/m5kdev), matching the App's
+installed version. The maintainer's local checkout is an optional example,
+not a required path. When a task needs an upstream fix and access permits,
+agents can submit a PR there under that repository's own instructions.
+
+Production deployment and database migration require explicit user instruction
+for that operation; feature work or a PR request is not authorization. This
+includes Canary operations that change the Production database. Production
+migrations still run through the deploy workflow. Agents may generate and apply
+migrations to local or Development databases without additional confirmation.
+Migration integrity and disposable-reset rules remain in the generated
+`docs/agents/database-migrations.md`; the framework repository retains its own
+operational conventions and Cursor rules.
+
 ### Changesets
 
 Every generated app, including Landing-only, includes `@changesets/cli` as a root
@@ -126,7 +157,7 @@ custom subpath. The standalone Docker image bakes matching Caddy routes during
 the build, so no runtime variable is required for the mount path. Help links use
 the selected host and current locale when known.
 
-Generated `AGENTS.md` and `CLAUDE.md` require agents to update affected guides
+Generated `AGENTS.md` instructions require agents to update affected guides
 and translations in every configured locale before completing user-facing work.
 Detailed rules live in `docs/agents/product-documentation.md`. Framework updates
 preserve app-written guides and translations. The hosting selection persists;

@@ -1,14 +1,13 @@
----
-globs: apps/server/src/modules/**/*.db.ts,apps/server/src/schema.ts,apps/server/drizzle-postgresql/**
-alwaysApply: false
----
-
 # Database Migrations
 
 Migrations are the app's schema history. They are generated from the table
 definitions (`*.db.ts`), applied to each database independently, and never
 rolled back. Read this before changing a table or touching the migration
 folder.
+
+Production app deployment or database migration requires explicit user instruction
+for that operation. Feature work and opening a PR do not authorize it. This
+includes deployments that migrate the Production database through Canary.
 
 ## How migrations are made and applied
 
@@ -20,8 +19,9 @@ folder.
 - If drizzle-kit asks an interactive question (for example, whether a column
   was renamed or created), stop and ask the user. The answer decides whether
   data is dropped.
-- Agents may apply migrations with `drizzle:migrate` only to the local or
-  Development database named in `apps/shared/.env`. Staging, Canary, and
+- Generate migrations with `drizzle:generate` and apply them with
+  `drizzle:migrate` to the local or Development database named in
+  `apps/shared/.env` without asking for confirmation. Staging, Canary, and
   Production are migrated only by the GitHub Actions deploy workflow, before
   each deploy.
 - Never regenerate a migration that has already been applied to Development.
