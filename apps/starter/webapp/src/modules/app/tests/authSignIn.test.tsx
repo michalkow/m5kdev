@@ -138,6 +138,15 @@ function SessionActions(): ReactElement {
     <>
       <button
         type="button"
+        data-action="complete-sign-in"
+        onClick={() => {
+          void registerSession(undefined, { signIn: true });
+        }}
+      >
+        Complete sign-in
+      </button>
+      <button
+        type="button"
         data-action="refresh"
         onClick={() => {
           void registerSession();
@@ -491,4 +500,23 @@ it("keeps OAuth usable when browser storage is unavailable", async () => {
   const callbackURL = await startOAuth({ onSignIn });
   expect(callbackURL).toBe("http://localhost/reports");
   expect(onSignIn).not.toHaveBeenCalled();
+});
+
+it("does not record the same session again after another sign-in registration", async () => {
+  const anotherSession = {
+    ...signedInSession,
+    session: { ...signedInSession.session, id: "session-2" },
+  };
+  const onSignIn = jest.fn();
+  await renderLogin({ props: { onSignIn } });
+  for (const session of [signedInSession, anotherSession, signedInSession]) {
+    currentSession = session;
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-action="complete-sign-in"]')?.click();
+    });
+  }
+  expect(onSignIn.mock.calls.map(([session]) => session.session.id)).toEqual([
+    "session-1",
+    "session-2",
+  ]);
 });

@@ -43,7 +43,7 @@ export function AuthProvider({
   );
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
-  const lastSignInSessionId = useRef<string | null>(null);
+  const notifiedSignInSessions = useRef(new Set<string>());
   const signInHandler = useRef(onSignIn);
   useEffect(() => {
     signInHandler.current = onSignIn;
@@ -67,9 +67,9 @@ export function AuthProvider({
             nextSession &&
             (options.signIn === true ||
               nextSession.session.id !== options.signIn.previousSessionId) &&
-            lastSignInSessionId.current !== nextSession.session.id
+            !notifiedSignInSessions.current.has(nextSession.session.id)
           ) {
-            lastSignInSessionId.current = nextSession.session.id;
+            notifiedSignInSessions.current.add(nextSession.session.id);
             try {
               void Promise.resolve(signInHandler.current?.(nextSession)).catch((error) => {
                 console.error("Sign-in callback failed:", error);

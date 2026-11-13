@@ -12,6 +12,7 @@ module.exports = {
   moduleNameMapper: hasFrameworkSources
     ? {
         "^@m5kdev/frontend/(.*)$": "<rootDir>/../../../packages/frontend/src/$1",
+        "^@m5kdev/web-ui/utils$": "<rootDir>/../../../packages/web-ui/src/lib/utils",
         "^@m5kdev/web-ui/(.*)$": "<rootDir>/../../../packages/web-ui/src/$1",
         "^@m5kdev/commons/(.*)$": "<rootDir>/../../../packages/commons/src/$1",
       }
