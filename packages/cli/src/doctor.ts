@@ -34,6 +34,8 @@ export interface DoctorOptions {
   state?: ManagedState;
   /** Enrollment checks source compatibility before dependencies need to be installed. */
   checkInstallation?: boolean;
+  /** Source enrollment must not require untracked runtime secrets. */
+  checkRuntimeConfiguration?: boolean;
   templateRoot?: string;
   cliVersion?: string;
   registry?: readonly MigrationDefinition[];
@@ -378,6 +380,7 @@ export async function diagnoseManagedRepo(options: DoctorOptions): Promise<Diagn
     repoRoot: options.repoRoot,
     state,
     checkInstallation: options.checkInstallation !== false,
+    checkRuntimeConfiguration: options.checkRuntimeConfiguration !== false,
   });
   diagnostics.push(...readiness.diagnostics);
   verification.push(...readiness.verification);

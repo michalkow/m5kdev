@@ -136,6 +136,7 @@ export async function initializeManagedRepo(options: InitCommandOptions) {
     repoRoot: options.repoRoot,
     state,
     checkInstallation: false,
+    checkRuntimeConfiguration: false,
   });
   if (!report.ok) return { initialized: false, state, report };
 

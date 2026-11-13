@@ -11,6 +11,7 @@ export async function inspectConfiguration(options: {
   repoRoot: string;
   state: ManagedState;
   manifests: ReadonlyMap<string, { scripts?: Record<string, string> }>;
+  checkRuntimeConfiguration: boolean;
 }): Promise<{ diagnostics: Diagnostic[]; verification: VerificationCheck[] }> {
   const { repoRoot, state, manifests } = options;
   const diagnostics: Diagnostic[] = [];
@@ -29,7 +30,7 @@ export async function inspectConfiguration(options: {
         "apps/server/db.ts",
         "apps/server/drizzle.config.ts",
         "apps/server/src/schema.ts",
-        "apps/shared/.env",
+        ...(options.checkRuntimeConfiguration ? ["apps/shared/.env"] : []),
       ],
       message:
         "Migration configuration inspected; schema generation, database connectivity, and application were not executed.",
@@ -88,8 +89,18 @@ export async function inspectConfiguration(options: {
   for (const [file, manifest] of manifests) {
     for (const script of Object.values(manifest.scripts ?? {})) {
       if (typeof script !== "string") continue;
-      if (/\btsc\b/.test(script) && !/\s(?:-p|--project)\b/.test(script))
-        buildPaths.push(path.join(path.dirname(file), "tsconfig.json"));
+      if (/\btsc\b/.test(script)) {
+        const project = script.match(
+          /(?:^|\s)(?:-p|--project)(?:=|\s+)(?:"([^"]+)"|'([^']+)'|([^\s]+))/
+        );
+        const argument = project?.[1] ?? project?.[2] ?? project?.[3];
+        if (!argument || !/[${}]/.test(argument)) {
+          let configPath = path.resolve(repoRoot, path.dirname(file), argument ?? "tsconfig.json");
+          const stat = await fs.stat(configPath).catch(() => undefined);
+          if (stat?.isDirectory()) configPath = path.join(configPath, "tsconfig.json");
+          buildPaths.push(path.relative(repoRoot, configPath).split(path.sep).join("/"));
+        }
+      }
       if (file === "package.json" && /\bturbo\s+run\b/.test(script)) buildPaths.push("turbo.json");
     }
   }
@@ -98,7 +109,7 @@ export async function inspectConfiguration(options: {
       id: "build-configuration",
       paths: [...new Set(buildPaths)],
       message:
-        "Default TypeScript/Turbo configuration paths inspected; commands were not executed by this check.",
+        "TypeScript/Turbo configuration paths inspected; commands were not executed by this check.",
       suggestion: "Run doctor --full after completing applicable guides.",
     });
   for (const configuration of configurations) {
@@ -162,22 +173,31 @@ export async function inspectConfiguration(options: {
       }
     }
     if (configuration.id === "migrations") {
-      const env = await fs
-        .readFile(path.join(repoRoot, "apps/shared/.env"), "utf8")
-        .catch(() => "");
-      for (const key of ["DATABASE_URL", "DATABASE_DIRECT_URL"]) {
-        const value = env
-          .match(new RegExp(`^${key}=(.*)$`, "m"))?.[1]
-          ?.trim()
-          .replace(/^["']|["']$/g, "");
-        if (!process.env[key] && !value)
-          diagnostics.push({
-            code: "CONFIGURATION_VALUE_MISSING",
-            severity: "error",
-            path: "apps/shared/.env",
-            message: `${key} is required; its value was not printed.`,
-            suggestion: "Configure local/Development database URLs before testing migrations.",
-          });
+      if (options.checkRuntimeConfiguration) {
+        const env = await fs
+          .readFile(path.join(repoRoot, "apps/shared/.env"), "utf8")
+          .catch(() => "");
+        for (const key of ["DATABASE_URL", "DATABASE_DIRECT_URL"]) {
+          const value = env
+            .match(new RegExp(`^${key}=(.*)$`, "m"))?.[1]
+            ?.trim()
+            .replace(/^["']|["']$/g, "");
+          if (!process.env[key] && !value)
+            diagnostics.push({
+              code: "CONFIGURATION_VALUE_MISSING",
+              severity: "error",
+              path: "apps/shared/.env",
+              message: `${key} is required; its value was not printed.`,
+              suggestion: "Configure local/Development database URLs before testing migrations.",
+            });
+        }
+      } else {
+        verification.push({
+          id: "runtime-configuration",
+          status: "configured-but-untested",
+          message: "Source enrollment did not inspect local runtime environment values or secrets.",
+          suggestion: "Configure the local/Development environment, then run doctor --full.",
+        });
       }
       const scripts = manifests.get("apps/server/package.json")?.scripts;
       for (const script of ["drizzle:generate", "drizzle:migrate"]) {

@@ -82,11 +82,58 @@ describe("managed repository commands", () => {
     );
   });
 
+  it("finds Windows executables through PATHEXT, including git.exe", async () => {
+    const commands = path.join(tempRoot, "commands");
+    await fs.mkdir(commands);
+    await fs.writeFile(path.join(commands, "git.exe"), "fixture executable");
+    await fs.writeFile(path.join(commands, "pnpm.cmd"), "fixture command shim");
+    const platform = Object.getOwnPropertyDescriptor(process, "platform");
+    if (!platform) throw new Error("Missing process.platform descriptor");
+    const previousPath = process.env.PATH;
+    const previousExtensions = process.env.PATHEXT;
+    try {
+      Object.defineProperty(process, "platform", { value: "win32" });
+      process.env.PATH = commands;
+      process.env.PATHEXT = ".COM;.EXE;.BAT;.CMD";
+      const report = await diagnoseManagedRepo({ repoRoot });
+      expect(report.verification).toContainEqual(
+        expect.objectContaining({ id: "executables", status: "verified" })
+      );
+      expect(report.diagnostics).not.toContainEqual(
+        expect.objectContaining({
+          code: "EXECUTABLE_MISSING",
+          message: expect.stringContaining("Required commands"),
+        })
+      );
+    } finally {
+      Object.defineProperty(process, "platform", platform);
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+      if (previousExtensions === undefined) delete process.env.PATHEXT;
+      else process.env.PATHEXT = previousExtensions;
+    }
+  });
+
   it("initializes an existing compatible project at the running baseline", async () => {
     await fs.rm(path.join(repoRoot, ".m5kdev.json"));
     const result = await initializeManagedRepo({ repoRoot, yes: true, force: false });
     expect(result.initialized).toBe(true);
     expect(await readManagedState(repoRoot)).toEqual(result.state);
+  });
+
+  it("enrolls source without requiring local database secrets", async () => {
+    await fs.rm(path.join(repoRoot, ".m5kdev.json"));
+    await fs.rm(path.join(repoRoot, "apps/shared/.env"));
+    const result = await initializeManagedRepo({ repoRoot, yes: true, force: false });
+    expect(result.initialized).toBe(true);
+    expect(result.report.ok).toBe(true);
+    expect(result.report.verification).toContainEqual(
+      expect.objectContaining({ id: "runtime-configuration", status: "configured-but-untested" })
+    );
+    const runtime = await diagnoseManagedRepo({ repoRoot });
+    expect(runtime.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "CONFIGURATION_MISSING", path: "apps/shared/.env" })
+    );
   });
 
   it("separates missing migration configuration from configured but untested CI and deployment", async () => {
@@ -105,6 +152,26 @@ describe("managed repository commands", () => {
         expect.objectContaining({ id: "deployment", status: "configured-but-untested" }),
         expect.objectContaining({ id: "documentation", status: "configured-but-untested" }),
       ])
+    );
+  });
+
+  it.each([
+    { argument: "--project missing-project.json", file: "missing-project.json" },
+    { argument: "-p missing-project.json", file: "missing-project.json" },
+    { argument: "--project=missing-project.json", file: "missing-project.json" },
+    { argument: '--project "missing project.json"', file: "missing project.json" },
+  ])("detects explicit TypeScript config dependencies: $argument", async ({ argument, file }) => {
+    const packagePath = path.join(repoRoot, "package.json");
+    const manifest = JSON.parse(await fs.readFile(packagePath, "utf8"));
+    manifest.scripts["check-types"] = `tsc ${argument}`;
+    await fs.writeFile(packagePath, JSON.stringify(manifest));
+    const report = await diagnoseManagedRepo({ repoRoot, checkInstallation: false });
+    expect(report.ok).toBe(false);
+    expect(report.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "CONFIGURATION_MISSING", path: file })
+    );
+    expect(report.verification).toContainEqual(
+      expect.objectContaining({ id: "build-configuration", status: "blocked" })
     );
   });
 

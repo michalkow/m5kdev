@@ -25,6 +25,21 @@ async function accessible(file: string, mode = constants.F_OK): Promise<boolean>
   );
 }
 
+async function executableAvailable(directory: string, command: string): Promise<boolean> {
+  if (process.platform !== "win32")
+    return accessible(path.join(directory, command), constants.X_OK);
+  const extensions = (process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD")
+    .split(";")
+    .filter(Boolean)
+    .map((extension) => extension.toLowerCase());
+  const candidates = extensions.map((extension) => `${command}${extension}`);
+  if (extensions.includes(path.extname(command).toLowerCase())) candidates.unshift(command);
+  for (const candidate of candidates) {
+    if (await accessible(path.join(directory, candidate))) return true;
+  }
+  return false;
+}
+
 function ancestorDirectories(directory: string, repoRoot: string): string[] {
   const directories: string[] = [];
   for (let current = directory; ; current = path.dirname(current)) {
@@ -46,6 +61,7 @@ export async function inspectReadiness(options: {
   repoRoot: string;
   state: ManagedState;
   checkInstallation: boolean;
+  checkRuntimeConfiguration: boolean;
 }): Promise<{ diagnostics: Diagnostic[]; verification: VerificationCheck[] }> {
   const repoRoot = path.resolve(options.repoRoot);
   const diagnostics: Diagnostic[] = [];
@@ -64,7 +80,7 @@ export async function inspectReadiness(options: {
   }
 
   for (const packageFile of packageFiles) {
-    const relativePath = path.relative(repoRoot, packageFile);
+    const relativePath = path.relative(repoRoot, packageFile).split(path.sep).join("/");
     if (await findRepositorySymlink(repoRoot, relativePath)) continue;
     let manifest: PackageManifest;
     try {
@@ -166,16 +182,7 @@ export async function inspectReadiness(options: {
         const targetPath = path.resolve(path.dirname(installedPath), target);
         let shim = false;
         for (const directory of directories) {
-          if (
-            await accessible(
-              path.join(
-                directory,
-                "node_modules/.bin",
-                process.platform === "win32" ? `${bin}.cmd` : bin
-              ),
-              constants.X_OK
-            )
-          ) {
+          if (await executableAvailable(path.join(directory, "node_modules/.bin"), bin)) {
             shim = true;
             break;
           }
@@ -226,12 +233,7 @@ export async function inspectReadiness(options: {
     for (const executable of ["pnpm", "git"]) {
       let found = false;
       for (const directory of (process.env.PATH ?? "").split(path.delimiter)) {
-        if (
-          await accessible(
-            path.join(directory, process.platform === "win32" ? `${executable}.cmd` : executable),
-            constants.X_OK
-          )
-        ) {
+        if (await executableAvailable(directory, executable)) {
           found = true;
           break;
         }
@@ -251,7 +253,12 @@ export async function inspectReadiness(options: {
       message: "Checked pnpm and git executable availability on PATH.",
     });
   }
-  const configuration = await inspectConfiguration({ repoRoot, state: options.state, manifests });
+  const configuration = await inspectConfiguration({
+    repoRoot,
+    state: options.state,
+    manifests,
+    checkRuntimeConfiguration: options.checkRuntimeConfiguration,
+  });
   diagnostics.push(...configuration.diagnostics);
   verification.push(...configuration.verification);
   return { diagnostics, verification };

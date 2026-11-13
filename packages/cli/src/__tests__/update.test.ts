@@ -334,6 +334,40 @@ describe("managed update", () => {
     expect(await fs.readFile(outside, "utf8")).toBe("external source\n");
   });
 
+  it("reports missing workspace metadata as a preflight blocker without advancing sources", async () => {
+    const setup = await fixture(tempRoot, {
+      catalogVersion: "1.0.0",
+      source: "export const value = 1;\n",
+    });
+    const targetRoot = path.join(tempRoot, "target");
+    await makeTemplate(targetRoot, {
+      catalogVersion: "2.0.0",
+      source: "export const value = 2;\n",
+    });
+    await fs.rm(path.join(setup.repoRoot, "pnpm-workspace.yaml"));
+    const before = await snapshot(setup.repoRoot);
+    const install = jest.fn(async () => undefined);
+    const result = await updateManagedRepo({
+      repoRoot: setup.repoRoot,
+      dryRun: false,
+      skipInstall: false,
+      targetTemplateRoot: targetRoot,
+      targetVersion: "0.32.0",
+      baseProvider: setup.baseProvider,
+      assertClean: async () => undefined,
+      install,
+    });
+    expect(result.applied).toBe(false);
+    expect(result.conflicts).toContainEqual(
+      expect.objectContaining({ path: "pnpm-workspace.yaml" })
+    );
+    expect(result.verification).toContainEqual(
+      expect.objectContaining({ id: "preflight", status: "blocked" })
+    );
+    expect(install).not.toHaveBeenCalled();
+    expect(await snapshot(setup.repoRoot)).toEqual(before);
+  });
+
   it("aborts a write-mode plan atomically on conflict", async () => {
     const setup = await fixture(tempRoot, {
       catalogVersion: "1.0.0",

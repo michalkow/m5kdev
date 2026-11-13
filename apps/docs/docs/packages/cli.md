@@ -190,8 +190,8 @@ human-readable output:
 The existing `ok` field means there are no error diagnostics; it is not proof
 that every upgrade path was executed. A `--skip-install` scaffold can have a
 compatible source baseline while doctor correctly reports missing dependencies.
-`init` can record that baseline before installation and marks installation
-untested rather than claiming it passed. Unsupported non-SemVer dependency
+`init` can record that baseline before installation or local runtime secrets
+are configured, marking those checks untested rather than claiming they passed. Unsupported non-SemVer dependency
 revisions require manual verification.
 
 Doctor never runs migrations, deploys, or CI jobs. Migration configuration,

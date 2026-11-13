@@ -446,6 +446,8 @@ export async function updateManagedRepo(options: UpdateCommandOptions): Promise<
   const unsafe = preflight.diagnostics.filter(
     (diagnostic) =>
       unsafeCodes.has(diagnostic.code) ||
+      (diagnostic.code === "REQUIRED_PATH_MISSING" &&
+        (diagnostic.path === "package.json" || diagnostic.path === "pnpm-workspace.yaml")) ||
       (diagnostic.code === "EXECUTABLE_MISSING" &&
         !diagnostic.path &&
         diagnostic.message.includes("git"))
