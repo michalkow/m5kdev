@@ -54,13 +54,16 @@ app's integration compatible with its installed release until the fix is availab
 
 ## Production operations
 
-Deploying the Production app or migrating its database requires explicit user
-instruction for that operation. A request to implement a feature, fix a bug,
+Deploying the Production app requires explicit user instruction for that
+operation. A request to implement a feature, fix a bug,
 or open a PR does not grant that authority.
+// m5k:server:start
+Migrating the Production database also requires explicit user instruction.
 // m5k:env-canary:start
 This also applies to Canary operations that migrate or otherwise change the
 Production database.
 // m5k:env-canary:end
+// m5k:server:end
 
 // m5k:server:start
 ## Modules and layers

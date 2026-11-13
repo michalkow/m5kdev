@@ -94,8 +94,9 @@ installed version. The maintainer's local checkout is an optional example,
 not a required path. When a task needs an upstream fix and access permits,
 agents can submit a PR there under that repository's own instructions.
 
-Production deployment and database migration require explicit user instruction
-for that operation; feature work or a PR request is not authorization. This
+Production deployment requires explicit user instruction for every platform.
+For server-backed Apps, Production database migration requires that instruction
+as well; feature work or a PR request is not authorization. This
 includes Canary operations that change the Production database. Production
 migrations still run through the deploy workflow. Agents may generate and apply
 migrations to local or Development databases without additional confirmation.

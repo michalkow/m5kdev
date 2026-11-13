@@ -89,6 +89,7 @@ describe("scaffoldProject", () => {
       } else {
         expect(agents).not.toContain("rule-module-service");
         expect(agents).not.toContain("apps/server");
+        expect(agents).not.toMatch(/database/i);
         await expect(read("docs/agents/database-migrations.md")).rejects.toMatchObject({
           code: "ENOENT",
         });
