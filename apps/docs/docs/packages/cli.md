@@ -72,6 +72,26 @@ module. Expo-only still includes a server.
 on the Managed catalog. See
 [Core vs Optional](/guides/v0.34.0-core-optional-backend-modules-migration).
 
+### Changesets
+
+Every generated app, including Landing-only, includes `@changesets/cli` as a root
+`devDependency` pinned through the Managed catalog. Normal creation installs it;
+with `--skip-install`, run `pnpm install` before using it. The generated
+`.changeset/config.json` uses `main` as its base branch and enables versioning
+and changelogs for private workspace packages.
+
+```sh
+pnpm cs:add
+# Select affected packages, a bump, and a summary; commit .changeset/*.md with the code.
+pnpm cs:version
+pnpm install
+# Review and commit versions, changelogs, lockfile, and removed changeset files.
+```
+
+Both scripts use the installed CLI. Packages remain private, with no automatic
+commits or tags. The generated README and `.changeset/README.md` describe the
+workflow. Changesets configuration can be customized for the app's release policy.
+
 ### Public product help
 
 Every generated app includes a Docusaurus site in `apps/docs`, including

@@ -56,6 +56,29 @@ pnpm check-types
 pnpm lint
 ```
 
+## Changesets
+
+Changesets is installed as a root development dependency and configured for the
+private packages in this workspace. Record a change with the local CLI:
+
+```sh
+pnpm cs:add
+```
+
+Select the affected packages, choose a version bump, and write a short summary.
+Commit the generated `.changeset/*.md` file with your code. To prepare versions
+and package changelogs from pending changesets:
+
+```sh
+pnpm cs:version
+pnpm install
+```
+
+Review and commit the updated package versions, `CHANGELOG.md` files, lockfile,
+and removed changeset files together. Packages remain private; these commands
+do not publish, create Git tags, or commit for you. See `.changeset/README.md`
+for the workflow and `.changeset/config.json` for configuration.
+
 ## Product help
 
 `pnpm docs:dev` runs the public help site at `http://localhost:3001`.

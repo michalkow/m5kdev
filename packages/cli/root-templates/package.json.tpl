@@ -8,6 +8,8 @@
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "check-types": "turbo run check-types",
+    "cs:add": "changeset add",
+    "cs:version": "changeset version",
     "test": "turbo run test",
     "docs:dev": "pnpm --filter ./apps/docs dev",
     "docs:build": "pnpm --filter ./apps/docs build",
@@ -42,6 +44,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:m5kdev",
+    "@changesets/cli": "catalog:m5kdev",
     "@m5kdev/backend": "catalog:m5kdev",
     "turbo": "catalog:m5kdev",
     "typescript": "catalog:m5kdev"

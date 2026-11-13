@@ -23,6 +23,80 @@ describe("scaffoldProject", () => {
     await fs.rm(tempRoot, { recursive: true, force: true });
   });
 
+  it.each(["web", "expo", "both", "landing"] as const)(
+    "includes usable local Changesets tooling for %s apps",
+    async (platform) => {
+      const { targetDirectory } = await scaffoldProject({
+        targetDirectory: "versioned-app",
+        appName: "Versioned App",
+        appDescription: "An app with release notes.",
+        platform,
+        force: false,
+        yes: true,
+        skipInstall: true,
+        skipGit: true,
+      });
+      const rootPackage = JSON.parse(
+        await fs.readFile(path.join(targetDirectory, "package.json"), "utf8")
+      );
+      const workspace = parse(
+        await fs.readFile(path.join(targetDirectory, "pnpm-workspace.yaml"), "utf8")
+      );
+      expect(rootPackage.devDependencies["@changesets/cli"]).toBe("catalog:m5kdev");
+      expect(rootPackage.dependencies?.["@changesets/cli"]).toBeUndefined();
+      expect(workspace.catalogs.m5kdev["@changesets/cli"]).toBe("2.30.0");
+      expect(rootPackage.scripts["cs:add"]).toBe("changeset add");
+      expect(rootPackage.scripts["cs:version"]).toBe("changeset version");
+      const config = JSON.parse(
+        await fs.readFile(path.join(targetDirectory, ".changeset/config.json"), "utf8")
+      );
+      expect(config).toMatchObject({
+        baseBranch: "main",
+        commit: false,
+        privatePackages: { version: true, tag: false },
+        fixed: [],
+        linked: [],
+        ignore: [],
+      });
+      const readme = await fs.readFile(path.join(targetDirectory, "README.md"), "utf8");
+      expect(readme).toContain("pnpm cs:add");
+      expect(readme).toContain("pnpm cs:version");
+      await expect(
+        fs.readFile(path.join(targetDirectory, ".changeset/README.md"), "utf8")
+      ).resolves.toContain("pnpm cs:add");
+
+      // Reuse the installed external CLI so this integration test needs no registry access.
+      await fs.symlink(
+        path.resolve(__dirname, "../../../../node_modules"),
+        path.join(targetDirectory, "node_modules")
+      );
+      const add = spawnSync("pnpm", ["cs:add", "--empty"], {
+        cwd: targetDirectory,
+        encoding: "utf8",
+      });
+      expect({ status: add.status, stderr: add.stderr }).toEqual({ status: 0, stderr: "" });
+      await fs.writeFile(
+        path.join(targetDirectory, ".changeset/landing-patch.md"),
+        '---\n"@versioned-app/landing": patch\n---\n\nImprove the landing page.\n'
+      );
+      const version = spawnSync("pnpm", ["cs:version"], {
+        cwd: targetDirectory,
+        encoding: "utf8",
+      });
+      expect({ status: version.status, stderr: version.stderr }).toEqual({ status: 0, stderr: "" });
+      const landing = JSON.parse(
+        await fs.readFile(path.join(targetDirectory, "apps/landing/package.json"), "utf8")
+      );
+      expect(landing).toMatchObject({ version: "0.0.1", private: true });
+      await expect(
+        fs.readFile(path.join(targetDirectory, "apps/landing/CHANGELOG.md"), "utf8")
+      ).resolves.toContain("Improve the landing page.");
+      await expect(
+        fs.stat(path.join(targetDirectory, ".changeset/landing-patch.md"))
+      ).rejects.toMatchObject({ code: "ENOENT" });
+    }
+  );
+
   it("creates the minimal starter and replaces placeholders", async () => {
     const result = await scaffoldProject({
       targetDirectory: "editorial-desk",
