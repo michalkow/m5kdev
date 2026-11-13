@@ -184,6 +184,39 @@ and [Workflow](/modules/workflow). Upgrade:
 locale then refreshes the session with cookie cache disabled;
 `AuthProvider` remounts children when the language changes.
 
+### Record successful sign-ins
+
+Pass `onSignIn` to `AuthProvider` to record an actual successful sign-in in an
+app-owned integration. The handler receives the confirmed authenticated session:
+
+```tsx
+<AuthProvider
+  onSignIn={(session) => {
+    analytics.capture("user_signed_in", { userId: session.user.id });
+  }}
+>
+  {children}
+</AuthProvider>
+```
+
+Shared email/password login and signup flows that explicitly sign the User in
+invoke it after fetching the authenticated session and before navigation. Signup
+that waits for email verification does not invoke it. Initial session loading,
+page reloads, restored sessions, routine refreshes, Organization changes, failed
+authentication, and logout do not invoke it. Callback errors are reported to the
+console without failing sign-in; returned promises do not delay navigation.
+
+Keep using `onSession` for SDK identity synchronization: it also runs for initial
+loading, refreshes, Organization changes, and logout (`null`). It is not a
+sign-in event. Existing apps may omit `onSignIn`.
+
+For custom credential forms, call `useSession().registerSession(onSuccess,
+{ signIn: true })` only after successful authentication. This bypasses the cookie
+cache and notifies at most once per session in the mounted provider. Ordinary
+session refreshes should continue calling `registerSession()` without that flag.
+Direct custom auth-client calls and externally initiated Account claim magic
+links do not automatically notify this UI callback.
+
 ## Web UI
 
 `@m5kdev/web-ui` ships route-level routers you mount in your app router:

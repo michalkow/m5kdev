@@ -5,6 +5,8 @@ export type AuthSession = ReturnType<M5KAuthClient["useSession"]>["data"];
 
 export interface RegisterSessionOptions {
   disableCookieCache?: boolean;
+  /** Only set after a successful authentication action, never for session refreshes. */
+  signIn?: boolean;
 }
 
 export const authProviderContext = createContext<{
