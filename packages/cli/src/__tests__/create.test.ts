@@ -2051,7 +2051,10 @@ describe("landing-only platform upgrade", () => {
     const glossary = await fs.readFile(path.join(result.targetDirectory, "GLOSSARY.md"), "utf8");
     expect(glossary).toContain("**Organization**:");
 
-    const report = await diagnoseManagedRepo({ repoRoot: result.targetDirectory });
+    const report = await diagnoseManagedRepo({
+      repoRoot: result.targetDirectory,
+      checkInstallation: false,
+    });
     expect(report.ok).toBe(true);
   });
 

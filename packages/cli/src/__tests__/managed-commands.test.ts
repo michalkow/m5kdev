@@ -35,10 +35,50 @@ describe("managed repository commands", () => {
     await fs.rm(tempRoot, { recursive: true, force: true });
   });
 
-  it("reports a freshly scaffolded repository as healthy", async () => {
+  it("reports missing installation without confusing it with source compatibility", async () => {
     const report = await diagnoseManagedRepo({ repoRoot });
-    expect(report.ok).toBe(true);
-    expect(report.diagnostics.filter(({ severity }) => severity === "error")).toEqual([]);
+    expect(report.ok).toBe(false);
+    expect(report.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "DEPENDENCY_MISSING" })
+    );
+    const source = await diagnoseManagedRepo({ repoRoot, checkInstallation: false });
+    expect(source.ok).toBe(true);
+    expect(source.verification).toContainEqual(
+      expect.objectContaining({
+        id: "dependencies:package.json",
+        status: "configured-but-untested",
+      })
+    );
+  });
+
+  it("reports installed version drift and missing package executables instead of trusting declarations", async () => {
+    const packagePath = path.join(repoRoot, "package.json");
+    const manifest = JSON.parse(await fs.readFile(packagePath, "utf8"));
+    manifest.dependencies = { "upgrade-fixture": "1.2.3" };
+    await fs.writeFile(packagePath, JSON.stringify(manifest));
+    const installed = path.join(repoRoot, "node_modules/upgrade-fixture");
+    await fs.mkdir(installed, { recursive: true });
+    await fs.writeFile(
+      path.join(installed, "package.json"),
+      JSON.stringify({
+        name: "upgrade-fixture",
+        version: "1.0.0",
+        bin: { "upgrade-tool": "dist/cli.js" },
+      })
+    );
+    const report = await diagnoseManagedRepo({ repoRoot });
+    expect(report.ok).toBe(false);
+    expect(report.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "INSTALLED_VERSION_MISMATCH", path: "package.json" }),
+        expect.objectContaining({ code: "EXECUTABLE_MISSING" }),
+      ])
+    );
+    expect(report.verification).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "dependencies:package.json", status: "blocked" }),
+      ])
+    );
   });
 
   it("initializes an existing compatible project at the running baseline", async () => {
@@ -46,6 +86,58 @@ describe("managed repository commands", () => {
     const result = await initializeManagedRepo({ repoRoot, yes: true, force: false });
     expect(result.initialized).toBe(true);
     expect(await readManagedState(repoRoot)).toEqual(result.state);
+  });
+
+  it("separates missing migration configuration from configured but untested CI and deployment", async () => {
+    await fs.rm(path.join(repoRoot, "apps/server/drizzle.config.ts"));
+    const report = await diagnoseManagedRepo({ repoRoot });
+    expect(report.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "CONFIGURATION_MISSING",
+        path: "apps/server/drizzle.config.ts",
+      })
+    );
+    expect(report.verification).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "migrations", status: "blocked" }),
+        expect.objectContaining({ id: "ci", status: "configured-but-untested" }),
+        expect.objectContaining({ id: "deployment", status: "configured-but-untested" }),
+        expect.objectContaining({ id: "documentation", status: "configured-but-untested" }),
+      ])
+    );
+  });
+
+  it("records full command evidence and reports missing scripts instead of silently skipping them", async () => {
+    const file = path.join(repoRoot, "package.json");
+    const manifest = JSON.parse(await fs.readFile(file, "utf8"));
+    manifest.scripts = {
+      ...manifest.scripts,
+      "check-types": 'node -e "process.exit(0)"',
+      build: 'node -e "process.exit(1)"',
+      "docs:build": 'node -e "process.exit(0)"',
+    };
+    delete manifest.scripts.lint;
+    await fs.writeFile(file, JSON.stringify(manifest));
+    const report = await diagnoseManagedRepo({ repoRoot, full: true, checkInstallation: false });
+    expect(report.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "COMMAND_LINT_MISSING" }),
+        expect.objectContaining({ code: "COMMAND_BUILD_FAILED" }),
+      ])
+    );
+    expect(report.verification).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "command:check-types",
+          status: "verified",
+          evidence: ["pnpm check-types completed successfully."],
+        }),
+        expect.objectContaining({ id: "command:lint", status: "blocked" }),
+        expect.objectContaining({ id: "command:build", status: "blocked" }),
+        expect.objectContaining({ id: "command:docs:build", status: "verified" }),
+        expect.objectContaining({ id: "deployment", status: "configured-but-untested" }),
+      ])
+    );
   });
 
   it("does not require catalog entries belonging only to disabled features", async () => {
@@ -131,8 +223,8 @@ describe("landing-only managed repository commands", () => {
     await fs.rm(tempRoot, { recursive: true, force: true });
   });
 
-  it("reports a landing-only scaffold as healthy without a server", async () => {
-    const report = await diagnoseManagedRepo({ repoRoot });
+  it("checks a landing-only source baseline without inventing a database", async () => {
+    const report = await diagnoseManagedRepo({ repoRoot, checkInstallation: false });
     expect(report.ok).toBe(true);
     expect(report.diagnostics.filter(({ severity }) => severity === "error")).toEqual([]);
   });

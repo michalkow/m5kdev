@@ -172,6 +172,32 @@ legacy apps without a selection retain standalone hosting. When upgrading an
 existing app, move any custom locale configuration into `apps/locales.ts` and
 provide guides for all configured locales before building.
 
+### Verification evidence
+
+Doctor includes a `verification` list in JSON and groups the same checks in
+human-readable output:
+
+- **Verified:** the named check succeeded, with scoped evidence such as resolved
+  package versions or a completed validation command. A local build passing
+  does not prove a working deployment or live database migration.
+- **Configured but untested:** the files, scripts, or declarations are present,
+  but the corresponding execution has not been tested.
+- **Blocked:** a prerequisite is missing, an installed version differs, or a
+  check failed. The report gives the path/reason and a next step.
+
+The existing `ok` field means there are no error diagnostics; it is not proof
+that every upgrade path was executed. A `--skip-install` scaffold can have a
+compatible source baseline while doctor correctly reports missing dependencies.
+`init` can record that baseline before installation and marks installation
+untested rather than claiming it passed. Unsupported non-SemVer dependency
+revisions require manual verification.
+
+Doctor never runs migrations, deploys, or CI jobs. Migration configuration,
+workflow files, and deployment file references remain untested until the agent
+or maintainer records actual execution evidence. Production operations still
+require explicit user instruction. `doctor --full` explicitly runs the docs
+build, but published hosting and guide accuracy require their own verification.
+
 ### init / doctor / update
 
 Managed state lives in `.m5kdev.json` (template version, features, catalog
@@ -180,9 +206,13 @@ snapshot, file policies). Bootstrap:
 
 - `init` writes that file at the running CLI version. It does not replay older
   migrations.
-- `doctor` is static diagnostics. `--full` also runs `check-types`, `lint`, and
-  `build` when those scripts exist. Optional `@m5kdev/module-*` pins must
-  lockstep with the Kernel (`CATALOG_VERSION_MISMATCH`).
+- `doctor` inspects managed sources, declared catalogs, installed direct
+  dependency versions, package executable targets/shims, and applicable
+  migration, CI, deployment, documentation, and build configuration paths.
+  `--full` also executes `check-types`, `lint`, `build`, and `docs:build` when
+  documentation is configured. Missing required scripts are reported as blockers.
+  Optional `@m5kdev/module-*` pins must lockstep with the Kernel
+  (`CATALOG_VERSION_MISMATCH`).
 - `update --dry-run` plans without writes. Write mode needs a clean Git tree
   and applies only conflict-free plans.
 - `update --platform web|expo|both` is the landing-only escape hatch onto the
