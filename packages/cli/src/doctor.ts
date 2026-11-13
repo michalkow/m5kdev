@@ -12,9 +12,16 @@ import {
 } from "./catalog";
 import { ChangeSet, findRepositorySymlink } from "./changes";
 import { TEMPLATE_NAME } from "./constants";
-import { createDiagnosticReport, type Diagnostic, type DiagnosticReport } from "./diagnostics";
+import {
+  createDiagnosticReport,
+  type Diagnostic,
+  type DiagnosticReport,
+  type VerificationCheck,
+} from "./diagnostics";
 import { getPendingMigrations, runMigrationValidators } from "./migrations/registry";
+import type { MigrationDefinition } from "./migrations/types";
 import { getTemplateRoot } from "./paths";
+import { inspectReadiness } from "./readiness";
 import { getCliVersion, type ManagedState, readManagedState, sha256 } from "./state";
 import { hasProductStack, loadTemplateManifest } from "./template";
 
@@ -25,6 +32,13 @@ export interface DoctorOptions {
   repoRoot: string;
   full?: boolean;
   state?: ManagedState;
+  /** Enrollment checks source compatibility before dependencies need to be installed. */
+  checkInstallation?: boolean;
+  /** Source enrollment must not require untracked runtime secrets. */
+  checkRuntimeConfiguration?: boolean;
+  templateRoot?: string;
+  cliVersion?: string;
+  registry?: readonly MigrationDefinition[];
 }
 
 async function exists(filePath: string): Promise<boolean> {
@@ -36,6 +50,7 @@ async function exists(filePath: string): Promise<boolean> {
 
 export async function diagnoseManagedRepo(options: DoctorOptions): Promise<DiagnosticReport> {
   const diagnostics: Diagnostic[] = [];
+  const verification: VerificationCheck[] = [];
   let state = options.state;
   if (!state) {
     try {
@@ -52,7 +67,7 @@ export async function diagnoseManagedRepo(options: DoctorOptions): Promise<Diagn
     }
   }
 
-  const cliVersion = getCliVersion();
+  const cliVersion = options.cliVersion ?? getCliVersion();
   if (state.template.name !== TEMPLATE_NAME) {
     diagnostics.push({
       code: "STATE_TEMPLATE_UNKNOWN",
@@ -84,7 +99,7 @@ export async function diagnoseManagedRepo(options: DoctorOptions): Promise<Diagn
     });
   }
 
-  const manifest = loadTemplateManifest(getTemplateRoot());
+  const manifest = loadTemplateManifest(options.templateRoot ?? getTemplateRoot());
   const seenFeatures = new Set<string>();
   for (const feature of state.template.features) {
     if (seenFeatures.has(feature)) {
@@ -260,7 +275,7 @@ export async function diagnoseManagedRepo(options: DoctorOptions): Promise<Diagn
     }
   }
 
-  const pending = getPendingMigrations(state, cliVersion);
+  const pending = getPendingMigrations(state, cliVersion, options.registry);
   for (const migration of pending) {
     diagnostics.push({
       code: "MIGRATION_PENDING",
@@ -272,51 +287,103 @@ export async function diagnoseManagedRepo(options: DoctorOptions): Promise<Diagn
     });
   }
   diagnostics.push(
-    ...(await runMigrationValidators({
-      repoRoot: options.repoRoot,
-      state,
-      changes: new ChangeSet(options.repoRoot),
-    }))
+    ...(await runMigrationValidators(
+      {
+        repoRoot: options.repoRoot,
+        state,
+        changes: new ChangeSet(options.repoRoot),
+      },
+      options.registry
+    ))
   );
 
-  if (options.full) {
-    const packagePath = path.join(options.repoRoot, "package.json");
-    let packageManifest: { scripts?: Record<string, string> } | undefined;
-    try {
-      packageManifest = JSON.parse(await fs.readFile(packagePath, "utf8")) as {
-        scripts?: Record<string, string>;
-      };
-    } catch (error) {
-      diagnostics.push({
-        code: "PACKAGE_JSON_UNREADABLE",
-        severity: "error",
-        message:
-          error instanceof Error
-            ? `Unable to read package.json: ${error.message}`
-            : "Unable to read package.json.",
+  verification.push({
+    id: "managed-source",
+    status: diagnostics.some((diagnostic) => diagnostic.severity === "error")
+      ? "blocked"
+      : "verified",
+    message:
+      "Inspected managed state, declared catalogs, file markers, and migration validators; this is a source check only.",
+  });
+
+  const packagePath = path.join(options.repoRoot, "package.json");
+  let packageManifest: { scripts?: Record<string, string> } | undefined;
+  try {
+    packageManifest = JSON.parse(await fs.readFile(packagePath, "utf8"));
+  } catch {
+    diagnostics.push({
+      code: "PACKAGE_JSON_UNREADABLE",
+      severity: "error",
+      message: "Unable to read package.json.",
+      path: "package.json",
+    });
+  }
+  if (packageManifest) {
+    const commands = ["check-types", "lint", "build"];
+    if (
+      packageManifest.scripts?.["docs:build"] ||
+      state.template.features.some((feature) => feature.startsWith("docs-"))
+    )
+      commands.push("docs:build");
+    for (const script of commands) {
+      const code = script.replace(/[^a-z0-9]+/gi, "_").toUpperCase();
+      const check: VerificationCheck = {
+        id: `command:${script}`,
+        status: "configured-but-untested",
+        message: `pnpm ${script} is configured but has not been executed.`,
         path: "package.json",
-      });
-    }
-    if (packageManifest) {
-      for (const script of ["check-types", "lint", "build"] as const) {
-        if (!packageManifest.scripts?.[script]) continue;
+        suggestion: "Run doctor --full after applying the relevant upgrade guides.",
+      };
+      if (
+        typeof packageManifest.scripts?.[script] !== "string" ||
+        !packageManifest.scripts[script]?.trim()
+      ) {
+        diagnostics.push({
+          code: `COMMAND_${code}_MISSING`,
+          severity: "error",
+          message: `Required ${script} script is missing.`,
+          path: "package.json",
+          suggestion:
+            "Restore the appropriate validation script before final upgrade verification.",
+        });
+        check.status = "blocked";
+        check.message = `Cannot run pnpm ${script}: the script is missing.`;
+      } else if (options.full) {
         try {
           await execFileAsync("pnpm", [script], {
             cwd: options.repoRoot,
             env: process.env,
             timeout: FULL_COMMAND_TIMEOUT_MS,
+            maxBuffer: 10 * 1024 * 1024,
           });
-        } catch (error) {
+          check.status = "verified";
+          check.message = `Local ${script} command passed; this does not prove deployment or live database behavior.`;
+          check.evidence = [`pnpm ${script} completed successfully.`];
+          check.suggestion = undefined;
+        } catch {
           diagnostics.push({
-            code: `COMMAND_${script.replace("-", "_").toUpperCase()}_FAILED`,
+            code: `COMMAND_${code}_FAILED`,
             severity: "error",
-            message: `${script} failed: ${error instanceof Error ? error.message : String(error)}`,
+            message: `pnpm ${script} failed. Rerun the command to inspect its output.`,
             path: "package.json",
           });
+          check.status = "blocked";
+          check.message = `pnpm ${script} failed.`;
+          check.suggestion = `Run pnpm ${script}, resolve its errors, and rerun doctor --full.`;
         }
       }
+      verification.push(check);
     }
   }
 
-  return createDiagnosticReport(diagnostics);
+  const readiness = await inspectReadiness({
+    repoRoot: options.repoRoot,
+    state,
+    checkInstallation: options.checkInstallation !== false,
+    checkRuntimeConfiguration: options.checkRuntimeConfiguration !== false,
+  });
+  diagnostics.push(...readiness.diagnostics);
+  verification.push(...readiness.verification);
+
+  return createDiagnosticReport(diagnostics, verification);
 }

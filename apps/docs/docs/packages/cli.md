@@ -72,6 +72,40 @@ module. Expo-only still includes a server.
 on the Managed catalog. See
 [Core vs Optional](/guides/v0.34.0-core-optional-backend-modules-migration).
 
+### Agent instructions
+
+Every platform receives a root `AGENTS.md`, with additional server/webapp
+instructions when applicable. The scaffold assumes the required rule skills
+from [michalkow/skills](https://github.com/michalkow/skills) are installed
+globally; it installs no local skill copies and ships no `CLAUDE.md` or Cursor
+rules. The existing GitHub Issues, triage-label, glossary, and ADR setup is
+included so the engineering skills have repository context.
+
+When root `PROJECT.md` exists, agents read it as the App's **North Star**:
+why the project exists, its intended function and experience, and its priorities.
+It is purpose context rather than an architecture plan. Before a user-facing
+change, agents identify the intended outcome, prefer the simplest interaction,
+and justify extra controls/screens/steps with a concrete user need. They flag
+conflicts or trade-offs before editing, verify the complete journey reaches its
+outcome, and measure the path the user waits for when responsiveness matters. The CLI does not create this file;
+when it is absent, agents continue with the task's stated goals.
+
+Instructions point agents to an accessible local m5kdev checkout or the
+[upstream repository](https://github.com/michalkow/m5kdev), matching the App's
+installed version. The maintainer's local checkout is an optional example,
+not a required path. When a task needs an upstream fix and access permits,
+agents can submit a PR there under that repository's own instructions.
+
+Production deployment requires explicit user instruction for every platform.
+For server-backed Apps, Production database migration requires that instruction
+as well; feature work or a PR request is not authorization. This
+includes Canary operations that change the Production database. Production
+migrations still run through the deploy workflow. Agents may generate and apply
+migrations to local or Development databases without additional confirmation.
+Migration integrity and disposable-reset rules remain in the generated
+`docs/agents/database-migrations.md`; the framework repository retains its own
+operational conventions and Cursor rules.
+
 ### Changesets
 
 Every generated app, including Landing-only, includes `@changesets/cli` as a root
@@ -126,13 +160,45 @@ custom subpath. The standalone Docker image bakes matching Caddy routes during
 the build, so no runtime variable is required for the mount path. Help links use
 the selected host and current locale when known.
 
-Generated `AGENTS.md` and `CLAUDE.md` require agents to update affected guides
+Generated `AGENTS.md` instructions require agents to update affected guides
 and translations in every configured locale before completing user-facing work.
+Frontend help follows screens and user journeys: how to reach and interact with
+each screen, its controls, expected outcomes, and navigation. Apps that expose a
+backend API or MCP interface document consumer usage in separate sections from
+screen walkthroughs and from each other, including authentication, permissions,
+operations/tools, inputs/outputs, examples, limits, and errors. Implementation
+internals and operations instructions remain outside the public help site.
 Detailed rules live in `docs/agents/product-documentation.md`. Framework updates
 preserve app-written guides and translations. The hosting selection persists;
 legacy apps without a selection retain standalone hosting. When upgrading an
 existing app, move any custom locale configuration into `apps/locales.ts` and
 provide guides for all configured locales before building.
+
+### Verification evidence
+
+Doctor includes a `verification` list in JSON and groups the same checks in
+human-readable output:
+
+- **Verified:** the named check succeeded, with scoped evidence such as resolved
+  package versions or a completed validation command. A local build passing
+  does not prove a working deployment or live database migration.
+- **Configured but untested:** the files, scripts, or declarations are present,
+  but the corresponding execution has not been tested.
+- **Blocked:** a prerequisite is missing, an installed version differs, or a
+  check failed. The report gives the path/reason and a next step.
+
+The existing `ok` field means there are no error diagnostics; it is not proof
+that every upgrade path was executed. A `--skip-install` scaffold can have a
+compatible source baseline while doctor correctly reports missing dependencies.
+`init` can record that baseline before installation or local runtime secrets
+are configured, marking those checks untested rather than claiming they passed. Unsupported non-SemVer dependency
+revisions require manual verification.
+
+Doctor never runs migrations, deploys, or CI jobs. Migration configuration,
+workflow files, and deployment file references remain untested until the agent
+or maintainer records actual execution evidence. Production operations still
+require explicit user instruction. `doctor --full` explicitly runs the docs
+build, but published hosting and guide accuracy require their own verification.
 
 ### init / doctor / update
 
@@ -142,11 +208,22 @@ snapshot, file policies). Bootstrap:
 
 - `init` writes that file at the running CLI version. It does not replay older
   migrations.
-- `doctor` is static diagnostics. `--full` also runs `check-types`, `lint`, and
-  `build` when those scripts exist. Optional `@m5kdev/module-*` pins must
-  lockstep with the Kernel (`CATALOG_VERSION_MISMATCH`).
-- `update --dry-run` plans without writes. Write mode needs a clean Git tree
-  and applies only conflict-free plans.
+- `doctor` inspects managed sources, declared catalogs, installed direct
+  dependency versions, package executable targets/shims, and applicable
+  migration, CI, deployment, documentation, and build configuration paths.
+  `--full` also executes `check-types`, `lint`, `build`, and `docs:build` when
+  documentation is configured. Missing required scripts are reported as blockers.
+  Optional `@m5kdev/module-*` pins must lockstep with the Kernel
+  (`CATALOG_VERSION_MISMATCH`).
+- `update --dry-run` runs read-only preflight and plans without writes. Write
+  mode needs a clean Git tree and applies only conflict-free plans. Unsafe
+  metadata/symlink prerequisites block writes; repairable baseline installation
+  or configuration gaps remain visible without preventing reconciliation.
+- Update installs when dependency inputs changed **or** installed packages/bins
+  are missing or stale. With `--skip-install`, it reports installation as
+  outstanding. Installation failure leaves already-applied sources in place,
+  reports a blocker, and requires repair and verification rather than claiming
+  the upgrade worked.
 - `update --platform web|expo|both` is the landing-only escape hatch onto the
   always-on product stack for that platform. It keeps existing Landing sources,
   copies Landing env into Deploy home, then asks optional Backend Modules and
@@ -154,6 +231,30 @@ snapshot, file policies). Bootstrap:
   optional modules) and does not skip the clean Git check. The flag is refused
   on repos that already have a Webapp or Expo, and `--platform landing` cannot
   downgrade.
+
+Update JSON retains `applied` for template application and adds `preflight`,
+`postflight` (after application), and `verification`. Preflight is the original
+snapshot; postflight inspects the new source/installation state without running
+full validation. Text output labels both phases and outstanding checks. A
+blocked final check returns a nonzero exit status; configured-but-untested
+checks remain explicit even when source application succeeds.
+
+After applying the applicable automatic/manual/conditional upgrade guides, run
+the exact target release's `doctor --full`. Verify affected migration, CI,
+deployment, and documentation paths and complete user journeys with actual
+evidence. Neither an advanced template version nor reconciliation alone proves
+a working upgrade. CI/deploy/migration execution remains untested until it has
+its own evidence; doctor/update never execute those operations. The generated
+`docs/agents/upgrades.md` gives the sequence and reporting requirements.
+
+Agent-guidance updates remove unchanged managed `CLAUDE.md` and Cursor-rule
+files and install the current AGENTS guidance. If an obsolete file was
+customized, `update` reports a conflict and writes nothing. Move useful
+App-specific guidance into `AGENTS.md`, remove the obsolete file, commit those
+changes, and rerun the update. Existing AGENTS customizations use the normal
+three-way merge; conflicts require review rather than overwriting local guidance.
+Install the required global skills before adopting this setup. App-owned
+`PROJECT.md` is preserved; the updater does not create or replace its goals.
 
 `update` **ignores** `**/fly.toml` and `**/.env.production`. Copy those once
 from a fresh scaffold if you want Fly. See

@@ -132,7 +132,12 @@ export async function initializeManagedRepo(options: InitCommandOptions) {
     renderedFiles,
     manifest,
   });
-  const report = await diagnoseManagedRepo({ repoRoot: options.repoRoot, state });
+  const report = await diagnoseManagedRepo({
+    repoRoot: options.repoRoot,
+    state,
+    checkInstallation: false,
+    checkRuntimeConfiguration: false,
+  });
   if (!report.ok) return { initialized: false, state, report };
 
   await confirmInitialization(version, options.yes);

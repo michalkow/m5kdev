@@ -125,6 +125,12 @@ pnpm dlx create-m5kdev@<version> update --dry-run
 pnpm dlx create-m5kdev@<version> update
 ```
 
+Update runs read-only preflight automatically and reports source application
+separately from verification. After applying the relevant manual/conditional
+guide steps, run `pnpm dlx create-m5kdev@<version> doctor --full` and verify the
+affected paths. See `docs/agents/upgrades.md` for the workflow and the
+Verified / Configured but untested / Blocked evidence categories.
+
 Use an exact target version in CI and when coordinating an upgrade. Existing
 projects without `.m5kdev.json` can enroll at their current compatible baseline
 with `pnpm dlx create-m5kdev@<version> init`.

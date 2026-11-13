@@ -89,7 +89,10 @@ describe("optional Deployment environments", () => {
       ]) {
         expect(await read(file)).not.toContain("m5k:");
       }
-      const report = await diagnoseManagedRepo({ repoRoot: result.targetDirectory });
+      const report = await diagnoseManagedRepo({
+        repoRoot: result.targetDirectory,
+        checkInstallation: false,
+      });
       expect(report.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
       const deploy = parse(await read(".github/workflows/deploy-app.yml"));
       expect(deploy.on.push.branches).toEqual(branches);

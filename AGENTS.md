@@ -177,6 +177,11 @@ Single-context: one root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.
 
 ## Product documentation
 
+Organize frontend help around screens and user journeys, explaining how to
+reach and interact with each screen. Maintain separate API and MCP usage
+sections when the app exposes those interfaces; keep implementation details
+in repository documentation.
+
 Maintain guides and navigation in every configured app locale, including regional
 variants, whenever user-facing behavior or supported locales change.
 
@@ -184,4 +189,4 @@ Before completing a Starter task that adds, changes, or removes user-facing
 behavior, update its end-user guides in `apps/starter/docs/docs/` in the same
 change. Read `docs/agents/product-documentation.md` for audience, content, and
 verification rules. Keep the equivalent generated-app instructions in
-`packages/cli/root-templates/AGENTS.md.tpl` and `CLAUDE.md.tpl` aligned.
+`packages/cli/root-templates/AGENTS.md.tpl` aligned.

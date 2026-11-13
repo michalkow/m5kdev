@@ -7,7 +7,7 @@
  *   - concrete strings -> {{PACKAGE_SCOPE}} / {{APP_NAME}} / {{APP_SLUG}}
  *   - "@m5kdev/x": "workspace:*" -> "catalog:m5kdev" (generated repos pin published versions)
  *   - text files gain a .tpl suffix; binaries are copied verbatim
- *   - committed root templates (repo-root files, .cursor rules, .env templates)
+ *   - committed root templates (repo-root files, agent docs, .env templates)
  *     are layered in from root-templates/
  *   - a manifest describes optional features (test harness, platforms) that
  *     `create` includes or strips based on prompts
@@ -112,6 +112,7 @@ const FEATURE_MANIFEST = {
         ".github/workflows/promotion.yml",
         "docs/deployment.md",
         "docs/agents/environments.md",
+        "docs/agents/database-migrations.md",
       ],
     },
     "env-staging": {
@@ -222,17 +223,29 @@ function isTextFile(filePath: string): boolean {
 }
 
 function tokenize(content: string): string {
-  return content
-    .replaceAll(
-      '"landing" satisfies DocumentationHosting',
-      '"{{DOCS_HOSTING}}" satisfies DocumentationHosting'
-    )
-    .replaceAll("@starter-app", "{{PACKAGE_SCOPE}}")
-    .replaceAll("M5 Starter", "{{APP_NAME}}")
-    .replaceAll("starter-app", "{{APP_SLUG}}")
-    .replace(/^(\s*"mastra:init":.*)$/m, "// m5k:ai:start\n$1\n// m5k:ai:end")
-    .replace(/"(@m5kdev\/[a-z-]+)": "workspace:\*"/g, `"$1": "${MANAGED_CATALOG_SPECIFIER}"`)
-    .replaceAll('"catalog:"', `"${MANAGED_CATALOG_SPECIFIER}"`);
+  return (
+    content
+      // Starter keeps the framework's editor rules; generated apps use global skills.
+      .replaceAll(".cursor/rules/database-migrations.mdc", "docs/agents/database-migrations.md")
+      .replaceAll(
+        "See `.cursor/rules/server-event-emit.mdc`",
+        "Use the globally installed `rule-server-event-emit` skill"
+      )
+      .replaceAll(
+        "detailed guides live in `.cursor/rules/frontend-*.mdc`",
+        "use the globally installed `rule-frontend-*` skills for detailed conventions"
+      )
+      .replaceAll(
+        '"landing" satisfies DocumentationHosting',
+        '"{{DOCS_HOSTING}}" satisfies DocumentationHosting'
+      )
+      .replaceAll("@starter-app", "{{PACKAGE_SCOPE}}")
+      .replaceAll("M5 Starter", "{{APP_NAME}}")
+      .replaceAll("starter-app", "{{APP_SLUG}}")
+      .replace(/^(\s*"mastra:init":.*)$/m, "// m5k:ai:start\n$1\n// m5k:ai:end")
+      .replace(/"(@m5kdev\/[a-z-]+)": "workspace:\*"/g, `"$1": "${MANAGED_CATALOG_SPECIFIER}"`)
+      .replaceAll('"catalog:"', `"${MANAGED_CATALOG_SPECIFIER}"`)
+  );
 }
 
 function tokenizePath(relPath: string): string {
@@ -269,7 +282,7 @@ function main(): void {
   fs.rmSync(OUT_DIR, { recursive: true, force: true });
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
-  // 1. committed root templates (repo root files, .cursor, .env templates)
+  // 1. committed root templates (repo root files, agent docs, .env templates)
   copyTree(ROOT_TEMPLATES_DIR, OUT_DIR);
 
   // 2. tokenized starter app -> apps/**

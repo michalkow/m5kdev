@@ -19,6 +19,40 @@ describe("generated public product help", () => {
     await fs.rm(tempRoot, { recursive: true, force: true });
   });
 
+  it.each(["landing", "web", "expo", "both"] as const)(
+    "guides documentation by screens and separate exposed interfaces for %s",
+    async (platform) => {
+      const { targetDirectory } = await scaffoldProject({
+        targetDirectory: path.join(tempRoot, "guided-docs"),
+        platform,
+        yes: true,
+        force: false,
+        skipInstall: true,
+        skipGit: true,
+      });
+      const read = (file: string) => fs.readFile(path.join(targetDirectory, file), "utf8");
+      const agents = await read("AGENTS.md");
+      expect(agents).toMatch(/screens and user journeys/);
+      expect(agents).toMatch(/separate.*API.*MCP/);
+      const policy = await read("docs/agents/product-documentation.md");
+      expect(policy).toContain("## Screens and user journeys");
+      expect(policy).toContain("how to reach it");
+      expect(policy).toContain("controls and actions");
+      expect(policy).toContain("expected outcomes");
+      expect(policy).toContain("related screens");
+      expect(policy).toContain("## API and MCP usage");
+      expect(policy).toContain("If the app exposes");
+      expect(policy).toContain("separate sections");
+      expect(policy).toContain("authentication");
+      expect(policy).toContain("inputs and outputs");
+      expect(policy).toContain("examples");
+      expect(policy).toContain("Do not invent interfaces");
+      expect(policy).toContain("API implementation internals");
+      expect(policy).toContain("every supported locale");
+      expect(await read("GLOSSARY.md")).toContain("API or MCP interface");
+    }
+  );
+
   it.each([
     { platform: "landing", modules: [], guides: ["index.md"] },
     { platform: "web", modules: [], guides: ["index.md", "posts.md", "signing-in.md"] },
@@ -81,9 +115,7 @@ describe("generated public product help", () => {
       expect(pkg.scripts["docs:deploy"]).toContain("m5kdev-fly-deploy --config apps/docs/fly.toml");
       expect(pkg.scripts["docs:build"]).toBe("pnpm --filter ./apps/docs build");
       expect(await read("apps/landing/src/LandingPage.tsx")).toContain("getDocumentationUrl");
-      for (const agentFile of ["AGENTS.md", "CLAUDE.md"]) {
-        expect(await read(agentFile)).toContain("docs/agents/product-documentation.md");
-      }
+      expect(await read("AGENTS.md")).toContain("docs/agents/product-documentation.md");
       const source = await read(".github/workflows/deploy-docs.yml");
       const workflow = parse(source);
       const triggers = (file: string) =>

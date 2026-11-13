@@ -5,8 +5,8 @@
 ## Language
 
 **Product documentation**:
-Public help for the people using this app: its features, tasks, expected results, and limitations, written for its audience's technical knowledge.
-_Avoid_: developer guides; engineering or agent instructions in the public help site
+Public help for people using this app: screen and user-journey guides plus separate usage guides for any exposed backend API or MCP interface, written for each audience's technical knowledge.
+_Avoid_: implementation and operations guides; engineering or agent instructions in the public help site
 # m5k:server:start
 
 ### Tenancy
