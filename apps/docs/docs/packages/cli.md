@@ -186,6 +186,15 @@ snapshot, file policies). Bootstrap:
   on repos that already have a Webapp or Expo, and `--platform landing` cannot
   downgrade.
 
+Agent-guidance updates remove unchanged managed `CLAUDE.md` and Cursor-rule
+files and install the current AGENTS guidance. If an obsolete file was
+customized, `update` reports a conflict and writes nothing. Move useful
+App-specific guidance into `AGENTS.md`, remove the obsolete file, commit those
+changes, and rerun the update. Existing AGENTS customizations use the normal
+three-way merge; conflicts require review rather than overwriting local guidance.
+Install the required global skills before adopting this setup. App-owned
+`PROJECT.md` is preserved; the updater does not create or replace its goals.
+
 `update` **ignores** `**/fly.toml` and `**/.env.production`. Copy those once
 from a fresh scaffold if you want Fly. See
 [Docker, Fly.io, and Node 24](/guides/v0.34.0-fly-deploy-migration).

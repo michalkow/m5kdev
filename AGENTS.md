@@ -184,4 +184,4 @@ Before completing a Starter task that adds, changes, or removes user-facing
 behavior, update its end-user guides in `apps/starter/docs/docs/` in the same
 change. Read `docs/agents/product-documentation.md` for audience, content, and
 verification rules. Keep the equivalent generated-app instructions in
-`packages/cli/root-templates/AGENTS.md.tpl` and `CLAUDE.md.tpl` aligned.
+`packages/cli/root-templates/AGENTS.md.tpl` aligned.
