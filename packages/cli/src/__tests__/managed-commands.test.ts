@@ -141,6 +141,49 @@ describe("managed repository commands", () => {
     );
   });
 
+  it("reports current executable readiness when the full build repairs a linked package", async () => {
+    const packagePath = path.join(repoRoot, "package.json");
+    const manifest = JSON.parse(await fs.readFile(packagePath, "utf8"));
+    manifest.dependencies = { "upgrade-fixture": "1.0.0" };
+    manifest.devDependencies = {};
+    manifest.scripts = {
+      ...manifest.scripts,
+      "check-types": 'node -e "process.exit(0)"',
+      lint: 'node -e "process.exit(0)"',
+      build: "node build-fixture.cjs",
+      "docs:build": 'node -e "process.exit(0)"',
+    };
+    await fs.writeFile(packagePath, JSON.stringify(manifest));
+    const installed = path.join(repoRoot, "node_modules/upgrade-fixture");
+    await fs.mkdir(installed, { recursive: true });
+    await fs.writeFile(
+      path.join(installed, "package.json"),
+      JSON.stringify({
+        name: "upgrade-fixture",
+        version: "1.0.0",
+        bin: { "upgrade-tool": "dist/cli.js" },
+      })
+    );
+    await fs.writeFile(
+      path.join(repoRoot, "build-fixture.cjs"),
+      [
+        'const fs = require("node:fs");',
+        'fs.mkdirSync("node_modules/upgrade-fixture/dist", { recursive: true });',
+        'fs.writeFileSync("node_modules/upgrade-fixture/dist/cli.js", "module.exports = {};");',
+        'fs.mkdirSync("node_modules/.bin", { recursive: true });',
+        'fs.writeFileSync("node_modules/.bin/upgrade-tool", "#!/bin/sh\\nexit 0\\n", { mode: 0o755 });',
+      ].join("\n")
+    );
+    const before = await diagnoseManagedRepo({ repoRoot });
+    expect(before.verification).toContainEqual(
+      expect.objectContaining({ id: "dependencies:package.json", status: "blocked" })
+    );
+    const after = await diagnoseManagedRepo({ repoRoot, full: true });
+    expect(after.verification).toContainEqual(
+      expect.objectContaining({ id: "dependencies:package.json", status: "verified" })
+    );
+  });
+
   it("does not require catalog entries belonging only to disabled features", async () => {
     await fs.rm(path.join(repoRoot, ".m5kdev.json"));
     const workspacePath = path.join(repoRoot, "pnpm-workspace.yaml");
