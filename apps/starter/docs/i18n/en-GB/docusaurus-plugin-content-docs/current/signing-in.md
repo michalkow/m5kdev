@@ -10,6 +10,9 @@ the form and submit it. If you receive a verification email, follow its link to
 confirm your email address. If sign-up asks for an invitation code, you need a
 valid code before you can continue.
 
+Use the link from the verification email without changing its address. If it is
+invalid or has expired, request a fresh verification email from the same website.
+
 ## Sign in
 
 Enter the email address and password you used when signing up. After a
@@ -20,6 +23,8 @@ successful sign-in, the product opens your signed-in home screen.
 1. On the sign-in screen, choose the forgotten-password option.
 2. Enter your email address and submit the form.
 3. Check your inbox and spam folder for a password-reset email.
-4. Follow the link, choose a new password, and return to sign in.
+4. Follow the complete link and enter your new password twice.
+5. Wait for the success message, then return to sign in with your new password.
 
-If the link has expired, request another reset email. Keep reset links private.
+If the link is incomplete, invalid, or has expired, request another reset email
+from the same website. Keep reset links private and do not edit their address.

@@ -46,6 +46,7 @@ import {
   serverEventChannelPrefix,
 } from "./base/server-event";
 import { ExperienceRegistry, type ExperienceRequest, experienceMiddleware } from "./experience";
+import { EXPERIENCE_FLOW_HEADER, ExperienceFlowSigner } from "./experience-flows";
 import { type AppI18n, type BackendAppI18nResources, createAppI18n } from "./i18n/app-i18n";
 import type * as authTables from "./modules/auth/auth.db";
 import type { BetterAuth } from "./modules/auth/auth.lib";
@@ -229,6 +230,7 @@ export type BackendModuleRepositoriesContext<Tables extends TableMap = TableMap>
     redis?: IORedis;
     resend?: Resend;
     serverEvents: ServerEventBus;
+    experienceFlows?: ExperienceFlowSigner;
   };
 };
 
@@ -247,6 +249,7 @@ export type BackendModuleServicesContext = {
     redis?: IORedis;
     resend?: Resend;
     serverEvents: ServerEventBus;
+    experienceFlows?: ExperienceFlowSigner;
   };
 };
 
@@ -315,6 +318,7 @@ export type BackendModuleDefinition<
 };
 
 export type BackendAppAuthFactoryContext = {
+  experienceFlows?: ExperienceFlowSigner;
   env: Record<string, string | undefined>;
   logger: Logger;
   appConfig: ResolvedBackendAppMetadata;
@@ -356,6 +360,8 @@ export type BackendAppConfig = {
   logger?: Logger;
   env?: Record<string, string | undefined>;
   app?: BackendAppMetadata;
+  /** Stable server key for token-bound Experience continuations. */
+  experienceFlowSecret?: string;
   auth?: {
     factory(ctx: BackendAppAuthFactoryContext): BetterAuth;
   };
@@ -732,6 +738,7 @@ function applyCors({
       USER_LOCALE_HEADER,
       USER_CURRENCY_HEADER,
       USER_PRICE_ID_HEADER,
+      EXPERIENCE_FLOW_HEADER,
     ],
   };
   const corsOptions = config.cors ? config.cors(corsDefaults) : corsDefaults;
@@ -806,6 +813,13 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   const logger = config.logger ?? rootLogger;
   const appConfig = normalizeAppConfig(config.app, env);
   const emailConfig = normalizeEmailConfig(config.email, env);
+  const flowSecret = config.experienceFlowSecret ?? env.BETTER_AUTH_SECRET;
+  const experienceFlows =
+    appConfig.experienceRegistry &&
+    flowSecret &&
+    (appConfig.experienceRegistry.strict || config.experienceFlowSecret)
+      ? new ExperienceFlowSigner(appConfig.experienceRegistry, flowSecret)
+      : undefined;
   const appI18n = appConfig.locales
     ? createAppI18n(appConfig.locales, config.i18n?.resources ?? {})
     : undefined;
@@ -837,6 +851,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     }),
   });
   const infra = {
+    experienceFlows,
     express: expressApp,
     redis: redisState.redis,
     resend: resendState.resend,
@@ -904,6 +919,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   }
 
   let auth: BetterAuth | undefined = config.auth?.factory({
+    experienceFlows,
     env,
     logger,
     appConfig,

@@ -25,6 +25,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { TFunction } from "i18next";
 import { z } from "zod";
 import type { BackendAppMetadata } from "../../app";
+import type { ExperienceFlowSigner } from "../../experience-flows";
 import type { AppI18n } from "../../i18n/app-i18n";
 import { captureServerError, ServerError } from "../../utils/errors";
 import { logger as rootLogger } from "../../utils/logger";
@@ -32,7 +33,7 @@ import { posthogCapture } from "../../utils/posthog";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
 import * as auth from "./auth.db";
-import { experienceAuthPlugin } from "./auth.experience";
+import { bindAuthRecoveryLink, experienceAuthPlugin } from "./auth.experience";
 import { createMcpOAuthPlugins } from "./auth.mcp-plugins";
 import * as oauth from "./auth.oauth.db";
 import {
@@ -101,6 +102,7 @@ export type CreateBetterAuthConfigParams = {
     ) => Promise<void>;
   };
   options?: BetterAuthOptions;
+  experienceFlows?: ExperienceFlowSigner;
   app?: BackendAppMetadata;
   config?: {
     waitlist: boolean;
@@ -189,6 +191,7 @@ export function createBetterAuth<
   config,
   i18n,
   mcp,
+  experienceFlows,
 }: CreateBetterAuthParams<O, S, E, B>): BetterAuth {
   const { email: emailService, billing: billingService } = services;
   const { waitlist = false, provisionedAccountEmailDomain } = config ?? {};
@@ -197,6 +200,8 @@ export function createBetterAuth<
   const apiUrl = app?.urls?.api ?? process.env.VITE_SERVER_URL;
   const experienceRegistry = app?.experienceRegistry;
   const multiExperience = experienceRegistry?.strict === true;
+  if (multiExperience && emailService && !experienceFlows)
+    throw new Error("Experience flow signing is required for multi-Experience recovery email");
   const normalizedProvisionedAccountEmailDomain = provisionedAccountEmailDomain
     ? provisionedAccountEmailDomain.toLowerCase().replace(/^@/, "")
     : null;
@@ -451,9 +456,24 @@ export function createBetterAuth<
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: !waitlist,
-      sendResetPassword: async ({ user, url }) => {
+      resetPasswordTokenExpiresIn: options?.emailAndPassword?.resetPasswordTokenExpiresIn,
+      sendResetPassword: async ({ user, url, token }, request) => {
         const locale = getRecordLocale(user);
-        const result = await emailService?.sendResetPassword(user.email, url, { locale });
+        const presentation = multiExperience
+          ? bindAuthRecoveryLink({
+              registry: experienceRegistry,
+              flows: experienceFlows,
+              request,
+              url,
+              token,
+              purpose: "reset-password",
+              expiresIn: options?.emailAndPassword?.resetPasswordTokenExpiresIn ?? 3600,
+            })
+          : { url, experience: undefined };
+        const result = await emailService?.sendResetPassword(user.email, presentation.url, {
+          locale,
+          experience: presentation.experience,
+        });
         if (result?.isErr()) {
           captureServerError(result.error, { logger }); // no-op when captured at creation
           hooks?.onError?.(result.error);
@@ -462,9 +482,24 @@ export function createBetterAuth<
       },
     },
     emailVerification: {
-      sendVerificationEmail: async ({ user, url }) => {
+      expiresIn: options?.emailVerification?.expiresIn,
+      sendVerificationEmail: async ({ user, url, token }, request) => {
         const locale = getRecordLocale(user);
-        const result = await emailService?.sendVerification(user.email, url, { locale });
+        const presentation = multiExperience
+          ? bindAuthRecoveryLink({
+              registry: experienceRegistry,
+              flows: experienceFlows,
+              request,
+              url,
+              token,
+              purpose: "verify-email",
+              expiresIn: options?.emailVerification?.expiresIn ?? 3600,
+            })
+          : { url, experience: undefined };
+        const result = await emailService?.sendVerification(user.email, presentation.url, {
+          locale,
+          experience: presentation.experience,
+        });
         if (result?.isErr()) {
           captureServerError(result.error, { logger }); // no-op when captured at creation
           hooks?.onError?.(result.error);
@@ -474,7 +509,7 @@ export function createBetterAuth<
     },
     plugins: [
       ...(options?.plugins ?? []),
-      ...(multiExperience ? [experienceAuthPlugin(experienceRegistry)] : []),
+      ...(multiExperience ? [experienceAuthPlugin(experienceRegistry, experienceFlows)] : []),
       setPasswordEndpointPlugin(),
       magicLink({
         disableSignUp: true,

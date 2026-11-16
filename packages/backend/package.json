@@ -357,6 +357,16 @@
         "types": "./dist/src/experience.d.cts",
         "default": "./dist/src/experience.cjs"
       }
+    },
+    "./experience-flows": {
+      "import": {
+        "types": "./dist/src/experience-flows.d.mts",
+        "default": "./dist/src/experience-flows.mjs"
+      },
+      "require": {
+        "types": "./dist/src/experience-flows.d.cts",
+        "default": "./dist/src/experience-flows.cjs"
+      }
     }
   }
 }

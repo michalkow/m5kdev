@@ -46,7 +46,7 @@ issuer, resource and JWKS address even when browser authentication accepts sever
 domains. The protected endpoint checks signature, issuer, audience and expiry and
 keeps shared DPoP replay protection; it does not require a global browser auth URL.
 
-Existing Starter sign-in screens remain unchanged because Starter uses the single-Experience shorthand. Its signing-in guides were reviewed and require no screen-instruction changes at this checkpoint.
+Starter retains the single-Experience shorthand. Its recovery screen preserves complete reset links and explains how to request a fresh link; both configured guide locales describe that journey.
 
 ### App-authored immediate email
 
@@ -73,9 +73,51 @@ injecting the private email profile or credentials.
 Explicit registries require context even with one definition; their default is not
 an email policy. Existing single-Experience shorthand keeps context-free sends and
 its existing brand customization. Unknown/disabled references fail, and overlapping
-sends never mutate the service's current brand. Recovery, invitation, waitlist,
-background and trial producers remain separate migration checkpoints. See
+sends never mutate the service's current brand. Invitation, waitlist, background
+and trial producers remain separate migration checkpoints. See
 `apps/docs/docs/modules/email/index.md` for complete immediate-send examples.
+
+### Verification and password recovery
+
+Configure a stable server-only `experienceFlowSecret` (at least 32 characters) on
+`createBackendApp`. The Kernel normalizes it once, with `BETTER_AUTH_SECRET` as an
+optional fallback for explicit Experience configuration. It constructs one immutable
+`ExperienceFlowSigner`, exposes it to module services as `infra.experienceFlows`, and
+passes it to the auth factory as `experienceFlows`. Forward that value to
+`createBetterAuth({ ..., experienceFlows })`. Direct compositions may inject a signer
+created with their registry and explicit stable key. Never put a signing key in an
+Experience Definition, public bootstrap descriptor, frontend config or job payload.
+Use the same key on all instances; rotating it invalidates outstanding continuations.
+If a custom auth factory uses another auth secret/keyring, configure the flow key
+explicitly rather than assuming the environment contains that factory's key.
+
+The signer binds purpose, the auth token/resource digest, Experience, canonical
+destination and expiry. It does not grant Membership or replace the underlying
+token's authority or one-use rules. Later integrations can reuse the injected
+`sign`/`verify` operations with distinct purposes; each flow still checks its owning
+resource and request authority.
+
+Built-in verification/reset senders now select the requesting Experience's sender,
+template and links together, retaining recipient locale. Links contain a signed
+continuation inside their callback destination. Keep the complete generated URL.
+Reset pages preserve the `experienceFlow` query value and submit it using the
+`X-M5kdev-Experience-Flow` header with the original reset token. The shared reset form
+does this automatically. Custom frontends must do the same; use the exported commons
+constants. The Kernel includes the header in default credentialed CORS configuration.
+
+HTTP requests and direct auth API calls enforce identical bindings. A valid signed
+continuation can select its registered Experience on a shared API without Origin;
+it cannot select an Experience outside that API's configured host/origin pairs.
+Changed destinations, another token's continuation, expired proofs and removed or
+disabled Experiences fail without navigating to another brand. Password reset still
+consumes Better Auth's original token once. No new tables or token store is added.
+
+Existing single-Experience shorthand continues to accept raw outstanding links.
+Opting an existing deployment into strict Experience resolution requires fresh
+verification/reset links: unsigned outstanding links are deliberately rejected rather
+than treated as an unrestricted legacy fallback. Plan that cutover in customer
+communication; an issuance-cutoff migration for accepting old links after strict
+adoption is not supplied by this checkpoint.
 
 The registry/bootstrap slice is the first checkpoint. Subsequent implementation tickets migrate auth, email, invitation, Connection and billing flows. Complete adoption requires the final integration audit in #100; adding another domain alone does not complete those flows.
 

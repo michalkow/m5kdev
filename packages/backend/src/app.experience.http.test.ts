@@ -1,7 +1,8 @@
 import { request, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { createBackendApp } from "./app";
+import { createBackendApp, defineBackendModule } from "./app";
 import { ExperienceRegistry } from "./experience";
+import { ExperienceFlowSigner } from "./experience-flows";
 import { createTestPool } from "./test/postgresql";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
@@ -64,6 +65,37 @@ export const experienceFixture = {
 };
 
 describe("domain-selected public Experience", () => {
+  it("injects one stable flow signer into services and the auth factory without publishing its secret", async () => {
+    const client = createTestPool();
+    let authFlows: unknown;
+    const probe = defineBackendModule({
+      id: "flow-probe",
+      services({ infra }) {
+        return { probe: { flows: "experienceFlows" in infra ? infra.experienceFlows : undefined } };
+      },
+    });
+    const config = {
+      db: { client },
+      app: { experiences: experienceFixture },
+      experienceFlowSecret: "a-stable-flow-key-at-least-thirty-two-characters",
+      auth: {
+        factory(ctx: Record<string, unknown>) {
+          authFlows = ctx.experienceFlows;
+          return { api: {}, options: {} } as never;
+        },
+      },
+    };
+    const built = createBackendApp(config, [probe]);
+    try {
+      const flows = built.modules["flow-probe"].services.probe.flows;
+      expect(flows).toBeInstanceOf(ExperienceFlowSigner);
+      expect(authFlows).toBe(flows);
+      expect(JSON.stringify(built.config.app)).not.toContain(config.experienceFlowSecret);
+    } finally {
+      await built.shutdown();
+      await client.end();
+    }
+  });
   it("disambiguates shared APIs only with configured Origin pairs and preserves canonical aliases", () => {
     const registry = new ExperienceRegistry({
       ...experienceFixture,

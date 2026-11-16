@@ -4,6 +4,9 @@ const config: Config = {
   testEnvironment: "node",
   roots: ["<rootDir>/src"],
   testMatch: ["**/*.test.ts", "**/*.test.tsx"],
+  moduleNameMapper: {
+    "^@m5kdev/frontend/(.*)$": "<rootDir>/../frontend/src/$1",
+  },
   transform: {
     "^.+\\.(t|j)sx?$": [
       "ts-jest",

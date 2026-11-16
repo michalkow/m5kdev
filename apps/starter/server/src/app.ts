@@ -109,7 +109,7 @@ export const builtBackendApp = createBackendApp(
       outputDirectory: process.env.EMAIL_OUTPUT_DIRECTORY ?? ".emails",
     },
     auth: {
-      factory({ db, services, appConfig, i18n, mcp }) {
+      factory({ db, services, appConfig, i18n, mcp, experienceFlows }) {
         return createBetterAuth({
           orm: db.orm,
           schema: db.schema,
@@ -117,6 +117,7 @@ export const builtBackendApp = createBackendApp(
             email: services.email.email,
           },
           app: appConfig,
+          experienceFlows,
           i18n,
           mcp,
           config: {

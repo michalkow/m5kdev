@@ -123,7 +123,12 @@ export class ExperienceRegistry {
   }
 
   destination(experience: PublicExperience, path: string): string {
-    const target = new URL(path, experience.webOrigin);
+    let target: URL;
+    try {
+      target = new URL(path, experience.webOrigin);
+    } catch {
+      throw new ExperienceContextError("Invalid Experience return destination");
+    }
     if (
       target.origin !== experience.webOrigin ||
       target.username ||

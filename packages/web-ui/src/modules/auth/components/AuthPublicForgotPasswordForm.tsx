@@ -7,7 +7,7 @@ import { createUserLocaleHeaders } from "../utils/authLocale";
 
 export function AuthPublicForgotPasswordForm() {
   const { t } = useTranslation();
-  const { locales } = useAppConfig();
+  const { locales, appUrl } = useAppConfig();
   const [isBusy, setIsBusy] = useState(false);
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -20,7 +20,7 @@ export function AuthPublicForgotPasswordForm() {
       .requestPasswordReset(
         {
           email,
-          redirectTo: "/reset-password",
+          redirectTo: new URL("/reset-password", appUrl).href,
         },
         {
           headers: locales ? createUserLocaleHeaders(locales) : {},
