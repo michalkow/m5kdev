@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import type { PublicExperience } from "@m5kdev/commons/modules/app/experience.schema";
 import {
   type AuthLocaleConfig,
   getAllowedLocaleCodes,
@@ -22,6 +24,7 @@ import { err, ok } from "neverthrow";
 import { z } from "zod";
 import type { BackendAppMetadata } from "../../app";
 import type { ServerEventBus } from "../../base/server-event";
+import { ExperienceContextError } from "../../experience";
 import type { AppI18n } from "../../i18n/app-i18n";
 import { posthogCapture } from "../../utils/posthog";
 import type { OrganizationContext, RequestContext } from "../../utils/trpc";
@@ -30,6 +33,15 @@ import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
+import {
+  type AuthPresentation,
+  accountClaimPath,
+  accountClaimSubject,
+  issueAuthFlow,
+  verifyClaimContinuation,
+  verifyInvitationContinuation,
+  verifyWaitlistContinuation,
+} from "./auth.continuation";
 import * as auth from "./auth.db";
 import {
   accountClaimMagicLinkSchemas,
@@ -138,7 +150,8 @@ export class AuthService extends BasePermissionService<
     locales?: AuthLocaleConfig,
     i18n?: AppI18n,
     rolesConfig: NormalizedAuthRolesConfig = DEFAULT_AUTH_ROLES,
-    private readonly closeAfterDays = 30
+    private readonly closeAfterDays = 30,
+    private readonly presentation: AuthPresentation = {}
   ) {
     super(repository, service, grants);
     this.appUrls = appUrls;
@@ -146,6 +159,30 @@ export class AuthService extends BasePermissionService<
     this.localeConfig = locales;
     this.i18n = i18n;
     this.rolesConfig = rolesConfig;
+  }
+
+  private presentationResult<T>(action: () => T): ServerResult<T> {
+    try {
+      return ok(action());
+    } catch (error) {
+      if (!(error instanceof ExperienceContextError)) throw error;
+      return this.error(
+        "BAD_REQUEST",
+        "This link is invalid or has expired. Request a new link from the same website.",
+        { cause: error }
+      );
+    }
+  }
+
+  private selectExperience(ctx: Pick<RequestContext, "experience" | "req">) {
+    return this.presentationResult(() => {
+      if (this.presentation.registry?.strict && !this.presentation.flows)
+        throw new ExperienceContextError("Experience flow signing is not configured");
+      const experience = this.presentation.registry?.require(ctx.experience);
+      if (experience && ctx.req)
+        this.presentation.registry?.validateBoundRequest(experience, { headers: ctx.req.headers });
+      return experience;
+    });
   }
 
   private validateOrganizationRole(role: string): ServerResult<true> {
@@ -408,6 +445,7 @@ export class AuthService extends BasePermissionService<
     email,
     role,
     webUrl,
+    experience,
     organizationName,
     organizationLocale,
     inviterUserId,
@@ -417,6 +455,7 @@ export class AuthService extends BasePermissionService<
     email: string;
     role: string;
     webUrl: string;
+    experience?: PublicExperience;
     organizationName: string;
     organizationLocale: string | null | undefined;
     inviterUserId: string;
@@ -457,13 +496,28 @@ export class AuthService extends BasePermissionService<
     const inviter = await this.repository.user.findById(inviterUserId);
     if (inviter.isErr()) return err(inviter.error);
     const inviterName = inviter.value?.name || inviter.value?.email || "";
+    const link = this.presentationResult(() =>
+      issueAuthFlow({
+        ...this.presentation,
+        experience,
+        webOrigin: webUrl,
+        purpose: "organization-invitation",
+        token: invitation.id,
+        path: `/organization/accept-invitation?${new URLSearchParams({ id: invitation.id })}`,
+        expiresAt: invitation.expiresAt,
+      })
+    );
+    if (link.isErr()) return err(link.error);
     const emailResult = await this.service.email.sendOrganizationInvite(
       email,
       organizationName,
       inviterName,
       role,
-      `${webUrl}/organization/accept-invitation?id=${invitation.id}`,
-      organizationLocale ? { locale: organizationLocale } : undefined
+      link.value.url,
+      {
+        experience: link.value.experience,
+        ...(organizationLocale ? { locale: organizationLocale } : {}),
+      }
     );
     if (emailResult.isErr()) return err(emailResult.error);
     return ok({
@@ -1507,16 +1561,49 @@ export class AuthService extends BasePermissionService<
       return this.repository.waitlist.create(input);
     });
 
+  private waitlistLink(
+    entry: InferSelectModel<typeof auth.waitlist>,
+    experience?: PublicExperience
+  ) {
+    return this.presentationResult(() => {
+      if (
+        !entry.code ||
+        !entry.expiresAt ||
+        entry.status !== "INVITED" ||
+        entry.expiresAt.getTime() <= Date.now()
+      )
+        throw new ExperienceContextError("Waitlist code is invalid or expired");
+      return issueAuthFlow({
+        ...this.presentation,
+        experience,
+        webOrigin: this.appUrls?.web,
+        purpose: "waitlist-signup",
+        token: entry.code,
+        expiresAt: entry.expiresAt,
+        path: `/signup?${new URLSearchParams({ code: entry.code, ...(entry.email ? { email: entry.email } : {}) })}`,
+      });
+    });
+  }
+
   inviteFromWaitlist = this.procedure("inviteFromWaitlist")
     .input(waitlistSchemas.input.inviteFrom)
     .output(waitlistSchemas.output.claim)
     .requireAuth("admin")
-    .handle(async ({ input }) => {
+    .use("experience", ({ ctx }) => this.selectExperience(ctx))
+    .handle(async ({ input, state }) => {
       const waitlist = await this.repository.waitlist.inviteFromWaitlist(input);
       if (waitlist.isErr()) return err(waitlist.error);
       if (!waitlist.value.code) return this.error("BAD_REQUEST");
       if (!waitlist.value.email) return this.error("BAD_REQUEST");
-      await this.service.email.sendWaitlistInvite(waitlist.value.email, waitlist.value.code);
+      const link = this.waitlistLink(waitlist.value, state.experience);
+      if (link.isErr()) return err(link.error);
+      const sent = await this.service.email.sendBrandTemplate(
+        waitlist.value.email,
+        "waitlistInvite",
+        { url: link.value.url },
+        { experience: link.value.experience }
+      );
+      if (sent.isErr()) return err(sent.error);
       return ok(waitlist.value);
     });
 
@@ -1524,7 +1611,8 @@ export class AuthService extends BasePermissionService<
     .input(waitlistSchemas.input.invite)
     .output(waitlistSchemas.output.full)
     .requireAuth()
-    .handle(async ({ input: { email, name }, ctx }) => {
+    .use("experience", ({ ctx }) => this.selectExperience(ctx))
+    .handle(async ({ input: { email, name }, ctx, state }) => {
       const count = await this.repository.waitlist.getUserWaitlistCount(ctx.user.id);
       if (count.isErr()) return err(count.error);
       if (count.value >= 3) return this.error("BAD_REQUEST", "Run out of invites");
@@ -1535,13 +1623,22 @@ export class AuthService extends BasePermissionService<
       });
       if (waitlist.isErr()) return err(waitlist.error);
       if (!waitlist.value.code) return this.error("BAD_REQUEST");
-      await this.service.email.sendWaitlistUserInvite(
+      const link = this.waitlistLink(waitlist.value, state.experience);
+      if (link.isErr()) return err(link.error);
+      const sent = await this.service.email.sendBrandTemplate(
         email,
-        waitlist.value.code,
-        ctx.user.name,
-        name,
-        { locale: ctx.user.locale ?? this.resolveDefaultLocale() }
+        "waitlistUserInvite",
+        {
+          url: link.value.url,
+          inviter: ctx.user.name,
+          name,
+        },
+        {
+          experience: link.value.experience,
+          locale: ctx.user.locale ?? this.resolveDefaultLocale(),
+        }
       );
+      if (sent.isErr()) return err(sent.error);
       posthogCapture({
         distinctId: ctx.user.id,
         event: "waitlist_invite_sent",
@@ -1551,6 +1648,19 @@ export class AuthService extends BasePermissionService<
         },
       });
       return ok(waitlist.value);
+    });
+
+  createWaitlistLink = this.procedure("createWaitlistLink")
+    .input(waitlistSchemas.input.link)
+    .output(waitlistSchemas.output.link)
+    .requireAuth()
+    .loadResource("entry", ({ input }) => this.repository.waitlist.findById(input.id))
+    .use("experience", ({ ctx }) => this.selectExperience(ctx))
+    .handle(({ ctx, state }) => {
+      if (state.entry.userId !== ctx.actor.userId)
+        return this.error("FORBIDDEN", "This invitation code belongs to another User");
+      const link = this.waitlistLink(state.entry, state.experience);
+      return link.isErr() ? err(link.error) : ok({ url: link.value.url });
     });
 
   createWaitlistCode = this.procedure("createWaitlistCode")
@@ -1574,11 +1684,18 @@ export class AuthService extends BasePermissionService<
   joinWaitlist = this.procedure("joinWaitlist")
     .input(waitlistSchemas.input.join)
     .output(waitlistSchemas.output.single)
-    .handle(async ({ input }) => {
+    .use("experience", ({ ctx }) => this.selectExperience(ctx))
+    .handle(async ({ input, state }) => {
       const waitlist = await this.repository.waitlist.create(input);
       if (waitlist.isErr()) return err(waitlist.error);
-      await this.service.email.sendWaitlistConfirmation(input.email);
-      await this.service.email.sendSystemWaitlistNotification(input.email);
+      const confirmed = await this.service.email.sendWaitlistConfirmation(input.email, {
+        experience: state.experience,
+      });
+      if (confirmed.isErr()) return err(confirmed.error);
+      const notified = await this.service.email.sendSystemWaitlistNotification(input.email, {
+        experience: state.experience,
+      });
+      if (notified.isErr()) return err(notified.error);
       return ok(waitlistSchemas.output.single.parse(waitlist.value));
     });
 
@@ -1590,11 +1707,28 @@ export class AuthService extends BasePermissionService<
       return this.repository.waitlist.update({ id, status: "REMOVED" });
     });
 
-  validateWaitlistCode = this.procedure<string>("validateWaitlistCode").handle(
-    async ({ input }): ServerResultAsync<{ status: string }> => {
-      return this.repository.waitlist.validateWaitlistCode(input);
-    }
-  );
+  validateWaitlistCode = this.procedure("validateWaitlistCode")
+    .input(waitlistSchemas.input.validateCode)
+    .handle(async ({ input, ctx }): ServerResultAsync<{ status: string }> => {
+      const status = await this.repository.waitlist.validateWaitlistCode(input.code);
+      if (status.isErr() || status.value.status !== "VALID") return status;
+      const entry = await this.repository.waitlist.queryFind({
+        filters: [{ columnId: "code", type: "string", method: "equals", value: input.code }],
+      });
+      if (entry.isErr()) return err(entry.error);
+      if (!entry.value) return ok({ status: "NOT_FOUND" });
+      const selected = this.presentationResult(() =>
+        verifyWaitlistContinuation({
+          ...this.presentation,
+          experience: ctx.experience,
+          entry: entry.value!,
+          proof: input.experienceFlow,
+          requestHeaders: ctx.req?.headers,
+        })
+      );
+      if (selected.isErr()) return err(selected.error);
+      return status;
+    });
 
   createAccountClaimCode = this.procedure("createAccountClaimCode")
     .input(accountClaimMagicLinkSchemas.input.create)
@@ -1633,26 +1767,69 @@ export class AuthService extends BasePermissionService<
   getMyAccountClaimStatus = this.procedure("getMyAccountClaimStatus")
     .output(accountClaimSchemas.output.claim.nullable())
     .requireAuth()
-    .handle(async ({ ctx }) => {
-      return this.repository.accountClaim.findPendingAccountClaimForUser(ctx.actor.userId);
-    });
+    .input(accountClaimMagicLinkSchemas.input.continuation)
+    .handle(async ({ input, ctx }) => this.pendingClaim(input, ctx));
+
+  private async pendingClaim(
+    input: { claimId?: string; experienceFlow?: string } | undefined,
+    ctx: RequestContext
+  ) {
+    if (this.presentation.registry?.strict && !input?.claimId)
+      return this.error("BAD_REQUEST", "The original account claim reference is required");
+    const claim = input?.claimId
+      ? await this.repository.accountClaim.findAccountClaimById(input.claimId)
+      : await this.repository.accountClaim.findPendingAccountClaimForUser(ctx.actor!.userId);
+    if (claim.isErr()) return err(claim.error);
+    if (!claim.value)
+      return this.presentation.registry?.strict
+        ? this.error("BAD_REQUEST", "No pending account claim was found")
+        : ok(null);
+    const row = claim.value;
+    if (
+      row.claimUserId !== ctx.actor?.userId ||
+      row.status !== "INVITED" ||
+      !row.expiresAt ||
+      row.expiresAt.getTime() <= Date.now()
+    )
+      return this.error("BAD_REQUEST", "Account claim is invalid or has expired");
+    const selected = this.presentationResult(() =>
+      verifyClaimContinuation({
+        ...this.presentation,
+        experience: ctx.experience,
+        claim: row,
+        userId: ctx.actor!.userId,
+        proof: input?.experienceFlow,
+        requestHeaders: ctx.req?.headers,
+      })
+    );
+    return selected.isErr() ? err(selected.error) : ok(accountClaimSchemas.output.claim.parse(row));
+  }
 
   setMyAccountClaimEmail = this.procedure("setMyAccountClaimEmail")
     .input(accountClaimMagicLinkSchemas.input.setEmail)
     .requireAuth()
-    .handle(async ({ ctx, input: { email } }): ServerResultAsync<{ status: boolean }> => {
-      return this.repository.accountClaim.setAccountClaimEmail({ userId: ctx.actor.userId, email });
+    .handle(async ({ ctx, input }): ServerResultAsync<{ status: boolean }> => {
+      const claim = await this.pendingClaim(input, ctx);
+      if (claim.isErr()) return err(claim.error);
+      return this.repository.accountClaim.setAccountClaimEmail({
+        userId: ctx.actor.userId,
+        email: input.email,
+        claimId: claim.value?.id,
+      });
     });
 
   acceptMyAccountClaim = this.procedure("acceptMyAccountClaim")
+    .input(accountClaimMagicLinkSchemas.input.continuation)
     .requireAuth()
-    .handle(async ({ ctx }): ServerResultAsync<{ status: boolean }> => {
-      const pendingClaim = await this.repository.accountClaim.findPendingAccountClaimForUser(
-        ctx.user.id
-      );
+    .handle(async ({ ctx, input }): ServerResultAsync<{ status: boolean }> => {
+      const pendingClaim = await this.pendingClaim(input, ctx);
       if (pendingClaim.isErr()) return err(pendingClaim.error);
 
-      const accepted = await this.repository.accountClaim.acceptAccountClaim(ctx.user.id);
+      const accepted = await this.repository.accountClaim.acceptAccountClaim(
+        ctx.user.id,
+        undefined,
+        pendingClaim.value?.id
+      );
       if (accepted.isErr()) return err(accepted.error);
 
       if (pendingClaim.value) {
@@ -1686,7 +1863,8 @@ export class AuthService extends BasePermissionService<
     .input(accountClaimMagicLinkSchemas.input.generateLink)
     .output(accountClaimMagicLinkSchemas.output.single)
     .requireAuth("admin")
-    .handle(async ({ input: { claimId, email } }) => {
+    .use("experience", ({ ctx }) => this.selectExperience(ctx))
+    .handle(async ({ input: { claimId, email }, state }) => {
       const claim = await this.repository.accountClaim.findAccountClaimById(claimId);
       if (claim.isErr()) return err(claim.error);
       if (!claim.value) return this.error("NOT_FOUND", "Claim not found");
@@ -1705,22 +1883,33 @@ export class AuthService extends BasePermissionService<
 
       const setEmail = await this.repository.accountClaim.setAccountClaimEmail({
         userId: claim.value.claimUserId,
+        claimId,
         email: targetEmail,
       });
       if (setEmail.isErr()) return err(setEmail.error);
 
-      const apiBase = (this.appUrls?.api ?? process.env.VITE_SERVER_URL)?.trim();
-      const webBase = (this.appUrls?.web ?? process.env.VITE_APP_URL)?.trim();
-      if (!apiBase || !webBase) {
-        return this.error(
-          "INTERNAL_SERVER_ERROR",
-          "Missing public API or web URL (configure app.urls.api / app.urls.web or VITE_SERVER_URL / VITE_APP_URL)"
-        );
-      }
-
+      const apiBase = state.experience?.apiOrigin ?? this.appUrls?.api;
+      const webBase = state.experience?.webOrigin ?? this.appUrls?.web;
+      if (!apiBase || !webBase)
+        return this.error("INTERNAL_SERVER_ERROR", "Public API and web origins are required");
+      const bound = this.presentationResult(() =>
+        issueAuthFlow({
+          ...this.presentation,
+          experience: state.experience,
+          purpose: "account-claim",
+          token: accountClaimSubject(claim.value!),
+          path: accountClaimPath(claimId),
+          expiresAt: claim.value!.expiresAt!,
+          webOrigin: webBase,
+        })
+      );
+      if (bound.isErr()) return err(bound.error);
+      const callback = new URL(bound.value.url);
+      const proof = callback.searchParams.get("experienceFlow");
+      callback.searchParams.delete("experienceFlow");
+      if (proof) callback.searchParams.set("claimFlow", proof);
+      const issuanceId = randomUUID();
       const magicLinkUrl = new URL("/api/auth/sign-in/magic-link", apiBase).toString();
-      const callback = new URL("/claim-account", webBase);
-      callback.searchParams.set("claim", claimId);
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), ACCOUNT_CLAIM_MAGIC_LINK_FETCH_MS);
@@ -1731,12 +1920,13 @@ export class AuthService extends BasePermissionService<
           method: "POST",
           headers: {
             "content-type": "application/json",
-            origin: new URL(apiBase).origin,
+            origin: webBase,
             connection: "close",
           },
           body: JSON.stringify({
             email: targetEmail.toLowerCase(),
             callbackURL: callback.toString(),
+            metadata: { claimId, issuanceId },
           }),
           keepalive: false,
           signal: controller.signal,
@@ -1754,7 +1944,10 @@ export class AuthService extends BasePermissionService<
         return this.error("INTERNAL_SERVER_ERROR", "Failed to generate magic link");
       }
 
-      const latest = await this.repository.accountClaim.latestAccountClaimMagicLink({ claimId });
+      const latest = await this.repository.accountClaim.latestAccountClaimMagicLink({
+        claimId,
+        id: issuanceId,
+      });
       if (latest.isErr()) return err(latest.error);
       if (!latest.value) return this.error("INTERNAL_SERVER_ERROR");
       return ok(latest.value);
@@ -1767,11 +1960,57 @@ export class AuthService extends BasePermissionService<
   // * SECTION: Invitations
   // * =============================================================================
 
+  createOrganizationInvitationLink = this.procedure("createOrganizationInvitationLink")
+    .input(invitationSchemas.input.link)
+    .output(invitationSchemas.output.link)
+    .requireAuth("organization")
+    .loadResource("invitation", ({ input }) => this.repository.invitation.findById(input.id))
+    .access({
+      action: "write",
+      entities: ({ state }) => ({ organizationId: state.invitation.organizationId }),
+    })
+    .use("experience", ({ ctx }) => this.selectExperience(ctx))
+    .handle(({ input, state }) => {
+      if (
+        state.invitation.status !== "pending" ||
+        state.invitation.expiresAt.getTime() <= Date.now()
+      )
+        return this.error("BAD_REQUEST", "Invitation is invalid or has expired");
+      return this.presentationResult(() => {
+        const origin = state.experience?.webOrigin ?? this.appUrls?.web;
+        if (!origin) throw new ExperienceContextError("Public web origin is not configured");
+        const path = input.path ?? "/organization/accept-invitation";
+        const canonical =
+          state.experience && this.presentation.registry
+            ? this.presentation.registry.destination(state.experience, path)
+            : path;
+        let destination: URL;
+        try {
+          destination = new URL(canonical, origin);
+        } catch {
+          throw new ExperienceContextError("Invalid invitation destination");
+        }
+        destination.searchParams.set("id", state.invitation.id);
+        return {
+          url: issueAuthFlow({
+            ...this.presentation,
+            experience: state.experience,
+            webOrigin: origin,
+            purpose: "organization-invitation",
+            token: state.invitation.id,
+            expiresAt: state.invitation.expiresAt,
+            path: destination.href,
+          }).url,
+        };
+      });
+    });
+
   readInvitation = this.procedure("readInvitation")
     .input(invitationSchemas.input.read)
     .output(invitationSchemas.output.read)
-    .loadResource("invitation", ({ input }) =>
-      this.repository.invitation.findById(input.id, undefined, ["organizationId", "email"])
+    .loadResource("invitation", ({ input }) => this.repository.invitation.findById(input.id))
+    .use("experience", ({ input, ctx, state }) =>
+      this.verifyInvitationFlow(input, ctx, state.invitation)
     )
     .loadResource("organization", ({ state }) =>
       this.repository.organization.findById(state.invitation.organizationId, undefined, [
@@ -1780,15 +2019,31 @@ export class AuthService extends BasePermissionService<
         "logo",
       ])
     )
-    .handle(({ state }) => {
-      return ok({
+    .handle(({ state }) =>
+      ok({
         organizationId: state.invitation.organizationId,
         email: state.invitation.email,
         name: state.organization.name,
         slug: state.organization.slug,
         logo: state.organization.logo,
-      });
-    });
+      })
+    );
+
+  private verifyInvitationFlow(
+    input: { id: string; experienceFlow?: string },
+    ctx: Pick<RequestContext, "experience" | "req">,
+    invitation: InferSelectModel<typeof auth.invitations>
+  ) {
+    return this.presentationResult(() =>
+      verifyInvitationContinuation({
+        ...this.presentation,
+        experience: ctx.experience,
+        invitation,
+        proof: input.experienceFlow,
+        requestHeaders: ctx.req?.headers,
+      })
+    );
+  }
 
   updateMemberName = this.procedure("updateMemberName")
     .input(invitationSchemas.input.updateMemberName)
@@ -1886,6 +2141,7 @@ export class AuthService extends BasePermissionService<
         organizationId: state.organization.id,
       }),
     })
+    .use("experience", ({ ctx }) => this.selectExperience(ctx))
     .handle(async ({ input, ctx, state }) => {
       const email = input.email.trim().toLowerCase();
       if (input.role === "owner") {
@@ -1894,7 +2150,7 @@ export class AuthService extends BasePermissionService<
       const roleCheck = this.validateOrganizationRole(input.role);
       if (roleCheck.isErr()) return err(roleCheck.error);
 
-      const webUrl = this.appUrls?.web;
+      const webUrl = state.experience?.webOrigin ?? this.appUrls?.web;
       if (!webUrl) {
         return this.error("INTERNAL_SERVER_ERROR", "Web URL is not configured");
       }
@@ -1953,6 +2209,7 @@ export class AuthService extends BasePermissionService<
           email,
           role: input.role,
           webUrl,
+          experience: state.experience,
           organizationName: state.organization.name,
           organizationLocale: state.organization.locale,
           inviterUserId: ctx.actor.userId,
@@ -2012,6 +2269,7 @@ export class AuthService extends BasePermissionService<
         email,
         role: input.role,
         webUrl,
+        experience: state.experience,
         organizationName: state.organization.name,
         organizationLocale: state.organization.locale,
         inviterUserId: ctx.actor.userId,
@@ -2049,6 +2307,11 @@ export class AuthService extends BasePermissionService<
       const invitation = await this.repository.invitation.findById(input.id);
       if (invitation.isErr()) return err(invitation.error);
       if (!invitation.value) return this.error("NOT_FOUND", "Invitation not found");
+
+      if (this.presentation.registry?.strict || input.experienceFlow !== undefined) {
+        const presentation = this.verifyInvitationFlow(input, ctx, invitation.value);
+        if (presentation.isErr()) return err(presentation.error);
+      }
 
       if (invitation.value.status !== "pending") {
         return this.error("BAD_REQUEST", "Invitation is not pending");

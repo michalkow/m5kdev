@@ -195,8 +195,10 @@ export const organizationSchemas = createOrganizationSchemas(DEFAULT_AUTH_ROLES)
 export const waitlistSchema = createSelectSchema(waitlist);
 export const accountClaimSchema = createSelectSchema(accountClaims);
 
+const continuationLinkSchema = z.object({ url: z.url() });
 export const waitlistSchemas = {
   output: {
+    link: continuationLinkSchema,
     single: waitlistSchema.omit({ code: true, expiresAt: true }),
     full: waitlistSchema,
     claim: waitlistSchema.omit({ code: true }),
@@ -210,6 +212,7 @@ export const waitlistSchemas = {
     }),
   },
   input: {
+    link: z.object({ id: z.string() }),
     create: z.object({
       name: z.string().optional(),
     }),
@@ -231,6 +234,7 @@ export const waitlistSchemas = {
     }),
     validateCode: z.object({
       code: z.string(),
+      experienceFlow: z.string().min(1).optional(),
     }),
   },
 };
@@ -251,6 +255,7 @@ export const organizationMemberListItemSchema = z.object({
 
 export const invitationSchemas = {
   output: {
+    link: continuationLinkSchema,
     read: z.object({
       organizationId: z.string(),
       email: z.string(),
@@ -299,8 +304,10 @@ export const invitationSchemas = {
     }),
   },
   input: {
+    link: z.object({ id: z.string(), path: z.string().optional() }),
     read: z.object({
       id: z.string(),
+      experienceFlow: z.string().min(1).optional(),
     }),
     invite: z.object({
       email: z.string(),
@@ -316,6 +323,7 @@ export const invitationSchemas = {
     }),
     accept: z.object({
       id: z.string(),
+      experienceFlow: z.string().min(1).optional(),
     }),
     cancel: z.object({
       invitationId: z.string(),
@@ -345,11 +353,16 @@ export const accountClaimSchemas = {
 export const accountClaimMagicLinkSchema = createSelectSchema(accountClaimMagicLinks);
 const accountClaimMagicLinkOutputSchema = accountClaimMagicLinkSchema.omit({ token: true });
 
+const claimContinuationInput = z.object({
+  claimId: z.string().optional(),
+  experienceFlow: z.string().min(1).optional(),
+});
 export const accountClaimMagicLinkSchemas = {
   output: {
     single: accountClaimMagicLinkOutputSchema,
   },
   input: {
+    continuation: claimContinuationInput.optional(),
     create: z.object({
       userId: z.string(),
       expiresInHours: z.number().optional(),
@@ -361,8 +374,6 @@ export const accountClaimMagicLinkSchemas = {
     listLinks: z.object({
       claimId: z.string(),
     }),
-    setEmail: z.object({
-      email: z.string().email(),
-    }),
+    setEmail: claimContinuationInput.extend({ email: z.string().email() }),
   },
 };

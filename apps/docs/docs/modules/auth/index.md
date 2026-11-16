@@ -314,3 +314,37 @@ team on the session.
 - [Admin create verified user migration](/guides/admin-create-verified-user-migration)
 - [Custom app roles migration](/guides/custom-app-roles-migration)
 - [Kernel Server events in 0.35.0](/guides/v0.35.0-kernel-server-events-migration)
+
+
+## Experience-bound invitations and account links
+
+With an explicit Experience registry, issue invitations, waitlist messages and
+account-claim links with the trusted request `ctx.experience`. AuthModule injects
+the shared flow signer. Presentation does not change Membership, Organization,
+email ownership or saved language preferences.
+
+Custom clients preserve the generated `experienceFlow` when calling
+`readInvitation`, `acceptOrganizationInvitation` and `validateWaitlistCode`. Send
+the same value in `X-M5kdev-Experience-Flow` on password signup, or as opaque social
+additionalData at initiation. The framework validates it before copying values to
+server-owned OAuth state; another Experience cannot replace an existing binding.
+Missing, revoked, expired or tampered continuations produce an error before
+acceptance. The shared UI handles this contract and keeps the intended website.
+
+Managers copy links using `createOrganizationInvitationLink({ id, path? })`;
+Users share their own waitlist codes with `createWaitlistLink({ id })`. Use the
+returned URL rather than assembling a raw id/code link in the browser. These
+operations enforce the existing resource permissions and current expiry.
+
+Account-claim magic links are still stored for administrator retrieval. Preserve
+`claim` and `claimFlow` on the claim page. Pass `{ claimId, experienceFlow: claimFlow }`
+to claim status/completion, include those fields when setting the claim email or
+creating its password, and retain them in a canonical provider-link callback.
+Generation and completion stay scoped to that exact claim/User. Changing its
+email invalidates older login links for the previous email; no email delivery is
+added by this feature.
+
+Single-Experience shorthand keeps raw outstanding links. Strict adoption uses the
+explicit bounded legacy policy described in the repository's
+`docs/experience-adoption.md`; missing proof is never a general default-brand
+fallback. See [Email](/modules/email) for sender/template precedence.

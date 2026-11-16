@@ -1231,6 +1231,7 @@ export class AuthWaitlistRepository extends BaseTableRepository<
           .update(this.schema.waitlist)
           .set({
             status: "INVITED",
+            updatedAt: new Date(),
             code: uuidv4(),
             expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
           })
@@ -1418,7 +1419,7 @@ export class AuthAccountClaimRepository extends BaseTableRepository<
     });
 
   async setAccountClaimEmail(
-    { userId, email }: { userId: string; email: string },
+    { userId, email, claimId }: { userId: string; email: string; claimId?: string },
     tx?: Orm
   ): ServerResultAsync<{ status: boolean }> {
     const db = tx ?? this.orm;
@@ -1444,6 +1445,7 @@ export class AuthAccountClaimRepository extends BaseTableRepository<
         .where(
           and(
             eq(this.schema.accountClaims.claimUserId, userId),
+            ...(claimId ? [eq(this.schema.accountClaims.id, claimId)] : []),
             eq(this.schema.accountClaims.status, "INVITED"),
             gte(this.schema.accountClaims.expiresAt, new Date())
           )
@@ -1483,7 +1485,11 @@ export class AuthAccountClaimRepository extends BaseTableRepository<
     return ok({ status: true });
   }
 
-  async acceptAccountClaim(userId: string, tx?: Orm): ServerResultAsync<{ status: boolean }> {
+  async acceptAccountClaim(
+    userId: string,
+    tx?: Orm,
+    claimId?: string
+  ): ServerResultAsync<{ status: boolean }> {
     const db = tx ?? this.orm;
     const claimResult = await this.throwableQuery(() =>
       db
@@ -1492,6 +1498,7 @@ export class AuthAccountClaimRepository extends BaseTableRepository<
         .where(
           and(
             eq(this.schema.accountClaims.claimUserId, userId),
+            ...(claimId ? [eq(this.schema.accountClaims.id, claimId)] : []),
             eq(this.schema.accountClaims.status, "INVITED"),
             gte(this.schema.accountClaims.expiresAt, new Date())
           )
@@ -1562,9 +1569,9 @@ export class AuthAccountClaimRepository extends BaseTableRepository<
     });
 
   latestAccountClaimMagicLink = this.query("latestAccountClaimMagicLink")
-    .input(accountClaimMagicLinkSchemas.input.listLinks)
+    .input(accountClaimMagicLinkSchemas.input.listLinks.extend({ id: z.string().optional() }))
     .output(accountClaimMagicLinkSchemas.output.single.nullable())
-    .handle(async ({ claimId }) => {
+    .handle(async ({ claimId, id }) => {
       const result = await this.throwableQuery(() =>
         this.orm
           .select({
@@ -1577,7 +1584,12 @@ export class AuthAccountClaimRepository extends BaseTableRepository<
             createdAt: this.schema.accountClaimMagicLinks.createdAt,
           })
           .from(this.schema.accountClaimMagicLinks)
-          .where(eq(this.schema.accountClaimMagicLinks.claimId, claimId))
+          .where(
+            and(
+              eq(this.schema.accountClaimMagicLinks.claimId, claimId),
+              ...(id ? [eq(this.schema.accountClaimMagicLinks.id, id)] : [])
+            )
+          )
           .orderBy(desc(this.schema.accountClaimMagicLinks.createdAt))
           .limit(1)
       );

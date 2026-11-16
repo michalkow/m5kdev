@@ -139,9 +139,12 @@ and resolved props. Registry email profiles and transport credentials are not
 injected into template props or stored output. Interleaved sends keep independent
 presentation context.
 
-This checkpoint covers app-authored immediate sends. Built-in recovery,
-invitation, waitlist and trial producers require their own flow-context migration;
-registering multiple domains alone does not migrate those producers.
+Auth now owns bound verification, recovery, Organization invitation and waitlist
+flows. Use those owning Auth operations to issue complete signed links; Email
+wrappers format messages and do not create resource authority. Account-claim
+sign-in links remain stored for administrator retrieval rather than emailed.
+Background communication policy and trial producers remain separate checkpoints;
+registering domains alone does not migrate those producers.
 
 ## Email preview helper
 

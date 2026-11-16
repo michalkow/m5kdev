@@ -18,6 +18,7 @@ interface AuthPublicSignupRouteProps {
 export function AuthPublicSignupRoute({ providers, waitlist = false }: AuthPublicSignupRouteProps) {
   const { t } = useTranslation("web-ui");
 
+  const [experienceFlow] = useQueryState("experienceFlow");
   const [code] = useQueryState("code");
   const [invitation] = useQueryState("invitation");
   const [email] = useQueryState("email");
@@ -27,9 +28,42 @@ export function AuthPublicSignupRoute({ providers, waitlist = false }: AuthPubli
   const hasInvitation = !!invitation;
 
   const trpc = useAppTRPC<BackendTRPCRouter>();
-  const { data: invitationData } = useQuery(
-    trpc.auth.readInvitation.queryOptions({ id: invitation || "" }, { enabled: hasInvitation })
+  const {
+    data: invitationData,
+    isPending: invitationPending,
+    error: invitationError,
+  } = useQuery(
+    trpc.auth.readInvitation.queryOptions(
+      { id: invitation || "", experienceFlow: experienceFlow ?? undefined },
+      { enabled: hasInvitation }
+    )
   );
+
+  const waitlistQuery = useQuery(
+    trpc.auth.validateWaitlistCode.queryOptions(
+      { code: code ?? "", experienceFlow: experienceFlow ?? undefined },
+      { enabled: hasWaitlist && !!code && !hasInvitation }
+    )
+  );
+  const pending =
+    (hasInvitation && invitationPending) ||
+    (hasWaitlist && !!code && !hasInvitation && waitlistQuery.isPending);
+  const invalid =
+    invitationError ||
+    (hasWaitlist &&
+      code &&
+      !hasInvitation &&
+      (waitlistQuery.error || (waitlistQuery.data && waitlistQuery.data.status !== "VALID")));
+  if (pending || invalid)
+    return (
+      <Alert status={invalid ? "danger" : "default"}>
+        <Alert.Content>
+          <Alert.Title>
+            {t(invalid ? "web-ui:auth.continuation.invalid" : "web-ui:auth.continuation.loading")}
+          </Alert.Title>
+        </Alert.Content>
+      </Alert>
+    );
 
   return (
     <div className="flex flex-col gap-6">
@@ -61,12 +95,15 @@ export function AuthPublicSignupRoute({ providers, waitlist = false }: AuthPubli
           </Card.Header>
           <Card.Content>
             <div className="grid gap-6">
-              {hasWaitlist && code && <AuthPublicWaitlistCodeValidation code={code} />}
+              {hasWaitlist && code && (
+                <AuthPublicWaitlistCodeValidation code={code} experienceFlow={experienceFlow} />
+              )}
               <AuthPublicProviders
                 providers={providers}
                 code={code}
                 invitation={invitation}
                 trialPriceId={trialPriceId}
+                experienceFlow={experienceFlow}
                 requestSignUp
               />
               <AuthPublicSignupForm
@@ -75,6 +112,7 @@ export function AuthPublicSignupRoute({ providers, waitlist = false }: AuthPubli
                 email={email}
                 waitlist={hasWaitlist}
                 trialPriceId={trialPriceId}
+                experienceFlow={experienceFlow}
               />
             </div>
           </Card.Content>

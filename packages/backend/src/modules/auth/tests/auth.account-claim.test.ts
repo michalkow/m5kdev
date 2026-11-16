@@ -78,7 +78,8 @@ describe("AuthService Account claim", () => {
           queryList: fakes.queryList ?? jest.fn().mockResolvedValue(ok({ rows: [pendingClaim] })),
           findPendingAccountClaimForUser:
             fakes.findPendingAccountClaimForUser ?? jest.fn().mockResolvedValue(ok(pendingClaim)),
-          acceptAccountClaim: fakes.acceptAccountClaim ?? jest.fn().mockResolvedValue(ok({ status: true })),
+          acceptAccountClaim:
+            fakes.acceptAccountClaim ?? jest.fn().mockResolvedValue(ok({ status: true })),
         } as unknown as AuthAccountClaimRepository,
         user: {} as AuthUserRepository,
         invitation: {} as AuthInvitationRepository,
@@ -133,7 +134,7 @@ describe("AuthService Account claim", () => {
     expect(status.isOk()).toBe(true);
     expect(accepted.isOk()).toBe(true);
     expect(findPendingAccountClaimForUser).toHaveBeenCalledWith(USER_ID);
-    expect(acceptAccountClaim).toHaveBeenCalledWith(USER_ID);
+    expect(acceptAccountClaim).toHaveBeenCalledWith(USER_ID, undefined, CLAIM_ID);
     expect(waitlist.findPendingAccountClaimForUser).not.toHaveBeenCalled();
     expect(waitlist.acceptAccountClaim).not.toHaveBeenCalled();
   });

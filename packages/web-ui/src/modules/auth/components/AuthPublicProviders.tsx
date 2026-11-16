@@ -16,6 +16,7 @@ export function AuthPublicProviders({
   requestSignUp = false,
   returnTo = "/",
   trialPriceId,
+  experienceFlow,
 }: {
   providers?: string[];
   code?: string | null;
@@ -24,10 +25,12 @@ export function AuthPublicProviders({
   returnTo?: string;
   invitation?: string | null;
   trialPriceId?: string | null;
+  experienceFlow?: string | null;
 }) {
   const { t } = useTranslation();
   const { locales } = useAppConfig();
   const additionalData = {
+    ...(experienceFlow ? { experienceFlow } : {}),
     ...(code ? { waitlistInvitationCode: code } : {}),
     ...(invitation ? { organizationInvitationCode: invitation } : {}),
     ...(locales ? { userLocale: resolvePublicLocale(locales) } : {}),

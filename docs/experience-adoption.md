@@ -73,8 +73,9 @@ injecting the private email profile or credentials.
 Explicit registries require context even with one definition; their default is not
 an email policy. Existing single-Experience shorthand keeps context-free sends and
 its existing brand customization. Unknown/disabled references fail, and overlapping
-sends never mutate the service's current brand. Invitation, waitlist, background
-and trial producers remain separate migration checkpoints. See
+sends never mutate the service's current brand. Background and trial producers
+remain separate migration checkpoints. Auth invitation, waitlist and account-claim
+continuation support is described below. See
 `apps/docs/docs/modules/email/index.md` for complete immediate-send examples.
 
 ### Verification and password recovery
@@ -150,6 +151,69 @@ Experience and canonical destination. An adapter must obtain authoritative issua
 data from its existing resource and still authenticate, expire and consume that
 resource before any effect. Do not pass caller-supplied timestamps as authority.
 
-The registry/bootstrap slice is the first checkpoint. Subsequent implementation tickets migrate auth, email, invitation, Connection and billing flows. Complete adoption requires the final integration audit in #100; adding another domain alone does not complete those flows.
+Registry/bootstrap, Auth, Email and invitation/waitlist/account-claim checkpoints are
+available. Background communication, Connection and Billing flows remain separate
+implementation tickets. Complete adoption requires the final integration audit in
+#100; adding another domain alone does not complete those flows.
 
 One Trial Plan per currency, one Subscription per Organization/environment and account-wide Stripe identity constraints remain. This feature does not provision domains/certificates, merge data, add independent subscriptions or promise cross-domain SSO.
+
+
+### Invitations, waitlist and account claim
+
+AuthService now requires the initiating `ctx.experience` for branded issuance in
+explicit-registry mode. AuthModule injects the same registry and
+`infra.experienceFlows`; direct service compositions pass those through its final
+presentation options. Missing/invalid context is rejected before Membership or
+claim-email writes. Ordinary actor/list operations and raw owned waitlist-code
+creation remain presentation-neutral; link/email issuance is the presentation boundary.
+
+Organization invitation emails and waitlist signup links carry a resource-bound
+`experienceFlow`. Custom frontends must preserve it through invitation reads,
+acceptance, waitlist validation and password signup (`X-M5kdev-Experience-Flow`).
+Social signup transports it as opaque additionalData only at initiation; Auth
+validates the resource/proof and stores approved continuation values in OAuth
+serverContext. Callback hooks never trust client-supplied Experience fields or
+raw additionalData instead of that state. Bound host/Origin checks protect User,
+Account and Session writes and provider-error redirects, including a shared API
+with no browser Origin. The complete shared frontend does this automatically.
+Signed service reads and accepts also validate `ctx.req` against the same registry
+using `validateBoundRequest`: an A proof cannot select A on a separate B/C-only
+shared API. Trusted direct calls without an HTTP request can use explicit or
+signed context.
+
+Use `auth.createOrganizationInvitationLink({ id, path? })` for a manager's copy
+action and `auth.createWaitlistLink({ id })` for an owned share code. Each operation
+checks the current resource, authority, expiry and presentation, then issues a
+canonical signed link. A configured custom local accept path is allowed; another
+origin is rejected. Public readers do not mint proofs or relabel links. Fresh
+explicit authorized issuance can choose a different Experience for the same
+still-pending underlying resource; an existing signed continuation keeps its own
+identity. MemberId, invited email and current Membership role stay authoritative.
+
+Waitlist confirmation and system notification use the entered request Experience.
+The selected email profile's systemNotificationEmail overrides the existing global
+recipient, and its admin link uses that Experience. Strict context-free admin/API
+calls require trusted explicit context; this does not infer a background
+communication policy from recipient email. Existing locale/default behavior stays
+unchanged, and visiting a brand never writes User preferences.
+
+Account-claim magic links remain administrator-readable stored URLs, not newly
+emailed messages. Generation scopes both email updates and stored-link retrieval
+to the requested claim and issuance. The actual magic token is bound to its own
+canonical callback; `claimFlow` separately binds post-login operations to the claim
+and User. Preserve `claim`, `claimFlow` and the complete magic callback. Strict
+post-login operations require the original claim reference even under legacy
+admission; they never choose another pending claim by recency. Password
+creation, provider linking and claim completion verify this continuation before
+credential or claim effects. Revoked/expired claims, changed owner email and
+another User at a recycled email cannot use an old link to sign in. Existing
+Better Auth token consumption still enforces one-use login.
+
+Raw outstanding links remain supported in shorthand. Explicit adoption can reuse
+experienceFlowLegacyPolicy: invitation createdAt, waitlist updatedAt (or createdAt
+before any rotation), claim createdAt and the original magic token's trusted
+issuance time gate eligibility. Rotating a waitlist code stamps new updatedAt, so
+it cannot inherit an older row's legacy allowance. Invalid supplied proofs never
+downgrade to legacy; other Experiences, newer issuance and elapsed acceptance
+deadlines fail closed. No new tables or metadata migration are needed.

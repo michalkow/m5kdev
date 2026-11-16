@@ -116,6 +116,20 @@ export class ExperienceRegistry {
     throw new ExperienceContextError("Unknown Experience host");
   }
 
+  /** A bound flow may disambiguate only an API/Origin pair registered for that Experience. */
+  validateBoundRequest(experience: PublicExperience, request: HeaderInput): PublicExperience {
+    const approved = this.get(experience.id);
+    const selected = this.resolveRequest({
+      headers: {
+        ...request.headers,
+        origin: request.headers.origin ?? approved.webOrigin,
+      },
+    });
+    if (selected?.id !== approved.id)
+      throw new ExperienceContextError("Conflicting Experience transport");
+    return approved;
+  }
+
   require(experience?: PublicExperience | ExperienceId | string): PublicExperience {
     if (experience) return this.get(typeof experience === "string" ? experience : experience.id);
     if (!this.strict) return this.defaultExperience;

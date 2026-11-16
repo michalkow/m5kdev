@@ -1,6 +1,11 @@
 import type { PublicExperience } from "@m5kdev/commons/modules/app/experience.schema";
 import type { BetterAuthPlugin } from "better-auth";
-import { APIError, addOAuthServerContext, createAuthMiddleware } from "better-auth/api";
+import {
+  APIError,
+  addOAuthServerContext,
+  createAuthMiddleware,
+  getOAuthState,
+} from "better-auth/api";
 import { z } from "zod";
 import { ExperienceContextError, type ExperienceRegistry } from "../../experience";
 import {
@@ -8,6 +13,7 @@ import {
   EXPERIENCE_FLOW_PARAMETER,
   type ExperienceFlowSigner,
 } from "../../experience-flows";
+import type { SignupContinuation } from "./auth.continuation";
 
 export function bindAuthRecoveryLink(input: {
   registry: ExperienceRegistry;
@@ -15,7 +21,7 @@ export function bindAuthRecoveryLink(input: {
   request?: Request;
   url: string;
   token: string;
-  purpose: "reset-password" | "verify-email";
+  purpose: "reset-password" | "verify-email" | "account-claim-magic-link";
   expiresIn: number;
 }) {
   const experience = input.registry.require(resolveAuthExperience(input.registry, input.request));
@@ -63,21 +69,33 @@ function verificationIssuedAt(token: string): number {
   }
 }
 
+export function validateAuthTransport(
+  registry: ExperienceRegistry,
+  experience: PublicExperience,
+  request?: Request,
+  headers?: Headers
+) {
+  const values = Object.fromEntries((headers ?? request?.headers ?? new Headers()).entries());
+  if (!values.host && request) values.host = new URL(request.url).host;
+  registry.validateBoundRequest(experience, { headers: values });
+}
+
 export function experienceAuthPlugin(
   registry: ExperienceRegistry,
-  flows?: ExperienceFlowSigner
+  flows?: ExperienceFlowSigner,
+  options: {
+    signup?: (
+      headers: Headers | undefined,
+      additionalData: unknown,
+      experience: PublicExperience
+    ) => Promise<SignupContinuation>;
+    magic?: (token: string, callback: URL, experience: PublicExperience) => Promise<void>;
+    claimLink?: (
+      callbackURL: unknown,
+      experience: PublicExperience
+    ) => Promise<{ claimId: string; experienceFlow?: string } | undefined>;
+  } = {}
 ): BetterAuthPlugin {
-  const validateBoundTransport = (
-    experience: PublicExperience,
-    request?: Request,
-    headers?: Headers
-  ) => {
-    const values = new Headers(headers ?? request?.headers);
-    if (!values.has("origin")) values.set("origin", experience.webOrigin);
-    const selected = resolveAuthExperience(registry, request, values);
-    if (selected?.id !== experience.id)
-      throw new ExperienceContextError("Conflicting recovery transport");
-  };
   return {
     id: "m5kdev-experience",
     hooks: {
@@ -102,9 +120,57 @@ export function experienceAuthPlugin(
                   issuedAt = record?.createdAt ? new Date(record.createdAt).getTime() : Number.NaN;
                 }
                 const bound = flows.verifyLegacy({ issuedAt, experience, destination });
-                validateBoundTransport(bound.experience, ctx.request, ctx.headers);
+                validateAuthTransport(registry, bound.experience, ctx.request, ctx.headers);
                 return bound.destination;
               };
+              if (ctx.path === "/magic-link/verify") {
+                if (
+                  !flows ||
+                  typeof ctx.query?.token !== "string" ||
+                  typeof ctx.query?.callbackURL !== "string"
+                )
+                  throw new ExperienceContextError("Missing account claim continuation");
+                let callback: URL;
+                try {
+                  callback = new URL(ctx.query.callbackURL, ctx.context.baseURL);
+                } catch {
+                  throw new ExperienceContextError("Invalid account claim destination");
+                }
+                const proofs = callback.searchParams.getAll(EXPERIENCE_FLOW_PARAMETER);
+                callback.searchParams.delete(EXPERIENCE_FLOW_PARAMETER);
+                if (proofs.length > 1)
+                  throw new ExperienceContextError("Invalid account claim continuation");
+                const record =
+                  proofs.length === 0
+                    ? await ctx.context.internalAdapter.findVerificationValue(ctx.query.token)
+                    : undefined;
+                const bound =
+                  proofs.length === 1
+                    ? flows.verify({
+                        proof: proofs[0],
+                        purpose: "account-claim-magic-link",
+                        token: ctx.query.token,
+                        experience,
+                        destination: callback.href,
+                      })
+                    : flows.verifyLegacy({
+                        issuedAt: record?.createdAt
+                          ? new Date(record.createdAt).getTime()
+                          : Number.NaN,
+                        experience,
+                        destination: callback.href,
+                      });
+                validateAuthTransport(registry, bound.experience, ctx.request, ctx.headers);
+                for (const key of ["errorCallbackURL", "newUserCallbackURL"]) {
+                  if (
+                    ctx.query[key] !== undefined &&
+                    registry.destination(bound.experience, String(ctx.query[key])) !== callback.href
+                  )
+                    throw new ExperienceContextError("Conflicting account claim destination");
+                }
+                await options.magic?.(ctx.query.token, callback, bound.experience);
+                return;
+              }
               if (ctx.path === "/reset-password") {
                 const proof = ctx.headers?.get(EXPERIENCE_FLOW_HEADER);
                 const token = ctx.body?.token || ctx.query?.token;
@@ -116,7 +182,7 @@ export function experienceAuthPlugin(
                 }
                 if (!flows) throw new ExperienceContextError("Missing recovery continuation");
                 const bound = flows.verify({ proof, purpose: "reset-password", token, experience });
-                validateBoundTransport(bound.experience, ctx.request, ctx.headers);
+                validateAuthTransport(registry, bound.experience, ctx.request, ctx.headers);
                 return;
               }
               if (ctx.path === "/reset-password/:token" || ctx.path === "/verify-email") {
@@ -151,7 +217,7 @@ export function experienceAuthPlugin(
                   experience,
                   destination: callback.href,
                 });
-                validateBoundTransport(bound.experience, ctx.request, ctx.headers);
+                validateAuthTransport(registry, bound.experience, ctx.request, ctx.headers);
                 return;
               }
               const sensitive =
@@ -170,12 +236,24 @@ export function experienceAuthPlugin(
                 if (typeof body[key] === "string")
                   body[key] = registry.destination(selected, body[key]);
               }
+              const signupContinuation =
+                options.signup &&
+                ["/sign-up/email", "/sign-in/social", "/sign-in/oauth2"].includes(ctx.path)
+                  ? await options.signup(ctx.headers, ctx.body?.additionalData, selected)
+                  : undefined;
               if (
                 ["/sign-in/social", "/sign-in/oauth2", "/link-social", "/link-account"].includes(
                   ctx.path
                 )
               ) {
-                await addOAuthServerContext({ experienceId: selected.id });
+                const claimContinuation = ["/link-social", "/link-account"].includes(ctx.path)
+                  ? await options.claimLink?.(body.callbackURL, selected)
+                  : undefined;
+                await addOAuthServerContext({
+                  experienceId: selected.id,
+                  ...(signupContinuation ? { signupContinuation } : {}),
+                  ...(claimContinuation ? { claimContinuation } : {}),
+                });
               }
               // Direct auth.api calls have headers but no Request. Supply the same
               // validated transport context to upstream email callbacks.
@@ -193,6 +271,37 @@ export function experienceAuthPlugin(
                   "This link is invalid or has expired. Request a new link from the same website.",
               });
             }
+          }),
+        },
+      ],
+      after: [
+        {
+          matcher: (ctx) => /^\/(callback\/|oauth2\/callback\/)/.test(ctx.path ?? ""),
+          handler: createAuthMiddleware(async (ctx) => {
+            const state = await getOAuthState();
+            if (!state) return undefined;
+            try {
+              const id = state.serverContext?.experienceId;
+              if (typeof id !== "string")
+                throw new ExperienceContextError("Missing OAuth Experience");
+              validateAuthTransport(registry, registry.get(id), ctx.request, ctx.headers);
+            } catch (error) {
+              if (!(error instanceof ExperienceContextError)) throw error;
+              // Upstream provider-error redirects precede database hooks. Replace the
+              // redirect response as well as its headers; throwing alone retains 302.
+              ctx.context.responseHeaders?.delete("location");
+              return new Response(
+                JSON.stringify({
+                  message:
+                    "This sign-in continuation is invalid. Start again from the same website.",
+                }),
+                {
+                  status: 400,
+                  headers: { "content-type": "application/json" },
+                }
+              );
+            }
+            return undefined;
           }),
         },
       ],

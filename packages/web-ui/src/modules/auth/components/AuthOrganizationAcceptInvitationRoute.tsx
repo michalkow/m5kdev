@@ -2,12 +2,13 @@ import { Button, Card, Spinner } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppRoles } from "@m5kdev/frontend/modules/app/hooks/useAppRoles";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
+import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { parseAsString, useQueryStates } from "nuqs";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useSearchParams } from "react-router";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
 type Phase = "idle" | "accepting" | "success" | "error" | "mismatch";
@@ -37,12 +38,15 @@ export function AuthOrganizationAcceptInvitationRoute({
   onInvalidateScopedQueries,
 }: AuthOrganizationAcceptInvitationRouteProps) {
   const { t } = useTranslation();
+  const authClient = useAuthClient();
   const organizationRoles = useAppRoles("organization");
   const resolvedManagerRoles = managerRoles ?? organizationRoles.managerRoles;
-  const [searchParams] = useSearchParams();
+  const [{ id: invitationId, experienceFlow }] = useQueryStates({
+    id: parseAsString,
+    experienceFlow: parseAsString,
+  });
   const { data: session, isLoading, registerSession } = useSession();
   const navigate = useNavigate();
-  const invitationId = searchParams.get("id");
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [mismatchEmails, setMismatchEmails] = useState<{
@@ -57,7 +61,10 @@ export function AuthOrganizationAcceptInvitationRoute({
     trpc.auth.acceptOrganizationInvitation.mutationOptions()
   );
   const { data: invitationData, isError: invitationFailed } = useQuery(
-    trpc.auth.readInvitation.queryOptions({ id: invitationId || "" }, { enabled: !!invitationId })
+    trpc.auth.readInvitation.queryOptions(
+      { id: invitationId || "", experienceFlow: experienceFlow ?? undefined },
+      { enabled: !!invitationId }
+    )
   );
   const sessionUserId = session?.user?.id;
   const sessionEmail = session?.user?.email;
@@ -70,8 +77,9 @@ export function AuthOrganizationAcceptInvitationRoute({
     return new URLSearchParams({
       invitation: invitationId,
       email: invitedEmail,
+      ...(experienceFlow ? { experienceFlow } : {}),
     }).toString();
-  }, [invitationId, invitedEmail]);
+  }, [invitationId, invitedEmail, experienceFlow]);
 
   useEffect(() => {
     if (!invitationId) {
@@ -133,7 +141,10 @@ export function AuthOrganizationAcceptInvitationRoute({
     const run = async (): Promise<void> => {
       try {
         setPhase("accepting");
-        const accepted = await acceptOrganizationInvitation({ id: invitationId });
+        const accepted = await acceptOrganizationInvitation({
+          id: invitationId,
+          experienceFlow: experienceFlow ?? undefined,
+        });
         const organizationId = accepted.organizationId;
         const invitationRole = accepted.role;
 
@@ -180,6 +191,8 @@ export function AuthOrganizationAcceptInvitationRoute({
     };
   }, [
     acceptOrganizationInvitation,
+    authClient.organization.setActive,
+    experienceFlow,
     defaultRedirectPath,
     invitationData,
     invitationId,

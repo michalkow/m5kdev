@@ -82,14 +82,12 @@ describe("AuthService Waitlist codes", () => {
         user: {} as AuthUserRepository,
         invitation: {} as AuthInvitationRepository,
         waitlist: {
-          getUserWaitlistCount:
-            fakes.getUserWaitlistCount ?? jest.fn().mockResolvedValue(ok(0)),
+          getUserWaitlistCount: fakes.getUserWaitlistCount ?? jest.fn().mockResolvedValue(ok(0)),
           getUserWaitlistCodeCount:
             fakes.getUserWaitlistCodeCount ?? jest.fn().mockResolvedValue(ok(0)),
           createWaitlistCode:
             fakes.createWaitlistCode ?? jest.fn().mockResolvedValue(ok(mintedRow())),
-          inviteToWaitlist:
-            fakes.inviteToWaitlist ?? jest.fn().mockResolvedValue(ok(emailedRow())),
+          inviteToWaitlist: fakes.inviteToWaitlist ?? jest.fn().mockResolvedValue(ok(emailedRow())),
           queryList: fakes.queryList ?? jest.fn().mockResolvedValue(ok({ rows: [] })),
           create: fakes.create ?? jest.fn().mockResolvedValue(ok({ id: "join-1", email: "a@b.c" })),
         } as unknown as AuthWaitlistRepository,
@@ -97,13 +95,14 @@ describe("AuthService Waitlist codes", () => {
       },
       {
         email: {
-          sendWaitlistUserInvite: jest.fn().mockResolvedValue(ok(undefined)),
+          sendBrandTemplate: jest.fn().mockResolvedValue(ok(undefined)),
           sendWaitlistConfirmation: jest.fn().mockResolvedValue(ok(undefined)),
           sendSystemWaitlistNotification: jest.fn().mockResolvedValue(ok(undefined)),
         } as unknown as EmailService,
       },
       defaultAuthGrants,
-      createFakeBus()
+      createFakeBus(),
+      { web: "https://app.example.test" }
     );
   }
 
@@ -158,7 +157,16 @@ describe("AuthService Waitlist codes", () => {
     const ownQueryList = jest.fn().mockResolvedValue(ok({ rows: [mintedRow()], total: 1 }));
     const adminQueryList = jest.fn().mockResolvedValue(
       ok({
-        rows: [{ id: "w1", email: "a@b.c", name: "A", createdAt: new Date(), updatedAt: null, status: "WAITLIST" }],
+        rows: [
+          {
+            id: "w1",
+            email: "a@b.c",
+            name: "A",
+            createdAt: new Date(),
+            updatedAt: null,
+            status: "WAITLIST",
+          },
+        ],
         total: 1,
       })
     );

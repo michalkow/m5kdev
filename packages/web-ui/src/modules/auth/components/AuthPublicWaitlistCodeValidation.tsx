@@ -6,13 +6,20 @@ import { useTranslation } from "react-i18next";
 
 interface AuthPublicWaitlistCodeValidationProps {
   code: string;
+  experienceFlow?: string | null;
 }
 
-export function AuthPublicWaitlistCodeValidation({ code }: AuthPublicWaitlistCodeValidationProps) {
+export function AuthPublicWaitlistCodeValidation({
+  code,
+  experienceFlow,
+}: AuthPublicWaitlistCodeValidationProps) {
   const { t } = useTranslation();
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const { data, isLoading, error } = useQuery(
-    trpc.auth.validateWaitlistCode.queryOptions({ code })
+    trpc.auth.validateWaitlistCode.queryOptions({
+      code,
+      experienceFlow: experienceFlow ?? undefined,
+    })
   );
   const status = data?.status;
 

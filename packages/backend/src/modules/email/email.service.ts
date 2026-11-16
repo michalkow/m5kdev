@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { PublicExperience } from "@m5kdev/commons/modules/app/experience.schema";
 import { toI18nLanguageTag } from "@m5kdev/commons/modules/auth/auth.locale";
-import { ok } from "neverthrow";
+import { err, ok } from "neverthrow";
 import { createElement, type FunctionComponent } from "react";
 import { prerender } from "react-dom/static";
 import { Resend } from "resend";
@@ -479,6 +479,17 @@ export class EmailService extends BaseService<never, never> {
     );
   }
 
+  private emailWebOrigin(options?: OverrideOptions) {
+    try {
+      return ok(
+        this.experienceRegistry?.require(options?.experience).webOrigin ?? this.appConfig.urls?.web
+      );
+    } catch (error) {
+      if (!(error instanceof ExperienceContextError)) throw error;
+      return this.error("INTERNAL_SERVER_ERROR", error.message, { cause: error });
+    }
+  }
+
   async sendWaitlistConfirmation(email: string, overrideOptions?: OverrideOptions) {
     return this.sendTemplate(
       email,
@@ -492,11 +503,17 @@ export class EmailService extends BaseService<never, never> {
   }
 
   async sendSystemWaitlistNotification(email: string, overrideOptions?: OverrideOptions) {
-    if (!this.systemNotificationEmail) return ok();
-
-    const url = buildAppUrl(this.appConfig.urls?.web, "/admin/waitlist") ?? undefined;
+    const origin = this.emailWebOrigin(overrideOptions);
+    if (origin.isErr()) return err(origin.error);
+    const experience = this.experienceRegistry?.require(overrideOptions?.experience);
+    const recipient =
+      (experience
+        ? this.experienceRegistry?.emailProfile(experience)?.systemNotificationEmail
+        : undefined) ?? this.systemNotificationEmail;
+    if (!recipient) return ok();
+    const url = buildAppUrl(origin.value, "/admin/waitlist") ?? undefined;
     return this.sendTemplate(
-      this.systemNotificationEmail,
+      recipient,
       "systemWaitlistNotification",
       {
         email,
@@ -508,8 +525,10 @@ export class EmailService extends BaseService<never, never> {
   }
 
   async sendWaitlistInvite(email: string, code: string, overrideOptions?: OverrideOptions) {
+    const origin = this.emailWebOrigin(overrideOptions);
+    if (origin.isErr()) return err(origin.error);
     const params = new URLSearchParams({ code, email });
-    const url = buildAppUrl(this.appConfig.urls?.web, `/signup?${params.toString()}`);
+    const url = buildAppUrl(origin.value, `/signup?${params.toString()}`);
     if (!url) {
       return this.error("INTERNAL_SERVER_ERROR", "App web URL is not configured for email links");
     }
@@ -532,7 +551,9 @@ export class EmailService extends BaseService<never, never> {
     name?: string,
     overrideOptions?: OverrideOptions
   ) {
-    const url = buildAppUrl(this.appConfig.urls?.web, `/signup?code=${code}&email=${email}`);
+    const origin = this.emailWebOrigin(overrideOptions);
+    if (origin.isErr()) return err(origin.error);
+    const url = buildAppUrl(origin.value, `/signup?code=${code}&email=${email}`);
     if (!url) {
       return this.error("INTERNAL_SERVER_ERROR", "App web URL is not configured for email links");
     }

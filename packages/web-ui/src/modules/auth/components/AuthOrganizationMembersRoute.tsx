@@ -428,19 +428,17 @@ export function AuthOrganizationMembersRoute({
     [canManageOrganization, cancelInvitationMutation]
   );
 
-  const invitationLinkBase = useMemo(() => {
-    const invitationPath = invitationAcceptPath ?? "/organization/accept-invitation";
-    if (/^https?:\/\//i.test(invitationPath)) {
-      return `${invitationPath}?id=`;
-    }
-    return typeof window === "undefined"
-      ? `${invitationPath}?id=`
-      : `${window.location.origin}${invitationPath}?id=`;
-  }, [invitationAcceptPath]);
+  const invitationLinkMutation = useMutation(
+    trpc.auth.createOrganizationInvitationLink.mutationOptions()
+  );
 
   const onCopyInvitationLink = async (invitationId: string) => {
     try {
-      await navigator.clipboard.writeText(`${invitationLinkBase}${invitationId}`);
+      const link = await invitationLinkMutation.mutateAsync({
+        id: invitationId,
+        path: invitationAcceptPath,
+      });
+      await navigator.clipboard.writeText(link.url);
       toast.success(resolvedLabels.inviteLinkCopied);
     } catch {
       toast.error(resolvedLabels.copyInviteLinkError);

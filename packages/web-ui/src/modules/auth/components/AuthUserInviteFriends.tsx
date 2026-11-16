@@ -1,17 +1,26 @@
 import { Button, Card, Chip, Input, Label, toast } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
-import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Link2Icon, Mail, Send, Ticket, Users, Zap } from "lucide-react";
+import { CheckCircle2, Copy, Link2Icon, Mail, Send, Ticket, Users, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { z } from "zod";
-import { CopyButton } from "../../../components/CopyButton";
 
 export function AuthUserInviteFriends() {
-  const { appUrl } = useAppConfig();
+  const { t } = useTranslation();
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();
+  const shareLink = useMutation(trpc.auth.createWaitlistLink.mutationOptions());
+  const copyLink = async (id: string) => {
+    try {
+      const link = await shareLink.mutateAsync({ id });
+      await navigator.clipboard.writeText(link.url);
+      toast.success(t("web-ui:common.copySuccess"));
+    } catch {
+      toast.danger(t("web-ui:common.copyError"));
+    }
+  };
 
   const { data: waitlist = [] } = useQuery(trpc.auth.listWaitlist.queryOptions());
   const { data: count = 0 } = useQuery(trpc.auth.getUserWaitlistCount.queryOptions());
@@ -222,13 +231,19 @@ export function AuthUserInviteFriends() {
 
                   <div className="flex items-center gap-3">
                     {item.code && (
-                      <CopyButton
+                      <Button
                         variant="ghost"
                         size="sm"
                         className="text-success-600"
-                        text={`${appUrl}/signup?code=${item.code}`}
+                        onPress={() => {
+                          void copyLink(item.id);
+                        }}
+                        isDisabled={shareLink.isPending && shareLink.variables?.id === item.id}
+                        aria-label={t("web-ui:common.copy")}
                         isIconOnly
-                      />
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
                     )}
                   </div>
                 </div>
