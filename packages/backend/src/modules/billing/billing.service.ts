@@ -40,10 +40,11 @@ import type { EmailService } from "../email/email.service";
 import {
   type BillingBrowserContext,
   type BillingPresentation,
+  type CheckoutFlow,
   type CheckoutPresentation,
-  type CheckoutReturnInput,
-  type CheckoutStartInput,
+  checkoutCompletionInputSchema,
   checkoutNonceKey,
+  checkoutStartInputSchema,
   checkoutVersionKey,
   createCheckoutReturnUrls,
   verifyCheckoutReturn,
@@ -52,8 +53,8 @@ import {
   type BrowserPortalPresentation,
   createPortalReturnUrl,
   type PortalPresentation,
-  type PortalReturnInput,
-  type PortalStartInput,
+  portalReturnInputSchema,
+  portalStartInputSchema,
   verifyPortalReturn,
 } from "./billing.portal";
 import type { BillingRepository } from "./billing.repository";
@@ -166,11 +167,39 @@ export class BillingService extends BasePermissionService<
     });
   }
 
-  async startCheckout(
-    input: CheckoutStartInput,
+  /** Shared commercial authority; flow-specific proof and browser/trial selection stay at the caller. */
+  private async authorizeBillingReturn(
+    resource: Pick<CheckoutFlow, "organizationId" | "environment" | "customerId">,
+    browser: Pick<CheckoutFlow, "memberId" | "userId" | "sessionId"> | undefined,
     ctx: BillingBrowserContext
-  ): ServerResultAsync<{ url: string }> {
-    return this.throwableAsync(async () => {
+  ) {
+    const authorized = await this.authorizeBillingBrowser(ctx);
+    if (authorized.isErr()) return err(authorized.error);
+    if (
+      authorized.value.organizationId !== resource.organizationId ||
+      this.repository.billing.environment !== resource.environment ||
+      (browser &&
+        (authorized.value.memberId !== browser.memberId ||
+          authorized.value.userId !== browser.userId ||
+          authorized.value.sessionId !== browser.sessionId))
+    )
+      throw new ExperienceContextError("Billing return browser context changed");
+    const customerId = await this.repository.billing.getOrganizationCustomerId(
+      resource.organizationId
+    );
+    if (customerId.isErr()) return err(customerId.error);
+    if (customerId.value !== resource.customerId)
+      throw new ExperienceContextError("Billing return Customer changed");
+    const customer = await this.repository.billing.getStripeCustomer(resource.customerId);
+    if (customer.isErr()) return err(customer.error);
+    if (customer.value.deleted)
+      throw new ExperienceContextError("Billing return Customer was deleted");
+    return authorized;
+  }
+
+  readonly startCheckout = this.procedure<unknown, BillingBrowserContext>("startCheckout")
+    .input(checkoutStartInputSchema)
+    .handle(async ({ input, ctx }) => {
       const registry = this.presentation.registry;
       if (!registry)
         return this.error("INTERNAL_SERVER_ERROR", "Billing public origins are not configured");
@@ -191,14 +220,11 @@ export class BillingService extends BasePermissionService<
         return this.error("INTERNAL_SERVER_ERROR", "Checkout did not provide a navigation URL");
       return ok({ url: session.value.url });
     });
-  }
 
-  async completeCheckout(
-    input: CheckoutReturnInput,
-    kind: "success" | "cancel",
-    ctx: BillingBrowserContext
-  ): ServerResultAsync<{ url: string }> {
-    return this.throwableAsync(async () => {
+  readonly completeCheckout = this.procedure<unknown, BillingBrowserContext>("completeCheckout")
+    .input(checkoutCompletionInputSchema)
+    .handle(async ({ input, ctx }) => {
+      const { kind } = input;
       const registry = this.presentation.registry;
       if (!registry)
         return this.error("INTERNAL_SERVER_ERROR", "Billing public origins are not configured");
@@ -223,26 +249,9 @@ export class BillingService extends BasePermissionService<
       if (ctx.experience && ctx.experience.id !== bound.experience.id)
         throw new ExperienceContextError("Conflicting Checkout Experience");
       if (ctx.req) registry.validateBoundRequest(bound.experience, ctx.req);
-      const authorized = await this.authorizeBillingBrowser(ctx);
-      if (authorized.isErr()) return err(authorized.error);
       const flow = bound.flow;
-      if (
-        authorized.value.organizationId !== flow.organizationId ||
-        authorized.value.memberId !== flow.memberId ||
-        authorized.value.userId !== flow.userId ||
-        authorized.value.sessionId !== flow.sessionId ||
-        this.repository.billing.environment !== flow.environment
-      )
-        throw new ExperienceContextError("Checkout browser context changed");
-      const customerId = await this.repository.billing.getOrganizationCustomerId(
-        flow.organizationId
-      );
-      if (customerId.isErr()) return err(customerId.error);
-      if (customerId.value !== flow.customerId)
-        throw new ExperienceContextError("Checkout Customer changed");
-      const customer = await this.repository.billing.getStripeCustomer(flow.customerId);
-      if (customer.isErr()) return err(customer.error);
-      if (customer.value.deleted) throw new ExperienceContextError("Checkout Customer was deleted");
+      const authorized = await this.authorizeBillingReturn(flow, flow, ctx);
+      if (authorized.isErr()) return err(authorized.error);
       if (kind === "cancel") return ok({ url: bound.destination });
       if (!input.checkoutSessionId) throw new ExperienceContextError("Missing Checkout Session");
       const retrieved = await this.repository.billing.getCheckoutSession(input.checkoutSessionId);
@@ -270,13 +279,10 @@ export class BillingService extends BasePermissionService<
       if (synced.isErr()) url.searchParams.set("error", "SYNC_FAILED");
       return ok({ url: url.href });
     });
-  }
 
-  async startPortal(
-    input: PortalStartInput,
-    ctx: BillingBrowserContext
-  ): ServerResultAsync<{ url: string }> {
-    return this.throwableAsync(async () => {
+  readonly startPortal = this.procedure<unknown, BillingBrowserContext>("startPortal")
+    .input(portalStartInputSchema)
+    .handle(async ({ input, ctx }) => {
       const registry = this.presentation.registry;
       if (!registry)
         return this.error("INTERNAL_SERVER_ERROR", "Billing public origins are not configured");
@@ -300,13 +306,10 @@ export class BillingService extends BasePermissionService<
       if (portal.isErr()) return err(portal.error);
       return ok({ url: portal.value.url });
     });
-  }
 
-  async completePortal(
-    input: PortalReturnInput,
-    ctx: BillingBrowserContext
-  ): ServerResultAsync<{ url: string }> {
-    return this.throwableAsync(async () => {
+  readonly completePortal = this.procedure<unknown, BillingBrowserContext>("completePortal")
+    .input(portalReturnInputSchema)
+    .handle(async ({ input, ctx }) => {
       const registry = this.presentation.registry;
       if (!registry || !this.presentation.flows)
         throw new ExperienceContextError("Missing Portal signing configuration");
@@ -314,33 +317,15 @@ export class BillingService extends BasePermissionService<
       if (ctx.experience && ctx.experience.id !== bound.experience.id)
         throw new ExperienceContextError("Conflicting Portal Experience");
       if (ctx.req) registry.validateBoundRequest(bound.experience, ctx.req);
-      const authorized = await this.authorizeBillingBrowser(ctx);
-      if (authorized.isErr()) return err(authorized.error);
       const flow = bound.flow;
-      if (
-        authorized.value.organizationId !== flow.organizationId ||
-        this.repository.billing.environment !== flow.environment ||
-        (flow.source.kind === "browser" &&
-          (authorized.value.memberId !== flow.source.memberId ||
-            authorized.value.userId !== flow.source.userId ||
-            authorized.value.sessionId !== flow.source.sessionId))
-      )
-        throw new ExperienceContextError("Portal browser context changed");
-      const customerId = await this.repository.billing.getOrganizationCustomerId(
-        flow.organizationId
-      );
-      if (customerId.isErr()) return err(customerId.error);
-      if (customerId.value !== flow.customerId)
-        throw new ExperienceContextError("Portal Customer changed");
-      const customer = await this.repository.billing.getStripeCustomer(flow.customerId);
-      if (customer.isErr()) return err(customer.error);
-      if (customer.value.deleted) throw new ExperienceContextError("Portal Customer was deleted");
+      const browser = flow.source.kind === "browser" ? flow.source : undefined;
+      const authorized = await this.authorizeBillingReturn(flow, browser, ctx);
+      if (authorized.isErr()) return err(authorized.error);
       const synced = await this.syncStripeData({ customerId: flow.customerId });
       const url = new URL(bound.destination);
       if (synced.isErr()) url.searchParams.set("error", "SYNC_FAILED");
       return ok({ url: url.href });
     });
-  }
 
   async createOrganizationCustomer({
     organizationId,

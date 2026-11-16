@@ -32,7 +32,9 @@ function legacyMetadataConsumer(pool: Pool) {
 }
 void legacyMetadataConsumer;
 
-import type { AuthenticatedActor } from "@m5kdev/backend/base/base.actor";
+import type { AuthenticatedActor, OrganizationActor } from "@m5kdev/backend/base/base.actor";
+import type { BillingBrowserContext } from "@m5kdev/backend/modules/billing/billing.checkout";
+import type { BillingService } from "@m5kdev/backend/modules/billing/billing.service";
 // Existing literal caller context remains open while optional Experience is checked at runtime.
 import type { FileService } from "@m5kdev/backend/modules/file/file.service";
 
@@ -42,3 +44,21 @@ void files.getDownloadUrl(
   { fileId: "legacy-file" },
   { actor: oldFileActor, user: { id: "legacy-user" } }
 );
+
+function billingBrowserConsumer(
+  service: BillingService,
+  browser: BillingBrowserContext,
+  actor: OrganizationActor
+) {
+  // Express/direct callers retain User + session authority without manufacturing an Actor.
+  const direct = { user: browser.user, session: browser.session, experience: browser.experience };
+  void service.startCheckout({ priceId: "price-current" }, direct);
+  void service.startPortal({}, direct);
+  void service.completeCheckout({ kind: "success" }, direct);
+  void service.completePortal({ flow: "issued-flow", experienceFlow: "issued-proof" }, direct);
+  // Organization procedures can retain their actual authenticated Actor.
+  void service.startCheckout({ priceId: "price-current" }, { ...direct, actor });
+  // @ts-expect-error the route-owned outcome belongs to the operation input.
+  void service.completeCheckout({}, direct);
+}
+void billingBrowserConsumer;

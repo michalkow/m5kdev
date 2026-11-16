@@ -335,8 +335,11 @@ never falls back to raw behavior; there is no invented issuance timestamp.
 Custom service composition can inject `{ registry, flows, resolveCheckoutSessionCreate }`
 as BillingService's fourth constructor argument. Portal adds
 `resolveBillingPortalSessionCreate` in that same runtime object. `startCheckout(input, context)`
-and `completeCheckout(input, kind, context)` require the explicit browser User/
-session and validated presentation/request context. Existing server-owned commercial
+and `completeCheckout({ ...input, kind }, context)` require the explicit browser User/
+session and validated presentation/request context. The completing route supplies
+`kind: "success" | "cancel"`; it never comes from an untrusted query field. An
+optional Actor, when present, is the actual authorized OrganizationActor; direct
+User/session integrations do not need to fabricate one. Existing server-owned commercial
 `createCheckoutSession` calls retain their Owner fields and now recheck live Member
 and open Organization. Strict compositions require the approved presentation and
 shared signer; contextual callbacks also require explicit presentation in shorthand

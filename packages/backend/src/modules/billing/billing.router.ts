@@ -73,12 +73,15 @@ export function createBillingRouter(
         return res
           .status(400)
           .json({ message: "Invalid billing link. Reopen Billing from the original website." });
-      const result = await service.completeCheckout(input.data, kind, {
-        user: req.user,
-        session: req.session,
-        experience: req.experience,
-        req,
-      });
+      const result = await service.completeCheckout(
+        { ...input.data, kind },
+        {
+          user: req.user,
+          session: req.session,
+          experience: req.experience,
+          req,
+        }
+      );
       if (result.isErr())
         return res.status(result.error.getHTTPStatusCode()).json({ message: result.error.message });
       return res.redirect(result.value.url);

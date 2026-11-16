@@ -3,15 +3,14 @@ import { err, ok } from "neverthrow";
 import { ExperienceContextError, type ExperienceRegistry } from "../../experience";
 import type { User } from "../auth/auth.lib";
 import type { AuthRequest } from "../auth/auth.middleware";
-import type { ServerResultAsync } from "../base/base.dto";
 import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
-import type {
-  ConnectCallbackInput,
-  ConnectDeleteInputSchema,
-  ConnectListInputSchema,
-  ConnectNavigation,
-  ConnectStartInput,
+import {
+  type ConnectDeleteInputSchema,
+  type ConnectListInputSchema,
+  connectCallbackInputSchema,
+  connectNavigationSchema,
+  connectStartInputSchema,
 } from "./connect.dto";
 import {
   buildAuthorizationUrl,
@@ -151,11 +150,10 @@ export class ConnectService extends BasePermissionService<
     return super.handleUnknownError(error);
   }
 
-  async startAuth(
-    input: ConnectStartInput,
-    ctx: ConnectFlowContext
-  ): ServerResultAsync<ConnectNavigation> {
-    return this.throwableAsync<ConnectNavigation>(async () => {
+  readonly startAuth = this.procedure<unknown, ConnectFlowContext>("startAuth")
+    .input(connectStartInputSchema)
+    .output(connectNavigationSchema)
+    .handle(async ({ input, ctx }) => {
       const registry = this.presentation.registry;
       if (!registry)
         return this.error("INTERNAL_SERVER_ERROR", "Connection public origins are not configured");
@@ -183,13 +181,11 @@ export class ConnectService extends BasePermissionService<
       }
       return ok({ url: authorization.value, outcome: "authorized" as const });
     });
-  }
 
-  async handleCallback(
-    input: ConnectCallbackInput,
-    ctx: ConnectFlowContext
-  ): ServerResultAsync<ConnectNavigation> {
-    return this.throwableAsync<ConnectNavigation>(async () => {
+  readonly handleCallback = this.procedure<unknown, ConnectFlowContext>("handleCallback")
+    .input(connectCallbackInputSchema)
+    .output(connectNavigationSchema)
+    .handle(async ({ input, ctx }) => {
       const registry = this.presentation.registry;
       if (!registry)
         return this.error("INTERNAL_SERVER_ERROR", "Connection public origins are not configured");
@@ -256,7 +252,6 @@ export class ConnectService extends BasePermissionService<
         return ok(this.navigation({ destination, outcome: "failed", provider: input.provider }));
       return ok(this.navigation({ destination, outcome: "connected", provider: input.provider }));
     });
-  }
 
   async refreshToken(connectionId: string) {
     const connection = await this.repository.connect.findById(connectionId);

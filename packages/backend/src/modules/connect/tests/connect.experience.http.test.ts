@@ -817,3 +817,35 @@ describe("Connection JSON browser start", () => {
     }
   });
 });
+
+describe("Named Connection browser operations", () => {
+  it("identifies missing presentation and invalid callback state without provider effects", async () => {
+    const f = await fixture();
+    try {
+      const neutral = new ConnectService(
+        f.built.modules.connect.repositories,
+        [],
+        defaultConnectGrants
+      );
+      const missing = await neutral.startAuth(
+        { provider: "recording" },
+        { user: { id: "person" }, sessionId: "missing-session" }
+      );
+      expect(missing.isErr()).toBe(true);
+      if (missing.isErr()) expect(missing.error.context).toMatchObject({ procedure: "startAuth" });
+      const service: ConnectService = f.built.modules.connect.services.connect;
+      const invalid = await service.handleCallback(
+        { provider: "recording", state: "invalid" },
+        { user: { id: "person" }, sessionId: "missing-session" }
+      );
+      expect(invalid.isErr()).toBe(true);
+      if (invalid.isErr()) {
+        expect(invalid.error.code).toBe("BAD_REQUEST");
+        expect(invalid.error.context).toMatchObject({ procedure: "handleCallback" });
+      }
+      expect(f.exchanges).toEqual([]);
+    } finally {
+      await f.close();
+    }
+  });
+});

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { PublicExperience } from "@m5kdev/commons/modules/app/experience.schema";
 import type Stripe from "stripe";
 import { z } from "zod";
+import type { OrganizationActor } from "../../base/base.actor";
 import { ExperienceContextError, type ExperienceRegistry } from "../../experience";
 import { EXPERIENCE_FLOW_PARAMETER, type ExperienceFlowSigner } from "../../experience-flows";
 import type { Session, User } from "../auth/auth.lib";
@@ -16,7 +17,7 @@ export type CheckoutStartInput = z.infer<typeof checkoutStartInputSchema>;
 export type BillingBrowserContext = {
   user: Pick<User, "id" | "email" | "name">;
   session?: Pick<Session, "id" | "activeOrganizationId"> | null;
-  actor?: { organizationId: string };
+  actor?: OrganizationActor;
   experience?: PublicExperience;
   req?: Pick<AuthRequest, "headers">;
 };
@@ -70,6 +71,11 @@ export const checkoutReturnInputSchema = z.strictObject({
   checkoutSessionId: z.string().min(1).optional(),
 });
 export type CheckoutReturnInput = z.infer<typeof checkoutReturnInputSchema>;
+/** Route-owned outcome; it is never selected from the callback query. */
+export const checkoutCompletionInputSchema = checkoutReturnInputSchema.extend({
+  kind: z.enum(["success", "cancel"]),
+});
+export type CheckoutCompletionInput = z.infer<typeof checkoutCompletionInputSchema>;
 export const checkoutNonceKey = "m5kdevCheckoutNonce";
 export const checkoutVersionKey = "m5kdevCheckoutFlow";
 const purpose = { success: "billing-checkout-success", cancel: "billing-checkout-cancel" } as const;
