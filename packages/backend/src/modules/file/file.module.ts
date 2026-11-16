@@ -51,11 +51,8 @@ function defaultBuckets(): string[] {
   return envBucket ? [envBucket] : [];
 }
 
-function localStorePublicBaseUrl(): string {
-  return (process.env.VITE_SERVER_URL ?? `http://127.0.0.1:${process.env.PORT ?? "3000"}`).replace(
-    /\/$/,
-    ""
-  );
+function localStorePublicBaseUrl(input: { apiUrl?: string; port?: string }): string {
+  return (input.apiUrl ?? `http://127.0.0.1:${input.port ?? "3000"}`).replace(/\/$/, "");
 }
 
 export class FileModule extends BaseModule<
@@ -87,6 +84,7 @@ export class FileModule extends BaseModule<
   override repositories({
     db,
     appConfig,
+    env,
   }: ModuleRepositoriesContext<FileModuleDeps, FileModuleTables>) {
     const defaultBucket = this.buckets[0] ?? process.env.AWS_S3_BUCKET ?? "local-s3";
     // Deployed environments use S3; only `local` uses the local object store.
@@ -95,7 +93,10 @@ export class FileModule extends BaseModule<
         ? new FileS3Repository()
         : new LocalFileObjectStore({
             root: path.join(tmpdir(), "m5kdev-file-s3"),
-            publicBaseUrl: localStorePublicBaseUrl(),
+            publicBaseUrl: localStorePublicBaseUrl({
+              apiUrl: appConfig.urls.api,
+              port: env.PORT,
+            }),
             defaultBucket,
           });
     if (fileS3 instanceof LocalFileObjectStore) {
@@ -113,6 +114,7 @@ export class FileModule extends BaseModule<
   override services({
     repositories,
     deps,
+    appConfig,
   }: ModuleServicesContext<FileModuleDeps, FileModuleRepositories>) {
     return {
       file: new FileService(
@@ -127,6 +129,7 @@ export class FileModule extends BaseModule<
           deleteAfterDays: this.deleteAfterDays,
           purgeObjectOnDelete: !deps.workflow,
           fileTypes: this.fileTypes,
+          experienceRegistry: appConfig.experienceRegistry,
         }
       ),
     };

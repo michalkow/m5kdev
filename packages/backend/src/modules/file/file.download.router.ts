@@ -1,6 +1,6 @@
 import express, { type Response, type Router } from "express";
-import type { MembershipLookup } from "../base/base.actor";
 import type { AuthMiddleware, AuthRequest } from "../auth/auth.middleware";
+import type { MembershipLookup } from "../base/base.actor";
 import type { FileService } from "./file.service";
 
 export interface CreateDownloadRouterOptions {
@@ -30,6 +30,7 @@ export function createDownloadRouter({
       userId: user.id,
       userRole: user.role ?? "user",
       memberships,
+      experience: req.experience,
     });
     if (result.isErr()) {
       const status =

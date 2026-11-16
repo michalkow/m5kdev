@@ -1,9 +1,14 @@
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { PublicExperience } from "@m5kdev/commons/modules/app/experience.schema";
 import { err, ok } from "neverthrow";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseExternaRepository } from "../base/base.repository";
-import { type FileObjectBody, type FileObjectStore, fileS3MockObjectUrl } from "./file.object-store";
+import {
+  type FileObjectBody,
+  type FileObjectStore,
+  fileS3MockObjectUrl,
+} from "./file.object-store";
 
 export interface LocalFileObjectStoreOptions {
   readonly root: string;
@@ -19,6 +24,14 @@ interface ObjectMeta {
 export class LocalFileObjectStore extends BaseExternaRepository implements FileObjectStore {
   constructor(private readonly options: LocalFileObjectStoreOptions) {
     super();
+  }
+
+  /** URL presentation only; immutable storage root, bucket and File ownership stay shared. */
+  withPublicOrigin(apiOrigin: PublicExperience["apiOrigin"]): LocalFileObjectStore {
+    return new LocalFileObjectStore({
+      ...this.options,
+      publicBaseUrl: apiOrigin,
+    });
   }
 
   getBucket(): string {

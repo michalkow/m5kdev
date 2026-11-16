@@ -59,7 +59,7 @@ export function AuthPublicSignupForm({
 }) {
   const { t } = useTranslation();
   const authClient = useAuthClient();
-  const { locales } = useAppConfig();
+  const { locales, appUrl } = useAppConfig();
   const [status, setStatus] = useState("start");
   const [userEmail, setUserEmail] = useState<string>(email || "");
   const { registerSession } = useSession();
@@ -81,6 +81,7 @@ export function AuthPublicSignupForm({
           name: submittedEmail,
           email: submittedEmail,
           password,
+          callbackURL: new URL("/login", appUrl).href,
         },
         {
           headers: {

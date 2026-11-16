@@ -48,6 +48,10 @@ export const connectStartInputSchema = z.object({
   redirect: z.string().optional(),
 });
 export type ConnectStartInput = z.infer<typeof connectStartInputSchema>;
+/** Browser JSON starts cannot replace the route-selected provider or private OAuth state. */
+export const connectBrowserStartInputSchema = connectStartInputSchema
+  .omit({ provider: true })
+  .strict();
 
 export const connectCallbackInputSchema = z.object({
   provider: z.string().min(1),

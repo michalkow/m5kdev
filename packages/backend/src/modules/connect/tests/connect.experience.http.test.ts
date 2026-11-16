@@ -57,7 +57,13 @@ describe("Experience-bound Connection HTTP flow", () => {
         const data = await readConnectTRPC(listed);
         expect(data).toMatchObject({
           result: {
-            data: [{ userId: "person", provider: "recording", displayName: "External Person" }],
+            data: [
+              {
+                userId: "person",
+                provider: "recording",
+                displayName: "External Person",
+              },
+            ],
           },
         });
         expect(JSON.stringify(data)).not.toMatch(/accessToken|refreshToken|recorded-access-token/);
@@ -197,7 +203,11 @@ describe("Experience-bound Connection HTTP flow", () => {
     try {
       expect(() => {
         const built = createBackendApp(
-          { db: { client: pool }, schema, app: { experiences: experienceConfig } },
+          {
+            db: { client: pool },
+            schema,
+            app: { experiences: experienceConfig },
+          },
           [
             new ConnectModule([
               createGoogleProvider({
@@ -222,14 +232,21 @@ describe("Experience-bound Connection HTTP flow", () => {
     try {
       expect(() => {
         const provider = {
-          ...createGoogleProvider({ clientId: "recorded-client", clientSecret: "recorded-secret" }),
+          ...createGoogleProvider({
+            clientId: "recorded-client",
+            clientSecret: "recorded-secret",
+          }),
           authorizationExtraParams: {
             state: "poisoned",
             redirect_uri: "https://unregistered.example.test/callback",
           },
         };
         const built = createBackendApp(
-          { db: { client: pool }, schema, app: { experiences: experienceConfig } },
+          {
+            db: { client: pool },
+            schema,
+            app: { experiences: experienceConfig },
+          },
           [new ConnectModule([provider])]
         );
         shutdown = built.shutdown;
@@ -263,7 +280,9 @@ describe("Experience-bound Connection HTTP flow", () => {
       const listed = await f.visit("horeka.example.test", connectListPath, {
         cookie,
       });
-      expect(await readConnectTRPC(listed)).toMatchObject({ result: { data: [] } });
+      expect(await readConnectTRPC(listed)).toMatchObject({
+        result: { data: [] },
+      });
     } finally {
       await f.close();
     }
@@ -276,12 +295,25 @@ describe("Experience-bound Connection HTTP flow", () => {
       const otherSession = await f.login("radar");
       const otherUser = await f.login("radar", "other");
       const cases = [
-        { host: "radar.example.test", suffix: "&redirect=https%3A%2F%2Fevil.example.test", cookie },
-        { host: "radar.example.test", suffix: "&redirect=%2Fother-path", cookie },
+        {
+          host: "radar.example.test",
+          suffix: "&redirect=https%3A%2F%2Fevil.example.test",
+          cookie,
+        },
+        {
+          host: "radar.example.test",
+          suffix: "&redirect=%2Fother-path",
+          cookie,
+        },
         { host: "radar.example.test", suffix: "", cookie: otherSession },
         { host: "radar.example.test", suffix: "", cookie: otherUser },
         { host: "api.example.test", suffix: "", cookie },
-        { host: "radar.example.test", suffix: "", cookie, provider: "other-provider" },
+        {
+          host: "radar.example.test",
+          suffix: "",
+          cookie,
+          provider: "other-provider",
+        },
         { host: "radar.example.test", suffix: "", cookie, tamper: true },
       ];
       for (const scenario of cases) {
@@ -391,7 +423,9 @@ describe("Experience-bound Connection HTTP flow", () => {
       const empty = await f.visit("radar.example.test", connectListPath, {
         cookie,
       });
-      expect(await readConnectTRPC(empty)).toMatchObject({ result: { data: [] } });
+      expect(await readConnectTRPC(empty)).toMatchObject({
+        result: { data: [] },
+      });
     } finally {
       await f.close();
     }
@@ -421,7 +455,9 @@ describe("Experience-bound Connection HTTP flow", () => {
         const listed = await f.visit("horeka.example.test", connectListPath, {
           cookie,
         });
-        expect(await readConnectTRPC(listed)).toMatchObject({ result: { data: [] } });
+        expect(await readConnectTRPC(listed)).toMatchObject({
+          result: { data: [] },
+        });
       } finally {
         await f.close();
       }
@@ -467,20 +503,27 @@ describe("Experience-bound Connection HTTP flow", () => {
   it.each(["alias", "web"] as const)(
     "rejects a host-only session started on the %s authority and requires canonical authenticated API initiation",
     async (entry) => {
-      const f = await fixture({ topology: entry === "web" ? "separate" : "domain" });
+      const f = await fixture({
+        topology: entry === "web" ? "separate" : "domain",
+      });
       try {
         const host = entry === "alias" ? "alias-radar.example.test" : "radar.example.test";
         const signedIn = await f.visit(host, "/api/auth/sign-in/email", {
           method: "POST",
           origin: `https://${host}`,
-          body: { email: "person@example.test", password: "Original-Password-123" },
+          body: {
+            email: "person@example.test",
+            password: "Original-Password-123",
+          },
         });
         expect(signedIn.status).toBe(200);
         const cookie = signedIn.headers
           .getSetCookie()
           .map((value) => value.split(";")[0])
           .join("; ");
-        const start = await f.visit(host, "/connections/recording/start", { cookie });
+        const start = await f.visit(host, "/connections/recording/start", {
+          cookie,
+        });
         expect(start.status).toBe(400);
         expect(start.headers.get("location")).toBeNull();
         const canonicalCookie = await f.login("radar");
@@ -689,7 +732,10 @@ describe("Experience-bound Connection HTTP flow", () => {
         { connect: f.built.modules.connect.repositories.connect },
         [adapter],
         defaultConnectGrants,
-        { registry: f.built.config.app.experienceRegistry, mountPath: "/class" }
+        {
+          registry: f.built.config.app.experienceRegistry,
+          mountPath: "/class",
+        }
       );
       f.built.express.app.use("/class", createConnectRouter(f.built.auth!.middleware, service));
       const cookie = await f.login("radar");
@@ -716,6 +762,56 @@ describe("Experience-bound Connection HTTP flow", () => {
           displayName: "Class Provider Person",
         }),
       ]);
+    } finally {
+      await f.close();
+    }
+  });
+});
+
+describe("Connection JSON browser start", () => {
+  it("returns private JSON for a shared API Origin and retains canonical/session-bound callback", async () => {
+    const f = await fixture({ topology: "shared" });
+    try {
+      const cookie = await f.login("horeka");
+      const response = await f.visit("api.example.test", "/connections/recording/start", {
+        method: "POST",
+        cookie,
+        origin: "https://horeka.example.test",
+        body: { redirect: "/settings?tab=connections" },
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+      expect(response.headers.get("location")).toBeNull();
+      const started = await response.json();
+      const authorization = new URL(started.url);
+      expect(authorization.origin).toBe("https://provider.example.test");
+      const callback = await f.visit(
+        "api.example.test",
+        `/connections/recording/callback?state=${authorization.searchParams.get("state")}&code=accepted`,
+        { cookie }
+      );
+      expect(callback.status).toBe(302);
+      expect(callback.headers.get("location")).toBe(
+        "https://horeka.example.test/settings?tab=connections&connect_success=true&provider=recording"
+      );
+      for (const body of [
+        { redirect: "//horeka.example.test/settings" },
+        { redirect: "/settings", state: "caller-selected" },
+      ]) {
+        const invalid = await f.visit("api.example.test", "/connections/recording/start", {
+          method: "POST",
+          cookie,
+          origin: "https://horeka.example.test",
+          body,
+        });
+        expect(invalid.status).toBe(400);
+      }
+      const alias = await f.visit("alias-radar.example.test", "/connections/recording/start", {
+        method: "POST",
+        cookie,
+        body: { redirect: "/settings" },
+      });
+      expect(alias.status).toBe(400);
     } finally {
       await f.close();
     }

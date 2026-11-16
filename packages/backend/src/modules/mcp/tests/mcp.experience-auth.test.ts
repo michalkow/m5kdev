@@ -15,7 +15,9 @@ import { createMcpExpressHandler } from "../mcp.http";
 const RESOURCE = "https://radar.example.test/mcp";
 const ISSUER = "https://radar.example.test/api/auth";
 
-async function fixture() {
+async function fixture(
+  options: { basePath?: string; staticBaseURL?: string; registryOnly?: boolean } = {}
+) {
   const client = createTestPool();
   const schema = { ...authTables, ...oauthTables };
   await prepareExperienceTables(client, schema);
@@ -23,14 +25,29 @@ async function fixture() {
     orm: drizzle(client, { schema }),
     schema,
     services: {},
-    app: {
-      experienceRegistry: new ExperienceRegistry(experienceConfig),
-      urls: { web: "https://radar.example.test", api: "https://radar.example.test" },
-    },
+    app: options.staticBaseURL
+      ? {
+          urls: {
+            web: "https://radar.example.test",
+            api: options.staticBaseURL,
+          },
+        }
+      : {
+          experienceRegistry: new ExperienceRegistry(experienceConfig),
+          ...(!options.registryOnly
+            ? {
+                urls: {
+                  web: "https://radar.example.test",
+                  api: "https://radar.example.test",
+                },
+              }
+            : {}),
+        },
     mcp: { resource: RESOURCE },
     options: {
       secret: "mcp-experience-secret-at-least-thirty-two-characters",
       rateLimit: { enabled: false },
+      basePath: options.basePath,
     },
   });
   return { auth, close: () => client.end() };
@@ -77,7 +94,9 @@ describe("canonical MCP identity with dynamic auth domains", () => {
           host: "horeka.example.test",
           origin: "https://horeka.example.test",
         }),
-        body: { payload: { sub: "person-1", aud: RESOURCE, client_id: "client-1" } },
+        body: {
+          payload: { sub: "person-1", aud: RESOURCE, client_id: "client-1" },
+        },
       });
       const [header, payload, signature] = issued.token.split(".");
       expect(JSON.parse(Buffer.from(payload, "base64url").toString()).iss).toBe(ISSUER);
@@ -100,8 +119,14 @@ describe("canonical MCP identity with dynamic auth domains", () => {
   it("verifies token signatures, canonical issuer, audience and expiry before initializing MCP", async () => {
     const f = await fixture();
     const server = await protectedServer(f.auth);
-    const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-    const jwk = { ...publicKey.export({ format: "jwk" }), kid: "experience-mcp", alg: "RS256" };
+    const { privateKey, publicKey } = generateKeyPairSync("rsa", {
+      modulusLength: 2048,
+    });
+    const jwk = {
+      ...publicKey.export({ format: "jwk" }),
+      kid: "experience-mcp",
+      alg: "RS256",
+    };
     const nativeFetch = globalThis.fetch;
     const jwksRequests: string[] = [];
     const fetchBoundary = jest
@@ -183,7 +208,12 @@ describe("canonical MCP identity with dynamic auth domains", () => {
       const response = await fetch(server.url, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {},
+        }),
       });
       expect(response.status).toBe(401);
       expect(response.headers.get("www-authenticate")).toContain(
@@ -218,4 +248,84 @@ describe("canonical MCP identity with dynamic auth domains", () => {
       await f.close();
     }
   });
+  it.each([
+    { basePath: "/identity", expected: "https://radar.example.test/identity" },
+    {
+      staticBaseURL: "https://radar.example.test/static-auth",
+      expected: "https://radar.example.test/static-auth",
+    },
+    { registryOnly: true, expected: ISSUER },
+  ])(
+    "uses actual framework-issued custom-path/canonical tokens for discovery/JWKS/protected requests %j",
+    async (options) => {
+      const before = process.env.VITE_SERVER_URL;
+      process.env.VITE_SERVER_URL = "https://wrong-brand.example.test";
+      const f = await fixture(options);
+      const server = await protectedServer(f.auth);
+      const nativeFetch = globalThis.fetch;
+      const seen: string[] = [];
+      const boundary = jest.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url === `${options.expected}/jwks`) {
+          seen.push(url);
+          return f.auth.handler(new Request(url));
+        }
+        return nativeFetch(input, init);
+      });
+      try {
+        const api = f.auth.api as unknown as {
+          signJWT(input: {
+            headers: Headers;
+            body: { payload: Record<string, unknown> };
+          }): Promise<{ token: string }>;
+        };
+        const issued = await api.signJWT({
+          headers: new Headers({
+            host: "radar.example.test",
+            origin: "https://radar.example.test",
+          }),
+          body: {
+            payload: { sub: "person-1", aud: RESOURCE, client_id: "client-1" },
+          },
+        });
+        expect(
+          JSON.parse(Buffer.from(issued.token.split(".")[1], "base64url").toString()).iss
+        ).toBe(options.expected);
+        const discovery = await f.auth.handler(
+          new Request(
+            `https://radar.example.test/.well-known/oauth-authorization-server${new URL(options.expected).pathname}`
+          )
+        );
+        expect(discovery.status).toBe(200);
+        expect((await discovery.json()).issuer).toBe(options.expected);
+        const response = await fetch(server.url, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+            authorization: `Bearer ${issued.token}`,
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "initialize",
+            params: {
+              protocolVersion: "2025-11-25",
+              capabilities: {},
+              clientInfo: { name: "custom-path", version: "1" },
+            },
+          }),
+        });
+        expect(response.status).toBe(200);
+        expect(await response.text()).toContain("Canonical MCP");
+        expect(seen).toEqual([`${options.expected}/jwks`]);
+      } finally {
+        boundary.mockRestore();
+        await server.close();
+        await f.close();
+        if (before === undefined) delete process.env.VITE_SERVER_URL;
+        else process.env.VITE_SERVER_URL = before;
+      }
+    }
+  );
 });

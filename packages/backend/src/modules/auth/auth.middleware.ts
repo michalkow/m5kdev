@@ -33,6 +33,7 @@ export type AuthMiddleware = (req: AuthRequest, res: Response, next: NextFunctio
 
 export function createAuthMiddleware(auth: BetterAuth): AuthMiddleware {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
+    res.set("Cache-Control", "private, no-store");
     auth.api
       .getSession({
         headers: fromNodeHeaders(req.headers),
@@ -65,6 +66,7 @@ export function createAuthMiddleware(auth: BetterAuth): AuthMiddleware {
 
 export function createRoleAuthMiddleware(auth: BetterAuth): (role: string) => AuthMiddleware {
   return (role: string) => (req: AuthRequest, res: Response, next: NextFunction) => {
+    res.set("Cache-Control", "private, no-store");
     auth.api
       .getSession({
         headers: fromNodeHeaders(req?.headers),

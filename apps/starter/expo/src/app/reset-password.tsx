@@ -1,3 +1,4 @@
+import { EXPERIENCE_FLOW_HEADER } from "@m5kdev/commons/modules/app/experience.constants";
 import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
 import { useLocalSearchParams } from "expo-router";
 import { Button } from "heroui-native";
@@ -8,13 +9,18 @@ import { FormTextField } from "../components/FormTextField";
 import { StatusText } from "../components/StatusText";
 
 function singleParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
+  return typeof value === "string" ? value : undefined;
 }
 
 export default function ResetPasswordScreen() {
   const authClient = useAuthClient();
-  const params = useLocalSearchParams<{ token?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    token?: string | string[];
+    experienceFlow?: string | string[];
+  }>();
   const token = singleParam(params.token);
+  const experienceFlow = singleParam(params.experienceFlow);
+  const invalidContinuation = Array.isArray(params.experienceFlow) || Array.isArray(params.token);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -23,9 +29,9 @@ export default function ResetPasswordScreen() {
 
   const submit = async () => {
     setStatus(null);
-    if (!token) {
+    if (!token || invalidContinuation) {
       setTone("error");
-      setStatus("Reset token is required");
+      setStatus("This link is invalid or expired. Request a fresh link from the same website.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -35,7 +41,14 @@ export default function ResetPasswordScreen() {
     }
     setIsBusy(true);
     try {
-      await authClient.resetPassword({ newPassword, token });
+      const result = await authClient.resetPassword(
+        { newPassword, token },
+        { headers: { ...(experienceFlow ? { [EXPERIENCE_FLOW_HEADER]: experienceFlow } : {}) } }
+      );
+      if (result.error)
+        throw new Error(
+          "This link is invalid or expired. Request a fresh link from the same website."
+        );
       setTone("success");
       setStatus("Password reset successfully");
     } catch (error) {

@@ -520,3 +520,11 @@ it("does not record the same session again after another sign-in registration", 
     "session-2",
   ]);
 });
+it("keeps verification on the authored frontend after signup rather than falling back to the API origin", async () => {
+  await renderLogin({ form: <AuthPublicSignupForm /> });
+  await submitLogin("signup");
+  expect(client.signUp.email).toHaveBeenCalledWith(
+    expect.objectContaining({ callbackURL: "http://localhost/login" }),
+    expect.anything()
+  );
+});

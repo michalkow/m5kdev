@@ -150,7 +150,9 @@ function useOrganizationConfig() {
       membersNoActive: t("web-ui:organization.members.noActive"),
       membersManageOnly: t("web-ui:organization.members.manageOnly"),
       membersDescription: (organizationName: string) =>
-        t("web-ui:organization.members.description", { name: organizationName }),
+        t("web-ui:organization.members.description", {
+          name: organizationName,
+        }),
       defaultOrganizationName: t("web-ui:organization.members.defaultName"),
       loadMembersError: t("web-ui:organization.members.loadMembersError"),
       loadInvitationsError: t("web-ui:organization.members.loadInvitationsError"),
@@ -323,9 +325,13 @@ export function AuthOrganizationMembersRoute({
   }, [inviteRole, resolvedAssignableRoles]);
 
   const membersQuery = useQuery(
-    trpc.auth.listOrganizationMembers.queryOptions(undefined, {
-      enabled: Boolean(activeOrganizationId && canManageOrganization),
-    })
+    trpc.auth.listOrganizationMembers.queryOptions(
+      { organizationId: activeOrganizationId || undefined },
+      {
+        placeholderData: () => undefined,
+        enabled: Boolean(activeOrganizationId && canManageOrganization),
+      }
+    )
   );
 
   const organizationName = useMemo(
@@ -369,10 +375,16 @@ export function AuthOrganizationMembersRoute({
 
     try {
       if (nameChanged) {
-        await updateNameMutation.mutateAsync({ memberId: editingRow.memberId, name });
+        await updateNameMutation.mutateAsync({
+          memberId: editingRow.memberId,
+          name,
+        });
       }
       if (roleChanged) {
-        await updateRoleMutation.mutateAsync({ memberId: editingRow.memberId, role: editRole });
+        await updateRoleMutation.mutateAsync({
+          memberId: editingRow.memberId,
+          role: editRole,
+        });
       }
       if (nameChanged || roleChanged) {
         toast.success(resolvedLabels.editSuccess);

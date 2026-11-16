@@ -15,7 +15,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check-types": "tsc --noEmit",
-    "typecheck": "pnpm check-types"
+    "typecheck": "pnpm check-types",
+    "test": "jest"
   },
   "dependencies": {
     "@expo/metro-runtime": "~56.0.13",
@@ -58,6 +59,12 @@
     "eslint": "^9.39.4",
     "eslint-config-expo": "^56.0.4",
     "prettier": "^3.8.3",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "jest": "catalog:",
+    "jest-environment-jsdom": "catalog:",
+    "ts-jest": "catalog:",
+    "@types/jest": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react-dom": "catalog:"
   }
 }

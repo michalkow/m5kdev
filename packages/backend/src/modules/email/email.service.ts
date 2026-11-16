@@ -369,7 +369,9 @@ export class EmailService extends BaseService<never, never> {
       });
 
       if (error) {
-        return this.error("INTERNAL_SERVER_ERROR", "Failed to send email", { cause: error });
+        return this.error("INTERNAL_SERVER_ERROR", "Failed to send email", {
+          cause: error,
+        });
       }
 
       return ok();
@@ -491,7 +493,9 @@ export class EmailService extends BaseService<never, never> {
       }
     } catch (error) {
       if (!(error instanceof ExperienceContextError)) throw error;
-      return this.error("INTERNAL_SERVER_ERROR", error.message, { cause: error });
+      return this.error("INTERNAL_SERVER_ERROR", error.message, {
+        cause: error,
+      });
     }
     const profile = experience ? this.experienceRegistry?.emailProfile(experience) : undefined;
     const template = this.resolveTemplate(templateKey, profile?.templateSet);
@@ -572,7 +576,9 @@ export class EmailService extends BaseService<never, never> {
       );
     } catch (error) {
       if (!(error instanceof ExperienceContextError)) throw error;
-      return this.error("INTERNAL_SERVER_ERROR", error.message, { cause: error });
+      return this.error("INTERNAL_SERVER_ERROR", error.message, {
+        cause: error,
+      });
     }
   }
 
@@ -610,7 +616,19 @@ export class EmailService extends BaseService<never, never> {
     );
   }
 
+  /** Auth owns code issuance and its proof. Email must not invent a strict continuation. */
+  private waitlistContinuation(options?: OverrideOptions): ServerResult<true> {
+    if (this.experienceRegistry?.strict && !options?.linkPaths?.url)
+      return this.error(
+        "INTERNAL_SERVER_ERROR",
+        "Strict waitlist email helpers require an Auth-issued URL in linkPaths.url"
+      );
+    return ok(true);
+  }
+
   async sendWaitlistInvite(email: string, code: string, overrideOptions?: OverrideOptions) {
+    const continuation = this.waitlistContinuation(overrideOptions);
+    if (continuation.isErr()) return err(continuation.error);
     const origin = this.emailWebOrigin(overrideOptions);
     if (origin.isErr()) return err(origin.error);
     const params = new URLSearchParams({ code, email });
@@ -637,6 +655,8 @@ export class EmailService extends BaseService<never, never> {
     name?: string,
     overrideOptions?: OverrideOptions
   ) {
+    const continuation = this.waitlistContinuation(overrideOptions);
+    if (continuation.isErr()) return err(continuation.error);
     const origin = this.emailWebOrigin(overrideOptions);
     if (origin.isErr()) return err(origin.error);
     const url = buildAppUrl(origin.value, `/signup?code=${code}&email=${email}`);

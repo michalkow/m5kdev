@@ -5,11 +5,14 @@ import { BillingProvider } from "@m5kdev/frontend/modules/billing/components/Bil
 import { EntitlementProvider } from "@m5kdev/frontend/modules/billing/components/EntitlementProvider";
 import { useEntitlement } from "@m5kdev/frontend/modules/billing/hooks/useEntitlements";
 import { useSubscription } from "@m5kdev/frontend/modules/billing/hooks/useSubscription";
+import { AuthOrganizationMembersRoute } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationMembersRoute";
+import { AuthOrganizationPreferences } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationPreferences";
 import { AuthPublicRouter } from "@m5kdev/web-ui/modules/auth/components/AuthPublicRouter";
 import { BillingInvoicePage } from "@m5kdev/web-ui/modules/billing/components/BillingInvoicePage";
 import { BillingSinglePlanSelect } from "@m5kdev/web-ui/modules/billing/components/BillingSinglePlanSelect";
 import { useTranslation } from "react-i18next";
 import { Link, Navigate, Outlet, Route, Routes } from "react-router";
+import { z } from "zod";
 import { catalog } from "../server/catalog";
 import { useReference } from "./hooks/useReference";
 
@@ -128,6 +131,23 @@ function AssistantWorkflow() {
   const { t } = useTranslation("reference");
   return <h2 data-testid="workflow">{t("assistant")}</h2>;
 }
+const referencePreferencesSchema = z.object({
+  referenceOffice: z.boolean().optional(),
+});
+function OrganizationPreferences() {
+  const { t } = useTranslation("reference");
+  return (
+    <AuthOrganizationPreferences
+      schema={referencePreferencesSchema}
+      controls={{
+        referenceOffice: {
+          label: t("organizationPreference"),
+          element: "switch",
+        },
+      }}
+    />
+  );
+}
 export function Router() {
   const { experience } = useAppConfig();
   const reports = experience?.product === "reports";
@@ -139,6 +159,8 @@ export function Router() {
         <Route index element={workflow} />
         <Route path={reports ? "reports" : "assistant"} element={workflow} />
         <Route path="supplied" element={workflow} />
+        <Route path="members" element={<AuthOrganizationMembersRoute />} />
+        <Route path="organization-preferences" element={<OrganizationPreferences />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

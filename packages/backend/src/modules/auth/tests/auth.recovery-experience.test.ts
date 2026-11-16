@@ -17,7 +17,12 @@ const SECRET = "recovery-test-secret-at-least-thirty-two-characters";
 const ORIGINAL_PASSWORD = "Original-Password-123";
 
 async function fixture(
-  options: { verified?: boolean; sharedApi?: boolean; legacy?: boolean } = {}
+  options: {
+    verified?: boolean;
+    sharedApi?: boolean;
+    legacy?: boolean;
+    legacyWebOrigin?: string;
+  } = {}
 ) {
   const client = createTestPool();
   await prepareExperienceTables(client, schema);
@@ -54,7 +59,10 @@ async function fixture(
     organizationInvite: template,
   };
   const app = {
-    urls: { web: "https://radar.example.test", api: "https://radar.example.test" },
+    urls: {
+      web: options.legacyWebOrigin ?? "https://radar.example.test",
+      api: "https://radar.example.test",
+    },
     experienceRegistry: options.legacy ? undefined : registry,
   };
   const i18n = createAppI18n(
@@ -749,4 +757,63 @@ describe("Experience-bound recovery", () => {
       await f.close();
     }
   });
+});
+
+it("preserves explicit standalone Expo-web verification and recovery destinations when the legacy server trusts that frontend", async () => {
+  const origin = "https://native-web.example.test";
+  const f = await fixture({ legacy: true, verified: false, legacyWebOrigin: origin });
+  try {
+    const request = (path: string, body: unknown) =>
+      new Request(`https://radar.example.test/api/auth/${path}`, {
+        method: "POST",
+        headers: { host: "radar.example.test", origin, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    expect(
+      (
+        await f.auth.handler(
+          request("send-verification-email", {
+            email: "radar@example.test",
+            callbackURL: `${origin}/login`,
+          })
+        )
+      ).status
+    ).toBe(200);
+    const verification = await f.email.findLatestStoredEmail({ to: "radar@example.test" });
+    const verified = await f.auth.handler(
+      new Request(String(verification?.props.url), { headers: { host: "radar.example.test" } })
+    );
+    expect(verified.status).toBe(302);
+    expect(verified.headers.get("location")).toBe(`${origin}/login`);
+    expect(
+      (
+        await f.auth.handler(
+          request("request-password-reset", {
+            email: "radar@example.test",
+            redirectTo: `${origin}/reset-password`,
+          })
+        )
+      ).status
+    ).toBe(200);
+    const recovery = await f.email.findLatestStoredEmail({ to: "radar@example.test" });
+    const callback = await f.auth.handler(
+      new Request(String(recovery?.props.url), { headers: { host: "radar.example.test" } })
+    );
+    expect(callback.status).toBe(302);
+    const destination = new URL(callback.headers.get("location")!);
+    expect(destination.origin).toBe(origin);
+    expect(destination.pathname).toBe("/reset-password");
+    expect(
+      (
+        await f.auth.handler(
+          request("reset-password", {
+            token: destination.searchParams.get("token"),
+            newPassword: "Native-Password-123",
+          })
+        )
+      ).status
+    ).toBe(200);
+  } finally {
+    await f.close();
+  }
 });

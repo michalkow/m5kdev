@@ -3,6 +3,7 @@ import { initReactI18next } from "react-i18next";
 import shared from "../node_modules/@m5kdev/web-ui/dist/translations/en/web-ui.json";
 
 const reference = {
+  organizationPreference: "Reference office",
   refreshSubscription: "Refresh subscription",
   reportsNavigation: "Reports workspace",
   assistantNavigation: "Assistant workspace",
@@ -29,6 +30,9 @@ export const initializeI18n = () =>
   i18n.use(initReactI18next).init({
     lng: "en",
     fallbackLng: "en",
-    resources: { en: { "web-ui": shared, reference }, "en-GB": { "web-ui": shared, reference } },
+    resources: {
+      en: { "web-ui": shared, reference },
+      "en-GB": { "web-ui": shared, reference },
+    },
     interpolation: { escapeValue: false },
   });

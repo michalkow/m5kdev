@@ -1,7 +1,14 @@
 import fs from "node:fs";
 import type { Server } from "node:http";
 import path from "node:path";
-import type { ExperienceRegistryConfig } from "@m5kdev/commons/modules/app/experience.schema";
+import { canonicalOriginSchema } from "@m5kdev/commons/modules/app/experience.schema";
+import { type BackendAppMetadata, resolvePresentationMetadata } from "./presentation";
+
+export type {
+  BackendAppAuthoringMetadata,
+  BackendAppMetadata,
+} from "./presentation";
+
 import {
   ADMIN_CREATE_VERIFIED_USER_HEADER,
   USER_CURRENCY_HEADER,
@@ -10,7 +17,6 @@ import {
 } from "@m5kdev/commons/modules/auth/auth.constants";
 import type { AuthLocaleConfig } from "@m5kdev/commons/modules/auth/auth.locale";
 import {
-  type AuthRolesConfig,
   type NormalizedAuthRolesConfig,
   normalizeAuthRolesConfig,
 } from "@m5kdev/commons/modules/auth/auth.roles";
@@ -148,22 +154,6 @@ type AppDbSchema<Tables extends TableMap = TableMap> = Tables & typeof authTable
 export type BackendAppRouterMap<Modules extends readonly BackendAppModule[]> = Simplify<
   UnionToIntersection<ExtractModuleRouters<Modules[number]>>
 >;
-
-export type BackendAppMetadata = {
-  experiences?: ExperienceRegistryConfig;
-  experienceRegistry?: ExperienceRegistry;
-  name?: string;
-  urls?: {
-    web?: string;
-    api?: string;
-  };
-  brand?: {
-    logo?: string;
-    tagline?: string;
-  };
-  locales?: AuthLocaleConfig;
-  roles?: AuthRolesConfig;
-};
 
 export type BackendAppEmailMode = "send" | "log" | "store";
 
@@ -436,14 +426,25 @@ function normalizeAppConfig(
   env: Record<string, string | undefined>
 ): ResolvedBackendAppMetadata {
   const { environment, slug } = parseAppEnvironment(env);
-  if (config?.experiences && (config.name || config.urls || config.brand))
-    throw new Error("Do not mix Experience registry and single-Experience metadata");
-  const registry = config?.experiences
-    ? new ExperienceRegistry(config.experiences, { deployed: environment !== "local" })
-    : undefined;
-  const selected = registry?.defaultExperience;
-  const webUrl = selected?.webOrigin ?? config?.urls?.web ?? env.VITE_APP_URL;
-  const apiUrl = selected?.apiOrigin ?? config?.urls?.api ?? env.VITE_SERVER_URL;
+  if (config && Object.hasOwn(config, "experienceRegistry"))
+    throw new Error(
+      "experienceRegistry is resolved metadata; use app.experiences for Kernel authoring"
+    );
+  const presentation = resolvePresentationMetadata(config, env, {
+    deployed: environment !== "local",
+  });
+  const registry = presentation.experienceRegistry;
+  const origin = (value: string | undefined, key: string) => {
+    if (value === undefined) return undefined;
+    const parsed = canonicalOriginSchema.safeParse(value);
+    if (!parsed.success)
+      throw new Error(
+        `${key} must be an HTTP(S) origin without a path, query, fragment or credentials`
+      );
+    return parsed.data;
+  };
+  const webUrl = origin(presentation.urls.web, "app.urls.web");
+  const apiUrl = origin(presentation.urls.api, "app.urls.api");
   if (environment !== "local") {
     if (!webUrl)
       throw new Error(`VITE_APP_URL (or app.urls.web) must be set when APP_ENV=${environment}`);
@@ -459,7 +460,9 @@ function normalizeAppConfig(
         ? new ExperienceRegistry(
             {
               defaultExperience: "default",
-              brands: { default: { name: config?.name ?? "m5kdev", ...config?.brand } },
+              brands: {
+                default: { name: config?.name ?? "m5kdev", ...config?.brand },
+              },
               definitions: {
                 default: {
                   product: "default",
@@ -472,23 +475,14 @@ function normalizeAppConfig(
             { strict: false }
           )
         : undefined),
-    name: selected?.brand.name ?? config?.name,
+    name: presentation.name,
     environment,
     slug,
     urls: {
       web: webUrl,
       api: apiUrl,
     },
-    brand: {
-      logo:
-        selected?.brand.logo ??
-        config?.brand?.logo ??
-        (webUrl ? new URL("/mark.svg", webUrl).toString() : undefined),
-      tagline:
-        selected?.brand.tagline ??
-        config?.brand?.tagline ??
-        (config?.name ? `${config.name} publishing workspace` : undefined),
-    },
+    brand: presentation.brand,
     locales: config?.locales,
     roles: normalizeAuthRolesConfig(config?.roles),
   };
@@ -525,7 +519,10 @@ function createDbClient(config: BackendAppConfig["db"]): {
   };
 }
 
-function createRedisClient(config: BackendAppConfig["redis"]): { redis?: IORedis; owned: boolean } {
+function createRedisClient(config: BackendAppConfig["redis"]): {
+  redis?: IORedis;
+  owned: boolean;
+} {
   if (!config) {
     return {
       redis: undefined,
@@ -1064,6 +1061,10 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       trpcExpress.createExpressMiddleware({
         router: appRouter as AnyRouter,
         createContext,
+        // Authenticated resources and opaque continuation reads must never enter shared caches.
+        responseMeta: () => ({
+          headers: { "cache-control": "private, no-store" },
+        }),
         onError: ({ error, type, path, input }) => {
           handleTRPCBoundaryError({ error, type, path, input });
         },
@@ -1106,7 +1107,10 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     });
   }
 
-  applyProductDocumentation({ expressApp, documentation: config.documentation });
+  applyProductDocumentation({
+    expressApp,
+    documentation: config.documentation,
+  });
   applyBakedSpa({ expressApp, spa: config.spa });
   expressApp.use(handleHTTPBoundaryError);
 

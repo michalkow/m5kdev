@@ -1,6 +1,10 @@
 import { Router } from "express";
 import type { AuthMiddleware, AuthRequest } from "../auth/auth.middleware";
-import { connectCallbackInputSchema, connectStartInputSchema } from "./connect.dto";
+import {
+  connectBrowserStartInputSchema,
+  connectCallbackInputSchema,
+  connectStartInputSchema,
+} from "./connect.dto";
 import type { ConnectService } from "./connect.service";
 
 export function createConnectRouter(
@@ -8,6 +12,27 @@ export function createConnectRouter(
   service: ConnectService
 ): Router {
   const router = Router();
+  // A JSON start lets a shared-API browser send its real Origin before navigating to OAuth.
+  router.post("/:provider/start", authMiddleware, async (req: AuthRequest, res) => {
+    res.set("Cache-Control", "private, no-store");
+    if (!req.user || !req.session) return res.status(401).json({ message: "Unauthorized" });
+    const body = connectBrowserStartInputSchema.safeParse(req.body);
+    if (!body.success) return res.status(400).json({ message: "Invalid connection request" });
+    const input = connectStartInputSchema.safeParse({
+      ...body.data,
+      provider: req.params.provider,
+    });
+    if (!input.success) return res.status(400).json({ message: "Invalid connection request" });
+    const result = await service.startAuth(input.data, {
+      user: req.user,
+      sessionId: req.session.id,
+      experience: req.experience,
+      request: req,
+    });
+    if (result.isErr())
+      return res.status(result.error.getHTTPStatusCode()).json({ message: result.error.message });
+    return res.json(result.value);
+  });
   router.get("/:provider/start", authMiddleware, async (req: AuthRequest, res) => {
     if (!req.user || !req.session) return res.status(401).json({ message: "Unauthorized" });
     const input = connectStartInputSchema.safeParse({

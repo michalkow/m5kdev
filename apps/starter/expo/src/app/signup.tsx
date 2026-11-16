@@ -1,5 +1,7 @@
+import { EXPERIENCE_FLOW_HEADER } from "@m5kdev/commons/modules/app/experience.constants";
 import { USER_LOCALE_HEADER } from "@m5kdev/commons/modules/auth/auth.constants";
 import { resolveAppLocale } from "@m5kdev/commons/modules/auth/auth.locale";
+import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { APP_LOCALE_CONFIG } from "@starter-app/shared/modules/app/app.constants";
@@ -11,22 +13,29 @@ import { AuthScaffold } from "../components/AuthScaffold";
 import { FormTextField } from "../components/FormTextField";
 import { StatusText } from "../components/StatusText";
 import { isWaitlistProfile } from "../config";
-import { trpcClient } from "../lib/trpc";
+import { useTRPCClient } from "../lib/trpc";
 
 function singleParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
+  return typeof value === "string" ? value : undefined;
 }
 
 export default function SignupScreen() {
   const authClient = useAuthClient();
+  const { appUrl } = useAppConfig();
+  const trpcClient = useTRPCClient();
   const { registerSession } = useSession();
   const router = useRouter();
   const params = useLocalSearchParams<{
     code?: string | string[];
+    experienceFlow?: string | string[];
     email?: string | string[];
     invitation?: string | string[];
   }>();
   const code = singleParam(params.code);
+  const experienceFlow = singleParam(params.experienceFlow);
+  const invalidContinuation = [params.code, params.invitation, params.experienceFlow].some(
+    Array.isArray
+  );
   const invitation = singleParam(params.invitation);
   const lockedEmail = singleParam(params.email);
   const isPublicWaitlist = isWaitlistProfile && !code && !invitation;
@@ -65,7 +74,7 @@ export default function SignupScreen() {
     setIsValidatingWaitlistCode(true);
     setWaitlistCodeError(false);
     trpcClient.auth.validateWaitlistCode
-      .query({ code })
+      .query({ code, experienceFlow })
       .then((result) => {
         if (!cancelled) setWaitlistCodeStatus(result.status);
       })
@@ -79,7 +88,7 @@ export default function SignupScreen() {
     return () => {
       cancelled = true;
     };
-  }, [code]);
+  }, [code, experienceFlow, trpcClient]);
 
   const submitWaitlist = async () => {
     setIsBusy(true);
@@ -97,6 +106,11 @@ export default function SignupScreen() {
   };
 
   const submitSignup = async () => {
+    if (invalidContinuation) {
+      setStatusTone("error");
+      setStatus("This link is invalid or expired. Request a fresh link from the same website.");
+      return;
+    }
     setIsBusy(true);
     setStatus(null);
     try {
@@ -107,12 +121,14 @@ export default function SignupScreen() {
           name: email,
           email,
           password,
+          callbackURL: new URL("/login", appUrl).href,
         },
         {
           headers: {
             "Waitlist-Invitation-Code": code ?? "",
             "Organization-Invitation-Code": invitation ?? "",
             [USER_LOCALE_HEADER]: userLocale,
+            ...(experienceFlow ? { [EXPERIENCE_FLOW_HEADER]: experienceFlow } : {}),
           },
         }
       );

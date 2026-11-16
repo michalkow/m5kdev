@@ -32,7 +32,8 @@
     "react-router": "catalog:",
     "stripe": "catalog:",
     "zod": "catalog:",
-    "express": "catalog:"
+    "express": "catalog:",
+    "ioredis": "catalog:"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",

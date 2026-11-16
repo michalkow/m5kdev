@@ -20,6 +20,8 @@ export async function prepareExperienceTables(client: Pool, schema: Record<strin
           : ` DEFAULT ${dialect.sqlToQuery(value instanceof SQL ? value : sql`${column.mapToDriverValue(value)}`.inlineParams()).sql}`;
       return `"${column.name}" ${column.getSQLType()}${column.primary ? " PRIMARY KEY" : ""}${column.notNull ? " NOT NULL" : ""}${column.isUnique ? " UNIQUE" : ""}${defaultSql}`;
     });
-    await client.query(`CREATE TABLE "${namespace}"."${config.name}" (${columns.join(",")})`);
+    await client.query(
+      `CREATE TABLE "${namespace}"."${config.name}" (${[...columns, ...config.uniqueConstraints.map((c) => `CONSTRAINT "${c.name}" UNIQUE (${c.columns.map((column) => `"${column.name}"`).join(",")})`)].join(",")})`
+    );
   }
 }

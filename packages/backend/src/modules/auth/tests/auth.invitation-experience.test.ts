@@ -32,6 +32,7 @@ const SECRET = "invitation-test-secret-at-least-thirty-two-characters";
 async function fixture(
   options: {
     sharedApi?: boolean;
+    basePath?: string;
     splitApi?: boolean;
     socialEmail?: string;
     legacy?: boolean;
@@ -64,7 +65,10 @@ async function fixture(
         ...(options.legacy
           ? {
               name: "Legacy",
-              urls: { web: "https://radar.example.test", api: "https://radar.example.test" },
+              urls: {
+                web: "https://radar.example.test",
+                api: "https://radar.example.test",
+              },
             }
           : {
               experiences: {
@@ -86,6 +90,7 @@ async function fixture(
                     ...(options.sharedApi ? { apiOrigin: "https://api.example.test" } : {}),
                     ...(options.splitApi ? { apiOrigin: "https://a-api.example.test" } : {}),
                     emailProfile: "radar",
+                    aliases: ["https://alias-radar.example.test"],
                   },
                   partner: {
                     ...experienceConfig.definitions.partner,
@@ -101,7 +106,11 @@ async function fixture(
               },
             }),
       },
-      email: { mode: "store", from: "Legacy <legacy@example.test>", outputDirectory: directory },
+      email: {
+        mode: "store",
+        from: "Legacy <legacy@example.test>",
+        outputDirectory: directory,
+      },
     },
     [
       new EmailModule({
@@ -130,9 +139,12 @@ async function fixture(
       emailVerified: true,
     })
     .returning();
-  await orm
-    .insert(schema.organizations)
-    .values({ id: "organization", name: "Shared Organization", slug: "shared", locale: "en_GB" });
+  await orm.insert(schema.organizations).values({
+    id: "organization",
+    name: "Shared Organization",
+    slug: "shared",
+    locale: "en_GB",
+  });
   await orm.insert(schema.members).values({
     id: "owner-member",
     organizationId: "organization",
@@ -164,6 +176,7 @@ async function fixture(
     options: {
       secret: SECRET,
       rateLimit: { enabled: false },
+      basePath: options.basePath,
       socialProviders: {
         google: {
           clientId: "test-client",
@@ -214,7 +227,9 @@ describe("Experience-bound invitations", () => {
         ["radar", "Gastro Raider", "Radar"],
         ["horeka", "Horeka AI", "Horeka"],
       ]) {
-        const email = await f.email.findLatestStoredEmail({ to: `${id}-invitee@example.test` });
+        const email = await f.email.findLatestStoredEmail({
+          to: `${id}-invitee@example.test`,
+        });
         expect(email?.from).toBe(`${from} <${id}@example.test>`);
         const link = new URL(String(email?.props.url));
         expect(link.origin).toBe(`https://${id}.example.test`);
@@ -234,7 +249,9 @@ describe("Experience-bound invitations", () => {
         f.ownerContext("radar")
       );
       if (issued.isErr()) throw issued.error;
-      const mail = await f.email.findLatestStoredEmail({ to: "new@example.test" });
+      const mail = await f.email.findLatestStoredEmail({
+        to: "new@example.test",
+      });
       const url = new URL(String(mail?.props.url));
       const input = {
         id: issued.value.invitation.id,
@@ -316,7 +333,9 @@ describe("Experience-bound invitations", () => {
         f.ownerContext("radar")
       );
       if (issued.isErr()) throw issued.error;
-      const mail = await f.email.findLatestStoredEmail({ to: "signup@example.test" });
+      const mail = await f.email.findLatestStoredEmail({
+        to: "signup@example.test",
+      });
       const proof = new URL(String(mail?.props.url)).searchParams.get("experienceFlow")!;
       const signup = (brand: string, continuation?: string) =>
         f.betterAuth.api.signUpEmail({
@@ -326,10 +345,18 @@ describe("Experience-bound invitations", () => {
             "organization-invitation-code": issued.value.invitation.id,
             ...(continuation !== undefined ? { "X-M5kdev-Experience-Flow": continuation } : {}),
           }),
-          body: { name: "Signup", email: "signup@example.test", password: "Valid-Password-123" },
+          body: {
+            name: "Signup",
+            email: "signup@example.test",
+            password: "Valid-Password-123",
+          },
         });
-      await expect(signup("horeka", proof)).rejects.toMatchObject({ status: "BAD_REQUEST" });
-      await expect(signup("radar")).rejects.toMatchObject({ status: "BAD_REQUEST" });
+      await expect(signup("horeka", proof)).rejects.toMatchObject({
+        status: "BAD_REQUEST",
+      });
+      await expect(signup("radar")).rejects.toMatchObject({
+        status: "BAD_REQUEST",
+      });
       const result = await signup("radar", proof);
       expect(result.user.email).toBe("signup@example.test");
       const members = await f.auth.listOrganizationMembers(undefined, f.ownerContext("radar"));
@@ -349,7 +376,9 @@ describe("Experience-bound invitations", () => {
         f.ownerContext("horeka")
       );
       expect(issued.isOk()).toBe(true);
-      const email = await f.email.findLatestStoredEmail({ to: "friend@example.test" });
+      const email = await f.email.findLatestStoredEmail({
+        to: "friend@example.test",
+      });
       expect(email?.from).toBe("Horeka <horeka@example.test>");
       const url = new URL(String(email?.props.url));
       expect(url.origin).toBe("https://horeka.example.test");
@@ -357,7 +386,11 @@ describe("Experience-bound invitations", () => {
         code: url.searchParams.get("code")!,
         experienceFlow: url.searchParams.get("experienceFlow")!,
       };
-      const pub = (id: string) => ({ experience: f.registry.get(id), user: null, actor: null });
+      const pub = (id: string) => ({
+        experience: f.registry.get(id),
+        user: null,
+        actor: null,
+      });
       const valid = await f.auth.validateWaitlistCode(input, pub("horeka"));
       expect(valid.isOk() && valid.value.status).toBe("VALID");
       expect((await f.auth.validateWaitlistCode(input, pub("radar"))).isErr()).toBe(true);
@@ -369,9 +402,15 @@ describe("Experience-bound invitations", () => {
             "waitlist-invitation-code": input.code,
             "X-M5kdev-Experience-Flow": input.experienceFlow,
           }),
-          body: { name: "Friend", email: "friend@example.test", password: "Valid-Password-123" },
+          body: {
+            name: "Friend",
+            email: "friend@example.test",
+            password: "Valid-Password-123",
+          },
         });
-      await expect(signup("radar")).rejects.toMatchObject({ status: "BAD_REQUEST" });
+      await expect(signup("radar")).rejects.toMatchObject({
+        status: "BAD_REQUEST",
+      });
       expect((await signup("horeka")).user.email).toBe("friend@example.test");
       const consumed = await f.auth.validateWaitlistCode(input, pub("horeka"));
       expect(consumed.isOk() && consumed.value.status).toBe("INVALID");
@@ -409,7 +448,11 @@ describe("Experience-bound invitations", () => {
         new Request(
           `https://api.example.test/api/auth/callback/google?${new URLSearchParams({ state: state!, error: "access_denied" })}`,
           {
-            headers: { host: "api.example.test", origin: "https://radar.example.test", cookie },
+            headers: {
+              host: "api.example.test",
+              origin: "https://radar.example.test",
+              cookie,
+            },
           }
         )
       );
@@ -586,7 +629,10 @@ describe("Experience-bound invitations", () => {
   it.each([false, true])(
     "completes invited social signup on its bound shared API (no Origin: %s)",
     async (noOrigin) => {
-      const f = await fixture({ sharedApi: true, socialEmail: "social-invite@example.test" });
+      const f = await fixture({
+        sharedApi: true,
+        socialEmail: "social-invite@example.test",
+      });
       const tokenBodies: URLSearchParams[] = [];
       const transport = jest.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
         if (String(url) !== "https://oauth2.googleapis.com/token")
@@ -608,7 +654,9 @@ describe("Experience-bound invitations", () => {
           f.ownerContext("horeka")
         );
         if (issued.isErr()) throw issued.error;
-        const mail = await f.email.findLatestStoredEmail({ to: "social-invite@example.test" });
+        const mail = await f.email.findLatestStoredEmail({
+          to: "social-invite@example.test",
+        });
         const proof = new URL(String(mail?.props.url)).searchParams.get("experienceFlow")!;
         const start = await f.betterAuth.handler(
           new Request("https://api.example.test/api/auth/sign-in/social", {
@@ -698,7 +746,11 @@ describe("Experience-bound invitations", () => {
         .update(schema.invitations)
         .set({ createdAt: new Date(issuedBefore.getTime() - 1000) })
         .where(eq(schema.invitations.id, invitation.value.invitation.id));
-      const pub = (id: string) => ({ experience: f.registry.get(id), actor: null, user: null });
+      const pub = (id: string) => ({
+        experience: f.registry.get(id),
+        actor: null,
+        user: null,
+      });
       expect(
         (await f.auth.readInvitation({ id: invitation.value.invitation.id }, pub("radar"))).isOk()
       ).toBe(true);
@@ -724,7 +776,9 @@ describe("Experience-bound invitations", () => {
       };
       const rotated = await f.auth.inviteFromWaitlist({ id: oldCode.id }, admin);
       if (rotated.isErr()) throw rotated.error;
-      const mail = await f.email.findLatestStoredEmail({ to: "old-code@example.test" });
+      const mail = await f.email.findLatestStoredEmail({
+        to: "old-code@example.test",
+      });
       const link = new URL(String(mail?.props.url));
       expect(
         (
@@ -776,7 +830,9 @@ describe("Experience-bound invitations", () => {
         f.ownerContext("radar")
       );
       if (invitation.isErr()) throw invitation.error;
-      const mail = await f.email.findLatestStoredEmail({ to: "legacy@example.test" });
+      const mail = await f.email.findLatestStoredEmail({
+        to: "legacy@example.test",
+      });
       expect(new URL(String(mail?.props.url)).searchParams.has("experienceFlow")).toBe(false);
       expect(
         (
@@ -864,7 +920,9 @@ describe("Experience-bound invitations", () => {
       if (fresh.isErr()) throw fresh.error;
       expect(fresh.value.id).not.toBe(old.value.id);
       const signedIn = await f.betterAuth.handler(
-        new Request(fresh.value.url, { headers: { host: "radar.example.test" } })
+        new Request(fresh.value.url, {
+          headers: { host: "radar.example.test" },
+        })
       );
       expect(signedIn.status).toBe(302);
       const cookie = signedIn.headers
@@ -892,7 +950,9 @@ describe("Experience-bound invitations", () => {
         context
       );
       if (issued.isErr()) throw issued.error;
-      const email = await f.email.findLatestStoredEmail({ to: "revoked@example.test" });
+      const email = await f.email.findLatestStoredEmail({
+        to: "revoked@example.test",
+      });
       const proof = new URL(String(email?.props.url)).searchParams.get("experienceFlow")!;
       const input = { id: issued.value.invitation.id, experienceFlow: proof };
       await f.auth.cancelOrganizationInvitation({ invitationId: input.id }, context);
@@ -975,7 +1035,9 @@ describe("Experience-bound invitations", () => {
           )
           .where(eq(schema.accountClaims.id, claim.value.id));
         const response = await f.betterAuth.handler(
-          new Request(link.value.url, { headers: { host: "radar.example.test" } })
+          new Request(link.value.url, {
+            headers: { host: "radar.example.test" },
+          })
         );
         expect(response.status).toBe(400);
         expect(response.headers.get("set-cookie") ?? "").not.toContain("session_token");
@@ -1027,8 +1089,12 @@ describe("Experience-bound invitations", () => {
           { experience: f.registry.get(id), user: null, actor: null }
         );
         expect(joined.isOk()).toBe(true);
-        const confirmation = await f.email.findLatestStoredEmail({ to: `${id}-join@example.test` });
-        const system = await f.email.findLatestStoredEmail({ to: `ops-${id}@example.test` });
+        const confirmation = await f.email.findLatestStoredEmail({
+          to: `${id}-join@example.test`,
+        });
+        const system = await f.email.findLatestStoredEmail({
+          to: `ops-${id}@example.test`,
+        });
         expect(confirmation?.props.brand).toEqual(f.registry.get(id).brand);
         expect(system?.props.brand).toEqual(f.registry.get(id).brand);
         expect(system?.from).toBe(confirmation?.from);
@@ -1074,7 +1140,10 @@ describe("Experience-bound invitations", () => {
       );
       if (invitation.isErr()) throw invitation.error;
       const shared = await f.auth.createOrganizationInvitationLink(
-        { id: invitation.value.invitation.id, path: "/custom-accept?mode=join&id=wrong#section" },
+        {
+          id: invitation.value.invitation.id,
+          path: "/custom-accept?mode=join&id=wrong#section",
+        },
         f.ownerContext("radar")
       );
       if (shared.isErr()) throw shared.error;
@@ -1301,7 +1370,10 @@ describe("Experience-bound invitations", () => {
           ),
           expiresAt: claim.value.expiresAt!.getTime(),
         });
-        const claimInput = { claimId: claim.value.id, experienceFlow: claimProof };
+        const claimInput = {
+          claimId: claim.value.id,
+          experienceFlow: claimProof,
+        };
         const seen: Array<string | undefined> = [];
         f.built.express.app.post("/bound/:operation", async (req, res) => {
           seen.push((req as ExperienceRequest).experience?.id);
@@ -1333,7 +1405,10 @@ describe("Experience-bound invitations", () => {
           new Promise<{ status: number; data: Record<string, unknown> }>((resolve, reject) => {
             const request = httpRequest(
               `${base}/bound/${operation}`,
-              { method: "POST", headers: { host, "content-type": "application/json" } },
+              {
+                method: "POST",
+                headers: { host, "content-type": "application/json" },
+              },
               (response) => {
                 const chunks: Buffer[] = [];
                 response.on("data", (chunk) => chunks.push(chunk));
@@ -1387,4 +1462,207 @@ describe("Experience-bound invitations", () => {
       }
     }
   );
+  it.each([
+    { sharedApi: false, basePath: "/api/auth" },
+    { sharedApi: true, basePath: "/api/auth" },
+    { sharedApi: true, basePath: "/identity" },
+  ])(
+    "completes omitted-callback OAuth on canonical web root using configured auth path %j",
+    async (config) => {
+      const f = await fixture({
+        ...config,
+        socialEmail: "default-callback@example.test",
+      });
+      const tokenBodies: URLSearchParams[] = [];
+      const transport = jest.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
+        if (String(url) !== "https://oauth2.googleapis.com/token")
+          throw new Error(`Unexpected provider ${url}`);
+        tokenBodies.push(new URLSearchParams(String(options?.body)));
+        return new Response(
+          JSON.stringify({
+            access_token: "recorded",
+            token_type: "Bearer",
+            expires_in: 3600,
+            scope: "openid email profile",
+          }),
+          { headers: { "content-type": "application/json" } }
+        );
+      });
+      try {
+        const issued = await f.auth.inviteOrganizationMember(
+          { email: "default-callback@example.test", role: "member" },
+          f.ownerContext("horeka")
+        );
+        if (issued.isErr()) throw issued.error;
+        const mail = await f.email.findLatestStoredEmail({
+          to: "default-callback@example.test",
+        });
+        const proof = new URL(String(mail?.props.url)).searchParams.get("experienceFlow")!;
+        const api = config.sharedApi ? "https://api.example.test" : "https://horeka.example.test";
+        const start = await f.betterAuth.handler(
+          new Request(`${api}${config.basePath}/sign-in/social`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              host: new URL(api).host,
+              origin: "https://horeka.example.test",
+            },
+            body: JSON.stringify({
+              provider: "google",
+              requestSignUp: true,
+              additionalData: {
+                organizationInvitationCode: issued.value.invitation.id,
+                experienceFlow: proof,
+              },
+            }),
+          })
+        );
+        expect(start.status).toBe(200);
+        const provider = new URL((await start.json()).url);
+        expect(provider.searchParams.get("redirect_uri")).toBe(
+          `${api}${config.basePath}/callback/google`
+        );
+        const cookie = start.headers
+          .getSetCookie()
+          .map((value) => value.split(";")[0])
+          .join("; ");
+        const done = await f.betterAuth.handler(
+          new Request(
+            `${api}${config.basePath}/callback/google?state=${provider.searchParams.get("state")}&code=recorded`,
+            { headers: { host: new URL(api).host, cookie } }
+          )
+        );
+        expect(done.status).toBe(302);
+        expect(done.headers.get("location")).toBe("https://horeka.example.test/");
+        expect(tokenBodies[0].get("redirect_uri")).toBe(`${api}${config.basePath}/callback/google`);
+      } finally {
+        transport.mockRestore();
+        await f.close();
+      }
+    }
+  );
+  it("rejects alias OAuth initiation before minting a host-only state cookie", async () => {
+    const f = await fixture();
+    try {
+      const response = await f.betterAuth.handler(
+        new Request("https://alias-radar.example.test/api/auth/sign-in/social", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            host: "alias-radar.example.test",
+            origin: "https://alias-radar.example.test",
+          },
+          body: JSON.stringify({
+            provider: "google",
+            callbackURL: "https://radar.example.test/",
+          }),
+        })
+      );
+      expect(response.status).toBe(400);
+      expect(response.headers.get("set-cookie")).toBeNull();
+      await expect(
+        f.betterAuth.api.signInSocial({
+          headers: new Headers({
+            host: "alias-radar.example.test",
+            origin: "https://alias-radar.example.test",
+          }),
+          body: {
+            provider: "google",
+            callbackURL: "https://radar.example.test/",
+          },
+        })
+      ).rejects.toMatchObject({ status: "BAD_REQUEST" });
+    } finally {
+      await f.close();
+    }
+  });
+});
+
+describe("Public Email waitlist helpers", () => {
+  it("requires a producer-issued continuation for strict links instead of delivering an unusable raw code", async () => {
+    const f = await fixture();
+    try {
+      const experience = f.registry.get("horeka");
+      for (const send of [
+        () =>
+          f.email.sendWaitlistInvite("raw@example.test", "unbound", {
+            experience,
+          }),
+        () =>
+          f.email.sendWaitlistUserInvite("raw-user@example.test", "unbound", "Owner", undefined, {
+            experience,
+          }),
+      ]) {
+        expect((await send()).isErr()).toBe(true);
+      }
+      expect(await f.email.findLatestStoredEmail({ to: "raw@example.test" })).toBeNull();
+    } finally {
+      await f.close();
+    }
+  });
+});
+
+describe("Producer-issued Email waitlist continuation", () => {
+  it("delivers the Auth-issued strict continuation and keeps raw shorthand helpers working", async () => {
+    for (const legacy of [false, true]) {
+      const f = await fixture({ legacy });
+      try {
+        const experience = legacy ? f.registry.defaultExperience : f.registry.get("horeka");
+        if (legacy) {
+          expect(
+            (
+              await f.email.sendWaitlistInvite("legacy-helper@example.test", "raw-code", {
+                experience,
+              })
+            ).isOk()
+          ).toBe(true);
+          const email = await f.email.findLatestStoredEmail({
+            to: "legacy-helper@example.test",
+          });
+          expect(new URL(String(email?.props.url)).searchParams.get("code")).toBe("raw-code");
+        } else {
+          const issued = await f.auth.inviteToWaitlist(
+            { email: "helper@example.test", name: "Friend" },
+            f.ownerContext("horeka")
+          );
+          expect(issued.isOk()).toBe(true);
+          const original = await f.email.findLatestStoredEmail({
+            to: "helper@example.test",
+          });
+          const link = new URL(String(original?.props.url));
+          for (const send of [
+            () =>
+              f.email.sendWaitlistInvite(
+                "helper-copy@example.test",
+                link.searchParams.get("code")!,
+                { experience, linkPaths: { url: link.href } }
+              ),
+            () =>
+              f.email.sendWaitlistUserInvite(
+                "helper-user-copy@example.test",
+                link.searchParams.get("code")!,
+                "Owner",
+                undefined,
+                { experience, linkPaths: { url: link.href } }
+              ),
+          ])
+            expect((await send()).isOk()).toBe(true);
+          const copy = await f.email.findLatestStoredEmail({
+            to: "helper-copy@example.test",
+          });
+          expect(copy?.props.url).toBe(link.href);
+          const valid = await f.auth.validateWaitlistCode(
+            {
+              code: link.searchParams.get("code")!,
+              experienceFlow: link.searchParams.get("experienceFlow")!,
+            },
+            { experience, user: null, actor: null }
+          );
+          expect(valid.isOk() && valid.value.status).toBe("VALID");
+        }
+      } finally {
+        await f.close();
+      }
+    }
+  });
 });

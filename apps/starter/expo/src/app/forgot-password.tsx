@@ -1,3 +1,4 @@
+import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
 import { Button } from "heroui-native";
 import { useState } from "react";
@@ -8,6 +9,7 @@ import { StatusText } from "../components/StatusText";
 
 export default function ForgotPasswordScreen() {
   const authClient = useAuthClient();
+  const { appUrl } = useAppConfig();
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [tone, setTone] = useState<"error" | "success">("success");
@@ -17,10 +19,12 @@ export default function ForgotPasswordScreen() {
     setIsBusy(true);
     setStatus(null);
     try {
-      await authClient.requestPasswordReset({
+      const result = await authClient.requestPasswordReset({
         email,
-        redirectTo: "/reset-password",
+        redirectTo: new URL("/reset-password", appUrl).href,
       });
+      if (result.error)
+        throw new Error("Unable to request a reset link. Try again from the same website.");
       setTone("success");
       setStatus("Password reset email sent");
     } catch (error) {

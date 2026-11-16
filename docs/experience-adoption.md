@@ -17,7 +17,19 @@ experiences: {
 }
 ```
 
-The default identifies deliberately context-free operations. It never rescues an unknown browser host. Duplicate web authorities, unknown profiles, invalid origins and ambiguous API ownership fail at boot. Deployed configurations require HTTPS.
+Kernel `app.urls.web`/`api` and registry origins are HTTP(S) **origins**: no path,
+query, fragment or credentials. A trailing root slash is normalized. API prefixes
+are not a supported Kernel deployment contract. Better Auth's explicit
+`options.basePath` and standalone Auth's static `app.urls.api` base-URL path
+behavior remain SDK-owned; register the corresponding exact provider callbacks and MCP URLs.
+Kernel and standalone Auth share presentation normalization. Explicit metadata
+wins over environment defaults; raw `experiences` cannot be mixed with singular
+name/URL/brand or a resolved registry, even when values are empty. Existing code
+annotated with exported `BackendAppMetadata` remains supported.
+
+The default identifies deliberately context-free operations. It never rescues an unknown browser host. Duplicate web authorities, unknown profiles, invalid origins and ambiguous API ownership fail at boot. Deployed configurations require HTTPS. A strict Auth composition requires one
+protocol across its active API origins; mixed HTTP/HTTPS API definitions fail at
+Auth boot rather than inheriting the default Experience's callback scheme.
 
 ## Bootstrap before authentication
 
@@ -29,9 +41,16 @@ Keep shells/routes in app composition. Multiple Experiences can share a product 
 
 Prefer a same-origin API/auth proxy on each product domain. When several Experiences share a distinct API authority, only an exact registered browser Origin/API pair selects one. Ordinary no-Origin API calls may remain presentation-neutral; a branded operation must receive explicit validated context.
 
-List aliases as canonical origins. `infrastructureHosts` may admit unbranded health probes. Set `trustedProxyHeaders` only behind an ingress that overwrites client-supplied forwarded headers. Unknown/conflicting hosts and origins fail without generating cookies or redirects. Partition external caches by host/Experience and locale; private auth and capability responses are not shared content.
+List aliases as canonical origins. `infrastructureHosts` may admit unbranded health probes. Set `trustedProxyHeaders` only behind an ingress that overwrites client-supplied forwarded headers. Unknown/conflicting hosts and origins fail without generating cookies or redirects. Aliases are public entry addresses, not cookie-sharing authorities. Navigate at
+the app/ingress boundary to the selected canonical API/web entry **before** sign-in
+and cookie-sensitive OAuth or Connection starts. A host-only cookie established
+on an alias/web-only authority cannot be transferred to another callback host.
+Omitted OAuth callbackURL defaults to that selected web origin's `/`, including
+split API deployments. Configured Better Auth base paths are preserved.
 
-## Adoption checkpoints
+Partition external caches by host/Experience and locale; private auth and capability responses are not shared content.
+
+## Authentication and communications
 
 ### Domain-local authentication
 
@@ -97,14 +116,14 @@ an explicit Result error, including with shorthand. Without an id or registered
 policy, only normalized supported shorthand can use its default; even a one-entry
 explicit registry remains strict.
 
-Keep the returned `PublicExperience` for the whole operation: for example, #98
+Keep the returned `PublicExperience` for the whole operation: for example, Billing
 resolves once after authoritative billing/event checks, then creates its contextual
 Portal and sends with that same descriptor. Policy is not called implicitly by
 sendTemplate/sendBrandTemplate; pass `{ experience, linkPaths, locale }` through the
 existing path. This avoids running a lookup again between a related link and its
 message. Sender/template overrides and recipient/Organization locale remain as
 documented above. It does not change which Organization owns the resource, current
-Grants/Entitlements or delivery deduplication. The new resolver requires an app
+Grants/Entitlements or delivery deduplication. The resolver requires an app
 registry; existing manually constructed EmailService send APIs are unchanged.
 
 Queue only the approved `experience.id` plus existing minimal User/Organization/
@@ -147,6 +166,33 @@ a configured Origin pair or trusted explicit server context. A top-level cross-s
 GET cannot be assumed to supply Origin or a usable API cookie. There is no SSO
 handoff or inferred User/Organization.
 
+For a browser using a shared API, POST JSON to the configured mount's
+`/:provider/start` with credentials. The route returns `{ url }` and
+`Cache-Control: private, no-store`; navigate only after the successful response.
+It accepts only optional `redirect`, a local return destination. The provider is
+selected by the route. Caller state, callback URLs and arbitrary OAuth parameters
+are rejected. Existing GET starts retain their redirect behavior.
+
+```ts
+const response = await fetch(
+  `${experience.apiOrigin}/connections/google/start`,
+  {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ redirect: "/settings/connections" }),
+  },
+);
+if (!response.ok)
+  throw new Error("Unable to start connection. Try again here.");
+const { url } = await response.json();
+window.location.assign(url);
+```
+
+Use the module's configured mount and provider id; the example assumes
+`mountPath: "/connections"`. Cookie policy must allow that browser/API topology.
+No shared Connections screen is installed in the normal Starter.
+
 The opaque provider nonce refers to private per-app state binding User/session,
 provider, Experience, canonical local destination, exact callback URI, PKCE and
 checked expiry. Both success and provider-error callbacks consume it once and use
@@ -166,7 +212,7 @@ paths and direct service consumer migration.
 
 Configure a stable server-only `experienceFlowSecret` (at least 32 characters) on
 `createBackendApp`. The Kernel normalizes it once, with `BETTER_AUTH_SECRET` as an
-optional fallback for explicit Experience configuration. It constructs one immutable
+optional fallback when it has at least 32 characters, including shorthand. It constructs one immutable
 `ExperienceFlowSigner`, exposes it to module services as `infra.experienceFlows`, and
 passes it to the auth factory as `experienceFlows`. Forward that value to
 `createBetterAuth({ ..., experienceFlows })`. Direct compositions may inject a signer
@@ -178,11 +224,11 @@ explicitly rather than assuming the environment contains that factory's key.
 
 The signer binds purpose, the auth token/resource digest, Experience, canonical
 destination and expiry. It does not grant Membership or replace the underlying
-token's authority or one-use rules. Later integrations can reuse the injected
+token's authority or one-use rules. Owning services can reuse the injected
 `sign`/`verify` operations with distinct purposes; each flow still checks its owning
 resource and request authority.
 
-Built-in verification/reset senders now select the requesting Experience's sender,
+Built-in verification/reset senders select the requesting Experience's sender,
 template and links together, retaining recipient locale. Links contain a signed
 continuation inside their callback destination. Keep the complete generated URL.
 Reset pages preserve the `experienceFlow` query value and submit it using the
@@ -202,14 +248,17 @@ When adopting strict registry configuration, an optional, default-off policy can
 preserve tokens issued by the one known former Experience:
 
 ```ts
-createBackendApp({
-  // Other app configuration and a stable experienceFlowSecret...
-  experienceFlowLegacyPolicy: {
-    experience: "radar",
-    issuedBefore: new Date("2026-11-16T12:00:00Z"),
-    acceptUntil: new Date("2026-11-17T12:00:00Z"),
+createBackendApp(
+  {
+    // Other app configuration and a stable experienceFlowSecret...
+    experienceFlowLegacyPolicy: {
+      experience: "radar",
+      issuedBefore: new Date("2026-11-16T12:00:00Z"),
+      acceptUntil: new Date("2026-11-17T12:00:00Z"),
+    },
   },
-}, modules);
+  modules,
+);
 ```
 
 Choose the real deployment cutoff and a short acceptance deadline, and use the same
@@ -230,22 +279,16 @@ admission automatically. Missing historical issuance data fails closed; request 
 fresh link instead. No new metadata table is required.
 
 The same injected signer exposes `verifyLegacy({ issuedAt, experience?, destination? })`
-for later owning adapters. It checks only policy eligibility and returns the fixed
+for owning adapters. It checks only policy eligibility and returns the fixed
 Experience and canonical destination. An adapter must obtain authoritative issuance
 data from its existing resource and still authenticate, expire and consume that
 resource before any effect. Do not pass caller-supplied timestamps as authority.
 
-Registry/bootstrap, Auth, Email, invitation/waitlist/account-claim, Connection and
-background communication, Checkout, Portal and trial communication checkpoints are
-available. Shared frontend Billing adoption remains its next checkpoint. Complete adoption requires the final integration audit in
-#100; adding another domain alone does not complete those flows.
-
 One Trial Plan per currency, one Subscription per Organization/environment and account-wide Stripe identity constraints remain. This feature does not provision domains/certificates, merge data, add independent subscriptions or promise cross-domain SSO.
-
 
 ### Invitations, waitlist and account claim
 
-AuthService now requires the initiating `ctx.experience` for branded issuance in
+AuthService requires the initiating `ctx.experience` for branded issuance in
 explicit-registry mode. AuthModule injects the same registry and
 `infra.experienceFlows`; direct service compositions pass those through its final
 presentation options. Missing/invalid context is rejected before Membership or
@@ -274,6 +317,13 @@ origin is rejected. Public readers do not mint proofs or relabel links. Fresh
 explicit authorized issuance can choose a different Experience for the same
 still-pending underlying resource; an existing signed continuation keeps its own
 identity. MemberId, invited email and current Membership role stay authoritative.
+
+`EmailService.sendWaitlistInvite` and `sendWaitlistUserInvite` cannot create an
+Auth proof from a raw code. In strict registry mode pass the complete Auth-issued
+link as `options.linkPaths.url`; omitting it returns an error before mail. Prefer
+Auth's issuing operations, which own the resource checks and signed continuation.
+The public raw-code helpers retain their old shorthand behavior. Email does not
+validate resource ownership or mint proofs for these helpers.
 
 Waitlist confirmation and system notification use the entered request Experience.
 The selected email profile's systemNotificationEmail overrides the existing global
@@ -315,7 +365,7 @@ Use the canonical authenticated API/proxy for GET Checkout initiation. A distinc
 shared API uses `billing.startCheckout` tRPC POST with registered browser Origin;
 neutral ambiguous GET and alias/web-only starts fail. New signed returns bind the
 original User/session/active Organization and live Owner, validate actual Stripe
-Checkout Session nonce/customer/environment/completion/expiry, then reconcile before
+Checkout Session nonce/customer/environment/completion and proof expiry, then reconcile before
 returning to the stored product destination. Cancellation has no billing effects.
 Changed context requires reopening Billing and never switches the session Org.
 
@@ -371,6 +421,25 @@ const experience = await loadExperience({ url: "/app/experience" });
 // <AppConfigProvider config={{ experience, locales, roles }}>...</AppConfigProvider>
 ```
 
+Normal Starter Providers perform this bootstrap before Auth, then select its
+header, title, logo and Help destination from the resolved descriptor. Loading and
+retry screens precede session loading. The server and native composition retain
+single-Experience authoring without adding Billing or example product routing.
+`VITE_SERVER_URL` is a web bootstrap transport input only;
+selected canonical URLs drive subsequent clients. For one multi-domain web artifact
+prefer relative `/app/experience` through each domain-local API proxy. Separately
+hosted clients can supply `experience` to Starter Providers or supply an explicit
+`bootstrapUrl` for the registered API transport. Native Starter keeps its explicit
+standalone `APP_NAME` + `EXPO_PUBLIC_APP_URL` + `EXPO_PUBLIC_SERVER_URL` composition
+form. Its authored frontend URL supplies verification/recovery destinations and
+must be allowed by the server's trusted origins/CORS. For strict native/web-export
+composition, replace that singular provider with the provided native
+`ExperienceBootstrap` before Auth; register the actual frontend/API pairing in the
+server registry. Never override a strict descriptor with a client URL or infer
+strictness from an Experience id. Expo preserves reset, invitation,
+waitlist and claim continuation ids/proofs; its browser export tests do not prove
+native device OAuth/custom-scheme cookie behavior.
+
 Keep bootstrap loading and failure explicit. Do not start authentication or render
 another configured brand while resolution is pending or has failed. A separately
 hosted frontend may receive the matching public descriptor from trusted app
@@ -385,7 +454,7 @@ Organization, Plan, Entitlement and Grant changes never select the product.
 Keep approved theme/copy identifiers in app-owned lookup tables, rather than
 executing configuration as HTML, CSS or code.
 
-Shared Checkout and Portal buttons now invoke `billing.startCheckout` and
+Shared Checkout and Portal buttons invoke `billing.startCheckout` and
 `billing.startPortal` through the authenticated tRPC client before navigating to
 the returned Stripe URL. The browser POST supplies its Origin to a shared API;
 a top-level GET link normally does not. Custom frontend integrations should use
@@ -394,6 +463,11 @@ Price/local-return inputs. Do not send Stripe parameter bags or Customer ids.
 The old server GET routes remain available for supported domain-local integrations.
 A shared API still requires a working authenticated cookie topology; this does
 not add cross-domain SSO.
+
+Members, child Organizations and Organization preferences also include their active
+Organization id and discard previous-Organization placeholders. Preference mutations
+update the cache named by their original mutation input. User-owned Organization
+lists and saved User preferences stay User-scoped.
 
 Subscription, invoice, trial-price and Entitlement queries are scoped by
 Organization id. Entitlements deliberately do not acquire an Experience key.
@@ -411,3 +485,51 @@ Kernel, Better Auth, tRPC and Billing/Grant services. It is excluded from Starte
 scaffolding. Its README describes the disposable PostgreSQL/browser commands,
 domain-local and shared-API topologies, supplied-descriptor example and recording
 Stripe boundary.
+
+## File URLs, caches and neutral infrastructure
+
+File ownership continues to use User/Organization plus bucket/key. Local mock-S3
+upload/download URLs use the approved request Experience's canonical API origin via
+an immutable per-call store view, so another unrelated product domain can reach
+its own mock endpoint. Neutral server calls use normalized infrastructure defaults;
+deployed S3 URLs are unchanged. Local storage itself is not partitioned by brand.
+
+Ordinary tRPC JSON responses, including batches and errors, are private/no-store;
+this includes Entitlements, Subscriptions and public proof-bound resource reads.
+Authenticated Express routes and their errors/redirects are private/no-store at
+the Auth transport boundary; Auth's session endpoint is no-store. Public static assets keep their normal policy.
+MCP discovery/issuer/JWKS remain canonical/default, and no-Origin neutral workers
+and API operations acquire no invented browser identity.
+
+## Cutover and verification
+
+Retain both old Experience ids **and their original canonical web/API origins**
+until outstanding signed links and queued work have drained or been explicitly
+migrated. Merely retaining the old web address as an alias after changing
+`webOrigin` does not preserve signatures for its old canonical destination. Create
+a new Experience for a new canonical origin while old continuations drain.
+
+Use the bounded legacy policy only with authoritative issuance timestamps as
+specified above. Strict raw historical payment returns have no trustworthy issuance
+record and fail closed: rely on verified webhook reconciliation and reopen Billing.
+Do not reinterpret malformed signed input as an older raw flow. Background jobs
+without ids use an explicit trusted communication policy during strict adoption.
+Preserve app-authored guides and every configured locale when updating generated
+apps; CLI update does not replace authored guides/translations.
+
+Run `node scripts/check-experience-readers.mjs` to check the bounded runtime-reader
+inventory, then `node scripts/verify-experiences.mjs` with the explicit disposable
+PostgreSQL and owned Redis environment variables described by the reference README.
+The same compiled fixture covers A/B/alternate branding, actual Auth and resource
+continuations, Connection provider callbacks, Checkout/Portal return reconciliation,
+interleaved immediate and delayed emails, and verified webhook trial warnings.
+Recording adapters are restricted to provider/Stripe boundaries. Existing broad
+negative-flow suites run alongside it. Generated-consumer evidence must use freshly
+packed current-branch packages, not registry copies with the same version number.
+
+Hosted Stripe branding, payments, invoices/receipts and external email appearance
+require real sandbox access; the documented Billing sandbox checklist remains the
+manual verification boundary when credentials are unavailable. This feature does
+not merge User/data records or subscriptions, provision customer-managed domains or
+certificates, add cross-domain SSO, create multiple Stripe accounts, or select a
+Trial Plan by Experience. ADR-0034 remains the commercial authority.

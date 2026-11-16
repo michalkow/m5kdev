@@ -17,11 +17,11 @@ production.
 
 ## Package map
 
-| Package | What it owns |
-| --- | --- |
+| Package           | What it owns                                                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@m5kdev/backend` | `EmailModule` + `EmailService` (send, brand, locale, exclusive `send` / `store` / `log` modes). `EmailPreviewModule` is a helper, not Core. |
-| `@m5kdev/email` | Shared React Email layout (`EmailLayout`, `CtaButton`, brand chrome) and template prop types. |
-| App email package | Per-app template components and `emailResources` registered in `createBackendApp`. |
+| `@m5kdev/email`   | Shared React Email layout (`EmailLayout`, `CtaButton`, brand chrome) and template prop types.                                               |
+| App email package | Per-app template components and `emailResources` registered in `createBackendApp`.                                                          |
 
 ## Registration
 
@@ -178,16 +178,25 @@ resolve presentation before creating any branded side effect or sending:
 const selected = await email.resolveCommunicationExperience({
   experienceId: queued.experienceId, // validated ExperienceId, when already bound
   context: {
-    event: "app.report-ready", eventId,
-    organizationId: report.organizationId, resourceId: report.id,
+    event: "app.report-ready",
+    eventId,
+    organizationId: report.organizationId,
+    resourceId: report.id,
   },
 });
 if (selected.isErr()) return err(selected.error);
 const experience = selected.value;
 // Use this same descriptor for any generated action/return link, then send.
-return email.sendBrandTemplate(recipient.email, "reportReady", { title: report.title }, {
-  experience, linkPaths: { url: `/reports/${report.id}` }, locale: recipient.locale,
-});
+return email.sendBrandTemplate(
+  recipient.email,
+  "reportReady",
+  { title: report.title },
+  {
+    experience,
+    linkPaths: { url: `/reports/${report.id}` },
+    locale: recipient.locale,
+  },
+);
 ```
 
 Resolution precedence is explicit:
@@ -228,8 +237,15 @@ for the validated payload shape and worker registration.
 Optional producers can ask EmailService without duplicating profile/set lookup:
 
 ```ts
-const reachable = email.hasTemplate({ scope: "any", templateKey: "trialEnding" });
-const selected = email.hasTemplate({ scope: "experience", templateKey: "trialEnding", experienceId: experience.id });
+const reachable = email.hasTemplate({
+  scope: "any",
+  templateKey: "trialEnding",
+});
+const selected = email.hasTemplate({
+  scope: "experience",
+  templateKey: "trialEnding",
+  experienceId: experience.id,
+});
 // Both return ServerResult<boolean>; neither invokes policy or sends.
 ```
 
@@ -298,3 +314,11 @@ see [User and organization locale migration](/guides/user-org-locale-migration).
 - [`@m5kdev/email` package](/packages/email)
 - [Billing trial-ending email](/guides/v0.34.0-billing-trial-ending-email-migration)
 - [Notification](/modules/notification) — email Channel may call EmailModule
+
+### Existing waitlist send helpers
+
+`sendWaitlistInvite` and `sendWaitlistUserInvite` keep raw-code authoring in the
+single-Experience shorthand. With strict `app.experiences`, obtain a complete link
+from Auth's authorized issuing operations and pass it as `options.linkPaths.url`.
+Missing links fail before delivery. These Email helpers cannot mint a valid Auth
+continuation from a raw code and do not replace Auth's resource authorization.

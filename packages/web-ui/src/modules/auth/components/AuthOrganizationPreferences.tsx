@@ -56,15 +56,24 @@ export function AuthOrganizationPreferences<S extends z.ZodObject<z.ZodRawShape>
   );
 
   const { data: preferences = {}, isLoading: isPreferencesLoading } = useQuery(
-    trpc.auth.getOrganizationPreferences.queryOptions(undefined, {
-      enabled: Boolean(activeOrganizationId),
-    })
+    trpc.auth.getOrganizationPreferences.queryOptions(
+      { organizationId: activeOrganizationId || undefined },
+      {
+        placeholderData: () => undefined,
+        enabled: Boolean(activeOrganizationId),
+      }
+    )
   );
 
   const { mutate: setPreferences, isPending: isSetPreferencesPending } = useMutation(
     trpc.auth.setOrganizationPreferences.mutationOptions({
-      onSuccess: async (result) => {
-        queryClient.setQueryData(trpc.auth.getOrganizationPreferences.queryKey(), result);
+      onSuccess: async (result, variables) => {
+        queryClient.setQueryData(
+          trpc.auth.getOrganizationPreferences.queryKey({
+            organizationId: variables.organizationId,
+          }),
+          result
+        );
         await onInvalidateScopedQueries?.();
       },
       onError: async (error) => {
@@ -84,7 +93,12 @@ export function AuthOrganizationPreferences<S extends z.ZodObject<z.ZodRawShape>
           isLoading={isPreferencesLoading}
           isPending={isSetPreferencesPending}
           labels={resolvedLabels}
-          updateValues={setPreferences}
+          updateValues={(values, options) =>
+            setPreferences(
+              { ...values, organizationId: activeOrganizationId ?? undefined },
+              options
+            )
+          }
         />
         <AuthCloseOrganizationDangerZone />
       </div>

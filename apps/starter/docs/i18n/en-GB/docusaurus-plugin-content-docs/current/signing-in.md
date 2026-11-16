@@ -75,3 +75,14 @@ an invalid or expired account link, ask the administrator to generate another.
 If the reset request cannot be sent, the form shows an error. Try again before
 waiting for an email. A successful request keeps account details private; it does
 not confirm whether an email address has an account.
+
+## Open the intended product
+
+Use the website address supplied for the product you want to use. Check the name
+shown before signing in, and keep that website open while following invitations,
+verification, password-reset and account-claim links. Signing in on a different
+product website may ask you to sign in again.
+
+In the mobile app, keep complete invitation and recovery links unchanged. When a
+password reset fails, request a fresh link from the same website; an error does
+not mean the password was changed or that an email was sent.

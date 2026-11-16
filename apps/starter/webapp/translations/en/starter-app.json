@@ -37,9 +37,9 @@
       "noVapid": "Server is missing VAPID public key configuration.",
       "badSubscription": "Could not read push subscription from the browser.",
       "failed": "Could not enable push. Check the console and server logs.",
-      "vapidMissing": "Server did not return a VAPID key — set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY, then restart.",
+      "vapidMissing": "Server did not return a VAPID key \u2014 set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY, then restart.",
       "blockedHint": "Notifications are blocked for this site. Enable them in the browser address bar or site settings, then try again.",
-      "permissionGranted": "Permission granted — tap below to register this browser with the server."
+      "permissionGranted": "Permission granted \u2014 tap below to register this browser with the server."
     },
     "account": {
       "eyebrow": "Signed In As",
@@ -135,7 +135,7 @@
     "hero": {
       "eyebrow": "Workflows",
       "title": "Run a job and watch it finish.",
-      "body": "Trigger a demo ping on the fast queue. The run list is live against the workflow table — queued, running, then completed.",
+      "body": "Trigger a demo ping on the fast queue. The run list is live against the workflow table \u2014 queued, running, then completed.",
       "run": "Run demo job",
       "syncing": "Refreshing",
       "synced": "Live against the job queue"
@@ -162,7 +162,7 @@
     "hero": {
       "eyebrow": "Conversation",
       "title": "Chat with a Mastra agent.",
-      "body": "Session-only transcript for this signed-in user. Set OPENROUTER_API_KEY to get a reply. Memory is optional on the Agent — this example does not persist threads."
+      "body": "Session-only transcript for this signed-in user. Set OPENROUTER_API_KEY to get a reply. Memory is optional on the Agent \u2014 this example does not persist threads."
     }
   },
   "files": {
@@ -207,5 +207,10 @@
     "title": "Something went wrong",
     "body": "Reload the page to try again. If the problem continues, contact support.",
     "reload": "Reload page"
+  },
+  "bootstrap": {
+    "loading": "Loading your product...",
+    "error": "We could not load this website. Check your connection and try again.",
+    "retry": "Try again"
   }
 }

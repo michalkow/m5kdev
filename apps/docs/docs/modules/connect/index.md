@@ -10,8 +10,8 @@ The module id and table stay `connect`. This is not Better Auth login OAuth
 
 ## Package map
 
-| Package | What it owns |
-| --- | --- |
+| Package           | What it owns                                                                                                    |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- |
 | `@m5kdev/backend` | Connection DB tables, DTOs, OAuth helpers, provider adapters, repository, service, routes, and tRPC procedures. |
 
 ## How it works
@@ -41,11 +41,11 @@ The Google provider requests Drive read access and stores refreshable OAuth toke
 
 ### Environment variables
 
-| Variable | Purpose |
-| --- | --- |
-| `GOOGLE_CLIENT_ID` | OAuth client ID from Google Cloud Console |
-| `GOOGLE_CLIENT_SECRET` | OAuth client secret |
-| App API origin | Canonical API origin from `createBackendApp` app configuration; legacy environment defaults are normalized there |
+| Variable               | Purpose                                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `GOOGLE_CLIENT_ID`     | OAuth client ID from Google Cloud Console                                                                        |
+| `GOOGLE_CLIENT_SECRET` | OAuth client secret                                                                                              |
+| App API origin         | Canonical API origin from `createBackendApp` app configuration; legacy environment defaults are normalized there |
 
 Redirect URI registered in Google Cloud Console:
 
@@ -87,7 +87,6 @@ Requires `LINKEDIN_CLIENT_ID` and `LINKEDIN_CLIENT_SECRET`. Register the callbac
 {canonical-api-origin}/connect/linkedin/callback
 ```
 
-
 ## Domains, callbacks and return destinations
 
 `ConnectModule` derives each provider callback from the selected Experience's
@@ -108,7 +107,29 @@ transfer cookies. Do not route product B through product A's cookies.
 
 A shared API can select an Experience from its registered browser Origin when
 starting. Top-level navigation to a distinct shared API usually sends no Origin;
-an ambiguous start is rejected rather than choosing a default brand. Use the
+an ambiguous start is rejected rather than choosing a default brand. For a shared-API
+browser, use the private JSON start instead of a top-level GET:
+
+```ts
+const response = await fetch(`${experience.apiOrigin}/connect/google/start`, {
+  method: "POST",
+  credentials: "include",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ redirect: "/settings" }),
+});
+if (!response.ok)
+  throw new Error("Unable to start connection. Try again here.");
+const { url } = await response.json();
+window.location.assign(url);
+```
+
+The browser supplies its actual Origin on POST. The body accepts only optional
+`redirect`; provider comes from the route. State/callback/provider overrides are
+rejected. Success is `{ url }` with `Cache-Control: private, no-store`. The example
+uses the default `/connect` mount; use your configured `mountPath`. Cookies must
+work for that registered web/API pair; this operation does not add SSO.
+
+Use the
 domain-local proxy, or a trusted server integration with explicit validated context.
 Callbacks may omit Origin: private state supplies the Experience, which is checked
 against the API/Origin relationship configured for that host. A conflicting actual
@@ -177,9 +198,9 @@ share it across apps or serialize its private PKCE/session data into browser sta
 
 ## tRPC procedures
 
-| Procedure | Auth | Description |
-| --- | --- | --- |
-| `connect.list` | Required | List connections for the current user (tokens omitted) |
-| `connect.delete` | Required + delete grant | Remove a connection by id |
+| Procedure        | Auth                    | Description                                            |
+| ---------------- | ----------------------- | ------------------------------------------------------ |
+| `connect.list`   | Required                | List connections for the current user (tokens omitted) |
+| `connect.delete` | Required + delete grant | Remove a connection by id                              |
 
 OAuth start/callback routes are Express-only (`/connect/:provider/start`, `/connect/:provider/callback`).

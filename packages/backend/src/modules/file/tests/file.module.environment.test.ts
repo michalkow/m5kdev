@@ -3,7 +3,10 @@ import { LocalFileObjectStore } from "../file.local-store";
 import { FileModule } from "../file.module";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
-  transformer: { serialize: (value: unknown) => value, deserialize: (value: unknown) => value },
+  transformer: {
+    serialize: (value: unknown) => value,
+    deserialize: (value: unknown) => value,
+  },
 }));
 jest.mock("better-auth/node", () => ({
   toNodeHandler: () => () => undefined,
@@ -11,7 +14,10 @@ jest.mock("better-auth/node", () => ({
 }));
 
 describe("FileModule Deployment environment", () => {
-  const previous = { APP_ENV: process.env.APP_ENV, NODE_ENV: process.env.NODE_ENV };
+  const previous = {
+    APP_ENV: process.env.APP_ENV,
+    NODE_ENV: process.env.NODE_ENV,
+  };
 
   afterEach(() => {
     process.env.APP_ENV = previous.APP_ENV;
@@ -25,9 +31,12 @@ describe("FileModule Deployment environment", () => {
     // The validated appConfig decides, not whatever process.env says.
     process.env.APP_ENV = processEnv.APP_ENV;
     process.env.NODE_ENV = processEnv.NODE_ENV;
-    const repositories = new FileModule({ buckets: ["app-bucket"] }).repositories({
+    const repositories = new FileModule({
+      buckets: ["app-bucket"],
+    }).repositories({
       db: { orm: {}, schema: { files } },
-      appConfig: { environment, slug: "editorial-desk" },
+      appConfig: { environment, slug: "editorial-desk", urls: {} },
+      env: {},
     } as never);
     return repositories.fileS3;
   };
@@ -39,5 +48,39 @@ describe("FileModule Deployment environment", () => {
     expect(
       objectStoreFor("staging", { APP_ENV: "local", NODE_ENV: "development" })
     ).not.toBeInstanceOf(LocalFileObjectStore);
+  });
+  it("mints upload and download URLs from normalized infrastructure metadata instead of another process brand", async () => {
+    const before = process.env.VITE_SERVER_URL;
+    process.env.VITE_SERVER_URL = "https://wrong-brand.example.test";
+    try {
+      const repositories = new FileModule({
+        buckets: ["app-bucket"],
+      }).repositories({
+        db: { orm: {}, schema: { files } },
+        appConfig: {
+          environment: "local",
+          slug: "files",
+          urls: { api: "https://storage.example.test" },
+        },
+        env: { PORT: "4411" },
+      } as never);
+      expect(
+        (await repositories.fileS3.getS3UploadUrl("folder/item.txt", "text/plain"))._unsafeUnwrap()
+      ).toBe("https://storage.example.test/file-s3-mock/app-bucket/folder/item.txt");
+      expect((await repositories.fileS3.getS3DownloadUrl("folder/item.txt"))._unsafeUnwrap()).toBe(
+        "https://storage.example.test/file-s3-mock/app-bucket/folder/item.txt"
+      );
+      const fallback = new FileModule({ buckets: ["app-bucket"] }).repositories({
+        db: { orm: {}, schema: { files } },
+        appConfig: { environment: "local", slug: "files", urls: {} },
+        env: { PORT: "4411" },
+      } as never);
+      expect((await fallback.fileS3.getS3DownloadUrl("item.txt"))._unsafeUnwrap()).toBe(
+        "http://127.0.0.1:4411/file-s3-mock/app-bucket/item.txt"
+      );
+    } finally {
+      if (before === undefined) delete process.env.VITE_SERVER_URL;
+      else process.env.VITE_SERVER_URL = before;
+    }
   });
 });

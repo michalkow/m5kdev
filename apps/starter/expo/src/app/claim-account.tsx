@@ -1,15 +1,29 @@
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
+import { useLocalSearchParams } from "expo-router";
 import { Button } from "heroui-native";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 import { AuthScaffold } from "../components/AuthScaffold";
 import { FormTextField } from "../components/FormTextField";
 import { StatusText } from "../components/StatusText";
-import { trpcClient } from "../lib/trpc";
+import { useTRPCClient } from "../lib/trpc";
 
 export default function ClaimAccountScreen() {
   const { serverUrl } = useAppConfig();
+  const trpcClient = useTRPCClient();
+  const params = useLocalSearchParams<{
+    claim?: string | string[];
+    claimFlow?: string | string[];
+  }>();
+  const invalidContinuation = Array.isArray(params.claim) || Array.isArray(params.claimFlow);
+  const continuation = useMemo(
+    () => ({
+      claimId: typeof params.claim === "string" ? params.claim : undefined,
+      experienceFlow: typeof params.claimFlow === "string" ? params.claimFlow : undefined,
+    }),
+    [params.claim, params.claimFlow]
+  );
   const { data: session, registerSession } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,6 +42,12 @@ export default function ClaimAccountScreen() {
   useEffect(() => {
     let cancelled = false;
 
+    if (invalidContinuation) {
+      setStatusTone("error");
+      setStatus("This link is invalid or expired. Request a fresh link from the same website.");
+      setHasClaim(false);
+      return;
+    }
     if (isClaimed) {
       return;
     }
@@ -40,7 +60,7 @@ export default function ClaimAccountScreen() {
     }
 
     trpcClient.auth.getMyAccountClaimStatus
-      .query()
+      .query(continuation)
       .then((claim) => {
         if (cancelled) return;
         setHasClaim(Boolean(claim));
@@ -60,13 +80,13 @@ export default function ClaimAccountScreen() {
     return () => {
       cancelled = true;
     };
-  }, [isClaimed, session?.user]);
+  }, [isClaimed, session?.user, continuation, invalidContinuation, trpcClient]);
 
   const saveEmail = async () => {
     setIsBusy(true);
     setStatus(null);
     try {
-      await trpcClient.auth.setMyAccountClaimEmail.mutate({ email });
+      await trpcClient.auth.setMyAccountClaimEmail.mutate({ email, ...continuation });
       registerSession();
       setStatusTone("success");
       setStatus("Email updated");
@@ -90,6 +110,7 @@ export default function ClaimAccountScreen() {
         },
         body: JSON.stringify({
           newPassword: password,
+          ...continuation,
         }),
       });
       const payload = (await response.json().catch(() => ({}))) as { message?: string };
@@ -97,7 +118,7 @@ export default function ClaimAccountScreen() {
         throw new Error(payload.message ?? "Unable to set password");
       }
 
-      await trpcClient.auth.acceptMyAccountClaim.mutate();
+      await trpcClient.auth.acceptMyAccountClaim.mutate(continuation);
       setIsClaimed(true);
       registerSession();
       setStatusTone("success");

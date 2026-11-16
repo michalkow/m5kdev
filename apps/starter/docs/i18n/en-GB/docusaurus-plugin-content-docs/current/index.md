@@ -22,3 +22,10 @@ You can bookmark a guide or share its address; it opens without signing in.
 If you see **Something went wrong**, select **Reload page** to try again. If the
 problem continues, contact support and describe what you were doing before the
 error appeared.
+
+## If the application cannot load
+
+When you open the product, wait for its name and sign-in screen to appear. If the
+screen says it cannot load the application, check your connection and choose
+**Try again**. If that fails, reopen the product from the usual website address
+or contact support. Sign-in starts after the application has loaded.

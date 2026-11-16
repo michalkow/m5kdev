@@ -1,9 +1,14 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path, { dirname } from "node:path";
+import {
+  type PublicExperience,
+  publicExperienceSchema,
+} from "@m5kdev/commons/modules/app/experience.schema";
 import { fileTypes } from "@m5kdev/commons/modules/file/file.constants";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
+import type { ExperienceRegistry } from "../../experience";
 import type { Base } from "../base/base.abstract";
 import {
   type AuthenticatedActor,
@@ -17,6 +22,7 @@ import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
 import { FILE_DOWNLOAD_EXPIRES_IN, FILE_PENDING_TTL_MS } from "./file.constants";
 import { fileSchemas } from "./file.dto";
+import { LocalFileObjectStore } from "./file.local-store";
 import type { FileObjectBody, FileObjectStore } from "./file.object-store";
 import type { FileRepository, FileRow } from "./file.repository";
 import {
@@ -28,6 +34,7 @@ import {
 import { buildS3ObjectKey, extractOriginalExtension } from "./file.utils";
 
 export interface FileServiceConfig {
+  readonly experienceRegistry?: ExperienceRegistry;
   readonly buckets?: readonly string[];
   readonly deleteAfterDays?: number;
   readonly purgeObjectOnDelete?: boolean;
@@ -51,6 +58,19 @@ export class FileService extends BasePermissionService<
   ) {
     super(repository, service, grants);
   }
+  private objectStore(experience?: unknown): FileObjectStore {
+    const store = this.repository.fileS3;
+    if (
+      !experience ||
+      !this.fileConfig.experienceRegistry ||
+      !(store instanceof LocalFileObjectStore)
+    )
+      return store;
+    return store.withPublicOrigin(
+      this.fileConfig.experienceRegistry.require(publicExperienceSchema.parse(experience)).apiOrigin
+    );
+  }
+
   readonly list = this.procedure("list")
     .input(fileSchemas.input.list)
     .output(fileSchemas.output.list)
@@ -131,7 +151,7 @@ export class FileService extends BasePermissionService<
     .handle(async ({ ctx, state }) => {
       const denied = this.denyFileAccess(ctx.actor, state.file, "read");
       if (denied) return denied;
-      return this.presignDownload(state.file);
+      return this.presignDownload(state.file, ctx.experience);
     });
 
   readonly update = this.procedure("update")
@@ -223,6 +243,7 @@ export class FileService extends BasePermissionService<
       readonly userId: string;
       readonly userRole: string;
       readonly memberships?: MembershipLookup;
+      readonly experience?: PublicExperience;
     }
   ): ServerResultAsync<{ url: string; expiresAt: Date }> {
     const rowResult = await this.findUploadedFile({ fileId });
@@ -239,10 +260,13 @@ export class FileService extends BasePermissionService<
       if (resolved.isErr()) return err(resolved.error);
       actor = resolved.value;
     } else {
-      actor = createServiceActor({ userId: input.userId, userRole: input.userRole });
+      actor = createServiceActor({
+        userId: input.userId,
+        userRole: input.userRole,
+      });
     }
 
-    return this.getDownloadUrl({ fileId }, { actor, user: { id: input.userId } });
+    return this.getDownloadUrl({ fileId }, { actor, experience: input.experience });
   }
 
   isS3Path(pathValue: string): boolean {
@@ -402,7 +426,7 @@ export class FileService extends BasePermissionService<
       if (createdResult.isErr()) return err(createdResult.error);
 
       const row = createdResult.value;
-      const urlResult = await this.repository.fileS3.getS3UploadUrl(
+      const urlResult = await this.objectStore(ctx.experience).getS3UploadUrl(
         key,
         input.contentType,
         undefined,
@@ -550,8 +574,11 @@ export class FileService extends BasePermissionService<
     return this.memberMustOwnFiles(actor, action) && file.memberId !== actor.memberId;
   }
 
-  private async presignDownload(row: FileRow): ServerResultAsync<{ url: string; expiresAt: Date }> {
-    const url = await this.repository.fileS3.getS3DownloadUrl(
+  private async presignDownload(
+    row: FileRow,
+    experience?: unknown
+  ): ServerResultAsync<{ url: string; expiresAt: Date }> {
+    const url = await this.objectStore(experience).getS3DownloadUrl(
       row.key,
       FILE_DOWNLOAD_EXPIRES_IN,
       row.bucket

@@ -30,6 +30,7 @@ import { ExperienceContextError } from "../../experience";
 import type { ExperienceFlowSigner } from "../../experience-flows";
 import { EXPERIENCE_FLOW_HEADER } from "../../experience-flows";
 import type { AppI18n } from "../../i18n/app-i18n";
+import { resolvePresentationMetadata } from "../../presentation";
 import { captureServerError, ServerError } from "../../utils/errors";
 import { logger as rootLogger } from "../../utils/logger";
 import { posthogCapture } from "../../utils/posthog";
@@ -180,18 +181,24 @@ function setPasswordEndpointPlugin(
           });
           const minPasswordLength = ctx.context.password.config.minPasswordLength;
           if (newPassword.length < minPasswordLength) {
-            throw new APIError("BAD_REQUEST", { message: "Password is too short" });
+            throw new APIError("BAD_REQUEST", {
+              message: "Password is too short",
+            });
           }
           const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
           if (newPassword.length > maxPasswordLength) {
-            throw new APIError("BAD_REQUEST", { message: "Password is too long" });
+            throw new APIError("BAD_REQUEST", {
+              message: "Password is too long",
+            });
           }
 
           const existingCredentialAccount = (
             await ctx.context.internalAdapter.findAccounts(session.user.id)
           ).find((account) => account.providerId === "credential" && account.password);
           if (existingCredentialAccount) {
-            throw new APIError("BAD_REQUEST", { message: "User already has a password" });
+            throw new APIError("BAD_REQUEST", {
+              message: "User already has a password",
+            });
           }
 
           await ctx.context.internalAdapter.linkAccount({
@@ -228,10 +235,22 @@ export function createBetterAuth<
   const { email: emailService, billing: billingService } = services;
   const { waitlist = false, provisionedAccountEmailDomain } = config ?? {};
   const localeConfig = app?.locales;
-  const webUrl = app?.urls?.web ?? process.env.VITE_APP_URL;
-  const apiUrl = app?.urls?.api ?? process.env.VITE_SERVER_URL;
-  const experienceRegistry = app?.experienceRegistry;
+  const presentation = resolvePresentationMetadata(app, process.env);
+  const webUrl = presentation.urls.web;
+  const apiUrl = presentation.urls.api;
+  const experienceRegistry = presentation.experienceRegistry;
   const multiExperience = experienceRegistry?.strict === true;
+  if (
+    multiExperience &&
+    new Set(
+      Object.values(experienceRegistry.config.definitions)
+        .filter((definition) => !definition.disabled)
+        .map((definition) => new URL(definition.apiOrigin).protocol)
+    ).size !== 1
+  )
+    throw new Error(
+      "Auth Experience API origins must use one protocol; split mixed HTTP/HTTPS Auth compositions explicitly"
+    );
   if (multiExperience && emailService && !experienceFlows)
     throw new Error("Experience flow signing is required for multi-Experience recovery email");
   const normalizedProvisionedAccountEmailDomain = provisionedAccountEmailDomain
@@ -347,7 +366,10 @@ export function createBetterAuth<
       if (state.link) {
         const claimInput = state.serverContext?.claimContinuation;
         const parsed = z
-          .object({ claimId: z.string(), experienceFlow: z.string().optional() })
+          .object({
+            claimId: z.string(),
+            experienceFlow: z.string().optional(),
+          })
           .optional()
           .safeParse(claimInput);
         if (!parsed.success) throw signupError();
@@ -437,7 +459,12 @@ export function createBetterAuth<
       .where(eq(schema.accountClaims.id, claimId))
       .limit(1);
     if (!claim) throw signupError();
-    await validateClaimUser({ userId: claim.claimUserId, claimId, experienceFlow, experience });
+    await validateClaimUser({
+      userId: claim.claimUserId,
+      claimId,
+      experienceFlow,
+      experience,
+    });
     return { claimId, experienceFlow };
   };
 
@@ -500,7 +527,9 @@ export function createBetterAuth<
     const header = ctx?.headers?.get(ADMIN_CREATE_VERIFIED_USER_HEADER.toLowerCase());
     if (header !== ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE) return false;
     const role = (
-      ctx as { context?: { session?: { user?: { role?: string | null } } | null } } | null
+      ctx as {
+        context?: { session?: { user?: { role?: string | null } } | null };
+      } | null
     )?.context?.session?.user?.role;
     return role === "admin";
   };
@@ -587,7 +616,7 @@ export function createBetterAuth<
           allowedHosts: experienceRegistry.allowedHosts,
           protocol: experienceRegistry.defaultExperience.apiOrigin.startsWith("https:")
             ? "https"
-            : "auto",
+            : "http",
         }
       : apiUrl!,
     ...(multiExperience
@@ -858,7 +887,9 @@ export function createBetterAuth<
       organization({
         organizationHooks: {
           beforeCreateInvitation: async () => {
-            throw new APIError("FORBIDDEN", { message: "Use Auth inviteOrganizationMember" });
+            throw new APIError("FORBIDDEN", {
+              message: "Use Auth inviteOrganizationMember",
+            });
           },
           beforeDeleteOrganization: async (data) => {
             if (!billingService) return;
@@ -1053,7 +1084,11 @@ export function createBetterAuth<
                   "image" in user ? ((user.image as string | null | undefined) ?? null) : undefined,
               });
             } catch (error) {
-              logger.error({ step: "syncActiveMemberProfiles", userId: user.id, error });
+              logger.error({
+                step: "syncActiveMemberProfiles",
+                userId: user.id,
+                error,
+              });
             }
           },
         },
@@ -1309,7 +1344,9 @@ export function createBetterAuth<
               .where(eq(schema.users.id, session.userId))
               .limit(1);
             if (closedUser?.closedAt) {
-              throw new APIError("FORBIDDEN", { message: "This User is Closed" });
+              throw new APIError("FORBIDDEN", {
+                message: "This User is Closed",
+              });
             }
             const { organizationId, organizationRole, organizationType, organizationMemberId } =
               await getActiveOrganization(orm, schema, session.userId);
@@ -1342,7 +1379,9 @@ export function createBetterAuth<
                   prevSession.userId
                 );
                 if (newOrganization.closedAt) {
-                  throw new APIError("FORBIDDEN", { message: "This Organization is Closed" });
+                  throw new APIError("FORBIDDEN", {
+                    message: "This Organization is Closed",
+                  });
                 }
 
                 data.activeOrganizationType = newOrganization.type;

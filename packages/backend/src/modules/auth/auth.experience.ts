@@ -69,15 +69,21 @@ function verificationIssuedAt(token: string): number {
   }
 }
 
+function authTransportHeaders(request?: Request, headers?: Headers) {
+  const values = Object.fromEntries((headers ?? request?.headers ?? new Headers()).entries());
+  if (!values.host && request) values.host = new URL(request.url).host;
+  return values;
+}
+
 export function validateAuthTransport(
   registry: ExperienceRegistry,
   experience: PublicExperience,
   request?: Request,
   headers?: Headers
 ) {
-  const values = Object.fromEntries((headers ?? request?.headers ?? new Headers()).entries());
-  if (!values.host && request) values.host = new URL(request.url).host;
-  registry.validateBoundRequest(experience, { headers: values });
+  registry.validateBoundRequest(experience, {
+    headers: authTransportHeaders(request, headers),
+  });
 }
 
 export function experienceAuthPlugin(
@@ -119,7 +125,11 @@ export function experienceAuthPlugin(
                   );
                   issuedAt = record?.createdAt ? new Date(record.createdAt).getTime() : Number.NaN;
                 }
-                const bound = flows.verifyLegacy({ issuedAt, experience, destination });
+                const bound = flows.verifyLegacy({
+                  issuedAt,
+                  experience,
+                  destination,
+                });
                 validateAuthTransport(registry, bound.experience, ctx.request, ctx.headers);
                 return bound.destination;
               };
@@ -181,7 +191,12 @@ export function experienceAuthPlugin(
                   return;
                 }
                 if (!flows) throw new ExperienceContextError("Missing recovery continuation");
-                const bound = flows.verify({ proof, purpose: "reset-password", token, experience });
+                const bound = flows.verify({
+                  proof,
+                  purpose: "reset-password",
+                  token,
+                  experience,
+                });
                 validateAuthTransport(registry, bound.experience, ctx.request, ctx.headers);
                 return;
               }
@@ -205,7 +220,11 @@ export function experienceAuthPlugin(
                     ctx.path === "/verify-email" ? "verify-email" : "reset-password",
                     ctx.query.callbackURL
                   );
-                  return { context: { query: { ...ctx.query, callbackURL: destination } } };
+                  return {
+                    context: {
+                      query: { ...ctx.query, callbackURL: destination },
+                    },
+                  };
                 }
                 if (proofs.length !== 1)
                   throw new ExperienceContextError("Missing recovery continuation");
@@ -246,6 +265,10 @@ export function experienceAuthPlugin(
                   ctx.path
                 )
               ) {
+                registry.validateCanonicalApiRequest(selected, {
+                  headers: authTransportHeaders(ctx.request, ctx.headers),
+                });
+                if (!body.callbackURL) body.callbackURL = registry.destination(selected, "/");
                 const claimContinuation = ["/link-social", "/link-account"].includes(ctx.path)
                   ? await options.claimLink?.(body.callbackURL, selected)
                   : undefined;

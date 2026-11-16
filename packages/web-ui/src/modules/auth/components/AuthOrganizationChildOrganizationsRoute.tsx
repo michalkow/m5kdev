@@ -103,9 +103,13 @@ export function AuthOrganizationChildOrganizationsRoute({
   } = useChildOrganizationAccess({ managerRoles, onInvalidateScopedQueries });
 
   const childOrganizationsQuery = useQuery(
-    trpc.auth.listChildOrganizations.queryOptions(undefined, {
-      enabled: Boolean(activeOrganizationId && canUseChildOrganizations && canManageOrganization),
-    })
+    trpc.auth.listChildOrganizations.queryOptions(
+      { organizationId: activeOrganizationId || undefined },
+      {
+        placeholderData: () => undefined,
+        enabled: Boolean(activeOrganizationId && canUseChildOrganizations && canManageOrganization),
+      }
+    )
   );
 
   const createNameInputId = useId();
@@ -129,7 +133,9 @@ export function AuthOrganizationChildOrganizationsRoute({
         setNewOrganizationName("");
         setIsCreateOpen(false);
         await Promise.allSettled([
-          queryClient.invalidateQueries({ queryKey: trpc.auth.listChildOrganizations.queryKey() }),
+          queryClient.invalidateQueries({
+            queryKey: trpc.auth.listChildOrganizations.queryKey(),
+          }),
           refreshOrganizationQueries(),
         ]);
       },
@@ -148,7 +154,9 @@ export function AuthOrganizationChildOrganizationsRoute({
         setIsEditOpen(false);
         setEditingOrganizationId(null);
         await Promise.allSettled([
-          queryClient.invalidateQueries({ queryKey: trpc.auth.listChildOrganizations.queryKey() }),
+          queryClient.invalidateQueries({
+            queryKey: trpc.auth.listChildOrganizations.queryKey(),
+          }),
           refreshOrganizationQueries(),
         ]);
       },
@@ -180,7 +188,9 @@ export function AuthOrganizationChildOrganizationsRoute({
 
       try {
         setSwitchingOrganizationId(organizationId);
-        const { error } = await authClient.organization.setActive({ organizationId });
+        const { error } = await authClient.organization.setActive({
+          organizationId,
+        });
         if (error) {
           throw new Error(
             error.message ?? t("web-ui:organization.switcher.failedToSwitchOrganization")
@@ -188,7 +198,9 @@ export function AuthOrganizationChildOrganizationsRoute({
         }
 
         await Promise.allSettled([
-          queryClient.invalidateQueries({ queryKey: trpc.auth.listChildOrganizations.queryKey() }),
+          queryClient.invalidateQueries({
+            queryKey: trpc.auth.listChildOrganizations.queryKey(),
+          }),
           refreshOrganizationQueries(),
         ]);
         toast.success(t("web-ui:organization.switcher.organizationSwitched"));
