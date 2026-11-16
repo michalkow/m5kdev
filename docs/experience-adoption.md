@@ -43,6 +43,35 @@ MCP tools continue to use OrganizationActor and the existing allowlist. The defa
 
 Existing Starter sign-in screens remain unchanged because Starter uses the single-Experience shorthand. Its signing-in guides were reviewed and require no screen-instruction changes at this checkpoint.
 
+### App-authored immediate email
+
+Email profiles in `app.experiences.emailProfiles` select a sender and optionally a
+named template set. Register sets with `new EmailModule(templates, { templateSets })`;
+each named set is complete and does not inherit missing templates. Referenced sets
+are checked at boot.
+
+Pass `{ experience, linkPaths: { url: "/reports/7" }, locale: recipient.locale }`
+to `sendTemplate` or `sendBrandTemplate`. The Experience can be a configured id or a
+resolved request descriptor; the registry validates the reference and supplies the
+approved public descriptor and Brand Profile. Named link props resolve through the
+same canonical-destination validator used for returns. Invalid/cross-Experience
+links fail before delivery. Template props cannot replace the selected identity or
+resolved link props. App-authored arbitrary content strings are not rewritten.
+
+Per-send sender overrides win over the selected template's sender, then the email
+profile, then the existing global sender. Per-send subject/preview literals win over
+template text, and recipient locale wins over existing i18n/app defaults. EmailService
+never writes locale/preferences. Send/store/log behavior remains exclusive; stored
+readers expose sender, template id, public identity/link props and actual HTML without
+injecting the private email profile or credentials.
+
+Explicit registries require context even with one definition; their default is not
+an email policy. Existing single-Experience shorthand keeps context-free sends and
+its existing brand customization. Unknown/disabled references fail, and overlapping
+sends never mutate the service's current brand. Recovery, invitation, waitlist,
+background and trial producers remain separate migration checkpoints. See
+`apps/docs/docs/modules/email/index.md` for complete immediate-send examples.
+
 The registry/bootstrap slice is the first checkpoint. Subsequent implementation tickets migrate auth, email, invitation, Connection and billing flows. Complete adoption requires the final integration audit in #100; adding another domain alone does not complete those flows.
 
 One Trial Plan per currency, one Subscription per Organization/environment and account-wide Stripe identity constraints remain. This feature does not provision domains/certificates, merge data, add independent subscriptions or promise cross-domain SSO.

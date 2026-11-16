@@ -1,12 +1,14 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { PublicExperience } from "@m5kdev/commons/modules/app/experience.schema";
 import { toI18nLanguageTag } from "@m5kdev/commons/modules/auth/auth.locale";
 import { ok } from "neverthrow";
 import { createElement, type FunctionComponent } from "react";
 import { prerender } from "react-dom/static";
 import { Resend } from "resend";
 import type { BackendAppEmailMode, BackendAppEmailOptions, BackendAppMetadata } from "../../app";
+import { ExperienceContextError, ExperienceRegistry } from "../../experience";
 import type { AppI18n } from "../../i18n/app-i18n";
 import { BaseService } from "../base/base.service";
 
@@ -19,6 +21,10 @@ export type Brand = {
 };
 
 export type OverrideOptions = {
+  /** Registry reference or a resolved request descriptor; the registry remains authoritative. */
+  experience?: PublicExperience | string;
+  /** Named template props resolved against the selected canonical web origin. */
+  linkPaths?: Record<string, string>;
   from?: string;
   subject?: string;
   previewText?: string;
@@ -48,7 +54,10 @@ export type EmailTemplates = {
   [key: string]: EmailTemplate | undefined;
 };
 
+export type EmailTemplateSets = Record<string, EmailTemplates>;
+
 type EmailServiceProps = {
+  templateSets?: EmailTemplateSets;
   templates: EmailTemplates;
   appConfig?: BackendAppMetadata;
   emailConfig?: BackendAppEmailOptions;
@@ -122,6 +131,8 @@ export class EmailService extends BaseService<never, never> {
   public outputDirectory: string;
   public appConfig: BackendAppMetadata;
   public i18n?: AppI18n;
+  private readonly templateSets: EmailTemplateSets;
+  private readonly experienceRegistry?: ExperienceRegistry;
 
   constructor(props: EmailServiceProps) {
     super(undefined, undefined);
@@ -144,16 +155,31 @@ export class EmailService extends BaseService<never, never> {
     };
     this.noReplyFrom = props.from ?? props.emailConfig?.from ?? props.noReplyFrom;
     this.templates = props.templates;
+    this.templateSets = props.templateSets ?? {};
     this.systemNotificationEmail =
       props.systemNotificationEmail ?? props.emailConfig?.systemNotificationEmail;
     this.mode = props.mode ?? props.emailConfig?.mode ?? "send";
     this.outputDirectory = props.outputDirectory ?? props.emailConfig?.outputDirectory ?? ".emails";
     this.appConfig = appConfig;
     this.i18n = props.i18n;
+    this.experienceRegistry =
+      appConfig.experienceRegistry ??
+      (appConfig.experiences ? new ExperienceRegistry(appConfig.experiences) : undefined);
+    for (const [key, profile] of Object.entries(
+      this.experienceRegistry?.config.emailProfiles ?? {}
+    )) {
+      if (
+        profile.templateSet !== undefined &&
+        !Object.hasOwn(this.templateSets, profile.templateSet)
+      )
+        throw new Error(
+          `Email profile ${key} names unknown Email template set ${profile.templateSet}`
+        );
+    }
   }
 
-  private resolveTemplate(templateKey: keyof EmailTemplates) {
-    return this.templates[templateKey];
+  private resolveTemplate(templateKey: keyof EmailTemplates, templateSet?: string) {
+    return (templateSet ? this.templateSets[templateSet] : this.templates)[templateKey];
   }
 
   private resolveOutputDirectory() {
@@ -279,6 +305,7 @@ export class EmailService extends BaseService<never, never> {
       {
         to: payload.to,
         templateId: payload.templateId,
+        from: payload.from,
         subject: payload.subject,
         previewText: payload.previewText,
         props: payload.props,
@@ -362,7 +389,26 @@ export class EmailService extends BaseService<never, never> {
     templateProps: Record<string, unknown>,
     options?: OverrideOptions
   ) {
-    const template = this.resolveTemplate(templateKey);
+    let experience: PublicExperience | undefined;
+    const links: Record<string, string> = {};
+    try {
+      if (this.experienceRegistry)
+        experience = this.experienceRegistry.require(options?.experience);
+      else if (options?.experience || options?.linkPaths)
+        throw new ExperienceContextError("Email Experience registry is not configured");
+      if (experience && this.experienceRegistry) {
+        for (const [key, value] of Object.entries(options?.linkPaths ?? {})) {
+          if (["brand", "experience", "t", "htmlLang", "previewText"].includes(key))
+            throw new ExperienceContextError(`Reserved email link prop ${key}`);
+          links[key] = this.experienceRegistry.destination(experience, value);
+        }
+      }
+    } catch (error) {
+      if (!(error instanceof ExperienceContextError)) throw error;
+      return this.error("INTERNAL_SERVER_ERROR", error.message, { cause: error });
+    }
+    const profile = experience ? this.experienceRegistry?.emailProfile(experience) : undefined;
+    const template = this.resolveTemplate(templateKey, profile?.templateSet);
     if (!template) {
       // templates are registered at boot — a missing one is a config bug, not a client error
       return this.error(
@@ -373,7 +419,18 @@ export class EmailService extends BaseService<never, never> {
 
     const locale =
       options?.locale ?? this.i18n?.defaultLocale ?? this.appConfig.locales?.defaultLocale;
-    const mergedProps: Record<string, unknown> = { ...templateProps };
+    const mergedProps: Record<string, unknown> = {
+      ...templateProps,
+      ...(experience
+        ? {
+            experience,
+            brand: this.experienceRegistry?.strict
+              ? experience.brand
+              : (templateProps.brand ?? this.brand),
+          }
+        : {}),
+      ...links,
+    };
     const translationContext = buildEmailTranslationContext(mergedProps);
     const t = this.i18n ? this.i18n.getFixedT(locale) : undefined;
     if (t) {
@@ -382,7 +439,7 @@ export class EmailService extends BaseService<never, never> {
         mergedProps.htmlLang = toI18nLanguageTag(locale);
       }
     }
-    const from = options?.from ?? template.from ?? this.noReplyFrom;
+    const from = options?.from ?? template.from ?? profile?.from ?? this.noReplyFrom;
     const subject =
       options?.subject ??
       resolveTranslatedTemplateText(t, template.subject, translationContext) ??

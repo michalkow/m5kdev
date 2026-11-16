@@ -1,5 +1,5 @@
 import { BaseModule, type ModuleServicesContext, type TableMap } from "../base/base.module";
-import { EmailService, type EmailTemplates } from "./email.service";
+import { EmailService, type EmailTemplateSets, type EmailTemplates } from "./email.service";
 
 type EmailModuleDeps = never;
 type EmailModuleTables = TableMap;
@@ -19,7 +19,10 @@ export class EmailModule extends BaseModule<
   readonly id = "email";
   readonly templates: EmailTemplates;
 
-  constructor(templates: EmailTemplates) {
+  constructor(
+    templates: EmailTemplates,
+    readonly options: { templateSets?: EmailTemplateSets } = {}
+  ) {
     super();
     this.templates = templates;
   }
@@ -36,6 +39,7 @@ export class EmailModule extends BaseModule<
         emailConfig,
         resend: infra.resend,
         templates: this.templates,
+        templateSets: this.options.templateSets,
         i18n,
       }),
     };

@@ -6,11 +6,12 @@ export const experienceIdSchema = z
   .brand<"ExperienceId">();
 export type ExperienceId = z.infer<typeof experienceIdSchema>;
 export const canonicalOriginSchema = z
-  .url()
-  .refine((value) => {
-    const url = new URL(value);
-    return ["http:", "https:"].includes(url.protocol) && url.origin === value;
-  }, "Expected an HTTP(S) origin without credentials, a path or trailing slash")
+  .url({ protocol: /^https?$/, normalize: true })
+  .transform((value) => value.replace(/\/$/, ""))
+  .refine(
+    (value) => /^https?:\/\/[^/@?#\\\s]+$/.test(value),
+    "Expected an HTTP(S) origin without credentials, a path, query or fragment"
+  )
   .brand<"CanonicalOrigin">();
 export const brandProfileSchema = z
   .object({
@@ -33,22 +34,23 @@ export const publicExperienceSchema = z
   })
   .strict();
 export type PublicExperience = z.infer<typeof publicExperienceSchema>;
+export const experienceEmailProfileSchema = z
+  .object({
+    from: z
+      .string()
+      .trim()
+      .min(1)
+      .regex(/^[^\r\n]+$/, "Expected a single-line sender")
+      .optional(),
+    templateSet: z.string().min(1).optional(),
+    systemNotificationEmail: z.string().min(1).optional(),
+  })
+  .strict();
 export const experienceRegistrySchema = z
   .object({
     defaultExperience: z.string().min(1),
     brands: z.record(z.string(), brandProfileSchema),
-    emailProfiles: z
-      .record(
-        z.string(),
-        z
-          .object({
-            from: z.string().optional(),
-            templateSet: z.string().optional(),
-            systemNotificationEmail: z.string().optional(),
-          })
-          .strict()
-      )
-      .default({}),
+    emailProfiles: z.record(z.string(), experienceEmailProfileSchema).default({}),
     definitions: z.record(
       z.string(),
       z

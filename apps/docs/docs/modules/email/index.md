@@ -63,6 +63,86 @@ cancel warning; omit it to skip send. See the
 [Billing module](/modules/billing) and
 [Billing trial-ending email in 0.34.0](/guides/v0.34.0-billing-trial-ending-email-migration).
 
+## Immediate sends for an Experience
+
+Register server-only email profiles alongside the Experience definitions in
+`app.experiences`. A profile may name a sender and a template set:
+
+```ts
+emailProfiles: {
+  radarMail: { from: "Radar <reports@radar.example>", templateSet: "radar" },
+  partnerMail: { from: "Partner <reports@partner.example>", templateSet: "partner" },
+},
+// Each Experience definition references its profile by key:
+// radar: { product: "radar", brand: "radar", webOrigin: "https://radar.example",
+//          apiOrigin: "https://radar.example", emailProfile: "radarMail" }
+```
+
+Register named sets on the existing module. Each set is a complete
+`EmailTemplates` registration, including the required Auth templates; no implicit
+merge with the default templates occurs. They can reuse components and only
+replace the app's copy or layout:
+
+```ts
+new EmailModule(sharedTemplates, {
+  templateSets: { radar: radarTemplates, partner: partnerTemplates },
+});
+```
+
+Use the existing service for immediate app-authored messages:
+
+```ts
+await services.email.sendBrandTemplate(
+  recipient.email,
+  "reportReady",
+  { reportTitle: report.title },
+  {
+    experience, // resolved request descriptor or a configured Experience id
+    linkPaths: { url: `/reports/${report.id}`, settingsUrl: "/settings" },
+    locale: recipient.locale,
+  },
+);
+```
+
+`sendTemplate` accepts the same options. The service looks up the Experience in
+its immutable registry at every send. A descriptor's supplied identity fields
+cannot override approved configuration. Templates receive `experience` (the
+public descriptor), `brand`, and the named canonical links. For example, the
+`url` prop above becomes `https://radar.example/reports/7` for the Radar
+Experience. Cross-Experience/external destinations and reserved identity prop
+names in `linkPaths` fail before delivery. Existing arbitrary content props are
+not scanned or rewritten; put framework-generated destinations in `linkPaths`.
+
+Explicit registries require an Experience for every send, including when a
+registry currently has only one definition. Missing, unknown or disabled
+references return a configuration/context error; the registry's default does
+not guess the intended identity. Unknown profile or template-set references
+fail at boot. An unregistered template in the selected set fails without falling
+back to another set. Existing `app.name`/`app.urls`/`app.brand` single-Experience
+shorthand continues to send without new context and retains its brand defaults
+and existing per-send brand customization.
+
+Sender precedence is per-send `from`, selected template `from`, email-profile
+`from`, then the existing service/global sender. Subject and preview precedence
+is per-send literal override, selected template translation/literal, then the
+existing template-key/subject fallback. Locale precedence remains per-send
+`locale`, i18n default, then app default. Pass the recipient's saved locale;
+EmailService does not load or change User preferences, or derive locale from a
+visited brand. In explicit-registry mode, content props cannot replace the
+validated `brand` or `experience`, and `linkPaths` replaces content props of the
+same name.
+
+All identities use the existing exclusive send/store/log delivery path. Stored
+email readers expose the selected sender, template id, subject, public descriptor,
+brand, canonical link props and actual rendered HTML. Log mode includes the sender
+and resolved props. Registry email profiles and transport credentials are not
+injected into template props or stored output. Interleaved sends keep independent
+presentation context.
+
+This checkpoint covers app-authored immediate sends. Built-in recovery,
+invitation, waitlist and trial producers require their own flow-context migration;
+registering multiple domains alone does not migrate those producers.
+
 ## Email preview helper
 
 `EmailPreviewModule` mounts an unauthenticated Express UI for stored emails
