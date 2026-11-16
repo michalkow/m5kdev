@@ -46,7 +46,11 @@ import {
   serverEventChannelPrefix,
 } from "./base/server-event";
 import { ExperienceRegistry, type ExperienceRequest, experienceMiddleware } from "./experience";
-import { EXPERIENCE_FLOW_HEADER, ExperienceFlowSigner } from "./experience-flows";
+import {
+  EXPERIENCE_FLOW_HEADER,
+  ExperienceFlowSigner,
+  type LegacyExperienceFlowPolicy,
+} from "./experience-flows";
 import { type AppI18n, type BackendAppI18nResources, createAppI18n } from "./i18n/app-i18n";
 import type * as authTables from "./modules/auth/auth.db";
 import type { BetterAuth } from "./modules/auth/auth.lib";
@@ -362,6 +366,8 @@ export type BackendAppConfig = {
   app?: BackendAppMetadata;
   /** Stable server key for token-bound Experience continuations. */
   experienceFlowSecret?: string;
+  /** Optional bounded policy for trusted pre-cutover token issuance; disabled by default. */
+  experienceFlowLegacyPolicy?: LegacyExperienceFlowPolicy;
   auth?: {
     factory(ctx: BackendAppAuthFactoryContext): BetterAuth;
   };
@@ -818,7 +824,9 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     appConfig.experienceRegistry &&
     flowSecret &&
     (appConfig.experienceRegistry.strict || config.experienceFlowSecret)
-      ? new ExperienceFlowSigner(appConfig.experienceRegistry, flowSecret)
+      ? new ExperienceFlowSigner(appConfig.experienceRegistry, flowSecret, {
+          legacyPolicy: config.experienceFlowLegacyPolicy,
+        })
       : undefined;
   const appI18n = appConfig.locales
     ? createAppI18n(appConfig.locales, config.i18n?.resources ?? {})

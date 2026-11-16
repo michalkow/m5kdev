@@ -113,11 +113,42 @@ disabled Experiences fail without navigating to another brand. Password reset st
 consumes Better Auth's original token once. No new tables or token store is added.
 
 Existing single-Experience shorthand continues to accept raw outstanding links.
-Opting an existing deployment into strict Experience resolution requires fresh
-verification/reset links: unsigned outstanding links are deliberately rejected rather
-than treated as an unrestricted legacy fallback. Plan that cutover in customer
-communication; an issuance-cutoff migration for accepting old links after strict
-adoption is not supplied by this checkpoint.
+When adopting strict registry configuration, an optional, default-off policy can
+preserve tokens issued by the one known former Experience:
+
+```ts
+createBackendApp({
+  // Other app configuration and a stable experienceFlowSecret...
+  experienceFlowLegacyPolicy: {
+    experience: "radar",
+    issuedBefore: new Date("2026-11-16T12:00:00Z"),
+    acceptUntil: new Date("2026-11-17T12:00:00Z"),
+  },
+}, modules);
+```
+
+Choose the real deployment cutoff and a short acceptance deadline, and use the same
+policy on every instance. The issuance cutoff must already be in the past; it is
+rounded down to whole seconds because verification JWTs use second precision.
+Tokens issued during that cutoff second must use their signed continuation or be
+reissued. A direct composition passes `{ legacyPolicy }` as the third
+`ExperienceFlowSigner` constructor argument. This server-only policy never selects a
+brand from a caller's query and cannot admit an unsigned post-cutover token.
+
+Reset eligibility uses the existing verification record's creation time, including
+on direct reset POST calls. Verification eligibility reads JWT issuance time only
+as a gate; Better Auth still verifies its signature and expiry before changing a
+User. Both paths enforce the fixed legacy Experience's configured API/Origin pair
+and canonical destination. Invalid supplied proofs are never downgraded into legacy
+admission. New links always contain a proof, and the deadline closes old-link
+admission automatically. Missing historical issuance data fails closed; request a
+fresh link instead. No new metadata table is required.
+
+The same injected signer exposes `verifyLegacy({ issuedAt, experience?, destination? })`
+for later owning adapters. It checks only policy eligibility and returns the fixed
+Experience and canonical destination. An adapter must obtain authoritative issuance
+data from its existing resource and still authenticate, expire and consume that
+resource before any effect. Do not pass caller-supplied timestamps as authority.
 
 The registry/bootstrap slice is the first checkpoint. Subsequent implementation tickets migrate auth, email, invitation, Connection and billing flows. Complete adoption requires the final integration audit in #100; adding another domain alone does not complete those flows.
 

@@ -214,6 +214,246 @@ describe("Experience-bound recovery", () => {
       await f.close();
     }
   });
+  it("accepts a pre-cutover raw reset link only under an explicit bounded legacy policy", async () => {
+    const f = await fixture({ legacy: true });
+    try {
+      jest.useFakeTimers({
+        now: Date.now() - 10000,
+        doNotFake: [
+          "setTimeout",
+          "clearTimeout",
+          "setInterval",
+          "clearInterval",
+          "setImmediate",
+          "clearImmediate",
+          "nextTick",
+          "queueMicrotask",
+          "performance",
+          "hrtime",
+        ],
+      });
+      try {
+        await f.auth.handler(
+          f.request("radar", "/request-password-reset", {
+            email: "radar@example.test",
+            redirectTo: "/reset-password",
+          })
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+      const stored = await f.email.findLatestStoredEmail({ to: "radar@example.test" });
+      const legacyPolicy = {
+        experience: "radar",
+        issuedBefore: new Date(Date.now() - 5000),
+        acceptUntil: new Date(Date.now() + 60000),
+      };
+      const adopted = createBetterAuth({
+        orm: f.orm,
+        schema,
+        services: { email: f.email },
+        app: {
+          experienceRegistry: f.registry,
+          urls: { web: "https://radar.example.test", api: "https://radar.example.test" },
+        },
+        experienceFlows: new ExperienceFlowSigner(f.registry, SECRET, { legacyPolicy }),
+        options: { secret: SECRET, rateLimit: { enabled: false } },
+      });
+      const callback = await adopted.handler(new Request(String(stored?.props.url)));
+      expect(callback.status).toBe(302);
+      const destination = new URL(String(callback.headers.get("location")));
+      expect(destination.href).toContain("https://radar.example.test/reset-password?token=");
+      const token = String(destination.searchParams.get("token"));
+      const changedDestination = new URL(String(stored?.props.url));
+      changedDestination.searchParams.set(
+        "callbackURL",
+        "https://horeka.example.test/reset-password"
+      );
+      expect((await adopted.handler(new Request(changedDestination))).status).toBe(400);
+      const deadline = jest
+        .spyOn(Date, "now")
+        .mockReturnValue(legacyPolicy.acceptUntil.getTime() + 1);
+      try {
+        await expect(
+          adopted.api.resetPassword({
+            headers: new Headers({ host: "radar.example.test" }),
+            body: { token, newPassword: "Changed-Password-456" },
+          })
+        ).rejects.toMatchObject({ status: "BAD_REQUEST" });
+      } finally {
+        deadline.mockRestore();
+      }
+      await expect(
+        adopted.api.resetPassword({
+          headers: new Headers({
+            host: "radar.example.test",
+            "X-M5kdev-Experience-Flow": "invalid",
+          }),
+          body: { token, newPassword: "Changed-Password-456" },
+        })
+      ).rejects.toMatchObject({ status: "BAD_REQUEST" });
+      await expect(
+        adopted.api.resetPassword({
+          headers: new Headers({ host: "horeka.example.test" }),
+          body: { token, newPassword: "Changed-Password-456" },
+        })
+      ).rejects.toMatchObject({ status: "BAD_REQUEST" });
+      await expect(
+        adopted.api.resetPassword({
+          headers: new Headers({ host: "radar.example.test" }),
+          body: { token, newPassword: "Changed-Password-456" },
+        })
+      ).resolves.toEqual({ status: true });
+      await expect(
+        adopted.api.resetPassword({
+          headers: new Headers({ host: "radar.example.test" }),
+          body: { token, newPassword: "Changed-Password-456" },
+        })
+      ).rejects.toMatchObject({ status: "BAD_REQUEST" });
+    } finally {
+      await f.close();
+    }
+  });
+  it("admits old verification JWTs under the fixed legacy policy while upstream still rejects forged signatures", async () => {
+    const f = await fixture({ legacy: true, verified: false });
+    try {
+      jest.useFakeTimers({
+        now: Date.now() - 10000,
+        doNotFake: [
+          "setTimeout",
+          "clearTimeout",
+          "setInterval",
+          "clearInterval",
+          "setImmediate",
+          "clearImmediate",
+          "nextTick",
+          "queueMicrotask",
+          "performance",
+          "hrtime",
+        ],
+      });
+      try {
+        await f.auth.handler(
+          f.request("radar", "/send-verification-email", {
+            email: "radar@example.test",
+            callbackURL: "/verified",
+          })
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+      const stored = await f.email.findLatestStoredEmail({ to: "radar@example.test" });
+      const link = new URL(String(stored?.props.url));
+      const adopted = createBetterAuth({
+        orm: f.orm,
+        schema,
+        services: { email: f.email },
+        app: {
+          experienceRegistry: f.registry,
+          urls: { web: "https://radar.example.test", api: "https://radar.example.test" },
+        },
+        experienceFlows: new ExperienceFlowSigner(f.registry, SECRET, {
+          legacyPolicy: {
+            experience: "radar",
+            issuedBefore: new Date(Date.now() - 5000),
+            acceptUntil: new Date(Date.now() + 60000),
+          },
+        }),
+        options: { secret: SECRET, rateLimit: { enabled: false } },
+      });
+      const parts = String(link.searchParams.get("token")).split(".");
+      const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+      parts[1] = Buffer.from(JSON.stringify({ ...payload, email: "horeka@example.test" })).toString(
+        "base64url"
+      );
+      const forged = new URL(link);
+      forged.searchParams.set("token", parts.join("."));
+      const denied = await adopted.handler(new Request(forged));
+      expect(denied.status).toBe(302);
+      expect(denied.headers.get("location")).toBe(
+        "https://radar.example.test/verified?error=INVALID_TOKEN"
+      );
+      expect(
+        (
+          await adopted.handler(
+            f.request("horeka", "/sign-in/email", {
+              email: "horeka@example.test",
+              password: ORIGINAL_PASSWORD,
+            })
+          )
+        ).status
+      ).toBe(403);
+      const verified = await adopted.api.verifyEmail({
+        asResponse: true,
+        headers: new Headers({ host: "radar.example.test" }),
+        query: { token: String(link.searchParams.get("token")), callbackURL: "/verified" },
+      });
+      expect(verified.status).toBe(302);
+      expect(verified.headers.get("location")).toBe("https://radar.example.test/verified");
+      expect(
+        (
+          await adopted.handler(
+            f.request("radar", "/sign-in/email", {
+              email: "radar@example.test",
+              password: ORIGINAL_PASSWORD,
+            })
+          )
+        ).status
+      ).toBe(200);
+    } finally {
+      await f.close();
+    }
+  });
+  it("rejects unsigned post-cutover reset and verification tokens even when legacy admission is configured", async () => {
+    const f = await fixture({ legacy: true, verified: false });
+    try {
+      const adopted = createBetterAuth({
+        orm: f.orm,
+        schema,
+        services: { email: f.email },
+        app: {
+          experienceRegistry: f.registry,
+          urls: { web: "https://radar.example.test", api: "https://radar.example.test" },
+        },
+        experienceFlows: new ExperienceFlowSigner(f.registry, SECRET, {
+          legacyPolicy: {
+            experience: "radar",
+            issuedBefore: new Date(Date.now() - 5000),
+            acceptUntil: new Date(Date.now() + 60000),
+          },
+        }),
+        options: { secret: SECRET, rateLimit: { enabled: false } },
+      });
+      await f.auth.handler(
+        f.request("radar", "/request-password-reset", {
+          email: "radar@example.test",
+          redirectTo: "/reset-password",
+        })
+      );
+      const reset = await f.email.findLatestStoredEmail({ to: "radar@example.test" });
+      const rawReset = new URL(String(reset?.props.url));
+      expect((await adopted.handler(new Request(rawReset))).status).toBe(400);
+      const token = rawReset.pathname.split("/").at(-1);
+      await expect(
+        adopted.api.resetPassword({
+          headers: new Headers({ host: "radar.example.test" }),
+          body: { token, newPassword: "Changed-Password-456" },
+        })
+      ).rejects.toMatchObject({ status: "BAD_REQUEST" });
+      await f.auth.handler(
+        f.request("radar", "/send-verification-email", {
+          email: "radar@example.test",
+          callbackURL: "/verified",
+        })
+      );
+      const verification = await f.email.findLatestStoredEmail({ to: "radar@example.test" });
+      expect((await adopted.handler(new Request(String(verification?.props.url)))).status).toBe(
+        400
+      );
+    } finally {
+      await f.close();
+    }
+  });
   it("does not accept a previously issued link after its Experience is disabled", async () => {
     const f = await fixture();
     try {

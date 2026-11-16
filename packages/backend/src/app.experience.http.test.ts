@@ -78,6 +78,11 @@ describe("domain-selected public Experience", () => {
       db: { client },
       app: { experiences: experienceFixture },
       experienceFlowSecret: "a-stable-flow-key-at-least-thirty-two-characters",
+      experienceFlowLegacyPolicy: {
+        experience: "radar",
+        issuedBefore: new Date(Date.now() - 5000),
+        acceptUntil: new Date(Date.now() + 60000),
+      },
       auth: {
         factory(ctx: Record<string, unknown>) {
           authFlows = ctx.experienceFlows;
@@ -90,6 +95,10 @@ describe("domain-selected public Experience", () => {
       const flows = built.modules["flow-probe"].services.probe.flows;
       expect(flows).toBeInstanceOf(ExperienceFlowSigner);
       expect(authFlows).toBe(flows);
+      if (!flows) throw new Error("Flow infrastructure was not injected");
+      expect(
+        flows.verifyLegacy({ issuedAt: Date.now() - 10000, destination: "/legacy" }).destination
+      ).toBe("https://radar.example.test/legacy");
       expect(JSON.stringify(built.config.app)).not.toContain(config.experienceFlowSecret);
     } finally {
       await built.shutdown();

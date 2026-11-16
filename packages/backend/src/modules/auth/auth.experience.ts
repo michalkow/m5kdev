@@ -1,6 +1,7 @@
 import type { PublicExperience } from "@m5kdev/commons/modules/app/experience.schema";
 import type { BetterAuthPlugin } from "better-auth";
 import { APIError, addOAuthServerContext, createAuthMiddleware } from "better-auth/api";
+import { z } from "zod";
 import { ExperienceContextError, type ExperienceRegistry } from "../../experience";
 import {
   EXPERIENCE_FLOW_HEADER,
@@ -52,6 +53,16 @@ export function resolveAuthExperience(
   return registry.resolveRequest({ headers: values });
 }
 
+/** Eligibility gate only; upstream jwtVerify still authenticates this JWT before any effect. */
+function verificationIssuedAt(token: string): number {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+    return z.object({ iat: z.number().int().positive() }).parse(payload).iat * 1000;
+  } catch {
+    throw new ExperienceContextError("Invalid legacy verification issuance");
+  }
+}
+
 export function experienceAuthPlugin(
   registry: ExperienceRegistry,
   flows?: ExperienceFlowSigner
@@ -76,11 +87,34 @@ export function experienceAuthPlugin(
           handler: createAuthMiddleware(async (ctx) => {
             try {
               const experience = resolveAuthExperience(registry, ctx.request, ctx.headers);
+              const acceptLegacy = async (
+                token: string,
+                purpose: "reset-password" | "verify-email",
+                destination?: string
+              ) => {
+                if (!flows) throw new ExperienceContextError("Missing recovery continuation");
+                let issuedAt: number;
+                if (purpose === "verify-email") issuedAt = verificationIssuedAt(token);
+                else {
+                  const record = await ctx.context.internalAdapter.findVerificationValue(
+                    `reset-password:${token}`
+                  );
+                  issuedAt = record?.createdAt ? new Date(record.createdAt).getTime() : Number.NaN;
+                }
+                const bound = flows.verifyLegacy({ issuedAt, experience, destination });
+                validateBoundTransport(bound.experience, ctx.request, ctx.headers);
+                return bound.destination;
+              };
               if (ctx.path === "/reset-password") {
                 const proof = ctx.headers?.get(EXPERIENCE_FLOW_HEADER);
                 const token = ctx.body?.token || ctx.query?.token;
-                if (!flows || !proof || typeof token !== "string")
-                  throw new ExperienceContextError("Missing recovery continuation");
+                if (typeof token !== "string")
+                  throw new ExperienceContextError("Missing recovery token");
+                if (!proof) {
+                  await acceptLegacy(token, "reset-password");
+                  return;
+                }
+                if (!flows) throw new ExperienceContextError("Missing recovery continuation");
                 const bound = flows.verify({ proof, purpose: "reset-password", token, experience });
                 validateBoundTransport(bound.experience, ctx.request, ctx.headers);
                 return;
@@ -88,19 +122,28 @@ export function experienceAuthPlugin(
               if (ctx.path === "/reset-password/:token" || ctx.path === "/verify-email") {
                 if (!flows || typeof ctx.query?.callbackURL !== "string")
                   throw new ExperienceContextError("Missing recovery continuation");
+                const token = ctx.path === "/verify-email" ? ctx.query.token : ctx.params?.token;
+                if (typeof token !== "string")
+                  throw new ExperienceContextError("Invalid recovery token");
                 let callback: URL;
                 try {
-                  callback = new URL(ctx.query.callbackURL);
+                  // Resolve syntax here; legacy returns are canonicalized against their fixed Experience below.
+                  callback = new URL(ctx.query.callbackURL, ctx.context.baseURL);
                 } catch {
                   throw new ExperienceContextError("Invalid recovery destination");
                 }
                 const proofs = callback.searchParams.getAll(EXPERIENCE_FLOW_PARAMETER);
+                if (proofs.length === 0) {
+                  const destination = await acceptLegacy(
+                    token,
+                    ctx.path === "/verify-email" ? "verify-email" : "reset-password",
+                    ctx.query.callbackURL
+                  );
+                  return { context: { query: { ...ctx.query, callbackURL: destination } } };
+                }
                 if (proofs.length !== 1)
                   throw new ExperienceContextError("Missing recovery continuation");
                 callback.searchParams.delete(EXPERIENCE_FLOW_PARAMETER);
-                const token = ctx.path === "/verify-email" ? ctx.query.token : ctx.params?.token;
-                if (typeof token !== "string")
-                  throw new ExperienceContextError("Invalid recovery token");
                 const bound = flows.verify({
                   proof: proofs[0],
                   purpose: ctx.path === "/verify-email" ? "verify-email" : "reset-password",
