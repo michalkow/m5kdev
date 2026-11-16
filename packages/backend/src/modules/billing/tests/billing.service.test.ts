@@ -589,6 +589,10 @@ async function bootBilling(options: {
     {
       db: { client: options.client },
       schema: { ...authTables, ...billingTables },
+      app: {
+        name: "Legacy Billing",
+        urls: { web: "https://billing.example.test", api: "https://billing.example.test" },
+      },
       email: {
         mode: "store",
         from: "no-reply@example.com",

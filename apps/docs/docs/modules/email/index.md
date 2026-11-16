@@ -211,9 +211,10 @@ Policy runs once per resolution. Existing send methods never call it implicitly;
 pass the selected descriptor into their normal options. The send re-resolves its
 id against approved config and keeps the existing sender/template/locale/override
 precedence. Policy selection is presentation, not authorization or event-delivery
-deduplication. A retry may resolve again. Billing trial-ending production adopts
-this contract in its Portal/trial integration; registering a callback alone does
-not migrate that producer.
+deduplication. A retry may resolve again. Billing trial-ending production uses
+this contract before creating its Portal, with event `billing.trial-will-end`,
+trusted eventId/organizationId and Subscription id as resourceId. The same selected
+descriptor supplies Portal context and the actual send.
 
 Delayed work stores only an Experience id and existing resource identifiers, then
 reloads resources, scope, Grants, Entitlements, expiry and locale at execution.
@@ -221,6 +222,32 @@ Retain referenced Experience ids until work is drained or explicitly migrated.
 Older no-reference jobs keep the shorthand default; strict adoption needs an
 explicit resource-based policy or those jobs fail. See [Workflow](/modules/workflow)
 for the validated payload shape and worker registration.
+
+## Optional template availability
+
+Optional producers can ask EmailService without duplicating profile/set lookup:
+
+```ts
+const reachable = email.hasTemplate({ scope: "any", templateKey: "trialEnding" });
+const selected = email.hasTemplate({ scope: "experience", templateKey: "trialEnding", experienceId: experience.id });
+// Both return ServerResult<boolean>; neither invokes policy or sends.
+```
+
+The schema-derived input is exported from `modules/email/email.schema`. `any`
+considers only enabled Experiences' actual selected complete sets. Unreferenced or
+disabled-only sets, and base templates shadowed by every enabled named set, do not
+make a feature reachable. `experience` re-resolves its explicit branded id; an
+invalid/removed/disabled id is an error, while an absent optional template in a
+valid selection is false. It does not fall back to base templates. Manual legacy
+EmailService without a registry can inspect its base set with `scope: "any"`; selected
+checks require a registry.
+
+Billing uses any-reachable availability before requiring policy for an optional
+trial warning, then selected availability after its one policy resolution. No
+reachable template keeps the existing successful no-warning behavior; a reachable
+message with invalid policy fails before Portal/send. A selected set missing the
+optional template skips that warning. Normal send APIs retain their missing-template
+error behavior and never choose a policy implicitly.
 
 ## Email preview helper
 

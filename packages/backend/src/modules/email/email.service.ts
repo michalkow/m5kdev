@@ -13,12 +13,14 @@ import { Resend } from "resend";
 import type { BackendAppEmailMode, BackendAppEmailOptions, BackendAppMetadata } from "../../app";
 import { ExperienceContextError, ExperienceRegistry } from "../../experience";
 import type { AppI18n } from "../../i18n/app-i18n";
-import type { ServerResultAsync } from "../base/base.dto";
+import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
 import {
   type CommunicationExperienceInput,
   type CommunicationPolicy,
   communicationExperienceInputSchema,
+  type EmailTemplateAvailabilityInput,
+  emailTemplateAvailabilityInputSchema,
 } from "./email.schema";
 
 export type EmailTranslateFn = (key: string, options?: Record<string, unknown>) => string;
@@ -220,6 +222,45 @@ export class EmailService extends BaseService<never, never> {
           { cause: selected.error }
         );
       return ok(this.experienceRegistry.require(selected.data));
+    });
+  }
+
+  /** Report only templates reachable through enabled profiles; do not select or invoke policy. */
+  hasTemplate(input: EmailTemplateAvailabilityInput): ServerResult<boolean> {
+    return this.throwable(() => {
+      const parsed = emailTemplateAvailabilityInputSchema.safeParse(input);
+      if (!parsed.success)
+        return this.error("INTERNAL_SERVER_ERROR", "Invalid template availability context", {
+          cause: parsed.error,
+        });
+      const registry = this.experienceRegistry;
+      if (parsed.data.scope === "experience") {
+        if (!registry)
+          return this.error("INTERNAL_SERVER_ERROR", "Email Experience registry is not configured");
+        const experience = registry.require(parsed.data.experienceId);
+        return ok(
+          Boolean(
+            this.resolveTemplate(
+              parsed.data.templateKey,
+              registry.emailProfile(experience)?.templateSet
+            )
+          )
+        );
+      }
+      if (!registry) return ok(Boolean(this.resolveTemplate(parsed.data.templateKey)));
+      const templateKey = parsed.data.templateKey;
+      return ok(
+        Object.entries(registry.config.definitions).some(
+          ([id, definition]) =>
+            !definition.disabled &&
+            Boolean(
+              this.resolveTemplate(
+                templateKey,
+                registry.emailProfile(registry.get(id))?.templateSet
+              )
+            )
+        )
+      );
     });
   }
 

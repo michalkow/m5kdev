@@ -6,6 +6,7 @@ import { ExperienceContextError, type ExperienceRegistry } from "../../experienc
 import { EXPERIENCE_FLOW_PARAMETER, type ExperienceFlowSigner } from "../../experience-flows";
 import type { Session, User } from "../auth/auth.lib";
 import type { AuthRequest } from "../auth/auth.middleware";
+import type { PortalSessionResolver } from "./billing.portal";
 
 export const checkoutStartInputSchema = z.strictObject({
   priceId: z.string().min(1),
@@ -41,6 +42,7 @@ export type BillingPresentation = {
   registry?: ExperienceRegistry;
   flows?: ExperienceFlowSigner;
   resolveCheckoutSessionCreate?: CheckoutSessionResolver;
+  resolveBillingPortalSessionCreate?: PortalSessionResolver;
 };
 export type CheckoutPresentation = {
   experience: PublicExperience;

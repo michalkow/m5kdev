@@ -91,6 +91,7 @@ export class BillingRepository extends BaseTableRepository<
   public seatBilling: boolean;
   public nonBillableRoleKeys: readonly string[];
   public entitlements?: EntitlementCatalog;
+  private readonly portalReturnUrl?: string;
   private readonly checkoutUrls?: { successUrl: string; cancelUrl: string };
   private readonly checkoutSessionCreate?: Partial<Stripe.Checkout.SessionCreateParams>;
   private readonly billingPortalSessionCreate?: Partial<Stripe.BillingPortal.SessionCreateParams>;
@@ -101,6 +102,7 @@ export class BillingRepository extends BaseTableRepository<
     table: Schema["subscriptions"];
     libs: { stripe: Stripe };
     config: ResolvedStripePlans;
+    portalReturnUrl?: string;
     checkoutUrls?: { successUrl: string; cancelUrl: string };
     checkoutSessionCreate?: Partial<Stripe.Checkout.SessionCreateParams>;
     billingPortalSessionCreate?: Partial<Stripe.BillingPortal.SessionCreateParams>;
@@ -111,11 +113,13 @@ export class BillingRepository extends BaseTableRepository<
       checkoutSessionCreate,
       billingPortalSessionCreate,
       checkoutUrls,
+      portalReturnUrl,
       ...rest
     } = options;
     super(rest);
     this.stripe = libs.stripe;
     this.checkoutUrls = options.checkoutUrls;
+    this.portalReturnUrl = portalReturnUrl;
     this.checkoutSessionCreate = checkoutSessionCreate;
     this.billingPortalSessionCreate = billingPortalSessionCreate;
     this.environment = config.environment;
@@ -752,15 +756,24 @@ export class BillingRepository extends BaseTableRepository<
     );
   }
 
-  createBillingPortalSession(customerId: string): ServerResultAsync<Stripe.BillingPortal.Session> {
+  createBillingPortalSession(
+    customerId: string,
+    options?: {
+      returnUrl?: string;
+      contextualOverlay?: Partial<Stripe.BillingPortal.SessionCreateParams>;
+    }
+  ): ServerResultAsync<Stripe.BillingPortal.Session> {
     return this.throwablePromise(() =>
       this.stripe.billingPortal.sessions.create(
         mergeSessionCreateParams(
-          {
-            customer: customerId,
-            return_url: `${process.env.VITE_SERVER_URL}/stripe/success`,
-          } satisfies Stripe.BillingPortal.SessionCreateParams,
-          this.billingPortalSessionCreate
+          mergeSessionCreateParams(
+            {
+              customer: customerId,
+              return_url: options?.returnUrl ?? this.portalReturnUrl,
+            } satisfies Stripe.BillingPortal.SessionCreateParams,
+            this.billingPortalSessionCreate
+          ),
+          options?.contextualOverlay
         )
       )
     );

@@ -15,6 +15,7 @@ import {
 import { z } from "zod";
 import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 import { checkoutStartInputSchema } from "./billing.checkout";
+import { portalStartInputSchema } from "./billing.portal";
 import type { BillingService } from "./billing.service";
 
 export function createBillingTRPC(
@@ -22,6 +23,13 @@ export function createBillingTRPC(
   billingService: BillingService
 ) {
   return router({
+    startPortal: organizationProcedure
+      .input(portalStartInputSchema)
+      .output(z.object({ url: z.url() }))
+      .mutation(async ({ input, ctx }) =>
+        handleTRPCResult(await billingService.startPortal(input, ctx))
+      ),
+
     startCheckout: organizationProcedure
       .input(checkoutStartInputSchema)
       .output(z.object({ url: z.url() }))

@@ -13,6 +13,7 @@ import type { EmailModule } from "../email/email.module";
 import type { CheckoutSessionResolver } from "./billing.checkout";
 import type * as billingTables from "./billing.db";
 import { defaultBillingGrants } from "./billing.grants";
+import type { PortalSessionResolver } from "./billing.portal";
 import { BillingRepository } from "./billing.repository";
 import { createBillingRouter } from "./billing.router";
 import { BillingService } from "./billing.service";
@@ -35,6 +36,7 @@ export interface BillingModuleLibs {
   checkoutSessionCreate?: Partial<Stripe.Checkout.SessionCreateParams>;
   resolveCheckoutSessionCreate?: CheckoutSessionResolver;
   billingPortalSessionCreate?: Partial<Stripe.BillingPortal.SessionCreateParams>;
+  resolveBillingPortalSessionCreate?: PortalSessionResolver;
 }
 
 export class BillingModule extends BaseModule<
@@ -68,6 +70,9 @@ export class BillingModule extends BaseModule<
         table: db.schema.subscriptions,
         libs: { stripe: this.libs.stripe },
         config: this.config,
+        portalReturnUrl: appConfig.urls.api
+          ? new URL("/stripe/success", appConfig.urls.api).href
+          : undefined,
         checkoutUrls:
           appConfig.urls.api && appConfig.urls.web
             ? {
@@ -96,6 +101,7 @@ export class BillingModule extends BaseModule<
           registry: appConfig.experienceRegistry,
           flows: infra.experienceFlows,
           resolveCheckoutSessionCreate: this.libs.resolveCheckoutSessionCreate,
+          resolveBillingPortalSessionCreate: this.libs.resolveBillingPortalSessionCreate,
         }
       ),
     };

@@ -27,3 +27,14 @@ export type CommunicationPolicy = (
   | z.infer<typeof experienceIdSchema>
   | undefined
   | Promise<z.infer<typeof experienceIdSchema> | undefined>;
+
+/** Optional-feature availability is neutral; selected checks never infer an Experience. */
+export const emailTemplateAvailabilityInputSchema = z.discriminatedUnion("scope", [
+  z.strictObject({ scope: z.literal("any"), templateKey: z.string().min(1) }),
+  z.strictObject({
+    scope: z.literal("experience"),
+    templateKey: z.string().min(1),
+    experienceId: experienceIdSchema,
+  }),
+]);
+export type EmailTemplateAvailabilityInput = z.infer<typeof emailTemplateAvailabilityInputSchema>;

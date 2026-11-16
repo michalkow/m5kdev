@@ -1,11 +1,15 @@
+import fs from "node:fs/promises";
 import { request as httpRequest, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import os from "node:os";
+import path from "node:path";
+import type { ExperienceRegistryConfig } from "@m5kdev/commons/modules/app/experience.schema";
 import type { ResolvedStripePlans } from "@m5kdev/commons/modules/billing/billing.types";
 import { transformer } from "@m5kdev/commons/utils/trpc";
 import { hashPassword } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import type Stripe from "stripe";
+import Stripe from "stripe";
 import { z } from "zod";
 import { createBackendApp } from "../app";
 import * as authTables from "../modules/auth/auth.db";
@@ -13,11 +17,13 @@ import { createBetterAuth } from "../modules/auth/auth.lib";
 import { AuthModule } from "../modules/auth/auth.module";
 import * as billingTables from "../modules/billing/billing.db";
 import { BillingModule, type BillingModuleLibs } from "../modules/billing/billing.module";
+import type { BillingService } from "../modules/billing/billing.service";
 import { EmailModule } from "../modules/email/email.module";
-import type { EmailTemplates } from "../modules/email/email.service";
+import type { EmailService, EmailTemplates } from "../modules/email/email.service";
 import { experienceConfig, prepareExperienceTables } from "./experience.fixtures";
 import { createTestPool } from "./postgresql";
 
+export const BILLING_WEBHOOK_SECRET = "whsec_local_recording_billing_test";
 export const BILLING_SECRET = "billing-http-test-secret-at-least-thirty-two-characters";
 export const billingSchema = { ...authTables, ...billingTables };
 export const billingCatalog: ResolvedStripePlans = {
@@ -59,8 +65,14 @@ export async function billingFixture(
     secret?: string | null;
     libs?: Partial<BillingModuleLibs>;
     catalog?: ResolvedStripePlans;
+    experiences?: ExperienceRegistryConfig;
+    templates?: EmailTemplates;
+    emailOptions?: ConstructorParameters<typeof EmailModule>[1];
+    outputDirectory?: string;
   } = {}
 ) {
+  const outputDirectory =
+    options.outputDirectory ?? (await fs.mkdtemp(path.join(os.tmpdir(), "m5kdev-billing-http-")));
   const pool = createTestPool();
   await prepareExperienceTables(pool, billingSchema);
   const orm = drizzle(pool, { schema: billingSchema });
@@ -97,6 +109,28 @@ export async function billingFixture(
     });
   }
   const creates: Stripe.Checkout.SessionCreateParams[] = [];
+  const portalState = { failures: 0 };
+  const sdk = new Stripe("sk_test_recording", {
+    httpClient: Stripe.createFetchHttpClient(async () => {
+      throw new Error("Unexpected external Stripe request");
+    }),
+  });
+  const customers = new Map<
+    string,
+    Pick<Stripe.Customer, "id" | "email" | "metadata"> & {
+      deleted: boolean;
+      invoice_settings: Pick<Stripe.Customer.InvoiceSettings, "default_payment_method">;
+    }
+  >();
+  for (const id of ["cus_one", "cus_two", "cus_live_one", "cus_live_two"])
+    customers.set(id, {
+      id,
+      email: "person@example.test",
+      deleted: false,
+      metadata: {},
+      invoice_settings: { default_payment_method: null },
+    });
+  const portalCreates: Stripe.BillingPortal.SessionCreateParams[] = [];
   const sessions = new Map<string, Stripe.Checkout.Session>();
   const subscriptions = new Map<string, Stripe.Subscription>();
   const retrieved: string[] = [];
@@ -127,17 +161,26 @@ export async function billingFixture(
         },
       },
     },
+    billingPortal: {
+      sessions: {
+        create: async (params: Stripe.BillingPortal.SessionCreateParams) => {
+          portalCreates.push(structuredClone(params));
+          if (portalState.failures > 0) {
+            portalState.failures--;
+            throw new Error("Recorded Portal failure");
+          }
+          return {
+            id: `bps_${portalCreates.length}`,
+            url: `https://billing.stripe.com/p/session/bps_${portalCreates.length}`,
+          };
+        },
+      },
+    },
     customers: {
       retrieve: async (id: string) => {
-        if (!["cus_one", "cus_two", "cus_live_one", "cus_live_two"].includes(id))
-          throw new Error("Unknown Customer");
-        return {
-          id,
-          email: "person@example.test",
-          deleted: false,
-          metadata: {},
-          invoice_settings: { default_payment_method: null },
-        };
+        const customer = customers.get(id);
+        if (!customer) throw new Error("Unknown Customer");
+        return customer;
       },
     },
     subscriptions: {
@@ -146,9 +189,11 @@ export async function billingFixture(
         return { data: subscriptions.has(customer) ? [subscriptions.get(customer)] : [] };
       },
     },
-    webhooks: { constructEvent: (body: Buffer) => JSON.parse(body.toString()) },
+    webhooks: sdk.webhooks,
   } as unknown as Stripe;
-  const apiHost = (id: string) => (options.shared ? "api.example.test" : `${id}.example.test`);
+  const experiences: ExperienceRegistryConfig = options.experiences ?? experienceConfig;
+  const apiHost = (id: string) =>
+    options.shared ? "api.example.test" : new URL(experiences.definitions[id].apiOrigin).host;
   const app = options.legacy
     ? {
         name: "Legacy",
@@ -156,13 +201,13 @@ export async function billingFixture(
       }
     : {
         experiences: {
-          ...experienceConfig,
+          ...experiences,
           definitions: Object.fromEntries(
-            Object.entries(experienceConfig.definitions).map(([id, definition]) => [
+            Object.entries(experiences.definitions).map(([id, definition]) => [
               id,
               {
                 ...definition,
-                apiOrigin: `https://${apiHost(id)}`,
+                apiOrigin: options.shared ? `https://${apiHost(id)}` : definition.apiOrigin,
                 ...(id === "radar" ? { aliases: ["https://alias-radar.example.test"] } : {}),
               },
             ])
@@ -181,11 +226,20 @@ export async function billingFixture(
             APP_SLUG: "billing-http",
             BETTER_AUTH_SECRET: secret ?? undefined,
           },
-          app,
+          app: {
+            ...app,
+            locales: {
+              defaultLocale: "en",
+              locales: [
+                { code: "en", displayName: "English" },
+                { code: "en_GB", displayName: "English (UK)" },
+              ],
+            },
+          },
           email: {
             mode: "store",
             from: "test@example.test",
-            outputDirectory: "/tmp/m5kdev-implement-88/97-artifacts/emails",
+            outputDirectory,
           },
           auth: {
             factory: ({ db, appConfig, experienceFlows, services }) =>
@@ -200,7 +254,7 @@ export async function billingFixture(
           },
         },
         [
-          new EmailModule(billingTemplates),
+          new EmailModule(options.templates ?? billingTemplates, options.emailOptions),
           new BillingModule({ stripe, ...options.libs }, options.catalog ?? billingCatalog),
           new AuthModule(),
         ]
@@ -217,7 +271,13 @@ export async function billingFixture(
   const visit = (
     host: string,
     path: string,
-    options: { cookie?: string; origin?: string; method?: string; body?: unknown } = {}
+    options: {
+      cookie?: string;
+      origin?: string;
+      method?: string;
+      body?: unknown;
+      headers?: Record<string, string>;
+    } = {}
   ) =>
     new Promise<Response>((resolve, reject) => {
       const req = httpRequest(
@@ -231,6 +291,7 @@ export async function billingFixture(
           method: options.method ?? "GET",
           headers: {
             host,
+            ...options.headers,
             ...(options.cookie ? { cookie: options.cookie } : {}),
             ...(options.origin ? { origin: options.origin } : {}),
             ...(options.body ? { "content-type": "application/json" } : {}),
@@ -288,17 +349,16 @@ export async function billingFixture(
       .where(eq(authTables.sessions.id, body.session.id));
     return body.session.id as string;
   };
-  const complete = (index = 0) => {
-    const id = `cs_test_${index + 1}`;
-    const session = sessions.get(id)!;
-    session.status = "complete";
-    const params = creates[index];
-    const customer = String(params.customer);
+  const recordSubscription = (
+    customer: string,
+    status: Stripe.Subscription.Status = "active",
+    id = `sub_${customer}`
+  ) => {
     const now = Math.floor(Date.now() / 1000);
-    subscriptions.set(customer, {
-      id: `sub_${id}`,
+    const subscription = {
+      id,
       customer,
-      status: "active",
+      status,
       items: {
         data: [
           {
@@ -317,10 +377,32 @@ export async function billingFixture(
       discounts: [],
       cancel_at_period_end: false,
       metadata: {},
-    } as unknown as Stripe.Subscription);
+      ...(status === "trialing"
+        ? {
+            default_payment_method: null,
+            trial_start: now - 86400,
+            trial_end: now + 3 * 86400,
+            trial_settings: { end_behavior: { missing_payment_method: "cancel" } },
+          }
+        : {}),
+    } as unknown as Stripe.Subscription;
+    subscriptions.set(customer, subscription);
+    return subscription;
+  };
+  const complete = (index = 0) => {
+    const id = `cs_test_${index + 1}`;
+    const session = sessions.get(id)!;
+    session.status = "complete";
+    const params = creates[index];
+    const customer = String(params.customer);
+    recordSubscription(customer, "active", `sub_${id}`);
     return String(params.success_url).replace("{CHECKOUT_SESSION_ID}", id);
   };
+  const email: EmailService = built.modules.email.services.email;
+  const billing: BillingService = built.modules.billing.services.billing;
   return {
+    email,
+    billing,
     built,
     pool,
     orm,
@@ -329,8 +411,17 @@ export async function billingFixture(
     activate,
     apiHost,
     creates,
+    portalCreates,
+    portalState,
+    customers,
+    signWebhook: (body: unknown) =>
+      sdk.webhooks.generateTestHeaderString({
+        payload: JSON.stringify(body),
+        secret: BILLING_WEBHOOK_SECRET,
+      }),
     sessions,
     subscriptions,
+    recordSubscription,
     retrieved,
     synced,
     complete,
@@ -340,6 +431,7 @@ export async function billingFixture(
       );
       await built.shutdown();
       await pool.end();
+      if (!options.outputDirectory) await fs.rm(outputDirectory, { recursive: true, force: true });
     },
   };
 }

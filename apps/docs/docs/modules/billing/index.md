@@ -314,8 +314,8 @@ App overlays retain full override power. A custom success/cancel URL bypasses th
 normal handler. Replacing Customer or correlation metadata while leaving the
 normal success URL may deliberately cause a safe return rejection. Configure an
 app-owned return integration for that use case; Kernel does not silently restore
-reserved fields after your overlay. Portal contextual presentation is a separate
-integration; its static overlay remains supported.
+reserved fields after your overlay. Portal uses the same overlay precedence as
+described below.
 
 Existing single-Experience name/URLs/environment authoring and static constructor
 options remain supported. A normalized `BETTER_AUTH_SECRET` of at least 32 characters
@@ -333,7 +333,8 @@ reconcile and the User can reopen Billing. A malformed or partially signed link
 never falls back to raw behavior; there is no invented issuance timestamp.
 
 Custom service composition can inject `{ registry, flows, resolveCheckoutSessionCreate }`
-as BillingService's fourth constructor argument. `startCheckout(input, context)`
+as BillingService's fourth constructor argument. Portal adds
+`resolveBillingPortalSessionCreate` in that same runtime object. `startCheckout(input, context)`
 and `completeCheckout(input, kind, context)` require the explicit browser User/
 session and validated presentation/request context. Existing server-owned commercial
 `createCheckoutSession` calls retain their Owner fields and now recheck live Member
@@ -341,8 +342,9 @@ and open Organization. Strict compositions require the approved presentation and
 shared signer; contextual callbacks also require explicit presentation in shorthand
 mode. Direct presentation must name the actual Member's User and a validated local
 destination before any Stripe effects.
-Direct Repository construction supplies `checkoutUrls` from approved composition
-metadata; it no longer reads singular Checkout URLs from environment at request time.
+Direct Repository construction supplies `checkoutUrls` and `portalReturnUrl` from
+approved composition metadata; it no longer reads singular Checkout/Portal URLs
+from environment at request time.
 
 The installed Stripe SDK supports per-session `branding_settings` on hosted
 Checkout. Display name/logo/colors do not replace legal business identity, invoice,
@@ -357,6 +359,107 @@ Stripe test payment data, and verify actual Session/customer/nonce reconciliatio
 before the canonical return. Also verify a signed webhook with no browser return.
 Inspect account-level invoice/receipt identity separately. Recording-adapter tests
 do not establish live Stripe hosted appearance; never run this check with a live key.
+
+### Contextual Portal and trial-ending mail
+
+Register Portal customization alongside its existing static bag:
+
+```ts
+new BillingModule({
+  stripe,
+  billingPortalSessionCreate: { locale: "auto" },
+  resolveBillingPortalSessionCreate: ({ experience, organization, source }) => ({
+    configuration: portalConfigurations[experience.id],
+    locale: organization.locale === "pl" ? "pl" : "auto",
+    // source.kind is browser or trial-ending; only browser has User/session/Member.
+  }),
+}, resolved);
+```
+
+The readonly context contains the approved Experience, environment, Organization
+id/currency/locale and authoritative Customer id. Browser source has the original
+`userId`, `sessionId`, `memberId`; `trial-ending` source has trusted `eventId` and
+`subscriptionId`. The same defaults → static → contextual deep merge applies,
+including array replacement, undefined skipping and null assignment. Callback
+failure returns an error before Portal creation. Paid Plan/interval/card management
+stays in Portal; the app's catalog and Stripe Portal configuration control allowed
+transitions. Experience never creates a second Subscription, Trial or Stripe account.
+
+`GET /stripe/portal?returnPath=%2Fbilling` uses a canonical domain-local API/proxy.
+For a shared API, use authenticated `billing.startPortal({ returnPath? })` tRPC POST
+with its allowlisted browser Origin, then navigate to the returned `{ url }`.
+Browser inputs cannot select Customer, configuration or arbitrary Stripe params.
+`BillingService.startPortal`/`completePortal` own live authorization and returns;
+`createBillingPortalSession(fields, presentation?)` remains the server composition
+seam with fresh Owner checks. Strict direct calls require approved browser
+presentation/shared signer; a contextual hook also needs presentation in shorthand.
+
+Normal browser returns at `/stripe/portal/return` validate the bound original
+User/session/Member/active Organization, current live Owner and current
+environment-specific Customer. They then reconcile that original Customer before
+navigating to the canonical web destination. Shared no-Origin callbacks use the
+proof only for a configured API/Origin pair. Invalid/expired/foreign returns do not
+sync another Organization or switch the session's active Organization. Proofs last
+24 hours; this does not extend Stripe's own Portal URL/session lifetime. Repeated
+valid returns resync idempotently. The no-key legacy shorthand keeps its old raw
+`/stripe/success` convenience; only the standard stable-key form provides the new
+correlation. Strict old raw links must be reopened from Billing.
+
+Stripe Portal has **create only**, no Session retrieve/attestation API. The return
+handler verifies the signed application resource and current authorization; it does
+not verify which actual external Portal Session/customer was visited. Trusted
+Customer overrides remain unbounded and app-owned. If an overlay changes Customer
+while retaining the normal return, it still reconciles only the originally signed
+authoritative Customer. A custom return_url owns its navigation. Signed webhook
+reconciliation remains independent of these choices.
+
+For trial-ending warnings, register the existing [Email communication policy](/modules/email):
+
+```ts
+import { experienceIdSchema } from "@m5kdev/commons/modules/app/experience.schema";
+import type { CommunicationPolicy } from "@m5kdev/backend/modules/email/email.schema";
+
+// App-owned routing from trusted resources, not recipient email or a previous visit.
+const subscriptionExperiences = new Map([
+  ["sub_product_a", experienceIdSchema.parse("product-a")],
+  ["sub_product_b", experienceIdSchema.parse("product-b")],
+]);
+const communicationPolicy: CommunicationPolicy = ({ event, resourceId }) =>
+  event === "billing.trial-will-end" && resourceId
+    ? subscriptionExperiences.get(resourceId)
+    : undefined;
+new EmailModule(templates, { templateSets, communicationPolicy });
+```
+
+After verified-event reconciliation and existing missing-payment-method checks,
+Billing passes exactly `{ event: "billing.trial-will-end", eventId, organizationId,
+resourceId: subscription.id }`. It resolves policy once, checks the selected
+optional template, and uses that same descriptor for Portal creation and mail.
+Missing/removed/disabled/invalid policy fails before Portal/send when a message can
+be sent. If no enabled reachable selection has `trialEnding`, the optional feature
+remains a successful no-op without policy. A selected named set may omit it and
+skip; it never falls back to the base template. Unreferenced/disabled-only sets do
+not enable the feature. Customer email remains the recipient, Organization locale
+is preserved, and current payment-method/no-recipient skips do not require policy.
+The external Stripe Portal CTA is a trusted template prop, not a local linkPaths URL.
+
+Communication return has no fabricated issuing browser. It requires a real current
+live Owner with the signed Organization active and its current Customer/environment
+mapping. Another current Owner may use it; Customer email is not Membership proof.
+Sign in at the original website, select that Organization and reopen Billing when
+context or expiry prevents returning. Warning delivery suppression remains an
+in-memory process-local set after successful send: sequential duplicates still
+reconcile but do not resend, failures can retry, and later distinct events can send.
+This is not durable or concurrent exactly-once delivery.
+
+Portal configuration can vary supported headline/features/legal links. Displayed
+business identity, account appearance, one account custom domain and Stripe email
+settings have account-level limits; configuration is not full merchant white labeling.
+No external sandbox appearance claim follows from recording tests. With an explicitly
+supplied test key/catalog/configurations, manually open A/B Portal sessions, inspect
+supported presentation, make a safe permitted Plan/interval/card change, return and
+verify the original resource's reconciliation; then trigger a signed trial event
+and retry. Do not change account-wide branding or use live credentials for that smoke.
 
 This is a breaking cutover from User-keyed Stripe Customers. The Customer lives
 on the Organization: `organizations.stripe_customer_id` in production and
@@ -422,7 +525,7 @@ succeeds if Stripe is down; the paywall shows until a Subscription exists.
   method; AdminActor cancel is the cutoff.
 - Trial cancel warning — on `customer.subscription.trial_will_end`, after sync,
   Billing emails a Billing Portal CTA when Stripe would cancel for a missing
-  payment method. Requires a `trialEnding` template on `EmailModule`. Stripe
+  payment method. Requires a reachable selected `trialEnding` template and explicit communication policy in strict mode. Stripe
   fires that event about three days before Trial end. See
   [Billing trial-ending email in 0.34.0](/guides/v0.34.0-billing-trial-ending-email-migration).
 
@@ -433,7 +536,8 @@ Mounted under `/stripe` by `BillingModule`.
 | Route | Purpose |
 | --- | --- |
 | `GET /stripe/checkout/:priceId` | Redirect to a Stripe Checkout session (Owner) |
-| `GET /stripe/portal` | Redirect to the Stripe Billing Portal (Owner) |
+| `GET /stripe/portal` | Canonical domain-local Portal start (live Owner) |
+| `GET /stripe/portal/return` | Signed browser/communication Portal return and original-resource reconciliation |
 | `GET /stripe/success` | Validated correlated Checkout return and Subscription sync; narrow raw convenience only in shorthand mode |
 | `GET /stripe/cancel` | Validated Checkout cancellation navigation |
 | `POST /stripe/webhook` | Stripe Subscription webhook (raw body, verified with `STRIPE_WEBHOOK_SECRET`). This is Billing, not [Inbound callback](/modules/webhook). |
@@ -445,6 +549,7 @@ Organization-scoped.
 | Procedure | Description |
 | --- | --- |
 | `billing.startCheckout` | Owner browser mutation taking catalog `priceId` and optional local `returnPath`, returning `{ url }`; supports a configured shared API Origin |
+| `billing.startCheckout` / `billing.startPortal` | Authenticated browser POST starts with domain inputs and validated Experience/Origin |
 | `billing.getActiveSubscription` | Current accessible Subscription or `null`. Includes `ownerMustAddPaymentMethod` for the Owner after a consumed cardless Trial when the catalog requires a card, the switch is off, status is `trialing`, and there is no default payment method |
 | `billing.getEntitlements` | Organization Entitlement snapshot (allowed Capability keys and per-key reasons). Query identity includes Organization id |
 | `billing.getTrialPriceId` | Trial Price picked at sign-up (from Stripe Customer metadata) or `null` |

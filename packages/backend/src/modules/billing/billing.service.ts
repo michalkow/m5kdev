@@ -48,6 +48,14 @@ import {
   createCheckoutReturnUrls,
   verifyCheckoutReturn,
 } from "./billing.checkout";
+import {
+  type BrowserPortalPresentation,
+  createPortalReturnUrl,
+  type PortalPresentation,
+  type PortalReturnInput,
+  type PortalStartInput,
+  verifyPortalReturn,
+} from "./billing.portal";
 import type { BillingRepository } from "./billing.repository";
 
 const TRIAL_ENDING_TEMPLATE_KEY = "trialEnding";
@@ -257,6 +265,76 @@ export class BillingService extends BasePermissionService<
         session.metadata?.[checkoutVersionKey] !== "1"
       )
         throw new ExperienceContextError("Checkout Session does not match continuation");
+      const synced = await this.syncStripeData({ customerId: flow.customerId });
+      const url = new URL(bound.destination);
+      if (synced.isErr()) url.searchParams.set("error", "SYNC_FAILED");
+      return ok({ url: url.href });
+    });
+  }
+
+  async startPortal(
+    input: PortalStartInput,
+    ctx: BillingBrowserContext
+  ): ServerResultAsync<{ url: string }> {
+    return this.throwableAsync(async () => {
+      const registry = this.presentation.registry;
+      if (!registry)
+        return this.error("INTERNAL_SERVER_ERROR", "Billing public origins are not configured");
+      const experience = registry.require(ctx.experience);
+      if (ctx.req) registry.validateCanonicalApiRequest(experience, ctx.req);
+      const destination = registry.destination(experience, input.returnPath ?? "/billing");
+      if (registry.strict && !this.presentation.flows)
+        return this.error("INTERNAL_SERVER_ERROR", "Billing flow signing is not configured");
+      const authorized = await this.authorizeBillingBrowser(ctx);
+      if (authorized.isErr()) return err(authorized.error);
+      const portal = await this.createBillingPortalSession(authorized.value, {
+        experience,
+        destination,
+        source: {
+          kind: "browser",
+          userId: ctx.user.id,
+          sessionId: authorized.value.sessionId,
+          memberId: authorized.value.memberId,
+        },
+      });
+      if (portal.isErr()) return err(portal.error);
+      return ok({ url: portal.value.url });
+    });
+  }
+
+  async completePortal(
+    input: PortalReturnInput,
+    ctx: BillingBrowserContext
+  ): ServerResultAsync<{ url: string }> {
+    return this.throwableAsync(async () => {
+      const registry = this.presentation.registry;
+      if (!registry || !this.presentation.flows)
+        throw new ExperienceContextError("Missing Portal signing configuration");
+      const bound = verifyPortalReturn(input, this.presentation.flows);
+      if (ctx.experience && ctx.experience.id !== bound.experience.id)
+        throw new ExperienceContextError("Conflicting Portal Experience");
+      if (ctx.req) registry.validateBoundRequest(bound.experience, ctx.req);
+      const authorized = await this.authorizeBillingBrowser(ctx);
+      if (authorized.isErr()) return err(authorized.error);
+      const flow = bound.flow;
+      if (
+        authorized.value.organizationId !== flow.organizationId ||
+        this.repository.billing.environment !== flow.environment ||
+        (flow.source.kind === "browser" &&
+          (authorized.value.memberId !== flow.source.memberId ||
+            authorized.value.userId !== flow.source.userId ||
+            authorized.value.sessionId !== flow.source.sessionId))
+      )
+        throw new ExperienceContextError("Portal browser context changed");
+      const customerId = await this.repository.billing.getOrganizationCustomerId(
+        flow.organizationId
+      );
+      if (customerId.isErr()) return err(customerId.error);
+      if (customerId.value !== flow.customerId)
+        throw new ExperienceContextError("Portal Customer changed");
+      const customer = await this.repository.billing.getStripeCustomer(flow.customerId);
+      if (customer.isErr()) return err(customer.error);
+      if (customer.value.deleted) throw new ExperienceContextError("Portal Customer was deleted");
       const synced = await this.syncStripeData({ customerId: flow.customerId });
       const url = new URL(bound.destination);
       if (synced.isErr()) url.searchParams.set("error", "SYNC_FAILED");
@@ -740,31 +818,114 @@ export class BillingService extends BasePermissionService<
     });
   }
 
-  async createBillingPortalSession({
-    organizationId,
-    memberId,
-    organizationRole,
-    email,
-    name,
-  }: {
-    organizationId: string;
-    memberId: string;
-    organizationRole: string;
-    email: string;
-    name?: string;
-  }): ServerResultAsync<Stripe.BillingPortal.Session> {
-    if (organizationRole !== "owner") {
-      return this.error("FORBIDDEN", "Only the Owner can open the Billing Portal");
-    }
-
-    const stripeCustomer = await this.createOrganizationCustomer({
+  async createBillingPortalSession(
+    {
       organizationId,
       memberId,
+      organizationRole,
       email,
       name,
+    }: {
+      organizationId: string;
+      memberId: string;
+      organizationRole: string;
+      email: string;
+      name?: string;
+    },
+    presentationInput?: BrowserPortalPresentation
+  ): ServerResultAsync<Stripe.BillingPortal.Session> {
+    return this.throwableAsync(async () => {
+      let presentation = presentationInput;
+      const registry = this.presentation.registry;
+      if (registry?.strict && !presentation)
+        throw new ExperienceContextError("Portal Experience is required");
+      if (registry?.strict && !this.presentation.flows)
+        return this.error("INTERNAL_SERVER_ERROR", "Billing flow signing is not configured");
+      if (presentation) {
+        if (!registry) throw new ExperienceContextError("Portal registry is not configured");
+        const experience = registry.require(presentation.experience);
+        presentation = {
+          ...presentation,
+          experience,
+          destination: registry.destination(experience, presentation.destination),
+        };
+        if (presentation.source.memberId !== memberId)
+          throw new ExperienceContextError("Portal Member changed");
+      }
+      if (this.presentation.resolveBillingPortalSessionCreate && !presentation)
+        return this.error(
+          "INTERNAL_SERVER_ERROR",
+          "Contextual Portal requires explicit presentation context"
+        );
+      if (organizationRole !== "owner")
+        return this.error("FORBIDDEN", "Only the Owner can open the Billing Portal");
+      const live = await this.repository.billing.getLiveBillingMember({
+        organizationId,
+        memberId,
+        userId: presentation?.source.userId,
+      });
+      if (live.isErr()) return err(live.error);
+      if (live.value?.role !== "owner")
+        return this.error("FORBIDDEN", "Only the current Owner can open the Billing Portal");
+      const organization = await this.repository.billing.getOrganizationById(organizationId);
+      if (organization.isErr()) return err(organization.error);
+      if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
+      const stripeCustomer = await this.createOrganizationCustomer({
+        organizationId,
+        memberId,
+        email,
+        name,
+      });
+      if (stripeCustomer.isErr()) return err(stripeCustomer.error);
+      return this.createPresentedPortal({
+        organization: organization.value,
+        customerId: stripeCustomer.value.id,
+        presentation,
+      });
     });
-    if (stripeCustomer.isErr()) return err(stripeCustomer.error);
-    return this.repository.billing.createBillingPortalSession(stripeCustomer.value.id);
+  }
+
+  /** Both browser and verified event producers supply their own authoritative source. */
+  private async createPresentedPortal({
+    organization,
+    customerId,
+    presentation,
+  }: {
+    organization: InferSelectModel<typeof authTables.organizations>;
+    customerId: string;
+    presentation?: PortalPresentation;
+  }): ServerResultAsync<Stripe.BillingPortal.Session> {
+    return this.throwableAsync(async () => {
+      const contextualOverlay = presentation
+        ? await this.presentation.resolveBillingPortalSessionCreate?.(
+            Object.freeze({
+              experience: presentation.experience,
+              environment: this.repository.billing.environment,
+              organization: Object.freeze({
+                id: organization.id,
+                currency: organization.currency ?? this.repository.billing.defaultCurrency,
+                locale: organization.locale,
+              }),
+              customerId,
+              source: Object.freeze({ ...presentation.source }),
+            })
+          )
+        : undefined;
+      const returnUrl =
+        presentation && this.presentation.flows
+          ? createPortalReturnUrl({
+              flows: this.presentation.flows,
+              presentation,
+              organizationId: organization.id,
+              customerId,
+              environment: this.repository.billing.environment,
+            })
+          : undefined;
+      return this.repository.billing.createBillingPortalSession(customerId, {
+        returnUrl,
+        contextualOverlay,
+      });
+    });
   }
 
   async adjustBillableSeats({
@@ -1515,14 +1676,12 @@ export class BillingService extends BasePermissionService<
   }): ServerResultAsync<void> {
     if (this.processedTrialWillEndEventIds.has(eventId)) return ok();
 
-    const template = this.service.email.templates[TRIAL_ENDING_TEMPLATE_KEY];
-    if (!template) {
-      this.logger.info(
-        { templateKey: TRIAL_ENDING_TEMPLATE_KEY, customerId },
-        "Skipping trial-ending email because the template is unregistered"
-      );
-      return ok();
-    }
+    const available = this.service.email.hasTemplate({
+      scope: "any",
+      templateKey: TRIAL_ENDING_TEMPLATE_KEY,
+    });
+    if (available.isErr()) return err(available.error);
+    if (!available.value) return ok();
 
     if (subscription.trial_settings?.end_behavior?.missing_payment_method !== "cancel") {
       return ok();
@@ -1545,29 +1704,52 @@ export class BillingService extends BasePermissionService<
     if (organization.isErr()) return err(organization.error);
     if (!organization.value) return this.error("NOT_FOUND", "Organization not found");
 
-    const portal = await this.repository.billing.createBillingPortalSession(customerId);
+    if (organization.value.closedAt) return this.error("FORBIDDEN", "Organization is closed");
+    if (customer.value.deleted) return this.error("NOT_FOUND", "Customer was deleted");
+    const email = customer.value.email;
+    if (!email) return ok();
+    const selected = await this.service.email.resolveCommunicationExperience({
+      context: {
+        event: "billing.trial-will-end",
+        eventId,
+        organizationId: organization.value.id,
+        resourceId: subscription.id,
+      },
+    });
+    if (selected.isErr()) return err(selected.error);
+    const experience = selected.value;
+    const hasTemplate = this.service.email.hasTemplate({
+      scope: "experience",
+      templateKey: TRIAL_ENDING_TEMPLATE_KEY,
+      experienceId: experience.id,
+    });
+    if (hasTemplate.isErr()) return err(hasTemplate.error);
+    if (!hasTemplate.value) return ok();
+    if (this.presentation.registry?.strict && !this.presentation.flows)
+      return this.error("INTERNAL_SERVER_ERROR", "Billing flow signing is not configured");
+    const destination = this.presentation.registry?.destination(experience, "/billing");
+    if (!destination)
+      return this.error("INTERNAL_SERVER_ERROR", "Billing public origins are not configured");
+    const portal = await this.createPresentedPortal({
+      organization: organization.value,
+      customerId,
+      presentation: {
+        experience,
+        destination,
+        source: { kind: "trial-ending", eventId, subscriptionId: subscription.id },
+      },
+    });
     if (portal.isErr()) return err(portal.error);
-
     const trialEnd =
       subscription.trial_end != null
         ? new Date(subscription.trial_end * 1000).toISOString().slice(0, 10)
         : undefined;
 
-    const email =
-      !customer.value.deleted && "email" in customer.value ? customer.value.email : null;
-    if (!email) {
-      this.logger.info(
-        { organizationId: organization.value.id, customerId },
-        "Skipping trial-ending email because the Customer has no email"
-      );
-      return ok();
-    }
-
     const sent = await this.service.email.sendBrandTemplate(
       email,
       TRIAL_ENDING_TEMPLATE_KEY,
       { url: portal.value.url, trialEnd },
-      { locale: organization.value.locale ?? undefined }
+      { experience, locale: organization.value.locale ?? undefined }
     );
     if (sent.isErr()) return err(sent.error);
     this.processedTrialWillEndEventIds.add(eventId);

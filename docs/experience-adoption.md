@@ -73,8 +73,7 @@ injecting the private email profile or credentials.
 Explicit registries require context even with one definition; their default is not
 an email policy. Existing single-Experience shorthand keeps context-free sends and
 its existing brand customization. Unknown/disabled references fail, and overlapping
-sends never mutate the service's current brand. Background communications use the explicit app policy below; trial production
-remains a separate Portal/trial checkpoint. Auth invitation, waitlist and account-claim
+sends never mutate the service's current brand. Background and trial communications use the explicit app policy below. Auth invitation, waitlist and account-claim
 continuation support is described below. See
 `apps/docs/docs/modules/email/index.md` for complete immediate-send examples.
 
@@ -125,7 +124,13 @@ trusted resource/event ids or the operation fails; there is no blanket legacy-jo
 first-entry or last-browser fallback. Generic jobs do not borrow the separate
 signed-link legacy time policy. See the complete examples in
 `apps/docs/docs/modules/email/index.md` and `apps/docs/docs/modules/workflow/index.md`.
-Trial webhook production is integrated in #98, not by merely registering this hook.
+Trial webhook production uses event `billing.trial-will-end`, its verified event id,
+authoritative Organization id and Subscription id as resourceId. Billing resolves
+once before Portal creation and passes the same descriptor to send. Email-owned
+`hasTemplate` has schema-discriminated `any` reachable and selected `experience` modes:
+no reachable optional warning template retains its no-op without policy; selected
+absence skips without base fallback; a reachable message with invalid policy fails
+before Portal/send. Disabled/unreferenced sets never enable the feature.
 
 ### External Connections
 
@@ -231,8 +236,8 @@ data from its existing resource and still authenticate, expire and consume that
 resource before any effect. Do not pass caller-supplied timestamps as authority.
 
 Registry/bootstrap, Auth, Email, invitation/waitlist/account-claim, Connection and
-background communication checkpoints are available. Billing flows remain separate
-implementation tickets. Complete adoption requires the final integration audit in
+background communication, Checkout, Portal and trial communication checkpoints are
+available. Shared frontend Billing adoption remains its next checkpoint. Complete adoption requires the final integration audit in
 #100; adding another domain alone does not complete those flows.
 
 One Trial Plan per currency, one Subscription per Organization/environment and account-wide Stripe identity constraints remain. This feature does not provision domains/certificates, merge data, add independent subscriptions or promise cross-domain SSO.
@@ -328,4 +333,27 @@ metadata while retaining the handler can fail closed. Such app-owned overlays ke
 winning and webhook sync continues. Direct service/Repository compositions inject
 normalized runtime dependencies/approved Checkout URLs explicitly. See
 `apps/docs/docs/modules/billing/index.md` and ADR-0027 for exact APIs and sandbox
-smoke instructions. Portal/trial contextual production is integrated separately.
+smoke instructions. Portal adds `resolveBillingPortalSessionCreate` beside its static
+bag with the same precedence. Browser source retains the exact original
+User/session/Member/active Organization; trial-ending source carries verified
+event/Subscription ids without a fabricated browser and requires a current live
+Owner of the signed active Organization on return. Both use current environment
+Customer mapping and reconcile only the signed original resource. The callback
+receives the approved descriptor selected once by Email communication policy.
+Portal return uses `/stripe/portal/return`, separate purpose and a 24-hour proof;
+shared API browser start is `billing.startPortal` tRPC POST. No Portal retrieve API
+exists: the handler cannot attest which external Session/customer was visited.
+Trusted Customer/return overrides remain unbounded and app-owned; normal return
+still reconciles only its originally signed authoritative Customer. Repeated valid
+returns are idempotent reconciliation. Trial warning suppression is process-local
+and sequential after successful delivery, not durable/concurrent exactly-once.
+Existing card/no-recipient/optional-template skips remain no-ops before Portal.
+Portal configuration supports only Stripe's permitted per-session fields; account
+identity/appearance/custom-domain/Stripe-email limits remain explicit.
+
+Direct Portal Repository composition supplies approved `portalReturnUrl`; no
+runtime Portal or trial link reader uses a singular environment URL. No-registry
+custom compositions must supply the normalized presentation contract before
+sending a branded warning; do not invent a default identity. Supported app
+shorthand with valid name/URLs still needs no registry authoring, and missing/short
+legacy runtime keys retain their documented raw convenience limit.

@@ -277,4 +277,120 @@ describe("App-registered communication presentation", () => {
     expect((await email.resolveCommunicationExperience(JSON.parse("null"))).isErr()).toBe(true);
     expect(await email.listStoredEmails()).toEqual([]);
   });
+  it("checks actual reachable and selected optional templates without choosing presentation or invoking policy", async () => {
+    const policy = jest.fn(async () => experienceIdSchema.parse("radar"));
+    const app = createBackendApp(
+      {
+        db: { client },
+        app: {
+          experiences: {
+            ...experienceConfig,
+            emailProfiles: { assistant: { templateSet: "assistant" } },
+            definitions: {
+              ...experienceConfig.definitions,
+              horeka: { ...experienceConfig.definitions.horeka, emailProfile: "assistant" },
+            },
+          },
+        },
+        email: { mode: "store", outputDirectory },
+      },
+      [
+        new EmailModule(templates, {
+          communicationPolicy: policy,
+          templateSets: {
+            assistant: { ...templates, trialEnding: { ...report, id: "assistant-trial" } },
+          },
+        }),
+      ] as const
+    );
+    const email = app.modules.email.services.email;
+    expect(
+      (await email.hasTemplate({ scope: "any", templateKey: "trialEnding" }))._unsafeUnwrap()
+    ).toBe(true);
+    expect(
+      (
+        await email.hasTemplate({
+          scope: "experience",
+          templateKey: "trialEnding",
+          experienceId: experienceIdSchema.parse("horeka"),
+        })
+      )._unsafeUnwrap()
+    ).toBe(true);
+    expect(
+      (
+        await email.hasTemplate({
+          scope: "experience",
+          templateKey: "trialEnding",
+          experienceId: experienceIdSchema.parse("radar"),
+        })
+      )._unsafeUnwrap()
+    ).toBe(false);
+    expect(
+      (
+        await email.sendTemplate(
+          "selected@example.test",
+          "trialEnding",
+          {},
+          { experience: "horeka", linkPaths: { url: "/billing" } }
+        )
+      ).isOk()
+    ).toBe(true);
+    const stored = await email.findLatestStoredEmail({ to: "selected@example.test" });
+    expect(stored?.templateId).toBe("assistant-trial");
+    expect(stored?.html).toContain("Horeka AI");
+    expect(
+      (
+        await email.sendTemplate("missing@example.test", "trialEnding", {}, { experience: "radar" })
+      ).isErr()
+    ).toBe(true);
+    expect(policy).not.toHaveBeenCalled();
+  });
+  it("reports invalid selected availability as an error and preserves manual legacy availability", () => {
+    const email = build(undefined, {
+      experiences: {
+        ...experienceConfig,
+        definitions: {
+          ...experienceConfig.definitions,
+          horeka: { ...experienceConfig.definitions.horeka, disabled: true },
+        },
+      },
+    });
+    expect(email.hasTemplate({ scope: "any", templateKey: "trialEnding" })._unsafeUnwrap()).toBe(
+      false
+    );
+    for (const id of ["horeka", "removed"])
+      expect(
+        email
+          .hasTemplate({
+            scope: "experience",
+            templateKey: "trialEnding",
+            experienceId: experienceIdSchema.parse(id),
+          })
+          .isErr()
+      ).toBe(true);
+    expect(
+      email
+        .hasTemplate(
+          JSON.parse('{"scope":"any","templateKey":"trialEnding","experienceId":"radar"}')
+        )
+        .isErr()
+    ).toBe(true);
+    const manual = new EmailService({
+      templates: { ...templates, trialEnding: report },
+      mode: "store",
+      outputDirectory,
+    });
+    expect(manual.hasTemplate({ scope: "any", templateKey: "trialEnding" })._unsafeUnwrap()).toBe(
+      true
+    );
+    expect(
+      manual
+        .hasTemplate({
+          scope: "experience",
+          templateKey: "trialEnding",
+          experienceId: experienceIdSchema.parse("radar"),
+        })
+        .isErr()
+    ).toBe(true);
+  });
 });
