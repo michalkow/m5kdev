@@ -1,7 +1,10 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { PublicExperience } from "@m5kdev/commons/modules/app/experience.schema";
+import {
+  experienceIdSchema,
+  type PublicExperience,
+} from "@m5kdev/commons/modules/app/experience.schema";
 import { toI18nLanguageTag } from "@m5kdev/commons/modules/auth/auth.locale";
 import { err, ok } from "neverthrow";
 import { createElement, type FunctionComponent } from "react";
@@ -10,7 +13,13 @@ import { Resend } from "resend";
 import type { BackendAppEmailMode, BackendAppEmailOptions, BackendAppMetadata } from "../../app";
 import { ExperienceContextError, ExperienceRegistry } from "../../experience";
 import type { AppI18n } from "../../i18n/app-i18n";
+import type { ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
+import {
+  type CommunicationExperienceInput,
+  type CommunicationPolicy,
+  communicationExperienceInputSchema,
+} from "./email.schema";
 
 export type EmailTranslateFn = (key: string, options?: Record<string, unknown>) => string;
 
@@ -57,6 +66,7 @@ export type EmailTemplates = {
 export type EmailTemplateSets = Record<string, EmailTemplates>;
 
 type EmailServiceProps = {
+  communicationPolicy?: CommunicationPolicy;
   templateSets?: EmailTemplateSets;
   templates: EmailTemplates;
   appConfig?: BackendAppMetadata;
@@ -132,6 +142,7 @@ export class EmailService extends BaseService<never, never> {
   public appConfig: BackendAppMetadata;
   public i18n?: AppI18n;
   private readonly templateSets: EmailTemplateSets;
+  private readonly communicationPolicy?: CommunicationPolicy;
   private readonly experienceRegistry?: ExperienceRegistry;
 
   constructor(props: EmailServiceProps) {
@@ -156,6 +167,7 @@ export class EmailService extends BaseService<never, never> {
     this.noReplyFrom = props.from ?? props.emailConfig?.from ?? props.noReplyFrom;
     this.templates = props.templates;
     this.templateSets = props.templateSets ?? {};
+    this.communicationPolicy = props.communicationPolicy;
     this.systemNotificationEmail =
       props.systemNotificationEmail ?? props.emailConfig?.systemNotificationEmail;
     this.mode = props.mode ?? props.emailConfig?.mode ?? "send";
@@ -176,6 +188,39 @@ export class EmailService extends BaseService<never, never> {
           `Email profile ${key} names unknown Email template set ${profile.templateSet}`
         );
     }
+  }
+
+  /** Select presentation before communication side effects; owning services retain authority. */
+  async resolveCommunicationExperience(
+    input?: CommunicationExperienceInput
+  ): ServerResultAsync<PublicExperience> {
+    return this.throwableAsync(async () => {
+      const parsed = communicationExperienceInputSchema.safeParse(input === undefined ? {} : input);
+      if (!parsed.success)
+        return this.error("INTERNAL_SERVER_ERROR", "Invalid communication context", {
+          cause: parsed.error,
+        });
+      if (!this.experienceRegistry)
+        return this.error(
+          "INTERNAL_SERVER_ERROR",
+          "Communication Experience registry is not configured"
+        );
+      if (parsed.data.experienceId !== undefined)
+        return ok(this.experienceRegistry.require(parsed.data.experienceId));
+      if (!this.communicationPolicy) return ok(this.experienceRegistry.require());
+      if (!parsed.data.context)
+        return this.error("INTERNAL_SERVER_ERROR", "Communication policy context is required");
+      const selected = experienceIdSchema.safeParse(
+        await this.communicationPolicy(parsed.data.context)
+      );
+      if (!selected.success)
+        return this.error(
+          "INTERNAL_SERVER_ERROR",
+          "Communication policy must select one Experience id",
+          { cause: selected.error }
+        );
+      return ok(this.experienceRegistry.require(selected.data));
+    });
   }
 
   private resolveTemplate(templateKey: keyof EmailTemplates, templateSet?: string) {

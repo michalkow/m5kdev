@@ -146,6 +146,82 @@ sign-in links remain stored for administrator retrieval rather than emailed.
 Background communication policy and trial producers remain separate checkpoints;
 registering domains alone does not migrate those producers.
 
+## Scheduled, admin and webhook communication
+
+Register an optional policy on the existing module when an operation has no
+initiating website. The callback receives only trusted, server-loaded event and
+resource identifiers: `event`, optional `eventId`, `userId`, `organizationId` and
+`resourceId`. It returns one schema-validated `ExperienceId`, synchronously or
+asynchronously. It does not receive the recipient's address or a saved request.
+
+```ts
+import { experienceIdSchema } from "@m5kdev/commons/modules/app/experience.schema";
+import type { CommunicationPolicy } from "@m5kdev/backend/modules/email/email.schema";
+
+// App-owned explicit routing for these resources; choose from trusted ids.
+const deliveryExperiences = new Map([
+  ["report-7", experienceIdSchema.parse("radar")],
+  ["report-8", experienceIdSchema.parse("partner")],
+]);
+const communicationPolicy: CommunicationPolicy = ({ event, resourceId }) =>
+  event === "app.report-ready" && resourceId
+    ? deliveryExperiences.get(resourceId)
+    : undefined;
+
+new EmailModule(templates, { templateSets, communicationPolicy });
+```
+
+In the owning service, load and authorize the current resource first, then
+resolve presentation before creating any branded side effect or sending:
+
+```ts
+const selected = await email.resolveCommunicationExperience({
+  experienceId: queued.experienceId, // validated ExperienceId, when already bound
+  context: {
+    event: "app.report-ready", eventId,
+    organizationId: report.organizationId, resourceId: report.id,
+  },
+});
+if (selected.isErr()) return err(selected.error);
+const experience = selected.value;
+// Use this same descriptor for any generated action/return link, then send.
+return email.sendBrandTemplate(recipient.email, "reportReady", { title: report.title }, {
+  experience, linkPaths: { url: `/reports/${report.id}` }, locale: recipient.locale,
+});
+```
+
+Resolution precedence is explicit:
+
+1. A supplied `experienceId` is validated against the current registry; policy
+   is not invoked. Malformed, removed or disabled references fail without fallback.
+2. Without a bound id, a registered policy requires valid context and must return
+   exactly one currently approved id. Missing/undefined/null/ambiguous/invalid
+   output or a rejected callback fails, including in shorthand mode.
+3. Without a bound id or registered policy, supported single-Experience shorthand
+   uses its normal default. Explicit registries, even with one entry, fail.
+
+The resolver returns a `ServerResultAsync<PublicExperience>`. Types and runtime
+schemas are exported from `modules/email/email.schema`; `ExperienceId` is the
+existing commons schema-derived brand. Raw strings at a queue/config boundary
+must be parsed, not asserted into that type. Direct manual EmailService
+composition may pass `communicationPolicy` too; its new resolver requires an app
+registry. Existing manual send APIs remain supported.
+
+Policy runs once per resolution. Existing send methods never call it implicitly;
+pass the selected descriptor into their normal options. The send re-resolves its
+id against approved config and keeps the existing sender/template/locale/override
+precedence. Policy selection is presentation, not authorization or event-delivery
+deduplication. A retry may resolve again. Billing trial-ending production adopts
+this contract in its Portal/trial integration; registering a callback alone does
+not migrate that producer.
+
+Delayed work stores only an Experience id and existing resource identifiers, then
+reloads resources, scope, Grants, Entitlements, expiry and locale at execution.
+Retain referenced Experience ids until work is drained or explicitly migrated.
+Older no-reference jobs keep the shorthand default; strict adoption needs an
+explicit resource-based policy or those jobs fail. See [Workflow](/modules/workflow)
+for the validated payload shape and worker registration.
+
 ## Email preview helper
 
 `EmailPreviewModule` mounts an unauthenticated Express UI for stored emails

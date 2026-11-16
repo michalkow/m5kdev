@@ -73,10 +73,59 @@ injecting the private email profile or credentials.
 Explicit registries require context even with one definition; their default is not
 an email policy. Existing single-Experience shorthand keeps context-free sends and
 its existing brand customization. Unknown/disabled references fail, and overlapping
-sends never mutate the service's current brand. Background and trial producers
-remain separate migration checkpoints. Auth invitation, waitlist and account-claim
+sends never mutate the service's current brand. Background communications use the explicit app policy below; trial production
+remains a separate Portal/trial checkpoint. Auth invitation, waitlist and account-claim
 continuation support is described below. See
 `apps/docs/docs/modules/email/index.md` for complete immediate-send examples.
+
+### Background and server-initiated communications
+
+Register `communicationPolicy` on `new EmailModule(templates, { templateSets,
+communicationPolicy })`. Its `CommunicationContext` and
+`CommunicationExperienceInput` types derive from the server-only schemas in
+`@m5kdev/backend/modules/email/email.schema`. Context contains `event` and optional
+`eventId`, `userId`, `organizationId`, `resourceId`; it is built by the owning server
+operation from trusted ids, not recipient email, a previous visit, Actor, or saved
+Entitlements. Policy returns one commons `ExperienceId` (or a Promise); parse app
+configuration/lookup strings with `experienceIdSchema`, never a type assertion.
+
+Call `email.resolveCommunicationExperience({ experienceId?, context? })` explicitly
+before a branded side effect. A bound, validated id wins and is resolved against the
+current registry; removed, disabled or malformed ids fail without invoking policy.
+With no bound id, registered policy runs once and must return one valid current id.
+Missing context, undefined/null/ambiguous/invalid output and lookup failures return
+an explicit Result error, including with shorthand. Without an id or registered
+policy, only normalized supported shorthand can use its default; even a one-entry
+explicit registry remains strict.
+
+Keep the returned `PublicExperience` for the whole operation: for example, #98
+resolves once after authoritative billing/event checks, then creates its contextual
+Portal and sends with that same descriptor. Policy is not called implicitly by
+sendTemplate/sendBrandTemplate; pass `{ experience, linkPaths, locale }` through the
+existing path. This avoids running a lookup again between a related link and its
+message. Sender/template overrides and recipient/Organization locale remain as
+documented above. It does not change which Organization owns the resource, current
+Grants/Entitlements or delivery deduplication. The new resolver requires an app
+registry; existing manually constructed EmailService send APIs are unchanged.
+
+Queue only the approved `experience.id` plus existing minimal User/Organization/
+resource ids. Use the existing commons id schema for a raw queue/config boundary,
+and parse raw input at enqueue as well as execution. Workflow `.input(schema,true)`
+validates `payload.data`; derive its shape/type once and use a `{ data: ... }`
+payload for that option. The owning worker service reloads actual resource scope,
+Membership, current access/expiry and locale before sending. Selecting a brand never
+licenses a delayed operation. Neutral Workflow jobs acquire no Experience gate.
+
+Every execution uses the current immutable deployment registry, not a serialized
+public descriptor, sender or origin. Retain referenced ids until queued work is
+drained or explicitly migrated; removal/disablement deliberately causes failure.
+Older jobs with no reference keep the supported shorthand default. Adopting strict
+configuration requires an explicit app communication policy using those jobs'
+trusted resource/event ids or the operation fails; there is no blanket legacy-job,
+first-entry or last-browser fallback. Generic jobs do not borrow the separate
+signed-link legacy time policy. See the complete examples in
+`apps/docs/docs/modules/email/index.md` and `apps/docs/docs/modules/workflow/index.md`.
+Trial webhook production is integrated in #98, not by merely registering this hook.
 
 ### External Connections
 
@@ -181,8 +230,8 @@ Experience and canonical destination. An adapter must obtain authoritative issua
 data from its existing resource and still authenticate, expire and consume that
 resource before any effect. Do not pass caller-supplied timestamps as authority.
 
-Registry/bootstrap, Auth, Email and invitation/waitlist/account-claim checkpoints are
-available. Background communication, Connection and Billing flows remain separate
+Registry/bootstrap, Auth, Email, invitation/waitlist/account-claim, Connection and
+background communication checkpoints are available. Billing flows remain separate
 implementation tickets. Complete adoption requires the final integration audit in
 #100; adding another domain alone does not complete those flows.
 
