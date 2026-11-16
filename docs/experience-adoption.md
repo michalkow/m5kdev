@@ -41,6 +41,11 @@ Sign-in return destinations must belong to the entered Experience, even when ano
 
 MCP tools continue to use OrganizationActor and the existing allowlist. The default Experience supplies the canonical login/consent presentation; product branding does not create another issuer or grant a capability.
 
+MCP discovery and token verification retain the default Experience's canonical
+issuer, resource and JWKS address even when browser authentication accepts several
+domains. The protected endpoint checks signature, issuer, audience and expiry and
+keeps shared DPoP replay protection; it does not require a global browser auth URL.
+
 Existing Starter sign-in screens remain unchanged because Starter uses the single-Experience shorthand. Its signing-in guides were reviewed and require no screen-instruction changes at this checkpoint.
 
 ### App-authored immediate email

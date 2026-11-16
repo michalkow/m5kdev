@@ -1,5 +1,6 @@
-import { requireMcpAuth } from "@better-auth/mcp";
+import { createMcpProtectedRequestHandler } from "@better-auth/mcp";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
+import { createDpopReplayStore } from "better-auth/oauth2";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import type { Result } from "neverthrow";
 import type { ServerError } from "../../utils/errors";
@@ -7,7 +8,7 @@ import type { BetterAuth } from "../auth/auth.lib";
 import type { McpToolBinding } from "./mcp.adapter";
 import { invokeMcpTool, isArgumentRecord } from "./mcp.protocol";
 import type { McpInvokeInput } from "./mcp.types";
-import { MCP_HTTP_PATH } from "./mcp.types";
+import { MCP_HTTP_PATH, mcpIssuerUrl } from "./mcp.types";
 
 interface McpAccessTokenClaims {
   sub?: unknown;
@@ -134,15 +135,21 @@ export function createMcpExpressHandler(input: {
   return (req: Request, res: Response, next: NextFunction): void => {
     void (async () => {
       const request = expressRequestToWeb(req);
-      const response = await requireMcpAuth(
-        input.auth,
+      const issuer = mcpIssuerUrl(input.resource, input.auth.options.basePath);
+      const { internalAdapter } = await input.auth.$context;
+      const response = await createMcpProtectedRequestHandler(
+        {
+          issuer,
+          audience: input.resource,
+          jwksUrl: `${issuer}/jwks`,
+          dpop: { replayStore: createDpopReplayStore(internalAdapter) },
+        },
         async (webRequest, jwt) => {
           return mcpHttp.fetch(webRequest, {
             authInfo: mcpAuthInfoFromJwt(jwt, webRequest),
             parsedBody: req.body,
           });
-        },
-        { resource: input.resource }
+        }
       )(request);
       await writeWebResponse(res, response);
     })().catch(next);
