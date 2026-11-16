@@ -32,6 +32,7 @@ import { posthogCapture } from "../../utils/posthog";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
 import * as auth from "./auth.db";
+import { experienceAuthPlugin } from "./auth.experience";
 import { createMcpOAuthPlugins } from "./auth.mcp-plugins";
 import * as oauth from "./auth.oauth.db";
 import {
@@ -194,6 +195,8 @@ export function createBetterAuth<
   const localeConfig = app?.locales;
   const webUrl = app?.urls?.web ?? process.env.VITE_APP_URL;
   const apiUrl = app?.urls?.api ?? process.env.VITE_SERVER_URL;
+  const experienceRegistry = app?.experienceRegistry;
+  const multiExperience = experienceRegistry?.strict === true;
   const normalizedProvisionedAccountEmailDomain = provisionedAccountEmailDomain
     ? provisionedAccountEmailDomain.toLowerCase().replace(/^@/, "")
     : null;
@@ -311,7 +314,27 @@ export function createBetterAuth<
 
   return betterAuth({
     ...options,
-    baseURL: apiUrl!,
+    baseURL: multiExperience
+      ? {
+          allowedHosts: experienceRegistry.allowedHosts,
+          protocol: experienceRegistry.defaultExperience.apiOrigin.startsWith("https:")
+            ? "https"
+            : "auto",
+        }
+      : apiUrl!,
+    ...(multiExperience
+      ? {
+          advanced: {
+            ...options?.advanced,
+            trustedProxyHeaders: experienceRegistry.config.trustedProxyHeaders,
+            crossSubDomainCookies: { enabled: false },
+            defaultCookieAttributes: {
+              ...options?.advanced?.defaultCookieAttributes,
+              domain: undefined,
+            },
+          },
+        }
+      : {}),
     // Forward better-auth logs into pino. getSession swallows root causes into
     // opaque FAILED_TO_GET_SESSION; the real error is only passed to logger.error.
     logger: {
@@ -451,6 +474,7 @@ export function createBetterAuth<
     },
     plugins: [
       ...(options?.plugins ?? []),
+      ...(multiExperience ? [experienceAuthPlugin(experienceRegistry)] : []),
       setPasswordEndpointPlugin(),
       magicLink({
         disableSignUp: true,
@@ -661,7 +685,7 @@ export function createBetterAuth<
           : undefined
       ),
     ],
-    trustedOrigins: [webUrl!, apiUrl!],
+    trustedOrigins: experienceRegistry?.allowedOrigins ?? [webUrl!, apiUrl!],
 
     databaseHooks: {
       user: {

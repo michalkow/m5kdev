@@ -33,6 +33,16 @@ List aliases as canonical origins. `infrastructureHosts` may admit unbranded hea
 
 ## Adoption checkpoints
 
+### Domain-local authentication
+
+The Better Auth wrapper derives allowed hosts, trusted origins and base URLs from the registry. Explicit multi-experience configurations use host-only cookies; a shared User can sign in independently on each unrelated product domain. They do not share browser sessions automatically.
+
+Sign-in return destinations must belong to the entered Experience, even when another product origin is also trusted. Relative destinations are resolved against that Experience's canonical web origin. OAuth initiation carries a trusted server-side Experience reference in provider state; arbitrary client additional data cannot replace it. The same validation runs for HTTP handlers and direct auth API calls.
+
+MCP tools continue to use OrganizationActor and the existing allowlist. The default Experience supplies the canonical login/consent presentation; product branding does not create another issuer or grant a capability.
+
+Existing Starter sign-in screens remain unchanged because Starter uses the single-Experience shorthand. Its signing-in guides were reviewed and require no screen-instruction changes at this checkpoint.
+
 The registry/bootstrap slice is the first checkpoint. Subsequent implementation tickets migrate auth, email, invitation, Connection and billing flows. Complete adoption requires the final integration audit in #100; adding another domain alone does not complete those flows.
 
 One Trial Plan per currency, one Subscription per Organization/environment and account-wide Stripe identity constraints remain. This feature does not provision domains/certificates, merge data, add independent subscriptions or promise cross-domain SSO.
