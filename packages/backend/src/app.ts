@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import type { Server } from "node:http";
 import path from "node:path";
+import type { ExperienceRegistryConfig } from "@m5kdev/commons/modules/app/experience.schema";
 import {
   ADMIN_CREATE_VERIFIED_USER_HEADER,
   USER_CURRENCY_HEADER,
@@ -44,6 +45,7 @@ import {
   type ServerEventBus,
   serverEventChannelPrefix,
 } from "./base/server-event";
+import { ExperienceRegistry, type ExperienceRequest, experienceMiddleware } from "./experience";
 import { type AppI18n, type BackendAppI18nResources, createAppI18n } from "./i18n/app-i18n";
 import type * as authTables from "./modules/auth/auth.db";
 import type { BetterAuth } from "./modules/auth/auth.lib";
@@ -143,6 +145,8 @@ export type BackendAppRouterMap<Modules extends readonly BackendAppModule[]> = S
 >;
 
 export type BackendAppMetadata = {
+  experiences?: ExperienceRegistryConfig;
+  experienceRegistry?: ExperienceRegistry;
   name?: string;
   urls?: {
     web?: string;
@@ -166,6 +170,7 @@ export type BackendAppEmailOptions = {
 };
 
 type ResolvedBackendAppMetadata = {
+  experienceRegistry?: ExperienceRegistry;
   name?: string;
   /** `APP_ENV` — see {@link parseAppEnvironment}. */
   environment: DeploymentEnvironment;
@@ -419,8 +424,14 @@ function normalizeAppConfig(
   env: Record<string, string | undefined>
 ): ResolvedBackendAppMetadata {
   const { environment, slug } = parseAppEnvironment(env);
-  const webUrl = config?.urls?.web ?? env.VITE_APP_URL;
-  const apiUrl = config?.urls?.api ?? env.VITE_SERVER_URL;
+  if (config?.experiences && (config.name || config.urls || config.brand))
+    throw new Error("Do not mix Experience registry and single-Experience metadata");
+  const registry = config?.experiences
+    ? new ExperienceRegistry(config.experiences, { deployed: environment !== "local" })
+    : undefined;
+  const selected = registry?.defaultExperience;
+  const webUrl = selected?.webOrigin ?? config?.urls?.web ?? env.VITE_APP_URL;
+  const apiUrl = selected?.apiOrigin ?? config?.urls?.api ?? env.VITE_SERVER_URL;
   if (environment !== "local") {
     if (!webUrl)
       throw new Error(`VITE_APP_URL (or app.urls.web) must be set when APP_ENV=${environment}`);
@@ -430,7 +441,26 @@ function normalizeAppConfig(
   }
 
   return {
-    name: config?.name,
+    experienceRegistry:
+      registry ??
+      (webUrl && apiUrl
+        ? new ExperienceRegistry(
+            {
+              defaultExperience: "default",
+              brands: { default: { name: config?.name ?? "m5kdev", ...config?.brand } },
+              definitions: {
+                default: {
+                  product: "default",
+                  brand: "default",
+                  webOrigin: webUrl,
+                  apiOrigin: apiUrl,
+                },
+              },
+            },
+            { strict: false }
+          )
+        : undefined),
+    name: selected?.brand.name ?? config?.name,
     environment,
     slug,
     urls: {
@@ -438,8 +468,12 @@ function normalizeAppConfig(
       api: apiUrl,
     },
     brand: {
-      logo: config?.brand?.logo ?? (webUrl ? new URL("/mark.svg", webUrl).toString() : undefined),
+      logo:
+        selected?.brand.logo ??
+        config?.brand?.logo ??
+        (webUrl ? new URL("/mark.svg", webUrl).toString() : undefined),
       tagline:
+        selected?.brand.tagline ??
         config?.brand?.tagline ??
         (config?.name ? `${config.name} publishing workspace` : undefined),
     },
@@ -684,7 +718,9 @@ function applyCors({
   appConfig: ResolvedBackendAppMetadata;
 }): void {
   const corsDefaults: CorsOptions = {
-    origin: appConfig.urls.web ? [appConfig.urls.web] : false,
+    origin:
+      appConfig.experienceRegistry?.allowedOrigins ??
+      (appConfig.urls.web ? [appConfig.urls.web] : false),
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: [
@@ -776,7 +812,18 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
 
   const orderedModules = resolveModuleOrder(registeredModules);
   const expressApp = config.express ?? express();
+  if (appConfig.experienceRegistry) {
+    expressApp.use(experienceMiddleware(appConfig.experienceRegistry));
+  }
   applyCors({ expressApp, config, appConfig });
+  if (appConfig.experienceRegistry) {
+    expressApp.get("/app/experience", (req: ExperienceRequest, res) => {
+      if (!req.experience)
+        return res.status(400).json({ message: "Experience context is required" });
+      res.setHeader("Cache-Control", "private, no-store");
+      return res.json(req.experience);
+    });
+  }
   const dbClientState = createDbClient(config.db);
   applyHealthCheck({ expressApp, client: dbClientState.client, appConfig });
   const redisState = createRedisClient(config.redis);

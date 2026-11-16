@@ -1,3 +1,4 @@
+import type { PublicExperience } from "@m5kdev/commons/modules/app/experience.schema";
 import { fromNodeHeaders } from "better-auth/node";
 import type { InferSelectModel } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
@@ -22,7 +23,11 @@ const { users, sessions } = auth;
 type User = InferSelectModel<typeof users>;
 type Session = InferSelectModel<typeof sessions>;
 
-export type AuthRequest = Request & { user?: User; session?: Session };
+export type AuthRequest = Request & {
+  user?: User;
+  session?: Session;
+  experience?: PublicExperience;
+};
 
 export type AuthMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => void;
 

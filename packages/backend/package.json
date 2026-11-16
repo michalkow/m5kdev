@@ -347,6 +347,16 @@
         "types": "./dist/src/types.d.cts",
         "default": "./dist/src/types.cjs"
       }
+    },
+    "./experience": {
+      "import": {
+        "types": "./dist/src/experience.d.mts",
+        "default": "./dist/src/experience.mjs"
+      },
+      "require": {
+        "types": "./dist/src/experience.d.cts",
+        "default": "./dist/src/experience.cjs"
+      }
     }
   }
 }
