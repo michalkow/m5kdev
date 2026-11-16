@@ -1,5 +1,6 @@
 import express, { Router } from "express";
 import type { AuthMiddleware, AuthRequest } from "../auth/auth.middleware";
+import { checkoutReturnInputSchema, checkoutStartInputSchema } from "./billing.checkout";
 import type { BillingService } from "./billing.service";
 
 function organizationFields(req: AuthRequest): {
@@ -30,30 +31,22 @@ export function createBillingRouter(
   const billingRouter = Router();
 
   billingRouter.get("/checkout/:priceId", authMiddleware, async (req: AuthRequest, res) => {
-    const fields = organizationFields(req);
-    if (!fields) {
-      return res.status(403).json({ message: "Organization is required" });
-    }
-
     const priceId = typeof req.params.priceId === "string" ? req.params.priceId : undefined;
     if (!priceId) {
       return res.status(400).json({ message: "Missing priceId" });
     }
-    const session = await service.createCheckoutSession({ priceId }, fields);
+    const input = checkoutStartInputSchema.safeParse({ priceId, returnPath: req.query.returnPath });
+    if (!input.success) return res.status(400).json({ message: "Invalid Checkout request" });
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    const session = await service.startCheckout(input.data, {
+      user: req.user,
+      session: req.session,
+      experience: req.experience,
+      req,
+    });
     if (session.isErr()) {
-      const status =
-        session.error.code === "FORBIDDEN"
-          ? 403
-          : session.error.code === "CONFLICT"
-            ? 409
-            : session.error.code === "NOT_FOUND"
-              ? 404
-              : 500;
+      const status = session.error.getHTTPStatusCode();
       return res.status(status).json({ message: session.error.message });
-    }
-
-    if (!session.value.url) {
-      return res.status(500).json({ message: "Failed to create checkout session" });
     }
 
     return res.redirect(session.value.url);
@@ -75,20 +68,24 @@ export function createBillingRouter(
     return res.redirect(portal.value.url);
   });
 
-  billingRouter.get("/success", authMiddleware, async (req: AuthRequest, res) => {
-    const fields = organizationFields(req);
-    if (!fields) {
-      return res.redirect(`${process.env.VITE_APP_URL}/billing`);
-    }
-
-    const result = await service.syncOrganizationSubscription(fields.organizationId);
-
-    if (result.isErr()) {
-      return res.redirect(`${process.env.VITE_APP_URL}/billing?error=SYNC_FAILED`);
-    }
-
-    return res.redirect(`${process.env.VITE_APP_URL}/billing`);
-  });
+  for (const kind of ["success", "cancel"] as const)
+    billingRouter.get(`/${kind}`, authMiddleware, async (req: AuthRequest, res) => {
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+      const input = checkoutReturnInputSchema.safeParse(req.query);
+      if (!input.success)
+        return res
+          .status(400)
+          .json({ message: "Invalid billing link. Reopen Billing from the original website." });
+      const result = await service.completeCheckout(input.data, kind, {
+        user: req.user,
+        session: req.session,
+        experience: req.experience,
+        req,
+      });
+      if (result.isErr())
+        return res.status(result.error.getHTTPStatusCode()).json({ message: result.error.message });
+      return res.redirect(result.value.url);
+    });
 
   billingRouter.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
     const signature = req.headers["stripe-signature"];

@@ -59,6 +59,7 @@ export type Context = {
 
 /** `session` is null for cookieless callers that name the Organization with `organizationId`. */
 export type OrganizationContext = {
+  req?: IncomingMessage;
   experience?: PublicExperience;
   session?: Session | null;
   user: User;
@@ -323,7 +324,13 @@ async function resolveOrganizationProcedureContext({
     memberships,
   });
   if (actor.isErr()) throw actor.error.toTRPC();
-  return { session: ctx.session ?? null, user: ctx.user, actor: actor.value };
+  return {
+    session: ctx.session ?? null,
+    user: ctx.user,
+    actor: actor.value,
+    experience: ctx.experience,
+    req: ctx.req,
+  };
 }
 
 /**

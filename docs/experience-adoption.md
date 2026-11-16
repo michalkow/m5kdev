@@ -296,3 +296,36 @@ issuance time gate eligibility. Rotating a waitlist code stamps new updatedAt, s
 it cannot inherit an older row's legacy allowance. Invalid supplied proofs never
 downgrade to legacy; other Experiences, newer issuance and elapsed acceptance
 deadlines fail closed. No new tables or metadata migration are needed.
+
+### Checkout
+
+Existing `new BillingModule({ stripe, checkoutSessionCreate }, plans)` authoring stays
+supported. Add server-only `resolveCheckoutSessionCreate(context)` for per-Experience
+presentation; defaults → static → contextual merge retains full app override power.
+The callback sees approved Experience, fresh authorized browser source, Organization
+currency/locale/Customer/environment and effective Price/Seat/Trial values. Browser
+inputs remain catalog Price plus optional local return; no arbitrary Stripe params.
+
+Use the canonical authenticated API/proxy for GET Checkout initiation. A distinct
+shared API uses `billing.startCheckout` tRPC POST with registered browser Origin;
+neutral ambiguous GET and alias/web-only starts fail. New signed returns bind the
+original User/session/active Organization and live Owner, validate actual Stripe
+Checkout Session nonce/customer/environment/completion/expiry, then reconcile before
+returning to the stored product destination. Cancellation has no billing effects.
+Changed context requires reopening Billing and never switches the session Org.
+
+A usable normalized stable `BETTER_AUTH_SECRET` now supplies the shared signer even
+with shorthand metadata; no new registry authoring is required. Short/missing legacy
+keys keep the old raw convenience path; explicit/strict invalid keys fail and no
+weak/random key is generated. Existing raw Auth links stay keyed to strictness.
+Old raw payment returns are supported only as fresh-Owner current-Organization
+reconciliation in nonstrict mode. Strict adoption rejects them; verified webhooks
+continue reconciliation and the User can reopen Billing. Malformed/partial new
+proofs never downgrade to legacy and no old issuance timestamp is invented.
+
+Custom success/cancel URLs bypass normal correlation; changing Customer/nonce
+metadata while retaining the handler can fail closed. Such app-owned overlays keep
+winning and webhook sync continues. Direct service/Repository compositions inject
+normalized runtime dependencies/approved Checkout URLs explicitly. See
+`apps/docs/docs/modules/billing/index.md` and ADR-0027 for exact APIs and sandbox
+smoke instructions. Portal/trial contextual production is integrated separately.

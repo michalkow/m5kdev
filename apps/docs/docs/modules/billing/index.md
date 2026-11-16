@@ -258,7 +258,105 @@ new BillingModule(
 
 `billingPortalSessionCreate` is the same overlay for Billing Portal sessions.
 Overriding `success_url` skips Kernel `/stripe/success` (webhook sync still
-runs). GET `/stripe/checkout` still redirects to `session.url`.
+runs). GET `/stripe/checkout/:priceId` still redirects to `session.url`.
+
+### Contextual Checkout presentation and returns
+
+Add the optional server-only callback alongside the static overlay:
+
+```ts
+new BillingModule({
+  stripe,
+  checkoutSessionCreate: { tax_id_collection: { enabled: true } },
+  resolveCheckoutSessionCreate: async ({ experience, organization, checkout }) => ({
+    branding_settings: { display_name: experience.brand.name },
+    metadata: { experience: experience.id, billingLocale: organization.locale ?? "en" },
+    // checkout contains the effective priceId, quantity, trialDays and card policy.
+  }),
+}, resolved);
+```
+
+Precedence is framework defaults → static overlay → contextual overlay. The same
+merge rules apply at both stages. The callback receives a readonly approved
+Experience, Stripe environment, Organization id/currency/locale, authoritative
+Customer id, authorized browser User/session/Member source and effective Checkout
+values after Owner/catalog/Subscription checks. Experience changes presentation;
+it cannot choose an Organization, currency, paid Capability or second Subscription.
+The browser can send only `{ priceId, returnPath? }`, not Stripe parameters.
+
+For a domain-local canonical API/proxy, use
+`GET /stripe/checkout/:priceId?returnPath=%2Fbilling`. Strict mode requires the
+canonical authenticated API authority: a host-only cookie from an alias or a
+web-only authority would not reach the provider's canonical return. For a distinct
+shared API, call the authenticated `billing.startCheckout` tRPC mutation with the
+configured browser Origin, then navigate to the returned `{ url }`. Top-level GET
+navigation usually has no Origin; an ambiguous shared start is rejected. The
+browser must actually be authenticated on that API; this adds no cross-domain SSO.
+
+Returns bind the canonical web destination to the original User, session, active
+Organization, live Owner Membership, environment and Customer. The default success
+URL carries a literal `{CHECKOUT_SESSION_ID}` for Stripe substitution; the handler
+retrieves that Session and compares its metadata nonce, Customer, live/test environment and
+completed status before reconciling the Organization Subscription. Cancellation
+validates its own signed context and only navigates. A valid repeated return can
+reconcile again idempotently; browser success is not payment/fulfillment authority.
+Verified webhooks continue to reconcile when the browser never returns.
+
+Switching session/active Organization, leaving Owner membership, or using an
+invalid/expired link rejects the return without switching the session Organization.
+Sign in on the original website, select the original Organization and reopen
+Billing. Proofs last 24 hours. Open/expired Sessions are rejected; a completed Session
+remains authoritative after its original open-session deadline while that proof
+is valid. Trusted overrides of URLs own any changed continuation behavior. External
+and protocol-relative return paths are rejected; default local return is `/billing`.
+
+App overlays retain full override power. A custom success/cancel URL bypasses the
+normal handler. Replacing Customer or correlation metadata while leaving the
+normal success URL may deliberately cause a safe return rejection. Configure an
+app-owned return integration for that use case; Kernel does not silently restore
+reserved fields after your overlay. Portal contextual presentation is a separate
+integration; its static overlay remains supported.
+
+Existing single-Experience name/URLs/environment authoring and static constructor
+options remain supported. A normalized `BETTER_AUTH_SECRET` of at least 32 characters
+(or explicit `experienceFlowSecret`) supplies the shared immutable signer for new
+Checkout continuations. Short/missing legacy Auth keys keep their old raw path;
+configure a stable runtime signing key to enable correlation. Explicit or strict
+invalid keys fail validation; there is no weak or random signing fallback. Existing
+single-Experience Auth email links keep their raw format.
+
+Old raw `/stripe/success` links remain a nonstrict convenience: a freshly verified
+Owner can reconcile the current Organization's authoritative Customer and return
+to the configured default Billing page. Such a URL cannot identify a historical
+Checkout. Strict registry adoption rejects raw links, while Stripe webhooks still
+reconcile and the User can reopen Billing. A malformed or partially signed link
+never falls back to raw behavior; there is no invented issuance timestamp.
+
+Custom service composition can inject `{ registry, flows, resolveCheckoutSessionCreate }`
+as BillingService's fourth constructor argument. `startCheckout(input, context)`
+and `completeCheckout(input, kind, context)` require the explicit browser User/
+session and validated presentation/request context. Existing server-owned commercial
+`createCheckoutSession` calls retain their Owner fields and now recheck live Member
+and open Organization. Strict compositions require the approved presentation and
+shared signer; contextual callbacks also require explicit presentation in shorthand
+mode. Direct presentation must name the actual Member's User and a validated local
+destination before any Stripe effects.
+Direct Repository construction supplies `checkoutUrls` from approved composition
+metadata; it no longer reads singular Checkout URLs from environment at request time.
+
+The installed Stripe SDK supports per-session `branding_settings` on hosted
+Checkout. Display name/logo/colors do not replace legal business identity, invoice,
+receipt or account email settings. Portal appearance and custom merchant domains
+have separate Stripe account/configuration limits. A second product still uses a
+combined Plan or permitted Portal Plan switch (ADR-0034), never another concurrent
+Subscription/Trial/Stripe account.
+
+Sandbox smoke: with an explicitly configured test key/catalog, create two branded
+hosted Checkouts, inspect supported header/logo and cancel behavior, complete using
+Stripe test payment data, and verify actual Session/customer/nonce reconciliation
+before the canonical return. Also verify a signed webhook with no browser return.
+Inspect account-level invoice/receipt identity separately. Recording-adapter tests
+do not establish live Stripe hosted appearance; never run this check with a live key.
 
 This is a breaking cutover from User-keyed Stripe Customers. The Customer lives
 on the Organization: `organizations.stripe_customer_id` in production and
@@ -336,7 +434,8 @@ Mounted under `/stripe` by `BillingModule`.
 | --- | --- |
 | `GET /stripe/checkout/:priceId` | Redirect to a Stripe Checkout session (Owner) |
 | `GET /stripe/portal` | Redirect to the Stripe Billing Portal (Owner) |
-| `GET /stripe/success` | Post-checkout landing that triggers a sync |
+| `GET /stripe/success` | Validated correlated Checkout return and Subscription sync; narrow raw convenience only in shorthand mode |
+| `GET /stripe/cancel` | Validated Checkout cancellation navigation |
 | `POST /stripe/webhook` | Stripe Subscription webhook (raw body, verified with `STRIPE_WEBHOOK_SECRET`). This is Billing, not [Inbound callback](/modules/webhook). |
 
 ### tRPC procedures
@@ -345,6 +444,7 @@ Organization-scoped.
 
 | Procedure | Description |
 | --- | --- |
+| `billing.startCheckout` | Owner browser mutation taking catalog `priceId` and optional local `returnPath`, returning `{ url }`; supports a configured shared API Origin |
 | `billing.getActiveSubscription` | Current accessible Subscription or `null`. Includes `ownerMustAddPaymentMethod` for the Owner after a consumed cardless Trial when the catalog requires a card, the switch is off, status is `trialing`, and there is no default payment method |
 | `billing.getEntitlements` | Organization Entitlement snapshot (allowed Capability keys and per-key reasons). Query identity includes Organization id |
 | `billing.getTrialPriceId` | Trial Price picked at sign-up (from Stripe Customer metadata) or `null` |

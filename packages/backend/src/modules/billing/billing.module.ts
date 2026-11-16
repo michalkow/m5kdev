@@ -10,6 +10,7 @@ import {
   type ModuleTRPCContext,
 } from "../base/base.module";
 import type { EmailModule } from "../email/email.module";
+import type { CheckoutSessionResolver } from "./billing.checkout";
 import type * as billingTables from "./billing.db";
 import { defaultBillingGrants } from "./billing.grants";
 import { BillingRepository } from "./billing.repository";
@@ -32,6 +33,7 @@ type BillingRouters = {
 export interface BillingModuleLibs {
   stripe: Stripe;
   checkoutSessionCreate?: Partial<Stripe.Checkout.SessionCreateParams>;
+  resolveCheckoutSessionCreate?: CheckoutSessionResolver;
   billingPortalSessionCreate?: Partial<Stripe.BillingPortal.SessionCreateParams>;
 }
 
@@ -55,7 +57,10 @@ export class BillingModule extends BaseModule<
     this.grants = grants ?? defaultBillingGrants;
   }
 
-  override repositories({ db }: ModuleRepositoriesContext<BillingModuleDeps, BillingModuleTables>) {
+  override repositories({
+    db,
+    appConfig,
+  }: ModuleRepositoriesContext<BillingModuleDeps, BillingModuleTables>) {
     return {
       billing: new BillingRepository({
         orm: db.orm,
@@ -63,6 +68,13 @@ export class BillingModule extends BaseModule<
         table: db.schema.subscriptions,
         libs: { stripe: this.libs.stripe },
         config: this.config,
+        checkoutUrls:
+          appConfig.urls.api && appConfig.urls.web
+            ? {
+                successUrl: new URL("/stripe/success", appConfig.urls.api).href,
+                cancelUrl: new URL("/billing", appConfig.urls.web).href,
+              }
+            : undefined,
         checkoutSessionCreate: this.libs.checkoutSessionCreate,
         billingPortalSessionCreate: this.libs.billingPortalSessionCreate,
       }),
@@ -72,12 +84,19 @@ export class BillingModule extends BaseModule<
   override services({
     repositories,
     deps,
+    appConfig,
+    infra,
   }: ModuleServicesContext<BillingModuleDeps, BillingRepositories>) {
     return {
       billing: new BillingService(
         { billing: repositories.billing },
         { email: deps.email.services.email },
-        this.grants
+        this.grants,
+        {
+          registry: appConfig.experienceRegistry,
+          flows: infra.experienceFlows,
+          resolveCheckoutSessionCreate: this.libs.resolveCheckoutSessionCreate,
+        }
       ),
     };
   }

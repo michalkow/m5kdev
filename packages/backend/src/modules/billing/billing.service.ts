@@ -27,14 +27,27 @@ import {
 import type { InferSelectModel } from "drizzle-orm";
 import { err, ok } from "neverthrow";
 import type Stripe from "stripe";
+import { ExperienceContextError } from "../../experience";
 import { posthogCapture } from "../../utils/posthog";
 import type { OrganizationContext } from "../../utils/trpc";
 import type * as authTables from "../auth/auth.db";
 import { resolveOrganizationCurrency } from "../auth/auth.utils";
 import type { AuthenticatedActor } from "../base/base.actor";
 import type { ServerResult, ServerResultAsync } from "../base/base.dto";
+import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
 import type { EmailService } from "../email/email.service";
+import {
+  type BillingBrowserContext,
+  type BillingPresentation,
+  type CheckoutPresentation,
+  type CheckoutReturnInput,
+  type CheckoutStartInput,
+  checkoutNonceKey,
+  checkoutVersionKey,
+  createCheckoutReturnUrls,
+  verifyCheckoutReturn,
+} from "./billing.checkout";
 import type { BillingRepository } from "./billing.repository";
 
 const TRIAL_ENDING_TEMPLATE_KEY = "trialEnding";
@@ -99,6 +112,157 @@ export class BillingService extends BasePermissionService<
   { email: EmailService }
 > {
   private readonly processedTrialWillEndEventIds = new Set<string>();
+
+  constructor(
+    repositories: { billing: BillingRepository },
+    services: { email: EmailService },
+    grants: ResourceGrant[],
+    private readonly presentation: BillingPresentation = {}
+  ) {
+    super(repositories, services, grants);
+  }
+
+  override handleUnknownError(error: unknown) {
+    if (error instanceof ExperienceContextError)
+      return this.error(
+        "BAD_REQUEST",
+        "This billing link is invalid or expired. Return to the original website and Organization, then reopen Billing.",
+        { cause: error }
+      ).error;
+    return super.handleUnknownError(error);
+  }
+
+  private async authorizeBillingBrowser(ctx: BillingBrowserContext) {
+    const organizationId = ctx.session?.activeOrganizationId;
+    if (
+      !organizationId ||
+      !ctx.session ||
+      (ctx.actor && ctx.actor.organizationId !== organizationId)
+    )
+      return this.error("FORBIDDEN", "Return to your original Organization and reopen Billing");
+    const member = await this.repository.billing.getLiveBillingMember({
+      organizationId,
+      userId: ctx.user.id,
+    });
+    if (member.isErr()) return err(member.error);
+    if (member.value?.role !== "owner")
+      return this.error("FORBIDDEN", "Only the Owner can manage billing");
+    return ok({
+      organizationId,
+      memberId: member.value.id,
+      organizationRole: member.value.role,
+      userId: ctx.user.id,
+      sessionId: ctx.session.id,
+      email: ctx.user.email,
+      name: ctx.user.name,
+    });
+  }
+
+  async startCheckout(
+    input: CheckoutStartInput,
+    ctx: BillingBrowserContext
+  ): ServerResultAsync<{ url: string }> {
+    return this.throwableAsync(async () => {
+      const registry = this.presentation.registry;
+      if (!registry)
+        return this.error("INTERNAL_SERVER_ERROR", "Billing public origins are not configured");
+      const experience = registry.require(ctx.experience);
+      if (ctx.req) registry.validateCanonicalApiRequest(experience, ctx.req);
+      const destination = registry.destination(experience, input.returnPath ?? "/billing");
+      if (registry.strict && !this.presentation.flows)
+        return this.error("INTERNAL_SERVER_ERROR", "Billing flow signing is not configured");
+      const authorized = await this.authorizeBillingBrowser(ctx);
+      if (authorized.isErr()) return err(authorized.error);
+      const session = await this.createCheckoutSession(
+        { priceId: input.priceId },
+        authorized.value,
+        { experience, destination, userId: ctx.user.id, sessionId: authorized.value.sessionId }
+      );
+      if (session.isErr()) return err(session.error);
+      if (!session.value.url)
+        return this.error("INTERNAL_SERVER_ERROR", "Checkout did not provide a navigation URL");
+      return ok({ url: session.value.url });
+    });
+  }
+
+  async completeCheckout(
+    input: CheckoutReturnInput,
+    kind: "success" | "cancel",
+    ctx: BillingBrowserContext
+  ): ServerResultAsync<{ url: string }> {
+    return this.throwableAsync(async () => {
+      const registry = this.presentation.registry;
+      if (!registry)
+        return this.error("INTERNAL_SERVER_ERROR", "Billing public origins are not configured");
+      const raw =
+        input.flow === undefined &&
+        input.experienceFlow === undefined &&
+        input.checkoutSessionId === undefined;
+      if (raw) {
+        if (registry.strict || kind !== "success")
+          throw new ExperienceContextError("Missing Checkout continuation");
+        const experience = registry.defaultExperience;
+        const authorized = await this.authorizeBillingBrowser(ctx);
+        if (authorized.isErr()) return err(authorized.error);
+        const synced = await this.syncOrganizationSubscription(authorized.value.organizationId);
+        const url = new URL(registry.destination(experience, "/billing"));
+        if (synced.isErr()) url.searchParams.set("error", "SYNC_FAILED");
+        return ok({ url: url.href });
+      }
+      if (!this.presentation.flows)
+        throw new ExperienceContextError("Missing Checkout signing configuration");
+      const bound = verifyCheckoutReturn(input, kind, this.presentation.flows);
+      if (ctx.experience && ctx.experience.id !== bound.experience.id)
+        throw new ExperienceContextError("Conflicting Checkout Experience");
+      if (ctx.req) registry.validateBoundRequest(bound.experience, ctx.req);
+      const authorized = await this.authorizeBillingBrowser(ctx);
+      if (authorized.isErr()) return err(authorized.error);
+      const flow = bound.flow;
+      if (
+        authorized.value.organizationId !== flow.organizationId ||
+        authorized.value.memberId !== flow.memberId ||
+        authorized.value.userId !== flow.userId ||
+        authorized.value.sessionId !== flow.sessionId ||
+        this.repository.billing.environment !== flow.environment
+      )
+        throw new ExperienceContextError("Checkout browser context changed");
+      const customerId = await this.repository.billing.getOrganizationCustomerId(
+        flow.organizationId
+      );
+      if (customerId.isErr()) return err(customerId.error);
+      if (customerId.value !== flow.customerId)
+        throw new ExperienceContextError("Checkout Customer changed");
+      const customer = await this.repository.billing.getStripeCustomer(flow.customerId);
+      if (customer.isErr()) return err(customer.error);
+      if (customer.value.deleted) throw new ExperienceContextError("Checkout Customer was deleted");
+      if (kind === "cancel") return ok({ url: bound.destination });
+      if (!input.checkoutSessionId) throw new ExperienceContextError("Missing Checkout Session");
+      const retrieved = await this.repository.billing.getCheckoutSession(input.checkoutSessionId);
+      if (retrieved.isErr())
+        return this.error(
+          "BAD_REQUEST",
+          "This billing link is invalid. Reopen Billing from the original website.",
+          { cause: retrieved.error }
+        );
+      const session = retrieved.value;
+      const actualCustomer =
+        typeof session.customer === "string" ? session.customer : session.customer?.id;
+      // Stripe expires open Sessions; completed Sessions remain authoritative under the proof TTL.
+      if (
+        session.id !== input.checkoutSessionId ||
+        actualCustomer !== flow.customerId ||
+        session.livemode !== (flow.environment === "production") ||
+        session.status !== "complete" ||
+        session.metadata?.[checkoutNonceKey] !== flow.nonce ||
+        session.metadata?.[checkoutVersionKey] !== "1"
+      )
+        throw new ExperienceContextError("Checkout Session does not match continuation");
+      const synced = await this.syncStripeData({ customerId: flow.customerId });
+      const url = new URL(bound.destination);
+      if (synced.isErr()) url.searchParams.set("error", "SYNC_FAILED");
+      return ok({ url: url.href });
+    });
+  }
 
   async createOrganizationCustomer({
     organizationId,
@@ -418,88 +582,161 @@ export class BillingService extends BasePermissionService<
       organizationRole: string;
       email: string;
       name?: string;
-    }
+    },
+    presentationInput?: CheckoutPresentation
   ): ServerResultAsync<Stripe.Checkout.Session> {
-    if (organizationRole !== "owner") return this.error("FORBIDDEN", "Only the Owner can checkout");
-
-    const organization = await this.repository.billing.getOrganizationById(organizationId);
-    if (organization.isErr()) return err(organization.error);
-    const currency = organization.value?.currency ?? this.repository.billing.defaultCurrency;
-    const trialPlan = this.repository.billing.trialPlanFor(currency);
-    let checkoutPriceId = priceId;
-    let trialDays: number | undefined;
-    let collectPaymentMethod = false;
-    let usePickedTrialPrice = false;
-
-    if (this.repository.billing.trialRequiresPaymentMethod && trialPlan) {
-      const defaultPriceId = this.repository.billing.defaultTrialPriceId(currency);
-      if (defaultPriceId) {
-        checkoutPriceId = defaultPriceId;
-        usePickedTrialPrice = true;
-      } else if (!this.repository.billing.priceBelongsToTrialPlan(priceId, currency)) {
-        return this.error("NOT_FOUND", "Price not found for this Trial Plan");
+    return this.throwableAsync(async () => {
+      let presentation = presentationInput;
+      const registry = this.presentation.registry;
+      if (registry?.strict && !presentation)
+        throw new ExperienceContextError("Checkout Experience is required");
+      if (registry?.strict && !this.presentation.flows)
+        return this.error("INTERNAL_SERVER_ERROR", "Billing flow signing is not configured");
+      if (presentation) {
+        if (!registry) throw new ExperienceContextError("Checkout registry is not configured");
+        const experience = registry.require(presentation.experience);
+        presentation = {
+          ...presentation,
+          experience,
+          destination: registry.destination(experience, presentation.destination),
+        };
       }
-      collectPaymentMethod = true;
-    }
 
-    if (!this.repository.billing.priceBelongsToCurrency(checkoutPriceId, currency)) {
-      return this.error("NOT_FOUND", "Price not found for Organization currency");
-    }
+      if (this.presentation.resolveCheckoutSessionCreate && !presentation)
+        return this.error(
+          "INTERNAL_SERVER_ERROR",
+          "Contextual Checkout requires explicit browser presentation context"
+        );
+      if (organizationRole !== "owner")
+        return this.error("FORBIDDEN", "Only the Owner can checkout");
 
-    const open = await this.repository.billing.getOpenSubscription(organizationId);
-    if (open.isErr()) return err(open.error);
-    if (open.value) {
-      return this.error("CONFLICT", "Organization already has a Subscription");
-    }
-
-    const stripeCustomer = await this.createOrganizationCustomer({
-      organizationId,
-      memberId,
-      email,
-      name,
-    });
-    if (stripeCustomer.isErr()) return err(stripeCustomer.error);
-    if (usePickedTrialPrice) {
-      checkoutPriceId =
-        this.pickedTrialPriceId({ customer: stripeCustomer.value, currency }) ?? checkoutPriceId;
-    }
-
-    if (collectPaymentMethod && trialPlan) {
-      trialDays = resolveTrialDays({
-        plan: trialPlan,
-        priceId: checkoutPriceId,
-        fallbackDays: TRIAL_START_FALLBACK_DAYS,
+      const live = await this.repository.billing.getLiveBillingMember({
+        organizationId,
+        memberId,
+        userId: presentation?.userId,
       });
-    }
+      if (live.isErr()) return err(live.error);
+      if (live.value?.role !== "owner")
+        return this.error("FORBIDDEN", "Only the current Owner can checkout");
+      const organization = await this.repository.billing.getOrganizationById(organizationId);
+      if (organization.isErr()) return err(organization.error);
+      const currency = organization.value?.currency ?? this.repository.billing.defaultCurrency;
+      const trialPlan = this.repository.billing.trialPlanFor(currency);
+      let checkoutPriceId = priceId;
+      let trialDays: number | undefined;
+      let collectPaymentMethod = false;
+      let usePickedTrialPrice = false;
 
-    const stripeSubscriptions = await this.repository.billing.listStripeSubscriptions(
-      stripeCustomer.value.id
-    );
-    if (stripeSubscriptions.isErr()) return err(stripeSubscriptions.error);
-    const openOnStripe = stripeSubscriptions.value.some((subscription) =>
-      ["active", "trialing", "past_due", "unpaid", "paused", "incomplete"].includes(
-        subscription.status
-      )
-    );
-    if (openOnStripe) {
-      return this.error("CONFLICT", "Organization already has a Subscription");
-    }
+      if (this.repository.billing.trialRequiresPaymentMethod && trialPlan) {
+        const defaultPriceId = this.repository.billing.defaultTrialPriceId(currency);
+        if (defaultPriceId) {
+          checkoutPriceId = defaultPriceId;
+          usePickedTrialPrice = true;
+        } else if (!this.repository.billing.priceBelongsToTrialPlan(priceId, currency)) {
+          return this.error("NOT_FOUND", "Price not found for this Trial Plan");
+        }
+        collectPaymentMethod = true;
+      }
 
-    let quantity = 1;
-    if (this.repository.billing.seatBilling) {
-      const count = await this.repository.billing.countBillableMembers(organizationId);
-      if (count.isErr()) return err(count.error);
-      quantity = Math.max(count.value, 1);
-    }
+      if (!this.repository.billing.priceBelongsToCurrency(checkoutPriceId, currency)) {
+        return this.error("NOT_FOUND", "Price not found for Organization currency");
+      }
 
-    return this.repository.billing.createCheckoutSession({
-      customerId: stripeCustomer.value.id,
-      priceId: checkoutPriceId,
-      organizationId,
-      memberId,
-      quantity,
-      trialDays,
-      collectPaymentMethod,
+      const open = await this.repository.billing.getOpenSubscription(organizationId);
+      if (open.isErr()) return err(open.error);
+      if (open.value) {
+        return this.error("CONFLICT", "Organization already has a Subscription");
+      }
+
+      const stripeCustomer = await this.createOrganizationCustomer({
+        organizationId,
+        memberId,
+        email,
+        name,
+      });
+      if (stripeCustomer.isErr()) return err(stripeCustomer.error);
+      if (usePickedTrialPrice) {
+        checkoutPriceId =
+          this.pickedTrialPriceId({ customer: stripeCustomer.value, currency }) ?? checkoutPriceId;
+      }
+
+      if (collectPaymentMethod && trialPlan) {
+        trialDays = resolveTrialDays({
+          plan: trialPlan,
+          priceId: checkoutPriceId,
+          fallbackDays: TRIAL_START_FALLBACK_DAYS,
+        });
+      }
+
+      const stripeSubscriptions = await this.repository.billing.listStripeSubscriptions(
+        stripeCustomer.value.id
+      );
+      if (stripeSubscriptions.isErr()) return err(stripeSubscriptions.error);
+      const openOnStripe = stripeSubscriptions.value.some((subscription) =>
+        ["active", "trialing", "past_due", "unpaid", "paused", "incomplete"].includes(
+          subscription.status
+        )
+      );
+      if (openOnStripe) {
+        return this.error("CONFLICT", "Organization already has a Subscription");
+      }
+
+      let quantity = 1;
+      if (this.repository.billing.seatBilling) {
+        const count = await this.repository.billing.countBillableMembers(organizationId);
+        if (count.isErr()) return err(count.error);
+        quantity = Math.max(count.value, 1);
+      }
+
+      const contextualOverlay = presentation
+        ? await this.presentation.resolveCheckoutSessionCreate?.(
+            Object.freeze({
+              experience: presentation.experience,
+              environment: this.repository.billing.environment,
+              organization: Object.freeze({
+                id: organizationId,
+                currency,
+                locale: organization.value?.locale ?? null,
+              }),
+              customerId: stripeCustomer.value.id,
+              source: Object.freeze({
+                kind: "browser" as const,
+                userId: presentation.userId,
+                sessionId: presentation.sessionId,
+                memberId,
+              }),
+              checkout: Object.freeze({
+                priceId: checkoutPriceId,
+                quantity,
+                trialDays,
+                collectPaymentMethod,
+              }),
+            })
+          )
+        : undefined;
+      const returnUrls =
+        presentation && this.presentation.flows
+          ? createCheckoutReturnUrls({
+              flows: this.presentation.flows,
+              presentation,
+              organizationId,
+              memberId,
+              customerId: stripeCustomer.value.id,
+              environment: this.repository.billing.environment,
+            })
+          : undefined;
+      return this.repository.billing.createCheckoutSession({
+        customerId: stripeCustomer.value.id,
+        priceId: checkoutPriceId,
+        organizationId,
+        memberId,
+        quantity,
+        trialDays,
+        collectPaymentMethod,
+        returnUrls,
+        correlationMetadata: returnUrls?.metadata,
+        contextualOverlay,
+      });
     });
   }
 

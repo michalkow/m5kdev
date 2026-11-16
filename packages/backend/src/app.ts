@@ -820,10 +820,14 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   const appConfig = normalizeAppConfig(config.app, env);
   const emailConfig = normalizeEmailConfig(config.email, env);
   const flowSecret = config.experienceFlowSecret ?? env.BETTER_AUTH_SECRET;
+  // Legacy Better Auth accepts short keys; automatic flow signing requires a usable key.
+  // Explicit/strict signing configuration still validates and fails rather than weakening it.
   const experienceFlows =
     appConfig.experienceRegistry &&
-    flowSecret &&
-    (appConfig.experienceRegistry.strict || config.experienceFlowSecret)
+    flowSecret !== undefined &&
+    (appConfig.experienceRegistry.strict ||
+      config.experienceFlowSecret !== undefined ||
+      flowSecret.length >= 32)
       ? new ExperienceFlowSigner(appConfig.experienceRegistry, flowSecret, {
           legacyPolicy: config.experienceFlowLegacyPolicy,
         })
