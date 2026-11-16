@@ -679,7 +679,10 @@ export function createBetterAuth<
         mcp
           ? {
               resource: mcp.resource,
-              issuer: new URL(options?.basePath ?? "/api/auth", apiUrl ?? mcp.resource).href,
+              issuer:
+                apiUrl && new URL(apiUrl).pathname !== "/"
+                  ? apiUrl.replace(/\/$/, "")
+                  : new URL(options?.basePath ?? "/api/auth", apiUrl ?? mcp.resource).href,
               loginPage: webUrl ? joinAppPath(webUrl, "login") : "/login",
               consentPage: webUrl ? joinAppPath(webUrl, "consent") : "/consent",
             }

@@ -15,7 +15,7 @@ export interface McpOAuthPluginConfig {
 
 export function createMcpOAuthPlugins(mcp: McpOAuthPluginConfig | undefined): BetterAuthPlugin[] {
   if (!mcp) return [];
-  const issuer = mcp.issuer ?? mcpIssuerUrl(mcp.resource);
+  const issuer = mcp.issuer ?? mcpIssuerUrl(new URL(mcp.resource).origin);
   const provider = betterAuthPlugin({
     plugin: mcpPlugin({
       loginPage: mcp.loginPage,

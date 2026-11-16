@@ -135,8 +135,9 @@ export function createMcpExpressHandler(input: {
   return (req: Request, res: Response, next: NextFunction): void => {
     void (async () => {
       const request = expressRequestToWeb(req);
-      const issuer = mcpIssuerUrl(input.resource, input.auth.options.basePath);
-      const { internalAdapter } = await input.auth.$context;
+      const { baseURL, internalAdapter } = await input.auth.$context;
+      const issuer =
+        baseURL || mcpIssuerUrl(new URL(input.resource).origin, input.auth.options.basePath);
       const response = await createMcpProtectedRequestHandler(
         {
           issuer,

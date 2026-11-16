@@ -1,3 +1,4 @@
+import { createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -62,6 +63,40 @@ async function protectedServer(auth: ReturnType<typeof createBetterAuth>) {
 }
 
 describe("canonical MCP identity with dynamic auth domains", () => {
+  it("signs framework tokens on another brand with the canonical issuer and advertised key", async () => {
+    const f = await fixture();
+    try {
+      const api = f.auth.api as unknown as {
+        signJWT(input: {
+          headers: Headers;
+          body: { payload: Record<string, unknown> };
+        }): Promise<{ token: string }>;
+      };
+      const issued = await api.signJWT({
+        headers: new Headers({
+          host: "horeka.example.test",
+          origin: "https://horeka.example.test",
+        }),
+        body: { payload: { sub: "person-1", aud: RESOURCE, client_id: "client-1" } },
+      });
+      const [header, payload, signature] = issued.token.split(".");
+      expect(JSON.parse(Buffer.from(payload, "base64url").toString()).iss).toBe(ISSUER);
+      const keySet = await f.auth.handler(new Request(`${ISSUER}/jwks`));
+      const { keys } = await keySet.json();
+      const { kid } = JSON.parse(Buffer.from(header, "base64url").toString());
+      const key = keys.find((candidate: { kid: string }) => candidate.kid === kid);
+      expect(
+        verify(
+          null,
+          Buffer.from(`${header}.${payload}`),
+          createPublicKey({ key, format: "jwk" }),
+          Buffer.from(signature, "base64url")
+        )
+      ).toBe(true);
+    } finally {
+      await f.close();
+    }
+  });
   it("verifies token signatures, canonical issuer, audience and expiry before initializing MCP", async () => {
     const f = await fixture();
     const server = await protectedServer(f.auth);
@@ -184,5 +219,3 @@ describe("canonical MCP identity with dynamic auth domains", () => {
     }
   });
 });
-
-import { generateKeyPairSync, sign } from "node:crypto";

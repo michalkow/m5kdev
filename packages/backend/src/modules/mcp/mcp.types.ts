@@ -9,7 +9,8 @@ export const MCP_AUTH_ISSUER_PATH = "/api/auth";
 
 /** MCP has one deployment identity even when browser auth accepts several domains. */
 export function mcpIssuerUrl(apiUrl: string, basePath = MCP_AUTH_ISSUER_PATH): string {
-  return new URL(basePath, apiUrl).href;
+  const url = new URL(apiUrl);
+  return url.pathname !== "/" ? apiUrl.replace(/\/$/, "") : new URL(basePath, url).href;
 }
 
 export function mcpResourceUrl(apiUrl: string): string {
