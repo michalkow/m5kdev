@@ -786,7 +786,7 @@ function applyProductDocumentation(options: {
     res.redirect(308, req.originalUrl.replace(/(?=\?|$)/, "/"));
   });
   options.expressApp.use("/documentation", express.static(root), (_req, res) => {
-    res.status(404).sendFile(path.join(root, "404.html"), (error) => {
+    res.status(404).sendFile("404.html", { root }, (error) => {
       if (error && !res.headersSent) res.status(404).type("text").send("Documentation not found");
     });
   });
@@ -803,7 +803,7 @@ function applyBakedSpa(options: { expressApp: Express; spa: BackendAppConfig["sp
   }
   expressApp.use(express.static(root));
   expressApp.get("/{*splat}", (_req, res, next) => {
-    res.sendFile(path.join(root, "index.html"), (error) => {
+    res.sendFile("index.html", { root }, (error) => {
       if (error) {
         next(error);
       }

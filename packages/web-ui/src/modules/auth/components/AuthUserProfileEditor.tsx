@@ -1,5 +1,5 @@
 import { Button, FieldError, Form, Input, Label, TextField, toast } from "@heroui/react";
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
+import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -13,6 +13,7 @@ const profileSchema = z.object({
 });
 
 export function AuthUserProfileEditor() {
+  const authClient = useAuthClient();
   const { t } = useTranslation();
   const { data: session, isLoading } = useSession();
   const [image, setImage] = useState<string | null>(session?.user?.image || null);

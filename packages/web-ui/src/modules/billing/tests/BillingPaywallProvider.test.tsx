@@ -48,12 +48,13 @@ jest.mock("@m5kdev/frontend/modules/auth/hooks/useUserOrganizations", () => ({
   useUserOrganizations: jest.fn(),
 }));
 
-jest.mock("@m5kdev/frontend/modules/auth/auth.lib", () => ({
-  authClient: {
+jest.mock("@m5kdev/frontend/modules/auth/auth.lib", () => {
+  const authClient = {
     organization: { setActive: jest.fn() },
     admin: { stopImpersonating: jest.fn() },
-  },
-}));
+  };
+  return { authClient, getAuthClient: () => authClient };
+});
 
 jest.mock(
   "@heroui/react",

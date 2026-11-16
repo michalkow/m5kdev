@@ -357,3 +357,57 @@ custom compositions must supply the normalized presentation contract before
 sending a branded warning; do not invent a default identity. Supported app
 shorthand with valid name/URLs still needs no registry authoring, and missing/short
 legacy runtime keys retain their documented raw convenience limit.
+
+## Frontend composition and shared billing controls
+
+Import the public bootstrap helper from its supported package boundary:
+
+```ts
+import { loadExperience } from "@m5kdev/frontend/modules/app/experience";
+
+const experience = await loadExperience({ url: "/app/experience" });
+// Then render the app's normal NuqsAdapter, BrowserRouter and Providers.
+// In Providers, AppConfigProvider precedes AuthProvider and query providers.
+// <AppConfigProvider config={{ experience, locales, roles }}>...</AppConfigProvider>
+```
+
+Keep bootstrap loading and failure explicit. Do not start authentication or render
+another configured brand while resolution is pending or has failed. A separately
+hosted frontend may receive the matching public descriptor from trusted app
+composition and pass it directly; it need not fetch it again. `AppConfigProvider`
+validates that descriptor. Passing any singular `appName`, `appUrl` or `serverUrl`
+field together with `experience` is rejected, including from JavaScript callers.
+Existing singular provider configuration remains supported.
+
+Apps explicitly select their route tree and shell from the product key. A second
+Brand Profile for the same product reuses that route tree and workflow components.
+Organization, Plan, Entitlement and Grant changes never select the product.
+Keep approved theme/copy identifiers in app-owned lookup tables, rather than
+executing configuration as HTML, CSS or code.
+
+Shared Checkout and Portal buttons now invoke `billing.startCheckout` and
+`billing.startPortal` through the authenticated tRPC client before navigating to
+the returned Stripe URL. The browser POST supplies its Origin to a shared API;
+a top-level GET link normally does not. Custom frontend integrations should use
+those operations with the currently active `organizationId` and the documented
+Price/local-return inputs. Do not send Stripe parameter bags or Customer ids.
+The old server GET routes remain available for supported domain-local integrations.
+A shared API still requires a working authenticated cookie topology; this does
+not add cross-domain SSO.
+
+Subscription, invoice, trial-price and Entitlement queries are scoped by
+Organization id. Entitlements deliberately do not acquire an Experience key.
+Pending, failed or previous-Organization results withhold allowance from
+`useEntitlement`, even when a previous successful snapshot remains cached.
+`BillingProvider` accepts `errorPage` separately from `planPage`; shared paywalls
+show a load error rather than a purchase prompt when a billing query fails.
+App-owned caches of genuinely branded data must include the Experience and
+relevant locale; do not partition unrelated Organization authority data or clear
+all query caches on a brand change. Backend checks remain authoritative.
+
+The private `apps/experience-reference` composition exercises one compiled SPA
+under two products and an alternate brand of the first product, using the real
+Kernel, Better Auth, tRPC and Billing/Grant services. It is excluded from Starter
+scaffolding. Its README describes the disposable PostgreSQL/browser commands,
+domain-local and shared-API topologies, supplied-descriptor example and recording
+Stripe boundary.

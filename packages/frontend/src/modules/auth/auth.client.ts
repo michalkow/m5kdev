@@ -26,6 +26,7 @@ interface AuthPluginResult<T> {
 }
 
 export interface M5KAdminListUser {
+  closedAt?: Date | string | null;
   id: string;
   name: string;
   email: string;

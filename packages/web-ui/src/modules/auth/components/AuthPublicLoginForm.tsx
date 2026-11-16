@@ -1,5 +1,5 @@
 import { Button, FieldError, Form, Input, Label, TextField, toast } from "@heroui/react";
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
+import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router";
@@ -8,6 +8,7 @@ import { AuthPublicLastUsedBadge } from "./AuthPublicLastUsedBadge";
 import { AuthPublicProviders } from "./AuthPublicProviders";
 
 export function AuthPublicLoginForm({ providers }: { providers?: string[] }) {
+  const authClient = useAuthClient();
   const lastMethod = authClient.getLastUsedLoginMethod();
   const { registerSession } = useSession();
   const navigate = useNavigate();

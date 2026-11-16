@@ -80,7 +80,9 @@ export function useWebPush<
 ): {
   permission: NotificationPermission;
   isSupported: boolean;
-  vapidQuery: ReturnType<typeof useQuery<VapidPublicKeyQueryData, Error, VapidPublicKeyQueryData>>;
+  vapidQuery: ReturnType<
+    typeof useQuery<VapidPublicKeyQueryData, TQueryError, VapidPublicKeyQueryData>
+  >;
   subscribe: () => Promise<void>;
   reset: () => void;
   flowStatus: "idle" | "working" | "done" | "error";

@@ -10,7 +10,7 @@ import {
   toast,
 } from "@heroui/react";
 import { useAppRoles } from "@m5kdev/frontend/modules/app/hooks/useAppRoles";
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
+import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
@@ -93,6 +93,7 @@ export function AuthOrganizationProfile({
   allowSlugChange = false,
   managerRoles,
 }: AuthOrganizationProfileProps) {
+  const authClient = useAuthClient();
   const { t } = useTranslation();
   const { data: session } = useSession();
   const organizationRoles = useAppRoles("organization");

@@ -83,13 +83,9 @@ export type BillingPermissionProcedureBuilder<
   Services extends BillingServices,
   State extends Record<string, unknown> = Record<string, never>,
   TExpectedOutput = void,
-> = PermissionServiceProcedureBuilder<
-  TInput,
-  TCtx,
-  Repositories,
-  Services,
-  State,
-  TExpectedOutput
+> = Omit<
+  PermissionServiceProcedureBuilder<TInput, TCtx, Repositories, Services, State, TExpectedOutput>,
+  "input" | "output" | "use" | "requireAuth"
 > &
   EntitlementChain<TInput, TCtx, Repositories, Services, State, TExpectedOutput>;
 

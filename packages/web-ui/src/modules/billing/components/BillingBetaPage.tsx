@@ -1,5 +1,7 @@
+import { AppConfigContext } from "@m5kdev/frontend/modules/app/components/AppConfigProvider";
 import { Bell, CheckCircle2, Clock3, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
+import { useContext } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "../../../components/ui/badge";
 import {
@@ -13,13 +15,20 @@ import { Separator } from "../../../components/ui/separator";
 import { cn } from "../../../lib/utils";
 
 interface BillingBetaPageProps {
-  appName: string;
+  appName?: string;
   className?: string;
   footer?: ReactNode;
 }
 
-export function BillingBetaPage({ appName, className, footer }: BillingBetaPageProps) {
+export function BillingBetaPage({
+  appName: suppliedName,
+  className,
+  footer,
+}: BillingBetaPageProps) {
   const { t } = useTranslation("web-ui");
+  const config = useContext(AppConfigContext);
+  const appName = suppliedName ?? config?.appName;
+  if (!appName) throw new Error("BillingBetaPage requires app configuration or an explicit name");
   return (
     <div className={cn("mx-auto max-w-5xl px-4 py-12 md:py-16", className)}>
       {/* Heading */}

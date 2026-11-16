@@ -1,11 +1,12 @@
 import { Button, FieldError, Form, Input, Label, TextField, toast } from "@heroui/react";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
+import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createUserLocaleHeaders } from "../utils/authLocale";
 
 export function AuthPublicForgotPasswordForm() {
+  const authClient = useAuthClient();
   const { t } = useTranslation();
   const { locales, appUrl } = useAppConfig();
   const [isBusy, setIsBusy] = useState(false);
@@ -26,7 +27,11 @@ export function AuthPublicForgotPasswordForm() {
           headers: locales ? createUserLocaleHeaders(locales) : {},
         }
       )
-      .then(() => {
+      .then((result) => {
+        if (result.error) {
+          toast.danger(t("web-ui:auth.forgotPassword.error"));
+          return;
+        }
         toast.success(t("web-ui:auth.forgotPassword.success"));
       })
       .catch(() => {

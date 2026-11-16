@@ -71,3 +71,7 @@ Stay on that website while completing these steps. After successful completion,
 the product opens your signed-in home. Changing the account's email makes older
 sign-in links unusable; use a fresh link for the new address. If the screen reports
 an invalid or expired account link, ask the administrator to generate another.
+
+If the reset request cannot be sent, the form shows an error. Try again before
+waiting for an email. A successful request keeps account details private; it does
+not confirm whether an email address has an account.

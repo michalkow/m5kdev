@@ -1,3 +1,4 @@
+import { Button } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
 import {
@@ -6,13 +7,12 @@ import {
   listPlanSelectPrices,
   resolveTrialDays,
 } from "@m5kdev/commons/modules/billing/billing.utils";
-import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
+import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { buttonVariants } from "../../../components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../../components/ui/card";
-import { cn } from "../../../lib/utils";
+import { useBillingActions } from "../hooks/useBillingActions";
 import { BillingSinglePlanSelect } from "./BillingSinglePlanSelect";
 import { BillingTrialBadge, billingPlanCtaLabel } from "./billingPlanTrial";
 
@@ -38,9 +38,12 @@ export function BillingPlanSelect(props: BillingPlanSelectProps) {
   const plans = listedPlans(props);
   const { currency, trialRequiresPaymentMethod } = props;
   const trpc = useAppTRPC<BackendTRPCRouter>();
+  const { data: session } = useSession();
+  const organizationId = session?.session.activeOrganizationId ?? undefined;
   const { data: trialPriceId } = useQuery(
-    trpc.billing.getTrialPriceId.queryOptions(undefined, {
-      enabled: Boolean(trialRequiresPaymentMethod),
+    trpc.billing.getTrialPriceId.queryOptions(organizationId ? { organizationId } : undefined, {
+      enabled: Boolean(organizationId && trialRequiresPaymentMethod),
+      placeholderData: undefined,
     })
   );
   if (plans.length === 1) {
@@ -83,7 +86,7 @@ function PlanCard({
   trialPriceId?: string | null;
 }) {
   const { t } = useTranslation("web-ui");
-  const { serverUrl } = useAppConfig();
+  const billing = useBillingActions();
   const prices = listPlanSelectPrices({
     plan,
     currency,
@@ -112,17 +115,19 @@ function PlanCard({
         {prices.map((price) => {
           const trialDays = resolveTrialDays({ plan, price });
           return (
-            <a
+            <Button
               key={price.priceId}
-              className={cn(buttonVariants({ variant: "default" }), "w-full")}
-              href={`${serverUrl}/stripe/checkout/${price.priceId}`}
+              className="w-full"
+              isDisabled={!billing.canStart}
+              isPending={billing.isCheckoutPending}
+              onPress={() => void billing.startCheckout(price.priceId)}
             >
               {billingPlanCtaLabel({ trialRequiresPaymentMethod, trialDays, t })}{" "}
               {formatBillingInterval({
                 interval: price.interval,
                 intervalCount: price.intervalCount,
               }).toLowerCase()}
-            </a>
+            </Button>
           );
         })}
       </CardFooter>

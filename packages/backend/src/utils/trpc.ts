@@ -189,7 +189,7 @@ export function createRequestContext() {
       user: null,
       actor: null,
       req,
-      experience: (req as ExperienceRequest).experience,
+      experience: (req as typeof req & Pick<ExperienceRequest, "experience">).experience,
     };
   };
 }
@@ -229,7 +229,7 @@ export function createAuthContext(auth: BetterAuth) {
       user,
       actor,
       req,
-      experience: (req as ExperienceRequest).experience,
+      experience: (req as typeof req & Pick<ExperienceRequest, "experience">).experience,
     };
   };
 }

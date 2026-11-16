@@ -2,16 +2,17 @@ import { Button, Card, Checkbox, Label, toast } from "@heroui/react";
 import type { createMcpTRPC } from "@m5kdev/backend/modules/mcp/mcp.trpc";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
+import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { parseAsString, useQueryState } from "nuqs";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useProtectedRoute } from "../hooks/useProtectedRoute";
 
-type McpConsentRouter = BackendTRPCRouter & {
-  mcp: ReturnType<typeof createMcpTRPC>;
-};
+type McpConsentRouter = import("@trpc/server").TRPCBuiltRouter<
+  BackendTRPCRouter["_def"]["_config"]["$types"],
+  BackendTRPCRouter["_def"]["record"] & { mcp: ReturnType<typeof createMcpTRPC>["_def"]["record"] }
+>;
 
 function consentRedirectUrl(data: unknown): string | undefined {
   if (data === null || typeof data !== "object") return undefined;
@@ -26,6 +27,7 @@ function consentRedirectUrl(data: unknown): string | undefined {
 }
 
 export function AuthPublicConsentRoute() {
+  const authClient = useAuthClient();
   const { t } = useTranslation();
   const hasSession = useProtectedRoute();
   const [oauthClientId] = useQueryState("client_id", parseAsString);

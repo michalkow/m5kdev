@@ -2,7 +2,7 @@ import { Button, Card, Input, Label, Modal, Spinner, Table } from "@heroui/react
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppRoles } from "@m5kdev/frontend/modules/app/hooks/useAppRoles";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
+import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRightLeft, Plus, Settings2 } from "lucide-react";
@@ -90,6 +90,7 @@ export function AuthOrganizationChildOrganizationsRoute({
   managerRoles,
   onInvalidateScopedQueries,
 }: AuthOrganizationChildOrganizationsRouteProps) {
+  const authClient = useAuthClient();
   const { t } = useTranslation();
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();

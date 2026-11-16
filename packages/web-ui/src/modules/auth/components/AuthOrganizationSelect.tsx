@@ -7,7 +7,7 @@ import {
   type SelectProps,
   Spinner,
 } from "@heroui/react";
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
+import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useUserOrganizations } from "@m5kdev/frontend/modules/auth/hooks/useUserOrganizations";
 import { Building2Icon } from "lucide-react";
@@ -24,6 +24,7 @@ export function AuthOrganizationSelect<T extends object>({
   showSingle = false,
   ...props
 }: AuthOrganizationSelectProps<T>) {
+  const authClient = useAuthClient();
   const { t } = useTranslation("web-ui");
   const { data: session, isLoading: isLoadingSession } = useSession();
   const { data: organizations = [], isLoading: isLoadingOrganizations } = useUserOrganizations();

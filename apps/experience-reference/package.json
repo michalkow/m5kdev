@@ -1,0 +1,51 @@
+{
+  "name": "@m5kdev/experience-reference",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "check-types": "tsc --noEmit",
+    "test": "playwright test",
+    "lint": "biome check ."
+  },
+  "dependencies": {
+    "@m5kdev/backend": "workspace:*",
+    "@m5kdev/commons": "workspace:*",
+    "@m5kdev/frontend": "workspace:*",
+    "@m5kdev/web-ui": "workspace:*",
+    "@heroui/react": "catalog:",
+    "@heroui/styles": "catalog:",
+    "@tanstack/react-query": "catalog:",
+    "@trpc/client": "catalog:",
+    "@trpc/server": "catalog:",
+    "@trpc/tanstack-react-query": "catalog:",
+    "better-auth": "catalog:",
+    "drizzle-orm": "catalog:",
+    "i18next": "catalog:",
+    "neverthrow": "catalog:",
+    "nuqs": "catalog:",
+    "pg": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-i18next": "catalog:",
+    "react-router": "catalog:",
+    "stripe": "catalog:",
+    "zod": "catalog:",
+    "express": "catalog:"
+  },
+  "devDependencies": {
+    "@playwright/test": "catalog:",
+    "@tailwindcss/vite": "catalog:",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "tsx": "catalog:",
+    "@types/express": "catalog:"
+  }
+}

@@ -7,7 +7,9 @@ const config: Config = {
   moduleNameMapper: {
     "^@m5kdev/frontend/(.*)$": "<rootDir>/../frontend/src/$1",
   },
+  transformIgnorePatterns: ["/node_modules/(?!devalue/|\\.pnpm/devalue@)"],
   transform: {
+    "^.+\\.m?js$": "<rootDir>/../backend/jest-esm-transform.cjs",
     "^.+\\.(t|j)sx?$": [
       "ts-jest",
       {

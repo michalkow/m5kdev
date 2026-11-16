@@ -19,7 +19,6 @@ import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useAppRoles } from "@m5kdev/frontend/modules/app/hooks/useAppRoles";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useRoleLabel } from "@m5kdev/frontend/modules/app/hooks/useRoleLabel";
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import {
   invalidateListUsersQuery,
   type ListUsersQueryData,
@@ -27,6 +26,7 @@ import {
   listUsersQueryOptions,
   useUpdateUser,
 } from "@m5kdev/frontend/modules/auth/hooks/useAuthAdmin";
+import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import type { Key } from "@react-types/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -102,6 +102,7 @@ export function AuthAdminUserManagement({
   enableAccountClaimActions = true,
   enableAiUsage = false,
 }: AuthAdminUserManagementProps) {
+  const authClient = useAuthClient();
   const { locales } = useAppConfig();
   const { data: session } = useSession();
   const currentUserId = session?.user?.id;
@@ -206,7 +207,7 @@ export function AuthAdminUserManagement({
         toast.success("User Closed");
         void invalidateListUsersQuery(queryClient);
       },
-      onError: (error: Error) => {
+      onError: (error) => {
         toast.error(error.message);
       },
     })
@@ -218,7 +219,7 @@ export function AuthAdminUserManagement({
         toast.success("User Restored");
         void invalidateListUsersQuery(queryClient);
       },
-      onError: (error: Error) => {
+      onError: (error) => {
         toast.error(error.message);
       },
     })
@@ -230,7 +231,7 @@ export function AuthAdminUserManagement({
         toast.success("User Purged");
         void invalidateListUsersQuery(queryClient);
       },
-      onError: (error: Error) => {
+      onError: (error) => {
         toast.error(error.message);
       },
     })
@@ -241,7 +242,7 @@ export function AuthAdminUserManagement({
       toast.success("User updated successfully");
       void invalidateListUsersQuery(queryClient);
     },
-    onError: (error: Error) => {
+    onError: (error) => {
       toast.error(`Error updating user: ${error.message}`);
     },
   });

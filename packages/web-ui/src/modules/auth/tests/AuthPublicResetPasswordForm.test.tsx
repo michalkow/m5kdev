@@ -33,9 +33,10 @@ jest.mock(
   }),
   { virtual: true }
 );
-jest.mock("@m5kdev/frontend/modules/auth/auth.lib", () => ({
-  authClient: { resetPassword: jest.fn() },
-}));
+jest.mock("@m5kdev/frontend/modules/auth/auth.lib", () => {
+  const authClient = { resetPassword: jest.fn() };
+  return { authClient, getAuthClient: () => authClient };
+});
 
 async function submit() {
   renderToStaticMarkup(

@@ -1,9 +1,14 @@
 import type { EntitlementDecisionReason } from "@m5kdev/commons/modules/billing/billing.schema";
 import { useContext } from "react";
-import { entitlementProviderContext } from "../components/EntitlementProvider";
+import { entitlementProviderContext } from "../entitlement.context";
 
 export function useEntitlements() {
-  return useContext(entitlementProviderContext);
+  const value = useContext(entitlementProviderContext);
+  const snapshot =
+    !value.isError && !value.isPending && value.snapshot?.organizationId === value.organizationId
+      ? value.snapshot
+      : undefined;
+  return { ...value, snapshot, isPending: value.isPending || (!value.isError && !snapshot) };
 }
 
 export function useEntitlement(capability: string): {
@@ -15,7 +20,7 @@ export function useEntitlement(capability: string): {
   const { snapshot, isPending, isError } = useEntitlements();
   const decision = snapshot?.capabilities[capability];
   return {
-    allowed: decision?.allowed === true,
+    allowed: !isPending && !isError && decision?.allowed === true,
     isPending,
     isError: isError || (snapshot !== undefined && decision === undefined),
     reason: decision?.reason,
