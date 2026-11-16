@@ -95,13 +95,17 @@ export class ExperienceRegistry {
     return [...new Set([...this.webHosts.keys(), ...this.apiHosts.keys()])];
   }
 
-  resolveRequest({ headers }: HeaderInput): PublicExperience | undefined {
-    if (!this.strict) return this.defaultExperience;
+  private requestHost(headers: HeaderInput["headers"]): string {
     const forwarded = this.config.trustedProxyHeaders ? headers["x-forwarded-host"] : undefined;
     const rawHost = forwarded ?? headers.host;
     if (typeof rawHost !== "string" || !rawHost || /[\s,/\\@?#]/.test(rawHost))
       throw new ExperienceContextError("Invalid Experience host");
-    const host = rawHost.toLowerCase();
+    return rawHost.toLowerCase();
+  }
+
+  resolveRequest({ headers }: HeaderInput): PublicExperience | undefined {
+    if (!this.strict) return this.defaultExperience;
+    const host = this.requestHost(headers);
     const web = this.webHosts.get(host);
     const api = this.apiHosts.get(host);
     const origin = headers.origin;
@@ -130,6 +134,17 @@ export class ExperienceRegistry {
     return approved;
   }
 
+  /** Session-bound provider flows must start on the same canonical API authority as their callback. */
+  validateCanonicalApiRequest(
+    experience: PublicExperience,
+    request: HeaderInput
+  ): PublicExperience {
+    const selected = this.validateBoundRequest(experience, request);
+    if (this.strict && this.requestHost(request.headers) !== new URL(selected.apiOrigin).host)
+      throw new ExperienceContextError("Canonical authenticated API initiation is required");
+    return selected;
+  }
+
   require(experience?: PublicExperience | ExperienceId | string): PublicExperience {
     if (experience) return this.get(typeof experience === "string" ? experience : experience.id);
     if (!this.strict) return this.defaultExperience;
@@ -143,7 +158,11 @@ export class ExperienceRegistry {
     } catch {
       throw new ExperienceContextError("Invalid Experience return destination");
     }
+    // WHATWG URL parsing strips leading C0/space and ignores ASCII tab/newline.
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: WHATWG explicitly normalizes leading C0 controls.
+    const normalized = path.replace(/^[\u0000-\u0020]+/, "").replace(/[\t\r\n]/g, "");
     if (
+      normalized.startsWith("//") ||
       target.origin !== experience.webOrigin ||
       target.username ||
       target.password ||

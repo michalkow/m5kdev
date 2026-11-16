@@ -61,9 +61,13 @@ export class ConnectModule<const Namespace extends string = "connect"> extends B
 
   override services({
     repositories,
+    appConfig,
   }: ModuleServicesContext<ConnectModuleDeps, ConnectModuleRepositories>) {
     return {
-      connect: new ConnectService({ connect: repositories.connect }, this.providers, this.grants),
+      connect: new ConnectService({ connect: repositories.connect }, this.providers, this.grants, {
+        registry: appConfig.experienceRegistry,
+        mountPath: this.options.mountPath,
+      }),
     };
   }
 

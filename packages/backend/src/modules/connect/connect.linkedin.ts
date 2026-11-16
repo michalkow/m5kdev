@@ -11,14 +11,17 @@ interface LinkedInUserInfoResponse {
   email_verified?: boolean;
 }
 
-export function createLinkedInProvider(): ConnectProvider {
-  const clientId = process.env.LINKEDIN_CLIENT_ID;
-  const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
-  const baseUrl = process.env.VITE_SERVER_URL;
+export function createLinkedInProvider(
+  options: Partial<
+    Pick<ConnectProvider, "clientId" | "clientSecret" | "redirectUri" | "redirectUris">
+  > = {}
+): ConnectProvider {
+  const clientId = options.clientId ?? process.env.LINKEDIN_CLIENT_ID;
+  const clientSecret = options.clientSecret ?? process.env.LINKEDIN_CLIENT_SECRET;
 
-  if (!clientId || !clientSecret || !baseUrl) {
+  if (!clientId || !clientSecret) {
     throw new Error(
-      "Missing required LinkedIn OAuth environment variables: LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET, VITE_SERVER_URL"
+      "Missing required LinkedIn OAuth environment variables: LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET"
     );
   }
 
@@ -26,7 +29,8 @@ export function createLinkedInProvider(): ConnectProvider {
     id: "linkedin",
     clientId,
     clientSecret,
-    redirectUri: `${baseUrl}/connect/linkedin/callback`,
+    redirectUri: options.redirectUri,
+    redirectUris: options.redirectUris,
     // LinkedIn OpenID Connect scopes
     scopes: ["openid", "profile", "w_member_social"],
     // LinkedIn doesn't support PKCE - disable it

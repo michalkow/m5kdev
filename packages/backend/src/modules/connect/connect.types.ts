@@ -2,8 +2,11 @@ export interface ConnectProvider {
   id: string;
   clientId: string;
   clientSecret: string;
-  redirectUri: string;
-  scopes: string[];
+  /** Explicit registered callback; omitted to derive from canonical app configuration. */
+  redirectUri?: string;
+  /** Explicit per-Experience registered callbacks for a multi-domain deployment. */
+  redirectUris?: Record<string, string>;
+  scopes: readonly string[];
   issuerConfig?: {
     issuer: string;
     authorization_endpoint: string;
@@ -25,3 +28,5 @@ export interface ConnectProfile {
   parentId?: string;
   metadata?: Record<string, unknown>;
 }
+
+export type ResolvedConnectProvider = ConnectProvider & { redirectUri: string };

@@ -13,14 +13,17 @@ interface GoogleUserInfoResponse {
 
 const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
 
-export function createGoogleProvider(): ConnectProvider {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const baseUrl = process.env.VITE_SERVER_URL;
+export function createGoogleProvider(
+  options: Partial<
+    Pick<ConnectProvider, "clientId" | "clientSecret" | "redirectUri" | "redirectUris">
+  > = {}
+): ConnectProvider {
+  const clientId = options.clientId ?? process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = options.clientSecret ?? process.env.GOOGLE_CLIENT_SECRET;
 
-  if (!clientId || !clientSecret || !baseUrl) {
+  if (!clientId || !clientSecret) {
     throw new Error(
-      "Missing required Google OAuth environment variables: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, VITE_SERVER_URL"
+      "Missing required Google OAuth environment variables: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET"
     );
   }
 
@@ -28,7 +31,8 @@ export function createGoogleProvider(): ConnectProvider {
     id: "google",
     clientId,
     clientSecret,
-    redirectUri: `${baseUrl}/connect/google/callback`,
+    redirectUri: options.redirectUri,
+    redirectUris: options.redirectUris,
     scopes: ["openid", "email", "profile", "https://www.googleapis.com/auth/drive.readonly"],
     issuerUrl: "https://accounts.google.com",
     authorizationExtraParams: {

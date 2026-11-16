@@ -78,6 +78,36 @@ remain separate migration checkpoints. Auth invitation, waitlist and account-cla
 continuation support is described below. See
 `apps/docs/docs/modules/email/index.md` for complete immediate-send examples.
 
+### External Connections
+
+`ConnectModule` normalizes provider callbacks from the configured canonical API
+origin and mount path. Register every product callback with the external provider;
+keep explicit per-Experience callback overrides in trusted server configuration.
+Provider factories retain credential configuration but no longer read singular
+runtime URL environment variables.
+
+Start a Connection on its canonical authenticated API authority. Strict mode rejects
+an alias/web-only start because its host-only session would not reach the canonical
+callback; use the canonical entry or same-origin proxy. A shared API start requires
+a configured Origin pair or trusted explicit server context. A top-level cross-site
+GET cannot be assumed to supply Origin or a usable API cookie. There is no SSO
+handoff or inferred User/Organization.
+
+The opaque provider nonce refers to private per-app state binding User/session,
+provider, Experience, canonical local destination, exact callback URI, PKCE and
+checked expiry. Both success and provider-error callbacks consume it once and use
+its stored return. Changing callback queries, request Origin or destination cannot
+relabel it. Invalid/expired/replayed state fails without a foreign redirect. Local
+returns reject protocol-relative forms even after URL leading-control normalization;
+legitimate encoded query spaces remain supported.
+
+Current Connection state stays in memory: start/callback need the same instance,
+and restart requires authorization to be started again. No new tables, distributed
+state guarantee or presentation authority on Connection rows is added. User-owned
+list/delete/reconnect and neutral refresh/Social/MCP behavior remain intact. See
+`apps/docs/docs/modules/connect/index.md` for callback registration, custom mount
+paths and direct service consumer migration.
+
 ### Verification and password recovery
 
 Configure a stable server-only `experienceFlowSecret` (at least 32 characters) on

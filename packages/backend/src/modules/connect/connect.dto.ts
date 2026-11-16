@@ -42,3 +42,25 @@ export const connectDeleteInputSchema = z.object({ id: z.string() });
 export const connectDeleteOutputSchema = z.object({ id: z.string() });
 export type ConnectDeleteInputSchema = z.infer<typeof connectDeleteInputSchema>;
 export type ConnectDeleteOutputSchema = z.infer<typeof connectDeleteOutputSchema>;
+
+export const connectStartInputSchema = z.object({
+  provider: z.string().min(1),
+  redirect: z.string().optional(),
+});
+export type ConnectStartInput = z.infer<typeof connectStartInputSchema>;
+
+export const connectCallbackInputSchema = z.object({
+  provider: z.string().min(1),
+  state: z.string().min(1),
+  code: z.string().optional(),
+  error: z.string().optional(),
+  error_description: z.string().optional(),
+  redirect: z.string().optional(),
+});
+export type ConnectCallbackInput = z.infer<typeof connectCallbackInputSchema>;
+
+export const connectNavigationSchema = z.object({
+  url: z.url(),
+  outcome: z.enum(["authorized", "connected", "failed"]),
+});
+export type ConnectNavigation = z.infer<typeof connectNavigationSchema>;

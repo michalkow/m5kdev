@@ -1,117 +1,67 @@
-import type { Server } from "node:http";
-import type { AddressInfo } from "node:net";
-import type { NextFunction, Response } from "express";
-import express from "express";
-import { err, ok } from "neverthrow";
-import { ServerError } from "../../../utils/errors";
-import type { Session, User } from "../../auth/auth.lib";
-import type { AuthMiddleware, AuthRequest } from "../../auth/auth.middleware";
-import { createConnectRouter } from "../connect.router";
-import type { ConnectService } from "../connect.service";
+import { connectionFixture } from "../../../test/connect.fixtures";
 
-const APP_URL = "https://app.example.test";
-
-async function withServer(
-  app: express.Express,
-  run: (baseUrl: string) => Promise<void>
-): Promise<void> {
-  const server = await new Promise<Server>((resolve, reject) => {
-    const listening = app.listen(0, "127.0.0.1", () => {
-      resolve(listening);
-    });
-    listening.on("error", reject);
-  });
-
-  try {
-    const { port } = server.address() as AddressInfo;
-    await run(`http://127.0.0.1:${port}`);
-  } finally {
-    await new Promise<void>((resolve, reject) => {
-      server.close((err) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve();
-      });
-    });
-  }
-}
-
-function acceptAuth(): AuthMiddleware {
-  return (req: AuthRequest, _res: Response, next: NextFunction) => {
-    req.user = { id: "user-1", role: "user" } as User;
-    req.session = { id: "sess-1" } as Session;
-    next();
-  };
-}
-
-function mountApp(connect: Pick<ConnectService, "startAuth" | "handleCallback">): express.Express {
-  const app = express();
-  app.use("/connect", createConnectRouter(acceptAuth(), connect as ConnectService));
-  return app;
-}
-
-function failingStart(): Pick<ConnectService, "startAuth" | "handleCallback"> {
-  return {
-    startAuth: async () =>
-      err(new ServerError({ code: "BAD_REQUEST", message: "Unknown provider: google" })),
-    handleCallback: async () => ok({ id: "conn-1" }),
-  };
-}
-
-describe("Connection HTTP query params", () => {
-  const previousAppUrl = process.env.VITE_APP_URL;
-
-  beforeEach(() => {
-    process.env.VITE_APP_URL = APP_URL;
-  });
-
-  afterEach(() => {
-    if (previousAppUrl === undefined) {
-      delete process.env.VITE_APP_URL;
-    } else {
-      process.env.VITE_APP_URL = previousAppUrl;
+describe("Connection HTTP query boundary", () => {
+  it("rejects repeated start returns instead of selecting a redirect", async () => {
+    const f = await connectionFixture();
+    try {
+      const cookie = await f.login("radar");
+      const response = await f.visit(
+        "radar.example.test",
+        "/connections/recording/start?redirect=%2Fone&redirect=%2Ftwo",
+        { cookie }
+      );
+      expect(response.status).toBe(400);
+      expect(response.headers.get("location")).toBeNull();
+    } finally {
+      await f.close();
     }
   });
 
-  it("uses the app URL when start redirect is repeated (not a string)", async () => {
-    await withServer(mountApp(failingStart()), async (baseUrl) => {
-      const response = await fetch(
-        `${baseUrl}/connect/google/start?redirect=https://one.example/ok&redirect=https://two.example/ok`,
-        { redirect: "manual" }
-      );
-      expect(response.status).toBe(302);
-      const location = response.headers.get("location");
-      expect(location).toBe(
-        `${APP_URL}?connect_error=${encodeURIComponent("Unknown provider: google")}`
-      );
-    });
-  });
-
-  it("uses a string start redirect when startAuth fails", async () => {
-    await withServer(mountApp(failingStart()), async (baseUrl) => {
-      const response = await fetch(
-        `${baseUrl}/connect/google/start?redirect=${encodeURIComponent("https://app.example.test/return")}`,
-        { redirect: "manual" }
+  it("returns an unknown provider only to the validated local start destination", async () => {
+    const f = await connectionFixture();
+    try {
+      const cookie = await f.login("horeka");
+      const response = await f.visit(
+        "horeka.example.test",
+        "/connections/unknown/start?redirect=%2Fsettings",
+        { cookie }
       );
       expect(response.status).toBe(302);
       expect(response.headers.get("location")).toBe(
-        `https://app.example.test/return?error=${encodeURIComponent("Unknown provider: google")}`
+        "https://horeka.example.test/settings?error=CONNECTION_FAILED&provider=unknown"
       );
-    });
+      expect(f.exchanges).toHaveLength(0);
+    } finally {
+      await f.close();
+    }
   });
 
-  it("treats a repeated callback code as missing", async () => {
-    await withServer(mountApp(failingStart()), async (baseUrl) => {
-      const response = await fetch(
-        `${baseUrl}/connect/google/callback?code=aaa&code=bbb&state=state-1`,
-        { redirect: "manual" }
+  it("rejects a repeated callback code before selecting any return", async () => {
+    const f = await connectionFixture();
+    try {
+      const cookie = await f.login("radar");
+      const response = await f.visit(
+        "radar.example.test",
+        "/connections/recording/callback?code=one&code=two&state=invalid",
+        { cookie }
       );
-      expect(response.status).toBe(302);
-      expect(response.headers.get("location")).toBe(
-        `${APP_URL}?connect_success=true&error=${encodeURIComponent("Missing code or state")}`
-      );
-    });
+      expect(response.status).toBe(400);
+      expect(response.headers.get("location")).toBeNull();
+      expect(f.exchanges).toHaveLength(0);
+    } finally {
+      await f.close();
+    }
+  });
+
+  it("requires the existing authenticated User session", async () => {
+    const f = await connectionFixture();
+    try {
+      const response = await f.visit("radar.example.test", "/connections/recording/start");
+      expect(response.status).toBe(401);
+      expect(response.headers.get("location")).toBeNull();
+      expect(f.exchanges).toHaveLength(0);
+    } finally {
+      await f.close();
+    }
   });
 });
