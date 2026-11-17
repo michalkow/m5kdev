@@ -12,7 +12,7 @@ import {
 import { useAppRoles } from "@m5kdev/frontend/modules/app/hooks/useAppRoles";
 import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AvatarUpload } from "../../../components/AvatarUpload";
@@ -95,26 +95,30 @@ export function AuthOrganizationProfile({
 }: AuthOrganizationProfileProps) {
   const authClient = useAuthClient();
   const { t } = useTranslation();
-  const { data: session } = useSession();
+  const { data: session, isLoading: isLoadingSession } = useSession();
+  const queryClient = useQueryClient();
   const organizationRoles = useAppRoles("organization");
   const resolvedManagerRoles = managerRoles ?? organizationRoles.managerRoles;
   const activeOrganizationId = session?.session.activeOrganizationId;
   const activeOrganizationRole = session?.session.activeOrganizationRole;
   const canManageOrganization = resolvedManagerRoles.includes(activeOrganizationRole ?? "");
 
-  const { data: activeOrganization, isLoading: isLoadingActiveOrganization } = useQuery({
-    queryKey: ["auth-organization-full", activeOrganizationId],
+  const {
+    data: activeOrganization,
+    isLoading: isLoadingActiveOrganization,
+    isError: isOrganizationError,
+  } = useQuery({
+    queryKey: ["auth-organization-profile", activeOrganizationId],
     queryFn: async () => {
-      const { data, error } = await authClient.organization.getFullOrganization({
+      const { data, error } = await authClient.organization.getOrganization({
         query: {
-          organizationId: activeOrganizationId!,
-          membersLimit: 0,
+          organizationId: activeOrganizationId ?? undefined,
         },
       });
       if (error) throw new Error(error.message);
       return data;
     },
-    enabled: Boolean(activeOrganizationId && canManageOrganization),
+    enabled: Boolean(!isLoadingSession && activeOrganizationId && canManageOrganization),
   });
 
   const { isPending: isSavingOrganization, mutate: updateOrganization } = useMutation({
@@ -130,6 +134,10 @@ export function AuthOrganizationProfile({
         }),
     onSuccess: () => {
       toast.success(t("web-ui:organization.settings.updateSuccess"));
+      return queryClient.invalidateQueries({
+        queryKey: ["auth-organization-profile", activeOrganizationId],
+        exact: true,
+      });
     },
     onError: (error) => {
       toast.danger(
@@ -138,14 +146,17 @@ export function AuthOrganizationProfile({
     },
   });
 
-  if (isLoadingActiveOrganization)
+  if (
+    isLoadingSession ||
+    (activeOrganizationId && canManageOrganization && isLoadingActiveOrganization)
+  )
     return (
       <div className="flex w-full justify-center items-center">
         <Spinner size="xl" color="current" />
       </div>
     );
 
-  if (!activeOrganization || !activeOrganizationId)
+  if (!activeOrganizationId)
     return (
       <OrganizationStateCard
         title={t("web-ui:organization.settings.title")}
@@ -161,6 +172,22 @@ export function AuthOrganizationProfile({
       />
     );
 
+  if (isOrganizationError)
+    return (
+      <OrganizationStateCard
+        title={t("web-ui:organization.settings.title")}
+        message={t("web-ui:organization.settings.loadError")}
+      />
+    );
+
+  if (!activeOrganization)
+    return (
+      <OrganizationStateCard
+        title={t("web-ui:organization.settings.title")}
+        message={t("web-ui:organization.settings.noActive")}
+      />
+    );
+
   return (
     <div>
       <div className="flex flex-col gap-1 mb-4">
@@ -168,6 +195,7 @@ export function AuthOrganizationProfile({
         <p className="text-sm text-muted">{t("web-ui:organization.settings.description")}</p>
       </div>
       <OrganizationProfileForm
+        key={activeOrganizationId}
         organization={activeOrganization}
         updateOrganization={updateOrganization}
         isPending={isSavingOrganization}

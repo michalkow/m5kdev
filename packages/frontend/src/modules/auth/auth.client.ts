@@ -78,6 +78,14 @@ interface M5KAuthAdminApi {
 
 interface M5KAuthOrganizationApi {
   setActive: (opts: { organizationId: string }) => Promise<AuthPluginResult<unknown>>;
+  getOrganization: (opts?: {
+    query?: {
+      organizationId?: string;
+    };
+  }) => Promise<AuthPluginResult<M5KOrganization>>;
+  getOrganization: (opts?: {
+    query?: { organizationId?: string };
+  }) => Promise<AuthPluginResult<M5KOrganization>>;
   getFullOrganization: (opts?: {
     query?: {
       organizationId?: string;

@@ -103,7 +103,14 @@ describe("organization profile", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } },
+      defaultOptions: {
+        queries: {
+          retry: false,
+          retryOnMount: false,
+          staleTime: Number.POSITIVE_INFINITY,
+          gcTime: Number.POSITIVE_INFINITY,
+        },
+      },
     });
     mockSession = {
       data: { session: { activeOrganizationId: "org-1", activeOrganizationRole: "owner" } },
@@ -145,6 +152,11 @@ describe("organization profile", () => {
     expect(mockQueryOptions.enabled).toBe(false);
   });
 
+  it("shows no active organization when the metadata endpoint returns none", async () => {
+    mockGetOrganization.mockResolvedValue({ data: null, error: null });
+    expect(await load()).toContain("web-ui:organization.settings.noActive");
+  });
+
   it("shows the access message for a non-manager without fetching", () => {
     mockSession.data.session.activeOrganizationRole = "member";
     expect(render()).toContain("web-ui:organization.settings.manageOnly");
@@ -161,6 +173,10 @@ describe("organization profile", () => {
 
   it("refreshes the profile after saving", async () => {
     await load();
+    mockGetOrganization.mockResolvedValue({
+      data: { ...mockOrganization, name: "Renamed" },
+      error: null,
+    });
     // Use a real FormData payload; only the browser form element is absent in this renderer.
     const payload = new FormData();
     payload.set("name", "Renamed");
@@ -172,7 +188,8 @@ describe("organization profile", () => {
         organizationId: "org-1",
         data: { name: "Renamed", slug: "acme", logo: undefined },
       });
-      expect(queryClient.getQueryState(mockQueryOptions.queryKey)?.isInvalidated).toBe(true);
+      await queryClient.fetchQuery(mockQueryOptions);
+      expect(render()).toContain('data-value="Renamed"');
     } finally {
       formData.mockRestore();
     }
