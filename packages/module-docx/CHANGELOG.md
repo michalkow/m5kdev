@@ -1,5 +1,12 @@
 # @m5kdev/module-docx
 
+## 0.45.5
+
+### Patch Changes
+
+- Updated dependencies [452ab4b]
+  - @m5kdev/backend@0.45.5
+
 ## 0.45.4
 
 ### Patch Changes
