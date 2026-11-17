@@ -172,7 +172,9 @@ async function click(id: string) {
 }
 it("carries reset proof and reports resolved SDK failure as recovery", async () => {
   params = { token: "token", experienceFlow: "bound-reset" };
-  resetPassword.mockResolvedValue({ error: { message: "internal signature detail" } });
+  resetPassword.mockResolvedValue({
+    error: { code: "INVALID_RECOVERY_CONTINUATION", message: "internal signature detail" },
+  });
   await render(<Reset />);
   await input("reset-password-new", "Password123!");
   await input("reset-password-confirm", "Password123!");
@@ -242,6 +244,31 @@ it("preserves claim resource and proof through status, email, password and accep
     input: { claimId: "claim", experienceFlow: "bound-claim" },
   });
 });
+it.each([{ code: "PASSWORD_TOO_LONG", status: 400 }, { status: 400 }])(
+  "keeps password-policy and unclassified failures on the reset form: %j",
+  async (error) => {
+    params = { token: "token", experienceFlow: "bound-reset" };
+    resetPassword.mockResolvedValue({ error });
+    await render(<Reset />);
+    await input("reset-password-new", "Password123!");
+    await input("reset-password-confirm", "Password123!");
+    await click("reset-password-submit");
+    expect(container.textContent).toContain("Password reset failed");
+    expect(container.textContent).not.toContain("Request a fresh link");
+    expect(container.textContent).not.toContain("Password reset successfully");
+  }
+);
+
+it("reports a password reset only after the SDK confirms success", async () => {
+  params = { token: "token", experienceFlow: "bound-reset" };
+  await render(<Reset />);
+  await input("reset-password-new", "Password123!");
+  await input("reset-password-confirm", "Password123!");
+  await click("reset-password-submit");
+  expect(container.textContent).toContain("Password reset successfully");
+  expect(container.textContent).not.toContain("Request a fresh link");
+});
+
 it("does not report a resolved password recovery error as a sent email", async () => {
   requestPasswordReset.mockResolvedValue({ error: { message: "failed" } });
   await render(<Forgot />);

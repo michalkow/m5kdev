@@ -47,7 +47,9 @@ export default function ResetPasswordScreen() {
       );
       if (result.error)
         throw new Error(
-          "This link is invalid or expired. Request a fresh link from the same website."
+          ["INVALID_TOKEN", "INVALID_RECOVERY_CONTINUATION"].includes(result.error.code ?? "")
+            ? "This link is invalid or expired. Request a fresh link from the same website."
+            : "Password reset failed"
         );
       setTone("success");
       setStatus("Password reset successfully");
