@@ -1,9 +1,16 @@
 import { createMcpProtectedRequestHandler } from "@better-auth/mcp";
-import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
+import {
+  createMcpHandler,
+  McpServer,
+  ProtocolError,
+  ProtocolErrorCode,
+  type Tool,
+} from "@modelcontextprotocol/server";
 import { createDpopReplayStore } from "better-auth/oauth2";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import type { Result } from "neverthrow";
-import type { ServerError } from "../../utils/errors";
+import { z } from "zod";
+import { captureServerError, type ServerError } from "../../utils/errors";
 import type { BetterAuth } from "../auth/auth.lib";
 import type { McpToolBinding } from "./mcp.adapter";
 import { invokeMcpTool, isArgumentRecord } from "./mcp.protocol";
@@ -84,6 +91,11 @@ async function writeWebResponse(res: Response, response: globalThis.Response): P
 
 export function createMcpExpressHandler(input: {
   tools: readonly McpToolBinding[];
+  /** Per-request discovery filter; direct composition may keep a static catalog. */
+  listTools?: (caller: {
+    userId: string;
+    oauthClientId: string;
+  }) => Promise<Result<readonly McpToolBinding[], ServerError>>;
   invoke: (payload: McpInvokeInput) => Promise<Result<unknown, ServerError>>;
   auth: BetterAuth;
   resource: string;
@@ -94,7 +106,10 @@ export function createMcpExpressHandler(input: {
   if (typeof input.auth.options.baseURL === "object" && !input.issuer)
     throw new Error("Dynamic Auth requires an explicit canonical MCP issuer");
   const mcpHttp = createMcpHandler(
-    (ctx) => {
+    async (ctx) => {
+      const extra = ctx.authInfo?.extra;
+      const userId = typeof extra?.userId === "string" ? extra.userId : "";
+      const oauthClientId = ctx.authInfo?.clientId ?? "";
       const server = new McpServer({
         name: input.serverName,
         version: "1.0.0",
@@ -107,9 +122,6 @@ export function createMcpExpressHandler(input: {
             inputSchema: tool.inputSchema,
           },
           async (args) => {
-            const extra = ctx.authInfo?.extra;
-            const userId = typeof extra?.userId === "string" ? extra.userId : "";
-            const oauthClientId = ctx.authInfo?.clientId ?? "";
             const result = await invokeMcpTool({
               invoke: (payload) => input.invoke(payload),
               userId,
@@ -128,6 +140,25 @@ export function createMcpExpressHandler(input: {
             };
           }
         );
+      }
+      const listTools = input.listTools;
+      if (listTools) {
+        server.server.setRequestHandler("tools/list", async () => {
+          const listed = await listTools({ userId, oauthClientId });
+          if (listed.isErr()) {
+            captureServerError(listed.error);
+            throw new ProtocolError(ProtocolErrorCode.InternalError, "Internal server error");
+          }
+          const tools = listed.value;
+          return {
+            tools: tools.map((tool) => ({
+              name: tool.name,
+              description: tool.description,
+              // Zod produces JSON Schema; the SDK uses a separately defined recursive JSON type.
+              inputSchema: z.toJSONSchema(tool.inputSchema, { io: "input" }) as Tool["inputSchema"],
+            })),
+          };
+        });
       }
       return server;
     },
@@ -171,6 +202,11 @@ interface McpExpressMount {
 export function mountMcpHttp(input: {
   express: McpExpressMount;
   tools: readonly McpToolBinding[];
+  /** Per-request discovery filter; direct composition may keep a static catalog. */
+  listTools?: (caller: {
+    userId: string;
+    oauthClientId: string;
+  }) => Promise<Result<readonly McpToolBinding[], ServerError>>;
   invoke: (payload: McpInvokeInput) => Promise<Result<unknown, ServerError>>;
   auth: BetterAuth;
   resource: string;
@@ -182,6 +218,7 @@ export function mountMcpHttp(input: {
     MCP_HTTP_PATH,
     createMcpExpressHandler({
       tools: input.tools,
+      listTools: input.listTools,
       invoke: input.invoke,
       auth: input.auth,
       resource: input.resource,

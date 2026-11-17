@@ -1002,7 +1002,13 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
 
   const memberships: AuthOrganizationRepository | undefined =
     moduleStates.get("auth")?.repositories.organization;
-  const trpcMethods = createTRPCMethods({ memberships });
+  const billing = moduleStates.get("billing")?.services.billing;
+  const trpcMethods = createTRPCMethods({
+    memberships,
+    requireEntitlements: billing
+      ? (actor, capabilities) => billing.requireAll(actor, capabilities)
+      : undefined,
+  });
   const routerFragments = {} as BuiltModuleRouters<Modules>;
   const createContext = auth ? createAuthContext(auth) : createRequestContext();
   const trpcMountPath = config.trpc?.mountPath ?? "/trpc";

@@ -1,9 +1,13 @@
+import { err } from "neverthrow";
 import type { Pool } from "pg";
 import { createBackendApp } from "./app";
+import type { OrganizationActor } from "./base/base.actor";
+import type { User } from "./modules/auth/auth.lib";
 import { AuthModule } from "./modules/auth/auth.module";
 import { BaseModule, type TableMap } from "./modules/base/base.module";
 import { WorkflowModule } from "./modules/workflow/workflow.module";
 import { createTestPool } from "./test/postgresql";
+import { ServerError } from "./utils/errors";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: {
@@ -188,5 +192,56 @@ describe("createBackendApp", () => {
     expect(() => createBackendApp({ db: { client } }, [first, second] as const)).toThrow(
       'Duplicate backend tRPC router namespace "shared"'
     );
+  });
+});
+
+describe("Capability checker composition", () => {
+  it("wires Billing to Organization procedures at app composition", async () => {
+    const client = createTestPool();
+    try {
+      const built = createBackendApp({ db: { client } }, [
+        {
+          id: "billing",
+          services: () => ({
+            billing: {
+              requireAll: async (_actor: OrganizationActor, capabilities: readonly string[]) =>
+                err(
+                  new ServerError({
+                    code: "FORBIDDEN",
+                    message: "Entitlement denied",
+                    context: { kind: "entitlement", capabilities },
+                  })
+                ),
+            },
+          }),
+          trpc: ({ trpc }) => ({
+            protected: trpc.router({
+              run: trpc.organizationProcedure
+                .meta({ requiredCapabilities: ["posts.publish"] })
+                .query(() => "must not run"),
+            }),
+          }),
+        },
+      ]);
+      const caller = built.trpc.methods.createCallerFactory(built.trpc.router)({
+        user: { id: "user-1", role: "user" } as User,
+        session: null,
+        actor: {
+          userId: "user-1",
+          userRole: "user",
+          organizationId: "org-1",
+          organizationRole: "owner",
+          memberId: "member-1",
+          teamId: null,
+          teamRole: null,
+        },
+      });
+      await expect(caller.protected.run()).rejects.toMatchObject({
+        code: "FORBIDDEN",
+        cause: { context: { kind: "entitlement", capabilities: ["posts.publish"] } },
+      });
+    } finally {
+      await client.end();
+    }
   });
 });

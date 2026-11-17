@@ -144,6 +144,50 @@ invokes the procedure in-process with the OAuth User and the tool arguments, so
 Starter Posts `list-posts` / `create-post` enforce the same Posts Grants as the
 webapp. An MCP client cannot write what its Role cannot.
 
+## Capability requirements and discovery
+
+Add `requiredCapabilities` alongside `mcp` on an Organization procedure:
+
+```ts
+publish: organizationProcedure
+  .meta({
+    requiredCapabilities: ["typeorb.publish"],
+    mcp: { name: "publish-post", description: "Publish a post in an Organization." },
+  })
+  .input(publishInput)
+  .mutation(async ({ ctx, input }) => handleTRPCResult(await service.publish(input, ctx))),
+```
+
+When Billing is registered, tRPC checks every listed Capability after resolving
+the live OrganizationActor and before running the handler. Keep the service's
+Entitlement and Grant checks: jobs and internal calls still need them. Capability
+requirements belong on Organization procedures; declaring them on a User or
+Admin tool fails catalog collection.
+
+MCP filters its catalog for each authenticated `tools/list` request. A requirement-bearing tool
+appears only if **one** Organization on this OAuth client's allowlist, with a live
+Membership for this User, has **all** its required Capabilities. Capabilities are
+never combined across Organizations. Closed Organizations, left Memberships,
+and pending invitations do not contribute access. Empty eligible lists hide all
+requirement-bearing tools. Tools without requirements keep their behavior;
+Grants do not filter discovery.
+
+A visible tool can still be denied for the `organizationId` passed in a call.
+Every invocation, including a cached tool hidden from current discovery, runs
+the guarded tRPC procedure for that Organization and returns its Entitlement
+denial when access has been revoked. Later discovery requests reevaluate access.
+Filtering discovery does not remove invocation handlers, and a Billing discovery
+failure does not block tools without Capability requirements. Billing lookup failures fail the request instead of advertising
+an allowed catalog. The tRPC router and client types remain static.
+
+Apps omitting Billing remain Grant-only, including MCP discovery. Direct HTTP
+adapter composition can supply `listTools` to resolve the current caller's
+catalog; `McpModule` supplies it automatically using `McpService.listAvailableToolNames`
+and the Billing checker injected by `createBackendApp`. Direct `createTRPCMethods`
+composition passes `requireEntitlements: (actor, keys) => billing.requireAll(actor, keys)`.
+The HTTP adapters retain their static `tools` option for direct compositions
+that do not filter discovery.
+
 ## Breaking catalog change
 
 The MCP catalog used to be a second code surface: `<module>.mcp.ts` files,

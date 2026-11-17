@@ -187,6 +187,30 @@ Grant `FORBIDDEN` has no Entitlement context. Unknown Capability keys are
 does not mark Capabilities allowed. `billingExempt` is the Organization overlay
 that allows the full catalog.
 
+### tRPC Capability metadata
+
+Declare the same required Capabilities on the Organization-scoped tRPC procedure
+so the transport checks Entitlements before its handler runs:
+
+```ts
+publish: organizationProcedure
+  .meta({ requiredCapabilities: ["typeorb.publish"] })
+  .input(publishInput)
+  .mutation(async ({ ctx, input }) => handleTRPCResult(await service.publish(input, ctx))),
+```
+
+Every listed Capability is required. The check follows live OrganizationActor
+resolution and uses the Organization selected by input `organizationId`, with
+the session active Organization as fallback. Denials retain Billing's Entitlement
+`FORBIDDEN` context. Keep service `.requireEntitlements` checks for internal calls
+and jobs. The tRPC router and client types stay static.
+
+`createBackendApp` injects the registered Billing service into the transport;
+Kernel `base/` does not import Billing. Direct `createTRPCMethods` composition
+passes `requireEntitlements: (actor, keys) => billing.requireAll(actor, keys)`.
+Unannotated procedures and apps omitting Billing keep their existing behavior.
+MCP uses this same metadata to filter tool discovery.
+
 ### Snapshot and gate
 
 Members load one Organization-scoped snapshot from `billing.getEntitlements`.
