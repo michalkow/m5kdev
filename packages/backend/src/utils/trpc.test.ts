@@ -470,3 +470,114 @@ describe("trpc auth helpers", () => {
     );
   });
 });
+
+describe("Organization Capability metadata", () => {
+  it("checks the named Organization before the handler and preserves Entitlement denial", async () => {
+    const denied = new ServerError({
+      code: "FORBIDDEN",
+      message: "Entitlement denied",
+      context: {
+        kind: "entitlement",
+        capabilities: ["posts.publish"],
+        reason: "missing_capability",
+      },
+    });
+    const methods = createTRPCMethods({
+      memberships: createMemberships({
+        "org-allowed": { id: "member-allowed", role: "owner" },
+        "org-denied": { id: "member-denied", role: "owner" },
+      }),
+      requireEntitlements: async (actor, capabilities) => {
+        expect(capabilities).toEqual(["posts.read", "posts.publish"]);
+        return actor.organizationId === "org-allowed" ? ok(true) : err(denied);
+      },
+    });
+    const publish = jest.fn(() => "published");
+    const appRouter = methods.router({
+      publish: methods.organizationProcedure
+        .meta({ requiredCapabilities: ["posts.read", "posts.publish"] })
+        .mutation(publish),
+    });
+    const caller = methods.createCallerFactory(appRouter)({
+      user: createUser(),
+      session: createSession({ activeOrganizationId: "org-allowed" }),
+      actor: null,
+    });
+    await expect(caller.publish({ organizationId: "org-denied" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      cause: denied,
+    });
+    expect(publish).not.toHaveBeenCalled();
+    await expect(caller.publish()).resolves.toBe("published");
+    expect(publish).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("optional Capability enforcement", () => {
+  it("keeps annotated Organization calls Grant-only when Billing is omitted", async () => {
+    const methods = createTRPCMethods({
+      memberships: createMemberships({ "org-1": { id: "member-1", role: "member" } }),
+    });
+    const caller = methods.createCallerFactory(
+      methods.router({
+        run: methods.organizationProcedure
+          .meta({ requiredCapabilities: ["posts.publish"] })
+          .query(() => "available without Billing"),
+      })
+    )({ user: createUser(), session: null, actor: null });
+    await expect(caller.run({ organizationId: "org-1" })).resolves.toBe(
+      "available without Billing"
+    );
+  });
+
+  it("does not check unannotated procedures and resolves Membership before checking requirements", async () => {
+    const methods = createTRPCMethods({
+      memberships: createMemberships({ "org-1": { id: "member-1", role: "member" } }),
+      requireEntitlements: async () => {
+        throw new Error("Billing must not be reached");
+      },
+    });
+    const caller = methods.createCallerFactory(
+      methods.router({
+        ordinary: methods.organizationProcedure.query(() => "ordinary"),
+        guarded: methods.organizationProcedure
+          .meta({ requiredCapabilities: ["posts.publish"] })
+          .query(() => "guarded"),
+      })
+    )({ user: createUser(), session: null, actor: null });
+    await expect(caller.ordinary({ organizationId: "org-1" })).resolves.toBe("ordinary");
+    await expect(caller.guarded({ organizationId: "missing" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+
+  it("does not treat a Billing lookup failure as access", async () => {
+    const methods = createTRPCMethods({
+      memberships: createMemberships({ "org-1": { id: "member-1", role: "member" } }),
+      requireEntitlements: async () =>
+        err(new ServerError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" })),
+    });
+    const caller = methods.createCallerFactory(
+      methods.router({
+        run: methods.organizationProcedure
+          .meta({ requiredCapabilities: ["posts.publish"] })
+          .query(() => "must not run"),
+      })
+    )({ user: createUser(), session: null, actor: null });
+    await expect(caller.run({ organizationId: "org-1" })).rejects.toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+    });
+  });
+});
+
+it("rejects Organization Capability requirements on User procedures", async () => {
+  const methods = createTRPCMethods();
+  const caller = methods.createCallerFactory(
+    methods.router({
+      run: methods.userProcedure
+        .meta({ requiredCapabilities: ["posts.publish"] })
+        .query(() => "must not run"),
+    })
+  )({ user: createUser(), session: null, actor: null });
+  await expect(caller.run()).rejects.toMatchObject({ code: "BAD_REQUEST" });
+});

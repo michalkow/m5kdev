@@ -25,6 +25,7 @@ import {
   type UserActor,
   validateActor,
 } from "../base/base.actor";
+import type { ServerResultAsync } from "../base/base.dto";
 import type { ExperienceRequest } from "../experience";
 import type { BetterAuth, Session, User } from "../modules/auth/auth.lib";
 import { captureServerError, reportError, ServerError } from "./errors";
@@ -89,7 +90,15 @@ export type UserContext = {
   actor: UserActor;
 };
 
+/** Billing supplies this check; transport infrastructure does not own Entitlements. */
+export type RequireEntitlements = (
+  actor: OrganizationActor,
+  capabilities: readonly string[]
+) => ServerResultAsync<true>;
+
 export interface TRPCProcedureMeta {
+  /** All required Organization Capabilities, also used for MCP discovery. */
+  requiredCapabilities?: readonly string[];
   /** Stamped by `privateProcedure` / `userProcedure` / `organizationProcedure` / `adminProcedure`. */
   actorScope?: Exclude<ActorScope, "team">;
   /** Opts the procedure into the MCP catalog; both fields are required. */
@@ -102,7 +111,13 @@ export interface TRPCProcedureMeta {
 }
 
 const t = initTRPC.context<RequestContext>().meta<TRPCProcedureMeta>().create({ transformer });
-const baseProcedure = t.procedure.use(async ({ path, type, ctx, input, next }) => {
+const baseProcedure = t.procedure.use(async ({ path, type, ctx, input, meta, next }) => {
+  if (meta?.requiredCapabilities?.length && meta.actorScope !== "organization") {
+    throw new ServerError({
+      code: "BAD_REQUEST",
+      message: "Capability requirements need an Organization procedure",
+    }).toTRPC();
+  }
   attachTrpcPathToRequest(ctx.req, path);
   return runWithActorTelemetry(actorTelemetryFromRequestContext(ctx), () =>
     withSpan(
@@ -135,7 +150,8 @@ const organizationIdInputSchema = z
   .optional();
 
 function createOrganizationProcedure(
-  memberships: MembershipLookup | undefined
+  memberships: MembershipLookup | undefined,
+  requireEntitlements: RequireEntitlements | undefined
 ): TRPCProcedureBuilder<
   RequestContext,
   TRPCProcedureMeta,
@@ -149,12 +165,17 @@ function createOrganizationProcedure(
   return baseProcedure
     .meta({ actorScope: "organization" })
     .input(organizationIdInputSchema)
-    .use(async ({ ctx, input, next }) => {
+    .use(async ({ ctx, input, meta, next }) => {
       const organizationCtx = await resolveOrganizationProcedureContext({
         ctx,
         organizationId: input?.organizationId,
         memberships,
       });
+      if (requireEntitlements && meta?.requiredCapabilities?.length) {
+        handleTRPCResult(
+          await requireEntitlements(organizationCtx.actor, meta.requiredCapabilities)
+        );
+      }
       return next({ ctx: organizationCtx, input: undefined });
     })
     .use(({ getRawInput, next }) =>
@@ -170,6 +191,7 @@ function createOrganizationProcedure(
 }
 
 export type TRPCMethods = {
+  requireEntitlements?: RequireEntitlements;
   router: typeof t.router;
   createCallerFactory: typeof t.createCallerFactory;
   baseProcedure: typeof baseProcedure;
@@ -196,18 +218,21 @@ export function createRequestContext() {
 
 export function createTRPCMethods({
   memberships,
+  requireEntitlements,
 }: {
   /** Live Membership lookup for `organizationProcedure` (Auth's organization repository). */
   memberships?: MembershipLookup;
+  requireEntitlements?: RequireEntitlements;
 } = {}): TRPCMethods {
   return {
+    requireEntitlements,
     router: t.router,
     createCallerFactory: t.createCallerFactory,
     baseProcedure,
     publicProcedure,
     privateProcedure,
     userProcedure,
-    organizationProcedure: createOrganizationProcedure(memberships),
+    organizationProcedure: createOrganizationProcedure(memberships, requireEntitlements),
     adminProcedure,
   };
 }
