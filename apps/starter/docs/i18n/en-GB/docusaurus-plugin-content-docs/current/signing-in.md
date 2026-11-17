@@ -51,6 +51,19 @@ managers choose **Generate invitation link** in the pending member's row. The
 complete link appears in a field; choose **Copy** as a separate action. If your
 browser blocks clipboard access, select and copy the complete visible address.
 
+## Update organisation settings
+
+Select the organisation in the sidebar, then open `/organization/preferences` on
+the same product website. Owners and organisation admins can edit **Name**, change
+the organisation image, and choose **Save Changes**. If **Slug** is shown, you can
+edit it too. A success message confirms the update.
+
+Wait for the loading indicator to finish. If no organisation is selected, choose
+one in the sidebar. If the screen says only admins and owners can manage settings,
+ask an organisation manager to make the change. **Failed to load organization**
+means the details could not be retrieved; reload the page to try again. Pending
+invitations do not prevent you from editing the organisation's profile.
+
 ## Use a waitlist invitation
 
 If sign-up shows a waitlist, enter your email address to request access. Check your
