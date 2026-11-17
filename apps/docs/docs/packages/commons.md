@@ -9,7 +9,7 @@ backend and frontend packages.
 
 ## Use it for
 
-- Cross-package Zod schemas.
+- Cross-package Zod schemas, including Experience and Brand Profile contracts.
 - Shared constants such as file type definitions.
 - Type contracts that must stay identical across backend and frontend code.
 

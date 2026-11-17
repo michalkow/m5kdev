@@ -250,6 +250,18 @@ working.
 
 - Public product help: [CLI package](/packages/cli#public-product-help)
 
+## Upgrading to 0.45.3 {#upgrade-0-45-3}
+
+Complete 0.45.1 first. Domain-selected Experiences, generated Changesets,
+AGENTS-only project guidance, and the optional `AuthProvider` `onSignIn`
+callback are additive. Existing `app.name` / `app.urls` / `app.brand` apps keep
+working. No source, schema, catalog, env, or bootstrap change is required to
+keep working.
+
+- Experiences: [App shell](/modules/app#experiences)
+- Sign-in callback: [Auth](/modules/auth#record-successful-sign-ins)
+- Generated Changesets and agent guidance: [CLI package](/packages/cli)
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module

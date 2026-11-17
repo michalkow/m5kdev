@@ -1,5 +1,24 @@
 # @m5kdev/web-ui
 
+## 0.45.3
+
+### Patch Changes
+
+- 72ccbab: Support domain-selected Experiences with reusable Brand Profiles, validated origins, public bootstrap configuration and permanent single-Experience shorthand.
+  
+  Preserve the selected Experience through authentication, invitations, account claims, Connections and Checkout/Portal returns, with contextual billing customization and explicit email communication policies. Support approved Experience references for delayed Notification mail and recheck current recipients before delivery.
+  
+  Keep app-owned product shells independent of Organization Entitlements and Grants, isolate Organization-scoped query state, and handle access-query errors explicitly. Allow claims to finish after password creation across retries and reloads, and keep generated invitation links visible for a separate Copy action.
+  
+  Keep password-policy errors on recovery forms instead of reporting valid links as expired.
+  
+  Update web and Expo Starter wiring, localized help, generated templates and adoption guidance.
+- 3b57354: Expose an optional AuthProvider onSignIn callback for successful email/password and correlated OAuth sign-ins, without counting restored or refreshed sessions.
+- Updated dependencies [72ccbab]
+- Updated dependencies [3b57354]
+  - @m5kdev/commons@0.45.3
+  - @m5kdev/frontend@0.45.3
+
 ## 0.45.2
 
 ### Patch Changes

@@ -18,10 +18,10 @@ are **Node.js >= 24**.
 ## Commands
 
 ```sh
-pnpm dlx create-m5kdev@0.45.1 [directory] [create options]
-pnpm dlx create-m5kdev@0.45.1 init [--yes] [--force] [--json]
-pnpm dlx create-m5kdev@0.45.1 doctor [--full] [--json]
-pnpm dlx create-m5kdev@0.45.1 update [--dry-run] [--skip-install] [--json] [--platform web|expo|both] [--yes]
+pnpm dlx create-m5kdev@0.45.3 [directory] [create options]
+pnpm dlx create-m5kdev@0.45.3 init [--yes] [--force] [--json]
+pnpm dlx create-m5kdev@0.45.3 doctor [--full] [--json]
+pnpm dlx create-m5kdev@0.45.3 update [--dry-run] [--skip-install] [--json] [--platform web|expo|both] [--yes]
 ```
 
 A first positional argument that is not a command is treated as `create`.
@@ -327,6 +327,19 @@ without source, schema, catalog, env, or bootstrap changes. New apps default to
 Landing hosting; `update` preserves the current host and translated guides.
 Legacy apps without a selection stay on standalone hosting. See
 [Public product help](/packages/cli#public-product-help).
+
+## 0.45.3 upgrades
+
+Domain-selected Experiences, generated Changesets, AGENTS-only project guidance,
+and the optional `AuthProvider` `onSignIn` callback are additive. Existing
+`app.name` / `app.urls` / `app.brand` apps keep working without source, schema,
+catalog, env, or bootstrap changes. New apps include `@changesets/cli`; `update`
+can install current AGENTS guidance and remove unchanged managed `CLAUDE.md` and
+Cursor-rule files.
+
+- Experiences: [App shell](/modules/app#experiences)
+- Sign-in callback: [Auth](/modules/auth#record-successful-sign-ins)
+- Agent instructions, Changesets, and doctor evidence: [CLI package](/packages/cli#agent-instructions)
 
 ## Package rule
 

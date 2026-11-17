@@ -1,5 +1,14 @@
 # @m5kdev/expo
 
+## 0.45.3
+
+### Patch Changes
+
+- Updated dependencies [72ccbab]
+- Updated dependencies [3b57354]
+  - @m5kdev/commons@0.45.3
+  - @m5kdev/frontend@0.45.3
+
 ## 0.45.2
 
 ### Patch Changes

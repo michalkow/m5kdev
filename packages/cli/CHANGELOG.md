@@ -1,5 +1,25 @@
 # create-m5kdev
 
+## 0.45.3
+
+### Patch Changes
+
+- 72ccbab: Support domain-selected Experiences with reusable Brand Profiles, validated origins, public bootstrap configuration and permanent single-Experience shorthand.
+  
+  Preserve the selected Experience through authentication, invitations, account claims, Connections and Checkout/Portal returns, with contextual billing customization and explicit email communication policies. Support approved Experience references for delayed Notification mail and recheck current recipients before delivery.
+  
+  Keep app-owned product shells independent of Organization Entitlements and Grants, isolate Organization-scoped query state, and handle access-query errors explicitly. Allow claims to finish after password creation across retries and reloads, and keep generated invitation links visible for a separate Copy action.
+  
+  Keep password-policy errors on recovery forms instead of reporting valid links as expired.
+  
+  Update web and Expo Starter wiring, localized help, generated templates and adoption guidance.
+- 8e7cb61: Generate AGENTS-only instructions that retain m5kdev conventions and reference globally installed michalkow/skills instead of bundling Claude files and Cursor rules. Treat optional PROJECT.md as the App's functional North Star and flag conflicting changes before editing. Point agents to local or GitHub upstream source for the installed release and upstream PRs when a fix is needed. Require explicit user instruction for Production deployment and database migration while allowing Development migration generation and application within the existing integrity rules; Landing-only guidance omits database operations.
+  
+  Structure product documentation guidance around frontend screens and user journeys, with separate consumer usage sections for exposed backend API and MCP interfaces.
+  
+  Extend doctor with installed dependency/executable/configuration checks and scoped Verified, Configured but untested, and Blocked evidence, including explicit full documentation validation. Run update preflight automatically, repair missing/stale installation when possible, and distinguish applied templates from outstanding guide/runtime verification in text and JSON reports. Apply PROJECT.md goals through simpler justified interactions, complete-journey checks, and measurements of user-visible waiting when responsiveness matters.
+- a6cd4f5: Include Changesets as a root development dependency in generated apps, with private-package versioning configuration, local add/version commands, and developer instructions for every platform.
+
 ## 0.45.2
 
 No changes in this release.

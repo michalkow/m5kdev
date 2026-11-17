@@ -13,6 +13,7 @@ modules array.
 ## Use it for
 
 - Creating backend apps with `createBackendApp`.
+- Authoring presentation: single-Experience `app.name` / `app.urls` / `app.brand`, or an explicit `app.experiences` registry. See [App shell](/modules/app#experiences).
 - Registering first-party and app-specific modules.
 - Defining repositories and services behind module boundaries.
 - Wiring tRPC routers, Express routes, workflows, auth, and infrastructure.
