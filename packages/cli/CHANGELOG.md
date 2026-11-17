@@ -1,5 +1,9 @@
 # create-m5kdev
 
+## 0.45.4
+
+No changes in this release.
+
 ## 0.45.3
 
 ### Patch Changes

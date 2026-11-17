@@ -1,5 +1,14 @@
 # @m5kdev/web-ui
 
+## 0.45.4
+
+### Patch Changes
+
+- 02bf5d5: Load organization profile metadata without hydrating Memberships that may not have a User, and distinguish loading, access, and query-error states in organization settings.
+- Updated dependencies [02bf5d5]
+  - @m5kdev/frontend@0.45.4
+  - @m5kdev/commons@0.45.4
+
 ## 0.45.3
 
 ### Patch Changes
