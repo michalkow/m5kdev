@@ -1,6 +1,9 @@
 import { err, ok } from "neverthrow";
 import { Base } from "../../base/base.abstract";
+import type { OrganizationActor } from "../../base/base.actor";
+import { resolveOrganizationActor } from "../../base/base.actor";
 import type { ServerResultAsync } from "../../base/base.dto";
+import type { RequireEntitlements } from "../../utils/trpc";
 import type { User } from "../auth/auth.lib";
 import type { AuthOrganizationRepository, AuthUserRepository } from "../auth/auth.repository";
 import type { McpRepository } from "./mcp.repository";
@@ -13,6 +16,58 @@ export class McpService extends Base {
     private readonly userRepository: AuthUserRepository
   ) {
     super("service");
+  }
+
+  /** Discovery is the union of eligible Organizations, with all keys required in one. */
+  async listAvailableTools<T extends { requiredCapabilities?: readonly string[] }>({
+    tools,
+    userId,
+    oauthClientId,
+    requireEntitlements,
+  }: {
+    tools: readonly T[];
+    userId: string;
+    oauthClientId: string;
+    requireEntitlements?: RequireEntitlements;
+  }): ServerResultAsync<readonly T[]> {
+    if (!requireEntitlements || !tools.some((tool) => tool.requiredCapabilities?.length)) {
+      return ok(tools);
+    }
+    const user = await this.resolveCallerUser({ userId });
+    if (user.isErr()) return err(user.error);
+    const ids = await this.mcpRepository.listOrganizationIds({ userId, oauthClientId });
+    if (ids.isErr()) return err(ids.error);
+    const actors: OrganizationActor[] = [];
+    for (const organizationId of ids.value) {
+      const actor = await resolveOrganizationActor({
+        user: { userId, userRole: user.value.role ?? "user" },
+        organizationId,
+        memberships: this.organizationRepository,
+      });
+      if (actor.isErr()) {
+        if (actor.error.code === "NOT_FOUND") continue;
+        return err(actor.error);
+      }
+      actors.push(actor.value);
+    }
+    const available: T[] = [];
+    for (const tool of tools) {
+      if (!tool.requiredCapabilities?.length) {
+        available.push(tool);
+        continue;
+      }
+      for (const actor of actors) {
+        const allowed = await requireEntitlements(actor, tool.requiredCapabilities);
+        if (allowed.isOk()) {
+          available.push(tool);
+          break;
+        }
+        if (allowed.error.code !== "FORBIDDEN" || allowed.error.context?.kind !== "entitlement") {
+          return err(allowed.error);
+        }
+      }
+    }
+    return ok(available);
   }
 
   replaceAllowlist(input: {

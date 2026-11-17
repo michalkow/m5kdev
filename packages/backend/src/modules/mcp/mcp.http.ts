@@ -4,6 +4,7 @@ import { createDpopReplayStore } from "better-auth/oauth2";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import type { Result } from "neverthrow";
 import type { ServerError } from "../../utils/errors";
+import { handleTRPCResult } from "../../utils/trpc";
 import type { BetterAuth } from "../auth/auth.lib";
 import type { McpToolBinding } from "./mcp.adapter";
 import { invokeMcpTool, isArgumentRecord } from "./mcp.protocol";
@@ -84,6 +85,11 @@ async function writeWebResponse(res: Response, response: globalThis.Response): P
 
 export function createMcpExpressHandler(input: {
   tools: readonly McpToolBinding[];
+  /** Per-request discovery filter; direct composition may keep a static catalog. */
+  listTools?: (caller: {
+    userId: string;
+    oauthClientId: string;
+  }) => Promise<Result<readonly McpToolBinding[], ServerError>>;
   invoke: (payload: McpInvokeInput) => Promise<Result<unknown, ServerError>>;
   auth: BetterAuth;
   resource: string;
@@ -94,12 +100,18 @@ export function createMcpExpressHandler(input: {
   if (typeof input.auth.options.baseURL === "object" && !input.issuer)
     throw new Error("Dynamic Auth requires an explicit canonical MCP issuer");
   const mcpHttp = createMcpHandler(
-    (ctx) => {
+    async (ctx) => {
+      const extra = ctx.authInfo?.extra;
+      const userId = typeof extra?.userId === "string" ? extra.userId : "";
+      const oauthClientId = ctx.authInfo?.clientId ?? "";
+      const tools = input.listTools
+        ? handleTRPCResult(await input.listTools({ userId, oauthClientId }))
+        : input.tools;
       const server = new McpServer({
         name: input.serverName,
         version: "1.0.0",
       });
-      for (const tool of input.tools) {
+      for (const tool of tools) {
         server.registerTool(
           tool.name,
           {
@@ -107,9 +119,6 @@ export function createMcpExpressHandler(input: {
             inputSchema: tool.inputSchema,
           },
           async (args) => {
-            const extra = ctx.authInfo?.extra;
-            const userId = typeof extra?.userId === "string" ? extra.userId : "";
-            const oauthClientId = ctx.authInfo?.clientId ?? "";
             const result = await invokeMcpTool({
               invoke: (payload) => input.invoke(payload),
               userId,
@@ -171,6 +180,11 @@ interface McpExpressMount {
 export function mountMcpHttp(input: {
   express: McpExpressMount;
   tools: readonly McpToolBinding[];
+  /** Per-request discovery filter; direct composition may keep a static catalog. */
+  listTools?: (caller: {
+    userId: string;
+    oauthClientId: string;
+  }) => Promise<Result<readonly McpToolBinding[], ServerError>>;
   invoke: (payload: McpInvokeInput) => Promise<Result<unknown, ServerError>>;
   auth: BetterAuth;
   resource: string;
@@ -182,6 +196,7 @@ export function mountMcpHttp(input: {
     MCP_HTTP_PATH,
     createMcpExpressHandler({
       tools: input.tools,
+      listTools: input.listTools,
       invoke: input.invoke,
       auth: input.auth,
       resource: input.resource,

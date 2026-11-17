@@ -147,12 +147,12 @@ async function withServer(app: Express, run: (baseUrl: string) => Promise<void>)
   }
 }
 
-function registeredToolNames(): string[] {
+async function registeredToolNames(): Promise<string[]> {
   const factory = createMcpHandlerMock.mock.calls[0]?.[0] as
     | ((ctx: unknown) => unknown)
     | undefined;
   if (!factory) return [];
-  factory({});
+  await factory({});
   return mockRegisteredTools.map((tool) => tool.name);
 }
 
@@ -231,7 +231,7 @@ describe("McpModule HTTP", () => {
     expect(createMcpHandlerMock).toHaveBeenCalledWith(expect.any(Function), {
       legacy: "stateless",
     });
-    expect(registeredToolNames()).toEqual([LIST_ORGANIZATIONS_MCP_CALL]);
+    expect(await registeredToolNames()).toEqual([LIST_ORGANIZATIONS_MCP_CALL]);
 
     await withServer(built.express.app, async (baseUrl) => {
       const response = await fetch(`${baseUrl}${MCP_HTTP_PATH}`, {
@@ -254,7 +254,7 @@ describe("McpModule HTTP", () => {
     });
   });
 
-  it("exposes meta.mcp tools from multiple modules with flat names", () => {
+  it("exposes meta.mcp tools from multiple modules with flat names", async () => {
     const orgCalls = defineBackendModule({
       id: "echo-mcp",
       trpc(ctx) {
@@ -298,7 +298,11 @@ describe("McpModule HTTP", () => {
       },
       [new EmailModule(templates), new AuthModule(), new McpModule(), orgCalls, userCalls] as const
     );
-    expect(registeredToolNames().sort()).toEqual(["echo", LIST_ORGANIZATIONS_MCP_CALL, "ping"]);
+    expect((await registeredToolNames()).sort()).toEqual([
+      "echo",
+      LIST_ORGANIZATIONS_MCP_CALL,
+      "ping",
+    ]);
   });
 
   it("fails boot when two procedures share a flat MCP tool name", () => {

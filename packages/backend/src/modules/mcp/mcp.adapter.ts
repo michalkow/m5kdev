@@ -18,6 +18,7 @@ export interface McpToolBinding {
   /** Advertised MCP input shape; org tools require `organizationId`. */
   inputSchema: z.ZodObject<z.ZodRawShape>;
   requiresOrganizationId: boolean;
+  requiredCapabilities?: readonly string[];
 }
 
 function readProcedureMeta(procedure: unknown): TRPCProcedureMeta | undefined {
@@ -91,6 +92,9 @@ export function collectMcpTools(router: AnyRouter): McpToolBinding[] {
         `MCP tool "${name}" must use a user, organization, or admin procedure (missing actorScope)`
       );
     }
+    if (meta.requiredCapabilities?.length && actorScope !== "organization") {
+      throw new Error(`MCP tool "${name}" Capability requirements need an Organization procedure`);
+    }
     const existing = tools.get(name);
     if (existing) {
       throw new Error(
@@ -115,6 +119,7 @@ export function collectMcpTools(router: AnyRouter): McpToolBinding[] {
       trpcPath,
       inputSchema,
       requiresOrganizationId,
+      requiredCapabilities: meta.requiredCapabilities,
     });
   }
   return [...tools.values()];
