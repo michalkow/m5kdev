@@ -83,9 +83,6 @@ interface M5KAuthOrganizationApi {
       organizationId?: string;
     };
   }) => Promise<AuthPluginResult<M5KOrganization>>;
-  getOrganization: (opts?: {
-    query?: { organizationId?: string };
-  }) => Promise<AuthPluginResult<M5KOrganization>>;
   getFullOrganization: (opts?: {
     query?: {
       organizationId?: string;
