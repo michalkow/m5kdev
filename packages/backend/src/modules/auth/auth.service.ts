@@ -24,7 +24,7 @@ import { err, ok } from "neverthrow";
 import { z } from "zod";
 import type { BackendAppMetadata } from "../../app";
 import type { ServerEventBus } from "../../base/server-event";
-import { ExperienceContextError } from "../../experience";
+import { ExperienceContextError, resolveWebDestination } from "../../experience";
 import type { AppI18n } from "../../i18n/app-i18n";
 import { posthogCapture } from "../../utils/posthog";
 import type { OrganizationContext, RequestContext } from "../../utils/trpc";
@@ -1686,17 +1686,38 @@ export class AuthService extends BasePermissionService<
     .output(waitlistSchemas.output.single)
     .use("experience", ({ ctx }) => this.selectExperience(ctx))
     .handle(async ({ input, state }) => {
-      const waitlist = await this.repository.waitlist.create(input);
-      if (waitlist.isErr()) return err(waitlist.error);
-      const confirmed = await this.service.email.sendWaitlistConfirmation(input.email, {
-        experience: state.experience,
+      const registered = await this.repository.waitlist.register({
+        email: input.email.trim().toLowerCase(),
+        status: "WAITLIST",
       });
-      if (confirmed.isErr()) return err(confirmed.error);
-      const notified = await this.service.email.sendSystemWaitlistNotification(input.email, {
-        experience: state.experience,
-      });
-      if (notified.isErr()) return err(notified.error);
-      return ok(waitlistSchemas.output.single.parse(waitlist.value));
+      if (registered.isErr()) return err(registered.error);
+      const { entry, created } = registered.value;
+      if (created) {
+        for (const [communication, send] of [
+          [
+            "confirmation",
+            () =>
+              this.service.email.sendWaitlistConfirmation(entry.email!, {
+                experience: state.experience,
+              }),
+          ],
+          [
+            "system-notification",
+            () =>
+              this.service.email.sendSystemWaitlistNotification(entry.email!, {
+                experience: state.experience,
+              }),
+          ],
+        ] as const) {
+          const delivered = await this.throwableAsync(send);
+          if (delivered.isErr())
+            this.logger.error(
+              { err: delivered.error, waitlistId: entry.id, communication },
+              "Waitlist registration committed; communication delivery failed"
+            );
+        }
+      }
+      return ok(waitlistSchemas.output.single.parse(entry));
     });
 
   removeFromWaitlist = this.procedure("removeFromWaitlist")
@@ -1765,10 +1786,18 @@ export class AuthService extends BasePermissionService<
     });
 
   getMyAccountClaimStatus = this.procedure("getMyAccountClaimStatus")
-    .output(accountClaimSchemas.output.claim.nullable())
+    .output(accountClaimSchemas.output.status.nullable())
     .requireAuth()
     .input(accountClaimMagicLinkSchemas.input.continuation)
-    .handle(async ({ input, ctx }) => this.pendingClaim(input, ctx));
+    .handle(async ({ input, ctx }) => {
+      const claim = await this.pendingClaim(input, ctx);
+      if (claim.isErr()) return err(claim.error);
+      if (!claim.value) return ok(null);
+      const credential = await this.repository.user.hasCredentialPassword(ctx.actor.userId);
+      return credential.isErr()
+        ? err(credential.error)
+        : ok({ ...claim.value, hasPassword: credential.value });
+    });
 
   private async pendingClaim(
     input: { claimId?: string; experienceFlow?: string } | undefined,
@@ -1983,7 +2012,7 @@ export class AuthService extends BasePermissionService<
         const canonical =
           state.experience && this.presentation.registry
             ? this.presentation.registry.destination(state.experience, path)
-            : path;
+            : resolveWebDestination(origin, path);
         let destination: URL;
         try {
           destination = new URL(canonical, origin);
@@ -2308,11 +2337,6 @@ export class AuthService extends BasePermissionService<
       if (invitation.isErr()) return err(invitation.error);
       if (!invitation.value) return this.error("NOT_FOUND", "Invitation not found");
 
-      if (this.presentation.registry?.strict || input.experienceFlow !== undefined) {
-        const presentation = this.verifyInvitationFlow(input, ctx, invitation.value);
-        if (presentation.isErr()) return err(presentation.error);
-      }
-
       if (invitation.value.status !== "pending") {
         return this.error("BAD_REQUEST", "Invitation is not pending");
       }
@@ -2321,6 +2345,11 @@ export class AuthService extends BasePermissionService<
         if (canceled.isErr()) return err(canceled.error);
         return this.error("BAD_REQUEST", "Invitation has expired");
       }
+      if (this.presentation.registry?.strict || input.experienceFlow !== undefined) {
+        const presentation = this.verifyInvitationFlow(input, ctx, invitation.value);
+        if (presentation.isErr()) return err(presentation.error);
+      }
+
       if (!invitation.value.memberId) {
         return this.error("BAD_REQUEST", "Invitation has no Membership");
       }

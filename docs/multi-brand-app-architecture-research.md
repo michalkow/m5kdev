@@ -238,23 +238,23 @@ No family or version substitutions were made. Researchers returned cited briefs 
 
 ## Merged sources
 
-Repository references are the current authority for implementation and terminology. External links support platform behavior; recommendations are explicitly identified as synthesis/inference. Sources are restricted to those supplied in the research briefs; peripheral sources not used above are omitted.
+The repository inventory was researched against baseline commit `8e7cb611bf0dad9bbf19ab655329de6d722ded6c`; historical code/line citations below are pinned to that baseline. The shipped contract is documented in the [Experience adoption guide](./experience-adoption.md) and [ADR-0038](./adr/0038-domain-selected-experiences.md). External links support platform behavior; recommendations are explicitly identified as synthesis/inference. Sources are restricted to those supplied in the research briefs; peripheral sources not used above are omitted.
 
 ### Repository
 
 [R1]: ../docs/adr/0034-billing-owns-organization-entitlements.md
 [R2]: ../GLOSSARY.md
-[R3]: ../packages/backend/src/modules/billing/billing.service.ts:294
+[R3]: https://github.com/michalkow/m5kdev/blob/8e7cb611bf0dad9bbf19ab655329de6d722ded6c/packages/backend/src/modules/billing/billing.service.ts#L294
 [R4]: ../packages/backend/src/modules/billing/billing.db.ts
 [R5]: ../packages/commons/src/modules/billing/billing.entitlements.ts
-[R6]: ../packages/backend/src/app.ts:145
+[R6]: https://github.com/michalkow/m5kdev/blob/8e7cb611bf0dad9bbf19ab655329de6d722ded6c/packages/backend/src/app.ts#L145
 [R7]: ../apps/starter/webapp/src/Providers.tsx
-[R8]: ../packages/backend/src/modules/auth/auth.lib.ts:195
-[R9]: ../packages/backend/src/app.ts:677
+[R8]: https://github.com/michalkow/m5kdev/blob/8e7cb611bf0dad9bbf19ab655329de6d722ded6c/packages/backend/src/modules/auth/auth.lib.ts#L195
+[R9]: https://github.com/michalkow/m5kdev/blob/8e7cb611bf0dad9bbf19ab655329de6d722ded6c/packages/backend/src/app.ts#L677
 [R10]: ../docs/adr/0027-billing-checkout-portal-session-create-overlay.md
-[R11]: ../packages/backend/src/modules/billing/billing.router.ts:78
+[R11]: https://github.com/michalkow/m5kdev/blob/8e7cb611bf0dad9bbf19ab655329de6d722ded6c/packages/backend/src/modules/billing/billing.router.ts#L78
 [R12]: ../packages/frontend/src/modules/billing/hooks/useEntitlements.ts
-[R13]: ../pnpm-workspace.yaml:104
+[R13]: https://github.com/michalkow/m5kdev/blob/8e7cb611bf0dad9bbf19ab655329de6d722ded6c/pnpm-workspace.yaml#L104
 [R14]: ../AGENTS.md
 [R15]: ../docs/adr/0017-billing-org-paywall-seat-billing-opt-in.md
 [R16]: ../docs/adr/0020-trial-price-at-start-card-catalog-switch.md
@@ -273,7 +273,7 @@ Repository references are the current authority for implementation and terminolo
 - [R9 — Default CORS configuration][R9]
 - [R10 — Static billing session overlays][R10]
 - [R11 — Billing success redirect][R11]
-- [Session creation defaults](../packages/backend/src/modules/billing/billing.repository.ts:695)
+- [Session creation defaults](https://github.com/michalkow/m5kdev/blob/8e7cb611bf0dad9bbf19ab655329de6d722ded6c/packages/backend/src/modules/billing/billing.repository.ts#L695)
 - [R12 — Frontend entitlement state][R12]
 - [R13 — Dependency versions][R13]
 - [R14 — Architecture and job rules][R14]

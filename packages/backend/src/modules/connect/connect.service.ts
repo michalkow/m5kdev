@@ -110,6 +110,8 @@ export class ConnectService extends BasePermissionService<
     const redirectUri =
       provider.redirectUris?.[experience.id] ?? provider.redirectUri ?? expected.href;
     const target = new URL(redirectUri);
+    if (Object.keys(connectCallbackInputSchema.shape).some((key) => target.searchParams.has(key)))
+      throw new ExperienceContextError("Connection callback query contains a reserved flow field");
     if (
       !["http:", "https:"].includes(target.protocol) ||
       target.username ||

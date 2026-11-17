@@ -1,3 +1,4 @@
+import { AppConfigProvider } from "@m5kdev/frontend/modules/app/components/AppConfigProvider";
 import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
 import type { FormEvent, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -25,7 +26,6 @@ jest.mock("@m5kdev/frontend/modules/auth/hooks/useAuthClient", () => ({
   useAuthClient: () => require("@m5kdev/frontend/modules/auth/auth.lib").authClient,
 }));
 jest.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-jest.mock("@m5kdev/frontend/modules/app/hooks/useAppConfig", () => ({ useAppConfig: () => ({}) }));
 jest.mock("@m5kdev/frontend/modules/auth/hooks/useSession", () => ({
   useSession: () => ({ registerSession: jest.fn() }),
 }));
@@ -39,13 +39,21 @@ it("submits the invitation's opaque signed continuation with its original id bef
     error: { status: 400, statusText: "Bad Request", message: "Invalid link" },
   });
   renderToStaticMarkup(
-    <MemoryRouter>
-      <AuthPublicSignupForm
-        invitation="invitation-id"
-        email="invitee@example.test"
-        experienceFlow="signed-proof"
-      />
-    </MemoryRouter>
+    <AppConfigProvider
+      config={{
+        appName: "Radar",
+        appUrl: "https://radar.example.test",
+        serverUrl: "https://api.example.test",
+      }}
+    >
+      <MemoryRouter>
+        <AuthPublicSignupForm
+          invitation="invitation-id"
+          email="invitee@example.test"
+          experienceFlow="signed-proof"
+        />
+      </MemoryRouter>
+    </AppConfigProvider>
   );
   const data = jest.spyOn(globalThis, "FormData").mockImplementation(
     () =>
@@ -58,7 +66,10 @@ it("submits the invitation's opaque signed continuation with its original id bef
     mockSubmit({ preventDefault() {}, currentTarget: {} } as FormEvent<HTMLFormElement>);
     await new Promise((resolve) => setImmediate(resolve));
     expect(authClient.signUp.email).toHaveBeenCalledWith(
-      expect.objectContaining({ email: "invitee@example.test" }),
+      expect.objectContaining({
+        email: "invitee@example.test",
+        callbackURL: "https://radar.example.test/login",
+      }),
       {
         headers: expect.objectContaining({
           "Organization-Invitation-Code": "invitation-id",

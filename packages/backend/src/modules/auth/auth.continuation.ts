@@ -1,6 +1,10 @@
 import type { PublicExperience } from "@m5kdev/commons/modules/app/experience.schema";
 import { z } from "zod";
-import { ExperienceContextError, type ExperienceRegistry } from "../../experience";
+import {
+  ExperienceContextError,
+  type ExperienceRegistry,
+  resolveWebDestination,
+} from "../../experience";
 import { EXPERIENCE_FLOW_PARAMETER, type ExperienceFlowSigner } from "../../experience-flows";
 
 export type AuthPresentation = { registry?: ExperienceRegistry; flows?: ExperienceFlowSigner };
@@ -9,6 +13,13 @@ type AuthFlowContext = {
   experience?: PublicExperience;
   requestHeaders?: Parameters<ExperienceRegistry["resolveRequest"]>[0]["headers"];
 };
+
+/** URLSearchParams reserializes query bytes when the proof is attached or removed. */
+export function canonicalAuthFlowDestination(destination: string) {
+  const url = new URL(destination);
+  url.searchParams.delete(EXPERIENCE_FLOW_PARAMETER);
+  return url.href;
+}
 
 /** Issuance remains owned by Auth; the signer binds presentation, never resource authority. */
 export function issueAuthFlow(
@@ -24,10 +35,11 @@ export function issueAuthFlow(
   const experience = input.registry?.require(input.experience);
   const origin = experience?.webOrigin ?? input.webOrigin;
   if (!origin) throw new ExperienceContextError("Public web origin is not configured");
-  const destination =
+  const destination = canonicalAuthFlowDestination(
     experience && input.registry
       ? input.registry.destination(experience, input.path)
-      : new URL(input.path, origin).href;
+      : resolveWebDestination(origin, input.path)
+  );
   const link = new URL(destination);
   if (input.registry?.strict) {
     if (!input.flows || !experience)
@@ -80,7 +92,8 @@ export function verifyAuthFlow(
   if (
     input.proof !== undefined &&
     input.path !== undefined &&
-    bound.destination !== input.registry.destination(bound.experience, input.path)
+    bound.destination !==
+      canonicalAuthFlowDestination(input.registry.destination(bound.experience, input.path))
   )
     throw new ExperienceContextError("Invalid continuation destination");
   if (input.requestHeaders)

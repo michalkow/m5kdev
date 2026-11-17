@@ -731,17 +731,32 @@ test("integrated invitation, waitlist and exact account claim retain resource pr
     (await trpcRequest(page, brand, "auth.getMyAccountClaimStatus", continuation, "GET")).data[0]
       .result
   ).toMatchObject({ id: claim.id });
-  expect(
-    (
-      await authRequest(page, brand, "set-password", {
-        newPassword: "Claimed-Password-123",
-        ...continuation,
-      })
-    ).status
-  ).toBe(200);
-  expect((await trpcRequest(page, brand, "auth.acceptMyAccountClaim", continuation)).status).toBe(
-    200
+  let passwordWrites = 0;
+  let acceptAttempts = 0;
+  const countPassword = (request: import("@playwright/test").Request) => {
+    if (new URL(request.url()).pathname.endsWith("/set-password")) passwordWrites++;
+  };
+  page.on("request", countPassword);
+  await page.route("**/trpc/auth.acceptMyAccountClaim*", async (route) => {
+    if (++acceptAttempts === 1) await route.abort("failed");
+    else await route.continue();
+  });
+  await page.locator('input[type="password"]').fill("Claimed-Password-123");
+  const claimButton = page.getByRole("button", { name: "Set Password and Claim", exact: true });
+  const failedAcceptance = page.waitForRequest((request) =>
+    request.url().includes("auth.acceptMyAccountClaim")
   );
+  await claimButton.click();
+  await failedAcceptance;
+  await page.reload();
+  const finishClaim = page.getByRole("button", { name: "Finish Claim", exact: true });
+  await expect(finishClaim).toBeEnabled();
+  await finishClaim.click();
+  await expect.poll(() => acceptAttempts).toBe(2);
+  await expect(page).toHaveURL(`${app.origins.beta}/`);
+  expect(passwordWrites).toBe(1);
+  page.off("request", countPassword);
+  await page.unroute("**/trpc/auth.acceptMyAccountClaim*");
   expect(
     (await app.orm.select().from(accountClaims).where(eq(accountClaims.id, claim.id)))[0].status
   ).toBe("ACCEPTED");
@@ -1030,4 +1045,206 @@ test("integrated immediate and real Redis delayed A/B emails and signed trial we
       2
     )
   );
+});
+
+for (const source of ["members", "invite-friends"] as const)
+  test(`generated ${source} invitation link stays visible and copies only from a separate fresh gesture`, async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      let fresh = false;
+      let gestureEpoch = 0;
+      const gesture = () => {
+        fresh = true;
+        const epoch = ++gestureEpoch;
+        // Capture and delegated Press listeners may have a microtask checkpoint between them.
+        setTimeout(() => {
+          if (gestureEpoch === epoch) fresh = false;
+        }, 0);
+      };
+      for (const event of ["pointerup", "click", "keydown"])
+        document.addEventListener(event, gesture, true);
+      sessionStorage.setItem(
+        "clipboard-evidence",
+        JSON.stringify({ writes: [], outsideGesture: 0 })
+      );
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (value: string) => {
+            const evidence = JSON.parse(sessionStorage.getItem("clipboard-evidence")!);
+            if (!fresh) {
+              evidence.outsideGesture++;
+              sessionStorage.setItem("clipboard-evidence", JSON.stringify(evidence));
+              throw new DOMException("Fresh gesture required", "NotAllowedError");
+            }
+            if (sessionStorage.getItem("clipboard-denied"))
+              throw new DOMException("Clipboard denied", "NotAllowedError");
+            evidence.writes.push(value);
+            sessionStorage.setItem("clipboard-evidence", JSON.stringify(evidence));
+          },
+        },
+      });
+    });
+    if (source === "members")
+      (
+        await app.auth.inviteOrganizationMember(
+          { email: "clipboard-member@example.test", role: "member" },
+          app.ownerContext("alpha")
+        )
+      )._unsafeUnwrap();
+    else
+      (
+        await app.auth.createWaitlistCode({ name: "Clipboard link" }, app.ownerContext("alpha"))
+      )._unsafeUnwrap();
+    await login(page);
+    await page.goto(`${app.origins.alpha}/${source}`);
+    await page.getByRole("button", { name: "reports", exact: true }).click();
+    await page.route("**/trpc/auth.create*Link*", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      await route.continue();
+    });
+    const row =
+      source === "members"
+        ? page.getByRole("row").filter({ hasText: "clipboard-member@example.test" })
+        : page.locator("div.border.rounded-lg").filter({ hasText: "Clipboard link" });
+    await row.getByRole("button", { name: /Copy|Generate invitation link/ }).click();
+    const urlField = page.getByRole("textbox", { name: "Invitation link", exact: true });
+    await expect(urlField).toBeVisible();
+    const url = await urlField.inputValue();
+    expect(new URL(url).origin).toBe(app.origins.alpha);
+    expect(new URL(url).searchParams.get("experienceFlow")).toBeTruthy();
+    expect(
+      await page.evaluate(() => JSON.parse(sessionStorage.getItem("clipboard-evidence")!))
+    ).toEqual({ writes: [], outsideGesture: 0 });
+    await page.getByRole("button", { name: "Copy", exact: true }).click();
+    await expect
+      .poll(() =>
+        page.evaluate(() => JSON.parse(sessionStorage.getItem("clipboard-evidence")!).writes)
+      )
+      .toEqual([url]);
+    await page.evaluate(() => sessionStorage.setItem("clipboard-denied", "true"));
+    await page.getByRole("button", { name: "Copy", exact: true }).click();
+    await expect(urlField).toHaveValue(url);
+    await page.screenshot({ path: `${artifactRoot}/${source}-share-link.png`, fullPage: true });
+  });
+
+test("compiled Notification worker preserves explicit and policy presentation and rejects a closed Organization Owner", async () => {
+  const { randomUUID } = await import("node:crypto");
+  const { users, organizations, members } = await import("@m5kdev/backend/modules/auth/auth.db");
+  const { notificationSendLogs, notifications } = await import(
+    "@m5kdev/backend/modules/notification/notification.db"
+  );
+  const { eq } = await import("drizzle-orm");
+  const recipient = `notification-${randomUUID()}@example.test`;
+  const [original] = await app.orm.select().from(users).where(eq(users.id, "person"));
+  try {
+    await app.orm
+      .update(users)
+      .set({ email: recipient, locale: "en_GB" })
+      .where(eq(users.id, "person"));
+    const explicit = (
+      await app.notification.send({
+        memberId: "member_reports",
+        kind: "reference.notice",
+        title: "Entered Reports",
+        body: "Explicit Experience reference",
+        experienceId: "alpha",
+        data: { experienceId: "partner" },
+      })
+    )._unsafeUnwrap();
+    const policy = (
+      await app.notification.send({
+        memberId: "member_reports",
+        kind: "reference.notice",
+        title: "No-visit event",
+        body: "App communication policy",
+        data: { experienceId: "partner" },
+      })
+    )._unsafeUnwrap();
+    const closed = (
+      await app.notification.send({
+        memberId: "member_unpaid",
+        kind: "reference.notice",
+        title: "Closed Owner event",
+        body: "Must not deliver",
+      })
+    )._unsafeUnwrap();
+    await app.orm
+      .update(organizations)
+      .set({ closedAt: new Date() })
+      .where(eq(organizations.id, "org_unpaid"));
+    const [owner] = await app.orm.select().from(members).where(eq(members.id, "member_unpaid"));
+    expect(owner.deletedAt).toBeNull();
+    for (const brand of ["alpha", "beta"]) {
+      await expect
+        .poll(
+          async () =>
+            (
+              await app.email.findLatestStoredEmail({
+                to: recipient,
+                templateId: `${brand}-notificationInbox`,
+              })
+            )?.templateId
+        )
+        .toBe(`${brand}-notificationInbox`);
+      const mail = await app.email.findLatestStoredEmail({
+        to: recipient,
+        templateId: `${brand}-notificationInbox`,
+      });
+      expect(mail).toMatchObject({
+        from: `${brand} <${brand}@example.test>`,
+        props: { experience: { id: brand, webOrigin: app.origins[brand] }, htmlLang: "en-GB" },
+      });
+      expect(mail?.html).toContain(brand === "beta" ? "Beta Assistant" : "Alpha Reports");
+      expect(mail?.html).toContain('lang="en-GB"');
+    }
+    await expect
+      .poll(
+        async () =>
+          (
+            await app.orm
+              .select()
+              .from(notificationSendLogs)
+              .where(eq(notificationSendLogs.notificationId, closed.id))
+          )[0]?.status
+      )
+      .toBe("failed");
+    const [rejected] = await app.orm
+      .select()
+      .from(notifications)
+      .where(eq(notifications.id, closed.id));
+    expect(rejected.emailedAt).toBeNull();
+    const delivered = (await app.email.listStoredEmails()).filter((mail) =>
+      Array.isArray(mail.to) ? mail.to.includes(recipient) : mail.to === recipient
+    );
+    expect(delivered).toHaveLength(2);
+    const job = await app.workflow.service.getJob("main", `email-${explicit.id}`);
+    expect(job?.data).toEqual({ notificationId: explicit.id, experienceId: "alpha" });
+    await writeFile(
+      `${artifactRoot}/compiled-notification.json`,
+      JSON.stringify(
+        {
+          recipient,
+          explicit: explicit.id,
+          policy: policy.id,
+          closed: closed.id,
+          payload: job?.data,
+          delivered,
+          rejected: { id: rejected.id, emailedAt: rejected.emailedAt },
+        },
+        null,
+        2
+      )
+    );
+  } finally {
+    await app.orm
+      .update(users)
+      .set({ email: original.email, locale: original.locale })
+      .where(eq(users.id, "person"));
+    await app.orm
+      .update(organizations)
+      .set({ closedAt: null })
+      .where(eq(organizations.id, "org_unpaid"));
+  }
 });

@@ -849,3 +849,80 @@ describe("Named Connection browser operations", () => {
     }
   });
 });
+
+describe("Registered Connection callback query", () => {
+  it.each(["state", "code", "error", "error_description", "redirect", "provider"])(
+    "rejects reserved callback field %s at boot",
+    async (key) => {
+      const pool = createTestPool();
+      let shutdown: (() => Promise<void>) | undefined;
+      try {
+        expect(() => {
+          const built = createBackendApp(
+            {
+              db: { client: pool },
+              schema,
+              app: {
+                urls: { web: "https://radar.example.test", api: "https://radar.example.test" },
+              },
+            },
+            [
+              new ConnectModule([
+                createGoogleProvider({
+                  clientId: "client",
+                  clientSecret: "secret",
+                  redirectUri: `https://radar.example.test/connect/google/callback?${key}=registered`,
+                }),
+              ]),
+            ]
+          );
+          shutdown = built.shutdown;
+        }).toThrow("Connection callback query contains a reserved flow field");
+      } finally {
+        await shutdown?.();
+        await pool.end();
+      }
+    }
+  );
+});
+
+describe("Local Connection presentation boot contract", () => {
+  it("requires a web origin for configured OAuth providers while preserving API-only neutral Kernel and empty Connect", async () => {
+    const pool = createTestPool();
+    const previous = process.env.VITE_APP_URL;
+    delete process.env.VITE_APP_URL;
+    const shutdowns: (() => Promise<void>)[] = [];
+    try {
+      const config = {
+        db: { client: pool },
+        schema,
+        app: { urls: { api: "http://localhost:8080" } },
+      };
+      const neutral = createBackendApp(config);
+      shutdowns.push(neutral.shutdown);
+      expect(neutral.config.app.experienceRegistry).toBeUndefined();
+      const empty = createBackendApp(config, [new ConnectModule([])]);
+      shutdowns.push(empty.shutdown);
+      expect(empty.modules.connect.services.connect.getProvider("google")).toBeNull();
+      expect(() => {
+        const built = createBackendApp(config, [
+          new ConnectModule([
+            createGoogleProvider({
+              clientId: "client",
+              clientSecret: "secret",
+              redirectUri: "http://localhost:8080/connect/google/callback",
+            }),
+          ]),
+        ]);
+        shutdowns.push(built.shutdown);
+      }).toThrow(
+        "Configured Connection OAuth providers require app.urls.web / VITE_APP_URL and app.urls.api / VITE_SERVER_URL"
+      );
+    } finally {
+      for (const shutdown of shutdowns) await shutdown();
+      if (previous === undefined) delete process.env.VITE_APP_URL;
+      else process.env.VITE_APP_URL = previous;
+      await pool.end();
+    }
+  });
+});

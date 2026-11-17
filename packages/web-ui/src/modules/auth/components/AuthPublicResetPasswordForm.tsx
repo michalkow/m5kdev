@@ -52,7 +52,8 @@ export function AuthPublicResetPasswordForm() {
       .then((result) => {
         if (result.error) {
           const message = t(
-            result.error.status === 400
+            result.error.code === "INVALID_TOKEN" ||
+              result.error.code === "INVALID_RECOVERY_CONTINUATION"
               ? "web-ui:auth.resetPassword.linkInvalid"
               : "web-ui:auth.resetPassword.error"
           );

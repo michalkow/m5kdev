@@ -192,6 +192,11 @@ export class EmailService extends BaseService<never, never> {
     }
   }
 
+  /** Derived capability for legacy standalone producers; strict selection never falls back. */
+  get hasExperienceRegistry() {
+    return this.experienceRegistry !== undefined;
+  }
+
   /** Select presentation before communication side effects; owning services retain authority. */
   async resolveCommunicationExperience(
     input?: CommunicationExperienceInput

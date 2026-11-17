@@ -26,12 +26,16 @@ import type { AuthService } from "../../auth/auth.service";
 import { subscriptions } from "../../billing/billing.db";
 import { BillingModule } from "../../billing/billing.module";
 import type { BillingService } from "../../billing/billing.service";
+import * as notificationSchema from "../../notification/notification.db";
+import { defaultNotificationGrants } from "../../notification/notification.grants";
+import { NotificationModule } from "../../notification/notification.module";
+import { NotificationService } from "../../notification/notification.service";
 import { workflows } from "../../workflow/workflow.db";
 import { WorkflowModule } from "../../workflow/workflow.module";
 import type { WorkflowService } from "../../workflow/workflow.service";
 import { EmailModule } from "../email.module";
 import type { CommunicationContext, CommunicationPolicy } from "../email.schema";
-import type { EmailService, EmailTemplates } from "../email.service";
+import { EmailService, type EmailTemplates } from "../email.service";
 
 jest.mock("@m5kdev/commons/utils/trpc", () => ({
   transformer: { serialize: (value: unknown) => value, deserialize: (value: unknown) => value },
@@ -41,7 +45,7 @@ jest.mock("better-auth/node", () => ({
   fromNodeHeaders: (headers: unknown) => headers,
 }));
 
-const schema = { ...authSchema, workflows, subscriptions };
+const schema = { ...authSchema, ...notificationSchema, workflows, subscriptions };
 const reminderSchema = z
   .object({
     userId: z.string().min(1),
@@ -212,6 +216,16 @@ describeWithRedis("Delayed communications through real Workflow and Email", () =
           }
         ),
         new AuthModule(),
+        new NotificationModule({
+          kinds: [
+            {
+              id: "notice",
+              defaultChannels: ["email"],
+              emailTemplate: "reminder",
+              delays: { emailMs: 30 },
+            },
+          ],
+        }),
         new WorkflowModule({
           prefix,
           boardPath: null,
@@ -255,7 +269,14 @@ describeWithRedis("Delayed communications through real Workflow and Email", () =
       .output(z.string(), true)
       .handle(async ({ data }) => ok(data.resourceId));
     built.workflow.registry.registerService({ ...jobs, neutral });
-    const result = { built, workflow, email, jobs, neutral };
+    const result = {
+      built,
+      workflow,
+      email,
+      jobs,
+      neutral,
+      notification: built.modules.notification.services.notification,
+    };
     shutdowns.push(() => built.shutdown());
     return result;
   }
@@ -338,6 +359,244 @@ describeWithRedis("Delayed communications through real Workflow and Email", () =
   });
   afterAll(async () => {
     await client.end();
+  });
+
+  it.each(["missing-policy", "removed-reference", "changed-Membership", "closed-Organization"])(
+    "refuses Notification delivery for %s without policy fallback or stale recipient authority",
+    async (failure) => {
+      const policy =
+        failure === "missing-policy"
+          ? undefined
+          : jest.fn(async () => experienceIdSchema.parse("radar"));
+      const producer = build(policy);
+      const sent = (
+        await producer.notification.send({
+          memberId: "owner-member",
+          kind: "notice",
+          title: "Protected notice",
+          body: "Must not deliver",
+          ...(failure === "removed-reference" ? { experienceId: "horeka" } : {}),
+        })
+      )._unsafeUnwrap();
+      let app = producer;
+      if (failure === "removed-reference") {
+        await producer.built.shutdown();
+        app = build(policy, {
+          experiences: {
+            ...registryConfig,
+            definitions: {
+              radar: registryConfig.definitions.radar,
+              partner: registryConfig.definitions.partner,
+            },
+          },
+        });
+      }
+      if (failure === "changed-Membership") {
+        await orm.insert(schema.users).values({
+          id: "replacement",
+          emailVerified: true,
+          name: "Replacement",
+          email: "replacement@example.test",
+          role: "user",
+        });
+        await orm
+          .update(schema.members)
+          .set({ userId: "replacement" })
+          .where(eq(schema.members.id, "owner-member"));
+      }
+      if (failure === "closed-Organization") {
+        const auth = app.built.modules.auth.services.auth;
+        const actor = (
+          await resolveOrganizationActor({
+            user: { userId: "owner", userRole: "user" },
+            organizationId: "organization",
+            memberships: auth.repository.organization,
+          })
+        )._unsafeUnwrap();
+        const [user] = await orm.select().from(schema.users).where(eq(schema.users.id, "owner"));
+        expect((await auth.closeOrganization({ name: "Shared" }, { actor, user })).isOk()).toBe(
+          true
+        );
+        const [owner] = await orm
+          .select()
+          .from(schema.members)
+          .where(eq(schema.members.id, "owner-member"));
+        expect(owner.deletedAt).toBeNull();
+      }
+      await app.built.start({ listen: false });
+      let logs: (typeof schema.notificationSendLogs.$inferSelect)[] = [];
+      const deadline = Date.now() + 3000;
+      while (Date.now() < deadline) {
+        logs = await orm
+          .select()
+          .from(schema.notificationSendLogs)
+          .where(eq(schema.notificationSendLogs.notificationId, sent.id));
+        if (logs.length) break;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toMatchObject({ status: "failed", channel: "email", userId: "owner" });
+      expect(logs[0].error).toBeTruthy();
+      expect(await app.email.listStoredEmails()).toEqual([]);
+      if (policy) expect(policy).not.toHaveBeenCalled();
+    }
+  );
+
+  it("keeps an actual standalone registry-free EmailService usable by the old Notification sender contract", async () => {
+    const app = build();
+    const sent = (
+      await app.notification.send({
+        memberId: "owner-member",
+        kind: "notice",
+        title: "Legacy",
+        body: "Raw email",
+      })
+    )._unsafeUnwrap();
+    const email = new EmailService({
+      templates: {
+        ...templates,
+        reminder: {
+          id: "legacy-notice",
+          react: (props) => createElement("h1", null, String(props.title)),
+        },
+      },
+      appConfig: { name: "Legacy", urls: { web: "https://legacy.example.test" } },
+      emailConfig: {
+        mode: "store",
+        outputDirectory: `${outputDirectory}/legacy`,
+        from: "legacy@example.test",
+      },
+    });
+    const notification = new NotificationService(
+      { notification: app.notification.repository.notification },
+      { workflow: app.workflow, auth: app.built.modules.auth.services.auth, email },
+      defaultNotificationGrants,
+      { kinds: [{ id: "notice", defaultChannels: ["email"], emailTemplate: "reminder" }] }
+    );
+    expect(email.hasExperienceRegistry).toBe(false);
+    expect((await notification.deliverEmail(sent.id)).isOk()).toBe(true);
+    expect(await email.findLatestStoredEmail({ to: "owner@example.test" })).toMatchObject({
+      from: "legacy@example.test",
+      props: { title: "Legacy", body: "Raw email" },
+      html: expect.stringContaining("Legacy"),
+    });
+  });
+
+  it("retains an explicitly selected Notification Experience id in the email job without policy inference", async () => {
+    const policy = jest.fn(async () => experienceIdSchema.parse("radar"));
+    const app = build(policy);
+    const invalid = await app.notification.send({
+      memberId: "owner-member",
+      kind: "notice",
+      title: "Invalid ref",
+      body: "No issuance",
+      experienceId: "missing",
+    });
+    expect(invalid.isErr()).toBe(true);
+    expect(await orm.select().from(schema.notifications)).toEqual([]);
+    const sent = (
+      await app.notification.send({
+        memberId: "owner-member",
+        kind: "notice",
+        title: "Entered B",
+        body: "Explicit sender",
+        experienceId: "horeka",
+      })
+    )._unsafeUnwrap();
+    const job = await app.workflow.getJob("main", `email-${sent.id}`);
+    expect(job?.data).toEqual({ notificationId: sent.id, experienceId: "horeka" });
+    await app.built.start({ listen: false });
+    const deadline = Date.now() + 3000;
+    while (
+      Date.now() < deadline &&
+      !(await app.email.findLatestStoredEmail({ to: "owner@example.test" }))
+    )
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(await app.email.findLatestStoredEmail({ to: "owner@example.test" })).toMatchObject({
+      props: { experience: { id: "horeka" } },
+    });
+    expect(policy).not.toHaveBeenCalled();
+  });
+
+  it("delivers strict Notification emails through real Redis using current Membership policy and current User locale", async () => {
+    const policy = jest.fn(async (context: CommunicationContext) =>
+      experienceIdSchema.parse(context.userId === "owner" ? "radar" : "horeka")
+    );
+    const app = build(policy);
+    await orm.insert(schema.users).values({
+      id: "other",
+      name: "Other",
+      email: "other@example.test",
+      locale: "en",
+      role: "user",
+      emailVerified: true,
+    });
+    await orm.insert(schema.members).values({
+      id: "other-member",
+      userId: "other",
+      organizationId: "organization",
+      role: "member",
+    });
+    const sent = await Promise.all(
+      ["owner-member", "other-member"].map((memberId) =>
+        app.notification.send({
+          memberId,
+          kind: "notice",
+          title: "Current notice",
+          body: "Inbox email",
+          data: { experienceId: "partner", organizationId: "forged" },
+        })
+      )
+    );
+    const ids = sent.map((result) => result._unsafeUnwrap().id);
+    const jobs = (await app.workflow.getQueue("main").getJobs(["delayed", "waiting"])).filter(
+      (job) => job.name === "notification.email"
+    );
+    expect(jobs).toHaveLength(2);
+    expect(jobs.map((job) => job.data)).toEqual(
+      expect.arrayContaining(ids.map((notificationId) => ({ notificationId })))
+    );
+    await orm.update(schema.users).set({ locale: "en_GB" });
+    await app.built.start({ listen: false });
+    const deadline = Date.now() + 8000;
+    while (Date.now() < deadline && (await app.email.listStoredEmails()).length < 2)
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    const stored = await app.email.listStoredEmails();
+    expect(stored).toHaveLength(2);
+    for (const [userId, memberId, brand] of [
+      ["owner", "owner-member", "radar"],
+      ["other", "other-member", "horeka"],
+    ]) {
+      const mail = await app.email.findLatestStoredEmail({ to: `${userId}@example.test` });
+      expect(mail).toMatchObject({
+        from: `${brand === "radar" ? "Radar" : "Horeka"} <${brand}@example.test>`,
+        props: { experience: { id: brand }, htmlLang: "en-GB" },
+      });
+      expect(policy).toHaveBeenCalledWith({
+        event: "notification.email",
+        eventId: ids[userId === "owner" ? 0 : 1],
+        resourceId: ids[userId === "owner" ? 0 : 1],
+        userId,
+        memberId,
+        organizationId: "organization",
+      });
+    }
+    const evidence = "/tmp/m5kdev-implement-88/bugbot-artifacts/notification";
+    await fs.mkdir(evidence, { recursive: true });
+    await fs.cp(outputDirectory, `${evidence}/emails`, { recursive: true });
+    await fs.writeFile(
+      `${evidence}/summary.json`,
+      JSON.stringify(
+        {
+          ids,
+          contexts: policy.mock.calls.map(([context]) => context),
+          jobs: jobs.map((job) => ({ name: job.name, data: job.data })),
+          emails: stored,
+        },
+        null,
+        2
+      )
+    );
   });
 
   it("queues ids only and renders delayed A/B messages using reloaded locale after interleaved sends", async () => {

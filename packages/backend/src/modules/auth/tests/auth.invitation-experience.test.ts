@@ -201,6 +201,7 @@ async function fixture(
     email,
     orm,
     registry,
+    directory,
     ownerContext,
     close: async () => {
       await built.shutdown();
@@ -547,6 +548,7 @@ describe("Experience-bound invitations", () => {
       };
       const status = await f.auth.getMyAccountClaimStatus(input, context);
       expect(status.isOk() && status.value?.id).toBe(first.value.id);
+      expect(status.isOk() && status.value?.hasPassword).toBe(true);
       expect(
         (
           await f.auth.acceptMyAccountClaim(input, {
@@ -1663,6 +1665,159 @@ describe("Producer-issued Email waitlist continuation", () => {
       } finally {
         await f.close();
       }
+    }
+  });
+});
+
+describe("Public claim-link request privacy", () => {
+  it.each([false, true])(
+    "does not reveal registered emails for missing or invalid claims (legacy=%s)",
+    async (legacy) => {
+      const f = await fixture({ legacy });
+      try {
+        const send = async (email: string, metadata?: Record<string, unknown>) => {
+          const response = await f.betterAuth.handler(
+            new Request("https://radar.example.test/api/auth/sign-in/magic-link", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                host: "radar.example.test",
+                origin: "https://radar.example.test",
+              },
+              body: JSON.stringify({
+                email,
+                callbackURL: "https://radar.example.test/claim-account",
+                ...(metadata ? { metadata } : {}),
+              }),
+            })
+          );
+          return { status: response.status, body: await response.json() };
+        };
+        const unknown = await send("unknown@example.test");
+        expect(unknown.status).toBe(200);
+        expect(await send("owner@example.test")).toEqual(unknown);
+        expect(await send("owner@example.test", { claimId: "missing-claim" })).toEqual(unknown);
+        expect(await f.email.listStoredEmails()).toEqual([]);
+      } finally {
+        await f.close();
+      }
+    }
+  );
+});
+
+describe("Expired invitation cleanup", () => {
+  it("cancels the trusted expired pending Membership before rejecting an invalid presentation proof", async () => {
+    const f = await fixture();
+    try {
+      const issued = await f.auth.inviteOrganizationMember(
+        { email: "expired-cleanup@example.test", role: "member" },
+        f.ownerContext("radar")
+      );
+      if (issued.isErr()) throw issued.error;
+      await f.orm
+        .update(schema.invitations)
+        .set({ expiresAt: new Date(Date.now() - 1000) })
+        .where(eq(schema.invitations.id, issued.value.invitation.id));
+      const result = await f.auth.acceptOrganizationInvitation(
+        { id: issued.value.invitation.id, experienceFlow: "invalid" },
+        {
+          experience: f.registry.get("radar"),
+          actor: createServiceActor({ userId: "owner", userRole: "user" }),
+          user: { id: "owner", name: "Owner", email: "owner@example.test" },
+        }
+      );
+      expect(result.isErr()).toBe(true);
+      const invitation = await f.orm.query.invitations.findFirst({
+        where: eq(schema.invitations.id, issued.value.invitation.id),
+      });
+      expect(invitation?.status).toBe("canceled");
+      const member = await f.orm.query.members.findFirst({
+        where: eq(schema.members.id, issued.value.member.id),
+      });
+      expect(member?.userId).toBeNull();
+      expect(member?.deletedAt).toBeInstanceOf(Date);
+    } finally {
+      await f.close();
+    }
+  });
+});
+
+describe("Committed waitlist registration", () => {
+  it("returns one committed registration after real Email store failure and reuses it on concurrent retry", async () => {
+    const f = await fixture();
+    try {
+      await fs.rm(f.directory, { recursive: true, force: true });
+      await fs.writeFile(f.directory, "blocked email store");
+      const context = { experience: f.registry.get("radar"), user: null, actor: null };
+      const first = await f.auth.joinWaitlist({ email: "Retry@Example.test" }, context);
+      expect(first.isOk()).toBe(true);
+      if (first.isErr()) throw first.error;
+      await fs.rm(f.directory, { force: true });
+      await fs.mkdir(f.directory);
+      const retries = await Promise.all(
+        Array.from({ length: 3 }, () =>
+          f.auth.joinWaitlist({ email: "retry@example.test" }, context)
+        )
+      );
+      expect(retries.map((result) => result.isOk() && result.value.id)).toEqual([
+        first.value.id,
+        first.value.id,
+        first.value.id,
+      ]);
+      const rows = await f.orm.select().from(schema.waitlist);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].email).toBe("retry@example.test");
+      expect(await f.email.listStoredEmails()).toEqual([]);
+      const normal = await f.auth.joinWaitlist({ email: "healthy@example.test" }, context);
+      expect(normal.isOk()).toBe(true);
+      expect(await f.email.findLatestStoredEmail({ to: "healthy@example.test" })).toMatchObject({
+        to: "healthy@example.test",
+      });
+    } finally {
+      await f.close();
+    }
+  });
+});
+
+describe("Standalone invitation destinations", () => {
+  it("rejects foreign and protocol-relative share paths without a registry while preserving local query values", async () => {
+    const f = await fixture();
+    try {
+      const issued = await f.auth.inviteOrganizationMember(
+        { email: "local-invite@example.test", role: "member" },
+        f.ownerContext("radar")
+      );
+      if (issued.isErr()) throw issued.error;
+      const direct = new AuthService(
+        f.built.modules.auth.repositories as never,
+        { email: f.email },
+        defaultAuthGrants,
+        f.built.serverEvents,
+        { web: "https://radar.example.test/" }
+      );
+      const context = { ...f.ownerContext("radar"), experience: undefined };
+      for (const path of [
+        "//unregistered.example/continue",
+        "https://unregistered.example/continue",
+        " //radar.example.test/continue",
+      ]) {
+        const result = await direct.createOrganizationInvitationLink(
+          { id: issued.value.invitation.id, path },
+          context
+        );
+        expect(result.isErr()).toBe(true);
+      }
+      const local = await direct.createOrganizationInvitationLink(
+        { id: issued.value.invitation.id, path: "/continue?label=~&plus=%2B" },
+        context
+      );
+      if (local.isErr()) throw local.error;
+      const url = new URL(local.value.url);
+      expect(url.origin).toBe("https://radar.example.test");
+      expect(url.searchParams.get("label")).toBe("~");
+      expect(url.searchParams.get("plus")).toBe("+");
+    } finally {
+      await f.close();
     }
   });
 });

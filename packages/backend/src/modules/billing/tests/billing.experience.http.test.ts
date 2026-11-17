@@ -761,3 +761,30 @@ describe("Experience-bound Checkout HTTP flow", () => {
     }
   );
 });
+
+describe("Unsigned shorthand custom billing destinations", () => {
+  it.each(["checkout", "portal"])(
+    "rejects custom %s returnPath before a Stripe Session is created",
+    async (operation) => {
+      const f = await billingFixture({ legacy: true, secret: null });
+      try {
+        const cookie = await f.login("radar");
+        await f.activate(cookie);
+        const route = operation === "checkout" ? "/stripe/checkout/price_usd" : "/stripe/portal";
+        const result = await f.visit(
+          "radar.example.test",
+          `${route}?returnPath=%2Fsettings%3Ftab%3Dbilling`,
+          { cookie }
+        );
+        expect(result.status).toBe(400);
+        expect(await result.json()).toMatchObject({
+          message: "Custom billing return paths require flow signing to be configured",
+        });
+        expect(f.creates).toEqual([]);
+        expect(f.portalCreates).toEqual([]);
+      } finally {
+        await f.close();
+      }
+    }
+  );
+});

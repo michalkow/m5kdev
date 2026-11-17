@@ -16,7 +16,12 @@ const RESOURCE = "https://radar.example.test/mcp";
 const ISSUER = "https://radar.example.test/api/auth";
 
 async function fixture(
-  options: { basePath?: string; staticBaseURL?: string; registryOnly?: boolean } = {}
+  options: {
+    basePath?: string;
+    staticBaseURL?: string;
+    registryOnly?: boolean;
+    resource?: string;
+  } = {}
 ) {
   const client = createTestPool();
   const schema = { ...authTables, ...oauthTables };
@@ -43,24 +48,29 @@ async function fixture(
               }
             : {}),
         },
-    mcp: { resource: RESOURCE },
+    mcp: { resource: options.resource ?? RESOURCE },
     options: {
       secret: "mcp-experience-secret-at-least-thirty-two-characters",
       rateLimit: { enabled: false },
       basePath: options.basePath,
     },
   });
+  await auth.$context;
   return { auth, close: () => client.end() };
 }
 
-async function protectedServer(auth: ReturnType<typeof createBetterAuth>) {
+async function protectedServer(
+  auth: ReturnType<typeof createBetterAuth>,
+  options: { issuer?: string; resource?: string } = {}
+) {
   const app = express();
   app.use(express.json());
   app.post(
     "/mcp",
     createMcpExpressHandler({
       auth,
-      resource: RESOURCE,
+      resource: options.resource ?? RESOURCE,
+      issuer: options.issuer ?? `https://radar.example.test${auth.options.basePath ?? "/api/auth"}`,
       tools: [],
       serverName: "Canonical MCP",
       invoke: async () => ok(null),
@@ -80,6 +90,82 @@ async function protectedServer(auth: ReturnType<typeof createBetterAuth>) {
 }
 
 describe("canonical MCP identity with dynamic auth domains", () => {
+  it("uses explicit canonical Auth issuer when the protected resource has a different origin", async () => {
+    const resource = "https://resource.example.test/mcp";
+    const f = await fixture({ resource });
+    const server = await protectedServer(f.auth, { resource, issuer: ISSUER });
+    const nativeFetch = globalThis.fetch;
+    const keyRequests: string[] = [];
+    const boundary = jest.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (new URL(url).hostname.endsWith(".example.test")) {
+        keyRequests.push(url);
+        return url === `${ISSUER}/jwks`
+          ? f.auth.handler(new Request(url))
+          : new Response("Unexpected issuer", { status: 404 });
+      }
+      return nativeFetch(input, init);
+    });
+    try {
+      const api = f.auth.api as unknown as {
+        signJWT(input: {
+          headers: Headers;
+          body: { payload: Record<string, unknown> };
+        }): Promise<{ token: string }>;
+      };
+      const issued = await api.signJWT({
+        headers: new Headers({
+          host: "horeka.example.test",
+          origin: "https://horeka.example.test",
+        }),
+        body: { payload: { sub: "person", aud: resource, client_id: "client" } },
+      });
+      expect(JSON.parse(Buffer.from(issued.token.split(".")[1], "base64url").toString()).iss).toBe(
+        ISSUER
+      );
+      const response = await fetch(server.url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          authorization: `Bearer ${issued.token}`,
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-11-25",
+            capabilities: {},
+            clientInfo: { name: "separate-resource", version: "1" },
+          },
+        }),
+      });
+      expect(response.status).toBe(200);
+      expect(keyRequests).toEqual([`${ISSUER}/jwks`]);
+    } finally {
+      boundary.mockRestore();
+      await server.close();
+      await f.close();
+    }
+  });
+  it("fails composition when dynamic Auth has no explicit canonical MCP issuer", async () => {
+    const f = await fixture();
+    try {
+      expect(() =>
+        createMcpExpressHandler({
+          auth: f.auth,
+          resource: RESOURCE,
+          tools: [],
+          serverName: "Missing issuer",
+          invoke: async () => ok(null),
+        })
+      ).toThrow("Dynamic Auth requires an explicit canonical MCP issuer");
+    } finally {
+      await f.close();
+    }
+  });
+
   it("signs framework tokens on another brand with the canonical issuer and advertised key", async () => {
     const f = await fixture();
     try {

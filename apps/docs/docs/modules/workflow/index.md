@@ -70,7 +70,7 @@ Example from the notification module (`notification.webPush` / `.mobilePush` /
 this.webPushJob = this.service.workflow
   .job<{ notificationId: string }>({
     name: "notification.webPush",
-    id: (p) => `web:${p.notificationId}`,
+    id: (p) => `web-${p.notificationId}`,
   })
   .handle(async (payload) => {
     /* deliver; throw on failure */

@@ -2,23 +2,25 @@ import { Button, Card, Chip, Input, Label, toast } from "@heroui/react";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Copy, Link2Icon, Mail, Send, Ticket, Users, Zap } from "lucide-react";
+import { CheckCircle2, Link2Icon, Mail, Send, Ticket, Users, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
+
+import { AuthGeneratedShareLink } from "./AuthGeneratedShareLink";
 
 export function AuthUserInviteFriends() {
   const { t } = useTranslation();
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const queryClient = useQueryClient();
   const shareLink = useMutation(trpc.auth.createWaitlistLink.mutationOptions());
-  const copyLink = async (id: string) => {
+  const [generatedLink, setGeneratedLink] = useState<{ id: string; url: string }>();
+  const generateLink = async (id: string) => {
     try {
       const link = await shareLink.mutateAsync({ id });
-      await navigator.clipboard.writeText(link.url);
-      toast.success(t("web-ui:common.copySuccess"));
+      setGeneratedLink({ id, url: link.url });
     } catch {
-      toast.danger(t("web-ui:common.copyError"));
+      toast.danger(t("web-ui:auth.shareLink.generateError"));
     }
   };
 
@@ -128,6 +130,9 @@ export function AuthUserInviteFriends() {
         </div>
       </div>
 
+      {generatedLink && waitlist.some((item) => item.id === generatedLink.id) ? (
+        <AuthGeneratedShareLink url={generatedLink.url} />
+      ) : null}
       <div className="grid gap-6">
         {/* Invite Form */}
         <Card className="shadow-sm border border-default-200">
@@ -236,13 +241,13 @@ export function AuthUserInviteFriends() {
                         size="sm"
                         className="text-success-600"
                         onPress={() => {
-                          void copyLink(item.id);
+                          void generateLink(item.id);
                         }}
                         isDisabled={shareLink.isPending && shareLink.variables?.id === item.id}
-                        aria-label={t("web-ui:common.copy")}
+                        aria-label={t("web-ui:auth.shareLink.generate")}
                         isIconOnly
                       >
-                        <Copy className="h-4 w-4" />
+                        <Link2Icon className="h-4 w-4" />
                       </Button>
                     )}
                   </div>

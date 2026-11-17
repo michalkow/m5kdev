@@ -8,6 +8,7 @@ import { useSubscription } from "@m5kdev/frontend/modules/billing/hooks/useSubsc
 import { AuthOrganizationMembersRoute } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationMembersRoute";
 import { AuthOrganizationPreferences } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationPreferences";
 import { AuthPublicRouter } from "@m5kdev/web-ui/modules/auth/components/AuthPublicRouter";
+import { AuthUserInviteFriends } from "@m5kdev/web-ui/modules/auth/components/AuthUserInviteFriends";
 import { BillingInvoicePage } from "@m5kdev/web-ui/modules/billing/components/BillingInvoicePage";
 import { BillingSinglePlanSelect } from "@m5kdev/web-ui/modules/billing/components/BillingSinglePlanSelect";
 import { useTranslation } from "react-i18next";
@@ -160,6 +161,7 @@ export function Router() {
         <Route path={reports ? "reports" : "assistant"} element={workflow} />
         <Route path="supplied" element={workflow} />
         <Route path="members" element={<AuthOrganizationMembersRoute />} />
+        <Route path="invite-friends" element={<AuthUserInviteFriends />} />
         <Route path="organization-preferences" element={<OrganizationPreferences />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

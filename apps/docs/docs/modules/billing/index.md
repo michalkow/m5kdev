@@ -322,7 +322,10 @@ options remain supported. A normalized `BETTER_AUTH_SECRET` of at least 32 chara
 (or explicit `experienceFlowSecret`) supplies the shared immutable signer for new
 Checkout continuations. Short/missing legacy Auth keys keep their old raw path;
 configure a stable runtime signing key to enable correlation. Explicit or strict
-invalid keys fail validation; there is no weak or random signing fallback. Existing
+invalid keys fail validation; there is no weak or random signing fallback. A custom
+`returnPath` requires signing and is rejected before Stripe Session creation when
+no signer is available; default unsigned shorthand destinations and trusted static
+overlays retain their existing behavior. Existing
 single-Experience Auth email links keep their raw format.
 
 Old raw `/stripe/success` links remain a nonstrict convenience: a freshly verified

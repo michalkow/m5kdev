@@ -89,7 +89,12 @@ describe("AuthService Waitlist codes", () => {
             fakes.createWaitlistCode ?? jest.fn().mockResolvedValue(ok(mintedRow())),
           inviteToWaitlist: fakes.inviteToWaitlist ?? jest.fn().mockResolvedValue(ok(emailedRow())),
           queryList: fakes.queryList ?? jest.fn().mockResolvedValue(ok({ rows: [] })),
-          create: fakes.create ?? jest.fn().mockResolvedValue(ok({ id: "join-1", email: "a@b.c" })),
+          register: async (input: { email: string }) => {
+            const created = await (
+              fakes.create ?? jest.fn().mockResolvedValue(ok({ id: "join-1", email: "a@b.c" }))
+            )(input);
+            return created.isErr() ? created : ok({ entry: created.value, created: true });
+          },
         } as unknown as AuthWaitlistRepository,
         organization: {} as AuthOrganizationRepository,
       },

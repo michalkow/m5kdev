@@ -28,6 +28,8 @@ successful sign-in, the product opens your signed-in home screen.
 
 If the link is incomplete, invalid, or has expired, request another reset email
 from the same website. Keep reset links private and do not edit their address.
+If the form rejects your password, change the password and try the same link again;
+a password error does not mean the link has expired.
 
 ## Join an organisation by invitation
 
@@ -44,20 +46,25 @@ organisation named on the screen; switching organisations later keeps the curren
 product website and your saved language preferences.
 
 A cancelled, expired or incomplete link cannot be accepted. Ask the organisation
-manager for a fresh invitation from the intended website. Managers can copy a
-complete invitation link from the pending member's row on the members screen.
+manager for a fresh invitation from the intended website. On the members screen,
+managers choose **Generate invitation link** in the pending member's row. The
+complete link appears in a field; choose **Copy** as a separate action. If your
+browser blocks clipboard access, select and copy the complete visible address.
 
 ## Use a waitlist invitation
 
 If sign-up shows a waitlist, enter your email address to request access. Check your
-inbox for confirmation. When access is offered, open the complete invitation link
+inbox for confirmation. If registration succeeds but no confirmation arrives,
+check spam or contact support; submitting again keeps the same registration.
+When access is offered, open the complete invitation link
 and finish sign-up on that website. A friend may also share an invitation link;
 use the whole link rather than copying only its code.
 
 An invitation can expire or be used only once. If the screen cannot validate it,
 ask for another link. Do not change the website address or remove link details to
-try again. If your product offers an invite-friends screen, use its copy button to
-share the complete generated link.
+try again. If your product offers an invite-friends screen, choose **Generate
+invitation link**, then **Copy** beside the visible address. You can select and
+copy the full address manually if clipboard access is blocked.
 
 ## Claim an account prepared for you
 
@@ -66,6 +73,9 @@ complete link on its original website. The link is short-lived and can sign you
 in once; ask the administrator for a new one if it has expired or was already used.
 The **Claim your account** screen lets you save your real email address, link an
 offered sign-in provider, or set a password with **Set Password and Claim**.
+If the password is saved but completing the claim fails, choose **Finish Claim**
+to retry completion. The saved password is kept, including after reloading the
+claim screen; you do not need to create it again.
 
 Stay on that website while completing these steps. After successful completion,
 the product opens your signed-in home. Changing the account's email makes older
@@ -83,6 +93,7 @@ shown before signing in, and keep that website open while following invitations,
 verification, password-reset and account-claim links. Signing in on a different
 product website may ask you to sign in again.
 
-In the mobile app, keep complete invitation and recovery links unchanged. When a
-password reset fails, request a fresh link from the same website; an error does
-not mean the password was changed or that an email was sent.
+In the mobile app, keep complete invitation and recovery links unchanged. If a
+link is invalid or expired, request a fresh one from the same website. If the
+password is rejected, choose another password and try the current link again.
+An error does not mean the password was changed or that an email was sent.

@@ -62,3 +62,21 @@ function billingBrowserConsumer(
   void service.completeCheckout({}, direct);
 }
 void billingBrowserConsumer;
+
+import type * as AuthTables from "@m5kdev/backend/modules/auth/auth.db";
+import type * as NotificationTables from "@m5kdev/backend/modules/notification/notification.db";
+import { NotificationRepository } from "@m5kdev/backend/modules/notification/notification.repository";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+
+type LegacyNotificationSchema = Pick<
+  typeof NotificationTables,
+  "notifications" | "notificationDevices" | "notificationPreferences" | "notificationSendLogs"
+> &
+  Pick<typeof AuthTables, "users" | "members">;
+function legacyNotificationRepository(
+  orm: NodePgDatabase<LegacyNotificationSchema>,
+  schema: LegacyNotificationSchema
+) {
+  return new NotificationRepository({ orm, schema });
+}
+void legacyNotificationRepository;

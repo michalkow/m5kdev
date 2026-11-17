@@ -337,6 +337,7 @@ export const invitationSchemas = {
 export const accountClaimSchemas = {
   output: {
     claim: accountClaimSchema.omit({ code: true }),
+    status: accountClaimSchema.omit({ code: true }).extend({ hasPassword: z.boolean() }),
     list: accountClaimSchema.pick({
       id: true,
       claimUserId: true,

@@ -33,6 +33,14 @@ export default function ClaimAccountScreen() {
   const [isClaimed, setIsClaimed] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
 
+  const [passwordCreatedFor, setPasswordCreatedFor] = useState<string>();
+  const credentialSubject = JSON.stringify([
+    session?.user?.id,
+    continuation.claimId,
+    continuation.experienceFlow,
+  ]);
+  const passwordCreated = passwordCreatedFor === credentialSubject;
+
   useEffect(() => {
     if (session?.user.email) {
       setEmail(session.user.email);
@@ -64,6 +72,7 @@ export default function ClaimAccountScreen() {
       .then((claim) => {
         if (cancelled) return;
         setHasClaim(Boolean(claim));
+        if (claim?.hasPassword) setPasswordCreatedFor(credentialSubject);
         setStatusTone(claim ? "success" : "error");
         setStatus(claim ? "Claim your account" : "No pending account claim was found.");
         if (claim?.claimedEmail) {
@@ -80,7 +89,7 @@ export default function ClaimAccountScreen() {
     return () => {
       cancelled = true;
     };
-  }, [isClaimed, session?.user, continuation, invalidContinuation, trpcClient]);
+  }, [isClaimed, session?.user, continuation, credentialSubject, invalidContinuation, trpcClient]);
 
   const saveEmail = async () => {
     setIsBusy(true);
@@ -102,20 +111,24 @@ export default function ClaimAccountScreen() {
     setIsBusy(true);
     setStatus(null);
     try {
-      const response = await fetch(`${serverUrl}/api/auth/set-password`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          newPassword: password,
-          ...continuation,
-        }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as { message?: string };
-      if (!response.ok) {
-        throw new Error(payload.message ?? "Unable to set password");
+      if (!passwordCreated) {
+        const response = await fetch(`${serverUrl}/api/auth/set-password`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            newPassword: password,
+            ...continuation,
+          }),
+        });
+        const payload = (await response.json().catch(() => ({}))) as { message?: string };
+        if (!response.ok) {
+          throw new Error(payload.message ?? "Unable to set password");
+        }
+
+        setPasswordCreatedFor(credentialSubject);
       }
 
       await trpcClient.auth.acceptMyAccountClaim.mutate(continuation);
@@ -154,14 +167,14 @@ export default function ClaimAccountScreen() {
           value={password}
           onChangeText={setPassword}
           secureTextEntry
-          editable={hasClaim && !isBusy}
+          editable={hasClaim && !isBusy && !passwordCreated}
         />
         <Button
           testID="claim-password-submit"
           onPress={setPasswordAndClaim}
-          isDisabled={!hasClaim || !password || isBusy}
+          isDisabled={!hasClaim || (!passwordCreated && !password) || isBusy}
         >
-          Set Password and Claim
+          {passwordCreated ? "Finish Claim" : "Set Password and Claim"}
         </Button>
         <StatusText testID="claim-status" tone={statusTone}>
           {status}

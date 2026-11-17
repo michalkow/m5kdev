@@ -533,3 +533,54 @@ manual verification boundary when credentials are unavailable. This feature does
 not merge User/data records or subscriptions, provision customer-managed domains or
 certificates, add cross-domain SSO, create multiple Stripe accounts, or select a
 Trial Plan by Experience. ADR-0034 remains the commercial authority.
+
+
+## Communication and local composition edge contracts
+
+Notification email jobs carry `{ notificationId, experienceId? }`, never a full
+request, recipient snapshot or Brand Profile. An owning server service may pass an
+approved `experienceId` to `NotificationService.send` for an entered-Experience
+email. The worker resolves that exact id again; removed/disabled/invalid supplied
+references fail delivery without policy fallback. With no reference, the real
+EmailService communication policy receives `event: "notification.email"`, the
+Notification id as eventId/resourceId and the current User/Member/Organization ids.
+The worker reloads the active Membership and matching available User, current email
+and locale. Notification data is never presentation or membership authority.
+Failed delivery is recorded in its send log. Existing custom three-argument senders
+and registry-free standalone EmailService remain supported; they need no new
+resolver. Strict email delivery requires either explicit selection or the app's
+communication policy.
+
+Waitlist joining returns the committed registration even if confirmation/system
+mail fails; failures retain waitlist id and communication diagnostics. Concurrent
+and case-normalized retries reuse one pending public WAITLIST registration without
+repeating notifications. Historical invitation/code rows are not disclosed or
+rewritten; no generic outbox or automatic delivery guarantee is introduced.
+
+Configured Connection OAuth providers require both public origins at module boot,
+including local development: `app.urls.web` / `VITE_APP_URL` and `app.urls.api` /
+`VITE_SERVER_URL`. A generic API-only Kernel, empty Connect module and headless
+Billing webhook/sync use remain valid. Browser Billing starts without presentation
+fail with this configuration guidance. Registered Connection callback queries may
+retain provider-specific nonreserved parameters, but cannot predefine any field
+owned by the callback input schema (state/code/error/provider/redirect fields).
+
+Unsigned shorthand browser Billing preserves its existing default and trusted
+static overlays. A caller-supplied `returnPath` requires a usable stable flow signer;
+otherwise Checkout/Portal start rejects before creating a Stripe Session rather
+than discarding the destination.
+
+Direct `createMcpExpressHandler` / `mountMcpHttp` composition with dynamic Better
+Auth must pass the explicit canonical Auth `issuer`, independently of the protected
+resource origin. Kernel wiring supplies it. A resolved static Auth baseURL retains
+precedence, including supported custom paths; an empty dynamic context never
+infers issuer from resource origin. Signature, issuer, audience and expiry checks
+remain required, with no Experience gate on ordinary MCP tools.
+
+Claim status reports `hasPassword` only after validating the exact authenticated
+claim continuation. Web and Expo use it to resume acceptance after a committed
+credential change, including reload; set-password is not weakened or made to
+accept arbitrary existing credentials. Public invalid magic-link send requests
+return the same success response for known and unknown emails and deliver no
+usable link. Recovery invalid-token/continuation errors are classified separately
+from password-policy errors, so a rejected password can reuse its valid link.

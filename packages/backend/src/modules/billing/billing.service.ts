@@ -202,12 +202,20 @@ export class BillingService extends BasePermissionService<
     .handle(async ({ input, ctx }) => {
       const registry = this.presentation.registry;
       if (!registry)
-        return this.error("INTERNAL_SERVER_ERROR", "Billing public origins are not configured");
+        return this.error(
+          "INTERNAL_SERVER_ERROR",
+          "Browser Billing requires app.urls.web / VITE_APP_URL and app.urls.api / VITE_SERVER_URL"
+        );
       const experience = registry.require(ctx.experience);
       if (ctx.req) registry.validateCanonicalApiRequest(experience, ctx.req);
       const destination = registry.destination(experience, input.returnPath ?? "/billing");
       if (registry.strict && !this.presentation.flows)
         return this.error("INTERNAL_SERVER_ERROR", "Billing flow signing is not configured");
+      if (!this.presentation.flows && input.returnPath !== undefined)
+        return this.error(
+          "BAD_REQUEST",
+          "Custom billing return paths require flow signing to be configured"
+        );
       const authorized = await this.authorizeBillingBrowser(ctx);
       if (authorized.isErr()) return err(authorized.error);
       const session = await this.createCheckoutSession(
@@ -227,7 +235,10 @@ export class BillingService extends BasePermissionService<
       const { kind } = input;
       const registry = this.presentation.registry;
       if (!registry)
-        return this.error("INTERNAL_SERVER_ERROR", "Billing public origins are not configured");
+        return this.error(
+          "INTERNAL_SERVER_ERROR",
+          "Browser Billing requires app.urls.web / VITE_APP_URL and app.urls.api / VITE_SERVER_URL"
+        );
       const raw =
         input.flow === undefined &&
         input.experienceFlow === undefined &&
@@ -285,12 +296,20 @@ export class BillingService extends BasePermissionService<
     .handle(async ({ input, ctx }) => {
       const registry = this.presentation.registry;
       if (!registry)
-        return this.error("INTERNAL_SERVER_ERROR", "Billing public origins are not configured");
+        return this.error(
+          "INTERNAL_SERVER_ERROR",
+          "Browser Billing requires app.urls.web / VITE_APP_URL and app.urls.api / VITE_SERVER_URL"
+        );
       const experience = registry.require(ctx.experience);
       if (ctx.req) registry.validateCanonicalApiRequest(experience, ctx.req);
       const destination = registry.destination(experience, input.returnPath ?? "/billing");
       if (registry.strict && !this.presentation.flows)
         return this.error("INTERNAL_SERVER_ERROR", "Billing flow signing is not configured");
+      if (!this.presentation.flows && input.returnPath !== undefined)
+        return this.error(
+          "BAD_REQUEST",
+          "Custom billing return paths require flow signing to be configured"
+        );
       const authorized = await this.authorizeBillingBrowser(ctx);
       if (authorized.isErr()) return err(authorized.error);
       const portal = await this.createBillingPortalSession(authorized.value, {
@@ -1714,7 +1733,10 @@ export class BillingService extends BasePermissionService<
       return this.error("INTERNAL_SERVER_ERROR", "Billing flow signing is not configured");
     const destination = this.presentation.registry?.destination(experience, "/billing");
     if (!destination)
-      return this.error("INTERNAL_SERVER_ERROR", "Billing public origins are not configured");
+      return this.error(
+        "INTERNAL_SERVER_ERROR",
+        "Browser Billing requires app.urls.web / VITE_APP_URL and app.urls.api / VITE_SERVER_URL"
+      );
     const portal = await this.createPresentedPortal({
       organization: organization.value,
       customerId,

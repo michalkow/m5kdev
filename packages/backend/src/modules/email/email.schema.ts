@@ -7,6 +7,7 @@ export const communicationContextSchema = z
     event: z.string().min(1),
     eventId: z.string().min(1).optional(),
     userId: z.string().min(1).optional(),
+    memberId: z.string().min(1).optional(),
     organizationId: z.string().min(1).optional(),
     resourceId: z.string().min(1).optional(),
   })

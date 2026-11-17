@@ -4,10 +4,10 @@ import type {
   NotificationProvider,
   NotificationSendStatus,
 } from "@m5kdev/commons/modules/notification/notification.constants";
-import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, or } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { err, ok } from "neverthrow";
-import { members, users } from "../auth/auth.db";
+import { members, organizations, users } from "../auth/auth.db";
 import type { ServerResultAsync } from "../base/base.dto";
 import { BaseRepository } from "../base/base.repository";
 import {
@@ -25,7 +25,7 @@ const schema = {
   users,
   members,
 };
-type Schema = typeof schema;
+type Schema = typeof schema & { organizations?: typeof organizations };
 type Orm = NodePgDatabase<Schema>;
 
 export interface NotificationDeviceRow {
@@ -233,6 +233,41 @@ export class NotificationRepository extends BaseRepository<Orm, Schema, Record<s
     );
     if (updateResult.isErr()) return err(updateResult.error);
     return ok();
+  }
+
+  /** One current recipient snapshot for delayed communication eligibility and presentation policy. */
+  async findCurrentEmailRecipient({
+    memberId,
+    userId,
+  }: Pick<NotificationInstanceRow, "memberId" | "userId">) {
+    // Keep the historical required constructor schema; Kernel supplies the actual table,
+    // while old direct compositions use the same canonical Auth core table.
+    const organizationTable = this.schema.organizations ?? organizations;
+    const found = await this.throwableQuery(() =>
+      this.orm
+        .select({
+          memberId: this.schema.members.id,
+          userId: this.schema.users.id,
+          organizationId: this.schema.members.organizationId,
+          email: this.schema.users.email,
+          locale: this.schema.users.locale,
+        })
+        .from(this.schema.members)
+        .innerJoin(this.schema.users, eq(this.schema.members.userId, this.schema.users.id))
+        .innerJoin(organizationTable, eq(this.schema.members.organizationId, organizationTable.id))
+        .where(
+          and(
+            eq(this.schema.members.id, memberId),
+            eq(this.schema.users.id, userId),
+            isNull(this.schema.members.deletedAt),
+            isNull(this.schema.users.closedAt),
+            or(isNull(this.schema.users.banned), eq(this.schema.users.banned, false)),
+            isNull(organizationTable.closedAt)
+          )
+        )
+        .limit(1)
+    );
+    return found.isErr() ? err(found.error) : ok(found.value[0]);
   }
 
   async findUserEmail(userId: string): ServerResultAsync<string | undefined> {

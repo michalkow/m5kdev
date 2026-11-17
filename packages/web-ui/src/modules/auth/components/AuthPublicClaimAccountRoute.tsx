@@ -43,6 +43,8 @@ export function AuthPublicClaimAccountRoute() {
   const linkingAccepted = useRef(false);
   const [email, setEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [passwordCreatedFor, setPasswordCreatedFor] = useState<string>();
+  const credentialSubject = JSON.stringify([session?.user?.id, claimId, claimFlow]);
   const [busy, setBusy] = useState<"none" | "email" | "password" | "link">("none");
 
   const trpc = useAppTRPC<BackendTRPCRouter>();
@@ -54,6 +56,9 @@ export function AuthPublicClaimAccountRoute() {
       return queryClient.fetchQuery(trpc.auth.getMyAccountClaimStatus.queryOptions(continuation));
     },
   });
+
+  const passwordCreated =
+    passwordCreatedFor === credentialSubject || claimStatusQuery.data?.hasPassword === true;
 
   const setEmailMutation = useMutation(trpc.auth.setMyAccountClaimEmail.mutationOptions());
 
@@ -139,20 +144,23 @@ export function AuthPublicClaimAccountRoute() {
   const onSetPassword = async () => {
     setBusy("password");
     try {
-      const response = await fetch(`${serverUrl}/api/auth/set-password`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          newPassword,
-          ...continuation,
-        }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.message ?? t("web-ui:auth.claim.passwordFailed"));
+      if (!passwordCreated) {
+        const response = await fetch(`${serverUrl}/api/auth/set-password`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            newPassword,
+            ...continuation,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.message ?? t("web-ui:auth.claim.passwordFailed"));
+        }
+        setPasswordCreatedFor(credentialSubject);
       }
       await acceptClaim(continuation);
       await queryClient.invalidateQueries({
@@ -263,6 +271,7 @@ export function AuthPublicClaimAccountRoute() {
             <Input
               type="password"
               value={newPassword}
+              disabled={passwordCreated}
               onChange={(e) => setNewPassword(e.target.value)}
               variant="secondary"
             />
@@ -270,11 +279,17 @@ export function AuthPublicClaimAccountRoute() {
           </TextField>
           <Button
             onPress={onSetPassword}
-            isDisabled={!newPassword || busy !== "none" || !hasClaimEmail || !claim}
+            isDisabled={
+              (!passwordCreated && !newPassword) || busy !== "none" || !hasClaimEmail || !claim
+            }
           >
             {busy === "password"
               ? t("web-ui:auth.claim.saving")
-              : t("web-ui:auth.claim.setPasswordAndClaim")}
+              : t(
+                  passwordCreated
+                    ? "web-ui:auth.claim.finishClaim"
+                    : "web-ui:auth.claim.setPasswordAndClaim"
+                )}
           </Button>
         </div>
       </Card.Content>

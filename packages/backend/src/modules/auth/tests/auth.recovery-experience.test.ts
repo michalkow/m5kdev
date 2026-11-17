@@ -136,6 +136,75 @@ async function fixture(
 }
 
 describe("Experience-bound recovery", () => {
+  it.each(["reset-password", "verify-email"])(
+    "preserves encoded callback query values through %s issuance and verification",
+    async (purpose) => {
+      const f = await fixture({ verified: purpose !== "verify-email" });
+      try {
+        const path = "/reset-password?label=~&literal=%2B&space=a+b&repeat=one&repeat=two";
+        const body =
+          purpose === "reset-password"
+            ? { email: "radar@example.test", redirectTo: path }
+            : { email: "radar@example.test", callbackURL: path };
+        const response = await f.auth.handler(
+          f.request(
+            "radar",
+            purpose === "reset-password" ? "/request-password-reset" : "/send-verification-email",
+            body
+          )
+        );
+        expect(response.status).toBe(200);
+        const stored = await f.email.findLatestStoredEmail({ to: "radar@example.test" });
+        const tampered = new URL(String(stored?.props.url));
+        const changedCallback = new URL(tampered.searchParams.get("callbackURL")!);
+        changedCallback.searchParams.set("label", "changed");
+        tampered.searchParams.set("callbackURL", changedCallback.href);
+        const rejected = await f.auth.handler(new Request(tampered));
+        expect(rejected.status).toBe(400);
+        if (purpose === "reset-password")
+          expect(await rejected.json()).toMatchObject({ code: "INVALID_RECOVERY_CONTINUATION" });
+        const followed = await f.auth.handler(new Request(String(stored?.props.url)));
+        expect(followed.status).toBe(302);
+        const destination = new URL(String(followed.headers.get("location")));
+        expect(destination.origin).toBe("https://radar.example.test");
+        expect(destination.searchParams.get("label")).toBe("~");
+        expect(destination.searchParams.get("literal")).toBe("+");
+        expect(destination.searchParams.get("space")).toBe("a b");
+        expect(destination.searchParams.getAll("repeat")).toEqual(["one", "two"]);
+        if (purpose === "reset-password") {
+          await expect(
+            f.auth.api.resetPassword({
+              body: { token: String(destination.searchParams.get("token")), newPassword: "short" },
+              headers: new Headers({
+                "X-M5kdev-Experience-Flow": String(destination.searchParams.get("experienceFlow")),
+                host: "radar.example.test",
+              }),
+            })
+          ).rejects.toMatchObject({ body: { code: "PASSWORD_TOO_SHORT" } });
+          await expect(
+            f.auth.api.resetPassword({
+              body: {
+                token: String(destination.searchParams.get("token")),
+                newPassword: "Changed-Password-456",
+              },
+              headers: new Headers({
+                "x-m5kdev-experience-flow": String(destination.searchParams.get("experienceFlow")),
+                host: "radar.example.test",
+              }),
+            })
+          ).resolves.toEqual({ status: true });
+        } else {
+          const user = await f.orm.query.users.findFirst({
+            where: (row, { eq }) => eq(row.id, "radar"),
+          });
+          expect(user?.emailVerified).toBe(true);
+        }
+      } finally {
+        await f.close();
+      }
+    }
+  );
+
   it("uses canonical API and web origins when recovery starts on an allowed alias", async () => {
     const f = await fixture();
     try {

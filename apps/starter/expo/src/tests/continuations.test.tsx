@@ -345,3 +345,47 @@ it("uses the explicitly authored one-Experience frontend origin for native recov
     expect.anything()
   );
 });
+
+it("retries claim acceptance without creating the already committed password again", async () => {
+  params = { claim: "claim", claimFlow: "bound-claim" };
+  const send = jest.mocked(fetch).getMockImplementation()!;
+  let passwordWrites = 0;
+  let acceptAttempts = 0;
+  jest.mocked(fetch).mockImplementation(async (url, options) => {
+    if (String(url).includes("/set-password")) {
+      passwordWrites++;
+      if (passwordWrites > 1)
+        return new Response(JSON.stringify({ message: "User already has a password" }), {
+          status: 400,
+        });
+    }
+    if (String(url).includes("acceptMyAccountClaim") && ++acceptAttempts === 1)
+      throw new Error("Temporary acceptance outage");
+    if (String(url).includes("getMyAccountClaimStatus") && passwordWrites > 0)
+      return new Response(
+        JSON.stringify([
+          {
+            result: {
+              data: transformer.serialize({
+                claimedEmail: "owner@example.test",
+                hasPassword: true,
+              }),
+            },
+          },
+        ]),
+        { headers: { "content-type": "application/json" } }
+      );
+    return send(url, options);
+  });
+  await render(<Claim />);
+  await input("claim-password", "Password123!");
+  await click("claim-password-submit");
+  expect(container.textContent).toContain("Temporary acceptance outage");
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await render(<Claim />);
+  await click("claim-password-submit");
+  expect(passwordWrites).toBe(1);
+  expect(acceptAttempts).toBe(2);
+  expect(container.textContent).toContain("Password set. Account claimed.");
+});

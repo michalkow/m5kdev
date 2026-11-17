@@ -21,9 +21,11 @@ import type { BillingService } from "@m5kdev/backend/modules/billing/billing.ser
 import * as connectTables from "@m5kdev/backend/modules/connect/connect.db";
 import { ConnectModule } from "@m5kdev/backend/modules/connect/connect.module";
 import { EmailModule } from "@m5kdev/backend/modules/email/email.module";
-import type { EmailTemplates } from "@m5kdev/backend/modules/email/email.service";
+import type { EmailService, EmailTemplates } from "@m5kdev/backend/modules/email/email.service";
 import * as fileTables from "@m5kdev/backend/modules/file/file.db";
 import { FileModule } from "@m5kdev/backend/modules/file/file.module";
+import * as notificationTables from "@m5kdev/backend/modules/notification/notification.db";
+import { NotificationModule } from "@m5kdev/backend/modules/notification/notification.module";
 import * as workflowTables from "@m5kdev/backend/modules/workflow/workflow.db";
 import { WorkflowModule } from "@m5kdev/backend/modules/workflow/workflow.module";
 import { experienceIdSchema } from "@m5kdev/commons/modules/app/experience.schema";
@@ -55,6 +57,10 @@ const schema = {
   files: fileTables.files,
   connect: connectTables.connect,
   workflows: workflowTables.workflows,
+  notifications: notificationTables.notifications,
+  notificationDevices: notificationTables.notificationDevices,
+  notificationPreferences: notificationTables.notificationPreferences,
+  notificationSendLogs: notificationTables.notificationSendLogs,
 };
 const secret = "reference-local-only-credential-at-least-thirty-two-characters";
 export async function bootReference(topology: "local" | "shared") {
@@ -373,6 +379,17 @@ export async function bootReference(topology: "local" | "shared") {
       magicLink: template,
       trialEnding: template,
       reminder: template,
+      notificationInbox: {
+        id: "notification-inbox",
+        react: ({ brand, htmlLang, title, body }) =>
+          createElement(
+            "main",
+            { lang: String(htmlLang) },
+            createElement("h1", null, (brand as { name: string }).name),
+            createElement("p", null, String(title)),
+            createElement("p", null, String(body))
+          ),
+      },
     };
     const webRoot = fileURLToPath(new URL("../dist", import.meta.url));
     const built = createBackendApp(
@@ -460,6 +477,16 @@ export async function bootReference(topology: "local" | "shared") {
           catalog
         ),
         new AuthModule(),
+        new NotificationModule({
+          kinds: [
+            {
+              id: "reference.notice",
+              defaultChannels: ["email"],
+              emailTemplate: "notificationInbox",
+              delays: { emailMs: 300 },
+            },
+          ],
+        }),
         new FileModule({ buckets: [localBucket] }),
         new ConnectModule(
           [
@@ -502,7 +529,7 @@ export async function bootReference(topology: "local" | "shared") {
     shutdown = () => built.shutdown();
     const billing = built.modules.billing.services.billing as BillingService;
     const auth: AuthService = built.modules.auth.services.auth;
-    const email = built.modules.email.services.email;
+    const email: EmailService = built.modules.email.services.email;
     const registry = built.config.app.experienceRegistry!;
     const owner = await auth.repository.user.findById("person");
     if (owner.isErr() || !owner.value) throw new Error("Owner missing");
@@ -605,6 +632,7 @@ export async function bootReference(topology: "local" | "shared") {
       adminContext,
       reminder,
       workflow,
+      notification: built.modules.notification.services.notification,
       signWebhook: (body: unknown) =>
         stripe.webhooks.generateTestHeaderString({
           payload: JSON.stringify(body),

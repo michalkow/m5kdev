@@ -1,4 +1,5 @@
 import {
+  canonicalOriginSchema,
   type ExperienceId,
   type ExperienceRegistryConfig,
   experienceIdSchema,
@@ -152,30 +153,37 @@ export class ExperienceRegistry {
   }
 
   destination(experience: PublicExperience, path: string): string {
-    let target: URL;
-    try {
-      target = new URL(path, experience.webOrigin);
-    } catch {
-      throw new ExperienceContextError("Invalid Experience return destination");
-    }
-    // WHATWG URL parsing strips leading C0/space and ignores ASCII tab/newline.
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: WHATWG explicitly normalizes leading C0 controls.
-    const normalized = path.replace(/^[\u0000-\u0020]+/, "").replace(/[\t\r\n]/g, "");
-    if (
-      normalized.startsWith("//") ||
-      target.origin !== experience.webOrigin ||
-      target.username ||
-      target.password ||
-      /[\\\r\n]/.test(path)
-    )
-      throw new ExperienceContextError("Invalid Experience return destination");
-    return target.href;
+    return resolveWebDestination(experience.webOrigin, path);
   }
 
   emailProfile(experience: PublicExperience) {
     const key = this.config.definitions[experience.id].emailProfile;
     return key ? this.config.emailProfiles[key] : undefined;
   }
+}
+
+/** Validate local presentation destinations even in standalone, registry-free compositions. */
+export function resolveWebDestination(webOrigin: string, path: string): string {
+  const base = canonicalOriginSchema.safeParse(webOrigin);
+  if (!base.success) throw new ExperienceContextError("Invalid Experience return destination");
+  let target: URL;
+  try {
+    target = new URL(path, base.data);
+  } catch {
+    throw new ExperienceContextError("Invalid Experience return destination");
+  }
+  // WHATWG URL parsing strips leading C0/space and ignores ASCII tab/newline.
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: WHATWG explicitly normalizes leading C0 controls.
+  const normalized = path.replace(/^[\u0000-\u0020]+/, "").replace(/[\t\r\n]/g, "");
+  if (
+    normalized.startsWith("//") ||
+    target.origin !== base.data ||
+    target.username ||
+    target.password ||
+    /[\\\r\n]/.test(path)
+  )
+    throw new ExperienceContextError("Invalid Experience return destination");
+  return target.href;
 }
 
 export function experienceMiddleware(registry: ExperienceRegistry): RequestHandler {

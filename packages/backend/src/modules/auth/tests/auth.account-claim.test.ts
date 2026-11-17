@@ -81,7 +81,9 @@ describe("AuthService Account claim", () => {
           acceptAccountClaim:
             fakes.acceptAccountClaim ?? jest.fn().mockResolvedValue(ok({ status: true })),
         } as unknown as AuthAccountClaimRepository,
-        user: {} as AuthUserRepository,
+        user: {
+          hasCredentialPassword: jest.fn().mockResolvedValue(ok(false)),
+        } as unknown as AuthUserRepository,
         invitation: {} as AuthInvitationRepository,
         waitlist,
         organization: {} as AuthOrganizationRepository,

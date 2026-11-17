@@ -70,6 +70,20 @@ async function submit() {
 }
 
 describe("password recovery form transport", () => {
+  it.each(["PASSWORD_TOO_SHORT", "PASSWORD_TOO_LONG", "PASSWORD_COMPROMISED", undefined])(
+    "keeps a rejected password or unrelated HTTP400 on the form (%s)",
+    async (code) => {
+      jest.mocked(authClient.resetPassword).mockResolvedValue({
+        data: null,
+        error: { status: 400, statusText: "Bad Request", code, message: "Password rejected" },
+      });
+      await submit();
+      expect(toast.error).toHaveBeenCalledWith("web-ui:auth.resetPassword.error");
+      expect(toast.error).not.toHaveBeenCalledWith("web-ui:auth.resetPassword.linkInvalid");
+      expect(toast.success).not.toHaveBeenCalled();
+    }
+  );
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -88,7 +102,12 @@ describe("password recovery form transport", () => {
   it("does not report success when the server returns an invalid-link error", async () => {
     jest.mocked(authClient.resetPassword).mockResolvedValue({
       data: null,
-      error: { status: 400, statusText: "Bad Request", message: "Invalid recovery continuation" },
+      error: {
+        status: 400,
+        statusText: "Bad Request",
+        code: "INVALID_TOKEN",
+        message: "Invalid recovery continuation",
+      },
     });
     await submit();
     expect(toast.error).toHaveBeenCalledWith("web-ui:auth.resetPassword.linkInvalid");

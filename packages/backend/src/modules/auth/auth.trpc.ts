@@ -194,7 +194,7 @@ export function createAuthTRPC(
 
     getMyAccountClaimStatus: procedure
       .input(accountClaimMagicLinkSchemas.input.continuation)
-      .output(accountClaimSchemas.output.claim.nullable())
+      .output(accountClaimSchemas.output.status.nullable())
       .query(async ({ ctx, input }) => {
         return handleTRPCResult(await authService.getMyAccountClaimStatus(input, ctx));
       }),

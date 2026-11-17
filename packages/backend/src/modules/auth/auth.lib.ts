@@ -826,7 +826,7 @@ export function createBetterAuth<
             .limit(1);
           if (!user) return;
           const requestedId = typeof metadata?.claimId === "string" ? metadata.claimId : undefined;
-          if (multiExperience && !requestedId) throw signupError();
+          if (multiExperience && !requestedId) return;
           const [claim] = await orm
             .select()
             .from(schema.accountClaims)
@@ -840,14 +840,14 @@ export function createBetterAuth<
             )
             .orderBy(desc(schema.accountClaims.createdAt))
             .limit(1);
-          if (!claim) throw signupError();
+          if (!claim) return;
           let link = url;
           if (multiExperience && experienceRegistry) {
             const experience = experienceRegistry.require(
               resolveAuthExperience(experienceRegistry, ctx?.request, ctx?.headers)
             );
             const callback = new URL(new URL(url).searchParams.get("callbackURL")!);
-            if (callback.searchParams.get("claim") !== claim.id) throw signupError();
+            if (callback.searchParams.get("claim") !== claim.id) return;
             try {
               verifyClaimContinuation({
                 registry: experienceRegistry,
@@ -858,7 +858,7 @@ export function createBetterAuth<
                 proof: callback.searchParams.get("claimFlow") ?? undefined,
               });
             } catch (error) {
-              if (error instanceof ExperienceContextError) throw signupError();
+              if (error instanceof ExperienceContextError) return;
               throw error;
             }
             link = bindAuthRecoveryLink({

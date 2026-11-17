@@ -11,6 +11,7 @@ One backend may present several app-owned Experiences. An Experience combines a 
 ## Consequences
 
 - Existing name/URL/brand configuration remains supported as a single-Experience shorthand, normalized at the boundary. Explicit registry configuration cannot mix competing identity fields. Its default is only for deliberately context-free operations (for example MCP login), not an unknown browser host.
+- Bound callbacks first resolve their Experience and destination from verified signed continuation or opaque server-held flow state, then validate that binding against the configured callback API transport. Top-level callback GETs do not require an Origin header; an actual conflicting Origin is rejected. This rule takes precedence over ordinary unbound request selection below.
 - Exact configured web authorities select an Experience. A shared API authority uses a registered browser Origin pair; ordinary cookieless calls can remain presentation-neutral. Forwarded headers require explicit trusted-proxy configuration. Canonical links come from configuration.
 - Request context and queued references are explicit and immutable. No singleton current brand, new tenancy axis or Experience tables. Missing multi-experience context is an error for presentation-sensitive work; scheduled/webhook work uses an app-registered policy.
 - Public bootstrap supports a runtime-selecting SPA and separately hosted frontends. It excludes email/Stripe secrets and the full registry. Kernel still serves one baked SPA root (ADR-0006).

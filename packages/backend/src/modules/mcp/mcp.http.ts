@@ -8,7 +8,7 @@ import type { BetterAuth } from "../auth/auth.lib";
 import type { McpToolBinding } from "./mcp.adapter";
 import { invokeMcpTool, isArgumentRecord } from "./mcp.protocol";
 import type { McpInvokeInput } from "./mcp.types";
-import { MCP_HTTP_PATH, mcpIssuerUrl } from "./mcp.types";
+import { MCP_HTTP_PATH } from "./mcp.types";
 
 interface McpAccessTokenClaims {
   sub?: unknown;
@@ -87,8 +87,12 @@ export function createMcpExpressHandler(input: {
   invoke: (payload: McpInvokeInput) => Promise<Result<unknown, ServerError>>;
   auth: BetterAuth;
   resource: string;
+  /** Canonical Auth issuer; required when Better Auth uses a dynamic baseURL. */
+  issuer?: string;
   serverName: string;
 }): RequestHandler {
+  if (typeof input.auth.options.baseURL === "object" && !input.issuer)
+    throw new Error("Dynamic Auth requires an explicit canonical MCP issuer");
   const mcpHttp = createMcpHandler(
     (ctx) => {
       const server = new McpServer({
@@ -136,8 +140,11 @@ export function createMcpExpressHandler(input: {
     void (async () => {
       const request = expressRequestToWeb(req);
       const { baseURL, internalAdapter } = await input.auth.$context;
-      const issuer =
-        baseURL || mcpIssuerUrl(new URL(input.resource).origin, input.auth.options.basePath);
+      const issuer = baseURL || input.issuer;
+      if (!issuer)
+        throw new Error(
+          "Auth requires an explicit canonical MCP issuer when its effective baseURL is empty"
+        );
       const response = await createMcpProtectedRequestHandler(
         {
           issuer,
@@ -167,6 +174,8 @@ export function mountMcpHttp(input: {
   invoke: (payload: McpInvokeInput) => Promise<Result<unknown, ServerError>>;
   auth: BetterAuth;
   resource: string;
+  /** Canonical Auth issuer; required when Better Auth uses a dynamic baseURL. */
+  issuer?: string;
   serverName: string;
 }): void {
   input.express.post(
@@ -176,6 +185,7 @@ export function mountMcpHttp(input: {
       invoke: input.invoke,
       auth: input.auth,
       resource: input.resource,
+      issuer: input.issuer,
       serverName: input.serverName,
     })
   );

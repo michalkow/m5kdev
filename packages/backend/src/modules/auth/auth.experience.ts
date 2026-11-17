@@ -13,7 +13,7 @@ import {
   EXPERIENCE_FLOW_PARAMETER,
   type ExperienceFlowSigner,
 } from "../../experience-flows";
-import type { SignupContinuation } from "./auth.continuation";
+import { canonicalAuthFlowDestination, type SignupContinuation } from "./auth.continuation";
 
 export function bindAuthRecoveryLink(input: {
   registry: ExperienceRegistry;
@@ -30,10 +30,12 @@ export function bindAuthRecoveryLink(input: {
   const link = new URL(experience.apiOrigin);
   link.pathname = source.pathname;
   link.search = source.search;
-  const destination = input.registry.destination(
-    experience,
-    link.searchParams.get("callbackURL") ||
-      (input.purpose === "reset-password" ? "/reset-password" : "/")
+  const destination = canonicalAuthFlowDestination(
+    input.registry.destination(
+      experience,
+      link.searchParams.get("callbackURL") ||
+        (input.purpose === "reset-password" ? "/reset-password" : "/")
+    )
   );
   const proof = input.flows.sign({
     purpose: input.purpose,
@@ -290,6 +292,9 @@ export function experienceAuthPlugin(
             } catch (error) {
               if (!(error instanceof ExperienceContextError)) throw error;
               throw new APIError("BAD_REQUEST", {
+                ...(ctx.path.startsWith("/reset-password")
+                  ? { code: "INVALID_RECOVERY_CONTINUATION" }
+                  : {}),
                 message:
                   "This link is invalid or has expired. Request a new link from the same website.",
               });
