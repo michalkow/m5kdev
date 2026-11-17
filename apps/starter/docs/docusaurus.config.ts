@@ -32,8 +32,9 @@ const publicUrl = new URL(
     development,
   })
 );
+const helpTitle = "M5 Starter Help";
 const config: Config = {
-  title: "M5 Starter Help",
+  title: helpTitle,
   tagline: "Guides to getting things done with M5 Starter",
   url: publicUrl.origin,
   baseUrl: publicUrl.pathname,
@@ -81,7 +82,7 @@ const config: Config = {
     ],
   ],
   themeConfig: {
-    navbar: { title: "M5 Starter Help", items: [{ type: "localeDropdown", position: "right" }] },
+    navbar: { title: helpTitle, items: [{ type: "localeDropdown", position: "right" }] },
     colorMode: { respectPrefersColorScheme: true },
   } satisfies Preset.ThemeConfig,
 };

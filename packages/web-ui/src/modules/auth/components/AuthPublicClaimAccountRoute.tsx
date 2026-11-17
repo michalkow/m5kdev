@@ -15,8 +15,10 @@ import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { parseAsString, useQueryStates } from "nuqs";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router";
 import { GoogleIcon } from "../../../icons/GoogleIcon";
 import { LinkedInIcon } from "../../../icons/LinkedInIcon";
 import { MicrosoftIcon } from "../../../icons/MicrosoftIcon";
@@ -24,33 +26,45 @@ import { MicrosoftIcon } from "../../../icons/MicrosoftIcon";
 // TODO: review Form / Input usage
 
 export function AuthPublicClaimAccountRoute() {
-  const { serverUrl } = useAppConfig();
+  const { serverUrl, appUrl } = useAppConfig();
+  const { t } = useTranslation();
+  const [{ claim: claimId, claimFlow, linked: linkedProvider }] = useQueryStates({
+    claim: parseAsString,
+    claimFlow: parseAsString,
+    linked: parseAsString,
+  });
+  const continuation = useMemo(
+    () => ({ claimId: claimId ?? undefined, experienceFlow: claimFlow ?? undefined }),
+    [claimId, claimFlow]
+  );
   const { data: session, registerSession } = useSession();
   const navigate = useNavigate();
-  const location = useLocation();
   const queryClient = useQueryClient();
+  const linkingAccepted = useRef(false);
   const [email, setEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [passwordCreatedFor, setPasswordCreatedFor] = useState<string>();
+  const credentialSubject = JSON.stringify([session?.user?.id, claimId, claimFlow]);
   const [busy, setBusy] = useState<"none" | "email" | "password" | "link">("none");
 
   const trpc = useAppTRPC<BackendTRPCRouter>();
 
-  const linkedProvider = useMemo(() => {
-    const params = new URLSearchParams(location.search);
-    return params.get("linked");
-  }, [location.search]);
-
   const claimStatusQuery = useQuery({
-    queryKey: ["auth", "claim-status", session?.user?.id ?? null],
+    queryKey: ["auth", "claim-status", session?.user?.id ?? null, continuation],
     enabled: !!session?.user,
     queryFn: async () => {
-      return queryClient.fetchQuery(trpc.auth.getMyAccountClaimStatus.queryOptions());
+      return queryClient.fetchQuery(trpc.auth.getMyAccountClaimStatus.queryOptions(continuation));
     },
   });
 
+  const passwordCreated =
+    passwordCreatedFor === credentialSubject || claimStatusQuery.data?.hasPassword === true;
+
   const setEmailMutation = useMutation(trpc.auth.setMyAccountClaimEmail.mutationOptions());
 
-  const acceptClaimMutation = useMutation(trpc.auth.acceptMyAccountClaim.mutationOptions());
+  const { mutateAsync: acceptClaim } = useMutation(
+    trpc.auth.acceptMyAccountClaim.mutationOptions()
+  );
 
   useEffect(() => {
     if (session?.user?.email) {
@@ -59,31 +73,48 @@ export function AuthPublicClaimAccountRoute() {
   }, [session?.user?.email]);
 
   useEffect(() => {
-    if (!linkedProvider) return;
-    acceptClaimMutation
-      .mutateAsync(undefined)
+    if (!linkedProvider || !session?.user || !claimStatusQuery.data || linkingAccepted.current)
+      return;
+    linkingAccepted.current = true;
+    acceptClaim(continuation)
       .then(() => {
-        toast.success("Account provider linked");
+        toast.success(t("web-ui:auth.claim.providerLinked"));
         queryClient.invalidateQueries({ queryKey: trpc.auth.getMyAccountClaimStatus.queryKey() });
+        navigate("/", { replace: true });
       })
       .catch((error) => {
-        toast.danger(error instanceof Error ? error.message : "Unable to link provider");
-      })
-      .finally(() => {
-        navigate("/claim-account", { replace: true });
+        toast.danger(
+          error instanceof Error ? error.message : t("web-ui:auth.claim.providerFailed")
+        );
       });
-  }, [acceptClaimMutation, linkedProvider, navigate, queryClient, trpc]);
+  }, [
+    acceptClaim,
+    linkedProvider,
+    continuation,
+    navigate,
+    queryClient,
+    trpc,
+    session?.user,
+    claimStatusQuery.data,
+    t,
+  ]);
 
   if (!session?.user) {
     return (
       <Alert status="warning">
-        <Alert.Title>
-          You need to sign in with your magic link before claiming this account.
-        </Alert.Title>
+        <Alert.Title>{t("web-ui:auth.claim.signInFirst")}</Alert.Title>
       </Alert>
     );
   }
 
+  if (claimStatusQuery.isError)
+    return (
+      <Alert status="danger">
+        <Alert.Content>
+          <Alert.Title>{t("web-ui:auth.continuation.invalid")}</Alert.Title>
+        </Alert.Content>
+      </Alert>
+    );
   const claim = claimStatusQuery.data;
   const hasClaimEmail = Boolean(claim?.claimedEmail);
 
@@ -97,14 +128,14 @@ export function AuthPublicClaimAccountRoute() {
   const onSetEmail = async (email: string) => {
     setBusy("email");
     try {
-      await setEmailMutation.mutateAsync({ email });
+      await setEmailMutation.mutateAsync({ ...continuation, email });
       registerSession(() => undefined);
       await queryClient.invalidateQueries({
         queryKey: trpc.auth.getMyAccountClaimStatus.queryKey(),
       });
-      toast.success("Email updated");
+      toast.success(t("web-ui:auth.claim.emailUpdated"));
     } catch (error) {
-      toast.danger(error instanceof Error ? error.message : "Unable to set email");
+      toast.danger(error instanceof Error ? error.message : t("web-ui:auth.claim.emailFailed"));
     } finally {
       setBusy("none");
     }
@@ -113,27 +144,32 @@ export function AuthPublicClaimAccountRoute() {
   const onSetPassword = async () => {
     setBusy("password");
     try {
-      const response = await fetch(`${serverUrl}/api/auth/set-password`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          newPassword,
-        }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.message ?? "Unable to set password");
+      if (!passwordCreated) {
+        const response = await fetch(`${serverUrl}/api/auth/set-password`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            newPassword,
+            ...continuation,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.message ?? t("web-ui:auth.claim.passwordFailed"));
+        }
+        setPasswordCreatedFor(credentialSubject);
       }
-      await acceptClaimMutation.mutateAsync(undefined);
+      await acceptClaim(continuation);
       await queryClient.invalidateQueries({
         queryKey: trpc.auth.getMyAccountClaimStatus.queryKey(),
       });
-      toast.success("Password set. Account claimed.");
+      toast.success(t("web-ui:auth.claim.passwordSet"));
+      navigate("/", { replace: true });
     } catch (error) {
-      toast.danger(error instanceof Error ? error.message : "Unable to set password");
+      toast.danger(error instanceof Error ? error.message : t("web-ui:auth.claim.passwordFailed"));
     } finally {
       setBusy("none");
     }
@@ -142,22 +178,26 @@ export function AuthPublicClaimAccountRoute() {
   const onLinkProvider = async (provider: "google" | "linkedin" | "microsoft") => {
     setBusy("link");
     try {
+      const callback = new URL("/claim-account", appUrl);
+      if (claimId) callback.searchParams.set("claim", claimId);
+      if (claimFlow) callback.searchParams.set("claimFlow", claimFlow);
+      callback.searchParams.set("linked", provider);
       const response = await fetch(`${serverUrl}/api/auth/link-social`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           provider,
-          callbackURL: `${window.location.origin}/claim-account?linked=${provider}`,
+          callbackURL: callback.href,
         }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload?.url) {
-        throw new Error(payload?.message ?? "Unable to start provider linking");
+        throw new Error(payload?.message ?? t("web-ui:auth.claim.providerStartFailed"));
       }
       window.location.href = payload.url;
     } catch (error) {
-      toast.danger(error instanceof Error ? error.message : "Unable to link provider");
+      toast.danger(error instanceof Error ? error.message : t("web-ui:auth.claim.providerFailed"));
       setBusy("none");
     }
   };
@@ -165,25 +205,23 @@ export function AuthPublicClaimAccountRoute() {
   return (
     <Card>
       <Card.Header className="flex flex-col gap-1">
-        <p className="text-xl font-semibold">Claim your account</p>
-        <p className="text-sm text-default-600">
-          You are signed in and can now set your permanent login methods.
-        </p>
+        <p className="text-xl font-semibold">{t("web-ui:auth.claim.title")}</p>
+        <p className="text-sm text-default-600">{t("web-ui:auth.claim.description")}</p>
       </Card.Header>
       <Card.Content className="grid gap-6">
         {claimStatusQuery.isLoading ? (
           <Alert status="default">
-            <Alert.Title>Loading claim status...</Alert.Title>
+            <Alert.Title>{t("web-ui:auth.claim.loading")}</Alert.Title>
           </Alert>
         ) : !claim ? (
           <Alert status="warning">
-            <Alert.Title>No pending account claim was found for your user.</Alert.Title>
+            <Alert.Title>{t("web-ui:auth.claim.empty")}</Alert.Title>
           </Alert>
         ) : null}
 
         <Form onSubmit={handleSubmit} className="grid gap-2">
           <TextField name="email" type="email" variant="secondary">
-            <Label className="text-sm font-medium">Email</Label>
+            <Label className="text-sm font-medium">{t("web-ui:auth.claim.email")}</Label>
             <Input
               type="email"
               value={email}
@@ -191,17 +229,17 @@ export function AuthPublicClaimAccountRoute() {
               variant="secondary"
             />
             <Description className="text-sm text-default-500">
-              Set your real email before linking providers and password.
+              {t("web-ui:auth.claim.emailHelp")}
             </Description>
             <FieldError />
           </TextField>
           <Button type="submit" isDisabled={!email || busy !== "none" || !claim}>
-            {busy === "email" ? "Saving..." : "Save Email"}
+            {busy === "email" ? t("web-ui:auth.claim.saving") : t("web-ui:auth.claim.saveEmail")}
           </Button>
         </Form>
 
         <div className="grid gap-2">
-          <p className="text-sm font-medium">Link a provider</p>
+          <p className="text-sm font-medium">{t("web-ui:auth.claim.linkProvider")}</p>
           <div className="grid gap-3 sm:grid-cols-3">
             <Button
               variant="outline"
@@ -229,10 +267,11 @@ export function AuthPublicClaimAccountRoute() {
 
         <div className="grid gap-2">
           <TextField name="password" type="password" variant="secondary" minLength={8}>
-            <Label className="text-sm font-medium">Set password</Label>
+            <Label className="text-sm font-medium">{t("web-ui:auth.claim.setPassword")}</Label>
             <Input
               type="password"
               value={newPassword}
+              disabled={passwordCreated}
               onChange={(e) => setNewPassword(e.target.value)}
               variant="secondary"
             />
@@ -240,9 +279,17 @@ export function AuthPublicClaimAccountRoute() {
           </TextField>
           <Button
             onPress={onSetPassword}
-            isDisabled={!newPassword || busy !== "none" || !hasClaimEmail || !claim}
+            isDisabled={
+              (!passwordCreated && !newPassword) || busy !== "none" || !hasClaimEmail || !claim
+            }
           >
-            {busy === "password" ? "Saving..." : "Set Password and Claim"}
+            {busy === "password"
+              ? t("web-ui:auth.claim.saving")
+              : t(
+                  passwordCreated
+                    ? "web-ui:auth.claim.finishClaim"
+                    : "web-ui:auth.claim.setPasswordAndClaim"
+                )}
           </Button>
         </div>
       </Card.Content>

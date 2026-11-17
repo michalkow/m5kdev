@@ -6,11 +6,10 @@ const config: Config = {
   testMatch: ["**/*.test.ts"],
   transform: {
     "^.+\\.mjs$": "<rootDir>/jest-esm-transform.cjs",
+    "^.+\\.js$": "<rootDir>/jest-esm-transform.cjs",
     "^.+\\.(t|j)s$": ["ts-jest", { tsconfig: { allowJs: true } }],
   },
-  transformIgnorePatterns: [
-    "node_modules/(?!(?:\\.pnpm/)?(?:@sindresorhus[+/]|escape-string-regexp|tokenx|p-map))",
-  ],
+  transformIgnorePatterns: [],
   moduleNameMapper: {
     "^#utils$": "<rootDir>/src/test/stubs/utils.ts",
     "^#modules/(.*)$": "<rootDir>/src/modules/$1",

@@ -91,6 +91,8 @@ export class BillingRepository extends BaseTableRepository<
   public seatBilling: boolean;
   public nonBillableRoleKeys: readonly string[];
   public entitlements?: EntitlementCatalog;
+  private readonly portalReturnUrl?: string;
+  private readonly checkoutUrls?: { successUrl: string; cancelUrl: string };
   private readonly checkoutSessionCreate?: Partial<Stripe.Checkout.SessionCreateParams>;
   private readonly billingPortalSessionCreate?: Partial<Stripe.BillingPortal.SessionCreateParams>;
 
@@ -100,12 +102,24 @@ export class BillingRepository extends BaseTableRepository<
     table: Schema["subscriptions"];
     libs: { stripe: Stripe };
     config: ResolvedStripePlans;
+    portalReturnUrl?: string;
+    checkoutUrls?: { successUrl: string; cancelUrl: string };
     checkoutSessionCreate?: Partial<Stripe.Checkout.SessionCreateParams>;
     billingPortalSessionCreate?: Partial<Stripe.BillingPortal.SessionCreateParams>;
   }) {
-    const { libs, config, checkoutSessionCreate, billingPortalSessionCreate, ...rest } = options;
+    const {
+      libs,
+      config,
+      checkoutSessionCreate,
+      billingPortalSessionCreate,
+      checkoutUrls,
+      portalReturnUrl,
+      ...rest
+    } = options;
     super(rest);
     this.stripe = libs.stripe;
+    this.checkoutUrls = options.checkoutUrls;
+    this.portalReturnUrl = portalReturnUrl;
     this.checkoutSessionCreate = checkoutSessionCreate;
     this.billingPortalSessionCreate = billingPortalSessionCreate;
     this.environment = config.environment;
@@ -696,6 +710,9 @@ export class BillingRepository extends BaseTableRepository<
     quantity,
     trialDays,
     collectPaymentMethod,
+    returnUrls,
+    correlationMetadata,
+    contextualOverlay,
   }: {
     customerId: string;
     priceId: string;
@@ -704,47 +721,93 @@ export class BillingRepository extends BaseTableRepository<
     quantity: number;
     trialDays?: number;
     collectPaymentMethod?: boolean;
+    returnUrls?: { successUrl: string; cancelUrl: string };
+    correlationMetadata?: Record<string, string>;
+    contextualOverlay?: Partial<Stripe.Checkout.SessionCreateParams>;
   }): ServerResultAsync<Stripe.Checkout.Session> {
     return this.throwablePromise(() =>
       this.stripe.checkout.sessions.create(
         mergeSessionCreateParams(
-          {
-            client_reference_id: organizationId,
-            customer: customerId,
-            success_url: `${process.env.VITE_SERVER_URL}/stripe/success`,
-            cancel_url: `${process.env.VITE_APP_URL}/billing`,
-            mode: "subscription",
-            ...(collectPaymentMethod ? { payment_method_collection: "always" as const } : {}),
-            metadata: { organizationId, memberId },
-            subscription_data: {
-              metadata: { organizationId, memberId },
-              ...(trialDays != null ? { trial_period_days: trialDays } : {}),
-            },
-            line_items: [
-              {
-                price: priceId,
-                quantity,
+          mergeSessionCreateParams(
+            {
+              client_reference_id: organizationId,
+              customer: customerId,
+              success_url: returnUrls?.successUrl ?? this.checkoutUrls?.successUrl,
+              cancel_url: returnUrls?.cancelUrl ?? this.checkoutUrls?.cancelUrl,
+              mode: "subscription",
+              ...(collectPaymentMethod ? { payment_method_collection: "always" as const } : {}),
+              metadata: { organizationId, memberId, ...correlationMetadata },
+              subscription_data: {
+                metadata: { organizationId, memberId },
+                ...(trialDays != null ? { trial_period_days: trialDays } : {}),
               },
-            ],
-          } satisfies Stripe.Checkout.SessionCreateParams,
-          this.checkoutSessionCreate
+              line_items: [
+                {
+                  price: priceId,
+                  quantity,
+                },
+              ],
+            } satisfies Stripe.Checkout.SessionCreateParams,
+            this.checkoutSessionCreate
+          ),
+          contextualOverlay
         )
       )
     );
   }
 
-  createBillingPortalSession(customerId: string): ServerResultAsync<Stripe.BillingPortal.Session> {
+  createBillingPortalSession(
+    customerId: string,
+    options?: {
+      returnUrl?: string;
+      contextualOverlay?: Partial<Stripe.BillingPortal.SessionCreateParams>;
+    }
+  ): ServerResultAsync<Stripe.BillingPortal.Session> {
     return this.throwablePromise(() =>
       this.stripe.billingPortal.sessions.create(
         mergeSessionCreateParams(
-          {
-            customer: customerId,
-            return_url: `${process.env.VITE_SERVER_URL}/stripe/success`,
-          } satisfies Stripe.BillingPortal.SessionCreateParams,
-          this.billingPortalSessionCreate
+          mergeSessionCreateParams(
+            {
+              customer: customerId,
+              return_url: options?.returnUrl ?? this.portalReturnUrl,
+            } satisfies Stripe.BillingPortal.SessionCreateParams,
+            this.billingPortalSessionCreate
+          ),
+          options?.contextualOverlay
         )
       )
     );
+  }
+
+  getCheckoutSession(id: string): ServerResultAsync<Stripe.Checkout.Session> {
+    return this.throwablePromise(() => this.stripe.checkout.sessions.retrieve(id));
+  }
+
+  getLiveBillingMember(input: { organizationId: string; memberId?: string; userId?: string }) {
+    return this.throwableQuery(async () => {
+      const [member] = await this.orm
+        .select({
+          id: this.schema.members.id,
+          userId: this.schema.members.userId,
+          role: this.schema.members.role,
+        })
+        .from(this.schema.members)
+        .innerJoin(
+          this.schema.organizations,
+          eq(this.schema.organizations.id, this.schema.members.organizationId)
+        )
+        .where(
+          and(
+            eq(this.schema.members.organizationId, input.organizationId),
+            isNull(this.schema.members.deletedAt),
+            isNull(this.schema.organizations.closedAt),
+            input.memberId ? eq(this.schema.members.id, input.memberId) : undefined,
+            input.userId ? eq(this.schema.members.userId, input.userId) : undefined
+          )
+        )
+        .limit(1);
+      return member ?? null;
+    });
   }
 
   getStripeCustomer(

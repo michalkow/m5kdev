@@ -1,4 +1,4 @@
-import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
+import { Button } from "@heroui/react";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { BillingProvider } from "@m5kdev/frontend/modules/billing/components/BillingProvider";
 import { EntitlementProvider } from "@m5kdev/frontend/modules/billing/components/EntitlementProvider";
@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { AuthOrganizationSelect } from "../../auth/components/AuthOrganizationSelect";
 import { AuthUtilityImpersonationBanner } from "../../auth/components/AuthUtilityImpersonationBanner";
+import { useBillingActions } from "../hooks/useBillingActions";
 
 interface BillingPaywallProviderProps {
   children: ReactNode;
@@ -21,10 +22,17 @@ export function BillingPaywallProvider({
   planPage,
   skipPlanCheck = false,
 }: BillingPaywallProviderProps): ReactNode {
+  const { t } = useTranslation("web-ui");
   return (
     <BillingProvider
       loader={loader}
       skipPlanCheck={skipPlanCheck}
+      errorPage={
+        <>
+          <BillingPaywallChrome />
+          <p role="alert">{t("billing.loadError")}</p>
+        </>
+      }
       planPage={
         <>
           <BillingPaywallChrome />
@@ -69,12 +77,18 @@ function BillingPaywallChrome(): ReactNode {
 
 function BillingAddPaymentMethodPage(): ReactNode {
   const { t } = useTranslation("web-ui");
-  const { serverUrl } = useAppConfig();
+  const billing = useBillingActions();
 
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col items-center gap-4 px-4 py-16 text-center">
       <p>{t("web-ui:billing.portal.addPaymentMethod")}</p>
-      <a href={`${serverUrl}/stripe/portal`}>{t("web-ui:billing.portal.addPaymentMethodCta")}</a>
+      <Button
+        isDisabled={!billing.canStart}
+        isPending={billing.isPortalPending}
+        onPress={() => void billing.startPortal()}
+      >
+        {t("web-ui:billing.portal.addPaymentMethodCta")}
+      </Button>
     </div>
   );
 }

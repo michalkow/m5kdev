@@ -1,18 +1,22 @@
 import { Button, ErrorMessage, FieldError, Form, Input, Label, TextField } from "@heroui/react";
+import { EXPERIENCE_FLOW_HEADER } from "@m5kdev/commons/modules/app/experience.constants";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
+import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
+import { parseAsString, useQueryStates } from "nuqs";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { createUserLocaleHeaders } from "../utils/authLocale";
 
 export function AuthPublicResetPasswordForm() {
+  const authClient = useAuthClient();
   const { t } = useTranslation();
   const { locales } = useAppConfig();
-  const [searchParams] = useSearchParams();
+  const [{ token, experienceFlow }] = useQueryStates({
+    token: parseAsString,
+    experienceFlow: parseAsString,
+  });
   const [error, setError] = useState<string | null>(null);
-  const token = searchParams.get("token");
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
@@ -39,12 +43,25 @@ export function AuthPublicResetPasswordForm() {
           token,
         },
         {
-          headers: locales ? createUserLocaleHeaders(locales) : {},
+          headers: {
+            ...(locales ? createUserLocaleHeaders(locales) : {}),
+            ...(experienceFlow ? { [EXPERIENCE_FLOW_HEADER]: experienceFlow } : {}),
+          },
         }
       )
-      .then(() => {
+      .then((result) => {
+        if (result.error) {
+          const message = t(
+            result.error.code === "INVALID_TOKEN" ||
+              result.error.code === "INVALID_RECOVERY_CONTINUATION"
+              ? "web-ui:auth.resetPassword.linkInvalid"
+              : "web-ui:auth.resetPassword.error"
+          );
+          setError(message);
+          toast.error(message);
+          return;
+        }
         toast.success(t("web-ui:auth.resetPassword.success"));
-        // Optionally, redirect
       })
       .catch(() => {
         toast.error(t("web-ui:auth.resetPassword.error"));

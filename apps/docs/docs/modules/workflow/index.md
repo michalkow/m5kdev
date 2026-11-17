@@ -70,12 +70,71 @@ Example from the notification module (`notification.webPush` / `.mobilePush` /
 this.webPushJob = this.service.workflow
   .job<{ notificationId: string }>({
     name: "notification.webPush",
-    id: (p) => `web:${p.notificationId}`,
+    id: (p) => `web-${p.notificationId}`,
   })
   .handle(async (payload) => {
     /* deliver; throw on failure */
   });
 ```
+
+## Experience references in delayed communication
+
+Workflow remains presentation-neutral. A job that sends branded mail carries the
+already validated Experience id with its existing resource ids; other jobs do not
+need website context. Never enqueue a request, session, descriptor, role, recipient
+profile or Entitlement snapshot.
+
+```ts
+import { experienceIdSchema } from "@m5kdev/commons/modules/app/experience.schema";
+import { z } from "zod";
+
+const reportInput = z.object({
+  userId: z.string().min(1),
+  organizationId: z.string().min(1),
+  reportId: z.string().min(1),
+  experienceId: experienceIdSchema.optional(),
+}).strict();
+type ReportJob = { data: z.infer<typeof reportInput> };
+
+// Inside the module workflows(ctx) hook:
+if (!ctx.workflow) throw new Error("Workflow runtime is required");
+const { service: workflow, registry } = ctx.workflow;
+const deliver = workflow.job<ReportJob>({ name: "app.report-ready" })
+  .input(reportInput, true)
+  .handle(async ({ data }) => {
+    const sent = await reports.deliverReadyReport(data);
+    if (sent.isErr()) throw sent.error;
+  });
+// Register in the module's workflows hook. Service-owned definitions with
+// .handle are discovered by the normal Kernel composition.
+registry.registerService({ deliver });
+
+// Request producer: requestContext.experience is an approved descriptor.
+await deliver.trigger({ data: reportInput.parse({
+  userId, organizationId, reportId, experienceId: requestContext.experience?.id,
+}) });
+```
+
+With this validation option, `.input(schema, true)` validates **payload.data**
+when the worker executes. Parse raw input at enqueue too. A flat payload is
+supported for existing jobs that do not use this data-validation shape.
+
+The owning `deliverReadyReport` service reloads the current User, Organization,
+Membership, report and saved locale, applies live scope/Grants/Entitlements and
+expiry checks, then calls `email.resolveCommunicationExperience`. A bound id
+wins over policy but is re-resolved against the worker's current deployment.
+Scheduled/admin/webhook handlers without an initiating website construct trusted
+communication context from those current resource ids; they do not accept a
+browser-provided recipient/brand hint. Use the same resolved descriptor for
+related links and the existing send method. See [Email policy](/modules/email).
+
+If an Experience was removed/disabled while work waited, the operation fails;
+policy does not replace that explicit reference. Keep referenced ids configured
+until pending work is drained or explicitly migrated. An older job with no id
+still works in the supported shorthand. Switching that deployment to an explicit
+registry requires an app-owned resource/event mapping or those older jobs fail;
+there is no first-entry or last-browser fallback. A Result error from a handler
+fails the actual BullMQ run and is recorded by Workflow.
 
 ## Notifying the UI
 

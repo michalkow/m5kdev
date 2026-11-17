@@ -13,7 +13,7 @@ import { mountMcpHttp } from "./mcp.http";
 import { McpRepository } from "./mcp.repository";
 import { McpService } from "./mcp.service";
 import { createMcpTRPC } from "./mcp.trpc";
-import { mcpResourceUrl } from "./mcp.types";
+import { mcpIssuerUrl, mcpResourceUrl } from "./mcp.types";
 
 type McpModuleDeps = { auth: AuthModule };
 type McpModuleTables = typeof mcpTables;
@@ -86,6 +86,7 @@ export class McpModule extends BaseModule<
       }),
       auth,
       resource: mcpResourceUrl(apiUrl),
+      issuer: mcpIssuerUrl(apiUrl, auth.options.basePath),
       serverName: appConfig.name ?? "m5kdev",
     });
   }

@@ -22,7 +22,7 @@ export function AuthCloseUserDangerZone(): ReactElement {
           navigate("/login");
         });
       },
-      onError: (error: Error) => {
+      onError: (error) => {
         toast.danger(error.message);
       },
     })

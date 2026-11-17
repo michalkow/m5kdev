@@ -39,6 +39,26 @@ export class AuthUserRepository extends BaseTableRepository<
   Record<string, never>,
   Schema["users"]
 > {
+  hasCredentialPassword = this.query<string>("hasCredentialPassword")
+    .output(z.boolean())
+    .handle(async (userId) => {
+      const found = await this.throwableQuery(() =>
+        this.orm
+          .select({ id: this.schema.accounts.id })
+          .from(this.schema.accounts)
+          .where(
+            and(
+              eq(this.schema.accounts.userId, userId),
+              eq(this.schema.accounts.providerId, "credential"),
+              isNotNull(this.schema.accounts.password),
+              ne(this.schema.accounts.password, "")
+            )
+          )
+          .limit(1)
+      );
+      return found.isErr() ? err(found.error) : ok(found.value.length > 0);
+    });
+
   async countLiveUserAdmins(): ServerResultAsync<number> {
     const result = await this.throwableQuery(() =>
       this.orm
@@ -1196,6 +1216,32 @@ export class AuthWaitlistRepository extends BaseTableRepository<
   Record<string, never>,
   Schema["waitlist"]
 > {
+  /** Serialize public registration retries without changing historical invite/code rows. */
+  async register(input: z.infer<typeof waitlistSchemas.input.join> & { status: "WAITLIST" }) {
+    return this.throwableQuery(() =>
+      this.orm.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`waitlist:${input.email}`}, 0))`
+        );
+        const [existing] = await tx
+          .select()
+          .from(this.schema.waitlist)
+          .where(
+            and(
+              eq(sql`lower(trim(${this.schema.waitlist.email}))`, input.email),
+              eq(this.schema.waitlist.status, input.status),
+              isNull(this.schema.waitlist.userId)
+            )
+          )
+          .orderBy(desc(this.schema.waitlist.createdAt))
+          .limit(1);
+        if (existing) return { entry: existing, created: false };
+        const [entry] = await tx.insert(this.schema.waitlist).values(input).returning();
+        return { entry, created: true };
+      })
+    );
+  }
+
   async getUserWaitlistCount(userId: string, tx?: Orm): ServerResultAsync<number> {
     const db = tx ?? this.orm;
     const result = await this.throwableQuery(() =>
@@ -1231,6 +1277,7 @@ export class AuthWaitlistRepository extends BaseTableRepository<
           .update(this.schema.waitlist)
           .set({
             status: "INVITED",
+            updatedAt: new Date(),
             code: uuidv4(),
             expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
           })
@@ -1418,7 +1465,7 @@ export class AuthAccountClaimRepository extends BaseTableRepository<
     });
 
   async setAccountClaimEmail(
-    { userId, email }: { userId: string; email: string },
+    { userId, email, claimId }: { userId: string; email: string; claimId?: string },
     tx?: Orm
   ): ServerResultAsync<{ status: boolean }> {
     const db = tx ?? this.orm;
@@ -1444,6 +1491,7 @@ export class AuthAccountClaimRepository extends BaseTableRepository<
         .where(
           and(
             eq(this.schema.accountClaims.claimUserId, userId),
+            ...(claimId ? [eq(this.schema.accountClaims.id, claimId)] : []),
             eq(this.schema.accountClaims.status, "INVITED"),
             gte(this.schema.accountClaims.expiresAt, new Date())
           )
@@ -1483,7 +1531,11 @@ export class AuthAccountClaimRepository extends BaseTableRepository<
     return ok({ status: true });
   }
 
-  async acceptAccountClaim(userId: string, tx?: Orm): ServerResultAsync<{ status: boolean }> {
+  async acceptAccountClaim(
+    userId: string,
+    tx?: Orm,
+    claimId?: string
+  ): ServerResultAsync<{ status: boolean }> {
     const db = tx ?? this.orm;
     const claimResult = await this.throwableQuery(() =>
       db
@@ -1492,6 +1544,7 @@ export class AuthAccountClaimRepository extends BaseTableRepository<
         .where(
           and(
             eq(this.schema.accountClaims.claimUserId, userId),
+            ...(claimId ? [eq(this.schema.accountClaims.id, claimId)] : []),
             eq(this.schema.accountClaims.status, "INVITED"),
             gte(this.schema.accountClaims.expiresAt, new Date())
           )
@@ -1562,9 +1615,9 @@ export class AuthAccountClaimRepository extends BaseTableRepository<
     });
 
   latestAccountClaimMagicLink = this.query("latestAccountClaimMagicLink")
-    .input(accountClaimMagicLinkSchemas.input.listLinks)
+    .input(accountClaimMagicLinkSchemas.input.listLinks.extend({ id: z.string().optional() }))
     .output(accountClaimMagicLinkSchemas.output.single.nullable())
-    .handle(async ({ claimId }) => {
+    .handle(async ({ claimId, id }) => {
       const result = await this.throwableQuery(() =>
         this.orm
           .select({
@@ -1577,7 +1630,12 @@ export class AuthAccountClaimRepository extends BaseTableRepository<
             createdAt: this.schema.accountClaimMagicLinks.createdAt,
           })
           .from(this.schema.accountClaimMagicLinks)
-          .where(eq(this.schema.accountClaimMagicLinks.claimId, claimId))
+          .where(
+            and(
+              eq(this.schema.accountClaimMagicLinks.claimId, claimId),
+              ...(id ? [eq(this.schema.accountClaimMagicLinks.id, id)] : [])
+            )
+          )
           .orderBy(desc(this.schema.accountClaimMagicLinks.createdAt))
           .limit(1)
       );

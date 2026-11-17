@@ -1,3 +1,4 @@
+import type { PublicExperience } from "@m5kdev/commons/modules/app/experience.schema";
 import { fromNodeHeaders } from "better-auth/node";
 import type { InferSelectModel } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
@@ -22,12 +23,17 @@ const { users, sessions } = auth;
 type User = InferSelectModel<typeof users>;
 type Session = InferSelectModel<typeof sessions>;
 
-export type AuthRequest = Request & { user?: User; session?: Session };
+export type AuthRequest = Request & {
+  user?: User;
+  session?: Session;
+  experience?: PublicExperience;
+};
 
 export type AuthMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => void;
 
 export function createAuthMiddleware(auth: BetterAuth): AuthMiddleware {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
+    res.set("Cache-Control", "private, no-store");
     auth.api
       .getSession({
         headers: fromNodeHeaders(req.headers),
@@ -60,6 +66,7 @@ export function createAuthMiddleware(auth: BetterAuth): AuthMiddleware {
 
 export function createRoleAuthMiddleware(auth: BetterAuth): (role: string) => AuthMiddleware {
   return (role: string) => (req: AuthRequest, res: Response, next: NextFunction) => {
+    res.set("Cache-Control", "private, no-store");
     auth.api
       .getSession({
         headers: fromNodeHeaders(req?.headers),

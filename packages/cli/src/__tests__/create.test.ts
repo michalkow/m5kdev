@@ -278,7 +278,16 @@ describe("scaffoldProject", () => {
     expect(sharedEnv).not.toContain("{{APP_NAME}}");
     expect(appConstants).toContain('APP_NAME = "Editorial Desk"');
     expect(appConstants).toContain('APP_SLUG = "editorial-desk"');
-    expect(providers).toContain("AppConfigProvider");
+    expect(providers).toContain("ExperienceBootstrap");
+    const bootstrap = await fs.readFile(
+      path.join(
+        result.targetDirectory,
+        "apps/webapp/src/modules/app/components/ExperienceBootstrap.tsx"
+      ),
+      "utf8"
+    );
+    expect(bootstrap).toContain("AppConfigProvider");
+    expect(bootstrap).toContain("useExperienceBootstrap");
     expect(providers).toContain("AppTrpcQueryProvider");
     expect(providers).toContain("StarterServerEventProvider");
     expect(providers).not.toContain("DEMO_WORKFLOW");

@@ -120,12 +120,22 @@ await this.service.notification.send({
 5. `userEmit` `{ resource: "notification", id, change: "created", organizationId }`.
 6. Enqueue delayed jobs for armed outbound Channels (`notification.webPush`,
    `notification.mobilePush`, `notification.email`). Job payload is
-   `{ notificationId }`.
+   `{ notificationId }`; email may additionally carry an approved `experienceId`.
 
 Outbound jobs no-op if the Member already marked the instance read, if the
 Channel was not armed, or if that Channel already has a send log / stamp.
 First successful web push, mobile push, and email stamp `webPushedAt` /
 `mobilePushedAt` / `emailedAt`. Permanent token failures disable the Device.
+
+For explicit Experience registries, an entered-Experience producer may supply
+`experienceId` to `send`. Email validates that reference before insertion and the
+worker resolves it again at delivery; invalid/removed references never fall back.
+Without a reference, EmailModule's communication policy selects from trusted
+`notification.email` event/Notification/User/Member/Organization ids. The worker
+loads the current matching Membership and User before selection, then uses the
+current email and locale. `data` is not authority. Missing policy/invalid context
+records a failed email send. Existing three-argument custom senders and standalone
+registry-free EmailService retain their public contract.
 
 Do not wrap `send` in a pass-through on another service.
 

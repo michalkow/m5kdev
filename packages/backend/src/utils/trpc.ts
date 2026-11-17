@@ -1,4 +1,5 @@
 import type { IncomingMessage } from "node:http";
+import type { PublicExperience } from "@m5kdev/commons/modules/app/experience.schema";
 import { transformer } from "@m5kdev/commons/utils/trpc";
 import {
   initTRPC,
@@ -24,6 +25,7 @@ import {
   type UserActor,
   validateActor,
 } from "../base/base.actor";
+import type { ExperienceRequest } from "../experience";
 import type { BetterAuth, Session, User } from "../modules/auth/auth.lib";
 import { captureServerError, reportError, ServerError } from "./errors";
 import { logger } from "./logger";
@@ -37,6 +39,7 @@ import {
 } from "./telemetry";
 
 export type RequestContext = {
+  experience?: PublicExperience;
   /** Absent for cookieless callers (in-process MCP calls); API keys get a session without an active Organization. */
   session?: Session | null;
   user: User | null;
@@ -48,6 +51,7 @@ export type RequestContext = {
 };
 
 export type Context = {
+  experience?: PublicExperience;
   session: Session;
   user: User;
   actor: UserActor;
@@ -55,6 +59,8 @@ export type Context = {
 
 /** `session` is null for cookieless callers that name the Organization with `organizationId`. */
 export type OrganizationContext = {
+  req?: IncomingMessage;
+  experience?: PublicExperience;
   session?: Session | null;
   user: User;
   actor: OrganizationActor;
@@ -67,6 +73,7 @@ export type TeamContext = {
 };
 
 export type AdminContext = {
+  experience?: PublicExperience;
   /** Absent for cookieless callers (in-process MCP calls). */
   session?: Session | null;
   user: User;
@@ -75,6 +82,7 @@ export type AdminContext = {
 
 /** Cookieless User context; a session is not required. */
 export type UserContext = {
+  experience?: PublicExperience;
   /** Absent for cookieless callers (in-process MCP calls). */
   session?: Session | null;
   user: User;
@@ -181,6 +189,7 @@ export function createRequestContext() {
       user: null,
       actor: null,
       req,
+      experience: (req as typeof req & Pick<ExperienceRequest, "experience">).experience,
     };
   };
 }
@@ -220,6 +229,7 @@ export function createAuthContext(auth: BetterAuth) {
       user,
       actor,
       req,
+      experience: (req as typeof req & Pick<ExperienceRequest, "experience">).experience,
     };
   };
 }
@@ -314,7 +324,13 @@ async function resolveOrganizationProcedureContext({
     memberships,
   });
   if (actor.isErr()) throw actor.error.toTRPC();
-  return { session: ctx.session ?? null, user: ctx.user, actor: actor.value };
+  return {
+    session: ctx.session ?? null,
+    user: ctx.user,
+    actor: actor.value,
+    experience: ctx.experience,
+    req: ctx.req,
+  };
 }
 
 /**

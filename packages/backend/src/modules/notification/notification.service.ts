@@ -1,3 +1,4 @@
+import { experienceIdSchema } from "@m5kdev/commons/modules/app/experience.schema";
 import type {
   NotificationChannel,
   NotificationKind,
@@ -8,11 +9,14 @@ import type {
 import type { NotificationRegisterDeviceInput } from "@m5kdev/commons/modules/notification/notification.schema";
 import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
+import { z } from "zod";
 import type { Context, OrganizationContext } from "../../utils/trpc";
 import type { AuthService } from "../auth/auth.service";
 import type { ServerResultAsync } from "../base/base.dto";
 import type { ResourceGrant } from "../base/base.grants";
 import { BasePermissionService } from "../base/base.service";
+import type { CommunicationExperienceInput } from "../email/email.schema";
+import type { EmailService, OverrideOptions } from "../email/email.service";
 import type { WorkflowService } from "../workflow/workflow.service";
 import type { FireAndForgetJobDefinition } from "../workflow/workflow.types";
 import {
@@ -28,11 +32,20 @@ export interface NotificationServiceJobPayload {
   readonly notificationId: string;
 }
 
+const notificationEmailJobPayloadSchema = z.strictObject({
+  notificationId: z.string().min(1),
+  experienceId: experienceIdSchema.optional(),
+});
+export type NotificationEmailJobPayload = z.infer<typeof notificationEmailJobPayloadSchema>;
+
 export interface NotificationEmailSender {
+  readonly hasExperienceRegistry?: boolean;
+  resolveCommunicationExperience?: EmailService["resolveCommunicationExperience"];
   sendTemplate(
     to: string,
     templateKey: string,
-    templateProps: Record<string, unknown>
+    templateProps: Record<string, unknown>,
+    options?: Pick<OverrideOptions, "experience" | "locale">
   ): ServerResultAsync<unknown>;
 }
 
@@ -82,7 +95,7 @@ export class NotificationService extends BasePermissionService<
 > {
   readonly webPushJob: FireAndForgetJobDefinition<NotificationServiceJobPayload>;
   readonly mobilePushJob: FireAndForgetJobDefinition<NotificationServiceJobPayload>;
-  readonly emailJob: FireAndForgetJobDefinition<NotificationServiceJobPayload>;
+  readonly emailJob: FireAndForgetJobDefinition<NotificationEmailJobPayload>;
   private readonly kindsById: ReadonlyMap<string, NotificationKind>;
   private readonly emailSender?: NotificationEmailSender;
 
@@ -107,7 +120,7 @@ export class NotificationService extends BasePermissionService<
         name: NOTIFICATION_WEB_PUSH_JOB_NAME,
         ...(options?.notificationQueue ? { queue: options.notificationQueue } : {}),
         timeout: options?.deliveryTimeout ?? 60_000,
-        id: (p) => `web:${p.notificationId}`,
+        id: (p) => `web-${p.notificationId}`,
       })
       .handle(async (payload) => {
         const result = await this.deliverWebPush(payload.notificationId);
@@ -119,7 +132,7 @@ export class NotificationService extends BasePermissionService<
         name: NOTIFICATION_MOBILE_PUSH_JOB_NAME,
         ...(options?.notificationQueue ? { queue: options.notificationQueue } : {}),
         timeout: options?.deliveryTimeout ?? 60_000,
-        id: (p) => `mobile:${p.notificationId}`,
+        id: (p) => `mobile-${p.notificationId}`,
       })
       .handle(async (payload) => {
         const result = await this.deliverMobilePush(payload.notificationId);
@@ -127,14 +140,18 @@ export class NotificationService extends BasePermissionService<
       });
 
     this.emailJob = this.service.workflow
-      .job<NotificationServiceJobPayload>({
+      .job<NotificationEmailJobPayload>({
         name: NOTIFICATION_EMAIL_JOB_NAME,
         ...(options?.notificationQueue ? { queue: options.notificationQueue } : {}),
         timeout: options?.deliveryTimeout ?? 60_000,
-        id: (p) => `email:${p.notificationId}`,
+        id: (p) => `email-${p.notificationId}`,
       })
       .handle(async (payload) => {
-        const result = await this.deliverEmail(payload.notificationId);
+        // Existing Notification jobs use the historical flat payload, not Workflow's data envelope.
+        const input = notificationEmailJobPayloadSchema.parse(payload);
+        const result = await this.deliverEmail(input.notificationId, {
+          experienceId: input.experienceId,
+        });
         if (result.isErr()) throw new Error(result.error.message);
       });
   }
@@ -273,6 +290,8 @@ export class NotificationService extends BasePermissionService<
     body: string;
     data?: Record<string, unknown> | null;
     channels?: readonly NotificationChannel[];
+    /** Approved server-owned reference; only the email job carries this minimal presentation id. */
+    experienceId?: string;
   }): ServerResultAsync<NotificationInstanceRow> {
     const kind = this.kindsById.get(input.kind);
     if (!kind) {
@@ -299,6 +318,25 @@ export class NotificationService extends BasePermissionService<
       (channel) => offered.includes(channel) && !mutedSet.has(channel)
     );
     const visibleInInbox = armed.includes("in-app");
+    let emailExperienceId: NotificationEmailJobPayload["experienceId"];
+    if (input.experienceId !== undefined && armed.includes("email")) {
+      if (
+        !this.emailSender?.resolveCommunicationExperience ||
+        this.emailSender.hasExperienceRegistry === false
+      )
+        return this.error(
+          "INTERNAL_SERVER_ERROR",
+          "Explicit Notification Experience requires an experience-aware Email sender"
+        );
+      const reference = experienceIdSchema.safeParse(input.experienceId);
+      if (!reference.success)
+        return this.error("BAD_REQUEST", "Invalid Notification Experience reference");
+      const selected = await this.emailSender.resolveCommunicationExperience({
+        experienceId: reference.data,
+      });
+      if (selected.isErr()) return err(selected.error);
+      emailExperienceId = selected.value.id;
+    }
 
     const inserted = await this.repository.notification.insertNotification({
       memberId: membership.value.id,
@@ -320,7 +358,7 @@ export class NotificationService extends BasePermissionService<
       organizationId: membership.value.organizationId,
     });
 
-    await this.enqueueArmedOutboundJobs(inserted.value.id, kind, armed);
+    await this.enqueueArmedOutboundJobs(inserted.value.id, kind, armed, emailExperienceId);
 
     return ok(inserted.value);
   }
@@ -464,7 +502,10 @@ export class NotificationService extends BasePermissionService<
     });
   }
 
-  async deliverEmail(notificationId: string): ServerResultAsync<void> {
+  async deliverEmail(
+    notificationId: string,
+    options?: Pick<CommunicationExperienceInput, "experienceId">
+  ): ServerResultAsync<void> {
     const instance = await this.repository.notification.findNotificationById(notificationId);
     if (instance.isErr()) return err(instance.error);
     const notification = instance.value;
@@ -513,11 +554,51 @@ export class NotificationService extends BasePermissionService<
     }
 
     try {
-      const sent = await this.emailSender.sendTemplate(to.value, kind.emailTemplate, {
-        title: notification.title,
-        body: notification.body,
-        data: notification.data,
-      });
+      let recipientEmail = to.value;
+      const props = { title: notification.title, body: notification.body, data: notification.data };
+      let selectedOptions: Pick<OverrideOptions, "experience" | "locale"> | undefined;
+      if (
+        options?.experienceId !== undefined &&
+        (!this.emailSender.resolveCommunicationExperience ||
+          this.emailSender.hasExperienceRegistry === false)
+      )
+        return fail("Explicit Notification Experience requires an experience-aware Email sender");
+      if (
+        this.emailSender.resolveCommunicationExperience &&
+        this.emailSender.hasExperienceRegistry !== false
+      ) {
+        const recipient = await this.repository.notification.findCurrentEmailRecipient({
+          memberId: notification.memberId,
+          userId: notification.userId,
+        });
+        if (recipient.isErr()) return err(recipient.error);
+        if (!recipient.value) return fail("Notification Membership or User is no longer available");
+        recipientEmail = recipient.value.email;
+        const selected = await this.emailSender.resolveCommunicationExperience({
+          experienceId: options?.experienceId,
+          context: {
+            event: "notification.email",
+            eventId: notification.id,
+            resourceId: notification.id,
+            userId: recipient.value.userId,
+            memberId: recipient.value.memberId,
+            organizationId: recipient.value.organizationId,
+          },
+        });
+        if (selected.isErr()) return fail(selected.error.message);
+        selectedOptions = {
+          experience: selected.value,
+          locale: recipient.value.locale ?? undefined,
+        };
+      }
+      const sent = selectedOptions
+        ? await this.emailSender.sendTemplate(
+            recipientEmail,
+            kind.emailTemplate,
+            props,
+            selectedOptions
+          )
+        : await this.emailSender.sendTemplate(recipientEmail, kind.emailTemplate, props);
       if (sent.isErr()) {
         return fail(sent.error.message);
       }
@@ -547,7 +628,8 @@ export class NotificationService extends BasePermissionService<
   private async enqueueArmedOutboundJobs(
     notificationId: string,
     kind: NotificationKind,
-    armed: readonly NotificationChannel[]
+    armed: readonly NotificationChannel[],
+    emailExperienceId?: NotificationEmailJobPayload["experienceId"]
   ): Promise<void> {
     if (armed.includes("web-push")) {
       try {
@@ -580,7 +662,10 @@ export class NotificationService extends BasePermissionService<
     if (armed.includes("email")) {
       try {
         await this.emailJob.trigger(
-          { notificationId },
+          {
+            notificationId,
+            ...(emailExperienceId !== undefined ? { experienceId: emailExperienceId } : {}),
+          },
           {
             jobOptions: {
               delay: kind.delays?.emailMs ?? NOTIFICATION_DEFAULT_EMAIL_DELAY_MS,

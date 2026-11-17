@@ -1,7 +1,8 @@
 import { Alert, Button, FieldError, Form, Input, Label, TextField, toast } from "@heroui/react";
+import { EXPERIENCE_FLOW_HEADER } from "@m5kdev/commons/modules/app/experience.constants";
 import { USER_PRICE_ID_HEADER } from "@m5kdev/commons/modules/auth/auth.constants";
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
+import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -47,15 +48,18 @@ export function AuthPublicSignupForm({
   email,
   waitlist,
   trialPriceId,
+  experienceFlow,
 }: {
   code?: string | null;
   invitation?: string | null;
   email?: string | null;
   waitlist?: boolean;
   trialPriceId?: string | null;
+  experienceFlow?: string | null;
 }) {
   const { t } = useTranslation();
-  const { locales } = useAppConfig();
+  const authClient = useAuthClient();
+  const { locales, appUrl } = useAppConfig();
   const [status, setStatus] = useState("start");
   const [userEmail, setUserEmail] = useState<string>(email || "");
   const { registerSession } = useSession();
@@ -77,11 +81,13 @@ export function AuthPublicSignupForm({
           name: submittedEmail,
           email: submittedEmail,
           password,
+          callbackURL: new URL("/login", appUrl).href,
         },
         {
           headers: {
             "Waitlist-Invitation-Code": code || "",
             "Organization-Invitation-Code": invitation || "",
+            ...(experienceFlow ? { [EXPERIENCE_FLOW_HEADER]: experienceFlow } : {}),
             ...(locales ? createUserLocaleHeaders(locales) : {}),
             ...(trialPriceId ? { [USER_PRICE_ID_HEADER]: trialPriceId } : {}),
           },

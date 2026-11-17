@@ -22,10 +22,11 @@ import {
 import { useUserOrganizations } from "@m5kdev/frontend/modules/auth/hooks/useUserOrganizations";
 import type { Key } from "@react-types/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Pencil, Trash2, UserPlus } from "lucide-react";
+import { Link2, Pencil, Trash2, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { AuthGeneratedShareLink } from "./AuthGeneratedShareLink";
 import {
   type CombinedMemberRow,
   ORGANIZATION_ROLE_FALLBACK,
@@ -150,7 +151,9 @@ function useOrganizationConfig() {
       membersNoActive: t("web-ui:organization.members.noActive"),
       membersManageOnly: t("web-ui:organization.members.manageOnly"),
       membersDescription: (organizationName: string) =>
-        t("web-ui:organization.members.description", { name: organizationName }),
+        t("web-ui:organization.members.description", {
+          name: organizationName,
+        }),
       defaultOrganizationName: t("web-ui:organization.members.defaultName"),
       loadMembersError: t("web-ui:organization.members.loadMembersError"),
       loadInvitationsError: t("web-ui:organization.members.loadInvitationsError"),
@@ -169,7 +172,7 @@ function useOrganizationConfig() {
       cancelInvitationSuccess: t("web-ui:organization.members.cancelInvitationSuccess"),
       cancelInvitationError: t("web-ui:organization.members.cancelInvitationError"),
       inviteLinkCopied: t("web-ui:organization.members.inviteLinkCopied"),
-      copyInviteLinkError: t("web-ui:organization.members.copyInviteLinkError"),
+      copyInviteLinkError: t("web-ui:auth.shareLink.generateError"),
       unknownName: t("web-ui:organization.members.unknownName"),
       invitedUser: t("web-ui:organization.members.invitedUser"),
       emailLabel: t("web-ui:organization.members.emailLabel"),
@@ -186,7 +189,7 @@ function useOrganizationConfig() {
       statusActive: t("web-ui:organization.members.statusActive"),
       statusInvited: t("web-ui:organization.members.statusInvited"),
       removeMember: t("web-ui:organization.members.removeMember"),
-      copyInviteLink: t("web-ui:organization.members.copyInviteLink"),
+      copyInviteLink: t("web-ui:auth.shareLink.generate"),
       cancelInvitation: t("web-ui:organization.members.cancelInvitation"),
     }),
     [t]
@@ -323,9 +326,13 @@ export function AuthOrganizationMembersRoute({
   }, [inviteRole, resolvedAssignableRoles]);
 
   const membersQuery = useQuery(
-    trpc.auth.listOrganizationMembers.queryOptions(undefined, {
-      enabled: Boolean(activeOrganizationId && canManageOrganization),
-    })
+    trpc.auth.listOrganizationMembers.queryOptions(
+      { organizationId: activeOrganizationId || undefined },
+      {
+        placeholderData: () => undefined,
+        enabled: Boolean(activeOrganizationId && canManageOrganization),
+      }
+    )
   );
 
   const organizationName = useMemo(
@@ -369,10 +376,16 @@ export function AuthOrganizationMembersRoute({
 
     try {
       if (nameChanged) {
-        await updateNameMutation.mutateAsync({ memberId: editingRow.memberId, name });
+        await updateNameMutation.mutateAsync({
+          memberId: editingRow.memberId,
+          name,
+        });
       }
       if (roleChanged) {
-        await updateRoleMutation.mutateAsync({ memberId: editingRow.memberId, role: editRole });
+        await updateRoleMutation.mutateAsync({
+          memberId: editingRow.memberId,
+          role: editRole,
+        });
       }
       if (nameChanged || roleChanged) {
         toast.success(resolvedLabels.editSuccess);
@@ -428,20 +441,23 @@ export function AuthOrganizationMembersRoute({
     [canManageOrganization, cancelInvitationMutation]
   );
 
-  const invitationLinkBase = useMemo(() => {
-    const invitationPath = invitationAcceptPath ?? "/organization/accept-invitation";
-    if (/^https?:\/\//i.test(invitationPath)) {
-      return `${invitationPath}?id=`;
-    }
-    return typeof window === "undefined"
-      ? `${invitationPath}?id=`
-      : `${window.location.origin}${invitationPath}?id=`;
-  }, [invitationAcceptPath]);
+  const invitationLinkMutation = useMutation(
+    trpc.auth.createOrganizationInvitationLink.mutationOptions()
+  );
 
-  const onCopyInvitationLink = async (invitationId: string) => {
+  const [generatedInvitationLink, setGeneratedInvitationLink] = useState<{
+    organizationId: string;
+    url: string;
+  }>();
+  const onGenerateInvitationLink = async (invitationId: string) => {
+    if (!activeOrganizationId) return;
     try {
-      await navigator.clipboard.writeText(`${invitationLinkBase}${invitationId}`);
-      toast.success(resolvedLabels.inviteLinkCopied);
+      const link = await invitationLinkMutation.mutateAsync({
+        id: invitationId,
+        path: invitationAcceptPath,
+        organizationId: activeOrganizationId,
+      });
+      setGeneratedInvitationLink({ organizationId: activeOrganizationId, url: link.url });
     } catch {
       toast.error(resolvedLabels.copyInviteLinkError);
     }
@@ -480,6 +496,9 @@ export function AuthOrganizationMembersRoute({
         <p className="text-sm text-muted">{resolvedLabels.membersDescription(organizationName)}</p>
       </div>
 
+      {generatedInvitationLink?.organizationId === activeOrganizationId ? (
+        <AuthGeneratedShareLink url={generatedInvitationLink.url} />
+      ) : null}
       <div className="flex flex-col gap-4">
         <div className="grid gap-3 md:grid-cols-[1fr_160px_auto]">
           <div className="grid gap-2">
@@ -598,11 +617,11 @@ export function AuthOrganizationMembersRoute({
                                 isIconOnly
                                 onPress={() => {
                                   const invitationId = row.invitationId;
-                                  if (invitationId) void onCopyInvitationLink(invitationId);
+                                  if (invitationId) void onGenerateInvitationLink(invitationId);
                                 }}
                                 aria-label={resolvedLabels.copyInviteLink}
                               >
-                                <Copy className="h-4 w-4" />
+                                <Link2 className="h-4 w-4" />
                               </Button>
                               <Button
                                 size="sm"

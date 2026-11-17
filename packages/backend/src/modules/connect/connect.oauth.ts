@@ -1,64 +1,61 @@
+import { experienceIdSchema } from "@m5kdev/commons/modules/app/experience.schema";
 import * as client from "openid-client";
+import { z } from "zod";
 import { logger as rootLogger } from "../../utils/logger";
-import type { ConnectProvider } from "./connect.types";
+import type { ConnectProvider, ResolvedConnectProvider } from "./connect.types";
 
-export interface OAuthState {
-  state: string;
-  codeVerifier: string;
-  codeChallenge: string;
-  sessionId: string;
-  provider: string;
-}
+const oauthStateSchema = z.object({
+  state: z.string(),
+  codeVerifier: z.string(),
+  codeChallenge: z.string(),
+  sessionId: z.string(),
+  provider: z.string(),
+  userId: z.string(),
+  experienceId: experienceIdSchema,
+  destination: z.url(),
+  redirectUri: z.url(),
+  expiresAt: z.number().int(),
+});
+export type OAuthState = z.infer<typeof oauthStateSchema>;
+const STATE_TTL_MS = 10 * 60 * 1000;
 
-// In-memory store for OAuth state (keyed by sessionId + provider)
-// In production, consider using Redis with TTL
-const oauthStateStore = new Map<string, OAuthState>();
+/** App-owned opaque state. Values never travel through the browser/provider. */
+export class OAuthStateStore {
+  private readonly records = new Map<string, Readonly<OAuthState>>();
 
-const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-
-function getStateKey(sessionId: string, provider: string): string {
-  return `${sessionId}:${provider}`;
-}
-
-export async function generateOAuthState(sessionId: string, provider: string): Promise<OAuthState> {
-  const state = client.randomState();
-  const codeVerifier = client.randomPKCECodeVerifier();
-  const codeChallenge = await client.calculatePKCECodeChallenge(codeVerifier);
-
-  const oauthState: OAuthState = {
-    state,
-    codeVerifier,
-    codeChallenge,
-    sessionId,
-    provider,
-  };
-
-  const key = getStateKey(sessionId, provider);
-  oauthStateStore.set(key, oauthState);
-
-  // Clean up after TTL
-  setTimeout(() => {
-    oauthStateStore.delete(key);
-  }, STATE_TTL_MS);
-
-  return oauthState;
-}
-
-export function getOAuthState(
-  sessionId: string,
-  provider: string,
-  state: string
-): OAuthState | null {
-  const key = getStateKey(sessionId, provider);
-  const stored = oauthStateStore.get(key);
-
-  if (!stored || stored.state !== state) {
-    return null;
+  async create(
+    input: Omit<OAuthState, "state" | "codeVerifier" | "codeChallenge" | "expiresAt">
+  ): Promise<Readonly<OAuthState>> {
+    const state = client.randomState();
+    const codeVerifier = client.randomPKCECodeVerifier();
+    const codeChallenge = await client.calculatePKCECodeChallenge(codeVerifier);
+    const value = Object.freeze({
+      ...input,
+      state,
+      codeVerifier,
+      codeChallenge,
+      expiresAt: Date.now() + STATE_TTL_MS,
+    });
+    this.records.set(state, value);
+    const timeout = setTimeout(() => this.records.delete(state), STATE_TTL_MS);
+    timeout.unref();
+    return value;
   }
 
-  // Clean up after use
-  oauthStateStore.delete(key);
-  return stored;
+  consume(
+    input: Pick<OAuthState, "sessionId" | "provider" | "state" | "userId">
+  ): Readonly<OAuthState> | null {
+    const value = this.records.get(input.state);
+    if (
+      !value ||
+      value.sessionId !== input.sessionId ||
+      value.provider !== input.provider ||
+      value.userId !== input.userId
+    )
+      return null;
+    this.records.delete(input.state);
+    return value.expiresAt > Date.now() ? value : null;
+  }
 }
 
 export async function createConfiguration(
@@ -66,9 +63,18 @@ export async function createConfiguration(
 ): Promise<client.Configuration> {
   // LinkedIn uses client_secret_post (form-encoded body parameters)
   // The library's ClientSecretPost handles this correctly
-  const clientAuth = provider.clientSecret
+  const authenticate = provider.clientSecret
     ? client.ClientSecretPost(provider.clientSecret)
     : client.None();
+  const clientAuth: client.ClientAuth = (issuer, metadata, body, headers) => {
+    authenticate(issuer, metadata, body, headers);
+    // openid-client strips callback query parameters when deriving redirect_uri.
+    // Restore only the server-configured URI. The SDK still validates state,
+    // sends the bound PKCE verifier and validates the token response.
+    // This supported client-auth seam runs immediately before request encoding.
+    if (body.get("grant_type") === "authorization_code" && provider.redirectUri)
+      body.set("redirect_uri", provider.redirectUri);
+  };
 
   if (provider.issuerConfig) {
     // Use manual issuer config (e.g., LinkedIn) - create Configuration directly
@@ -89,7 +95,7 @@ export async function createConfiguration(
     const clientMetadata: Partial<client.ClientMetadata> = {
       client_id: provider.clientId,
       ...(provider.clientSecret && { client_secret: provider.clientSecret }),
-      redirect_uris: [provider.redirectUri],
+      ...(provider.redirectUri ? { redirect_uris: [provider.redirectUri] } : {}),
     };
 
     return new client.Configuration(serverMetadata, provider.clientId, clientMetadata, clientAuth);
@@ -105,7 +111,7 @@ export async function createConfiguration(
 }
 
 export async function buildAuthorizationUrl(
-  provider: ConnectProvider,
+  provider: ResolvedConnectProvider,
   state: OAuthState
 ): Promise<string> {
   const config = await createConfiguration(provider);
@@ -131,11 +137,13 @@ export async function buildAuthorizationUrl(
 }
 
 export async function exchangeCodeForTokens(
-  provider: ConnectProvider,
-  code: string,
-  codeVerifier: string,
-  redirectUri: string,
-  state: string
+  provider: ResolvedConnectProvider,
+  {
+    code,
+    codeVerifier,
+    redirectUri,
+    state,
+  }: Pick<OAuthState, "codeVerifier" | "redirectUri" | "state"> & { code: string }
 ): Promise<{
   accessToken: string;
   refreshToken?: string;
@@ -153,7 +161,7 @@ export async function exchangeCodeForTokens(
       const body = new URLSearchParams({
         grant_type: "authorization_code",
         code,
-        redirect_uri: provider.redirectUri,
+        redirect_uri: redirectUri,
         client_id: provider.clientId,
         client_secret: provider.clientSecret,
       });

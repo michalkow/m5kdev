@@ -180,3 +180,14 @@ that still require RFC 7591, DCR (`registration_endpoint` →
 - [Better Auth 1.7.2 in 0.37.0](/guides/v0.37.0-better-auth-1.7.2-migration)
 - [McpModule and MCP OAuth in 0.37.0](/guides/v0.37.0-mcp-oauth-migration)
 - [Auth](/modules/auth)
+
+
+### Direct HTTP adapter composition
+
+`createMcpExpressHandler` and `mountMcpHttp` accept an explicit canonical `issuer`.
+Supply it when Auth uses dynamic domain-local base URLs; its origin can differ
+from the MCP protected `resource` origin. Dynamic composition fails early without
+it. Kernel wiring supplies the canonical Auth issuer automatically. A resolved
+static Better Auth baseURL, including a supported custom path, retains precedence.
+The adapter never infers issuer from resource origin and still verifies signatures,
+issuer, audience and expiry using the canonical JWKS endpoint.

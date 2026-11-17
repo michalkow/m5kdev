@@ -17,7 +17,13 @@ jest.mock("react-markdown", () => ({
 jest.mock(
   "@heroui/react",
   () => {
-    function Button({ children, ...props }: { children?: ReactNode; type?: string }) {
+    function Button({
+      children,
+      ...props
+    }: {
+      children?: ReactNode;
+      type?: "button" | "reset" | "submit";
+    }) {
       return <button {...props}>{children}</button>;
     }
     function Avatar({ children, ...props }: { children?: ReactNode; "aria-label"?: string }) {

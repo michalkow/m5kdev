@@ -1,4 +1,5 @@
 import { apiKey as createApiKeyPlugin } from "@better-auth/api-key";
+import type { PublicExperience } from "@m5kdev/commons/modules/app/experience.schema";
 import {
   ADMIN_CREATE_VERIFIED_USER_HEADER,
   ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE,
@@ -25,13 +26,30 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { TFunction } from "i18next";
 import { z } from "zod";
 import type { BackendAppMetadata } from "../../app";
+import { ExperienceContextError } from "../../experience";
+import type { ExperienceFlowSigner } from "../../experience-flows";
+import { EXPERIENCE_FLOW_HEADER } from "../../experience-flows";
 import type { AppI18n } from "../../i18n/app-i18n";
+import { resolvePresentationMetadata } from "../../presentation";
 import { captureServerError, ServerError } from "../../utils/errors";
 import { logger as rootLogger } from "../../utils/logger";
 import { posthogCapture } from "../../utils/posthog";
 import type { BillingService } from "../billing/billing.service";
 import type { EmailService } from "../email/email.service";
+import {
+  type SignupContinuation,
+  signupContinuationSchema,
+  verifyClaimContinuation,
+  verifyInvitationContinuation,
+  verifyWaitlistContinuation,
+} from "./auth.continuation";
 import * as auth from "./auth.db";
+import {
+  bindAuthRecoveryLink,
+  experienceAuthPlugin,
+  resolveAuthExperience,
+  validateAuthTransport,
+} from "./auth.experience";
 import { createMcpOAuthPlugins } from "./auth.mcp-plugins";
 import * as oauth from "./auth.oauth.db";
 import {
@@ -100,6 +118,7 @@ export type CreateBetterAuthConfigParams = {
     ) => Promise<void>;
   };
   options?: BetterAuthOptions;
+  experienceFlows?: ExperienceFlowSigner;
   app?: BackendAppMetadata;
   config?: {
     waitlist: boolean;
@@ -127,7 +146,15 @@ function joinAppPath(baseUrl: string, pathSegment: string): string {
   return new URL(pathSegment, base).href;
 }
 
-function setPasswordEndpointPlugin(): BetterAuthPlugin {
+function setPasswordEndpointPlugin(
+  guard?: (input: {
+    userId: string;
+    claimId?: string;
+    experienceFlow?: string;
+    request?: Request;
+    headers?: Headers;
+  }) => Promise<void>
+): BetterAuthPlugin {
   return {
     id: "m5kdev-set-password",
     endpoints: {
@@ -137,26 +164,41 @@ function setPasswordEndpointPlugin(): BetterAuthPlugin {
           method: "POST",
           body: z.object({
             newPassword: z.string(),
+            claimId: z.string().optional(),
+            experienceFlow: z.string().optional(),
           }),
           use: [sensitiveSessionMiddleware],
         },
         async (ctx) => {
           const { newPassword } = ctx.body;
           const session = ctx.context.session;
+          await guard?.({
+            userId: session.user.id,
+            claimId: ctx.body.claimId,
+            experienceFlow: ctx.body.experienceFlow,
+            request: ctx.request,
+            headers: ctx.headers,
+          });
           const minPasswordLength = ctx.context.password.config.minPasswordLength;
           if (newPassword.length < minPasswordLength) {
-            throw new APIError("BAD_REQUEST", { message: "Password is too short" });
+            throw new APIError("BAD_REQUEST", {
+              message: "Password is too short",
+            });
           }
           const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
           if (newPassword.length > maxPasswordLength) {
-            throw new APIError("BAD_REQUEST", { message: "Password is too long" });
+            throw new APIError("BAD_REQUEST", {
+              message: "Password is too long",
+            });
           }
 
           const existingCredentialAccount = (
             await ctx.context.internalAdapter.findAccounts(session.user.id)
           ).find((account) => account.providerId === "credential" && account.password);
           if (existingCredentialAccount) {
-            throw new APIError("BAD_REQUEST", { message: "User already has a password" });
+            throw new APIError("BAD_REQUEST", {
+              message: "User already has a password",
+            });
           }
 
           await ctx.context.internalAdapter.linkAccount({
@@ -188,19 +230,36 @@ export function createBetterAuth<
   config,
   i18n,
   mcp,
+  experienceFlows,
 }: CreateBetterAuthParams<O, S, E, B>): BetterAuth {
   const { email: emailService, billing: billingService } = services;
   const { waitlist = false, provisionedAccountEmailDomain } = config ?? {};
   const localeConfig = app?.locales;
-  const webUrl = app?.urls?.web ?? process.env.VITE_APP_URL;
-  const apiUrl = app?.urls?.api ?? process.env.VITE_SERVER_URL;
+  const presentation = resolvePresentationMetadata(app, process.env);
+  const webUrl = presentation.urls.web;
+  const apiUrl = presentation.urls.api;
+  const experienceRegistry = presentation.experienceRegistry;
+  const multiExperience = experienceRegistry?.strict === true;
+  if (
+    multiExperience &&
+    new Set(
+      Object.values(experienceRegistry.config.definitions)
+        .filter((definition) => !definition.disabled)
+        .map((definition) => new URL(definition.apiOrigin).protocol)
+    ).size !== 1
+  )
+    throw new Error(
+      "Auth Experience API origins must use one protocol; split mixed HTTP/HTTPS Auth compositions explicitly"
+    );
+  if (multiExperience && emailService && !experienceFlows)
+    throw new Error("Experience flow signing is required for multi-Experience recovery email");
   const normalizedProvisionedAccountEmailDomain = provisionedAccountEmailDomain
     ? provisionedAccountEmailDomain.toLowerCase().replace(/^@/, "")
     : null;
 
   const logger = rootLogger.child({ layer: "betterAuth" });
 
-  const getWaitlistInvitationCode = async (ctx?: { headers?: Headers | null } | null) => {
+  const getLegacyWaitlistInvitationCode = async (ctx?: { headers?: Headers | null } | null) => {
     let code = ctx?.headers?.get("waitlist-invitation-code");
     if (code) return code;
     const oauthState = await getOAuthState();
@@ -210,7 +269,7 @@ export function createBetterAuth<
     return code;
   };
 
-  const getOrganizationInvitationCode = async (ctx?: { headers?: Headers | null } | null) => {
+  const getLegacyOrganizationInvitationCode = async (ctx?: { headers?: Headers | null } | null) => {
     let code = ctx?.headers?.get("organization-invitation-code");
     if (code) return code;
     const oauthState = await getOAuthState();
@@ -218,6 +277,245 @@ export function createBetterAuth<
       code = oauthState.organizationInvitationCode;
     }
     return code;
+  };
+
+  type SignupContext = { request?: Request; headers?: Headers | null } | null | undefined;
+  const signupError = () =>
+    new APIError("BAD_REQUEST", {
+      message: "This link is invalid or has expired. Request a new link from the same website.",
+    });
+  const readSignupContinuation = (
+    headers?: Headers | null,
+    additionalData?: unknown
+  ): SignupContinuation => {
+    const data =
+      additionalData && typeof additionalData === "object"
+        ? (additionalData as Record<string, unknown>)
+        : {};
+    const value = (header: string, key: string) => {
+      const supplied = headers?.get(header);
+      const raw = supplied !== undefined && supplied !== null ? supplied : data[key];
+      if (raw !== undefined && raw !== null && typeof raw !== "string") throw signupError();
+      return typeof raw === "string" && (raw || key === "experienceFlow") ? raw : undefined;
+    };
+    return {
+      organizationInvitationCode: value(
+        "organization-invitation-code",
+        "organizationInvitationCode"
+      ),
+      waitlistInvitationCode: value("waitlist-invitation-code", "waitlistInvitationCode"),
+      experienceFlow: value(EXPERIENCE_FLOW_HEADER, "experienceFlow"),
+    };
+  };
+  const validateSignup = async (
+    data: SignupContinuation,
+    experience: PublicExperience | undefined,
+    kind?: "organization" | "waitlist"
+  ) => {
+    if (!experienceRegistry) return data;
+    try {
+      if (data.organizationInvitationCode && kind !== "waitlist") {
+        const [invitation] = await orm
+          .select()
+          .from(schema.invitations)
+          .where(eq(schema.invitations.id, data.organizationInvitationCode))
+          .limit(1);
+        if (!invitation) throw signupError();
+        verifyInvitationContinuation({
+          registry: experienceRegistry,
+          flows: experienceFlows,
+          experience,
+          invitation,
+          proof: data.experienceFlow,
+        });
+      }
+      if (data.waitlistInvitationCode && kind !== "organization") {
+        const [entry] = await orm
+          .select()
+          .from(schema.waitlist)
+          .where(eq(schema.waitlist.code, data.waitlistInvitationCode))
+          .limit(1);
+        if (!entry) throw signupError();
+        verifyWaitlistContinuation({
+          registry: experienceRegistry,
+          flows: experienceFlows,
+          experience,
+          entry,
+          proof: data.experienceFlow,
+        });
+      }
+      return data;
+    } catch (error) {
+      if (error instanceof ExperienceContextError) throw signupError();
+      throw error;
+    }
+  };
+  const assertOAuthExperience = async (ctx: SignupContext) => {
+    if (!multiExperience || !experienceRegistry) return;
+    const state = await getOAuthState();
+    if (!state) return;
+    try {
+      const id = state.serverContext?.experienceId;
+      if (typeof id !== "string") throw signupError();
+      validateAuthTransport(
+        experienceRegistry,
+        experienceRegistry.get(id),
+        ctx?.request,
+        ctx?.headers ?? undefined
+      );
+      if (state.link) {
+        const claimInput = state.serverContext?.claimContinuation;
+        const parsed = z
+          .object({
+            claimId: z.string(),
+            experienceFlow: z.string().optional(),
+          })
+          .optional()
+          .safeParse(claimInput);
+        if (!parsed.success) throw signupError();
+        await validateClaimUser({
+          userId: state.link.userId,
+          ...parsed.data,
+          experience: experienceRegistry.get(id),
+        });
+      }
+    } catch (error) {
+      if (error instanceof ExperienceContextError) throw signupError();
+      throw error;
+    }
+  };
+  const getSignupCode = async (kind: "organization" | "waitlist", ctx: SignupContext) => {
+    if (!multiExperience || !experienceRegistry)
+      return kind === "organization"
+        ? getLegacyOrganizationInvitationCode(ctx)
+        : getLegacyWaitlistInvitationCode(ctx);
+    await assertOAuthExperience(ctx);
+    const state = await getOAuthState();
+    const parsed = state
+      ? signupContinuationSchema.safeParse(state.serverContext?.signupContinuation ?? {})
+      : undefined;
+    if (parsed && !parsed.success) throw signupError();
+    const data = parsed?.data ?? readSignupContinuation(ctx?.headers);
+    const experience = resolveAuthExperience(
+      experienceRegistry,
+      ctx?.request,
+      ctx?.headers ?? undefined
+    );
+    await validateSignup(data, experience, kind);
+    return kind === "organization" ? data.organizationInvitationCode : data.waitlistInvitationCode;
+  };
+  const getOrganizationInvitationCode = (ctx: SignupContext) => getSignupCode("organization", ctx);
+  const getWaitlistInvitationCode = (ctx: SignupContext) => getSignupCode("waitlist", ctx);
+
+  const validateClaimUser = async (input: {
+    userId: string;
+    claimId?: string;
+    experienceFlow?: string;
+    experience?: PublicExperience;
+  }) => {
+    if (!multiExperience || !experienceRegistry) return;
+    const [claim] = await orm
+      .select()
+      .from(schema.accountClaims)
+      .where(
+        and(
+          eq(schema.accountClaims.claimUserId, input.userId),
+          eq(schema.accountClaims.status, "INVITED"),
+          ...(input.claimId ? [eq(schema.accountClaims.id, input.claimId)] : [])
+        )
+      )
+      .orderBy(desc(schema.accountClaims.createdAt))
+      .limit(1);
+    if (!claim) {
+      if (input.claimId) throw signupError();
+      return;
+    }
+    if (!input.claimId || !claim.expiresAt || claim.expiresAt.getTime() <= Date.now())
+      throw signupError();
+    try {
+      verifyClaimContinuation({
+        registry: experienceRegistry,
+        flows: experienceFlows,
+        experience: input.experience,
+        claim,
+        userId: input.userId,
+        proof: input.experienceFlow,
+      });
+    } catch (error) {
+      if (error instanceof ExperienceContextError) throw signupError();
+      throw error;
+    }
+  };
+  const validateClaimLink = async (callbackURL: unknown, experience: PublicExperience) => {
+    if (typeof callbackURL !== "string") return undefined;
+    const callback = new URL(callbackURL, experience.webOrigin);
+    const claimId = callback.searchParams.get("claim");
+    const experienceFlow = callback.searchParams.get("claimFlow") ?? undefined;
+    if (!claimId && !experienceFlow) return undefined;
+    if (!claimId) throw signupError();
+    const [claim] = await orm
+      .select()
+      .from(schema.accountClaims)
+      .where(eq(schema.accountClaims.id, claimId))
+      .limit(1);
+    if (!claim) throw signupError();
+    await validateClaimUser({
+      userId: claim.claimUserId,
+      claimId,
+      experienceFlow,
+      experience,
+    });
+    return { claimId, experienceFlow };
+  };
+
+  const validateMagicClaim = async (token: string, callback: URL, experience: PublicExperience) => {
+    const claimId = callback.searchParams.get("claim");
+    if (!claimId || !experienceRegistry) throw signupError();
+    const [claim] = await orm
+      .select()
+      .from(schema.accountClaims)
+      .where(eq(schema.accountClaims.id, claimId))
+      .limit(1);
+    const [link] = await orm
+      .select()
+      .from(schema.accountClaimMagicLinks)
+      .where(
+        and(
+          eq(schema.accountClaimMagicLinks.claimId, claimId),
+          eq(schema.accountClaimMagicLinks.token, token)
+        )
+      )
+      .limit(1);
+    if (
+      !claim ||
+      claim.status !== "INVITED" ||
+      !claim.expiresAt ||
+      claim.expiresAt.getTime() <= Date.now() ||
+      !link ||
+      link.userId !== claim.claimUserId ||
+      !link.expiresAt ||
+      link.expiresAt.getTime() <= Date.now()
+    )
+      throw signupError();
+    const [owner] = await orm
+      .select({ email: schema.users.email })
+      .from(schema.users)
+      .where(eq(schema.users.id, claim.claimUserId))
+      .limit(1);
+    if (!owner || owner.email.toLowerCase() !== link.email.toLowerCase()) throw signupError();
+    try {
+      verifyClaimContinuation({
+        registry: experienceRegistry,
+        flows: experienceFlows,
+        experience,
+        claim,
+        userId: link.userId,
+        proof: callback.searchParams.get("claimFlow") ?? undefined,
+      });
+    } catch (error) {
+      if (error instanceof ExperienceContextError) throw signupError();
+      throw error;
+    }
   };
 
   const isProvisionedAccountEmail = (email: string) => {
@@ -229,7 +527,9 @@ export function createBetterAuth<
     const header = ctx?.headers?.get(ADMIN_CREATE_VERIFIED_USER_HEADER.toLowerCase());
     if (header !== ADMIN_CREATE_VERIFIED_USER_HEADER_VALUE) return false;
     const role = (
-      ctx as { context?: { session?: { user?: { role?: string | null } } | null } } | null
+      ctx as {
+        context?: { session?: { user?: { role?: string | null } } | null };
+      } | null
     )?.context?.session?.user?.role;
     return role === "admin";
   };
@@ -311,7 +611,27 @@ export function createBetterAuth<
 
   return betterAuth({
     ...options,
-    baseURL: apiUrl!,
+    baseURL: multiExperience
+      ? {
+          allowedHosts: experienceRegistry.allowedHosts,
+          protocol: experienceRegistry.defaultExperience.apiOrigin.startsWith("https:")
+            ? "https"
+            : "http",
+        }
+      : apiUrl!,
+    ...(multiExperience
+      ? {
+          advanced: {
+            ...options?.advanced,
+            trustedProxyHeaders: experienceRegistry.config.trustedProxyHeaders,
+            crossSubDomainCookies: { enabled: false },
+            defaultCookieAttributes: {
+              ...options?.advanced?.defaultCookieAttributes,
+              domain: undefined,
+            },
+          },
+        }
+      : {}),
     // Forward better-auth logs into pino. getSession swallows root causes into
     // opaque FAILED_TO_GET_SESSION; the real error is only passed to logger.error.
     logger: {
@@ -428,9 +748,24 @@ export function createBetterAuth<
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: !waitlist,
-      sendResetPassword: async ({ user, url }) => {
+      resetPasswordTokenExpiresIn: options?.emailAndPassword?.resetPasswordTokenExpiresIn,
+      sendResetPassword: async ({ user, url, token }, request) => {
         const locale = getRecordLocale(user);
-        const result = await emailService?.sendResetPassword(user.email, url, { locale });
+        const presentation = multiExperience
+          ? bindAuthRecoveryLink({
+              registry: experienceRegistry,
+              flows: experienceFlows,
+              request,
+              url,
+              token,
+              purpose: "reset-password",
+              expiresIn: options?.emailAndPassword?.resetPasswordTokenExpiresIn ?? 3600,
+            })
+          : { url, experience: undefined };
+        const result = await emailService?.sendResetPassword(user.email, presentation.url, {
+          locale,
+          experience: presentation.experience,
+        });
         if (result?.isErr()) {
           captureServerError(result.error, { logger }); // no-op when captured at creation
           hooks?.onError?.(result.error);
@@ -439,9 +774,24 @@ export function createBetterAuth<
       },
     },
     emailVerification: {
-      sendVerificationEmail: async ({ user, url }) => {
+      expiresIn: options?.emailVerification?.expiresIn,
+      sendVerificationEmail: async ({ user, url, token }, request) => {
         const locale = getRecordLocale(user);
-        const result = await emailService?.sendVerification(user.email, url, { locale });
+        const presentation = multiExperience
+          ? bindAuthRecoveryLink({
+              registry: experienceRegistry,
+              flows: experienceFlows,
+              request,
+              url,
+              token,
+              purpose: "verify-email",
+              expiresIn: options?.emailVerification?.expiresIn ?? 3600,
+            })
+          : { url, experience: undefined };
+        const result = await emailService?.sendVerification(user.email, presentation.url, {
+          locale,
+          experience: presentation.experience,
+        });
         if (result?.isErr()) {
           captureServerError(result.error, { logger }); // no-op when captured at creation
           hooks?.onError?.(result.error);
@@ -451,40 +801,85 @@ export function createBetterAuth<
     },
     plugins: [
       ...(options?.plugins ?? []),
-      setPasswordEndpointPlugin(),
+      ...(multiExperience
+        ? [
+            experienceAuthPlugin(experienceRegistry, experienceFlows, {
+              signup: async (headers, additionalData, experience) =>
+                validateSignup(readSignupContinuation(headers, additionalData), experience),
+              magic: validateMagicClaim,
+              claimLink: validateClaimLink,
+            }),
+          ]
+        : []),
+      setPasswordEndpointPlugin(async (input) => {
+        if (!multiExperience || !experienceRegistry) return;
+        const experience = resolveAuthExperience(experienceRegistry, input.request, input.headers);
+        await validateClaimUser({ ...input, experience });
+      }),
       magicLink({
         disableSignUp: true,
-        sendMagicLink: async ({ email, url, token }) => {
+        sendMagicLink: async ({ email, url, token, metadata }, ctx) => {
           const [user] = await orm
-            .select({ id: schema.users.id })
+            .select()
             .from(schema.users)
             .where(eq(schema.users.email, email.toLowerCase()))
             .limit(1);
-
           if (!user) return;
-
+          const requestedId = typeof metadata?.claimId === "string" ? metadata.claimId : undefined;
+          if (multiExperience && !requestedId) return;
           const [claim] = await orm
-            .select({ id: schema.accountClaims.id })
+            .select()
             .from(schema.accountClaims)
             .where(
               and(
                 eq(schema.accountClaims.claimUserId, user.id),
                 eq(schema.accountClaims.status, "INVITED"),
-                gte(schema.accountClaims.expiresAt, new Date())
+                gte(schema.accountClaims.expiresAt, new Date()),
+                ...(requestedId ? [eq(schema.accountClaims.id, requestedId)] : [])
               )
             )
             .orderBy(desc(schema.accountClaims.createdAt))
             .limit(1);
-          if (claim) {
-            await orm.insert(schema.accountClaimMagicLinks).values({
-              claimId: claim.id,
-              userId: user.id,
-              email: email.toLowerCase(),
-              token,
+          if (!claim) return;
+          let link = url;
+          if (multiExperience && experienceRegistry) {
+            const experience = experienceRegistry.require(
+              resolveAuthExperience(experienceRegistry, ctx?.request, ctx?.headers)
+            );
+            const callback = new URL(new URL(url).searchParams.get("callbackURL")!);
+            if (callback.searchParams.get("claim") !== claim.id) return;
+            try {
+              verifyClaimContinuation({
+                registry: experienceRegistry,
+                flows: experienceFlows,
+                experience,
+                claim,
+                userId: user.id,
+                proof: callback.searchParams.get("claimFlow") ?? undefined,
+              });
+            } catch (error) {
+              if (error instanceof ExperienceContextError) return;
+              throw error;
+            }
+            link = bindAuthRecoveryLink({
+              registry: experienceRegistry,
+              flows: experienceFlows,
+              request: ctx?.request,
               url,
-              expiresAt: new Date(Date.now() + 1000 * 60 * 5),
-            });
+              token,
+              purpose: "account-claim-magic-link",
+              expiresIn: 300,
+            }).url;
           }
+          await orm.insert(schema.accountClaimMagicLinks).values({
+            ...(typeof metadata?.issuanceId === "string" ? { id: metadata.issuanceId } : {}),
+            claimId: claim.id,
+            userId: user.id,
+            email: email.toLowerCase(),
+            token,
+            url: link,
+            expiresAt: new Date(Math.min(Date.now() + 300_000, claim.expiresAt!.getTime())),
+          });
         },
       }),
       admin(),
@@ -492,7 +887,9 @@ export function createBetterAuth<
       organization({
         organizationHooks: {
           beforeCreateInvitation: async () => {
-            throw new APIError("FORBIDDEN", { message: "Use Auth inviteOrganizationMember" });
+            throw new APIError("FORBIDDEN", {
+              message: "Use Auth inviteOrganizationMember",
+            });
           },
           beforeDeleteOrganization: async (data) => {
             if (!billingService) return;
@@ -655,13 +1052,17 @@ export function createBetterAuth<
         mcp
           ? {
               resource: mcp.resource,
+              issuer:
+                apiUrl && new URL(apiUrl).pathname !== "/"
+                  ? apiUrl.replace(/\/$/, "")
+                  : new URL(options?.basePath ?? "/api/auth", apiUrl ?? mcp.resource).href,
               loginPage: webUrl ? joinAppPath(webUrl, "login") : "/login",
               consentPage: webUrl ? joinAppPath(webUrl, "consent") : "/consent",
             }
           : undefined
       ),
     ],
-    trustedOrigins: [webUrl!, apiUrl!],
+    trustedOrigins: experienceRegistry?.allowedOrigins ?? [webUrl!, apiUrl!],
 
     databaseHooks: {
       user: {
@@ -671,6 +1072,10 @@ export function createBetterAuth<
           },
         },
         update: {
+          before: async (user, ctx) => {
+            await assertOAuthExperience(ctx);
+            return { data: user };
+          },
           after: async (user) => {
             try {
               await syncActiveMemberProfiles(orm, user.id, {
@@ -679,12 +1084,17 @@ export function createBetterAuth<
                   "image" in user ? ((user.image as string | null | undefined) ?? null) : undefined,
               });
             } catch (error) {
-              logger.error({ step: "syncActiveMemberProfiles", userId: user.id, error });
+              logger.error({
+                step: "syncActiveMemberProfiles",
+                userId: user.id,
+                error,
+              });
             }
           },
         },
         create: {
           before: async (user, ctx) => {
+            await assertOAuthExperience(ctx);
             logger.info({ step: "before create user", user, ctx });
             const organizationInvitationCode = await getOrganizationInvitationCode(ctx);
 
@@ -910,16 +1320,33 @@ export function createBetterAuth<
           },
         },
       },
+      account: {
+        create: {
+          before: async (account, ctx) => {
+            await assertOAuthExperience(ctx);
+            return { data: account };
+          },
+        },
+        update: {
+          before: async (account, ctx) => {
+            await assertOAuthExperience(ctx);
+            return { data: account };
+          },
+        },
+      },
       session: {
         create: {
-          before: async (session) => {
+          before: async (session, ctx) => {
+            await assertOAuthExperience(ctx);
             const [closedUser] = await orm
               .select({ closedAt: schema.users.closedAt })
               .from(schema.users)
               .where(eq(schema.users.id, session.userId))
               .limit(1);
             if (closedUser?.closedAt) {
-              throw new APIError("FORBIDDEN", { message: "This User is Closed" });
+              throw new APIError("FORBIDDEN", {
+                message: "This User is Closed",
+              });
             }
             const { organizationId, organizationRole, organizationType, organizationMemberId } =
               await getActiveOrganization(orm, schema, session.userId);
@@ -952,7 +1379,9 @@ export function createBetterAuth<
                   prevSession.userId
                 );
                 if (newOrganization.closedAt) {
-                  throw new APIError("FORBIDDEN", { message: "This Organization is Closed" });
+                  throw new APIError("FORBIDDEN", {
+                    message: "This Organization is Closed",
+                  });
                 }
 
                 data.activeOrganizationType = newOrganization.type;

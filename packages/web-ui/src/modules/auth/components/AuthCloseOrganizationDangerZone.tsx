@@ -30,7 +30,7 @@ export function AuthCloseOrganizationDangerZone(): ReactElement | null {
         });
         navigate("/");
       },
-      onError: (error: Error) => {
+      onError: (error) => {
         toast.danger(error.message);
       },
     })
@@ -54,12 +54,7 @@ export function AuthCloseOrganizationDangerZone(): ReactElement | null {
       <Card.Content>
         <Form onSubmit={handleSubmit}>
           <div className="flex flex-col gap-4">
-            <TextField
-              name="name"
-              isRequired
-              value={typedName}
-              onChange={setTypedName}
-            >
+            <TextField name="name" isRequired value={typedName} onChange={setTypedName}>
               <Label>{t("web-ui:organization.preferences.dangerZone.nameLabel")}</Label>
               <Input placeholder={organizationName} autoComplete="off" />
               <FieldError />

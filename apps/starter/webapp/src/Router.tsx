@@ -5,7 +5,7 @@ import { AuthOrganizationRouter } from "@m5kdev/web-ui/modules/auth/components/A
 import { AuthPublicRouter } from "@m5kdev/web-ui/modules/auth/components/AuthPublicRouter";
 import { AuthUserRouter } from "@m5kdev/web-ui/modules/auth/components/AuthUserRouter";
 import { AuthUtilityProtectedRoutes as ProtectedRoutes } from "@m5kdev/web-ui/modules/auth/components/AuthUtilityProtectedRoutes";
-import { APP_NAME } from "@starter-app/shared/modules/app/app.constants";
+import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useTranslation } from "react-i18next";
 import { Route, Routes } from "react-router";
 import { z } from "zod";
@@ -44,6 +44,7 @@ const preferenceControls = {
 } as const;
 
 function AuthHeader() {
+  const { appName, experience } = useAppConfig();
   const { t } = useTranslation("starter-app");
 
   return (
@@ -51,8 +52,10 @@ function AuthHeader() {
       <p className="text-[0.68rem] font-semibold uppercase tracking-[0.3em] text-default-500">
         {t("auth.header.eyebrow")}
       </p>
-      <h1 className="mt-3 font-editorial text-4xl text-ink">{APP_NAME}</h1>
-      <p className="mt-3 text-sm text-default-600">{t("auth.header.tagline")}</p>
+      <h1 className="mt-3 font-editorial text-4xl text-ink">{appName}</h1>
+      <p className="mt-3 text-sm text-default-600">
+        {experience?.brand.tagline ?? t("auth.header.tagline")}
+      </p>
     </div>
   );
 }

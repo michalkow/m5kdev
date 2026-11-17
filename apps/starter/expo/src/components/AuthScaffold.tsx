@@ -1,7 +1,7 @@
+import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { Card, Typography } from "heroui-native";
 import type { ReactNode } from "react";
 import { ScrollView, Text, View } from "react-native";
-import { appTitle } from "../config";
 
 export function AuthScaffold({
   children,
@@ -12,6 +12,7 @@ export function AuthScaffold({
   description?: string;
   title: string;
 }) {
+  const { appName } = useAppConfig();
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="flex-grow px-5 py-8">
       <View className="flex-1 justify-center gap-5">
@@ -19,7 +20,7 @@ export function AuthScaffold({
           <Text className="text-center text-xs font-semibold uppercase tracking-widest text-default-500">
             Expo auth fixture
           </Text>
-          <Text className="text-center text-3xl font-semibold text-foreground">{appTitle}</Text>
+          <Text className="text-center text-3xl font-semibold text-foreground">{appName}</Text>
           <Typography.Paragraph className="text-center text-default-600">
             {description ?? "Native auth screens backed by @m5kdev/frontend."}
           </Typography.Paragraph>

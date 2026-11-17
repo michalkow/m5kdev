@@ -1,5 +1,6 @@
-import { requireMcpAuth } from "@better-auth/mcp";
+import { createMcpProtectedRequestHandler } from "@better-auth/mcp";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
+import { createDpopReplayStore } from "better-auth/oauth2";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import type { Result } from "neverthrow";
 import type { ServerError } from "../../utils/errors";
@@ -86,8 +87,12 @@ export function createMcpExpressHandler(input: {
   invoke: (payload: McpInvokeInput) => Promise<Result<unknown, ServerError>>;
   auth: BetterAuth;
   resource: string;
+  /** Canonical Auth issuer; required when Better Auth uses a dynamic baseURL. */
+  issuer?: string;
   serverName: string;
 }): RequestHandler {
+  if (typeof input.auth.options.baseURL === "object" && !input.issuer)
+    throw new Error("Dynamic Auth requires an explicit canonical MCP issuer");
   const mcpHttp = createMcpHandler(
     (ctx) => {
       const server = new McpServer({
@@ -134,15 +139,25 @@ export function createMcpExpressHandler(input: {
   return (req: Request, res: Response, next: NextFunction): void => {
     void (async () => {
       const request = expressRequestToWeb(req);
-      const response = await requireMcpAuth(
-        input.auth,
+      const { baseURL, internalAdapter } = await input.auth.$context;
+      const issuer = baseURL || input.issuer;
+      if (!issuer)
+        throw new Error(
+          "Auth requires an explicit canonical MCP issuer when its effective baseURL is empty"
+        );
+      const response = await createMcpProtectedRequestHandler(
+        {
+          issuer,
+          audience: input.resource,
+          jwksUrl: `${issuer}/jwks`,
+          dpop: { replayStore: createDpopReplayStore(internalAdapter) },
+        },
         async (webRequest, jwt) => {
           return mcpHttp.fetch(webRequest, {
             authInfo: mcpAuthInfoFromJwt(jwt, webRequest),
             parsedBody: req.body,
           });
-        },
-        { resource: input.resource }
+        }
       )(request);
       await writeWebResponse(res, response);
     })().catch(next);
@@ -159,6 +174,8 @@ export function mountMcpHttp(input: {
   invoke: (payload: McpInvokeInput) => Promise<Result<unknown, ServerError>>;
   auth: BetterAuth;
   resource: string;
+  /** Canonical Auth issuer; required when Better Auth uses a dynamic baseURL. */
+  issuer?: string;
   serverName: string;
 }): void {
   input.express.post(
@@ -168,6 +185,7 @@ export function mountMcpHttp(input: {
       invoke: input.invoke,
       auth: input.auth,
       resource: input.resource,
+      issuer: input.issuer,
       serverName: input.serverName,
     })
   );

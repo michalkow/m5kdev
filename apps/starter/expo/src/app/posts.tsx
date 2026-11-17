@@ -1,3 +1,4 @@
+import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useAuthLocale } from "@m5kdev/frontend/modules/auth/hooks/useAuthLocale";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { type Href, Link, Redirect } from "expo-router";
@@ -6,6 +7,7 @@ import { Linking, ScrollView, Text, View } from "react-native";
 import { getDocsUrl } from "../config";
 
 export default function PostsScreen() {
+  const { serverUrl, experience } = useAppConfig();
   const { data: session } = useSession();
   const { locale } = useAuthLocale();
 
@@ -42,7 +44,11 @@ export default function PostsScreen() {
         </Link>
         <Button
           variant="outline"
-          onPress={() => void Linking.openURL(getDocsUrl(locale ?? undefined))}
+          onPress={() =>
+            void Linking.openURL(
+              experience?.brand.helpUrl ?? getDocsUrl(serverUrl, locale ?? undefined)
+            )
+          }
         >
           Help
         </Button>

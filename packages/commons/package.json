@@ -150,6 +150,16 @@
         "types": "./dist/src/modules/billing/*.d.cts",
         "default": "./dist/src/modules/billing/*.cjs"
       }
+    },
+    "./modules/app/*": {
+      "import": {
+        "types": "./dist/src/modules/app/*.d.mts",
+        "default": "./dist/src/modules/app/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/app/*.d.cts",
+        "default": "./dist/src/modules/app/*.cjs"
+      }
     }
   }
 }

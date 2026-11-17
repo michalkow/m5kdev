@@ -225,6 +225,16 @@
         "types": "./dist/src/modules/table/queryParams.d.ts",
         "default": "./dist/src/modules/table/queryParams.js"
       }
+    },
+    "./modules/app/experience": {
+      "import": {
+        "types": "./dist/src/modules/app/experience.d.mts",
+        "default": "./dist/src/modules/app/experience.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/app/experience.d.ts",
+        "default": "./dist/src/modules/app/experience.js"
+      }
     }
   }
 }

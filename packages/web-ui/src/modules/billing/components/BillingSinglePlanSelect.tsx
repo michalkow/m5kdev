@@ -1,3 +1,4 @@
+import { Button as HeroButton } from "@heroui/react";
 import type { StripePlan } from "@m5kdev/commons/modules/billing/billing.types";
 import {
   formatBillingInterval,
@@ -5,13 +6,12 @@ import {
   listPlanSelectPrices,
   resolveTrialDays,
 } from "@m5kdev/commons/modules/billing/billing.utils";
-import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
+import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
 import { Check, LogOut } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router";
-import { Button, buttonVariants } from "../../../components/ui/button";
+import { Button } from "../../../components/ui/button";
 import {
   Card,
   CardContent,
@@ -22,6 +22,7 @@ import {
 } from "../../../components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "../../../components/ui/tabs";
 import { cn } from "../../../lib/utils";
+import { useBillingActions } from "../hooks/useBillingActions";
 import { BillingTrialBadge, billingPlanCtaLabel } from "./billingPlanTrial";
 
 export interface BillingSinglePlanSelectProps {
@@ -49,8 +50,9 @@ export function BillingSinglePlanSelect({
     "Cancel anytime",
   ],
 }: BillingSinglePlanSelectProps) {
+  const authClient = useAuthClient();
   const { t } = useTranslation("web-ui");
-  const { serverUrl } = useAppConfig();
+  const billing = useBillingActions();
   const navigate = useNavigate();
   const prices = listPlanSelectPrices({
     plan,
@@ -66,7 +68,6 @@ export function BillingSinglePlanSelect({
     navigate("/login");
   };
 
-  const href = selected ? `${serverUrl}/stripe/checkout/${selected.priceId}` : undefined;
   const amount =
     selected?.unitAmount != null
       ? formatPlanAmount({ unitAmount: selected.unitAmount, currency })
@@ -133,13 +134,15 @@ export function BillingSinglePlanSelect({
           </CardContent>
 
           <CardFooter>
-            {href ? (
-              <a
-                className={cn(buttonVariants({ variant: "default", size: "lg" }), "w-full")}
-                href={href}
+            {selected ? (
+              <HeroButton
+                className="w-full"
+                isDisabled={!billing.canStart}
+                isPending={billing.isCheckoutPending}
+                onPress={() => void billing.startCheckout(selected.priceId)}
               >
                 {billingPlanCtaLabel({ trialRequiresPaymentMethod, trialDays, t })}
-              </a>
+              </HeroButton>
             ) : null}
           </CardFooter>
         </Card>

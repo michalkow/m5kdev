@@ -3,38 +3,45 @@ import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { type Href, Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { LoadingScreen } from "../../components/LoadingScreen";
-import { trpcClient } from "../../lib/trpc";
+import { useTRPCClient } from "../../lib/trpc";
 
 function singleParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
+  return typeof value === "string" ? value : undefined;
 }
 
 export default function AcceptInvitationScreen() {
   const authClient = useAuthClient();
+  const trpcClient = useTRPCClient();
   const { data: session, registerSession } = useSession();
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    id?: string | string[];
+    experienceFlow?: string | string[];
+  }>();
   const invitationId = singleParam(params.id);
+  const experienceFlow = singleParam(params.experienceFlow);
+  const invalidContinuation = Array.isArray(params.id) || Array.isArray(params.experienceFlow);
   const [errorPath, setErrorPath] = useState<string | null>(null);
 
   const signupPath = useMemo(() => {
-    if (!invitationId) return null;
+    if (!invitationId || invalidContinuation) return null;
     return trpcClient.auth.readInvitation
-      .query({ id: invitationId })
+      .query({ id: invitationId, experienceFlow })
       .then((invitation) => {
         const search = new URLSearchParams({
           invitation: invitationId,
           email: invitation.email,
         });
+        if (experienceFlow) search.set("experienceFlow", experienceFlow);
         return `/signup?${search.toString()}`;
       })
       .catch(() => "/signup");
-  }, [invitationId]);
+  }, [invitationId, experienceFlow, invalidContinuation, trpcClient]);
 
   useEffect(() => {
     let cancelled = false;
 
-    if (!invitationId) {
+    if (!invitationId || invalidContinuation) {
       setErrorPath("/signup");
       return;
     }
@@ -47,7 +54,7 @@ export default function AcceptInvitationScreen() {
     }
 
     trpcClient.auth.acceptOrganizationInvitation
-      .mutate({ id: invitationId })
+      .mutate({ id: invitationId, experienceFlow })
       .then(async (accepted) => {
         const activeResult = await authClient.organization.setActive({
           organizationId: accepted.organizationId,
@@ -67,7 +74,17 @@ export default function AcceptInvitationScreen() {
     return () => {
       cancelled = true;
     };
-  }, [authClient, invitationId, registerSession, router, session, signupPath]);
+  }, [
+    authClient,
+    invitationId,
+    experienceFlow,
+    invalidContinuation,
+    registerSession,
+    router,
+    session,
+    signupPath,
+    trpcClient,
+  ]);
 
   if (errorPath) {
     return <Redirect href={errorPath as Href} />;

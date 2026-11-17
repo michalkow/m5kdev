@@ -38,14 +38,13 @@ jest.mock("better-auth/node", () => ({
 }));
 
 jest.mock("@better-auth/mcp", () => ({
-  requireMcpAuth:
-    (_auth: unknown, _handler: unknown, opts?: { resource?: string }) =>
-    async (request: Request) => {
+  createMcpProtectedRequestHandler:
+    (opts: { audience: string }, _handler: unknown) => async (request: Request) => {
       if (!request.headers.get("authorization")) {
         return new Response(JSON.stringify({ error: "unauthorized" }), {
           status: 401,
           headers: {
-            "WWW-Authenticate": `Bearer realm="mcp", resource_metadata="${opts?.resource ?? ""}"`,
+            "WWW-Authenticate": `Bearer realm="mcp", resource_metadata="${opts.audience}"`,
             "content-type": "application/json",
           },
         });

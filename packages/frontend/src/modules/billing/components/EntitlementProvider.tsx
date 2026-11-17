@@ -1,23 +1,12 @@
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
-import type { EntitlementSnapshot } from "@m5kdev/commons/modules/billing/billing.schema";
 import { useQuery } from "@tanstack/react-query";
-import { createContext, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useAppTRPC } from "../../app/hooks/useAppTrpc";
 import { useSession } from "../../auth/hooks/useSession";
 
-export interface EntitlementProviderValue {
-  organizationId: string | undefined;
-  snapshot: EntitlementSnapshot | undefined;
-  isPending: boolean;
-  isError: boolean;
-}
+export { type EntitlementProviderValue, entitlementProviderContext } from "../entitlement.context";
 
-export const entitlementProviderContext = createContext<EntitlementProviderValue>({
-  organizationId: undefined,
-  snapshot: undefined,
-  isPending: true,
-  isError: false,
-});
+import { entitlementProviderContext } from "../entitlement.context";
 
 export function EntitlementProvider({ children }: { children: ReactNode }): ReactNode {
   const trpc = useAppTRPC<BackendTRPCRouter>();
@@ -26,6 +15,7 @@ export function EntitlementProvider({ children }: { children: ReactNode }): Reac
   const query = useQuery(
     trpc.billing.getEntitlements.queryOptions(organizationId ? { organizationId } : undefined, {
       enabled: Boolean(organizationId),
+      placeholderData: undefined,
     })
   );
 
@@ -33,7 +23,8 @@ export function EntitlementProvider({ children }: { children: ReactNode }): Reac
     <entitlementProviderContext.Provider
       value={{
         organizationId,
-        snapshot: query.data,
+        snapshot:
+          !query.isError && query.data?.organizationId === organizationId ? query.data : undefined,
         isPending: query.isPending || query.isLoading,
         isError: query.isError,
       }}

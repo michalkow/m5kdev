@@ -61,9 +61,17 @@ export class ConnectModule<const Namespace extends string = "connect"> extends B
 
   override services({
     repositories,
+    appConfig,
   }: ModuleServicesContext<ConnectModuleDeps, ConnectModuleRepositories>) {
+    if (this.providers.length > 0 && !appConfig.experienceRegistry)
+      throw new Error(
+        "Configured Connection OAuth providers require app.urls.web / VITE_APP_URL and app.urls.api / VITE_SERVER_URL"
+      );
     return {
-      connect: new ConnectService({ connect: repositories.connect }, this.providers, this.grants),
+      connect: new ConnectService({ connect: repositories.connect }, this.providers, this.grants, {
+        registry: appConfig.experienceRegistry,
+        mountPath: this.options.mountPath,
+      }),
     };
   }
 

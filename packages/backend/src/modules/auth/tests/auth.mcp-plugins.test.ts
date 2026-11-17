@@ -54,6 +54,7 @@ describe("createMcpOAuthPlugins", () => {
     expect(jwt).toHaveBeenCalledWith({
       disableSettingJwtHeader: true,
       schema: { jwks: { modelName: "jwk" } },
+      jwt: { issuer: "http://127.0.0.1:8080/api/auth" },
     });
     expect(mcpPlugin).toHaveBeenCalledWith({
       loginPage: mcpConfig.loginPage,

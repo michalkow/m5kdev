@@ -1,6 +1,7 @@
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import type { ActiveSubscription } from "@m5kdev/commons/modules/billing/billing.schema";
 import { useQuery } from "@tanstack/react-query";
+import i18n from "i18next";
 import { createContext } from "react";
 import { useAppTRPC } from "../../app/hooks/useAppTrpc";
 import { useSession } from "../../auth/hooks/useSession";
@@ -8,6 +9,7 @@ import { useUserOrganizations } from "../../auth/hooks/useUserOrganizations";
 
 export const billingProviderContext = createContext<{
   isLoading: boolean;
+  isError?: boolean;
   data: ActiveSubscription | null;
 }>({
   isLoading: true,
@@ -19,31 +21,47 @@ export function BillingProvider({
   loader,
   planPage,
   paymentMethodPage,
+  errorPage,
   skipPlanCheck = false,
 }: {
   children: React.ReactNode;
   loader?: React.ReactNode;
   planPage: React.ReactNode;
   paymentMethodPage?: React.ReactNode;
+  errorPage?: React.ReactNode;
   skipPlanCheck?: boolean;
 }): React.ReactNode {
   const trpc = useAppTRPC<BackendTRPCRouter>();
   const { data: session } = useSession();
   const organizations = useUserOrganizations();
+  const organizationId = session?.session.activeOrganizationId ?? undefined;
   const billingExempt = Boolean(
     organizations.data?.find(
       (organization) => organization.id === session?.session.activeOrganizationId
     )?.billingExempt
   );
-  const skipSubscriptionQuery = skipPlanCheck || organizations.isLoading || billingExempt;
+  const skipSubscriptionQuery =
+    skipPlanCheck ||
+    organizations.isPending ||
+    organizations.isError ||
+    billingExempt ||
+    !organizationId;
 
-  const { data: activeSubscription, isLoading } = useQuery(
-    trpc.billing.getActiveSubscription.queryOptions(undefined, {
-      staleTime: 1000 * 60 * 60 * 4, // 4 hours
-      enabled: !skipSubscriptionQuery,
-    })
+  const subscription = useQuery(
+    trpc.billing.getActiveSubscription.queryOptions(
+      organizationId ? { organizationId } : undefined,
+      {
+        placeholderData: undefined,
+        staleTime: 1000 * 60 * 60 * 4, // 4 hours
+        enabled: !skipSubscriptionQuery,
+      }
+    )
   );
 
+  const activeSubscription =
+    !subscription.isError && subscription.data?.referenceId === organizationId
+      ? subscription.data
+      : undefined;
   if (skipPlanCheck) {
     return (
       <billingProviderContext.Provider value={{ isLoading: false, data: null }}>
@@ -52,7 +70,19 @@ export function BillingProvider({
     );
   }
 
-  if (organizations.isLoading) {
+  if (organizations.isError || (!billingExempt && subscription.isError)) {
+    return (
+      errorPage ?? (
+        <p role="alert">
+          {i18n.t("web-ui:billing.loadError", {
+            defaultValue: "Unable to load billing. Try again.",
+          })}
+        </p>
+      )
+    );
+  }
+
+  if (organizations.isPending || !organizationId) {
     return loader ? loader : "Loading...";
   }
 
@@ -64,7 +94,7 @@ export function BillingProvider({
     );
   }
 
-  if (isLoading) {
+  if (subscription.isPending) {
     return loader ? loader : "Loading...";
   }
 
@@ -77,7 +107,7 @@ export function BillingProvider({
   }
 
   return (
-    <billingProviderContext.Provider value={{ isLoading, data: activeSubscription }}>
+    <billingProviderContext.Provider value={{ isLoading: false, data: activeSubscription }}>
       {children}
     </billingProviderContext.Provider>
   );

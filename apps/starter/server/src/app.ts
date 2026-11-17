@@ -1,5 +1,8 @@
 // biome-ignore-all assist/source/organizeImports: feature-gated module imports stay in marker blocks
-import { createBackendApp, defineBackendModule } from "@m5kdev/backend/app";
+import { createBackendApp } from "@m5kdev/backend/app";
+// m5k:ai:start
+import { defineBackendModule } from "@m5kdev/backend/app";
+// m5k:ai:end
 import { isDeployedEnvironment, requireEnvValue } from "@m5kdev/backend/base/environment";
 import { shutdownTelemetry } from "@m5kdev/backend/lib/otel";
 import { shutdownPosthog } from "@m5kdev/backend/lib/posthog";
@@ -79,6 +82,7 @@ export const builtBackendApp = createBackendApp(
     },
     app: {
       name: APP_NAME,
+      brand: { logo: new URL("/logo.svg", appUrl).href },
       urls: {
         web: appUrl,
         api: serverUrl,
@@ -109,7 +113,7 @@ export const builtBackendApp = createBackendApp(
       outputDirectory: process.env.EMAIL_OUTPUT_DIRECTORY ?? ".emails",
     },
     auth: {
-      factory({ db, services, appConfig, i18n, mcp }) {
+      factory({ db, services, appConfig, i18n, mcp, experienceFlows }) {
         return createBetterAuth({
           orm: db.orm,
           schema: db.schema,
@@ -117,6 +121,7 @@ export const builtBackendApp = createBackendApp(
             email: services.email.email,
           },
           app: appConfig,
+          experienceFlows,
           i18n,
           mcp,
           config: {

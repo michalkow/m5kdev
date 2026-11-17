@@ -1,5 +1,6 @@
 import { AppConfigProvider } from "@m5kdev/frontend/modules/app/components/AppConfigProvider";
 import type { Meta, StoryObj } from "@storybook/react";
+import { NuqsAdapter } from "nuqs/adapters/react-router/v7";
 import type { ReactElement, ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { AuthPublicLayout } from "./AuthPublicLayout";
@@ -33,12 +34,14 @@ function AuthPublicResetPasswordRouteStory({
         }}
       >
         <MemoryRouter initialEntries={["/reset-password?token=storybook"]}>
-          <Routes>
-            <Route element={<AuthPublicLayout header={header} />}>
-              <Route path="/reset-password" element={<AuthPublicResetPasswordRoute />} />
-              <Route path="/login" element={<div>Login</div>} />
-            </Route>
-          </Routes>
+          <NuqsAdapter>
+            <Routes>
+              <Route element={<AuthPublicLayout header={header} />}>
+                <Route path="/reset-password" element={<AuthPublicResetPasswordRoute />} />
+                <Route path="/login" element={<div>Login</div>} />
+              </Route>
+            </Routes>
+          </NuqsAdapter>
         </MemoryRouter>
       </AppConfigProvider>
     </div>

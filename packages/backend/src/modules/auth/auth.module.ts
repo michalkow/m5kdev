@@ -122,7 +122,8 @@ export class AuthModule extends BaseModule<
         appConfig.locales,
         i18n,
         appConfig.roles,
-        this.closeAfterDays
+        this.closeAfterDays,
+        { registry: appConfig.experienceRegistry, flows: infra.experienceFlows }
       ),
     };
   }

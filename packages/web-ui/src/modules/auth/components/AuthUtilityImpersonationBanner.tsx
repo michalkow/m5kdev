@@ -1,9 +1,10 @@
 import { Button, toast } from "@heroui/react";
-import { authClient } from "@m5kdev/frontend/modules/auth/auth.lib";
+import { useAuthClient } from "@m5kdev/frontend/modules/auth/hooks/useAuthClient";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { useTranslation } from "react-i18next";
 
 export function AuthUtilityImpersonationBanner() {
+  const authClient = useAuthClient();
   const { data: session } = useSession();
   const { t } = useTranslation("web-ui");
   const isImpersonating = !!session?.session?.impersonatedBy;

@@ -2,6 +2,7 @@ const typescript = require("typescript");
 
 module.exports = {
   process(source, filename) {
+    if (!/\b(?:import|export)\b/.test(source)) return { code: source };
     return {
       code: typescript.transpileModule(source, {
         fileName: filename.replace(/\.mjs$/, ".js"),

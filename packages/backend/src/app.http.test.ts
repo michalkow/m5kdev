@@ -595,6 +595,32 @@ describe("createBackendApp HTTP shell", () => {
       });
     });
 
+    it("serves deep links from a hidden deployment parent without exposing dotfiles", async () => {
+      const hiddenRoot = path.join(spaRoot, ".deployment", "client");
+      await fs.mkdir(hiddenRoot, { recursive: true });
+      await fs.writeFile(path.join(hiddenRoot, "index.html"), "<title>hidden deployment</title>");
+      await fs.writeFile(path.join(hiddenRoot, ".secret"), "private deployment value");
+      const docsRoot = path.join(hiddenRoot, "docs");
+      await fs.mkdir(docsRoot);
+      await fs.writeFile(path.join(docsRoot, "404.html"), "Public help missing page");
+      const built = createBackendApp({
+        db: { client },
+        spa: { root: hiddenRoot },
+        documentation: { root: docsRoot },
+      });
+      await withServer(built.express.app, async (baseUrl) => {
+        const response = await fetch(`${baseUrl}/login`);
+        expect(response.status).toBe(200);
+        expect(await response.text()).toContain("<title>hidden deployment</title>");
+        expect(await (await fetch(`${baseUrl}/.secret`)).text()).not.toContain(
+          "private deployment value"
+        );
+        const missingHelp = await fetch(`${baseUrl}/documentation/missing`);
+        expect(missingHelp.status).toBe(404);
+        expect(await missingHelp.text()).toBe("Public help missing page");
+      });
+    });
+
     it("does not 500 when spa.root is missing and still serves API routes", async () => {
       const built = createBackendApp(
         {

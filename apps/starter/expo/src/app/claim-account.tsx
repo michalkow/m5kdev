@@ -1,15 +1,29 @@
 import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
+import { useLocalSearchParams } from "expo-router";
 import { Button } from "heroui-native";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 import { AuthScaffold } from "../components/AuthScaffold";
 import { FormTextField } from "../components/FormTextField";
 import { StatusText } from "../components/StatusText";
-import { trpcClient } from "../lib/trpc";
+import { useTRPCClient } from "../lib/trpc";
 
 export default function ClaimAccountScreen() {
   const { serverUrl } = useAppConfig();
+  const trpcClient = useTRPCClient();
+  const params = useLocalSearchParams<{
+    claim?: string | string[];
+    claimFlow?: string | string[];
+  }>();
+  const invalidContinuation = Array.isArray(params.claim) || Array.isArray(params.claimFlow);
+  const continuation = useMemo(
+    () => ({
+      claimId: typeof params.claim === "string" ? params.claim : undefined,
+      experienceFlow: typeof params.claimFlow === "string" ? params.claimFlow : undefined,
+    }),
+    [params.claim, params.claimFlow]
+  );
   const { data: session, registerSession } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,6 +32,14 @@ export default function ClaimAccountScreen() {
   const [hasClaim, setHasClaim] = useState(false);
   const [isClaimed, setIsClaimed] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+
+  const [passwordCreatedFor, setPasswordCreatedFor] = useState<string>();
+  const credentialSubject = JSON.stringify([
+    session?.user?.id,
+    continuation.claimId,
+    continuation.experienceFlow,
+  ]);
+  const passwordCreated = passwordCreatedFor === credentialSubject;
 
   useEffect(() => {
     if (session?.user.email) {
@@ -28,6 +50,12 @@ export default function ClaimAccountScreen() {
   useEffect(() => {
     let cancelled = false;
 
+    if (invalidContinuation) {
+      setStatusTone("error");
+      setStatus("This link is invalid or expired. Request a fresh link from the same website.");
+      setHasClaim(false);
+      return;
+    }
     if (isClaimed) {
       return;
     }
@@ -40,10 +68,11 @@ export default function ClaimAccountScreen() {
     }
 
     trpcClient.auth.getMyAccountClaimStatus
-      .query()
+      .query(continuation)
       .then((claim) => {
         if (cancelled) return;
         setHasClaim(Boolean(claim));
+        if (claim?.hasPassword) setPasswordCreatedFor(credentialSubject);
         setStatusTone(claim ? "success" : "error");
         setStatus(claim ? "Claim your account" : "No pending account claim was found.");
         if (claim?.claimedEmail) {
@@ -60,13 +89,13 @@ export default function ClaimAccountScreen() {
     return () => {
       cancelled = true;
     };
-  }, [isClaimed, session?.user]);
+  }, [isClaimed, session?.user, continuation, credentialSubject, invalidContinuation, trpcClient]);
 
   const saveEmail = async () => {
     setIsBusy(true);
     setStatus(null);
     try {
-      await trpcClient.auth.setMyAccountClaimEmail.mutate({ email });
+      await trpcClient.auth.setMyAccountClaimEmail.mutate({ email, ...continuation });
       registerSession();
       setStatusTone("success");
       setStatus("Email updated");
@@ -82,22 +111,27 @@ export default function ClaimAccountScreen() {
     setIsBusy(true);
     setStatus(null);
     try {
-      const response = await fetch(`${serverUrl}/api/auth/set-password`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          newPassword: password,
-        }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as { message?: string };
-      if (!response.ok) {
-        throw new Error(payload.message ?? "Unable to set password");
+      if (!passwordCreated) {
+        const response = await fetch(`${serverUrl}/api/auth/set-password`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            newPassword: password,
+            ...continuation,
+          }),
+        });
+        const payload = (await response.json().catch(() => ({}))) as { message?: string };
+        if (!response.ok) {
+          throw new Error(payload.message ?? "Unable to set password");
+        }
+
+        setPasswordCreatedFor(credentialSubject);
       }
 
-      await trpcClient.auth.acceptMyAccountClaim.mutate();
+      await trpcClient.auth.acceptMyAccountClaim.mutate(continuation);
       setIsClaimed(true);
       registerSession();
       setStatusTone("success");
@@ -133,14 +167,14 @@ export default function ClaimAccountScreen() {
           value={password}
           onChangeText={setPassword}
           secureTextEntry
-          editable={hasClaim && !isBusy}
+          editable={hasClaim && !isBusy && !passwordCreated}
         />
         <Button
           testID="claim-password-submit"
           onPress={setPasswordAndClaim}
-          isDisabled={!hasClaim || !password || isBusy}
+          isDisabled={!hasClaim || (!passwordCreated && !password) || isBusy}
         >
-          Set Password and Claim
+          {passwordCreated ? "Finish Claim" : "Set Password and Claim"}
         </Button>
         <StatusText testID="claim-status" tone={statusTone}>
           {status}

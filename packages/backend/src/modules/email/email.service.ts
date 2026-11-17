@@ -1,14 +1,27 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import {
+  experienceIdSchema,
+  type PublicExperience,
+} from "@m5kdev/commons/modules/app/experience.schema";
 import { toI18nLanguageTag } from "@m5kdev/commons/modules/auth/auth.locale";
-import { ok } from "neverthrow";
+import { err, ok } from "neverthrow";
 import { createElement, type FunctionComponent } from "react";
 import { prerender } from "react-dom/static";
 import { Resend } from "resend";
 import type { BackendAppEmailMode, BackendAppEmailOptions, BackendAppMetadata } from "../../app";
+import { ExperienceContextError, ExperienceRegistry } from "../../experience";
 import type { AppI18n } from "../../i18n/app-i18n";
+import type { ServerResult, ServerResultAsync } from "../base/base.dto";
 import { BaseService } from "../base/base.service";
+import {
+  type CommunicationExperienceInput,
+  type CommunicationPolicy,
+  communicationExperienceInputSchema,
+  type EmailTemplateAvailabilityInput,
+  emailTemplateAvailabilityInputSchema,
+} from "./email.schema";
 
 export type EmailTranslateFn = (key: string, options?: Record<string, unknown>) => string;
 
@@ -19,6 +32,10 @@ export type Brand = {
 };
 
 export type OverrideOptions = {
+  /** Registry reference or a resolved request descriptor; the registry remains authoritative. */
+  experience?: PublicExperience | string;
+  /** Named template props resolved against the selected canonical web origin. */
+  linkPaths?: Record<string, string>;
   from?: string;
   subject?: string;
   previewText?: string;
@@ -48,7 +65,11 @@ export type EmailTemplates = {
   [key: string]: EmailTemplate | undefined;
 };
 
+export type EmailTemplateSets = Record<string, EmailTemplates>;
+
 type EmailServiceProps = {
+  communicationPolicy?: CommunicationPolicy;
+  templateSets?: EmailTemplateSets;
   templates: EmailTemplates;
   appConfig?: BackendAppMetadata;
   emailConfig?: BackendAppEmailOptions;
@@ -122,6 +143,9 @@ export class EmailService extends BaseService<never, never> {
   public outputDirectory: string;
   public appConfig: BackendAppMetadata;
   public i18n?: AppI18n;
+  private readonly templateSets: EmailTemplateSets;
+  private readonly communicationPolicy?: CommunicationPolicy;
+  private readonly experienceRegistry?: ExperienceRegistry;
 
   constructor(props: EmailServiceProps) {
     super(undefined, undefined);
@@ -144,16 +168,109 @@ export class EmailService extends BaseService<never, never> {
     };
     this.noReplyFrom = props.from ?? props.emailConfig?.from ?? props.noReplyFrom;
     this.templates = props.templates;
+    this.templateSets = props.templateSets ?? {};
+    this.communicationPolicy = props.communicationPolicy;
     this.systemNotificationEmail =
       props.systemNotificationEmail ?? props.emailConfig?.systemNotificationEmail;
     this.mode = props.mode ?? props.emailConfig?.mode ?? "send";
     this.outputDirectory = props.outputDirectory ?? props.emailConfig?.outputDirectory ?? ".emails";
     this.appConfig = appConfig;
     this.i18n = props.i18n;
+    this.experienceRegistry =
+      appConfig.experienceRegistry ??
+      (appConfig.experiences ? new ExperienceRegistry(appConfig.experiences) : undefined);
+    for (const [key, profile] of Object.entries(
+      this.experienceRegistry?.config.emailProfiles ?? {}
+    )) {
+      if (
+        profile.templateSet !== undefined &&
+        !Object.hasOwn(this.templateSets, profile.templateSet)
+      )
+        throw new Error(
+          `Email profile ${key} names unknown Email template set ${profile.templateSet}`
+        );
+    }
   }
 
-  private resolveTemplate(templateKey: keyof EmailTemplates) {
-    return this.templates[templateKey];
+  /** Derived capability for legacy standalone producers; strict selection never falls back. */
+  get hasExperienceRegistry() {
+    return this.experienceRegistry !== undefined;
+  }
+
+  /** Select presentation before communication side effects; owning services retain authority. */
+  async resolveCommunicationExperience(
+    input?: CommunicationExperienceInput
+  ): ServerResultAsync<PublicExperience> {
+    return this.throwableAsync(async () => {
+      const parsed = communicationExperienceInputSchema.safeParse(input === undefined ? {} : input);
+      if (!parsed.success)
+        return this.error("INTERNAL_SERVER_ERROR", "Invalid communication context", {
+          cause: parsed.error,
+        });
+      if (!this.experienceRegistry)
+        return this.error(
+          "INTERNAL_SERVER_ERROR",
+          "Communication Experience registry is not configured"
+        );
+      if (parsed.data.experienceId !== undefined)
+        return ok(this.experienceRegistry.require(parsed.data.experienceId));
+      if (!this.communicationPolicy) return ok(this.experienceRegistry.require());
+      if (!parsed.data.context)
+        return this.error("INTERNAL_SERVER_ERROR", "Communication policy context is required");
+      const selected = experienceIdSchema.safeParse(
+        await this.communicationPolicy(parsed.data.context)
+      );
+      if (!selected.success)
+        return this.error(
+          "INTERNAL_SERVER_ERROR",
+          "Communication policy must select one Experience id",
+          { cause: selected.error }
+        );
+      return ok(this.experienceRegistry.require(selected.data));
+    });
+  }
+
+  /** Report only templates reachable through enabled profiles; do not select or invoke policy. */
+  hasTemplate(input: EmailTemplateAvailabilityInput): ServerResult<boolean> {
+    return this.throwable(() => {
+      const parsed = emailTemplateAvailabilityInputSchema.safeParse(input);
+      if (!parsed.success)
+        return this.error("INTERNAL_SERVER_ERROR", "Invalid template availability context", {
+          cause: parsed.error,
+        });
+      const registry = this.experienceRegistry;
+      if (parsed.data.scope === "experience") {
+        if (!registry)
+          return this.error("INTERNAL_SERVER_ERROR", "Email Experience registry is not configured");
+        const experience = registry.require(parsed.data.experienceId);
+        return ok(
+          Boolean(
+            this.resolveTemplate(
+              parsed.data.templateKey,
+              registry.emailProfile(experience)?.templateSet
+            )
+          )
+        );
+      }
+      if (!registry) return ok(Boolean(this.resolveTemplate(parsed.data.templateKey)));
+      const templateKey = parsed.data.templateKey;
+      return ok(
+        Object.entries(registry.config.definitions).some(
+          ([id, definition]) =>
+            !definition.disabled &&
+            Boolean(
+              this.resolveTemplate(
+                templateKey,
+                registry.emailProfile(registry.get(id))?.templateSet
+              )
+            )
+        )
+      );
+    });
+  }
+
+  private resolveTemplate(templateKey: keyof EmailTemplates, templateSet?: string) {
+    return (templateSet ? this.templateSets[templateSet] : this.templates)[templateKey];
   }
 
   private resolveOutputDirectory() {
@@ -257,7 +374,9 @@ export class EmailService extends BaseService<never, never> {
       });
 
       if (error) {
-        return this.error("INTERNAL_SERVER_ERROR", "Failed to send email", { cause: error });
+        return this.error("INTERNAL_SERVER_ERROR", "Failed to send email", {
+          cause: error,
+        });
       }
 
       return ok();
@@ -279,6 +398,7 @@ export class EmailService extends BaseService<never, never> {
       {
         to: payload.to,
         templateId: payload.templateId,
+        from: payload.from,
         subject: payload.subject,
         previewText: payload.previewText,
         props: payload.props,
@@ -362,7 +482,28 @@ export class EmailService extends BaseService<never, never> {
     templateProps: Record<string, unknown>,
     options?: OverrideOptions
   ) {
-    const template = this.resolveTemplate(templateKey);
+    let experience: PublicExperience | undefined;
+    const links: Record<string, string> = {};
+    try {
+      if (this.experienceRegistry)
+        experience = this.experienceRegistry.require(options?.experience);
+      else if (options?.experience || options?.linkPaths)
+        throw new ExperienceContextError("Email Experience registry is not configured");
+      if (experience && this.experienceRegistry) {
+        for (const [key, value] of Object.entries(options?.linkPaths ?? {})) {
+          if (["brand", "experience", "t", "htmlLang", "previewText"].includes(key))
+            throw new ExperienceContextError(`Reserved email link prop ${key}`);
+          links[key] = this.experienceRegistry.destination(experience, value);
+        }
+      }
+    } catch (error) {
+      if (!(error instanceof ExperienceContextError)) throw error;
+      return this.error("INTERNAL_SERVER_ERROR", error.message, {
+        cause: error,
+      });
+    }
+    const profile = experience ? this.experienceRegistry?.emailProfile(experience) : undefined;
+    const template = this.resolveTemplate(templateKey, profile?.templateSet);
     if (!template) {
       // templates are registered at boot — a missing one is a config bug, not a client error
       return this.error(
@@ -373,7 +514,18 @@ export class EmailService extends BaseService<never, never> {
 
     const locale =
       options?.locale ?? this.i18n?.defaultLocale ?? this.appConfig.locales?.defaultLocale;
-    const mergedProps: Record<string, unknown> = { ...templateProps };
+    const mergedProps: Record<string, unknown> = {
+      ...templateProps,
+      ...(experience
+        ? {
+            experience,
+            brand: this.experienceRegistry?.strict
+              ? experience.brand
+              : (templateProps.brand ?? this.brand),
+          }
+        : {}),
+      ...links,
+    };
     const translationContext = buildEmailTranslationContext(mergedProps);
     const t = this.i18n ? this.i18n.getFixedT(locale) : undefined;
     if (t) {
@@ -382,7 +534,7 @@ export class EmailService extends BaseService<never, never> {
         mergedProps.htmlLang = toI18nLanguageTag(locale);
       }
     }
-    const from = options?.from ?? template.from ?? this.noReplyFrom;
+    const from = options?.from ?? template.from ?? profile?.from ?? this.noReplyFrom;
     const subject =
       options?.subject ??
       resolveTranslatedTemplateText(t, template.subject, translationContext) ??
@@ -422,6 +574,19 @@ export class EmailService extends BaseService<never, never> {
     );
   }
 
+  private emailWebOrigin(options?: OverrideOptions) {
+    try {
+      return ok(
+        this.experienceRegistry?.require(options?.experience).webOrigin ?? this.appConfig.urls?.web
+      );
+    } catch (error) {
+      if (!(error instanceof ExperienceContextError)) throw error;
+      return this.error("INTERNAL_SERVER_ERROR", error.message, {
+        cause: error,
+      });
+    }
+  }
+
   async sendWaitlistConfirmation(email: string, overrideOptions?: OverrideOptions) {
     return this.sendTemplate(
       email,
@@ -435,11 +600,17 @@ export class EmailService extends BaseService<never, never> {
   }
 
   async sendSystemWaitlistNotification(email: string, overrideOptions?: OverrideOptions) {
-    if (!this.systemNotificationEmail) return ok();
-
-    const url = buildAppUrl(this.appConfig.urls?.web, "/admin/waitlist") ?? undefined;
+    const origin = this.emailWebOrigin(overrideOptions);
+    if (origin.isErr()) return err(origin.error);
+    const experience = this.experienceRegistry?.require(overrideOptions?.experience);
+    const recipient =
+      (experience
+        ? this.experienceRegistry?.emailProfile(experience)?.systemNotificationEmail
+        : undefined) ?? this.systemNotificationEmail;
+    if (!recipient) return ok();
+    const url = buildAppUrl(origin.value, "/admin/waitlist") ?? undefined;
     return this.sendTemplate(
-      this.systemNotificationEmail,
+      recipient,
       "systemWaitlistNotification",
       {
         email,
@@ -450,9 +621,23 @@ export class EmailService extends BaseService<never, never> {
     );
   }
 
+  /** Auth owns code issuance and its proof. Email must not invent a strict continuation. */
+  private waitlistContinuation(options?: OverrideOptions): ServerResult<true> {
+    if (this.experienceRegistry?.strict && !options?.linkPaths?.url)
+      return this.error(
+        "INTERNAL_SERVER_ERROR",
+        "Strict waitlist email helpers require an Auth-issued URL in linkPaths.url"
+      );
+    return ok(true);
+  }
+
   async sendWaitlistInvite(email: string, code: string, overrideOptions?: OverrideOptions) {
+    const continuation = this.waitlistContinuation(overrideOptions);
+    if (continuation.isErr()) return err(continuation.error);
+    const origin = this.emailWebOrigin(overrideOptions);
+    if (origin.isErr()) return err(origin.error);
     const params = new URLSearchParams({ code, email });
-    const url = buildAppUrl(this.appConfig.urls?.web, `/signup?${params.toString()}`);
+    const url = buildAppUrl(origin.value, `/signup?${params.toString()}`);
     if (!url) {
       return this.error("INTERNAL_SERVER_ERROR", "App web URL is not configured for email links");
     }
@@ -475,7 +660,11 @@ export class EmailService extends BaseService<never, never> {
     name?: string,
     overrideOptions?: OverrideOptions
   ) {
-    const url = buildAppUrl(this.appConfig.urls?.web, `/signup?code=${code}&email=${email}`);
+    const continuation = this.waitlistContinuation(overrideOptions);
+    if (continuation.isErr()) return err(continuation.error);
+    const origin = this.emailWebOrigin(overrideOptions);
+    if (origin.isErr()) return err(origin.error);
+    const url = buildAppUrl(origin.value, `/signup?code=${code}&email=${email}`);
     if (!url) {
       return this.error("INTERNAL_SERVER_ERROR", "App web URL is not configured for email links");
     }

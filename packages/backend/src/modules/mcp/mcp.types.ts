@@ -7,6 +7,12 @@ export const MCP_AUTHORIZATION_SERVER_METADATA_PATH = "/.well-known/oauth-author
 /** Better Auth `basePath`; RFC 8414 inserts this after the well-known prefix. */
 export const MCP_AUTH_ISSUER_PATH = "/api/auth";
 
+/** MCP has one deployment identity even when browser auth accepts several domains. */
+export function mcpIssuerUrl(apiUrl: string, basePath = MCP_AUTH_ISSUER_PATH): string {
+  const url = new URL(apiUrl);
+  return url.pathname !== "/" ? apiUrl.replace(/\/$/, "") : new URL(basePath, url).href;
+}
+
 export function mcpResourceUrl(apiUrl: string): string {
   const base = apiUrl.endsWith("/") ? apiUrl : `${apiUrl}/`;
   return new URL("mcp", base).href;

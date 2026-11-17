@@ -10,7 +10,7 @@ import { AuthUtilityImpersonationBanner } from "@m5kdev/web-ui/modules/auth/comp
 import { NotificationSidebarInbox } from "@m5kdev/web-ui/modules/notification/components/NotificationSidebarInbox";
 import { BellIcon } from "lucide-react";
 // m5k:notifications:end
-import { APP_NAME } from "@starter-app/shared/modules/app/app.constants";
+import { useAppConfig } from "@m5kdev/frontend/modules/app/hooks/useAppConfig";
 import { CircleHelpIcon, FileIcon, UsersIcon } from "lucide-react";
 // m5k:ai:start
 import { SparklesIcon } from "lucide-react";
@@ -31,6 +31,7 @@ import { StarterWebPush } from "./modules/notification/StarterWebPush";
 import { getDocumentationUrl } from "../../documentation";
 
 export function Layout() {
+  const { appName, experience, serverUrl } = useAppConfig();
   const { data: session, signOut } = useSession();
   const { t, i18n } = useTranslation("starter-app");
   const navigate = useNavigate();
@@ -47,7 +48,12 @@ export function Layout() {
     <AppShell
       header={<AuthUtilityImpersonationBanner />}
       sidebar={{
-        header: <AppSidebarHeader logo={{ src: "/logo.svg", alt: APP_NAME }} title={APP_NAME} />,
+        header: (
+          <AppSidebarHeader
+            logo={{ src: experience?.brand.logo ?? "/logo.svg", alt: appName }}
+            title={appName}
+          />
+        ),
         content: (
           <>
             {/* m5k:notifications:start */}
@@ -99,12 +105,14 @@ export function Layout() {
                 {
                   label: t("layout.navigation.help"),
                   icon: <CircleHelpIcon />,
-                  link: getDocumentationUrl({
-                    url: import.meta.env.VITE_DOCS_URL,
-                    serverUrl: import.meta.env.VITE_SERVER_URL,
-                    development: import.meta.env.DEV,
-                    locale: i18n.language,
-                  }),
+                  link:
+                    experience?.brand.helpUrl ??
+                    getDocumentationUrl({
+                      url: import.meta.env.VITE_DOCS_URL,
+                      serverUrl,
+                      development: import.meta.env.DEV,
+                      locale: i18n.language,
+                    }),
                 },
               ]}
               navigationState={navigationState}

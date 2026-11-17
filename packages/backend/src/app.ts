@@ -1,6 +1,14 @@
 import fs from "node:fs";
 import type { Server } from "node:http";
 import path from "node:path";
+import { canonicalOriginSchema } from "@m5kdev/commons/modules/app/experience.schema";
+import { type BackendAppMetadata, resolvePresentationMetadata } from "./presentation";
+
+export type {
+  BackendAppAuthoringMetadata,
+  BackendAppMetadata,
+} from "./presentation";
+
 import {
   ADMIN_CREATE_VERIFIED_USER_HEADER,
   USER_CURRENCY_HEADER,
@@ -9,7 +17,6 @@ import {
 } from "@m5kdev/commons/modules/auth/auth.constants";
 import type { AuthLocaleConfig } from "@m5kdev/commons/modules/auth/auth.locale";
 import {
-  type AuthRolesConfig,
   type NormalizedAuthRolesConfig,
   normalizeAuthRolesConfig,
 } from "@m5kdev/commons/modules/auth/auth.roles";
@@ -44,6 +51,12 @@ import {
   type ServerEventBus,
   serverEventChannelPrefix,
 } from "./base/server-event";
+import { ExperienceRegistry, type ExperienceRequest, experienceMiddleware } from "./experience";
+import {
+  EXPERIENCE_FLOW_HEADER,
+  ExperienceFlowSigner,
+  type LegacyExperienceFlowPolicy,
+} from "./experience-flows";
 import { type AppI18n, type BackendAppI18nResources, createAppI18n } from "./i18n/app-i18n";
 import type * as authTables from "./modules/auth/auth.db";
 import type { BetterAuth } from "./modules/auth/auth.lib";
@@ -142,20 +155,6 @@ export type BackendAppRouterMap<Modules extends readonly BackendAppModule[]> = S
   UnionToIntersection<ExtractModuleRouters<Modules[number]>>
 >;
 
-export type BackendAppMetadata = {
-  name?: string;
-  urls?: {
-    web?: string;
-    api?: string;
-  };
-  brand?: {
-    logo?: string;
-    tagline?: string;
-  };
-  locales?: AuthLocaleConfig;
-  roles?: AuthRolesConfig;
-};
-
 export type BackendAppEmailMode = "send" | "log" | "store";
 
 export type BackendAppEmailOptions = {
@@ -166,6 +165,7 @@ export type BackendAppEmailOptions = {
 };
 
 type ResolvedBackendAppMetadata = {
+  experienceRegistry?: ExperienceRegistry;
   name?: string;
   /** `APP_ENV` — see {@link parseAppEnvironment}. */
   environment: DeploymentEnvironment;
@@ -224,6 +224,7 @@ export type BackendModuleRepositoriesContext<Tables extends TableMap = TableMap>
     redis?: IORedis;
     resend?: Resend;
     serverEvents: ServerEventBus;
+    experienceFlows?: ExperienceFlowSigner;
   };
 };
 
@@ -242,6 +243,7 @@ export type BackendModuleServicesContext = {
     redis?: IORedis;
     resend?: Resend;
     serverEvents: ServerEventBus;
+    experienceFlows?: ExperienceFlowSigner;
   };
 };
 
@@ -310,6 +312,7 @@ export type BackendModuleDefinition<
 };
 
 export type BackendAppAuthFactoryContext = {
+  experienceFlows?: ExperienceFlowSigner;
   env: Record<string, string | undefined>;
   logger: Logger;
   appConfig: ResolvedBackendAppMetadata;
@@ -351,6 +354,10 @@ export type BackendAppConfig = {
   logger?: Logger;
   env?: Record<string, string | undefined>;
   app?: BackendAppMetadata;
+  /** Stable server key for token-bound Experience continuations. */
+  experienceFlowSecret?: string;
+  /** Optional bounded policy for trusted pre-cutover token issuance; disabled by default. */
+  experienceFlowLegacyPolicy?: LegacyExperienceFlowPolicy;
   auth?: {
     factory(ctx: BackendAppAuthFactoryContext): BetterAuth;
   };
@@ -419,8 +426,25 @@ function normalizeAppConfig(
   env: Record<string, string | undefined>
 ): ResolvedBackendAppMetadata {
   const { environment, slug } = parseAppEnvironment(env);
-  const webUrl = config?.urls?.web ?? env.VITE_APP_URL;
-  const apiUrl = config?.urls?.api ?? env.VITE_SERVER_URL;
+  if (config && Object.hasOwn(config, "experienceRegistry"))
+    throw new Error(
+      "experienceRegistry is resolved metadata; use app.experiences for Kernel authoring"
+    );
+  const presentation = resolvePresentationMetadata(config, env, {
+    deployed: environment !== "local",
+  });
+  const registry = presentation.experienceRegistry;
+  const origin = (value: string | undefined, key: string) => {
+    if (value === undefined) return undefined;
+    const parsed = canonicalOriginSchema.safeParse(value);
+    if (!parsed.success)
+      throw new Error(
+        `${key} must be an HTTP(S) origin without a path, query, fragment or credentials`
+      );
+    return parsed.data;
+  };
+  const webUrl = origin(presentation.urls.web, "app.urls.web");
+  const apiUrl = origin(presentation.urls.api, "app.urls.api");
   if (environment !== "local") {
     if (!webUrl)
       throw new Error(`VITE_APP_URL (or app.urls.web) must be set when APP_ENV=${environment}`);
@@ -430,19 +454,35 @@ function normalizeAppConfig(
   }
 
   return {
-    name: config?.name,
+    experienceRegistry:
+      registry ??
+      (webUrl && apiUrl
+        ? new ExperienceRegistry(
+            {
+              defaultExperience: "default",
+              brands: {
+                default: { name: config?.name ?? "m5kdev", ...config?.brand },
+              },
+              definitions: {
+                default: {
+                  product: "default",
+                  brand: "default",
+                  webOrigin: webUrl,
+                  apiOrigin: apiUrl,
+                },
+              },
+            },
+            { strict: false }
+          )
+        : undefined),
+    name: presentation.name,
     environment,
     slug,
     urls: {
       web: webUrl,
       api: apiUrl,
     },
-    brand: {
-      logo: config?.brand?.logo ?? (webUrl ? new URL("/mark.svg", webUrl).toString() : undefined),
-      tagline:
-        config?.brand?.tagline ??
-        (config?.name ? `${config.name} publishing workspace` : undefined),
-    },
+    brand: presentation.brand,
     locales: config?.locales,
     roles: normalizeAuthRolesConfig(config?.roles),
   };
@@ -479,7 +519,10 @@ function createDbClient(config: BackendAppConfig["db"]): {
   };
 }
 
-function createRedisClient(config: BackendAppConfig["redis"]): { redis?: IORedis; owned: boolean } {
+function createRedisClient(config: BackendAppConfig["redis"]): {
+  redis?: IORedis;
+  owned: boolean;
+} {
   if (!config) {
     return {
       redis: undefined,
@@ -684,7 +727,9 @@ function applyCors({
   appConfig: ResolvedBackendAppMetadata;
 }): void {
   const corsDefaults: CorsOptions = {
-    origin: appConfig.urls.web ? [appConfig.urls.web] : false,
+    origin:
+      appConfig.experienceRegistry?.allowedOrigins ??
+      (appConfig.urls.web ? [appConfig.urls.web] : false),
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: [
@@ -696,6 +741,7 @@ function applyCors({
       USER_LOCALE_HEADER,
       USER_CURRENCY_HEADER,
       USER_PRICE_ID_HEADER,
+      EXPERIENCE_FLOW_HEADER,
     ],
   };
   const corsOptions = config.cors ? config.cors(corsDefaults) : corsDefaults;
@@ -737,7 +783,7 @@ function applyProductDocumentation(options: {
     res.redirect(308, req.originalUrl.replace(/(?=\?|$)/, "/"));
   });
   options.expressApp.use("/documentation", express.static(root), (_req, res) => {
-    res.status(404).sendFile(path.join(root, "404.html"), (error) => {
+    res.status(404).sendFile("404.html", { root }, (error) => {
       if (error && !res.headersSent) res.status(404).type("text").send("Documentation not found");
     });
   });
@@ -754,7 +800,7 @@ function applyBakedSpa(options: { expressApp: Express; spa: BackendAppConfig["sp
   }
   expressApp.use(express.static(root));
   expressApp.get("/{*splat}", (_req, res, next) => {
-    res.sendFile(path.join(root, "index.html"), (error) => {
+    res.sendFile("index.html", { root }, (error) => {
       if (error) {
         next(error);
       }
@@ -770,13 +816,37 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   const logger = config.logger ?? rootLogger;
   const appConfig = normalizeAppConfig(config.app, env);
   const emailConfig = normalizeEmailConfig(config.email, env);
+  const flowSecret = config.experienceFlowSecret ?? env.BETTER_AUTH_SECRET;
+  // Legacy Better Auth accepts short keys; automatic flow signing requires a usable key.
+  // Explicit/strict signing configuration still validates and fails rather than weakening it.
+  const experienceFlows =
+    appConfig.experienceRegistry &&
+    flowSecret !== undefined &&
+    (appConfig.experienceRegistry.strict ||
+      config.experienceFlowSecret !== undefined ||
+      flowSecret.length >= 32)
+      ? new ExperienceFlowSigner(appConfig.experienceRegistry, flowSecret, {
+          legacyPolicy: config.experienceFlowLegacyPolicy,
+        })
+      : undefined;
   const appI18n = appConfig.locales
     ? createAppI18n(appConfig.locales, config.i18n?.resources ?? {})
     : undefined;
 
   const orderedModules = resolveModuleOrder(registeredModules);
   const expressApp = config.express ?? express();
+  if (appConfig.experienceRegistry) {
+    expressApp.use(experienceMiddleware(appConfig.experienceRegistry));
+  }
   applyCors({ expressApp, config, appConfig });
+  if (appConfig.experienceRegistry) {
+    expressApp.get("/app/experience", (req: ExperienceRequest, res) => {
+      if (!req.experience)
+        return res.status(400).json({ message: "Experience context is required" });
+      res.setHeader("Cache-Control", "private, no-store");
+      return res.json(req.experience);
+    });
+  }
   const dbClientState = createDbClient(config.db);
   applyHealthCheck({ expressApp, client: dbClientState.client, appConfig });
   const redisState = createRedisClient(config.redis);
@@ -790,6 +860,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     }),
   });
   const infra = {
+    experienceFlows,
     express: expressApp,
     redis: redisState.redis,
     resend: resendState.resend,
@@ -857,6 +928,7 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
   }
 
   let auth: BetterAuth | undefined = config.auth?.factory({
+    experienceFlows,
     env,
     logger,
     appConfig,
@@ -989,6 +1061,10 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
       trpcExpress.createExpressMiddleware({
         router: appRouter as AnyRouter,
         createContext,
+        // Authenticated resources and opaque continuation reads must never enter shared caches.
+        responseMeta: () => ({
+          headers: { "cache-control": "private, no-store" },
+        }),
         onError: ({ error, type, path, input }) => {
           handleTRPCBoundaryError({ error, type, path, input });
         },
@@ -1031,7 +1107,10 @@ export function createBackendApp<const Modules extends readonly BackendAppModule
     });
   }
 
-  applyProductDocumentation({ expressApp, documentation: config.documentation });
+  applyProductDocumentation({
+    expressApp,
+    documentation: config.documentation,
+  });
   applyBakedSpa({ expressApp, spa: config.spa });
   expressApp.use(handleHTTPBoundaryError);
 
