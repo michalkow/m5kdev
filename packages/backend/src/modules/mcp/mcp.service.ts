@@ -1,48 +1,51 @@
 import { err, ok } from "neverthrow";
-import { Base } from "../../base/base.abstract";
 import type { OrganizationActor } from "../../base/base.actor";
 import { resolveOrganizationActor } from "../../base/base.actor";
 import type { ServerResultAsync } from "../../base/base.dto";
+import { BaseService } from "../../base/base.service";
 import type { RequireEntitlements } from "../../utils/trpc";
 import type { User } from "../auth/auth.lib";
 import type { AuthOrganizationRepository, AuthUserRepository } from "../auth/auth.repository";
 import type { McpRepository } from "./mcp.repository";
 import type { McpConsentOrganization, McpListedOrganization } from "./mcp.types";
 
-export class McpService extends Base {
+interface ListAvailableToolNamesInput {
+  tools: readonly { name: string; requiredCapabilities?: readonly string[] }[];
+  userId: string;
+  oauthClientId: string;
+  requireEntitlements?: RequireEntitlements;
+}
+
+export class McpService extends BaseService<
+  { mcp: McpRepository; organization: AuthOrganizationRepository; user: AuthUserRepository },
+  Record<string, never>
+> {
   constructor(
-    private readonly mcpRepository: McpRepository,
-    private readonly organizationRepository: AuthOrganizationRepository,
-    private readonly userRepository: AuthUserRepository
+    mcpRepository: McpRepository,
+    organizationRepository: AuthOrganizationRepository,
+    userRepository: AuthUserRepository
   ) {
-    super("service");
+    super({ mcp: mcpRepository, organization: organizationRepository, user: userRepository }, {});
   }
 
   /** Discovery is the union of eligible Organizations, with all keys required in one. */
-  async listAvailableTools<T extends { requiredCapabilities?: readonly string[] }>({
-    tools,
-    userId,
-    oauthClientId,
-    requireEntitlements,
-  }: {
-    tools: readonly T[];
-    userId: string;
-    oauthClientId: string;
-    requireEntitlements?: RequireEntitlements;
-  }): ServerResultAsync<readonly T[]> {
+  readonly listAvailableToolNames = this.procedure<ListAvailableToolNamesInput>(
+    "listAvailableToolNames"
+  ).handle(async ({ input }): ServerResultAsync<string[]> => {
+    const { tools, userId, oauthClientId, requireEntitlements } = input;
     if (!requireEntitlements || !tools.some((tool) => tool.requiredCapabilities?.length)) {
-      return ok(tools);
+      return ok(tools.map((tool) => tool.name));
     }
     const user = await this.resolveCallerUser({ userId });
     if (user.isErr()) return err(user.error);
-    const ids = await this.mcpRepository.listOrganizationIds({ userId, oauthClientId });
+    const ids = await this.repository.mcp.listOrganizationIds({ userId, oauthClientId });
     if (ids.isErr()) return err(ids.error);
     const actors: OrganizationActor[] = [];
     for (const organizationId of ids.value) {
       const actor = await resolveOrganizationActor({
         user: { userId, userRole: user.value.role ?? "user" },
         organizationId,
-        memberships: this.organizationRepository,
+        memberships: this.repository.organization,
       });
       if (actor.isErr()) {
         if (actor.error.code === "NOT_FOUND") continue;
@@ -50,16 +53,16 @@ export class McpService extends Base {
       }
       actors.push(actor.value);
     }
-    const available: T[] = [];
+    const available: string[] = [];
     for (const tool of tools) {
       if (!tool.requiredCapabilities?.length) {
-        available.push(tool);
+        available.push(tool.name);
         continue;
       }
       for (const actor of actors) {
         const allowed = await requireEntitlements(actor, tool.requiredCapabilities);
         if (allowed.isOk()) {
-          available.push(tool);
+          available.push(tool.name);
           break;
         }
         if (allowed.error.code !== "FORBIDDEN" || allowed.error.context?.kind !== "entitlement") {
@@ -68,14 +71,14 @@ export class McpService extends Base {
       }
     }
     return ok(available);
-  }
+  });
 
   replaceAllowlist(input: {
     oauthClientId: string;
     userId: string;
     organizationIds: readonly string[];
   }): ServerResultAsync<void> {
-    return this.mcpRepository.replaceAllowlist(input);
+    return this.repository.mcp.replaceAllowlist(input);
   }
 
   async listConsentOrganizations({
@@ -87,9 +90,9 @@ export class McpService extends Base {
   }): ServerResultAsync<McpConsentOrganization[]> {
     const userResult = await this.resolveCallerUser({ userId });
     if (userResult.isErr()) return err(userResult.error);
-    const liveResult = await this.organizationRepository.listUserOrganizations(userId);
+    const liveResult = await this.repository.organization.listUserOrganizations(userId);
     if (liveResult.isErr()) return err(liveResult.error);
-    const allowlistedResult = await this.mcpRepository.listOrganizationIds({
+    const allowlistedResult = await this.repository.mcp.listOrganizationIds({
       oauthClientId,
       userId,
     });
@@ -109,7 +112,7 @@ export class McpService extends Base {
     userId: string;
     organizationIds: readonly string[];
   }): ServerResultAsync<void> {
-    const liveResult = await this.organizationRepository.listUserOrganizations(input.userId);
+    const liveResult = await this.repository.organization.listUserOrganizations(input.userId);
     if (liveResult.isErr()) return err(liveResult.error);
     const liveIds = new Set(liveResult.value.map((organization) => organization.id));
     return this.replaceAllowlist({
@@ -130,17 +133,17 @@ export class McpService extends Base {
   }): ServerResultAsync<McpListedOrganization[]> {
     const userResult = await this.resolveCallerUser({ userId });
     if (userResult.isErr()) return err(userResult.error);
-    const idsResult = await this.mcpRepository.listOrganizationIds({ oauthClientId, userId });
+    const idsResult = await this.repository.mcp.listOrganizationIds({ oauthClientId, userId });
     if (idsResult.isErr()) return err(idsResult.error);
     const listed: McpListedOrganization[] = [];
     for (const organizationId of idsResult.value) {
-      const memberResult = await this.organizationRepository.findMemberByUserAndOrganization({
+      const memberResult = await this.repository.organization.findMemberByUserAndOrganization({
         userId,
         organizationId,
       });
       if (memberResult.isErr()) continue;
       if (!memberResult.value.userId) continue;
-      const orgResult = await this.organizationRepository.findById(organizationId);
+      const orgResult = await this.repository.organization.findById(organizationId);
       if (orgResult.isErr()) return err(orgResult.error);
       if (!orgResult.value) continue;
       listed.push({
@@ -159,7 +162,7 @@ export class McpService extends Base {
    * from the tool `organizationId`.
    */
   async resolveCallerUser({ userId }: { userId: string }): ServerResultAsync<User> {
-    const userResult = await this.userRepository.findById(userId);
+    const userResult = await this.repository.user.findById(userId);
     if (userResult.isErr()) return err(userResult.error);
     if (!userResult.value) return this.error("NOT_FOUND", "User not found");
     return ok(userResult.value as User);
@@ -178,7 +181,7 @@ export class McpService extends Base {
     userId: string;
     organizationId: string;
   }): ServerResultAsync<void> {
-    const allowlisted = await this.mcpRepository.listOrganizationIds({
+    const allowlisted = await this.repository.mcp.listOrganizationIds({
       oauthClientId,
       userId,
     });

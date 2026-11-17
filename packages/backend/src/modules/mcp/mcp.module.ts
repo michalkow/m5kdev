@@ -78,13 +78,18 @@ export class McpModule extends BaseModule<
     mountMcpHttp({
       express: infra.express,
       tools,
-      listTools: ({ userId, oauthClientId }) =>
-        services.mcp.listAvailableTools({
-          tools,
-          userId,
-          oauthClientId,
-          requireEntitlements: trpc.methods.requireEntitlements,
-        }),
+      listTools: async ({ userId, oauthClientId }) => {
+        const available = await services.mcp.listAvailableToolNames(
+          {
+            tools,
+            userId,
+            oauthClientId,
+            requireEntitlements: trpc.methods.requireEntitlements,
+          },
+          {}
+        );
+        return available.map((names) => tools.filter((tool) => names.includes(tool.name)));
+      },
       invoke: createMcpToolInvoker({
         router: trpc.router,
         methods: trpc.methods,

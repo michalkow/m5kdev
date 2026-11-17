@@ -1,10 +1,16 @@
 import { createMcpProtectedRequestHandler } from "@better-auth/mcp";
-import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
+import {
+  createMcpHandler,
+  McpServer,
+  ProtocolError,
+  ProtocolErrorCode,
+  type Tool,
+} from "@modelcontextprotocol/server";
 import { createDpopReplayStore } from "better-auth/oauth2";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import type { Result } from "neverthrow";
-import type { ServerError } from "../../utils/errors";
-import { handleTRPCResult } from "../../utils/trpc";
+import { z } from "zod";
+import { captureServerError, type ServerError } from "../../utils/errors";
 import type { BetterAuth } from "../auth/auth.lib";
 import type { McpToolBinding } from "./mcp.adapter";
 import { invokeMcpTool, isArgumentRecord } from "./mcp.protocol";
@@ -104,14 +110,11 @@ export function createMcpExpressHandler(input: {
       const extra = ctx.authInfo?.extra;
       const userId = typeof extra?.userId === "string" ? extra.userId : "";
       const oauthClientId = ctx.authInfo?.clientId ?? "";
-      const tools = input.listTools
-        ? handleTRPCResult(await input.listTools({ userId, oauthClientId }))
-        : input.tools;
       const server = new McpServer({
         name: input.serverName,
         version: "1.0.0",
       });
-      for (const tool of tools) {
+      for (const tool of input.tools) {
         server.registerTool(
           tool.name,
           {
@@ -137,6 +140,25 @@ export function createMcpExpressHandler(input: {
             };
           }
         );
+      }
+      const listTools = input.listTools;
+      if (listTools) {
+        server.server.setRequestHandler("tools/list", async () => {
+          const listed = await listTools({ userId, oauthClientId });
+          if (listed.isErr()) {
+            captureServerError(listed.error);
+            throw new ProtocolError(ProtocolErrorCode.InternalError, "Internal server error");
+          }
+          const tools = listed.value;
+          return {
+            tools: tools.map((tool) => ({
+              name: tool.name,
+              description: tool.description,
+              // Zod produces JSON Schema; the SDK uses a separately defined recursive JSON type.
+              inputSchema: z.toJSONSchema(tool.inputSchema, { io: "input" }) as Tool["inputSchema"],
+            })),
+          };
+        });
       }
       return server;
     },

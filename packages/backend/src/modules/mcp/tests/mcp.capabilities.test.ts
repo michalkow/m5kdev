@@ -1,5 +1,10 @@
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import {
+  CLIENT_CAPABILITIES_META_KEY,
+  CLIENT_INFO_META_KEY,
+  PROTOCOL_VERSION_META_KEY,
+} from "@modelcontextprotocol/server";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import express from "express";
@@ -112,13 +117,18 @@ describe("Capability-aware MCP HTTP", () => {
         resource: "http://resource.test/mcp",
         serverName: "Capability test",
         tools,
-        listTools: ({ userId, oauthClientId }) =>
-          mcp.listAvailableTools({
-            userId,
-            oauthClientId,
-            tools,
-            requireEntitlements: methods.requireEntitlements,
-          }),
+        listTools: async ({ userId, oauthClientId }) => {
+          const available = await mcp.listAvailableToolNames(
+            {
+              userId,
+              oauthClientId,
+              tools,
+              requireEntitlements: methods.requireEntitlements,
+            },
+            {}
+          );
+          return available.map((names) => tools.filter((tool) => names.includes(tool.name)));
+        },
         invoke: createMcpToolInvoker({ router, methods, mcp, tools }),
       })
     );
@@ -166,6 +176,48 @@ describe("Capability-aware MCP HTTP", () => {
     await expect(toolNames()).resolves.toEqual(["ping", "publish", "read"]);
     capabilities[MCP_ORG_B] = ["posts.read", "posts.publish"];
     await expect(toolNames()).resolves.toEqual(["both", "ping", "publish", "read"]);
+  });
+
+  it("filters modern tool listings while preserving SDK capability discovery", async () => {
+    const modernRequest = async (method: string) => {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          authorization: `Bearer ${MCP_CLIENT_CURSOR}`,
+          "mcp-protocol-version": "2026-07-28",
+          "mcp-method": method,
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method,
+          params: {
+            _meta: {
+              [PROTOCOL_VERSION_META_KEY]: "2026-07-28",
+              [CLIENT_INFO_META_KEY]: { name: "Capability test", version: "1.0.0" },
+              [CLIENT_CAPABILITIES_META_KEY]: {},
+            },
+          },
+        }),
+      });
+      return response.json();
+    };
+    const discovery = await modernRequest("server/discover");
+    expect(discovery.result.supportedVersions).toContain("2026-07-28");
+    expect(discovery.result.capabilities.tools).toBeDefined();
+    expect(discovery.result.tools).toBeUndefined();
+    const listing = await modernRequest("tools/list");
+    expect(listing.result.tools.map((tool: { name: string }) => tool.name).sort()).toEqual([
+      "ping",
+      "publish",
+      "read",
+    ]);
+    expect(
+      listing.result.tools.find((tool: { name: string }) => tool.name === "publish").inputSchema
+        .required
+    ).toEqual(["organizationId"]);
   });
 
   it("uses only the current OAuth client's allowlist and refreshes consent changes", async () => {
@@ -222,8 +274,10 @@ describe("Capability-aware MCP HTTP", () => {
       name: "publish",
       arguments: { organizationId: MCP_ORG_B },
     });
-    expect(cached.error).toMatchObject({ code: -32602 });
-    expect(cached.result).toBeUndefined();
+    expect(cached.result).toMatchObject({
+      isError: true,
+      content: [{ type: "text", text: "Entitlement denied" }],
+    });
     expect(published).toEqual([MCP_ORG_B]);
   });
 
@@ -237,12 +291,25 @@ describe("Capability-aware MCP HTTP", () => {
     expect(response.result).toBeUndefined();
   });
 
-  it("keeps requirement-bearing tools available when Billing is omitted", async () => {
-    const result = await mcp.listAvailableTools({
-      userId: MCP_USER_ID,
-      oauthClientId: MCP_CLIENT_CLAUDE,
-      tools: [{ name: "publish", requiredCapabilities: ["posts.publish"] }],
+  it("does not let discovery failures block unannotated tool calls", async () => {
+    checkerFailure = new ServerError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Billing unavailable",
     });
-    expect(result).toEqual(ok([{ name: "publish", requiredCapabilities: ["posts.publish"] }]));
+    const response = await request("tools/call", { name: "ping", arguments: {} });
+    expect(response.result).toMatchObject({ content: [{ type: "text", text: '"pong"' }] });
+    expect(response.error).toBeUndefined();
+  });
+
+  it("keeps requirement-bearing tools available when Billing is omitted", async () => {
+    const result = await mcp.listAvailableToolNames(
+      {
+        userId: MCP_USER_ID,
+        oauthClientId: MCP_CLIENT_CLAUDE,
+        tools: [{ name: "publish", requiredCapabilities: ["posts.publish"] }],
+      },
+      {}
+    );
+    expect(result).toEqual(ok(["publish"]));
   });
 });

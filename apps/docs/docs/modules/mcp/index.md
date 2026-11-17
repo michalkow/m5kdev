@@ -164,7 +164,7 @@ Entitlement and Grant checks: jobs and internal calls still need them. Capabilit
 requirements belong on Organization procedures; declaring them on a User or
 Admin tool fails catalog collection.
 
-MCP filters its catalog per authenticated request. A requirement-bearing tool
+MCP filters its catalog for each authenticated `tools/list` request. A requirement-bearing tool
 appears only if **one** Organization on this OAuth client's allowlist, with a live
 Membership for this User, has **all** its required Capabilities. Capabilities are
 never combined across Organizations. Closed Organizations, left Memberships,
@@ -173,14 +173,16 @@ requirement-bearing tools. Tools without requirements keep their behavior;
 Grants do not filter discovery.
 
 A visible tool can still be denied for the `organizationId` passed in a call.
-Every invocation runs the guarded tRPC procedure for that Organization. Later
-requests reevaluate access, so cached tool listings cannot preserve revoked
-Entitlements. Billing lookup failures fail the request instead of advertising
+Every invocation, including a cached tool hidden from current discovery, runs
+the guarded tRPC procedure for that Organization and returns its Entitlement
+denial when access has been revoked. Later discovery requests reevaluate access.
+Filtering discovery does not remove invocation handlers, and a Billing discovery
+failure does not block tools without Capability requirements. Billing lookup failures fail the request instead of advertising
 an allowed catalog. The tRPC router and client types remain static.
 
 Apps omitting Billing remain Grant-only, including MCP discovery. Direct HTTP
 adapter composition can supply `listTools` to resolve the current caller's
-catalog; `McpModule` supplies it automatically using `McpService.listAvailableTools`
+catalog; `McpModule` supplies it automatically using `McpService.listAvailableToolNames`
 and the Billing checker injected by `createBackendApp`. Direct `createTRPCMethods`
 composition passes `requireEntitlements: (actor, keys) => billing.requireAll(actor, keys)`.
 The HTTP adapters retain their static `tools` option for direct compositions

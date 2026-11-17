@@ -149,10 +149,13 @@ const organizationIdInputSchema = z
   .object({ organizationId: z.string().min(1).optional() })
   .optional();
 
-function createOrganizationProcedure(
-  memberships: MembershipLookup | undefined,
-  requireEntitlements: RequireEntitlements | undefined
-): TRPCProcedureBuilder<
+function createOrganizationProcedure({
+  memberships,
+  requireEntitlements,
+}: {
+  memberships: MembershipLookup | undefined;
+  requireEntitlements: RequireEntitlements | undefined;
+}): TRPCProcedureBuilder<
   RequestContext,
   TRPCProcedureMeta,
   OrganizationContext,
@@ -232,7 +235,7 @@ export function createTRPCMethods({
     publicProcedure,
     privateProcedure,
     userProcedure,
-    organizationProcedure: createOrganizationProcedure(memberships, requireEntitlements),
+    organizationProcedure: createOrganizationProcedure({ memberships, requireEntitlements }),
     adminProcedure,
   };
 }

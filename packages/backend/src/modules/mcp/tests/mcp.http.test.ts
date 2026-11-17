@@ -66,6 +66,7 @@ const mockRegisteredTools: { name: string; description: string }[] = [];
 jest.mock("@modelcontextprotocol/server", () => ({
   createMcpHandler: (...args: unknown[]) => createMcpHandlerMock(...args),
   McpServer: class {
+    readonly server = { setRequestHandler: jest.fn() };
     registerTool(name: string, params: { description: string }): void {
       mockRegisteredTools.push({ name, description: params.description });
     }
