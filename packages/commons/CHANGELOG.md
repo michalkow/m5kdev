@@ -1,5 +1,9 @@
 # @m5kdev/commons
 
+## 0.45.6
+
+No changes in this release.
+
 ## 0.45.5
 
 No changes in this release.

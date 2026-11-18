@@ -1,5 +1,12 @@
 # @m5kdev/backend
 
+## 0.45.6
+
+### Patch Changes
+
+- @m5kdev/commons@0.45.6
+  - @m5kdev/config@0.45.6
+
 ## 0.45.5
 
 ### Patch Changes

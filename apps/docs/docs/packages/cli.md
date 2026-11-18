@@ -18,10 +18,10 @@ are **Node.js >= 24**.
 ## Commands
 
 ```sh
-pnpm dlx create-m5kdev@0.45.3 [directory] [create options]
-pnpm dlx create-m5kdev@0.45.3 init [--yes] [--force] [--json]
-pnpm dlx create-m5kdev@0.45.3 doctor [--full] [--json]
-pnpm dlx create-m5kdev@0.45.3 update [--dry-run] [--skip-install] [--json] [--platform web|expo|both] [--yes]
+pnpm dlx create-m5kdev@0.45.6 [directory] [create options]
+pnpm dlx create-m5kdev@0.45.6 init [--yes] [--force] [--json]
+pnpm dlx create-m5kdev@0.45.6 doctor [--full] [--json]
+pnpm dlx create-m5kdev@0.45.6 update [--dry-run] [--skip-install] [--json] [--platform web|expo|both] [--yes]
 ```
 
 A first positional argument that is not a command is treated as `create`.
@@ -340,6 +340,13 @@ Cursor-rule files.
 - Experiences: [App shell](/modules/app#experiences)
 - Sign-in callback: [Auth](/modules/auth#record-successful-sign-ins)
 - Agent instructions, Changesets, and doctor evidence: [CLI package](/packages/cli#agent-instructions)
+
+## 0.45.6 upgrades
+
+1. [HeroUI 3.2.7 toggle composition](/guides/v0.45.6-heroui-toggle-content-migration)
+
+There is no registry `id` for this upgrade. Catalog merge is `m5kdev update`;
+app-owned Checkbox / Radio / Switch JSX stays Manual.
 
 ## Package rule
 

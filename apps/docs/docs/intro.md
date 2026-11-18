@@ -262,6 +262,14 @@ keep working.
 - Sign-in callback: [Auth](/modules/auth#record-successful-sign-ins)
 - Generated Changesets and agent guidance: [CLI package](/packages/cli)
 
+## Upgrading to 0.45.6 {#upgrade-0-45-6}
+
+Complete 0.45.3 first. HeroUI moves from 3.0.3 to 3.2.7 and requires React Aria
+peers plus `Content` wrappers on Checkbox, Radio, and Switch. Package
+installation alone does not rewrite app-owned toggle JSX.
+
+- [HeroUI 3.2.7 toggle composition](/guides/v0.45.6-heroui-toggle-content-migration)
+
 New apps: [CLI package](/packages/cli). Deploy: [Fly.io](/guides/fly-deploy).
 
 ## Read by module

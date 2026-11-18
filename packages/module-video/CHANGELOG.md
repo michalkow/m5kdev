@@ -1,5 +1,11 @@
 # @m5kdev/module-video
 
+## 0.45.6
+
+### Patch Changes
+
+- @m5kdev/backend@0.45.6
+
 ## 0.45.5
 
 ### Patch Changes

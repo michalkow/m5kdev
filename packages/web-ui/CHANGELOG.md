@@ -1,5 +1,15 @@
 # @m5kdev/web-ui
 
+## 0.45.6
+
+### Patch Changes
+
+- ad9e57f: Upgrade HeroUI to 3.2.7 and pin compatible React Aria peers so consumers resolve required modules such as Sheet.
+  
+  Migrate Checkbox, Radio, and Switch compositions to wrap Control and labels in Content, and add accessible names to billing switches and SelectChips.
+- @m5kdev/commons@0.45.6
+  - @m5kdev/frontend@0.45.6
+
 ## 0.45.5
 
 ### Patch Changes
