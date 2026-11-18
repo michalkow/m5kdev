@@ -16,6 +16,8 @@
     "@starter-app/shared": "workspace:*",
     "@heroui/react": "catalog:",
     "@heroui/styles": "catalog:",
+    "react-aria": "catalog:",
+    "react-aria-components": "catalog:",
     "@m5kdev/commons": "workspace:*",
     "@m5kdev/frontend": "workspace:*",
     "@m5kdev/web-ui": "workspace:*",

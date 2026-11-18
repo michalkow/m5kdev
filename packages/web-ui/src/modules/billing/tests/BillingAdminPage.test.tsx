@@ -122,6 +122,7 @@ jest.mock(
     function Switch({ children, isSelected }: { children?: ReactNode; isSelected?: boolean }) {
       return <div data-switch={String(Boolean(isSelected))}>{children}</div>;
     }
+    Switch.Content = ({ children }: { children?: ReactNode }) => <span>{children}</span>;
     Switch.Control = ({ children }: { children?: ReactNode }) => <span>{children}</span>;
     Switch.Thumb = () => <span />;
     function Dropdown({ children }: { children?: ReactNode }) {

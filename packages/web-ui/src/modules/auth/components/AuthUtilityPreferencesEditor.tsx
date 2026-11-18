@@ -131,11 +131,11 @@ export function AuthUtilityPreferencesEditor<S extends z.ZodObject<z.ZodRawShape
                 value="on"
                 defaultSelected={Boolean(value)}
               >
-                <Switch.Control>
-                  <Switch.Thumb />
-                </Switch.Control>
-                <Switch.Content>
-                  <Label className="text-sm">{control.label}</Label>
+                <Switch.Content className="text-sm">
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  {control.label}
                 </Switch.Content>
               </Switch>
             );

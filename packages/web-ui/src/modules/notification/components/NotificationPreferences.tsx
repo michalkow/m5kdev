@@ -1,4 +1,4 @@
-import { EmptyState, Label, Spinner, Switch } from "@heroui/react";
+import { EmptyState, Spinner, Switch } from "@heroui/react";
 import type {
   NotificationChannel,
   NotificationKind,
@@ -99,11 +99,11 @@ export function NotificationPreferences({ kinds, offerEmail }: NotificationPrefe
                       setPreference({ kind: kind.id, channel, enabled: next });
                     }}
                   >
-                    <Switch.Control>
-                      <Switch.Thumb />
-                    </Switch.Control>
-                    <Switch.Content>
-                      <Label className="text-sm">{t(CHANNEL_I18N[channel])}</Label>
+                    <Switch.Content className="text-sm">
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                      {t(CHANNEL_I18N[channel])}
                     </Switch.Content>
                   </Switch>
                 </li>

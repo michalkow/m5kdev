@@ -1,4 +1,4 @@
-import { Button, Card, Checkbox, Label, toast } from "@heroui/react";
+import { Button, Card, Checkbox, toast } from "@heroui/react";
 import type { createMcpTRPC } from "@m5kdev/backend/modules/mcp/mcp.trpc";
 import type { BackendTRPCRouter } from "@m5kdev/backend/types";
 import { useAppTRPC } from "@m5kdev/frontend/modules/app/hooks/useAppTrpc";
@@ -139,10 +139,12 @@ export function AuthPublicConsentRoute() {
                         setSelectedOverride(next);
                       }}
                     >
-                      <Checkbox.Control>
-                        <Checkbox.Indicator />
-                      </Checkbox.Control>
-                      <Label>{organization.name}</Label>
+                      <Checkbox.Content>
+                        <Checkbox.Control>
+                          <Checkbox.Indicator />
+                        </Checkbox.Control>
+                        {organization.name}
+                      </Checkbox.Content>
                     </Checkbox>
                   </li>
                 );

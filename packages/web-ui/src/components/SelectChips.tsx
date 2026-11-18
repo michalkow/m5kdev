@@ -30,10 +30,17 @@ export function SelectChips({
         {...restButtonProps}
       >
         <Checkbox
+          aria-label={label}
           isSelected={selectedItems.includes(value)}
           isReadOnly
-          style={{ pointerEvents: "none" }}
-        />
+          className="pointer-events-none"
+        >
+          <Checkbox.Content>
+            <Checkbox.Control>
+              <Checkbox.Indicator />
+            </Checkbox.Control>
+          </Checkbox.Content>
+        </Checkbox>
         {label}
       </Button>
     );

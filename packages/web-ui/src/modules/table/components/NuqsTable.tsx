@@ -531,9 +531,11 @@ export const NuqsTable = <T,>({
             slot="selection"
             variant="secondary"
           >
-            <Checkbox.Control>
-              <Checkbox.Indicator />
-            </Checkbox.Control>
+            <Checkbox.Content>
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+            </Checkbox.Content>
           </Checkbox>
         </Table.Cell>
       ) : null}
@@ -707,9 +709,11 @@ export const NuqsTable = <T,>({
                     aria-label={t("web-ui:table.selectAll", { defaultValue: "Select all" })}
                     slot="selection"
                   >
-                    <Checkbox.Control>
-                      <Checkbox.Indicator />
-                    </Checkbox.Control>
+                    <Checkbox.Content>
+                      <Checkbox.Control>
+                        <Checkbox.Indicator />
+                      </Checkbox.Control>
+                    </Checkbox.Content>
                   </Checkbox>
                 </Table.Column>
               ) : null}
