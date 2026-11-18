@@ -16,6 +16,8 @@
     "@m5kdev/web-ui": "workspace:*",
     "@heroui/react": "catalog:",
     "@heroui/styles": "catalog:",
+    "react-aria": "catalog:",
+    "react-aria-components": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",

@@ -1,4 +1,4 @@
-import { Button, Label, Radio, RadioGroup } from "@heroui/react";
+import { Button, Radio, RadioGroup } from "@heroui/react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -37,11 +37,11 @@ export const TableGroupBy = ({
       <RadioGroup value={selected} onChange={setSelected} variant="secondary">
         {columns.map((col) => (
           <Radio key={col.id} value={col.id}>
-            <Radio.Control>
-              <Radio.Indicator />
-            </Radio.Control>
             <Radio.Content>
-              <Label>{col.label}</Label>
+              <Radio.Control>
+                <Radio.Indicator />
+              </Radio.Control>
+              {col.label}
             </Radio.Content>
           </Radio>
         ))}

@@ -236,6 +236,7 @@ export function BillingAdminPage({
         const item = row.original;
         return (
           <Switch
+            aria-label={t("web-ui:billing.admin.skipCheck")}
             isSelected={item.billingExempt}
             isDisabled={setExempt.isPending}
             onChange={(next) => {
@@ -249,9 +250,11 @@ export function BillingAdminPage({
               });
             }}
           >
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
+            <Switch.Content>
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+            </Switch.Content>
           </Switch>
         );
       },
@@ -265,6 +268,7 @@ export function BillingAdminPage({
               const item = row.original;
               return (
                 <Switch
+                  aria-label={t("web-ui:billing.admin.disableCreditCardCheck")}
                   isSelected={item.allowCardlessTrial}
                   isDisabled={setCardlessTrial.isPending}
                   onChange={(next) => {
@@ -274,9 +278,11 @@ export function BillingAdminPage({
                     });
                   }}
                 >
-                  <Switch.Control>
-                    <Switch.Thumb />
-                  </Switch.Control>
+                  <Switch.Content>
+                    <Switch.Control>
+                      <Switch.Thumb />
+                    </Switch.Control>
+                  </Switch.Content>
                 </Switch>
               );
             },

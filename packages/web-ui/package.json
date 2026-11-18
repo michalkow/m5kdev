@@ -28,6 +28,8 @@
     "@dnd-kit/sortable": "catalog:",
     "@dnd-kit/utilities": "catalog:",
     "@heroui/styles": "catalog:",
+    "react-aria": "catalog:",
+    "react-aria-components": "catalog:",
     "@react-aria/utils": "catalog:",
     "@react-types/calendar": "catalog:",
     "@react-types/shared": "catalog:",
