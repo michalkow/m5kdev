@@ -190,3 +190,10 @@ behavior, update its end-user guides in `apps/starter/docs/docs/` in the same
 change. Read `docs/agents/product-documentation.md` for audience, content, and
 verification rules. Keep the equivalent generated-app instructions in
 `packages/cli/root-templates/AGENTS.md.tpl` aligned.
+
+## Pull requests
+
+Attach a Changeset to every PR. Write `.changeset/<id>.md` with the affected
+versioned packages, bump, and a summary, then commit it with the code. Use the
+`changeset-add` skill. Keep the equivalent generated-app instruction in
+`packages/cli/root-templates/AGENTS.md.tpl` aligned.
