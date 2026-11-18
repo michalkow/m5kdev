@@ -70,6 +70,8 @@ describe("scaffoldProject", () => {
       expect(agents).toContain("docs/agents/issue-tracker.md");
       expect(agents).toContain("docs/agents/triage-labels.md");
       expect(agents).toContain("docs/agents/domain.md");
+      expect(agents).toMatch(/Attach a Changeset to every PR/);
+      expect(agents).toContain("pnpm cs:add");
       expect(agents).not.toContain(".cursor/");
       expect(agents).not.toContain("CLAUDE.md");
       expect(agents).not.toContain("m5k:");

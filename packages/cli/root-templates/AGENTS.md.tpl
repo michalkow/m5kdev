@@ -157,6 +157,11 @@ Before completing a task that adds, changes, or removes user-facing behavior,
 update the affected end-user guides in `apps/docs/docs/` in the same change.
 Read `docs/agents/product-documentation.md` for audience, content, and verification rules.
 
+## Pull requests
+
+Attach a Changeset to every PR. Run `pnpm cs:add` from the workspace root and
+commit the generated `.changeset/*.md` file with the code.
+
 ## Agent skills
 
 Assume the required skills from https://github.com/michalkow/skills are globally

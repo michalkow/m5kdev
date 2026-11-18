@@ -4,7 +4,7 @@ description: Write one pending Changeset. Default scope is this thread and bump 
 disable-model-invocation: true
 ---
 
-Write one pending Changeset for release-worthy behavior in the named scope. The human later runs `changeset version`; that command combines every pending Changeset into one release and takes the highest bump.
+Write one pending Changeset for the named scope. Every PR attaches one. The human later runs `changeset version`; that command combines every pending Changeset into one release and takes the highest bump.
 
 The bump is `patch` unless this invocation names `minor` or `major`. The scope is this thread unless this invocation names another one (since the last commit, since a SHA or tag, uncommitted files). Both can appear together. Write `.changeset/<id>.md` and stop. Leave CHANGELOG.md to version. Leave the file uncommitted.
 
@@ -15,9 +15,9 @@ Read the files that scope changed.
 - This thread: files the agent changed and edits the user clearly made as part of this thread. Ignore earlier commits on the branch and dirty files that predate the thread.
 - A named git range: the diff of that range.
 
-A change is release-worthy when a consumer of a versioned package would notice it. Write one sentence per distinct consumer-facing behavior.
+Write one sentence per distinct behavior the scope changed.
 
-Stop and say so when the scope changed no files, landed nothing a consumer would notice, or only touched packages Changesets ignores (see `.changeset/config.json`).
+Stop and say so when the scope changed no files or only touched packages Changesets ignores (see `.changeset/config.json`).
 
 Read every pending file in `.changeset/` except `README.md` and `config.json`.
 

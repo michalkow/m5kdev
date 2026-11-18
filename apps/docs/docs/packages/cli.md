@@ -108,6 +108,8 @@ operational conventions and Cursor rules.
 
 ### Changesets
 
+Generated `AGENTS.md` requires a Changeset on every PR.
+
 Every generated app, including Landing-only, includes `@changesets/cli` as a root
 `devDependency` pinned through the Managed catalog. Normal creation installs it;
 with `--skip-install`, run `pnpm install` before using it. The generated
