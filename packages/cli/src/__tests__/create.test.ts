@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { runInNewContext } from "node:vm";
 import { parse } from "yaml";
 import { scaffoldProject } from "../create";
 import { diagnoseManagedRepo } from "../doctor";
@@ -1230,10 +1231,27 @@ describe("scaffoldProject", () => {
     expect(workflowSource).not.toContain("m5k:");
     const workflow = parse(workflowSource) as {
       on: Record<string, unknown>;
-      jobs: { check: { steps: { run?: string; with?: Record<string, unknown> }[] } };
+      jobs: {
+        check: {
+          steps: { run?: string; with?: Record<string, unknown>; env?: Record<string, string> }[];
+        };
+      };
     };
     expect(workflow.on).toEqual({ push: { branches: ["**"] } });
     const steps = workflow.jobs.check.steps;
+    const baseExpression = steps.find((step) => step.env?.BASE_REF)?.env?.BASE_REF;
+    if (!baseExpression) throw new Error("Generated migration check has no comparison base");
+    // This expression uses the JavaScript-compatible boolean/string subset of Actions syntax.
+    for (const [ref, created, before, expected] of [
+      ["refs/heads/main", false, "previous-main", "previous-main"],
+      ["refs/heads/main", true, "0".repeat(40), "origin/main"],
+      ["refs/heads/feature/nested", true, "0".repeat(40), "origin/main"],
+      ["refs/heads/feature/nested", false, "previous-feature", "origin/main"],
+    ] as const) {
+      expect(
+        runInNewContext(baseExpression.slice(3, -2), { github: { ref, event: { created, before } } })
+      ).toBe(expected);
+    }
     const runs = steps.map((step) => step.run ?? "").join("\n");
     expect(steps.find((step) => step.with?.["fetch-depth"] === 0)).toBeTruthy();
     expect(runs).toContain("pnpm test");
