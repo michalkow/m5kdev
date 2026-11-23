@@ -2,7 +2,7 @@ name: check
 
 on:
   push:
-  pull_request:
+    branches: ['**']
 
 permissions:
   contents: read
@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # The migration check compares against the PR base branch.
+          # Fetch main and full history for migration comparisons.
           fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
@@ -39,11 +39,6 @@ jobs:
           pnpm --filter ./apps/server drizzle:generate
       - name: Check migration history is frozen
         env:
-          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
-        run: |
-          if [ -n "$BASE_REF" ]; then
-            pnpm exec m5kdev-migration-check --folder apps/server/drizzle-postgresql --base "$BASE_REF"
-          else
-            pnpm exec m5kdev-migration-check --folder apps/server/drizzle-postgresql
-          fi
+          BASE_REF: ${{ github.ref == 'refs/heads/main' && !github.event.created && github.event.before || 'origin/main' }}
+        run: pnpm exec m5kdev-migration-check --folder apps/server/drizzle-postgresql --base "$BASE_REF"
       # m5k:server:end
