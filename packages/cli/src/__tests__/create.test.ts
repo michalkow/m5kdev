@@ -1249,7 +1249,9 @@ describe("scaffoldProject", () => {
       ["refs/heads/feature/nested", false, "previous-feature", "origin/main"],
     ] as const) {
       expect(
-        runInNewContext(baseExpression.slice(3, -2), { github: { ref, event: { created, before } } })
+        runInNewContext(baseExpression.slice(3, -2), {
+          github: { ref, event: { created, before } },
+        })
       ).toBe(expected);
     }
     const runs = steps.map((step) => step.run ?? "").join("\n");
