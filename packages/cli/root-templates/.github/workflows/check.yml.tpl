@@ -39,6 +39,6 @@ jobs:
           pnpm --filter ./apps/server drizzle:generate
       - name: Check migration history is frozen
         env:
-          BASE_REF: ${{ github.ref == 'refs/heads/main' && github.event.before || 'origin/main' }}
+          BASE_REF: ${{ github.ref == 'refs/heads/main' && !github.event.created && github.event.before || 'origin/main' }}
         run: pnpm exec m5kdev-migration-check --folder apps/server/drizzle-postgresql --base "$BASE_REF"
       # m5k:server:end
