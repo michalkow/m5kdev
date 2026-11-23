@@ -74,6 +74,9 @@ export function mountMcpDcrNativeClientInterop(input: {
 
     const taken = await takeJsonBody(req);
     const body = taken.body;
+    // Native Auth reconstructs a consumed IncomingMessage from Express's parsed body.
+    // Preserve ordinary JSON too; replaying events cannot make an ended stream readable.
+    if (body) req.body = body;
     const redirectUris = readRedirectUris(body);
     const rewrite = rewriteMcpDcrRedirects({
       redirectUris,
@@ -90,7 +93,6 @@ export function mountMcpDcrNativeClientInterop(input: {
     body.application_type = rewrite.applicationType;
     body.redirect_uris = [...rewrite.registrationUris];
     body.software_id = rewrite.softwareId;
-    req.body = body;
     if (taken.raw) {
       replayRequestBody(req, Buffer.from(JSON.stringify(body)));
     }
