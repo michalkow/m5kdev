@@ -1229,15 +1229,19 @@ describe("scaffoldProject", () => {
     expect(workflowSource).not.toContain("secrets.");
     expect(workflowSource).not.toContain("m5k:");
     const workflow = parse(workflowSource) as {
+      on: Record<string, unknown>;
       jobs: { check: { steps: { run?: string; with?: Record<string, unknown> }[] } };
     };
+    expect(workflow.on).toEqual({ push: { branches: ["**"] } });
     const steps = workflow.jobs.check.steps;
     const runs = steps.map((step) => step.run ?? "").join("\n");
     expect(steps.find((step) => step.with?.["fetch-depth"] === 0)).toBeTruthy();
     expect(runs).toContain("pnpm test");
     expect(runs).toContain("drizzle-kit check");
     expect(runs).toContain("drizzle:generate");
-    expect(runs).toContain("m5kdev-migration-check --folder apps/server/drizzle-postgresql");
+    expect(runs).toContain(
+      'm5kdev-migration-check --folder apps/server/drizzle-postgresql --base "$BASE_REF"'
+    );
 
     const rootPackage = JSON.parse(
       await fs.readFile(path.join(web.targetDirectory, "package.json"), "utf8")
@@ -1249,6 +1253,7 @@ describe("scaffoldProject", () => {
       path.join(landing.targetDirectory, ".github/workflows/check.yml"),
       "utf8"
     );
+    expect(parse(landingWorkflow).on).toEqual({ push: { branches: ["**"] } });
     expect(landingWorkflow).not.toContain("drizzle");
     expect(landingWorkflow).not.toContain("m5k:");
   });
