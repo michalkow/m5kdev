@@ -1,4 +1,5 @@
 import type { AddressInfo } from "node:net";
+import { toNodeHandler } from "better-auth/node";
 import express, { type Express } from "express";
 import {
   isCustomSchemeRedirectUri,
@@ -113,16 +114,23 @@ async function postOauthRegister(input: {
   body: unknown;
 }): Promise<{ status: number; seenBody: Record<string, unknown> | undefined }> {
   const app = express();
-  app.use(express.json());
   mountMcpDcrNativeClientInterop({ app, store: input.store });
 
   let seenBody: Record<string, unknown> | undefined;
-  app.post("/api/auth/oauth2/register", (req, res) => {
-    if (isJsonObject(req.body)) {
-      seenBody = { ...req.body };
-    }
-    res.status(201).json({ client_id: "test-client" });
-  });
+  app.post(
+    "/api/auth/oauth2/register",
+    toNodeHandler(async (request) => {
+      try {
+        const body: unknown = await request.json();
+        if (!isJsonObject(body))
+          return Response.json({ error: "invalid_client_metadata" }, { status: 400 });
+        seenBody = body;
+        return Response.json({ client_id: "test-client" }, { status: 201 });
+      } catch {
+        return Response.json({ error: "invalid_client_metadata" }, { status: 400 });
+      }
+    })
+  );
 
   const response = await listenAndFetch({ app, body: input.body });
   return { status: response.status, seenBody };
