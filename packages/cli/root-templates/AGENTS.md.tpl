@@ -67,6 +67,44 @@ guide steps, then run `doctor --full` and verify the affected paths explicitly.
 Report **Verified**, **Configured but untested**, or **Blocked** with scoped
 evidence and next steps; distinguish configured files from actual execution.
 
+## Hosted service usage
+
+Preserve shared service allowances and live application availability when using
+Neon, Backblaze B2, PostHog, model APIs or other metered services, including through
+tests, scripts, CI and background workers.
+
+- Before hosted work, identify the actual account, project, environment, tier,
+  remaining quota and reset period. Check which operations consume compute,
+  transfer, storage, API calls, events or executions, and whether exhaustion causes
+  suspension, throttling, lost ingestion or extra charges. Read-only requests and
+  server-side copies can consume quota; billing alerts are not enforced caps.
+- Estimate the whole run, including verification, retries and parallel workers,
+  against one shared task budget. Leave headroom for live traffic, other work and
+  delayed usage reporting. Record the target, expected units and stop condition.
+  Use lightweight usage metadata when headroom is unknown. Routine small bounded
+  operations can proceed; obtain an explicit usage budget before a run that could
+  materially deplete the allowance or disrupt service.
+- Run iterative tests locally with synthetic data and verify connection
+  destinations before opening them, including options that can override a local
+  host. Keep production telemetry, session recordings and other metered
+  integrations off during tests unless explicitly under test on a bounded target.
+- Pass local checks before the smallest necessary hosted verification. Preserve
+  manifests, versions, checksums and successful stages; resume missing or changed
+  work. Repeat a full download, upload, export or scan only when changed inputs or
+  an unresolved verification requirement justify it and the budget covers it.
+- Bound query time ranges and scanned data as well as returned rows; LIMIT alone
+  may not bound consumption. Give polling and workers explicit lifetimes, close
+  pools and stop owned workers after verification so they do not keep compute awake.
+- Stop hosted attempts on quota or billing errors, record the blocker once and
+  continue independent local work. Retry transient failures only with a small
+  bounded policy; diagnose repeated failures before another attempt.
+- Preserve existing caps. Raising limits, upgrading tiers or switching accounts
+  or projects to bypass exhaustion requires explicit user instruction. A new cap
+  that could suspend Production is an availability change requiring authorization.
+- Report measured or estimated usage, reused work and remaining headroom, with
+  metering delays stated. Distinguish provider-enforced protections from agent
+  instructions.
+
 ## Production operations
 
 Deploying the Production app requires explicit user instruction for that
