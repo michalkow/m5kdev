@@ -251,6 +251,8 @@ it("invalidates a ready preview when detection changes its language and requires
     const preview = await support.getCase({ id: created.value.id }, staff);
     if (preview.isErr()) throw preview.error;
     expect(preview.value.messages[1].publishedBody).toBe("pl: Answer");
+    const before = await support.sync({ id: created.value.id }, staff);
+    if (before.isErr()) throw before.error;
     detectedLocale = "de";
     const question = await support.sendMessage(
       { id: created.value.id, clientId: "next-question", body: "Noch eine Frage" },
@@ -259,6 +261,16 @@ it("invalidates a ready preview when detection changes its language and requires
     if (question.isErr()) throw question.error;
     const detection = await support.processWork();
     if (detection.isErr()) throw detection.error;
+    const pending = await support.sync(
+      { id: created.value.id, cursor: before.value.cursor },
+      staff
+    );
+    if (pending.isErr()) throw pending.error;
+    expect(pending.value.messages.find((message) => message.id === sent.value.id)).toMatchObject({
+      publishedBody: null,
+      publishedAt: null,
+      translationState: "pending",
+    });
     const staleApproval = await support.controlMessage(
       { id: created.value.id, messageId: sent.value.id, action: "publish-preview" },
       staff
@@ -314,6 +326,8 @@ it("shows a held reply as failed when translation is disabled during the provide
       staff
     );
     if (sent.isErr()) throw sent.error;
+    const before = await support.sync({ id: created.value.id }, staff);
+    if (before.isErr()) throw before.error;
     const working = support.processWork();
     await started;
     const settings = await support.getSettings({}, staff);
@@ -330,6 +344,14 @@ it("shows a held reply as failed when translation is disabled during the provide
     release();
     const finished = await working;
     if (finished.isErr()) throw finished.error;
+    const recovered = await support.sync(
+      { id: created.value.id, cursor: before.value.cursor },
+      staff
+    );
+    if (recovered.isErr()) throw recovered.error;
+    expect(recovered.value.messages).toEqual([
+      expect.objectContaining({ id: sent.value.id, translationState: "failed", publishedAt: null }),
+    ]);
     const desk = await support.getCase({ id: created.value.id }, staff);
     if (desk.isErr()) throw desk.error;
     expect(desk.value.messages[1].translationState).toBe("failed");
@@ -405,6 +427,62 @@ it("keeps the new preview ready when the superseded provider call finishes last"
     expect(changes.value.case.unreadCount).toBe(1);
   } finally {
     release();
+    await pool.end();
+  }
+});
+
+it("recovers every retargeted held reply from the admin cursor with distinct Case changes", async () => {
+  const { support, pool } = await fixture({
+    id: "local-outbound",
+    languages: ["en", "pl", "de"],
+    translate: async ({ text, targetLocale }) => ({ text: `${targetLocale}: ${text}` }),
+  });
+  try {
+    const created = await support.createCase(
+      { clientId: "multiple-held", subject: "Help", body: "Pytanie", uiLocale: "pl" },
+      user
+    );
+    if (created.isErr()) throw created.error;
+    const messageIds: string[] = [];
+    for (const body of ["One", "Two"]) {
+      const sent = await support.sendMessage(
+        { id: created.value.id, clientId: body, body, preview: true },
+        staff
+      );
+      if (sent.isErr()) throw sent.error;
+      messageIds.push(sent.value.id);
+    }
+    const before = await support.sync({ id: created.value.id }, staff);
+    if (before.isErr()) throw before.error;
+    const changed = await support.setLanguage({ id: created.value.id, locale: "de" }, user);
+    if (changed.isErr()) throw changed.error;
+    const pending = await support.sync(
+      { id: created.value.id, cursor: before.value.cursor },
+      staff
+    );
+    if (pending.isErr()) throw pending.error;
+    expect(pending.value.messages.map((message) => message.id)).toEqual(messageIds);
+    expect(pending.value.changes.map((change) => change.type)).toEqual([
+      "language.changed",
+      "translation.queued",
+      "translation.queued",
+    ]);
+    expect(pending.value.case.version).toBe(before.value.case.version + 3);
+    for (let sweep = 0; sweep < 4; sweep++) {
+      const result = await support.processWork();
+      if (result.isErr()) throw result.error;
+    }
+    const ready = await support.sync({ id: created.value.id, cursor: pending.value.cursor }, staff);
+    if (ready.isErr()) throw ready.error;
+    expect(ready.value.messages.map((message) => message.publishedBody)).toEqual([
+      "de: One",
+      "de: Two",
+    ]);
+    expect(ready.value.messages.map((message) => message.translationState)).toEqual([
+      "ready",
+      "ready",
+    ]);
+  } finally {
     await pool.end();
   }
 });

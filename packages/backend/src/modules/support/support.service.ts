@@ -1085,7 +1085,7 @@ export class SupportService extends BasePermissionService<
         if (!current) throw this.error("NOT_FOUND", "Support Case not found").error;
         const locale = input.locale?.replaceAll("_", "-") ?? null;
         if (current.supportLocale === locale) return current;
-        const updated = await this.repository.support.record(
+        let updated = await this.repository.support.record(
           current,
           {
             supportLocale: locale,
@@ -1097,7 +1097,7 @@ export class SupportService extends BasePermissionService<
           tx
         );
         for (const message of await this.repository.support.heldReplies(current.id, tx))
-          await this.queueOutbound(updated, message, tx);
+          updated = await this.queueOutbound(updated, message, tx);
         if (updated.handling === "ai" && updated.waitingOn === "support") {
           const latest = await this.repository.support.latestUserMessage(current.id, tx);
           if (latest)
@@ -1191,7 +1191,7 @@ export class SupportService extends BasePermissionService<
     message: SupportMessageRow,
     tx: SupportTransaction
   ) {
-    const work = await this.repository.support.queueWork(
+    await this.repository.support.queueWork(
       {
         caseId: current.id,
         messageId: message.id,
@@ -1208,7 +1208,14 @@ export class SupportService extends BasePermissionService<
       { publishedBody: null, translationState: "pending" },
       tx
     );
-    return work;
+    return this.repository.support.record(
+      current,
+      {},
+      "translation.queued",
+      { kind: "system" },
+      { visibility: "internal", messageSequence: message.sequence },
+      tx
+    );
   }
   private async readyOutbound(
     current: SupportCaseRow,
@@ -1246,12 +1253,21 @@ export class SupportService extends BasePermissionService<
       !message.redactedAt &&
       message.translationState === "pending" &&
       !(await this.repository.support.hasPendingOutbound(message.id, current.handlingEpoch, tx))
-    )
+    ) {
       await this.repository.support.updateMessage(
         message.id,
         { publishedBody: null, translationState: "failed" },
         tx
       );
+      await this.repository.support.record(
+        current,
+        {},
+        "translation.failed",
+        { kind: "system" },
+        { visibility: "internal", messageSequence: message.sequence },
+        tx
+      );
+    }
   }
   readonly controlMessage = this.procedure("controlMessage")
     .input(supportSchemas.input.controlMessage, true)
@@ -1300,9 +1316,17 @@ export class SupportService extends BasePermissionService<
             },
             tx
           );
+          await this.repository.support.record(
+            current,
+            {},
+            "translation.queued",
+            { userId: ctx.actor.userId, kind: "admin" },
+            { visibility: "internal", messageSequence: message.sequence },
+            tx
+          );
           return this.repository.support.updateMessage(
             message.id,
-            { translationState: "pending" },
+            { publishedBody: null, translationState: "pending" },
             tx
           );
         }
@@ -1418,12 +1442,7 @@ export class SupportService extends BasePermissionService<
             { state: "failed", error: "automation-unavailable" },
             tx
           );
-          if (work.purpose === "outbound")
-            await this.repository.support.updateMessage(
-              message.id,
-              { translationState: "failed" },
-              tx
-            );
+          await this.failUnreplacedOutbound(work, current, message, tx);
           return null;
         }
         const now = new Date();
@@ -1443,12 +1462,7 @@ export class SupportService extends BasePermissionService<
             { state: "failed", error: "usage-limit" },
             tx
           );
-          if (work.purpose === "outbound")
-            await this.repository.support.updateMessage(
-              message.id,
-              { translationState: "failed" },
-              tx
-            );
+          await this.failUnreplacedOutbound(work, current, message, tx);
           return null;
         }
         if (counts.running >= budget.concurrency) return null;
@@ -1579,7 +1593,7 @@ export class SupportService extends BasePermissionService<
             const locale = current.supportLocale ?? value.locale;
             const changed =
               locale !== (current.supportLocale ?? current.detectedLocale ?? current.uiLocale);
-            const updated = await this.repository.support.record(
+            let updated = await this.repository.support.record(
               current,
               {
                 detectedLocale: value.locale,
@@ -1592,7 +1606,7 @@ export class SupportService extends BasePermissionService<
             );
             if (changed)
               for (const held of await this.repository.support.heldReplies(current.id, tx))
-                await this.queueOutbound(updated, held, tx);
+                updated = await this.queueOutbound(updated, held, tx);
             if (!freshSettings.value.config.nativeLocales.includes(value.locale))
               await this.repository.support.queueWork(
                 {
