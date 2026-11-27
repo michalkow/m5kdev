@@ -24,6 +24,7 @@ import { BaseRepository } from "../../base/base.repository";
 import { users } from "../auth/auth.db";
 import { taggings, tags } from "../tag/tag.db";
 import {
+  supportAttachments,
   supportCases,
   supportEvents,
   supportMessages,
@@ -392,6 +393,72 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
             isNull(tags.deletedAt)
           )
         )
+    );
+  }
+  reserveAttachment(input: { caseId: string; fileId: string; userId: string }) {
+    return this.throwableQuery(() => this.orm.insert(supportAttachments).values(input).returning());
+  }
+  async attachments(caseId: string, fileIds: string[], tx: SupportTransaction) {
+    return tx
+      .select()
+      .from(supportAttachments)
+      .where(
+        and(eq(supportAttachments.caseId, caseId), inArray(supportAttachments.fileId, fileIds))
+      );
+  }
+  async linkAttachments(fileIds: string[], messageId: string, tx: SupportTransaction) {
+    if (fileIds.length)
+      await tx
+        .update(supportAttachments)
+        .set({ messageId })
+        .where(inArray(supportAttachments.fileId, fileIds));
+  }
+  attachment(caseId: string, fileId: string) {
+    return this.throwableQuery(
+      async () =>
+        (
+          await this.orm
+            .select({ attachment: supportAttachments, message: supportMessages })
+            .from(supportAttachments)
+            .innerJoin(supportMessages, eq(supportMessages.id, supportAttachments.messageId))
+            .where(
+              and(
+                eq(supportAttachments.caseId, caseId),
+                eq(supportAttachments.fileId, fileId),
+                isNull(supportAttachments.revokedAt)
+              )
+            )
+        )[0]
+    );
+  }
+  async message(id: string, tx: SupportTransaction) {
+    return (await tx.select().from(supportMessages).where(eq(supportMessages.id, id)))[0];
+  }
+  async redact(id: string, tx: SupportTransaction) {
+    await tx
+      .update(supportMessages)
+      .set({ body: "", attachmentIds: [], redactedAt: new Date() })
+      .where(eq(supportMessages.id, id));
+    await tx
+      .update(supportAttachments)
+      .set({ revokedAt: new Date() })
+      .where(eq(supportAttachments.messageId, id));
+  }
+  pendingFileCleanup() {
+    return this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(supportAttachments)
+        .where(and(isNotNull(supportAttachments.revokedAt), isNull(supportAttachments.purgedAt)))
+        .limit(100)
+    );
+  }
+  fileCleaned(id: string) {
+    return this.throwableQuery(() =>
+      this.orm
+        .update(supportAttachments)
+        .set({ purgedAt: new Date() })
+        .where(eq(supportAttachments.id, id))
     );
   }
 }

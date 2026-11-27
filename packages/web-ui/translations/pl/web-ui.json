@@ -518,6 +518,12 @@
       "high": "Wysoki",
       "urgent": "Pilny"
     },
-    "take": "Przejmij sprawę"
+    "take": "Przejmij sprawę",
+    "redacted": "Wiadomość zredagowana",
+    "attachment": "Załącznik {{number}}",
+    "redactReason": "Powód redakcji (audyt)",
+    "redact": "Zredaguj",
+    "attachFiles": "Dodaj pliki (do 5; 10 MiB każdy)",
+    "attachedCount": "Gotowe pliki: {{count}}"
   }
 }

@@ -30,6 +30,8 @@ export const files = appDatabaseSchema.table(
     checksumSha256: text("checksum_sha256"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>(),
     status: text("status").notNull().$type<FileUploadStatus>(),
+    sealedAt: timestamp("sealed_at", { withTimezone: true, mode: "date" }),
+    sourceKey: text("source_key"),
     uploadedAt: timestamp("uploaded_at", { withTimezone: true, mode: "date" }),
   },
   (t) => [uniqueIndex("files_bucket_key_unique").on(t.bucket, t.key)]

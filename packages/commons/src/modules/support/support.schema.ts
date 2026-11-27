@@ -12,6 +12,7 @@ export const supportSendMessageSchema = z.object({
   clientId: z.string().min(1).max(128),
   body: z.string().trim().min(1).max(20000),
   visibility: z.enum(["public", "internal"]).default("public"),
+  attachmentIds: z.array(z.string().min(1)).max(50).default([]),
 });
 export const supportCaseSchema = z.object({
   id: z.string(),
@@ -88,4 +89,15 @@ export const supportCatalogSchema = z.object({
 export const supportSetTagsSchema = supportCaseIdSchema.extend({
   expectedVersion: z.number().int().min(1),
   tagIds: z.array(z.string().min(1)).max(30),
+});
+
+export const supportUploadSchema = supportCaseIdSchema.extend({
+  originalName: z.string().min(1).max(255),
+  contentType: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf", "text/plain"]),
+  sizeBytes: z.number().int().min(0),
+});
+export const supportDownloadSchema = supportCaseIdSchema.extend({ fileId: z.string().min(1) });
+export const supportRedactSchema = supportCaseIdSchema.extend({
+  messageId: z.string().min(1),
+  reason: z.string().trim().min(1).max(1000),
 });

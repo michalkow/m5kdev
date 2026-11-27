@@ -11,6 +11,7 @@ import type { ServerResultAsync } from "../../base/base.dto";
 import type { ResourceGrant } from "../../base/base.grants";
 import { BasePermissionService } from "../../base/base.service";
 import type { AuthService } from "../auth/auth.service";
+import type { FileService } from "../file/file.service";
 import { supportSchemas } from "./support.dto";
 import { defaultSupportGrants } from "./support.grants";
 import type { SupportRepository } from "./support.repository";
@@ -19,12 +20,13 @@ const hash = (data: unknown) => createHash("sha256").update(JSON.stringify(data)
 
 export class SupportService extends BasePermissionService<
   { support: SupportRepository },
-  { auth?: AuthService }
+  { auth?: AuthService; file?: FileService }
 > {
   constructor(
     repositories: { support: SupportRepository },
-    services: { auth?: AuthService },
-    grants: ResourceGrant[] = defaultSupportGrants
+    services: { auth?: AuthService; file?: FileService },
+    grants: ResourceGrant[] = defaultSupportGrants,
+    private readonly config: { maxAttachments?: number; maxFileBytes?: number } = {}
   ) {
     super(repositories, services, grants);
   }
@@ -213,7 +215,11 @@ export class SupportService extends BasePermissionService<
       const result = await this.repository.support.transaction(async (tx) => {
         const current = await this.repository.support.lockCase(input.id, tx);
         if (!current) throw this.error("NOT_FOUND", "Support Case not found").error;
-        const requestHash = hash({ body: input.body, visibility: input.visibility });
+        const requestHash = hash({
+          body: input.body,
+          visibility: input.visibility,
+          attachmentIds: input.attachmentIds,
+        });
         const existing = await this.repository.support.findMessage(
           input.id,
           ctx.actor.userId,
@@ -226,6 +232,31 @@ export class SupportService extends BasePermissionService<
               .error;
           return existing;
         }
+        if (input.attachmentIds.length > (this.config.maxAttachments ?? 5))
+          throw this.error("BAD_REQUEST", "Too many attachments").error;
+        const attachments = await this.repository.support.attachments(
+          input.id,
+          input.attachmentIds,
+          tx
+        );
+        if (
+          attachments.length !== new Set(input.attachmentIds).size ||
+          attachments.some(
+            (file) => file.userId !== ctx.actor.userId || file.messageId || file.revokedAt
+          )
+        )
+          throw this.error("FORBIDDEN", "Attachment is not an unused upload for this Case").error;
+        for (const attachment of attachments) {
+          if (!this.service.file)
+            throw this.error("INTERNAL_SERVER_ERROR", "Support File integration is unavailable")
+              .error;
+          const sealed = await this.service.file.sealForSharing(
+            attachment.fileId,
+            ctx.actor.userId,
+            this.config.maxFileBytes ?? 10 * 1024 * 1024
+          );
+          if (sealed.isErr()) throw sealed.error;
+        }
         const now = new Date();
         const authorKind = ctx.actor.userRole === "admin" ? "admin" : "user";
         const message = await this.repository.support.append(
@@ -236,6 +267,7 @@ export class SupportService extends BasePermissionService<
             authorKind,
             body: input.body,
             visibility: input.visibility,
+            attachmentIds: input.attachmentIds,
             clientId: input.clientId,
             requestHash,
             acceptedAt: now,
@@ -274,6 +306,7 @@ export class SupportService extends BasePermissionService<
               : { waitingOn: "user" },
             tx
           );
+        await this.repository.support.linkAttachments(input.attachmentIds, message.id, tx);
         return message;
       });
       if (result.isOk()) await this.notify(input.id, state.case.userId, ctx.actor.userId);
@@ -333,7 +366,11 @@ export class SupportService extends BasePermissionService<
           sequence: event.sequence,
           type: event.type,
           occurredAt: event.occurredAt,
-          data: event.data,
+          data: admin
+            ? event.data
+            : Object.fromEntries(
+                Object.entries(event.data).filter(([key]) => key !== "auditReason")
+              ),
         })),
         messages: messages.value.map((message) => supportSchemas.output.message.parse(message)),
       });
@@ -504,5 +541,100 @@ export class SupportService extends BasePermissionService<
       }
     }
     return ok(count);
+  }
+  readonly initiateAttachment = this.procedure("initiateAttachment")
+    .input(supportSchemas.input.upload, true)
+    .output(supportSchemas.output.upload)
+    .requireAuth("user")
+    .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .loadResource("case", ({ input }) => this.repository.support.findById(input.id))
+    .access({ action: "write", entityStep: "case" })
+    .handle(async ({ input, ctx }) => {
+      if (input.sizeBytes > (this.config.maxFileBytes ?? 10 * 1024 * 1024))
+        return this.error("BAD_REQUEST", "File exceeds the allowed size");
+      if (!this.service.file)
+        return this.error("INTERNAL_SERVER_ERROR", "Support File integration is unavailable");
+      const upload = await this.service.file.initiateSharedUpload({
+        originalName: input.originalName,
+        contentType: input.contentType,
+        sizeBytes: input.sizeBytes,
+        userId: ctx.actor.userId,
+      });
+      if (upload.isErr()) return err(upload.error);
+      const reserved = await this.repository.support.reserveAttachment({
+        caseId: input.id,
+        fileId: upload.value.fileId,
+        userId: ctx.actor.userId,
+      });
+      if (reserved.isErr()) return err(reserved.error);
+      return ok({ fileId: upload.value.fileId, url: upload.value.url });
+    });
+  readonly downloadAttachment = this.procedure("downloadAttachment")
+    .input(supportSchemas.input.download, true)
+    .output(supportSchemas.output.download)
+    .requireAuth("user")
+    .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .loadResource("case", ({ input }) => this.repository.support.findById(input.id))
+    .access({ action: "read", entityStep: "case" })
+    .handle(async ({ input, ctx }) => {
+      const result = await this.repository.support.attachment(input.id, input.fileId);
+      if (result.isErr()) return err(result.error);
+      const row = result.value;
+      if (
+        !row ||
+        row.message.redactedAt ||
+        !row.message.publishedAt ||
+        (row.message.visibility === "internal" && ctx.actor.userRole !== "admin")
+      )
+        return this.error("NOT_FOUND", "Attachment not available");
+      if (!this.service.file)
+        return this.error("INTERNAL_SERVER_ERROR", "Support File integration is unavailable");
+      return this.service.file.sharedDownload(input.fileId);
+    });
+  readonly redactMessage = this.procedure("redactMessage")
+    .input(supportSchemas.input.redact, true)
+    .output(supportSchemas.output.redaction)
+    .requireAuth("user")
+    .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .loadResource("case", ({ input }) => this.repository.support.findById(input.id))
+    .access({ action: "delete", entityStep: "case" })
+    .handle(async ({ input, ctx, state }) => {
+      const result = await this.repository.support.transaction(async (tx) => {
+        const current = await this.repository.support.lockCase(input.id, tx);
+        const message = await this.repository.support.message(input.messageId, tx);
+        if (!current || !message || message.caseId !== input.id)
+          throw this.error("NOT_FOUND", "Support Message not found").error;
+        if (message.redactedAt) return;
+        await this.repository.support.redact(message.id, tx);
+        await this.repository.support.record(
+          current,
+          {},
+          "message.redacted",
+          { userId: ctx.actor.userId, kind: "admin" },
+          {
+            messageSequence: message.sequence,
+            visibility: message.visibility,
+            auditReason: input.reason,
+          },
+          tx
+        );
+      });
+      if (result.isErr()) return err(result.error);
+      const cleanup = await this.cleanupRevokedFiles();
+      await this.notify(input.id, state.case.userId, ctx.actor.userId);
+      return ok({ id: input.messageId, cleanupPending: cleanup.isErr() });
+    });
+  async cleanupRevokedFiles(): ServerResultAsync<void> {
+    const pending = await this.repository.support.pendingFileCleanup();
+    if (pending.isErr()) return err(pending.error);
+    for (const attachment of pending.value) {
+      if (!this.service.file)
+        return this.error("INTERNAL_SERVER_ERROR", "Support File integration is unavailable");
+      const purged = await this.service.file.purgeSharedFile(attachment.fileId);
+      if (purged.isErr()) return err(purged.error);
+      const marked = await this.repository.support.fileCleaned(attachment.id);
+      if (marked.isErr()) return err(marked.error);
+    }
+    return ok(undefined);
   }
 }

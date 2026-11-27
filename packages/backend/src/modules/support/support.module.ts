@@ -28,6 +28,9 @@ export class SupportModule extends BaseModule<
   Services,
   { support: ReturnType<typeof createSupportTRPC> }
 > {
+  constructor(private readonly config: { maxAttachments?: number; maxFileBytes?: number } = {}) {
+    super();
+  }
   readonly id = "support";
   override readonly dependsOn = ["auth", "file", "tag", "workflow"] as const;
   override repositories({ db }: ModuleRepositoriesContext<Deps, typeof tables>) {
@@ -35,7 +38,15 @@ export class SupportModule extends BaseModule<
   }
   override services({ repositories, deps }: ModuleServicesContext<Deps, Repositories>) {
     return {
-      support: new SupportService(repositories, { auth: deps.auth.services.auth as AuthService }),
+      support: new SupportService(
+        repositories,
+        {
+          auth: deps.auth.services.auth as AuthService,
+          file: deps.file.services.file,
+        },
+        undefined,
+        this.config
+      ),
     };
   }
   override trpc({ trpc, services }: ModuleTRPCContext<Deps, Services>) {
@@ -46,6 +57,8 @@ export class SupportModule extends BaseModule<
     const definition = workflow.service
       .cron({ name: "support.snooze", pattern: "* * * * *" })
       .handle(async () => {
+        const cleanup = await services.support.cleanupRevokedFiles();
+        if (cleanup.isErr()) throw cleanup.error;
         const result = await services.support.wakeSnoozed();
         if (result.isErr()) throw result.error;
       });

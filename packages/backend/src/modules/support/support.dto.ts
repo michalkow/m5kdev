@@ -2,13 +2,16 @@ import {
   supportCaseIdSchema,
   supportCatalogSchema,
   supportCreateCaseSchema,
+  supportDownloadSchema,
   supportHistorySchema,
   supportListSchema,
   supportReadSchema,
+  supportRedactSchema,
   supportSendMessageSchema,
   supportSetTagsSchema,
   supportSyncSchema,
   supportUpdateCaseSchema,
+  supportUploadSchema,
 } from "@m5kdev/commons/modules/support/support.schema";
 import { z } from "zod";
 import { createZodSchemas } from "../../base/base.dto";
@@ -40,8 +43,14 @@ export const supportSchemas = {
     updateCase: supportUpdateCaseSchema,
     catalog: supportCatalogSchema,
     setTags: supportSetTagsSchema,
+    upload: supportUploadSchema,
+    download: supportDownloadSchema,
+    redact: supportRedactSchema,
   },
   output: {
+    upload: z.object({ fileId: z.string(), url: z.string() }),
+    download: z.object({ url: z.string(), expiresAt: z.date() }),
+    redaction: z.object({ id: z.string(), cleanupPending: z.boolean() }),
     case: caseOutput,
     message: messageOutput,
     transcript: z.object({

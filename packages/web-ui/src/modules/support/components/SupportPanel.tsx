@@ -70,7 +70,13 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
           {t("support.markRead")}
         </Button>
       )}
-      {state.transcript && <SupportMessageList messages={state.transcript.messages} />}
+      {state.transcript && (
+        <SupportMessageList
+          messages={state.transcript.messages}
+          onDownload={state.downloadFile}
+          onRedact={admin ? state.redactMessage : undefined}
+        />
+      )}
       <div className="flex gap-2">
         {state.transcript?.hasOlder && (
           <Button size="sm" variant="tertiary" onPress={state.showOlder}>
@@ -112,6 +118,20 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
               <FieldError />
             </TextField>
           </>
+        )}
+        {state.selectedId && (
+          <TextField name="files">
+            <Label>{t("support.attachFiles")}</Label>
+            <Input
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp,application/pdf,text/plain,.log"
+              onChange={(event) => void state.uploadFiles(Array.from(event.target.files ?? []))}
+            />
+            <p className="text-xs text-muted">
+              {t("support.attachedCount", { count: state.attachmentIds.length })}
+            </p>
+          </TextField>
         )}
         <TextField name="body" isRequired maxLength={20000}>
           <Label>{t("support.message")}</Label>

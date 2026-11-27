@@ -287,7 +287,11 @@ export class FileS3Repository extends BaseExternaRepository implements FileObjec
     return ok(urlResult.value);
   }
 
-  async getS3Object(key: string, bucket?: string): ServerResultAsync<FileObjectBody> {
+  async getS3Object(
+    key: string,
+    bucket?: string,
+    maxBytes?: number
+  ): ServerResultAsync<FileObjectBody> {
     const client = this.getClient();
     if (client.isErr()) return err(client.error);
     const resolvedBucket = this.resolveBucket(bucket);
@@ -304,7 +308,22 @@ export class FileS3Repository extends BaseExternaRepository implements FileObjec
     if (!body || typeof body.transformToByteArray !== "function") {
       return this.error("INTERNAL_SERVER_ERROR", "S3 object body is empty");
     }
-    const bytesResult = await this.throwablePromise(() => body.transformToByteArray());
+    if (maxBytes !== undefined && (dataResult.value.ContentLength ?? 0) > maxBytes) {
+      if ("destroy" in body && typeof body.destroy === "function") body.destroy();
+      return this.error("BAD_REQUEST", "File exceeds the allowed size");
+    }
+    const bytesResult = await this.throwablePromise(async () => {
+      if (maxBytes === undefined) return body.transformToByteArray();
+      const chunks: Buffer[] = [];
+      let size = 0;
+      for await (const chunk of body as AsyncIterable<Uint8Array>) {
+        const bytes = Buffer.from(chunk);
+        size += bytes.byteLength;
+        if (size > maxBytes) throw this.error("BAD_REQUEST", "File exceeds the allowed size").error;
+        chunks.push(bytes);
+      }
+      return Buffer.concat(chunks);
+    });
     if (bytesResult.isErr()) return err(bytesResult.error);
     return ok({
       body: Buffer.from(bytesResult.value),

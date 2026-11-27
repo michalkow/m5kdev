@@ -207,6 +207,33 @@ export function createSupportRouter(service: SupportService, auth: AuthMiddlewar
     (req) => ({ ...req.body, id: req.params.id }),
     (input, ctx) => service.setTags(input, ctx)
   );
+  register(
+    "post",
+    "/cases/:id/uploads",
+    "initiateAttachment",
+    supportSchemas.input.upload,
+    supportSchemas.output.upload,
+    (req) => ({ ...req.body, id: req.params.id }),
+    (input, ctx) => service.initiateAttachment(input, ctx)
+  );
+  register(
+    "post",
+    "/cases/:id/download",
+    "downloadAttachment",
+    supportSchemas.input.download,
+    supportSchemas.output.download,
+    (req) => ({ ...req.body, id: req.params.id }),
+    (input, ctx) => service.downloadAttachment(input, ctx)
+  );
+  register(
+    "post",
+    "/cases/:id/redact",
+    "redactMessage",
+    supportSchemas.input.redact,
+    supportSchemas.output.redaction,
+    (req) => ({ ...req.body, id: req.params.id }),
+    (input, ctx) => service.redactMessage(input, ctx)
+  );
   router.get("/openapi.json", (_req, res) =>
     res.json({
       openapi: "3.1.0",

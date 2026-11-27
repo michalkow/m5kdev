@@ -57,6 +57,8 @@ export const supportMessages = appDatabaseSchema.table(
     authorUserId: text("author_user_id").references(() => users.id, { onDelete: "set null" }),
     authorKind: text("author_kind").$type<"user" | "admin" | "ai" | "system">().notNull(),
     body: text("body").notNull(),
+    attachmentIds: text("attachment_ids").array().notNull().$type<string[]>().default([]),
+    redactedAt: instant("redacted_at"),
     visibility: text("visibility").$type<"public" | "internal">().notNull().default("public"),
     clientId: text("client_id").notNull(),
     requestHash: text("request_hash").notNull(),
@@ -111,3 +113,22 @@ export const supportReplies = appDatabaseSchema.table("support_replies", {
     .notNull()
     .$default(() => new Date()),
 });
+
+export const supportAttachments = appDatabaseSchema.table(
+  "support_attachments",
+  {
+    id: text("id").primaryKey().$default(uuidv4),
+    caseId: text("case_id")
+      .notNull()
+      .references(() => supportCases.id, { onDelete: "cascade" }),
+    fileId: text("file_id").notNull(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    messageId: text("message_id").references(() => supportMessages.id, { onDelete: "cascade" }),
+    createdAt: instant("created_at")
+      .notNull()
+      .$default(() => new Date()),
+    revokedAt: instant("revoked_at"),
+    purgedAt: instant("purged_at"),
+  },
+  (t) => [uniqueIndex("support_attachments_file").on(t.fileId)]
+);

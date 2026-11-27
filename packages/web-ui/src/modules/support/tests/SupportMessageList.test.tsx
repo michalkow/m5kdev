@@ -22,6 +22,7 @@ it("renders message content as text in an announced support log", async () => {
             authorUserId: "alice",
             authorKind: "user",
             visibility: "public",
+            attachmentIds:[], redactedAt:null,
             body: '<img src=x onerror="alert(1)">',
             acceptedAt: new Date(0),
             publishedAt: new Date(0),

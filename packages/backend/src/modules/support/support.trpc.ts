@@ -26,6 +26,24 @@ export function createSupportTRPC({ router, userProcedure }: TRPCMethods, servic
       .input(supportSchemas.input.setTags)
       .output(supportSchemas.output.case)
       .mutation(async ({ input, ctx }) => handleTRPCResult(await service.setTags(input, ctx))),
+    initiateAttachment: userProcedure
+      .input(supportSchemas.input.upload)
+      .output(supportSchemas.output.upload)
+      .mutation(async ({ input, ctx }) =>
+        handleTRPCResult(await service.initiateAttachment(input, ctx))
+      ),
+    downloadAttachment: userProcedure
+      .input(supportSchemas.input.download)
+      .output(supportSchemas.output.download)
+      .mutation(async ({ input, ctx }) =>
+        handleTRPCResult(await service.downloadAttachment(input, ctx))
+      ),
+    redactMessage: userProcedure
+      .input(supportSchemas.input.redact)
+      .output(supportSchemas.output.redaction)
+      .mutation(async ({ input, ctx }) =>
+        handleTRPCResult(await service.redactMessage(input, ctx))
+      ),
     createCase: userProcedure
       .input(supportCreateCaseSchema)
       .output(supportSchemas.output.case)

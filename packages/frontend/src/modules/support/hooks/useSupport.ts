@@ -18,9 +18,13 @@ export function useSupport(admin = false) {
   const trpc = useAppTRPC<SupportAppRouter>();
   const cache = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [beforeSequence, setBeforeSequence] = useState<number | undefined>();
   const selectCase = (id: string | null) => {
     setSelectedId(id);
+    setAttachmentIds([]);
     setBeforeSequence(undefined);
   };
   const pendingRequest = useRef<{ key: string; id: string } | null>(null);
@@ -105,10 +109,56 @@ export function useSupport(admin = false) {
       onSuccess: async () => {
         pendingRequest.current = null;
         setBeforeSequence(undefined);
+        setAttachmentIds([]);
         await refresh();
       },
     })
   );
+
+  const upload = useMutation(trpc.support.initiateAttachment.mutationOptions());
+  const download = useMutation(trpc.support.downloadAttachment.mutationOptions());
+  const redact = useMutation(trpc.support.redactMessage.mutationOptions({ onSuccess: refresh }));
+  const uploadFiles = async (files: File[]) => {
+    if (!selectedId) return;
+    setUploadError(null);
+    setIsUploading(true);
+    try {
+      const ids: string[] = [];
+      for (const file of files) {
+        const result = await upload.mutateAsync({
+          id: selectedId,
+          originalName: file.name,
+          contentType: (file.type || "text/plain") as
+            | "image/jpeg"
+            | "image/png"
+            | "image/webp"
+            | "application/pdf"
+            | "text/plain",
+          sizeBytes: file.size,
+        });
+        const response = await fetch(result.url, {
+          method: "PUT",
+          headers: { "content-type": file.type || "text/plain" },
+          body: file,
+        });
+        if (!response.ok) throw new Error("Upload failed");
+        ids.push(result.fileId);
+      }
+      setAttachmentIds((previous) => [...previous, ...ids]);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+  const downloadFile = async (fileId: string) => {
+    if (!selectedId) return;
+    const result = await download.mutateAsync({ id: selectedId, fileId });
+    window.open(result.url, "_blank", "noopener,noreferrer");
+  };
+  const redactMessage = async (messageId: string, reason: string) => {
+    if (selectedId) await redact.mutateAsync({ id: selectedId, messageId, reason });
+  };
   const clientId = (key: string) => {
     if (pendingRequest.current?.key !== key)
       pendingRequest.current = { key, id: crypto.randomUUID() };
@@ -134,7 +184,8 @@ export function useSupport(admin = false) {
         id: selectedId,
         body,
         visibility,
-        clientId: clientId(JSON.stringify([selectedId, body, visibility])),
+        attachmentIds,
+        clientId: clientId(JSON.stringify([selectedId, body, visibility, attachmentIds])),
       });
       return true;
     } catch {
@@ -142,6 +193,11 @@ export function useSupport(admin = false) {
     }
   };
   return {
+    attachmentIds,
+    uploadFiles,
+    downloadFile,
+    redactMessage,
+    isUploading,
     currentUserId: session.data?.user.id,
     filters,
     setFilters,
@@ -168,8 +224,11 @@ export function useSupport(admin = false) {
     retry: refresh,
     markRead,
     isLoading: cases.isLoading || (selectedId !== null && transcript.isLoading),
-    isPending: create.isPending || send.isPending,
+    isPending: create.isPending || send.isPending || isUploading,
     error:
+      uploadError ??
+      download.error?.message ??
+      redact.error?.message ??
       update.error?.message ??
       save.error?.message ??
       tag.error?.message ??

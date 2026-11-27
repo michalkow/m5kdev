@@ -15,7 +15,7 @@ export interface FileObjectStore {
     bucket?: string
   ): ServerResultAsync<string>;
   getS3DownloadUrl(key: string, expiresIn?: number, bucket?: string): ServerResultAsync<string>;
-  getS3Object(key: string, bucket?: string): ServerResultAsync<FileObjectBody>;
+  getS3Object(key: string, bucket?: string, maxBytes?: number): ServerResultAsync<FileObjectBody>;
   putS3Object(
     key: string,
     body: Buffer,
@@ -28,11 +28,7 @@ export interface FileObjectStore {
 
 export const FILE_S3_MOCK_MOUNT = "/file-s3-mock";
 
-export function fileS3MockObjectUrl(
-  publicBaseUrl: string,
-  bucket: string,
-  key: string
-): string {
+export function fileS3MockObjectUrl(publicBaseUrl: string, bucket: string, key: string): string {
   const base = publicBaseUrl.replace(/\/$/, "");
   return `${base}${FILE_S3_MOCK_MOUNT}/${encodeURIComponent(bucket)}/${key
     .split("/")

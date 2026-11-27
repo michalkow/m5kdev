@@ -518,6 +518,12 @@
       "high": "High",
       "urgent": "Urgent"
     },
-    "take": "Take Case"
+    "take": "Take Case",
+    "redacted": "Message redacted",
+    "attachment": "Attachment {{number}}",
+    "redactReason": "Redaction reason (audit)",
+    "redact": "Redact",
+    "attachFiles": "Attach files (up to 5; 10 MiB each)",
+    "attachedCount": "{{count}} files ready"
   }
 }
