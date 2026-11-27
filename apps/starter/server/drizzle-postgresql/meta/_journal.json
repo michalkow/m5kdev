@@ -15,6 +15,27 @@
       "when": 1794337664055,
       "tag": "0001_flaky_madame_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795812085321,
+      "tag": "0002_happy_barracuda",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795813191972,
+      "tag": "0003_chilly_abomination",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795815530464,
+      "tag": "0004_hesitant_peter_parker",
+      "breakpoints": true
     }
   ]
 }

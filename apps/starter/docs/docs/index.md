@@ -29,3 +29,11 @@ When you open the product, wait for its name and sign-in screen to appear. If th
 screen says it cannot load the application, check your connection and choose
 **Try again**. If that fails, reopen the product from the usual website address
 or contact support. Sign-in starts after the application has loaded.
+
+<!-- m5k:support:start -->
+## Get help from the platform team
+
+Use the signed-in [Support widget](support.md), or manage requests in the
+platform-admin [Support desk](support-desk.md). External clients can use the
+[Support API](support-api.md).
+<!-- m5k:support:end -->

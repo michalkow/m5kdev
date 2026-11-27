@@ -24,6 +24,7 @@ describe("CLI Backend Module feature catalog", () => {
       "notifications",
       "mcp",
       "tags",
+      "support",
       "connect",
       "webhook",
       "recurrence",

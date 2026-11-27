@@ -85,7 +85,8 @@
     "stripe": "catalog:",
     "trpc-to-openapi": "catalog:",
     "uuid": "catalog:",
-    "web-push": "catalog:"
+    "web-push": "catalog:",
+    "parse5": "catalog:"
   },
   "peerDependencies": {
     "@trpc/server": "catalog:",
@@ -366,6 +367,16 @@
       "require": {
         "types": "./dist/src/experience-flows.d.cts",
         "default": "./dist/src/experience-flows.cjs"
+      }
+    },
+    "./modules/support/*": {
+      "import": {
+        "types": "./dist/src/modules/support/*.d.mts",
+        "default": "./dist/src/modules/support/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/support/*.d.cts",
+        "default": "./dist/src/modules/support/*.cjs"
       }
     }
   }

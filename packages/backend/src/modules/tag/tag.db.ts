@@ -16,6 +16,7 @@ export const tags = appDatabaseSchema.table("tags", {
     onDelete: "set null",
   }),
   teamId: text("team_id"),
+  scope: text("scope").$type<"personal" | "support">().notNull().default("personal"),
   name: text("name").notNull(),
   color: text("color"),
   type: text("type"),

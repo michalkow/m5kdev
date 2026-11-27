@@ -24,6 +24,53 @@ describe("scaffoldProject", () => {
     await fs.rm(tempRoot, { recursive: true, force: true });
   });
 
+  it("composes optional Support with its required modules and keeps default docs independent", async () => {
+    const support = await scaffoldProject({
+      targetDirectory: "support-app",
+      appName: "Support App",
+      platform: "web",
+      modules: ["support"],
+      force: false,
+      yes: true,
+      skipInstall: true,
+      skipGit: true,
+    });
+    const read = (file: string) => fs.readFile(path.join(support.targetDirectory, file), "utf8");
+    const app = await read("apps/server/src/app.ts");
+    for (const module of ["SupportModule", "FileModule", "TagModule", "WorkflowModule"])
+      expect(app).toContain(`new ${module}(`);
+    expect(app).not.toContain("new AIModule(");
+    expect(await read("apps/server/src/schema.ts")).toContain("support.db");
+    expect(await read("apps/webapp/src/Layout.tsx")).toContain("<SupportWidget");
+    expect(await read("apps/webapp/src/Router.tsx")).toContain("SupportAdminRouter()");
+    expect(JSON.parse(await read("apps/docs/package.json")).scripts.build).toContain(
+      "support-manifest.mjs"
+    );
+    expect(await read("apps/docs/docs/support-api.md")).toContain("/api/v1/support");
+    for (const prefix of [
+      "apps/docs/docs",
+      "apps/docs/i18n/en-GB/docusaurus-plugin-content-docs/current",
+    ]) {
+      expect(await read(`${prefix}/support.md`)).toContain("Support");
+      expect(await read(`${prefix}/support-desk.md`)).toContain("Support");
+    }
+    const minimal = await scaffoldProject({
+      targetDirectory: "minimal-app",
+      appName: "Minimal App",
+      platform: "web",
+      modules: [],
+      force: false,
+      yes: true,
+      skipInstall: true,
+      skipGit: true,
+    });
+    const docs = JSON.parse(
+      await fs.readFile(path.join(minimal.targetDirectory, "apps/docs/package.json"), "utf8")
+    );
+    expect(docs.scripts.build).toBe("docusaurus build");
+    expect(docs.devDependencies).not.toHaveProperty("@m5kdev/backend");
+  });
+
   it.each(["web", "expo", "both", "landing"] as const)(
     "ships coherent AGENTS guidance using global skills for %s apps",
     async (platform) => {

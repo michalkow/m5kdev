@@ -95,6 +95,8 @@ const FEATURE_MANIFEST = {
         "apps/docs/docs/conversation.md",
         "apps/docs/docs/workflows.md",
         "apps/docs/docs/notifications-web.md",
+        "apps/docs/docs/support.md",
+        "apps/docs/docs/support-desk.md",
       ],
     },
     expo: {
@@ -173,7 +175,18 @@ const FEATURE_MANIFEST = {
         "apps/docs/docs/notifications-mobile.md",
       ],
     },
-    tags: { kind: "module", label: "Tags", experimental: true, paths: [] },
+    tags: { kind: "module", label: "Tags", paths: [] },
+    support: {
+      kind: "module",
+      label: "Support",
+      paths: [
+        "apps/docs/docs/support.md",
+        "apps/docs/docs/support-desk.md",
+        "apps/docs/docs/support-api.md",
+        "apps/docs/scripts/support-manifest.mjs",
+        "scripts/support-native-reference.mjs",
+      ],
+    },
     connect: { kind: "module", label: "Connect", experimental: true, paths: [] },
     recurrence: { kind: "module", label: "Recurrence", experimental: true, paths: [] },
     webhook: { kind: "module", label: "Webhook", experimental: true, paths: [] },
@@ -222,7 +235,18 @@ function isTextFile(filePath: string): boolean {
   return TEXT_EXTENSIONS.has(path.extname(filePath));
 }
 
-function tokenize(content: string): string {
+function tokenize(source: string, relativePath?: string): string {
+  let content = source;
+  if (relativePath === "docs/package.json") {
+    content = content.replace(
+      /^(\s*)"build": "docusaurus build && node scripts\/support-manifest\.mjs",?$/m,
+      `// m5k:support:start\n$1"build": "docusaurus build && node scripts/support-manifest.mjs",\n// m5k:support:end\n// m5k:no-support:start\n$1"build": "docusaurus build",\n// m5k:no-support:end`
+    );
+    content = content.replace(
+      /^(\s*"@m5kdev\/backend": "workspace:\*",?)$/m,
+      "// m5k:support:start\n$1\n// m5k:support:end"
+    );
+  }
   return (
     content
       // Starter keeps the framework's editor rules; generated apps use global skills.
@@ -296,7 +320,7 @@ function main(): void {
       rel === ".gitignore" ? path.join("apps", ".gitignore") : path.join("apps", tokenizePath(rel));
 
     if (isTextFile(file)) {
-      const content = tokenize(fs.readFileSync(file, "utf8"));
+      const content = tokenize(fs.readFileSync(file, "utf8"), rel);
       const target = path.join(OUT_DIR, `${destRel}.tpl`);
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, content, "utf8");
@@ -339,3 +363,9 @@ function main(): void {
 }
 
 main();
+
+fs.mkdirSync(path.join(OUT_DIR, "scripts"), { recursive: true });
+fs.writeFileSync(
+  path.join(OUT_DIR, "scripts/support-native-reference.mjs.tpl"),
+  tokenize(fs.readFileSync(path.join(REPO_ROOT, "scripts/support-native-reference.mjs"), "utf8"))
+);

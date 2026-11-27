@@ -457,5 +457,180 @@
   "billing.invoice.action": "Action",
   "billing.invoice.view": "View",
   "billing.invoice.noSubscriptionDetails": "You are currently on the free tier. Upgrade to access premium features.",
-  "billing.invoice.premium": "Premium Plan"
+  "billing.invoice.premium": "Premium Plan",
+  "support": {
+    "title": "Contact support",
+    "desk": "Support desk",
+    "new": "New request",
+    "failed": "Could not update support. Your message has been kept for retry.",
+    "retry": "Retry",
+    "loading": "Loading support…",
+    "requests": "Support requests",
+    "empty": "Start a request to reach platform support.",
+    "messages": "Messages",
+    "userId": "User ID",
+    "subject": "Subject",
+    "message": "Message",
+    "sending": "Sending…",
+    "send": "Send message",
+    "close": "Close support",
+    "author": {
+      "user": "User",
+      "admin": "Platform support",
+      "ai": "AI assistant",
+      "system": "Support update"
+    },
+    "markRead": "Mark as read",
+    "older": "Older messages",
+    "latest": "Latest messages",
+    "resolve": "Resolve",
+    "reopen": "Reopen",
+    "internalNote": "Internal note (staff only)",
+    "unassigned": "Unassigned",
+    "assign": "Assign to administrator User ID (empty to unassign)",
+    "save": "Save",
+    "snooze": "Snooze until (local time; empty to clear)",
+    "clearTags": "Clear Tags",
+    "catalogName": "Shared name",
+    "savedReply": "Saved reply text",
+    "addTag": "Add shared Tag",
+    "addReply": "Add saved reply",
+    "filter": {
+      "q": "Search public messages",
+      "status": "Status: open / resolved",
+      "priority": "Priority: low / normal / high / urgent",
+      "waitingOn": "Waiting: support / user / external",
+      "assignee": "Administrator User ID / unassigned",
+      "apply": "Apply filters"
+    },
+    "status": {
+      "open": "Open",
+      "resolved": "Resolved"
+    },
+    "wait": {
+      "support": "Waiting on support",
+      "user": "Waiting on User",
+      "external": "Waiting externally"
+    },
+    "priority": {
+      "low": "Low",
+      "normal": "Normal",
+      "high": "High",
+      "urgent": "Urgent"
+    },
+    "take": "Take Case",
+    "redacted": "Message redacted",
+    "attachment": "Attachment {{number}}",
+    "redactReason": "Redaction reason (audit)",
+    "redact": "Redact",
+    "attachFiles": "Attach files (up to 5; 10 MiB each)",
+    "attachedCount": "{{count}} files ready",
+    "language": "Support language",
+    "previewBeforeSend": "Preview translation before publishing",
+    "original": "Show original",
+    "translate": "Translate to my working language",
+    "translation": {
+      "pending": "Pending translation",
+      "failed": "Translation failed",
+      "ready": "Ready to publish",
+      "none": ""
+    },
+    "publication": {
+      "retry": "Retry",
+      "send-original": "Send original",
+      "publish-preview": "Publish preview"
+    },
+    "settings": {
+      "title": "Support settings",
+      "appLocales": "App locales: {{locales}}",
+      "native": "Natively supported locales (comma separated)",
+      "fallback": "Fallback admin locale",
+      "working": "My working locale",
+      "expectation": "Reply expectation shown to Users",
+      "translation": "Translation",
+      "ai": "Documentation AI",
+      "enable": "Enable",
+      "monthlyCalls": "Monthly calls",
+      "dailyUserCalls": "Daily calls per User",
+      "maxInputCharacters": "Maximum input characters",
+      "maxOutputCharacters": "Maximum output characters",
+      "concurrency": "Concurrent calls",
+      "attempts": "Attempts per task (1–3)",
+      "timeoutMs": "Timeout (ms)"
+    },
+    "talkToPerson": "Talk to a person",
+    "enableAI": "Re-enable AI for this Case",
+    "documentation": {
+      "title": "AI documentation",
+      "upload": "Upload documentation release",
+      "failed": "Refresh failed; check the release.",
+      "withdraw": "Withdraw",
+      "state": {
+        "pending": "Pending",
+        "active": "Active",
+        "inactive": "Previous",
+        "failed": "Failed",
+        "withdrawn": "Withdrawn"
+      }
+    },
+    "day": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    },
+    "csat": {
+      "enable": "Enable post-resolution feedback",
+      "question": "How was your support experience?",
+      "score": {
+        "-1": "Unhappy",
+        "0": "Neutral",
+        "1": "Happy"
+      }
+    },
+    "hours": {
+      "open": "Human support is open now",
+      "closed": "Outside human support hours; your message stays queued",
+      "settings": "Human support hours",
+      "enable": "Show human support hours",
+      "timeZone": "Time zone",
+      "day": "Day",
+      "opens": "Opens",
+      "closes": "Closes",
+      "add": "Add hours",
+      "remove": "Remove",
+      "holidays": "Holidays (YYYY-MM-DD, one per line)"
+    },
+    "overview": {
+      "title": "Support overview",
+      "open": "Open",
+      "unassigned": "Unassigned",
+      "noSample": "No samples",
+      "seconds": "s",
+      "cohort": "Cases created since {{date}}: {{count}}",
+      "partial": "Sample covers 500 Cases. Choose a later start date to narrow the range.",
+      "firstHuman": "First human response (calendar time)",
+      "median": "Median",
+      "samples": "Samples: {{count}}",
+      "unanswered": "Unanswered: {{count}}",
+      "handoff": "Human-handoff wait",
+      "oldest": "Oldest unanswered requests",
+      "csat": {
+        "human": "Human CSAT",
+        "ai": "AI CSAT"
+      },
+      "since": "Cases created since"
+    },
+    "unreadTrigger": "Support: {{count}} unread",
+    "addNote": "Add note",
+    "moreCases": "More requests",
+    "handling": {
+      "ai": "The AI assistant uses published help documentation.",
+      "human": "Your request is with human support."
+    },
+    "tools": "Case tools and filters"
+  }
 }

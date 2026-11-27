@@ -109,8 +109,9 @@ export type M5KAuthClient = Omit<BaseAuthClient, "useSession" | "updateUser"> & 
     ...args: unknown[]
   ) => ReturnType<BaseAuthClient["updateUser"]>;
   useSession: () => Omit<BaseSessionState, "data"> & {
-    data: BaseSessionData extends { session: infer Session }
-      ? Omit<BaseSessionData, "session"> & {
+    data: BaseSessionData extends { session: infer Session; user: infer User }
+      ? Omit<BaseSessionData, "session" | "user"> & {
+          user: User & { role?: string | null };
           session: Session & M5KAuthSessionFields;
         }
       : BaseSessionData;

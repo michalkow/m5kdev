@@ -118,7 +118,14 @@ export class FileService extends BasePermissionService<
           : [];
       const listed = await this.repository.file.queryList({
         ...input,
-        filters: [...(input.filters ?? []), uploadedFilter, ...scopeFilters, ...ownFilters],
+        filters: [
+          ...(input.filters ?? []),
+          uploadedFilter,
+          { columnId: "sealedAt", type: "string", method: "is_null", value: "" },
+          { columnId: "sourceKey", type: "string", method: "is_null", value: "" },
+          ...scopeFilters,
+          ...ownFilters,
+        ],
       });
       if (listed.isErr()) return listed;
       return ok(this.filterPermission(ctx.actor, "read", listed.value));
@@ -195,6 +202,11 @@ export class FileService extends BasePermissionService<
       const denied = this.denyFileAccess(ctx.actor, state.file, "delete");
       if (denied) return denied;
       const row = state.file;
+      if (row.sealedAt || row.sourceKey)
+        return this.error(
+          "FORBIDDEN",
+          "Shared Support Files are managed through Support redaction"
+        );
       if (this.fileConfig.purgeObjectOnDelete !== false) {
         const s3Result = await this.repository.fileS3.deleteS3Object(row.key, row.bucket);
         if (s3Result.isErr()) return err(s3Result.error);
@@ -369,6 +381,161 @@ export class FileService extends BasePermissionService<
     return ok({ ...object.value, fileId: row.id });
   }
 
+  /** Personal upload reserved by a trusted sharing service, with its own narrow allowlist. */
+  async initiateSharedUpload(input: {
+    originalName: string;
+    contentType: string;
+    sizeBytes: number;
+    userId: string;
+  }): ServerResultAsync<{ fileId: string; url: string }> {
+    if (
+      !["image/jpeg", "image/png", "image/webp", "application/pdf", "text/plain"].includes(
+        input.contentType
+      )
+    )
+      return this.error("BAD_REQUEST", "Unsupported shared File type");
+    const bucket = this.resolveBucket();
+    if (bucket.isErr()) return err(bucket.error);
+    const key = buildS3ObjectKey({
+      userId: input.userId,
+      extension: extractOriginalExtension(input.originalName),
+    });
+    const created = await this.repository.file.create({
+      userId: input.userId,
+      bucket: bucket.value,
+      key,
+      originalName: input.originalName,
+      contentType: input.contentType,
+      sizeBytes: input.sizeBytes,
+      status: "PENDING",
+      uploadExpiresAt: new Date(Date.now() + 300000),
+    });
+    if (created.isErr()) return err(created.error);
+    const url = await this.repository.fileS3.getS3UploadUrl(
+      key,
+      input.contentType,
+      300,
+      bucket.value
+    );
+    return url.map((url) => ({ fileId: created.value.id, url }));
+  }
+
+  /** Trusted sharing boundary. Only an in-process service that owns participant authorization may call this. */
+  async sealForSharing(
+    fileId: string,
+    ownerUserId: string,
+    maxBytes: number
+  ): ServerResultAsync<FileRow> {
+    const result = await this.repository.file.findActiveByIdForUser(fileId, ownerUserId);
+    if (result.isErr()) return err(result.error);
+    const row = result.value;
+    if (!row || row.organizationId || row.status === "DELETED" || row.status === "FAILED")
+      return this.error("FORBIDDEN", "File is not an available personal upload");
+    if (row.sealedAt !== null) {
+      if (row.sourceKey) {
+        const cleanup = await this.repository.fileS3.deleteS3Object(row.sourceKey, row.bucket);
+        if (cleanup.isErr()) return err(cleanup.error);
+      }
+      return ok(row);
+    }
+    const object = await this.repository.fileS3.getS3Object(
+      row.sourceKey ?? row.key,
+      row.bucket,
+      maxBytes
+    );
+    if (object.isErr()) return err(object.error);
+    const body = object.value.body;
+    const contentType = row.contentType;
+    const valid =
+      contentType === "image/jpeg"
+        ? body[0] === 255 && body[1] === 216 && body[2] === 255
+        : contentType === "image/png"
+          ? body.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+          : contentType === "image/webp"
+            ? body.toString("ascii", 0, 4) === "RIFF" && body.toString("ascii", 8, 12) === "WEBP"
+            : contentType === "application/pdf"
+              ? body.toString("ascii", 0, 5) === "%PDF-"
+              : contentType === "text/plain"
+                ? !body.includes(0) && Buffer.from(body.toString("utf8"), "utf8").equals(body)
+                : false;
+    if (!valid || body.byteLength > maxBytes)
+      return this.error("BAD_REQUEST", "Uploaded File type or size is not allowed");
+    // Persist both object locators before writing bytes. A crash at any later
+    // boundary leaves enough intent for retry and purge to converge.
+    const sourceKey = row.sourceKey ?? row.key;
+    const sealedKey = row.sourceKey ? row.key : `support-sealed/${row.id}`;
+    if (!row.sourceKey) {
+      const intent = await this.repository.file.update({
+        id: row.id,
+        sourceKey,
+        key: sealedKey,
+        status: "PENDING",
+      });
+      if (intent.isErr()) return err(intent.error);
+    }
+    const put = await this.repository.fileS3.putS3Object(sealedKey, body, contentType, row.bucket);
+    if (put.isErr()) return err(put.error);
+    const sealed = await this.repository.file.update({
+      id: row.id,
+      key: sealedKey,
+      sizeBytes: body.byteLength,
+      status: "UPLOADED",
+      uploadedAt: new Date(),
+      sealedAt: new Date(),
+      sourceKey,
+    });
+    if (sealed.isErr()) return err(sealed.error);
+    const deleted = await this.repository.fileS3.deleteS3Object(sourceKey, row.bucket);
+    if (deleted.isErr()) return err(deleted.error);
+    return ok(sealed.value);
+  }
+
+  async sharedDownload(fileId: string): ServerResultAsync<{ url: string; expiresAt: Date }> {
+    const result = await this.findUploadedFile({ fileId });
+    if (result.isErr()) return err(result.error);
+    if (!result.value.sealedAt) return this.error("FORBIDDEN", "File is not sealed for sharing");
+    const url = await this.repository.fileS3.getS3DownloadUrl(
+      result.value.key,
+      30,
+      result.value.bucket
+    );
+    return url.map((url) => ({ url, expiresAt: new Date(Date.now() + 30000) }));
+  }
+
+  /** Physically removes bytes first so previously issued URLs stop resolving. Safe to retry. */
+  async purgeSharedFile(fileId: string): ServerResultAsync<void> {
+    const result = await this.repository.file.findById(fileId);
+    if (result.isErr()) return err(result.error);
+    if (!result.value) return ok(undefined);
+    const row = result.value;
+    if (row.sourceKey) {
+      const source = await this.repository.fileS3.deleteS3Object(row.sourceKey, row.bucket);
+      if (source.isErr()) return err(source.error);
+    }
+    const removed = await this.repository.fileS3.deleteS3Object(row.key, row.bucket);
+    if (removed.isErr()) return err(removed.error);
+    if (row.uploadExpiresAt && row.uploadExpiresAt > new Date()) {
+      const tombstone = await this.repository.file.update({
+        id: row.id,
+        status: "DELETED",
+        deletedAt: new Date(),
+        originalName: "",
+        metadata: null,
+        userId: null,
+        memberId: null,
+        organizationId: null,
+      });
+      if (tombstone.isErr()) return err(tombstone.error);
+      return this.error(
+        "CONFLICT",
+        "File upload authorization is still expiring; cleanup will retry"
+      );
+    }
+    const deleted = await this.repository.file.deleteById(row.id);
+    if (deleted.isErr()) return err(deleted.error);
+    return ok(undefined);
+  }
+
   readonly initiate = this.procedure("initiate")
     .input(fileSchemas.input.initiate)
     .output(fileSchemas.output.initiate)
@@ -523,9 +690,16 @@ export class FileService extends BasePermissionService<
 
   private denyFileAccess(
     actor: AuthenticatedActor,
-    file: { organizationId: string | null; memberId: string | null },
+    file: {
+      organizationId: string | null;
+      memberId: string | null;
+      sealedAt?: Date | null;
+      sourceKey?: string | null;
+    },
     action: string
   ): ServerResult<never> | null {
+    if (file.sealedAt || file.sourceKey)
+      return this.error("FORBIDDEN", "Access shared Support Files through the Support Case");
     if (!this.actorMatchesFileScope(actor, file)) {
       return this.error("FORBIDDEN", "Actor scope does not match this File");
     }

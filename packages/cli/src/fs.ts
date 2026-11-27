@@ -45,7 +45,7 @@ export const TEXT_BASENAMES: ReadonlySet<string> = new Set([
 
 /** Feature marker blocks use line comments or JSX comments around feature content. */
 const MARKER_PATTERN =
-  /^[ \t]*(?:\/\/|#|\{\/\*)[ \t]*m5k:([a-z-]+):(start|end)(?:[ \t]*\*\/\})?[ \t]*$/;
+  /^[ \t]*(?:\/\/|#|\{\/\*|<!--)[ \t]*m5k:([a-z-]+):(start|end)(?:[ \t]*(?:\*\/\}|-->))?[ \t]*$/;
 
 export interface CopyTemplateOptions {
   /** Repo-root-relative path prefixes to skip entirely (disabled features). */

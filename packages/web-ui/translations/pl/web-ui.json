@@ -457,5 +457,180 @@
   "billing.invoice.action": "Działanie",
   "billing.invoice.view": "Zobacz",
   "billing.invoice.noSubscriptionDetails": "Obecnie korzystasz z bezpłatnego planu. Ulepsz go, aby uzyskać funkcje premium.",
-  "billing.invoice.premium": "Plan premium"
+  "billing.invoice.premium": "Plan premium",
+  "support": {
+    "title": "Kontakt z pomocą",
+    "desk": "Panel pomocy",
+    "new": "Nowe zgłoszenie",
+    "failed": "Nie udało się zaktualizować zgłoszenia. Wiadomość zachowano do ponowienia.",
+    "retry": "Ponów",
+    "loading": "Ładowanie pomocy…",
+    "requests": "Zgłoszenia",
+    "empty": "Utwórz zgłoszenie, aby skontaktować się z pomocą platformy.",
+    "messages": "Wiadomości",
+    "userId": "Identyfikator użytkownika",
+    "subject": "Temat",
+    "message": "Wiadomość",
+    "sending": "Wysyłanie…",
+    "send": "Wyślij wiadomość",
+    "close": "Zamknij pomoc",
+    "author": {
+      "user": "Użytkownik",
+      "admin": "Pomoc platformy",
+      "ai": "Asystent AI",
+      "system": "Aktualizacja zgłoszenia"
+    },
+    "markRead": "Oznacz jako przeczytane",
+    "older": "Starsze wiadomości",
+    "latest": "Najnowsze wiadomości",
+    "resolve": "Rozwiąż",
+    "reopen": "Otwórz ponownie",
+    "internalNote": "Notatka wewnętrzna (tylko obsługa)",
+    "unassigned": "Nieprzypisane",
+    "assign": "ID administratora (puste usuwa przypisanie)",
+    "save": "Zapisz",
+    "snooze": "Odłóż do (czas lokalny; puste usuwa odłożenie)",
+    "clearTags": "Usuń Tagi",
+    "catalogName": "Wspólna nazwa",
+    "savedReply": "Treść zapisanej odpowiedzi",
+    "addTag": "Dodaj wspólny Tag",
+    "addReply": "Dodaj odpowiedź",
+    "filter": {
+      "q": "Szukaj w wiadomościach publicznych",
+      "status": "Stan: open / resolved",
+      "priority": "Priorytet: low / normal / high / urgent",
+      "waitingOn": "Oczekuje: support / user / external",
+      "assignee": "ID administratora / unassigned",
+      "apply": "Filtruj"
+    },
+    "status": {
+      "open": "Otwarte",
+      "resolved": "Rozwiązane"
+    },
+    "wait": {
+      "support": "Oczekuje na obsługę",
+      "user": "Oczekuje na Użytkownika",
+      "external": "Oczekuje zewnętrznie"
+    },
+    "priority": {
+      "low": "Niski",
+      "normal": "Normalny",
+      "high": "Wysoki",
+      "urgent": "Pilny"
+    },
+    "take": "Przejmij sprawę",
+    "redacted": "Wiadomość zredagowana",
+    "attachment": "Załącznik {{number}}",
+    "redactReason": "Powód redakcji (audyt)",
+    "redact": "Zredaguj",
+    "attachFiles": "Dodaj pliki (do 5; 10 MiB każdy)",
+    "attachedCount": "Gotowe pliki: {{count}}",
+    "language": "Język obsługi",
+    "previewBeforeSend": "Podgląd tłumaczenia przed publikacją",
+    "original": "Pokaż oryginał",
+    "translate": "Przetłumacz na mój język",
+    "translation": {
+      "pending": "Oczekuje",
+      "failed": "Błąd tłumaczenia",
+      "ready": "Gotowe do publikacji",
+      "none": ""
+    },
+    "publication": {
+      "retry": "Ponów",
+      "send-original": "Wyślij oryginał",
+      "publish-preview": "Opublikuj podgląd"
+    },
+    "settings": {
+      "title": "Ustawienia obsługi",
+      "appLocales": "Języki aplikacji: {{locales}}",
+      "native": "Języki obsługiwane bez tłumaczenia (po przecinku)",
+      "fallback": "Domyślny język administratorów",
+      "working": "Mój język pracy",
+      "expectation": "Informacja o oczekiwanym czasie odpowiedzi",
+      "translation": "Tłumaczenie",
+      "ai": "Asystent AI dokumentacji",
+      "enable": "Włącz",
+      "monthlyCalls": "Wywołania miesięcznie",
+      "dailyUserCalls": "Wywołania na Użytkownika dziennie",
+      "maxInputCharacters": "Maks. znaków wejściowych",
+      "maxOutputCharacters": "Maks. znaków wyjściowych",
+      "concurrency": "Równoległe wywołania",
+      "attempts": "Próby na zadanie (1–3)",
+      "timeoutMs": "Limit czasu (ms)"
+    },
+    "talkToPerson": "Porozmawiaj z człowiekiem",
+    "enableAI": "Włącz ponownie AI dla tej sprawy",
+    "documentation": {
+      "title": "Dokumentacja AI",
+      "upload": "Wczytaj wydanie dokumentacji",
+      "failed": "Odświeżenie nie powiodło się; sprawdź wydanie.",
+      "withdraw": "Wycofaj",
+      "state": {
+        "pending": "Oczekuje",
+        "active": "Aktywne",
+        "inactive": "Poprzednie",
+        "failed": "Błąd",
+        "withdrawn": "Wycofane"
+      }
+    },
+    "day": {
+      "0": "Niedziela",
+      "1": "Poniedziałek",
+      "2": "Wtorek",
+      "3": "Środa",
+      "4": "Czwartek",
+      "5": "Piątek",
+      "6": "Sobota"
+    },
+    "csat": {
+      "enable": "Włącz ocenę obsługi po rozwiązaniu",
+      "question": "Jak oceniasz pomoc?",
+      "score": {
+        "-1": "Niezadowolenie",
+        "0": "Neutralnie",
+        "1": "Zadowolenie"
+      }
+    },
+    "hours": {
+      "open": "Obsługa jest teraz dostępna",
+      "closed": "Poza godzinami obsługi; Twoja wiadomość pozostaje w kolejce",
+      "settings": "Godziny obsługi",
+      "enable": "Pokazuj godziny obsługi",
+      "timeZone": "Strefa czasowa",
+      "day": "Dzień",
+      "opens": "Od",
+      "closes": "Do",
+      "add": "Dodaj godziny",
+      "remove": "Usuń",
+      "holidays": "Dni wolne (RRRR-MM-DD, po jednym w wierszu)"
+    },
+    "overview": {
+      "title": "Przegląd obsługi",
+      "open": "Otwarte",
+      "unassigned": "Nieprzypisane",
+      "noSample": "Brak próbek",
+      "seconds": "s",
+      "cohort": "Sprawy utworzone od {{date}}: {{count}}",
+      "partial": "Próbka obejmuje 500 spraw. Wybierz późniejszą datę początkową, aby zawęzić zakres.",
+      "firstHuman": "Pierwsza odpowiedź człowieka (czas kalendarzowy)",
+      "median": "Mediana",
+      "samples": "Próbki: {{count}}",
+      "unanswered": "Bez odpowiedzi: {{count}}",
+      "handoff": "Czas od przekazania człowiekowi",
+      "oldest": "Najdłużej oczekujące wiadomości",
+      "csat": {
+        "human": "CSAT człowieka",
+        "ai": "CSAT AI"
+      },
+      "since": "Sprawy utworzone od"
+    },
+    "unreadTrigger": "Pomoc: {{count}} nieprzeczytanych",
+    "addNote": "Dodaj notatkę",
+    "moreCases": "Więcej spraw",
+    "handling": {
+      "ai": "Asystent AI korzysta z opublikowanej dokumentacji.",
+      "human": "Twoja sprawa czeka na obsługę przez człowieka."
+    },
+    "tools": "Narzędzia i filtry zgłoszeń"
+  }
 }

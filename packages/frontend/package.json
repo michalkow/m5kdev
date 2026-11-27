@@ -40,7 +40,8 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-i18next": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "nuqs": "catalog:"
   },
   "devDependencies": {
     "@jest/globals": "catalog:",
@@ -63,7 +64,8 @@
     "better-auth": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "nuqs": "catalog:"
   },
   "exports": {
     ".": {
@@ -234,6 +236,16 @@
       "require": {
         "types": "./dist/src/modules/app/experience.d.ts",
         "default": "./dist/src/modules/app/experience.js"
+      }
+    },
+    "./modules/support/hooks/*": {
+      "import": {
+        "types": "./dist/src/modules/support/hooks/*.d.mts",
+        "default": "./dist/src/modules/support/hooks/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/support/hooks/*.d.ts",
+        "default": "./dist/src/modules/support/hooks/*.js"
       }
     }
   }

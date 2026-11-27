@@ -38,6 +38,7 @@ requires Email.
 | [Notification](/modules/notification) | commons, backend, frontend, web-ui, expo | Member inbox, Channel preferences, Devices, delayed web/mobile/email delivery |
 | [Email](/modules/email) | backend | `EmailModule` send orchestration over Resend; EmailPreview is a store-mode non-production helper |
 | [Recurrence](/modules/recurrence) | commons, backend | Recurring schedules and rules with permissioned CRUD |
+| [Support](/modules/support) | commons, backend, frontend, web-ui | Private Cases, widget/desk, translation, documentation AI, reporting and CSAT |
 | [Tag](/modules/tag) | commons, backend | Polymorphic tags and taggings for any resource type |
 | [Connection](/modules/connect) | backend | Linked third-party API accounts (`id` remains `connect`) |
 | [Inbound callback](/modules/webhook) | backend | One-shot inbound callbacks with awaitable payloads (`id` remains `webhook`) |

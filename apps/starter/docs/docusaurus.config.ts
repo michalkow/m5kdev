@@ -1,7 +1,11 @@
+// biome-ignore-all assist/source/organizeImports: feature-gated documentation imports remain in marker blocks
 import fs from "node:fs";
 import path from "node:path";
 import type * as Preset from "@docusaurus/preset-classic";
 import type { Config, Plugin } from "@docusaurus/types";
+// m5k:support:start
+import { writeSupportDocumentationPart } from "@m5kdev/backend/modules/support/support.documentation";
+// m5k:support:end
 
 import { getDocumentationUrl } from "../documentation";
 import { APP_LOCALE_CONFIG } from "../locales";
@@ -57,6 +61,24 @@ const config: Config = {
   markdown: { hooks: { onBrokenMarkdownLinks: "throw" } },
   future: { faster: { rspackBundler: true, swcJsLoader: true } },
   plugins: [
+    // m5k:support:start
+    function supportDocumentation(context): Plugin {
+      return {
+        name: "support-documentation-manifest",
+        async postBuild({ outDir }) {
+          const { version } = JSON.parse(
+            fs.readFileSync(path.join(__dirname, "package.json"), "utf8")
+          );
+          await writeSupportDocumentationPart({
+            outDir,
+            locale: context.i18n.currentLocale,
+            applicationVersion: version,
+            experience: "default",
+          });
+        },
+      };
+    },
+    // m5k:support:end
     function standaloneStaticRoutes(): Plugin {
       return {
         name: "standalone-static-routes",

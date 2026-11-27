@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { PublicExperience } from "@m5kdev/commons/modules/app/experience.schema";
 import { err, ok } from "neverthrow";
@@ -75,9 +75,32 @@ export class LocalFileObjectStore extends BaseExternaRepository implements FileO
     return ok(undefined);
   }
 
-  async getS3Object(key: string, bucket?: string): ServerResultAsync<FileObjectBody> {
+  async getS3Object(
+    key: string,
+    bucket?: string,
+    maxBytes?: number
+  ): ServerResultAsync<FileObjectBody> {
     const objectPath = this.objectPath(this.resolveBucket(bucket), key);
-    const bodyResult = await this.throwablePromise(() => readFile(objectPath));
+    const bodyResult = await this.throwablePromise(async () => {
+      if (maxBytes === undefined) return readFile(objectPath);
+      const handle = await open(objectPath, "r");
+      try {
+        const chunks: Buffer[] = [];
+        let size = 0;
+        for (;;) {
+          const chunk = Buffer.alloc(Math.min(65536, maxBytes + 1 - size));
+          const { bytesRead } = await handle.read(chunk, 0, chunk.length, null);
+          if (!bytesRead) break;
+          size += bytesRead;
+          if (size > maxBytes)
+            throw this.error("BAD_REQUEST", "File exceeds the allowed size").error;
+          chunks.push(chunk.subarray(0, bytesRead));
+        }
+        return Buffer.concat(chunks);
+      } finally {
+        await handle.close();
+      }
+    });
     if (bodyResult.isErr()) {
       return this.error("NOT_FOUND", "Object not found");
     }
@@ -91,8 +114,10 @@ export class LocalFileObjectStore extends BaseExternaRepository implements FileO
 
   async deleteS3Object(key: string, bucket?: string): ServerResultAsync<void> {
     const objectPath = this.objectPath(this.resolveBucket(bucket), key);
-    await this.throwablePromise(() => rm(objectPath, { force: true }));
-    await this.throwablePromise(() => rm(this.metaPath(objectPath), { force: true }));
+    const removed = await this.throwablePromise(() => rm(objectPath, { force: true }));
+    if (removed.isErr()) return err(removed.error);
+    const meta = await this.throwablePromise(() => rm(this.metaPath(objectPath), { force: true }));
+    if (meta.isErr()) return err(meta.error);
     return ok(undefined);
   }
 
