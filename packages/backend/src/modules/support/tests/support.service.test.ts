@@ -49,9 +49,13 @@ it("recovers committed changes and keeps read state monotonic", async () => {
   );
   if (tail.isErr()) throw tail.error;
   expect(tail.value.messages.map((message) => message.body)).toEqual(["Reply while offline"]);
+  expect(tail.value.case.unreadCount).toBe(1);
   const unread = await support.getCase({ id: created.value.id }, ctx("alice"));
   if (unread.isErr()) throw unread.error;
   expect(unread.value.case.unreadCount).toBe(1);
+  const badge = await support.getUnreadCount({}, ctx("alice"));
+  if (badge.isErr()) throw badge.error;
+  expect(badge.value.count).toBe(1);
   const marked = await support.markRead(
     { id: created.value.id, throughSequence: reply.value.sequence },
     ctx("alice")
@@ -61,6 +65,9 @@ it("recovers committed changes and keeps read state monotonic", async () => {
   const read = await support.getCase({ id: created.value.id }, ctx("alice"));
   if (read.isErr()) throw read.error;
   expect(read.value.case.unreadCount).toBe(0);
+  const cleared = await support.getUnreadCount({}, ctx("alice"));
+  if (cleared.isErr()) throw cleared.error;
+  expect(cleared.value.count).toBe(0);
 });
 
 it("pages history without gaps and rejects cross-Case cursors", async () => {
@@ -335,4 +342,26 @@ it("offers editable one-click feedback only for a genuine resolved cycle", async
   );
   const stale = await support.rate({ id: created.value.id, cycle: 2, score: 1 }, ctx("alice"));
   expect(stale.isErr() && stale.error.code).toBe("CONFLICT");
+});
+
+it("pages the complete private Case list", async () => {
+  for (let index = 0; index < 3; index++) {
+    const result = await support.createCase(
+      { clientId: `case-page-${index}`, subject: "Paging cohort", body: String(index) },
+      ctx("alice")
+    );
+    if (result.isErr()) throw result.error;
+  }
+  const first = await support.listCases({ limit: 2, search: "Paging cohort" }, ctx("alice"));
+  if (first.isErr()) throw first.error;
+  expect(first.value.items).toHaveLength(2);
+  expect(first.value.cursor).not.toBeNull();
+  const next = await support.listCases(
+    { limit: 2, search: "Paging cohort", cursor: first.value.cursor ?? undefined },
+    ctx("alice")
+  );
+  if (next.isErr()) throw next.error;
+  expect(next.value.items).toHaveLength(1);
+  expect(next.value.cursor).toBeNull();
+  expect(new Set([...first.value.items, ...next.value.items].map((row) => row.id)).size).toBe(3);
 });

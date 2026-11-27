@@ -65,7 +65,9 @@ module. Expo-only still includes a server.
 | `notifications` | Experimental. Notification tables, `NotificationModule`, Shared kinds, web inbox/preferences UI, Expo `/notifications` |
 | `mcp` | `McpModule` + MCP allowlist and Better Auth OAuth tables + Starter Posts `meta.mcp` on `list-posts` / `create-post`. **Default off.** Starter still registers McpModule. |
 | `billing` | Records the feature id only. Does **not** scaffold `BillingModule` |
-| `tags` / `connect` / `webhook` / `recurrence` | Experimental stubs. Prompt-only; empty template paths |
+| `support` | Support module, widget/desk, versioned API and guides. **Default off.** Implies `files`, `tags` and `workflows`; AI remains independent. |
+| `tags` | TagModule and Tag tables; owner-filtered generic Tag operations and shared Support taxonomy integration |
+| `connect` / `webhook` / `recurrence` | Experimental stubs. Prompt-only; empty template paths |
 
 `create-m5kdev` **never** adds Optional Backend Module packages
 (`@m5kdev/module-clay`, `docx`, `pdf`, `social`, `video`). Pin those by hand

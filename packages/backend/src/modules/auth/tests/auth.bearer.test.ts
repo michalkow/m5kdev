@@ -1,4 +1,5 @@
 import { hashPassword } from "better-auth/crypto";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { prepareExperienceTables } from "../../../test/experience.fixtures";
 import { createTestPool } from "../../../test/postgresql";
@@ -58,6 +59,25 @@ it("signs in a native User and rejects the same bearer session after logout", as
     );
     expect(logout.status).toBe(200);
     expect(await auth.api.getSession({ headers })).toBeNull();
+    const again = await auth.handler(
+      new Request("http://localhost:8080/api/auth/sign-in/email", {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "http://localhost:8080" },
+        body: JSON.stringify({
+          email: "native@local.test",
+          password: "Native-Example-Password-123",
+        }),
+      })
+    );
+    const nextHeaders = new Headers({
+      authorization: `Bearer ${again.headers.get("set-auth-token")}`,
+    });
+    expect((await auth.api.getSession({ headers: nextHeaders }))?.user.id).toBe("native-user");
+    await orm
+      .update(schema.sessions)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(eq(schema.sessions.userId, "native-user"));
+    expect(await auth.api.getSession({ headers: nextHeaders })).toBeNull();
   } finally {
     await pool.end();
   }

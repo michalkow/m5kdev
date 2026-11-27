@@ -1,4 +1,4 @@
-import { Button, Form, Input, Label, TextArea, TextField } from "@heroui/react";
+import { Button, Checkbox, Form, Input, Label, TextArea, TextField } from "@heroui/react";
 import type { useSupport } from "@m5kdev/frontend/modules/support/hooks/useSupport";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -42,15 +42,14 @@ export function SupportCalendarSettings({ state }: { state: State }) {
   return (
     <Form onSubmit={submit} className="mt-3 grid gap-2 rounded-lg border border-border p-3">
       <h4>{t("support.hours.settings")}</h4>
-      <label className="flex gap-2">
-        <input
-          type="checkbox"
-          name="calendarEnabled"
-          value="true"
-          defaultChecked={Boolean(settings.calendar)}
-        />
-        {t("support.hours.enable")}
-      </label>
+      <Checkbox name="calendarEnabled" value="true" defaultSelected={Boolean(settings.calendar)}>
+        <Checkbox.Content>
+          <Checkbox.Control>
+            <Checkbox.Indicator />
+          </Checkbox.Control>
+          {t("support.hours.enable")}
+        </Checkbox.Content>
+      </Checkbox>
       <TextField name="timeZone">
         <Label>{t("support.hours.timeZone")}</Label>
         <Input

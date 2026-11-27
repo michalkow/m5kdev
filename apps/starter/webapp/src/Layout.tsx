@@ -1,4 +1,7 @@
 // biome-ignore-all assist/source/organizeImports: feature-gated lucide icons stay in marker blocks
+// m5k:support:start
+import { SupportWidget } from "@m5kdev/web-ui/modules/support/components/SupportWidget";
+// m5k:support:end
 import { useSession } from "@m5kdev/frontend/modules/auth/hooks/useSession";
 import { AppShell } from "@m5kdev/web-ui/modules/app/components/AppShell";
 import { AppSidebarContent } from "@m5kdev/web-ui/modules/app/components/AppSidebarContent";
@@ -45,88 +48,93 @@ export function Layout() {
   };
 
   return (
-    <AppShell
-      header={<AuthUtilityImpersonationBanner />}
-      sidebar={{
-        header: (
-          <AppSidebarHeader
-            logo={{ src: experience?.brand.logo ?? "/logo.svg", alt: appName }}
-            title={appName}
-          />
-        ),
-        content: (
-          <>
-            {/* m5k:notifications:start */}
-            <NotificationSidebarInbox enablePush={<StarterWebPush />} />
-            {/* m5k:notifications:end */}
-            <div className="px-2 group-data-[collapsible=icon]:hidden">
-              <AuthOrganizationSelect />
-            </div>
-            <AppSidebarContent
-              navigationItems={[
-                {
-                  label: t("layout.navigation.posts"),
-                  icon: <FileIcon />,
-                  link: "/",
-                },
-                // m5k:ai:start
-                {
-                  label: t("layout.navigation.conversation"),
-                  icon: <SparklesIcon />,
-                  link: "/conversation",
-                },
-                // m5k:ai:end
-                // m5k:files:start
-                {
-                  label: t("layout.navigation.files"),
-                  icon: <ImageIcon />,
-                  link: "/files",
-                },
-                // m5k:files:end
-                // m5k:workflows:start
-                {
-                  label: t("layout.navigation.workflows"),
-                  icon: <WorkflowIcon />,
-                  link: "/workflows",
-                },
-                // m5k:workflows:end
-                // m5k:notifications:start
-                {
-                  label: t("layout.navigation.notifications"),
-                  icon: <BellIcon />,
-                  link: "/notifications",
-                },
-                // m5k:notifications:end
-                {
-                  label: t("layout.navigation.members"),
-                  icon: <UsersIcon />,
-                  link: "/organization/members",
-                },
-                {
-                  label: t("layout.navigation.help"),
-                  icon: <CircleHelpIcon />,
-                  link:
-                    experience?.brand.helpUrl ??
-                    getDocumentationUrl({
-                      url: import.meta.env.VITE_DOCS_URL,
-                      serverUrl,
-                      development: import.meta.env.DEV,
-                      locale: i18n.language,
-                    }),
-                },
-              ]}
-              navigationState={navigationState}
-              onNavigationStateChange={setNavigationState}
+    <>
+      <AppShell
+        header={<AuthUtilityImpersonationBanner />}
+        sidebar={{
+          header: (
+            <AppSidebarHeader
+              logo={{ src: experience?.brand.logo ?? "/logo.svg", alt: appName }}
+              title={appName}
             />
-          </>
-        ),
-        footer: (
-          // data-testid so e2e (and app tests) can assert on the signed-in user
-          <div data-testid="session-email" className="contents">
-            <AppSidebarUser user={session?.user} onSignOut={onSignOut} />
-          </div>
-        ),
-      }}
-    />
+          ),
+          content: (
+            <>
+              {/* m5k:notifications:start */}
+              <NotificationSidebarInbox enablePush={<StarterWebPush />} />
+              {/* m5k:notifications:end */}
+              <div className="px-2 group-data-[collapsible=icon]:hidden">
+                <AuthOrganizationSelect />
+              </div>
+              <AppSidebarContent
+                navigationItems={[
+                  {
+                    label: t("layout.navigation.posts"),
+                    icon: <FileIcon />,
+                    link: "/",
+                  },
+                  // m5k:ai:start
+                  {
+                    label: t("layout.navigation.conversation"),
+                    icon: <SparklesIcon />,
+                    link: "/conversation",
+                  },
+                  // m5k:ai:end
+                  // m5k:files:start
+                  {
+                    label: t("layout.navigation.files"),
+                    icon: <ImageIcon />,
+                    link: "/files",
+                  },
+                  // m5k:files:end
+                  // m5k:workflows:start
+                  {
+                    label: t("layout.navigation.workflows"),
+                    icon: <WorkflowIcon />,
+                    link: "/workflows",
+                  },
+                  // m5k:workflows:end
+                  // m5k:notifications:start
+                  {
+                    label: t("layout.navigation.notifications"),
+                    icon: <BellIcon />,
+                    link: "/notifications",
+                  },
+                  // m5k:notifications:end
+                  {
+                    label: t("layout.navigation.members"),
+                    icon: <UsersIcon />,
+                    link: "/organization/members",
+                  },
+                  {
+                    label: t("layout.navigation.help"),
+                    icon: <CircleHelpIcon />,
+                    link:
+                      experience?.brand.helpUrl ??
+                      getDocumentationUrl({
+                        url: import.meta.env.VITE_DOCS_URL,
+                        serverUrl,
+                        development: import.meta.env.DEV,
+                        locale: i18n.language,
+                      }),
+                  },
+                ]}
+                navigationState={navigationState}
+                onNavigationStateChange={setNavigationState}
+              />
+            </>
+          ),
+          footer: (
+            // data-testid so e2e (and app tests) can assert on the signed-in user
+            <div data-testid="session-email" className="contents">
+              <AppSidebarUser user={session?.user} onSignOut={onSignOut} />
+            </div>
+          ),
+        }}
+      />
+      {/* m5k:support:start */}
+      <SupportWidget />
+      {/* m5k:support:end */}
+    </>
   );
 }

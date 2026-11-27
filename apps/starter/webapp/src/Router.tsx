@@ -1,4 +1,7 @@
 // biome-ignore-all assist/source/organizeImports: feature-gated route imports stay in marker blocks
+// m5k:support:start
+import { SupportAdminRouter } from "@m5kdev/web-ui/modules/support/components/SupportAdminRouter";
+// m5k:support:end
 import { syncI18nLocale } from "@m5kdev/frontend/modules/app/utils/locale";
 import { AuthAdminRouter } from "@m5kdev/web-ui/modules/auth/components/AuthAdminRouter";
 import { AuthOrganizationRouter } from "@m5kdev/web-ui/modules/auth/components/AuthOrganizationRouter";
@@ -61,6 +64,9 @@ function AuthHeader() {
 }
 
 export function Router() {
+  // m5k:support:start
+  const { t } = useTranslation("web-ui");
+  // m5k:support:end
   const isWaitlist = import.meta.env.VITE_ENABLE_WAITLIST === "true";
 
   return (
@@ -111,6 +117,10 @@ export function Router() {
         })}
         {AuthAdminRouter({
           enableWaitlist: true,
+          // m5k:support:start
+          extraLinks: [{ to: "/admin/support", label: t("support.desk") }],
+          extraRoutes: SupportAdminRouter(),
+          // m5k:support:end
           enableAccountClaimActions: true,
         })}
       </Route>

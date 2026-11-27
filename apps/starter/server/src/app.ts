@@ -1,4 +1,14 @@
 // biome-ignore-all assist/source/organizeImports: feature-gated module imports stay in marker blocks
+// m5k:support:start
+import { SupportModule } from "@m5kdev/backend/modules/support/support.module";
+import {
+  getDocumentationUrl,
+  DOCUMENTATION_HOST as SUPPORT_DOCUMENTATION_HOST,
+} from "../../documentation";
+// m5k:support:end
+// m5k:tags:start
+import { TagModule } from "@m5kdev/backend/modules/tag/tag.module";
+// m5k:tags:end
 import { createBackendApp } from "@m5kdev/backend/app";
 // m5k:ai:start
 import { defineBackendModule } from "@m5kdev/backend/app";
@@ -71,6 +81,9 @@ const connection = { connectionString: databaseUrl };
 
 export const builtBackendApp = createBackendApp(
   {
+    // m5k:support:start
+    json: (defaults) => ({ ...defaults, limit: "5mb" }),
+    // m5k:support:end
     db: connection,
     schema,
     onShutdown: async () => {
@@ -178,6 +191,45 @@ export const builtBackendApp = createBackendApp(
     // m5k:notifications:start
     new NotificationModule({ kinds: NOTIFICATION_KINDS }),
     // m5k:notifications:end
+    // m5k:tags:start
+    new TagModule(),
+    // m5k:tags:end
+    // m5k:support:start
+    new SupportModule({
+      documentation: {
+        applicationVersion: "0.0.0",
+        allowedOrigins: [
+          new URL(getDocumentationUrl({ url: process.env.VITE_DOCS_URL, serverUrl })).origin,
+        ],
+        manifestPath:
+          process.env.SUPPORT_DOCUMENTATION_MANIFEST ??
+          (!isDeployedEnvironment()
+            ? "../docs/build/support-manifest.json"
+            : ["server"].includes(SUPPORT_DOCUMENTATION_HOST)
+              ? "./documentation/support-manifest.json"
+              : undefined),
+      },
+      models:
+        process.env.SUPPORT_ASSISTANT_MODEL || process.env.SUPPORT_TRANSLATION_MODEL
+          ? {
+              assistant: process.env.SUPPORT_ASSISTANT_MODEL
+                ? { model: process.env.SUPPORT_ASSISTANT_MODEL }
+                : undefined,
+              translation: process.env.SUPPORT_TRANSLATION_MODEL
+                ? {
+                    model: process.env.SUPPORT_TRANSLATION_MODEL,
+                    languages: (process.env.SUPPORT_TRANSLATION_LANGUAGES ?? "en,en-GB,pl")
+                      .split(",")
+                      .map((locale) => locale.trim()),
+                  }
+                : undefined,
+            }
+          : undefined,
+      retentionDays: process.env.SUPPORT_RETENTION_DAYS
+        ? Number(process.env.SUPPORT_RETENTION_DAYS)
+        : undefined,
+    }),
+    // m5k:support:end
     new PostsModule(),
     new EmailPreviewModule({ allowDelete: !isDeployedEnvironment() }),
     // m5k:test-harness:start

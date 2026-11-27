@@ -14,8 +14,8 @@ type Event = Pick<
   "sequence" | "type" | "occurredAt" | "data"
 >;
 export function supportDistribution(values: readonly number[]) {
-  const sorted = [...values].sort((a, b) => a - b),
-    n = sorted.length;
+  const sorted = [...values].sort((a, b) => a - b);
+  const n = sorted.length;
   return {
     medianMs: n ? (n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2) : null,
     p95Ms: n ? sorted[Math.ceil(n * 0.95) - 1] : null,

@@ -363,6 +363,15 @@ export function createSupportRouter(service: SupportService, auth: AuthMiddlewar
     (req) => req.query,
     (input, ctx) => service.overview(input, ctx)
   );
+  register(
+    "get",
+    "/unread",
+    "getUnreadCount",
+    z.object({}),
+    supportSchemas.output.unread,
+    () => ({}),
+    (input, ctx) => service.getUnreadCount(input, ctx)
+  );
   router.get("/openapi.json", (_req, res) =>
     res.json({
       openapi: "3.1.0",

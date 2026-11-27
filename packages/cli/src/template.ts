@@ -16,6 +16,11 @@ export function withImpliedFeatures(enabled: ReadonlySet<string>): Set<string> {
   const next = new Set(enabled);
   if (![...next].some((feature) => feature.startsWith("docs-"))) next.add("docs-standalone");
   if (next.has("webapp") || next.has("expo")) next.add(PRODUCT_STACK_FEATURE);
+  if (next.has("support")) {
+    if (!next.has(PRODUCT_STACK_FEATURE)) throw new Error("Support requires the product backend");
+    for (const dependency of ["files", "tags", "workflows"]) next.add(dependency);
+    next.delete("no-support");
+  } else next.add("no-support");
   return next;
 }
 

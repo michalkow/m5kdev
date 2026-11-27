@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { boolean, index, integer, jsonb, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { v4 as uuidv4 } from "uuid";
 import { appDatabaseSchema } from "../../base/database.schema";
@@ -33,6 +34,7 @@ export const supportCases = appDatabaseSchema.table(
     cycle: integer("cycle").notNull().default(1),
     snoozedUntil: instant("snoozed_until"),
     resolvedAt: instant("resolved_at"),
+    purgingAt: instant("purging_at"),
     origin: text("origin").$type<"user" | "admin">().notNull(),
     clientId: text("client_id").notNull(),
     requestHash: text("request_hash").notNull(),
@@ -48,6 +50,11 @@ export const supportCases = appDatabaseSchema.table(
   (table) => [
     uniqueIndex("support_cases_request").on(table.initiatorUserId, table.clientId),
     index("support_cases_requester").on(table.userId, table.updatedAt),
+    index("support_cases_cohort").on(table.createdAt),
+    index("support_cases_snooze").on(table.status, table.snoozedUntil),
+    index("support_cases_retention").on(table.status, table.resolvedAt),
+    index("support_cases_purging").on(table.purgingAt).where(sql`${table.purgingAt} is not null`),
+    index("support_cases_queue").on(table.status, table.waitingOn, table.assignedUserId),
   ]
 );
 export const supportMessages = appDatabaseSchema.table(
@@ -93,6 +100,8 @@ export const supportMessages = appDatabaseSchema.table(
   (table) => [
     uniqueIndex("support_messages_sequence").on(table.caseId, table.sequence),
     uniqueIndex("support_messages_request").on(table.caseId, table.authorUserId, table.clientId),
+    index("support_messages_author").on(table.authorUserId),
+    index("support_messages_publication").on(table.caseId, table.publishedAt),
   ]
 );
 export const supportEvents = appDatabaseSchema.table(
@@ -155,7 +164,11 @@ export const supportAttachments = appDatabaseSchema.table(
     revokedAt: instant("revoked_at"),
     purgedAt: instant("purged_at"),
   },
-  (t) => [uniqueIndex("support_attachments_file").on(t.fileId)]
+  (t) => [
+    uniqueIndex("support_attachments_file").on(t.fileId),
+    index("support_attachments_case").on(t.caseId),
+    index("support_attachments_owner").on(t.userId),
+  ]
 );
 
 export const supportSettings = appDatabaseSchema.table("support_settings", {
@@ -189,6 +202,8 @@ export const supportWork = appDatabaseSchema.table(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    ownerEpoch: integer("owner_epoch").notNull().default(0),
+    authorEpoch: integer("author_epoch"),
     purpose: text("purpose").$type<"outbound" | "view" | "detect" | "answer">().notNull(),
     locale: text("locale").notNull(),
     sourceHash: text("source_hash").notNull(),
@@ -210,24 +225,35 @@ export const supportWork = appDatabaseSchema.table(
       .notNull()
       .$default(() => new Date()),
   },
-  (t) => [index("support_work_pending").on(t.state, t.nextAt)]
+  (t) => [
+    index("support_work_pending").on(t.state, t.nextAt),
+    index("support_work_case").on(t.caseId),
+  ]
 );
-export const supportUsage = appDatabaseSchema.table("support_usage", {
-  id: text("id").primaryKey().$default(uuidv4),
-  workId: text("work_id")
-    .notNull()
-    .references(() => supportWork.id, { onDelete: "cascade" }),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  kind: text("kind").$type<"translation" | "ai">().notNull(),
-  provider: text("provider").notNull(),
-  inputCharacters: integer("input_characters").notNull(),
-  outputCharacters: integer("output_characters").notNull().default(0),
-  createdAt: instant("created_at")
-    .notNull()
-    .$default(() => new Date()),
-});
+export const supportUsage = appDatabaseSchema.table(
+  "support_usage",
+  {
+    id: text("id").primaryKey().$default(uuidv4),
+    workId: text("work_id")
+      .notNull()
+      .references(() => supportWork.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<"translation" | "ai">().notNull(),
+    provider: text("provider").notNull(),
+    inputCharacters: integer("input_characters").notNull(),
+    outputCharacters: integer("output_characters").notNull().default(0),
+    createdAt: instant("created_at")
+      .notNull()
+      .$default(() => new Date()),
+  },
+  (t) => [
+    index("support_usage_window").on(t.kind, t.createdAt),
+    index("support_usage_user_window").on(t.kind, t.userId, t.createdAt),
+    index("support_usage_work").on(t.workId),
+  ]
+);
 
 export const supportCorpora = appDatabaseSchema.table(
   "support_corpora",
@@ -268,7 +294,17 @@ export const supportDocuments = appDatabaseSchema.table(
     text: text("text").notNull(),
     sha256: text("sha256").notNull(),
   },
-  (t) => [index("support_documents_context").on(t.corpusId, t.experience, t.locale)]
+  (t) => [
+    index("support_documents_context").on(t.corpusId, t.experience, t.locale),
+    index("support_documents_search_simple").using(
+      "gin",
+      sql`to_tsvector('simple', ${t.title} || ' ' || ${t.text})`
+    ),
+    index("support_documents_search_english").using(
+      "gin",
+      sql`to_tsvector('english', ${t.title} || ' ' || ${t.text})`
+    ),
+  ]
 );
 
 export const supportFeedback = appDatabaseSchema.table(

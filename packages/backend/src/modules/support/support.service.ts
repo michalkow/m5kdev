@@ -16,6 +16,7 @@ import { BasePermissionService } from "../../base/base.service";
 import type { AuthService } from "../auth/auth.service";
 import type { FileService } from "../file/file.service";
 import { supportOpenNow } from "./support.calendar";
+import { supportConfigSchema } from "./support.config";
 import { supportSchemas } from "./support.dto";
 import { defaultSupportGrants } from "./support.grants";
 import { supportCaseMetrics, supportDistribution } from "./support.metrics";
@@ -43,6 +44,11 @@ const hash = (data: unknown) =>
     .update(JSON.stringify(canonical(data)))
     .digest("hex");
 
+const workSourceHash = (purpose: string, message: SupportMessageRow) =>
+  purpose === "view" || purpose === "outbound"
+    ? hash({ body: message.body, locale: message.authoredLocale })
+    : hash(message.body);
+
 export class SupportService extends BasePermissionService<
   { support: SupportRepository },
   { auth?: AuthService; file?: FileService }
@@ -54,6 +60,7 @@ export class SupportService extends BasePermissionService<
     private readonly config: SupportConfig = {}
   ) {
     super(repositories, services, grants);
+    supportConfigSchema.parse(config);
   }
 
   private async checkIdentity(actor: AuthenticatedActor): ServerResultAsync<void> {
@@ -130,7 +137,7 @@ export class SupportService extends BasePermissionService<
             userId,
             initiatorUserId: ctx.actor.userId,
             subject: input.subject,
-            uiLocale: input.uiLocale ?? this.locales[0],
+            uiLocale: (input.uiLocale ?? this.locales[0]).replaceAll("_", "-"),
             experienceId:
               typeof ctx.experience === "object" && ctx.experience && "id" in ctx.experience
                 ? String(ctx.experience.id)
@@ -201,7 +208,7 @@ export class SupportService extends BasePermissionService<
               userId,
               purpose: "view",
               locale: settings.value.fallbackLocale,
-              sourceHash: hash(first.body),
+              sourceHash: workSourceHash("view", first),
               epoch: created.handlingEpoch,
             },
             tx
@@ -272,16 +279,28 @@ export class SupportService extends BasePermissionService<
 
   readonly listCases = this.procedure("listCases")
     .input(supportListSchema, true)
-    .output(supportSchemas.output.case.array())
+    .output(supportSchemas.output.list)
     .requireAuth("user")
     .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
     .handle(async ({ input, ctx }) => {
+      let after: { updatedAt: Date; id: string } | undefined;
+      if (input.cursor) {
+        try {
+          after = z
+            .object({ updatedAt: z.coerce.date(), id: z.string().min(1) })
+            .parse(JSON.parse(Buffer.from(input.cursor, "base64url").toString("utf8")));
+        } catch {
+          return this.error("BAD_REQUEST", "Invalid Case-list cursor");
+        }
+      }
       const result = await this.repository.support.list(
         ctx.actor.userRole === "admin" ? null : ctx.actor.userId,
-        input
+        input,
+        after
       );
       if (result.isErr()) return err(result.error);
-      const rows = this.filterPermission(ctx.actor, "read", result.value);
+      const page = result.value.slice(0, input.limit);
+      const rows = this.filterPermission(ctx.actor, "read", page);
       const unread = await this.repository.support.unreadCounts(
         rows.map((row) => row.id),
         ctx.actor.userId,
@@ -289,11 +308,18 @@ export class SupportService extends BasePermissionService<
       );
       if (unread.isErr()) return err(unread.error);
       const counts = new Map(unread.value.map((row) => [row.caseId, row.total]));
-      return ok(
-        rows.map((row) =>
+      const last = page.at(-1);
+      return ok({
+        items: rows.map((row) =>
           supportSchemas.output.case.parse({ ...row, unreadCount: counts.get(row.id) ?? 0 })
-        )
-      );
+        ),
+        cursor:
+          result.value.length > input.limit && last
+            ? Buffer.from(
+                JSON.stringify({ updatedAt: last.updatedAt.toISOString(), id: last.id })
+              ).toString("base64url")
+            : null,
+      });
     });
 
   readonly sendMessage = this.procedure("sendMessage")
@@ -313,6 +339,9 @@ export class SupportService extends BasePermissionService<
       const result = await this.repository.support.transaction(async (tx) => {
         const current = await this.repository.support.lockCase(input.id, tx);
         if (!current) throw this.error("NOT_FOUND", "Support Case not found").error;
+        const recipient = await this.repository.support.lockUser(current.userId, tx);
+        if (input.visibility === "public" && (!recipient || recipient.closedAt || recipient.banned))
+          throw this.error("FORBIDDEN", "Support recipient is unavailable").error;
         const requestHash = hash({
           body: input.body,
           visibility: input.visibility,
@@ -358,7 +387,7 @@ export class SupportService extends BasePermissionService<
         const now = new Date();
         const authorKind = ctx.actor.userRole === "admin" ? "admin" : "user";
         const sourceLocale =
-          input.locale ??
+          input.locale?.replaceAll("_", "-") ??
           (authorKind === "admin"
             ? (working.value ?? settings.value.fallbackLocale)
             : (current.supportLocale ?? current.detectedLocale ?? current.uiLocale));
@@ -445,7 +474,7 @@ export class SupportService extends BasePermissionService<
               userId: current.userId,
               purpose: "outbound",
               locale: targetLocale,
-              sourceHash: hash(message.body),
+              sourceHash: workSourceHash("outbound", message),
               epoch,
             },
             tx
@@ -479,7 +508,7 @@ export class SupportService extends BasePermissionService<
               userId: current.userId,
               purpose: "view",
               locale: settings.value.fallbackLocale,
-              sourceHash: hash(message.body),
+              sourceHash: workSourceHash("view", message),
               epoch,
             },
             tx
@@ -546,8 +575,10 @@ export class SupportService extends BasePermissionService<
       if (messages.isErr()) return err(messages.error);
       const through =
         result.value.length > input.limit ? page[page.length - 1].sequence : state.case.version;
+      const unread = await this.repository.support.unread(input.id, ctx.actor.userId, admin);
+      if (unread.isErr()) return err(unread.error);
       return ok({
-        case: supportSchemas.output.case.parse(state.case),
+        case: supportSchemas.output.case.parse({ ...state.case, unreadCount: unread.value }),
         cursor: Buffer.from(JSON.stringify({ id: input.id, sequence: through })).toString(
           "base64url"
         ),
@@ -640,7 +671,10 @@ export class SupportService extends BasePermissionService<
               current.status === "resolved" && status === "open"
                 ? current.cycle + 1
                 : current.cycle,
-            handlingEpoch: patch.handling ? current.handlingEpoch + 1 : current.handlingEpoch,
+            handlingEpoch:
+              patch.handling || status !== current.status
+                ? current.handlingEpoch + 1
+                : current.handlingEpoch,
           },
           "case.updated",
           { userId: ctx.actor.userId, kind: admin ? "admin" : "user" },
@@ -652,7 +686,7 @@ export class SupportService extends BasePermissionService<
           },
           tx
         );
-        if (patch.handling === "ai") {
+        if (patch.handling === "ai" && updated.waitingOn === "support") {
           const latest = await this.repository.support.latestUserMessage(input.id, tx);
           if (latest)
             await this.repository.support.queueWork(
@@ -679,6 +713,7 @@ export class SupportService extends BasePermissionService<
     .output(supportSchemas.output.catalog)
     .requireAuth("user")
     .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .access({ action: "read", entities: () => ({}) })
     .handle(({ ctx }) =>
       ctx.actor.userRole === "admin"
         ? this.repository.support.catalog()
@@ -692,6 +727,7 @@ export class SupportService extends BasePermissionService<
     .output(supportSchemas.output.catalog)
     .requireAuth("user")
     .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .access({ action: "write", entities: () => ({}) })
     .handle(async ({ input, ctx }) => {
       if (ctx.actor.userRole !== "admin")
         return this.error("FORBIDDEN", "Support catalog requires platform administration");
@@ -784,12 +820,18 @@ export class SupportService extends BasePermissionService<
         userId: ctx.actor.userId,
       });
       if (upload.isErr()) return err(upload.error);
-      const reserved = await this.repository.support.reserveAttachment({
-        caseId: input.id,
-        fileId: upload.value.fileId,
-        userId: ctx.actor.userId,
+      const reserved = await this.repository.support.transaction(async (tx) => {
+        const current = await this.repository.support.lockCase(input.id, tx);
+        if (!current) throw this.error("NOT_FOUND", "Support Case not found").error;
+        return this.repository.support.reserveAttachmentTx(
+          { caseId: input.id, fileId: upload.value.fileId, userId: ctx.actor.userId },
+          tx
+        );
       });
-      if (reserved.isErr()) return err(reserved.error);
+      if (reserved.isErr()) {
+        await this.service.file.purgeSharedFile(upload.value.fileId);
+        return err(reserved.error);
+      }
       return ok({ fileId: upload.value.fileId, url: upload.value.url });
     });
   readonly downloadAttachment = this.procedure("downloadAttachment")
@@ -845,20 +887,34 @@ export class SupportService extends BasePermissionService<
       if (result.isErr()) return err(result.error);
       const cleanup = await this.cleanupRevokedFiles();
       await this.notify(input.id, state.case.userId, ctx.actor.userId);
-      return ok({ id: input.messageId, cleanupPending: cleanup.isErr() });
+      return ok({
+        id: input.messageId,
+        cleanupPending: cleanup.isErr() || cleanup.value.pending > 0,
+      });
     });
-  async cleanupRevokedFiles(): ServerResultAsync<void> {
+  async cleanupRevokedFiles(): ServerResultAsync<{ pending: number }> {
+    const expired = await this.repository.support.expireUnusedAttachments(
+      new Date(Date.now() - 86400000)
+    );
+    if (expired.isErr()) return err(expired.error);
     const pending = await this.repository.support.pendingFileCleanup();
     if (pending.isErr()) return err(pending.error);
+    let deferred = 0;
     for (const attachment of pending.value) {
       if (!this.service.file)
         return this.error("INTERNAL_SERVER_ERROR", "Support File integration is unavailable");
       const purged = await this.service.file.purgeSharedFile(attachment.fileId);
-      if (purged.isErr()) return err(purged.error);
+      if (purged.isErr()) {
+        if (purged.error.code === "CONFLICT") {
+          deferred++;
+          continue;
+        }
+        return err(purged.error);
+      }
       const marked = await this.repository.support.fileCleaned(attachment.id);
       if (marked.isErr()) return err(marked.error);
     }
-    return ok(undefined);
+    return ok({ pending: deferred });
   }
   private get locales(): readonly string[] {
     return this.config.locales?.length ? this.config.locales : ["en"];
@@ -880,7 +936,9 @@ export class SupportService extends BasePermissionService<
   private supportsLanguage(locale: string): boolean {
     return Boolean(
       this.config.translation?.languages.some(
-        (value) => value === locale || value === locale.split("-")[0]
+        (value) =>
+          value.replaceAll("_", "-") === locale.replaceAll("_", "-") ||
+          value === locale.replaceAll("_", "-").split("-")[0]
       )
     );
   }
@@ -889,6 +947,7 @@ export class SupportService extends BasePermissionService<
     .output(supportSchemas.output.settings)
     .requireAuth("user")
     .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .access({ action: "read", entities: () => ({}) })
     .handle(async ({ ctx }) => {
       if (ctx.actor.userRole !== "admin")
         return this.error("FORBIDDEN", "Support settings require platform administration");
@@ -907,6 +966,7 @@ export class SupportService extends BasePermissionService<
     .output(supportSchemas.output.settings)
     .requireAuth("user")
     .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .access({ action: "write", entities: () => ({}) })
     .handle(async ({ input, ctx }) => {
       if (ctx.actor.userRole !== "admin")
         return this.error("FORBIDDEN", "Support settings require platform administration");
@@ -965,6 +1025,7 @@ export class SupportService extends BasePermissionService<
     .output(supportSchemas.output.locale)
     .requireAuth("user")
     .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .access({ action: "write", entities: () => ({}) })
     .handle(async ({ input, ctx }) => {
       if (ctx.actor.userRole !== "admin")
         return this.error("FORBIDDEN", "Working locale requires platform administration");
@@ -994,15 +1055,38 @@ export class SupportService extends BasePermissionService<
       const result = await this.repository.support.transaction(async (tx) => {
         const current = await this.repository.support.lockCase(input.id, tx);
         if (!current) throw this.error("NOT_FOUND", "Support Case not found").error;
-        return this.repository.support.record(
+        const locale = input.locale?.replaceAll("_", "-") ?? null;
+        if (current.supportLocale === locale) return current;
+        const updated = await this.repository.support.record(
           current,
-          { supportLocale: input.locale, handlingEpoch: current.handlingEpoch + 1 },
+          {
+            supportLocale: locale,
+            handlingEpoch: current.handlingEpoch + 1,
+          },
           "language.changed",
           { userId: ctx.actor.userId, kind: ctx.actor.userRole === "admin" ? "admin" : "user" },
           { locale: input.locale },
           tx
         );
+        if (updated.handling === "ai" && updated.waitingOn === "support") {
+          const latest = await this.repository.support.latestUserMessage(current.id, tx);
+          if (latest)
+            await this.repository.support.queueWork(
+              {
+                caseId: current.id,
+                messageId: latest.id,
+                userId: current.userId,
+                purpose: "answer",
+                locale: locale ?? current.detectedLocale ?? current.uiLocale,
+                sourceHash: hash(latest.body),
+                epoch: updated.handlingEpoch,
+              },
+              tx
+            );
+        }
+        return updated;
       });
+      if (result.isOk()) await this.notify(input.id, result.value.userId, ctx.actor.userId);
       return result.map((row) => supportSchemas.output.case.parse(row));
     });
   readonly requestTranslation = this.procedure("requestTranslation")
@@ -1036,7 +1120,7 @@ export class SupportService extends BasePermissionService<
             userId: current.userId,
             purpose: "view",
             locale: input.locale,
-            sourceHash: hash(message.body),
+            sourceHash: workSourceHash("view", message),
             epoch: current.handlingEpoch,
           },
           tx
@@ -1053,7 +1137,7 @@ export class SupportService extends BasePermissionService<
   ) {
     if (message.redactedAt || message.publishedAt)
       throw this.error("CONFLICT", "Message is no longer awaiting publication").error;
-    await this.repository.support.updateMessage(
+    const published = await this.repository.support.updateMessage(
       message.id,
       {
         publishedBody: text,
@@ -1070,6 +1154,7 @@ export class SupportService extends BasePermissionService<
       { messageSequence: message.sequence, visibility: "public", cycle: current.cycle },
       tx
     );
+    return published;
   }
   readonly controlMessage = this.procedure("controlMessage")
     .input(supportSchemas.input.controlMessage, true)
@@ -1113,7 +1198,7 @@ export class SupportService extends BasePermissionService<
               userId: current.userId,
               purpose: "outbound",
               locale: current.supportLocale ?? current.detectedLocale ?? current.uiLocale,
-              sourceHash: hash(message.body),
+              sourceHash: workSourceHash("outbound", message),
               epoch: current.handlingEpoch,
             },
             tx
@@ -1126,14 +1211,13 @@ export class SupportService extends BasePermissionService<
         }
         const body = input.action === "send-original" ? message.body : message.publishedBody;
         if (!body) throw this.error("BAD_REQUEST", "Translation preview is not ready").error;
-        await this.publishHeld(
+        return this.publishHeld(
           current,
           message,
           body,
           { userId: ctx.actor.userId, kind: "admin" },
           tx
         );
-        return (await this.repository.support.message(message.id, tx))!;
       });
       if (result.isOk()) await this.notify(input.id, state.case.userId, ctx.actor.userId);
       return result.map((row) => supportSchemas.output.message.parse(row));
@@ -1168,12 +1252,21 @@ export class SupportService extends BasePermissionService<
         const message = work.messageId
           ? await this.repository.support.message(work.messageId, tx)
           : null;
+        const recipient = await this.repository.support.lockUser(work.userId, tx);
+        const author = message?.authorUserId
+          ? await this.repository.support.lockUser(message.authorUserId, tx)
+          : null;
         if (
+          !recipient ||
+          recipient.closedAt ||
+          recipient.banned ||
+          recipient.lifecycleVersion !== work.ownerEpoch ||
+          (author && author.lifecycleVersion !== work.authorEpoch) ||
           !current ||
           !message ||
           message.redactedAt ||
-          hash(message.body) !== work.sourceHash ||
-          work.epoch !== current.handlingEpoch
+          workSourceHash(work.purpose, message) !== work.sourceHash ||
+          (work.purpose === "outbound" && work.epoch !== current.handlingEpoch)
         ) {
           await this.repository.support.updateWork(
             work.id,
@@ -1294,11 +1387,13 @@ export class SupportService extends BasePermissionService<
           current &&
           source &&
           !source.redactedAt &&
-          hash(source.body) === work.sourceHash &&
-          current.handlingEpoch === work.epoch &&
+          workSourceHash(work.purpose, source) === work.sourceHash &&
+          (work.purpose !== "outbound" || current.handlingEpoch === work.epoch) &&
           recipient &&
           !recipient.closedAt &&
           !recipient.banned &&
+          recipient.lifecycleVersion === work.ownerEpoch &&
+          (!author || author.lifecycleVersion === work.authorEpoch) &&
           (work.purpose !== "outbound" ||
             (author?.role === "admin" && !author.closedAt && !author.banned));
         if (!allowed) {
@@ -1338,15 +1433,56 @@ export class SupportService extends BasePermissionService<
           return;
         }
         if (work.purpose === "detect" && value.locale && this.supportsLanguage(value.locale)) {
-          if (current.lastSequence === source.sequence)
-            await this.repository.support.record(
+          const detected = await this.repository.support.updateMessage(
+            source.id,
+            { authoredLocale: value.locale },
+            tx
+          );
+          const lastUser = await this.repository.support.latestUserMessage(current.id, tx);
+          if (lastUser?.id === source.id) {
+            const locale = current.supportLocale ?? value.locale;
+            const changed =
+              locale !== (current.supportLocale ?? current.detectedLocale ?? current.uiLocale);
+            const updated = await this.repository.support.record(
               current,
-              { detectedLocale: value.locale },
+              {
+                detectedLocale: value.locale,
+                handlingEpoch:
+                  current.handlingEpoch +
+                  (changed && current.handling === "ai" && current.waitingOn === "support" ? 1 : 0),
+              },
               "language.detected",
               { kind: "system" },
               { locale: value.locale },
               tx
             );
+            if (!freshSettings.value.config.nativeLocales.includes(value.locale))
+              await this.repository.support.queueWork(
+                {
+                  caseId: current.id,
+                  messageId: source.id,
+                  userId: current.userId,
+                  purpose: "view",
+                  locale: freshSettings.value.config.fallbackLocale,
+                  sourceHash: workSourceHash("view", detected),
+                  epoch: updated.handlingEpoch,
+                },
+                tx
+              );
+            if (changed && current.handling === "ai" && current.waitingOn === "support")
+              await this.repository.support.queueWork(
+                {
+                  caseId: current.id,
+                  messageId: source.id,
+                  userId: current.userId,
+                  purpose: "answer",
+                  locale,
+                  sourceHash: hash(source.body),
+                  epoch: updated.handlingEpoch,
+                },
+                tx
+              );
+          }
         } else if (value.text) {
           const rendition = {
             locale: work.locale,
@@ -1420,6 +1556,7 @@ export class SupportService extends BasePermissionService<
     .output(supportSchemas.output.documentation)
     .requireAuth("user")
     .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .access({ action: "read", entities: () => ({}) })
     .handle(({ ctx }) =>
       ctx.actor.userRole === "admin"
         ? this.repository.support.corpusList()
@@ -1432,6 +1569,7 @@ export class SupportService extends BasePermissionService<
     .output(supportSchemas.output.documentation)
     .requireAuth("user")
     .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .access({ action: "publish", entities: () => ({}) })
     .handle(async ({ input, ctx }) => {
       if (ctx.actor.userRole !== "admin")
         return this.error("FORBIDDEN", "Documentation management requires platform administration");
@@ -1461,6 +1599,7 @@ export class SupportService extends BasePermissionService<
     .output(supportSchemas.output.documentation)
     .requireAuth("user")
     .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .access({ action: "delete", entities: () => ({}) })
     .handle(async ({ input, ctx }) => {
       if (ctx.actor.userRole !== "admin")
         return this.error("FORBIDDEN", "Documentation management requires platform administration");
@@ -1472,13 +1611,14 @@ export class SupportService extends BasePermissionService<
       return this.repository.support.corpusList();
     });
   async processDocumentation(): ServerResultAsync<number> {
-    if (this.config.documentation?.manifestPath) {
+    const sourceConfig = this.config.documentation;
+    if (sourceConfig?.manifestPath) {
       let manifest: z.infer<typeof supportManifestSchema> | null = null;
       try {
-        const size = await stat(this.config.documentation.manifestPath);
+        const size = await stat(sourceConfig.manifestPath);
         if (size.size > 5 * 1024 * 1024) throw new Error("manifest-too-large");
         manifest = supportManifestSchema.parse(
-          JSON.parse(await readFile(this.config.documentation.manifestPath, "utf8"))
+          JSON.parse(await readFile(sourceConfig.manifestPath, "utf8"))
         );
       } catch {
         /* A failed refresh retains the previous authorized corpus. */
@@ -1489,14 +1629,14 @@ export class SupportService extends BasePermissionService<
         failed = staged.isErr();
       }
       if (failed) {
-        const version = `source-error-${createHash("sha256").update(this.config.documentation.manifestPath).digest("hex").slice(0, 32)}`;
+        const version = `source-error-${createHash("sha256").update(sourceConfig.manifestPath).digest("hex").slice(0, 32)}`;
         const recorded = await this.repository.support.transaction(async (tx) => {
           await this.repository.support.lockRequest("support:documentation", tx);
           const row = await this.repository.support.stageCorpus(
             {
               schemaVersion: 1,
               version,
-              applicationVersion: this.config.documentation!.applicationVersion,
+              applicationVersion: sourceConfig.applicationVersion,
               generatedAt: new Date().toISOString(),
               entries: [],
             },
@@ -1595,9 +1735,9 @@ export class SupportService extends BasePermissionService<
   private async processAnswer(candidate: SupportWorkRow): ServerResultAsync<boolean> {
     const settings = await this.readSettings();
     if (settings.isErr()) return err(settings.error);
-    const provider = this.config.assistant,
-      docs = this.config.documentation,
-      budget = settings.value.ai.budget;
+    const provider = this.config.assistant;
+    const docs = this.config.documentation;
+    const budget = settings.value.ai.budget;
     const snapshot = await this.repository.support.findById(candidate.caseId);
     if (snapshot.isErr()) return err(snapshot.error);
     const currentCase = snapshot.value;
@@ -1652,7 +1792,7 @@ export class SupportService extends BasePermissionService<
         (work.state !== "queued" &&
           !(work.state === "running" && work.leaseUntil && work.leaseUntil <= new Date()))
       )
-        return null;
+        return { state: "idle" as const };
       const current = await this.repository.support.lockCase(work.caseId, tx);
       const latest = current
         ? await this.repository.support.latestUserMessage(current.id, tx)
@@ -1667,6 +1807,7 @@ export class SupportService extends BasePermissionService<
         hash(latest.body) !== work.sourceHash ||
         current.status !== "open" ||
         !recipient ||
+        recipient.lifecycleVersion !== work.ownerEpoch ||
         recipient.closedAt ||
         recipient.banned
       ) {
@@ -1675,8 +1816,10 @@ export class SupportService extends BasePermissionService<
           { state: "cancelled", error: "source-or-authorization-changed" },
           tx
         );
-        return null;
+        return { state: "idle" as const };
       }
+      if (await this.repository.support.hasPendingDetection(latest.id, tx))
+        return { state: "idle" as const };
       const active =
         corpus && docs
           ? await this.repository.support.corpusActive(
@@ -1701,11 +1844,11 @@ export class SupportService extends BasePermissionService<
           tx
         );
         await this.handoff(current, "no-authorized-evidence-or-capability", tx);
-        return null;
+        return { state: "changed" as const };
       }
-      const now = new Date(),
-        month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
-        day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      const now = new Date();
+      const month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
       const counts = await this.repository.support.automationCounts(
         "ai",
         work.userId,
@@ -1721,9 +1864,9 @@ export class SupportService extends BasePermissionService<
           tx
         );
         await this.handoff(current, "usage-limit", tx);
-        return null;
+        return { state: "changed" as const };
       }
-      if (counts.running >= budget.concurrency) return null;
+      if (counts.running >= budget.concurrency) return { state: "idle" as const };
       const usage = await this.repository.support.reserveUsage(
         {
           workId: work.id,
@@ -1743,11 +1886,12 @@ export class SupportService extends BasePermissionService<
         },
         tx
       );
-      return { work: updated, usageId: usage.id };
+      return { state: "run" as const, work: updated, usageId: usage.id };
     });
     if (claimed.isErr()) return err(claimed.error);
-    if (!claimed.value || !provider || !budget || !docs || !corpus) {
-      await this.notify(candidate.caseId, candidate.userId, "");
+    if (claimed.value.state !== "run" || !provider || !budget || !docs || !corpus) {
+      if (claimed.value.state === "changed")
+        await this.notify(candidate.caseId, candidate.userId, "");
       return ok(false);
     }
     const { work, usageId } = claimed.value;
@@ -1776,8 +1920,10 @@ export class SupportService extends BasePermissionService<
       const latestWork = await this.repository.support.lockWork(work.id, tx);
       if (!latestWork || latestWork.state !== "running" || latestWork.attempts !== work.attempts)
         return;
-      const current = await this.repository.support.lockCase(work.caseId, tx),
-        latest = current ? await this.repository.support.latestUserMessage(current.id, tx) : null;
+      const current = await this.repository.support.lockCase(work.caseId, tx);
+      const latest = current
+        ? await this.repository.support.latestUserMessage(current.id, tx)
+        : null;
       const recipient = await this.repository.support.lockUser(work.userId, tx);
       const freshSettings = await this.repository.support.settings(tx);
       if (freshSettings.isErr()) throw freshSettings.error;
@@ -1793,6 +1939,7 @@ export class SupportService extends BasePermissionService<
         current.handlingEpoch !== work.epoch ||
         latest?.id !== work.messageId ||
         !recipient ||
+        recipient.lifecycleVersion !== work.ownerEpoch ||
         recipient.closedAt ||
         recipient.banned ||
         !active ||
@@ -1994,8 +2141,8 @@ export class SupportService extends BasePermissionService<
     .handle(async ({ input, ctx }) => {
       if (ctx.actor.userRole !== "admin")
         return this.error("FORBIDDEN", "Operational metrics require platform administration");
-      const to = new Date(),
-        from = input.since ?? new Date(to.getTime() - 30 * 86400000);
+      const to = new Date();
+      const from = input.since ?? new Date(to.getTime() - 30 * 86400000);
       if (from > to || from.getTime() < to.getTime() - 90 * 86400000)
         return this.error("BAD_REQUEST", "Overview cohort must start within the last 90 days");
       const cases = await this.repository.support.overviewCases(from, to);
@@ -2012,8 +2159,8 @@ export class SupportService extends BasePermissionService<
       if (facts.isErr()) return err(facts.error);
       const samples = facts.value.map((facts) => supportCaseMetrics(facts, to));
       const waiting = { support: 0, user: 0, external: 0 };
-      let open = 0,
-        unassigned = 0;
+      let open = 0;
+      let unassigned = 0;
       for (const group of counts.value) {
         open += group.total;
         waiting[group.waitingOn] += group.total;
@@ -2021,8 +2168,10 @@ export class SupportService extends BasePermissionService<
       }
       const csat = (kind: "human" | "ai") => {
         const groups = ratings.value.filter((row) => row.handledBy === kind);
-        const total = groups.reduce((sum, row) => sum + row.total, 0),
-          happy = groups.filter((row) => row.score === 1).reduce((sum, row) => sum + row.total, 0);
+        const total = groups.reduce((sum, row) => sum + row.total, 0);
+        const happy = groups
+          .filter((row) => row.score === 1)
+          .reduce((sum, row) => sum + row.total, 0);
         return { samples: total, positive: total ? happy / total : null };
       };
       return ok({
@@ -2051,4 +2200,141 @@ export class SupportService extends BasePermissionService<
         csat: { human: csat("human"), ai: csat("ai") },
       });
     });
+  async invalidateUserWork(userId: string, reason: "closed" | "restored"): ServerResultAsync<void> {
+    const cases = await this.repository.support.casesForUser(userId);
+    if (cases.isErr()) return err(cases.error);
+    return this.repository.support.transaction(async (tx) => {
+      await this.repository.support.invalidateWork(userId, tx);
+      for (const row of cases.value) {
+        const current = await this.repository.support.lockCase(row.id, tx);
+        if (current)
+          await this.repository.support.record(
+            current,
+            { handling: "human", handlingEpoch: current.handlingEpoch + 1 },
+            `privacy.${reason}`,
+            { kind: "system" },
+            {},
+            tx
+          );
+      }
+    });
+  }
+  private async purgeCase(id: string): ServerResultAsync<void> {
+    const marked = await this.repository.support.transaction(async (tx) => {
+      const current = await this.repository.support.lockCase(id, tx, true);
+      if (current)
+        await this.repository.support.patchCase(
+          id,
+          {
+            purgingAt: current.purgingAt ?? new Date(),
+            handling: "human",
+            handlingEpoch: current.handlingEpoch + 1,
+          },
+          tx
+        );
+    });
+    if (marked.isErr()) return err(marked.error);
+    const files = await this.repository.support.caseFiles(id);
+    if (files.isErr()) return err(files.error);
+    let pending = false;
+    for (const attachment of files.value) {
+      if (!this.service.file)
+        return this.error("INTERNAL_SERVER_ERROR", "Support File integration unavailable");
+      const result = await this.service.file.purgeSharedFile(attachment.fileId);
+      if (result.isErr()) {
+        if (result.error.code === "CONFLICT") {
+          pending = true;
+          continue;
+        }
+        return err(result.error);
+      }
+    }
+    if (pending)
+      return this.error(
+        "CONFLICT",
+        "File cleanup is pending until recent upload authorizations expire; retry Purge in five minutes"
+      );
+    return this.repository.support.transaction((tx) => this.repository.support.deleteCase(id, tx));
+  }
+  async purgeUserData(userId: string): ServerResultAsync<void> {
+    const invalidated = await this.invalidateUserWork(userId, "closed");
+    if (invalidated.isErr()) return err(invalidated.error);
+    const cases = await this.repository.support.casesForUser(userId);
+    if (cases.isErr()) return err(cases.error);
+    let pending = false;
+    for (const row of cases.value) {
+      const result = await this.purgeCase(row.id);
+      if (result.isErr()) {
+        if (result.error.code === "CONFLICT") {
+          pending = true;
+          continue;
+        }
+        return err(result.error);
+      }
+    }
+    const revoked = await this.repository.support.transaction((tx) =>
+      this.repository.support.revokeUploadsForUser(userId, tx)
+    );
+    if (revoked.isErr()) return err(revoked.error);
+    const authored = await this.repository.support.authoredMessages(userId);
+    if (authored.isErr()) return err(authored.error);
+    for (const message of authored.value) {
+      const redacted = await this.repository.support.transaction(async (tx) => {
+        const current = await this.repository.support.lockCase(message.caseId, tx);
+        if (!current) return;
+        await this.repository.support.redact(message.id, tx);
+        await this.repository.support.record(
+          current,
+          {},
+          "message.redacted",
+          { kind: "system" },
+          { messageSequence: message.sequence, visibility: message.visibility },
+          tx
+        );
+      });
+      if (redacted.isErr()) return err(redacted.error);
+    }
+    const cleanup = await this.cleanupRevokedFiles();
+    if (cleanup.isErr()) return err(cleanup.error);
+    pending ||= cleanup.value.pending > 0;
+    if (pending)
+      return this.error(
+        "CONFLICT",
+        "File cleanup is pending until recent upload authorizations expire; retry Purge in five minutes"
+      );
+    return this.repository.support.transaction((tx) =>
+      this.repository.support.eraseActor(userId, tx)
+    );
+  }
+  async cleanupRetention(): ServerResultAsync<number> {
+    const pending = await this.repository.support.purgingCases();
+    if (pending.isErr()) return err(pending.error);
+    const expired = this.config.retentionDays
+      ? await this.repository.support.expiredCases(
+          new Date(Date.now() - this.config.retentionDays * 86400000)
+        )
+      : ok([]);
+    if (expired.isErr()) return err(expired.error);
+    let count = 0;
+    for (const row of [
+      ...new Map([...pending.value, ...expired.value].map((row) => [row.id, row])).values(),
+    ]) {
+      const result = await this.purgeCase(row.id);
+      if (result.isErr()) {
+        if (result.error.code === "CONFLICT") continue;
+        return err(result.error);
+      }
+      count++;
+    }
+    return ok(count);
+  }
+  readonly getUnreadCount = this.procedure("getUnreadCount")
+    .input(z.object({}), true)
+    .output(supportSchemas.output.unread)
+    .requireAuth("user")
+    .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .access({ action: "read", entities: ({ ctx }) => ({ userId: ctx.actor.userId }) })
+    .handle(({ ctx }) =>
+      this.repository.support.unreadTotal(ctx.actor.userId, ctx.actor.userRole === "admin")
+    );
 }

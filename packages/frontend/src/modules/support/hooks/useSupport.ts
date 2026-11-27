@@ -1,6 +1,6 @@
 import type { SupportAppRouter } from "@m5kdev/backend/modules/support/support.trpc";
 import { supportStageDocumentationSchema } from "@m5kdev/commons/modules/support/support.schema";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { parseAsString, useQueryStates } from "nuqs";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -26,14 +26,16 @@ export function useSupport(admin = false) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [beforeSequence, setBeforeSequence] = useState<number | undefined>();
+  const currentSelection = useRef<string | null>(null);
   const selectCase = (id: string | null) => {
+    currentSelection.current = id;
     setSelectedId(id);
     setAttachmentIds([]);
     setBeforeSequence(undefined);
   };
   const pendingRequest = useRef<{ key: string; id: string } | null>(null);
-  const cases = useQuery(
-    trpc.support.listCases.queryOptions(
+  const cases = useInfiniteQuery(
+    trpc.support.listCases.infiniteQueryOptions(
       {
         limit: 30,
         ...(admin
@@ -54,7 +56,7 @@ export function useSupport(admin = false) {
             }
           : {}),
       },
-      { refetchInterval: 5000 }
+      { refetchInterval: 5000, getNextPageParam: (last) => last.cursor ?? undefined }
     )
   );
   const transcript = useQuery(
@@ -65,7 +67,7 @@ export function useSupport(admin = false) {
   );
   const refresh = async () => {
     await Promise.all([
-      cache.invalidateQueries(trpc.support.listCases.queryFilter()),
+      cache.invalidateQueries(trpc.support.listCases.infiniteQueryFilter()),
       cache.invalidateQueries(trpc.support.getCase.queryFilter()),
     ]);
   };
@@ -76,10 +78,10 @@ export function useSupport(admin = false) {
     },
   });
   const read = useMutation(trpc.support.markRead.mutationOptions({ onSuccess: refresh }));
-  const markRead = async () => {
+  const markRead = () => {
     const last = transcript.data?.messages.at(-1);
     if (!selectedId || !last) return;
-    await read.mutateAsync({ id: selectedId, throughSequence: last.sequence });
+    read.mutate({ id: selectedId, throughSequence: last.sequence });
   };
   const availability = useQuery(
     trpc.support.getAvailability.queryOptions({}, { staleTime: 60000 })
@@ -143,11 +145,11 @@ export function useSupport(admin = false) {
     })
   );
   const tag = useMutation(trpc.support.setTags.mutationOptions({ onSuccess: refresh }));
-  const updateCase = async (
+  const updateCase = (
     patch: Omit<Parameters<typeof update.mutateAsync>[0], "id" | "expectedVersion">
   ) => {
     if (!transcript.data) return;
-    await update.mutateAsync({
+    update.mutate({
       id: transcript.data.case.id,
       expectedVersion: transcript.data.case.version,
       ...patch,
@@ -178,13 +180,14 @@ export function useSupport(admin = false) {
   const redact = useMutation(trpc.support.redactMessage.mutationOptions({ onSuccess: refresh }));
   const uploadFiles = async (files: File[]) => {
     if (!selectedId) return;
+    const uploadCaseId = selectedId;
     setUploadError(null);
     setIsUploading(true);
     try {
       const ids: string[] = [];
       for (const file of files) {
         const result = await upload.mutateAsync({
-          id: selectedId,
+          id: uploadCaseId,
           originalName: file.name,
           contentType: (file.type || "text/plain") as
             | "image/jpeg"
@@ -202,7 +205,8 @@ export function useSupport(admin = false) {
         if (!response.ok) throw new Error("Upload failed");
         ids.push(result.fileId);
       }
-      setAttachmentIds((previous) => [...previous, ...ids]);
+      if (currentSelection.current === uploadCaseId)
+        setAttachmentIds((previous) => [...previous, ...ids]);
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "Upload failed");
     } finally {
@@ -211,11 +215,13 @@ export function useSupport(admin = false) {
   };
   const downloadFile = async (fileId: string) => {
     if (!selectedId) return;
-    const result = await download.mutateAsync({ id: selectedId, fileId });
-    window.open(result.url, "_blank", "noopener,noreferrer");
+    download.mutate(
+      { id: selectedId, fileId },
+      { onSuccess: (result) => window.open(result.url, "_blank", "noopener,noreferrer") }
+    );
   };
   const redactMessage = async (messageId: string, reason: string) => {
-    if (selectedId) await redact.mutateAsync({ id: selectedId, messageId, reason });
+    if (selectedId) redact.mutate({ id: selectedId, messageId, reason });
   };
   const clientId = (key: string) => {
     if (pendingRequest.current?.key !== key)
@@ -306,17 +312,21 @@ export function useSupport(admin = false) {
     setFilters,
     catalog: catalog.data,
     updateCase,
-    saveCatalog: save.mutateAsync,
-    setTags: async (tagIds: string[]) => {
+    saveCatalog: save.mutate,
+    setTags: (tagIds: string[]) => {
       if (transcript.data)
-        await tag.mutateAsync({
+        tag.mutate({
           id: transcript.data.case.id,
           expectedVersion: transcript.data.case.version,
           tagIds,
         });
     },
-    cases: cases.data ?? [],
-    transcript: transcript.data,
+    cases: cases.isError ? [] : (cases.data?.pages.flatMap((page) => page.items) ?? []),
+    hasMoreCases: cases.hasNextPage,
+    loadMoreCases: () => {
+      void cases.fetchNextPage();
+    },
+    transcript: transcript.isError ? undefined : transcript.data,
     selectedId,
     selectCase,
     createCase,

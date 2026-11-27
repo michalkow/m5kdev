@@ -1,4 +1,4 @@
-import { Button, Form, Input, Label, TextField } from "@heroui/react";
+import { Button, Checkbox, Form, Input, Label, TextField } from "@heroui/react";
 import type { useSupport } from "@m5kdev/frontend/modules/support/hooks/useSupport";
 import { useTranslation } from "react-i18next";
 import { SupportCalendarSettings } from "./SupportCalendarSettings";
@@ -66,27 +66,29 @@ export function SupportSettings({ state }: { state: State }) {
           <Label>{t("support.settings.expectation")}</Label>
           <Input defaultValue={settings.replyExpectation} maxLength={500} />
         </TextField>
-        <label className="flex gap-2">
-          <input
-            type="checkbox"
-            name="csatEnabled"
-            value="true"
-            defaultChecked={settings.csatEnabled}
-          />
-          {t("support.csat.enable")}
-        </label>
+        <Checkbox name="csatEnabled" value="true" defaultSelected={settings.csatEnabled}>
+          <Checkbox.Content>
+            <Checkbox.Control>
+              <Checkbox.Indicator />
+            </Checkbox.Control>
+            {t("support.csat.enable")}
+          </Checkbox.Content>
+        </Checkbox>
         {(["translation", "ai"] as const).map((kind) => (
           <fieldset key={kind} className="grid gap-2 rounded-lg border border-border p-3">
             <legend>{t(`support.settings.${kind}`)}</legend>
-            <label className="flex gap-2">
-              <input
-                name={`${kind}.enabled`}
-                type="checkbox"
-                value="true"
-                defaultChecked={settings[kind].enabled}
-              />
-              {t("support.settings.enable")}
-            </label>
+            <Checkbox
+              name={`${kind}.enabled`}
+              value="true"
+              defaultSelected={settings[kind].enabled}
+            >
+              <Checkbox.Content>
+                <Checkbox.Control>
+                  <Checkbox.Indicator />
+                </Checkbox.Control>
+                {t("support.settings.enable")}
+              </Checkbox.Content>
+            </Checkbox>
             {limits.map((key) => (
               <TextField key={key} name={`${kind}.${key}`}>
                 <Label>{t(`support.settings.${key}`)}</Label>

@@ -1,4 +1,13 @@
-import { Button, FieldError, Form, Input, Label, TextArea, TextField } from "@heroui/react";
+import {
+  Button,
+  Checkbox,
+  FieldError,
+  Form,
+  Input,
+  Label,
+  TextArea,
+  TextField,
+} from "@heroui/react";
 import { useSupport } from "@m5kdev/frontend/modules/support/hooks/useSupport";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -10,7 +19,18 @@ import { SupportSettings } from "./SupportSettings";
 export function SupportPanel({ admin = false }: { admin?: boolean }) {
   const { t } = useTranslation("web-ui");
   const state = useSupport(admin);
-  const [savedReply, setSavedReply] = useState<{ id: string; body: string } | null>(null);
+  const [noteMode, setNoteMode] = useState<{ caseId: string | null; value: boolean }>({
+    caseId: null,
+    value: false,
+  });
+  const internalNote = noteMode.caseId === state.selectedId && noteMode.value;
+  const setInternalNote = (value: boolean) => setNoteMode({ caseId: state.selectedId, value });
+  const [savedReply, setSavedReply] = useState<{
+    id: string;
+    body: string;
+    caseId: string | null;
+  } | null>(null);
+  const selectedReply = savedReply?.caseId === state.selectedId ? savedReply : null;
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -19,7 +39,7 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
     const success = state.selectedId
       ? await state.sendMessage(
           body,
-          values.get("internal") === "true" ? "internal" : "public",
+          internalNote ? "internal" : "public",
           values.get("preview") === "true"
         )
       : await state.createCase(
@@ -30,6 +50,7 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
     if (success) {
       form.reset();
       setSavedReply(null);
+      setInternalNote(false);
     }
   };
   return (
@@ -71,7 +92,12 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
       )}
       {admin && <SupportOverview state={state} />}
       {admin && <SupportSettings state={state} />}
-      {admin && <SupportDeskTools state={state} onChooseReply={setSavedReply} />}
+      {admin && (
+        <SupportDeskTools
+          state={state}
+          onChooseReply={(reply) => setSavedReply({ ...reply, caseId: state.selectedId })}
+        />
+      )}
       {state.isLoading && <p role="status">{t("support.loading")}</p>}
       <nav
         aria-label={t("support.requests")}
@@ -87,10 +113,25 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
             className="justify-start"
             onPress={() => state.selectCase(item.id)}
           >
-            {item.subject} {item.unreadCount > 0 && <span>({item.unreadCount})</span>}
+            {item.subject || t("support.title")}{" "}
+            {item.unreadCount > 0 && <span>({item.unreadCount})</span>}
           </Button>
         ))}
       </nav>
+      {state.hasMoreCases && (
+        <Button size="sm" variant="tertiary" onPress={state.loadMoreCases}>
+          {t("support.moreCases")}
+        </Button>
+      )}
+      {state.transcript && (
+        <p role="status" className="text-sm text-muted">
+          {t(
+            state.transcript.case.handling === "ai"
+              ? "support.handling.ai"
+              : "support.handling.human"
+          )}
+        </p>
+      )}
       {state.transcript && state.transcript.case.unreadCount > 0 && (
         <Button size="sm" variant="secondary" onPress={() => void state.markRead()}>
           {t("support.markRead")}
@@ -188,7 +229,15 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
           </div>
         </fieldset>
       )}
-      <Form key={savedReply?.id ?? "new"} onSubmit={submit} className="grid gap-3">
+      <Form
+        key={`${state.selectedId ?? "new"}:${selectedReply?.id ?? "blank"}`}
+        onSubmit={submit}
+        className={
+          internalNote
+            ? "grid gap-3 rounded-lg border border-warning bg-warning/10 p-3"
+            : "grid gap-3"
+        }
+      >
         {!state.selectedId && (
           <>
             {admin && (
@@ -220,24 +269,39 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
           </TextField>
         )}
         <TextField name="body" isRequired maxLength={20000}>
-          <Label>{t("support.message")}</Label>
-          <TextArea rows={3} defaultValue={savedReply?.body} />
+          <Label>{t(internalNote ? "support.internalNote" : "support.message")}</Label>
+          <TextArea rows={3} defaultValue={selectedReply?.body} />
           <FieldError />
         </TextField>
         {admin && state.selectedId && (
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="internal" value="true" />
-            {t("support.internalNote")}
-          </label>
+          <Checkbox
+            name="internal"
+            value="true"
+            isSelected={internalNote}
+            onChange={setInternalNote}
+          >
+            <Checkbox.Content>
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+              {t("support.internalNote")}
+            </Checkbox.Content>
+          </Checkbox>
         )}
-        {admin && state.selectedId && (
-          <label className="flex gap-2 text-sm">
-            <input type="checkbox" name="preview" value="true" />
-            {t("support.previewBeforeSend")}
-          </label>
+        {admin && state.selectedId && !internalNote && (
+          <Checkbox name="preview" value="true">
+            <Checkbox.Content>
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+              {t("support.previewBeforeSend")}
+            </Checkbox.Content>
+          </Checkbox>
         )}
         <Button type="submit" isDisabled={state.isPending} variant="primary">
-          {t(state.isPending ? "support.sending" : "support.send")}
+          {t(
+            state.isPending ? "support.sending" : internalNote ? "support.addNote" : "support.send"
+          )}
         </Button>
       </Form>
     </section>

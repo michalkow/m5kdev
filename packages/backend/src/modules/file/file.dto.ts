@@ -69,6 +69,7 @@ export const fileSchemas = {
       updatedAt: true,
       deletedAt: true,
       sealedAt: true,
+      uploadExpiresAt: true,
       sourceKey: true,
       userId: true,
       memberId: true,

@@ -172,3 +172,89 @@ it("stops automation at the persisted allowance while preserving human send-orig
     await pool.end();
   }
 });
+
+it("keeps detection and incoming translation working after a human request", async () => {
+  const pool = createTestPool();
+  const schema = { users, tags, taggings, ...tables };
+  await prepareExperienceTables(pool, schema);
+  const orm = drizzle(pool, { schema });
+  await orm.insert(users).values([
+    { id: "user", name: "User", email: "user@local.test", emailVerified: true },
+    { id: "staff", name: "Staff", email: "staff@local.test", emailVerified: true, role: "admin" },
+  ]);
+  let started: () => void = () => {};
+  const entered = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  let finish: (value: { locale: string }) => void = () => {};
+  const support = new SupportService(
+    { support: new SupportRepository({ orm, schema }) },
+    {},
+    undefined,
+    {
+      locales: ["en"],
+      documentation: { applicationVersion: "local", allowedOrigins: ["https://help.local"] },
+      assistant: {
+        id: "local-answer",
+        answer: async () => ({ supported: false, text: "", citations: [] }),
+      },
+      translation: {
+        id: "local-translation",
+        languages: ["en", "pl"],
+        detect: async () => {
+          started();
+          return new Promise((resolve) => {
+            finish = resolve;
+          });
+        },
+        translate: async () => ({ text: "English viewing translation" }),
+      },
+    }
+  );
+  const budget = {
+    monthlyCalls: 4,
+    dailyUserCalls: 4,
+    maxInputCharacters: 20000,
+    maxOutputCharacters: 20000,
+    concurrency: 1,
+    attempts: 1,
+    timeoutMs: 5000,
+  };
+  try {
+    const settings = await support.saveSettings(
+      {
+        expectedVersion: 0,
+        nativeLocales: ["en"],
+        fallbackLocale: "en",
+        translation: { enabled: true, budget },
+        ai: { enabled: true, budget },
+      },
+      ctx("staff", "admin")
+    );
+    if (settings.isErr()) throw settings.error;
+    const created = await support.createCase(
+      { clientId: "independent", subject: "Pomoc", body: "Pytanie", uiLocale: "en" },
+      ctx("user")
+    );
+    if (created.isErr()) throw created.error;
+    const running = support.processWork();
+    await entered;
+    const human = await support.requestHuman({ id: created.value.id }, ctx("user"));
+    if (human.isErr()) throw human.error;
+    finish({ locale: "pl" });
+    await running;
+    const detected = await support.getCase({ id: created.value.id }, ctx("user"));
+    if (detected.isErr()) throw detected.error;
+    expect(detected.value.case.detectedLocale).toBe("pl");
+    expect(detected.value.case.handling).toBe("human");
+    await support.processWork();
+    await support.processWork();
+    const translated = await support.getCase({ id: created.value.id }, ctx("staff", "admin"));
+    if (translated.isErr()) throw translated.error;
+    expect(
+      translated.value.messages[0].renditions.find((rendition) => rendition.locale === "en")?.text
+    ).toBe("English viewing translation");
+  } finally {
+    await pool.end();
+  }
+});

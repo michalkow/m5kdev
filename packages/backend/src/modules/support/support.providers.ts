@@ -13,8 +13,8 @@ export function createSupportProviders(
   ai: Pick<AIService<Mastra>, "generateObject">,
   models: SupportModels
 ): Pick<SupportConfig, "translation" | "assistant"> {
-  const translation = models.translation,
-    assistant = models.assistant;
+  const translation = models.translation;
+  const assistant = models.assistant;
   return {
     ...(translation
       ? {

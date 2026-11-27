@@ -117,6 +117,11 @@ export type AuthServiceHooks = {
   }) => Promise<void>;
 };
 
+export interface AuthUserLifecycleParticipant {
+  beforeClose?: (userId: string) => ServerResultAsync<void>;
+  beforeRestore?: (userId: string) => ServerResultAsync<void>;
+  beforePurge?: (userId: string) => ServerResultAsync<void>;
+}
 export class AuthService extends BasePermissionService<
   {
     accountClaim: AuthAccountClaimRepository;
@@ -128,6 +133,26 @@ export class AuthService extends BasePermissionService<
   AuthServiceDependencies,
   RequestContext
 > {
+  private readonly userLifecycleParticipants = new Map<string, AuthUserLifecycleParticipant>();
+  /** Explicit module composition; no import-time registration. */
+  registerUserLifecycleParticipant(id: string, participant: AuthUserLifecycleParticipant): void {
+    if (this.userLifecycleParticipants.has(id))
+      throw new Error(`Duplicate User lifecycle participant: ${id}`);
+    this.userLifecycleParticipants.set(id, participant);
+  }
+  private async prepareUserLifecycle(
+    action: keyof AuthUserLifecycleParticipant,
+    userId: string
+  ): ServerResultAsync<void> {
+    for (const participant of this.userLifecycleParticipants.values()) {
+      const hook = participant[action];
+      if (hook) {
+        const result = await hook(userId);
+        if (result.isErr()) return err(result.error);
+      }
+    }
+    return ok(undefined);
+  }
   private readonly appUrls?: BackendAppMetadata["urls"];
   private readonly hooks?: AuthServiceHooks;
   private readonly localeConfig?: AuthLocaleConfig;
@@ -369,6 +394,8 @@ export class AuthService extends BasePermissionService<
       });
       if (removed.isErr()) return err(removed.error);
     }
+    const prepared = await this.prepareUserLifecycle("beforeClose", user.id);
+    if (prepared.isErr()) return err(prepared.error);
     const closedAt = new Date();
     const updated = await this.repository.user.update({
       id: user.id,
@@ -420,6 +447,8 @@ export class AuthService extends BasePermissionService<
     if (owned.value.length > 0) {
       return this.error("BAD_REQUEST", "Cannot Purge a User who still Owns an Organization");
     }
+    const prepared = await this.prepareUserLifecycle("beforePurge", user.id);
+    if (prepared.isErr()) return err(prepared.error);
     if (this.hooks?.afterPurgeUser) {
       try {
         await this.hooks.afterPurgeUser({ user });
@@ -2584,6 +2613,8 @@ export class AuthService extends BasePermissionService<
       if (!user.value.closedAt) {
         return this.error("BAD_REQUEST", "This User is not Closed");
       }
+      const prepared = await this.prepareUserLifecycle("beforeRestore", input.id);
+      if (prepared.isErr()) return err(prepared.error);
       const updated = await this.repository.user.update({ id: input.id, closedAt: null });
       if (updated.isErr()) return err(updated.error);
       this.userEmit({

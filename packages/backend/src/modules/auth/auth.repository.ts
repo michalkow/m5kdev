@@ -4,7 +4,7 @@ import { err, ok } from "neverthrow";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import type { ServerResultAsync } from "../base/base.dto";
-import { BaseTableRepository } from "../base/base.repository";
+import { BaseTableRepository, type TableUpdatePayload } from "../base/base.repository";
 import * as auth from "./auth.db";
 import {
   accountClaimMagicLinkSchemas,
@@ -39,6 +39,26 @@ export class AuthUserRepository extends BaseTableRepository<
   Record<string, never>,
   Schema["users"]
 > {
+  /** Monotonic lifecycle fencing remains authoritative when optional modules are omitted. */
+  override async update(
+    data: TableUpdatePayload<Schema["users"]>,
+    tx?: Orm
+  ): ServerResultAsync<UserRow> {
+    if (!Object.hasOwn(data, "closedAt"))
+      return super.update({ ...data, lifecycleVersion: undefined }, tx);
+    const result = await this.throwableQuery(
+      async () =>
+        (
+          await (tx ?? this.orm)
+            .update(this.schema.users)
+            .set({ ...data, lifecycleVersion: sql`${this.schema.users.lifecycleVersion}+1` })
+            .where(eq(this.schema.users.id, data.id))
+            .returning()
+        )[0]
+    );
+    if (result.isErr()) return err(result.error);
+    return result.value ? ok(result.value) : this.error("NOT_FOUND", "User not found");
+  }
   hasCredentialPassword = this.query<string>("hasCredentialPassword")
     .output(z.boolean())
     .handle(async (userId) => {

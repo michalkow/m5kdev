@@ -161,9 +161,38 @@ _Avoid_: Job, Queue, Task, Recurrence
 # m5k:tags:start
 
 **Tag**:
-A polymorphic label. Ownership is UserId, MemberId, or organizationId.
+A polymorphic label. Ownership is UserId, MemberId, organizationId, or the shared platform Support catalog.
 _Avoid_: Label, Category
 # m5k:tags:end
+# m5k:support:start
+### Customer support
+
+**Support Case**:
+A private support request owned by one User and handled by platform admins. A User may have several independent Support Cases; an associated Organization is context and does not give its Members access.
+_Avoid_: Conversation (the AI transcript), Thread (Mastra Memory), a permanent per-User message stream, an Organization-shared request
+
+**Support Message**:
+An individual entry in the history of a Support Case, attributed to its sender. It is either public to the Case's User and platform support or an Internal note restricted to platform support.
+_Avoid_: AI turn, Notification
+
+**Internal note**:
+A Support Message visible only to platform support, outside the exchange shown to the Case's User.
+_Avoid_: public reply, customer-visible activity
+
+**Resolution cycle**:
+One opening or reopening of a Support Case through its next resolution. A new User message on a resolved Case begins another cycle in that same Case.
+_Avoid_: a new Support Case, permanent closure
+
+**Support language**:
+The language selected for replies to the User in a Support Case, independently of the app UI locale and admins' working languages.
+_Avoid_: app locale, admin translation target
+
+**Support desk**:
+The platform-admin interface for handling Support Cases.
+_Avoid_: Organization admin support, Notification inbox
+
+# m5k:support:end
+
 # m5k:connect:start
 
 **Connection**:

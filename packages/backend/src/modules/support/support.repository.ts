@@ -56,8 +56,14 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
   async lockRequest(key: string, tx: SupportTransaction) {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
   }
-  async lockCase(id: string, tx: SupportTransaction) {
-    const [row] = await tx.select().from(supportCases).where(eq(supportCases.id, id)).for("update");
+  async lockCase(id: string, tx: SupportTransaction, includePurging = false) {
+    const [row] = await tx
+      .select()
+      .from(supportCases)
+      .where(
+        and(eq(supportCases.id, id), includePurging ? undefined : isNull(supportCases.purgingAt))
+      )
+      .for("update");
     return row;
   }
   async findRequest(userId: string, clientId: string, tx: SupportTransaction) {
@@ -99,7 +105,10 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
   }
   findById(id: string) {
     return this.throwableQuery(async () => {
-      const [row] = await this.orm.select().from(supportCases).where(eq(supportCases.id, id));
+      const [row] = await this.orm
+        .select()
+        .from(supportCases)
+        .where(and(eq(supportCases.id, id), isNull(supportCases.purgingAt)));
       return row;
     });
   }
@@ -133,7 +142,8 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
     userId: string | null,
     input: import("zod").infer<
       typeof import("@m5kdev/commons/modules/support/support.schema").supportListSchema
-    >
+    >,
+    after?: { updatedAt: Date; id: string }
   ) {
     return this.throwableQuery(() =>
       this.orm
@@ -141,6 +151,13 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
         .from(supportCases)
         .where(
           and(
+            isNull(supportCases.purgingAt),
+            after
+              ? or(
+                  lt(supportCases.updatedAt, after.updatedAt),
+                  and(eq(supportCases.updatedAt, after.updatedAt), lt(supportCases.id, after.id))
+                )
+              : undefined,
             userId === null ? undefined : eq(supportCases.userId, userId),
             input.search
               ? or(
@@ -188,7 +205,7 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
           )
         )
         .orderBy(desc(supportCases.updatedAt), desc(supportCases.id))
-        .limit(input.limit)
+        .limit(input.limit + 1)
     );
   }
   currentUser(userId: string) {
@@ -196,7 +213,12 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
       async () =>
         (
           await this.orm
-            .select({ role: users.role, closedAt: users.closedAt, banned: users.banned })
+            .select({
+              role: users.role,
+              closedAt: users.closedAt,
+              banned: users.banned,
+              lifecycleVersion: users.lifecycleVersion,
+            })
             .from(users)
             .where(eq(users.id, userId))
         )[0]
@@ -414,7 +436,8 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
       .from(supportAttachments)
       .where(
         and(eq(supportAttachments.caseId, caseId), inArray(supportAttachments.fileId, fileIds))
-      );
+      )
+      .for("update");
   }
   async linkAttachments(fileIds: string[], messageId: string, tx: SupportTransaction) {
     if (fileIds.length)
@@ -539,6 +562,9 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
     else await tx.insert(supportStaffPreferences).values({ id: userId, locale });
   }
   async queueWork(row: typeof supportWork.$inferInsert, tx: SupportTransaction) {
+    const owner = await this.lockUser(row.userId, tx);
+    const source = row.messageId ? await this.message(row.messageId, tx) : null;
+    const author = source?.authorUserId ? await this.lockUser(source.authorUserId, tx) : null;
     const [existing] = await tx
       .select()
       .from(supportWork)
@@ -549,11 +575,39 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
           eq(supportWork.purpose, row.purpose),
           eq(supportWork.locale, row.locale),
           eq(supportWork.sourceHash, row.sourceHash),
+          eq(supportWork.epoch, row.epoch),
+          eq(supportWork.ownerEpoch, owner?.lifecycleVersion ?? 0),
+          author
+            ? eq(supportWork.authorEpoch, author.lifecycleVersion)
+            : isNull(supportWork.authorEpoch),
           inArray(supportWork.state, ["queued", "running"])
         )
       );
     if (existing) return existing;
-    return (await tx.insert(supportWork).values(row).returning())[0];
+    return (
+      await tx
+        .insert(supportWork)
+        .values({
+          ...row,
+          ownerEpoch: owner?.lifecycleVersion ?? 0,
+          authorEpoch: author?.lifecycleVersion ?? null,
+        })
+        .returning()
+    )[0];
+  }
+  async hasPendingDetection(messageId: string, tx: SupportTransaction) {
+    const [row] = await tx
+      .select({ id: supportWork.id })
+      .from(supportWork)
+      .where(
+        and(
+          eq(supportWork.messageId, messageId),
+          eq(supportWork.purpose, "detect"),
+          inArray(supportWork.state, ["queued", "running"])
+        )
+      )
+      .limit(1);
+    return Boolean(row);
   }
   pendingWork(now: Date) {
     return this.throwableQuery(() =>
@@ -630,7 +684,13 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
   async lockUser(userId: string, tx: SupportTransaction) {
     return (
       await tx
-        .select({ id: users.id, role: users.role, closedAt: users.closedAt, banned: users.banned })
+        .select({
+          id: users.id,
+          role: users.role,
+          closedAt: users.closedAt,
+          banned: users.banned,
+          lifecycleVersion: users.lifecycleVersion,
+        })
         .from(users)
         .where(eq(users.id, userId))
         .for("share")
@@ -867,7 +927,7 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
           total: count(),
         })
         .from(supportCases)
-        .where(eq(supportCases.status, "open"))
+        .where(and(eq(supportCases.status, "open"), isNull(supportCases.purgingAt)))
         .groupBy(supportCases.waitingOn, sql`${supportCases.assignedUserId} is null`)
     );
   }
@@ -886,6 +946,7 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
         .where(
           and(
             eq(supportCases.status, "open"),
+            isNull(supportCases.purgingAt),
             eq(supportMessages.authorKind, "user"),
             eq(supportMessages.visibility, "public"),
             isNotNull(supportMessages.publishedAt),
@@ -945,5 +1006,151 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
       for (const event of events) byCase.get(event.caseId)?.events.push(event);
       return [...byCase.values()];
     });
+  }
+  casesForUser(userId: string) {
+    return this.throwableQuery(() =>
+      this.orm.select().from(supportCases).where(eq(supportCases.userId, userId))
+    );
+  }
+  authoredMessages(userId: string) {
+    return this.throwableQuery(() =>
+      this.orm.select().from(supportMessages).where(eq(supportMessages.authorUserId, userId))
+    );
+  }
+  allUserAttachments(userId: string) {
+    return this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(supportAttachments)
+        .leftJoin(supportCases, eq(supportCases.id, supportAttachments.caseId))
+        .where(or(eq(supportCases.userId, userId), eq(supportAttachments.userId, userId)))
+    );
+  }
+  async invalidateWork(userId: string, tx: SupportTransaction) {
+    const authored = tx
+      .select({ id: supportMessages.id })
+      .from(supportMessages)
+      .where(eq(supportMessages.authorUserId, userId));
+    const owned = tx
+      .select({ id: supportCases.id })
+      .from(supportCases)
+      .where(eq(supportCases.userId, userId));
+    await tx
+      .update(supportWork)
+      .set({ state: "cancelled", error: "user-lifecycle-changed", updatedAt: new Date() })
+      .where(
+        and(
+          inArray(supportWork.state, ["queued", "running"]),
+          or(inArray(supportWork.caseId, owned), inArray(supportWork.messageId, authored))
+        )
+      );
+  }
+  async deleteCase(id: string, tx: SupportTransaction) {
+    // Explicit child cleanup also makes the boundary reliable in consumer schemas during migration rollout.
+    const workIds = tx
+      .select({ id: supportWork.id })
+      .from(supportWork)
+      .where(eq(supportWork.caseId, id));
+    await tx.delete(supportUsage).where(inArray(supportUsage.workId, workIds));
+    await tx.delete(supportWork).where(eq(supportWork.caseId, id));
+    await tx.delete(supportFeedback).where(eq(supportFeedback.caseId, id));
+    await tx.delete(supportAttachments).where(eq(supportAttachments.caseId, id));
+    await tx.delete(supportReads).where(eq(supportReads.caseId, id));
+    await tx.delete(supportEvents).where(eq(supportEvents.caseId, id));
+    await tx.delete(supportMessages).where(eq(supportMessages.caseId, id));
+    await tx
+      .delete(taggings)
+      .where(and(eq(taggings.resourceType, "support.case"), eq(taggings.resourceId, id)));
+    await tx.delete(supportCases).where(eq(supportCases.id, id));
+  }
+  caseFiles(caseId: string) {
+    return this.throwableQuery(() =>
+      this.orm.select().from(supportAttachments).where(eq(supportAttachments.caseId, caseId))
+    );
+  }
+  expiredCases(before: Date) {
+    return this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(supportCases)
+        .where(and(eq(supportCases.status, "resolved"), lt(supportCases.resolvedAt, before)))
+        .orderBy(asc(supportCases.resolvedAt))
+        .limit(50)
+    );
+  }
+  async eraseActor(userId: string, tx: SupportTransaction) {
+    await tx.delete(supportEvents).where(eq(supportEvents.actorUserId, userId));
+    await tx
+      .update(supportMessages)
+      .set({ authorUserId: null, requestHash: "", clientId: "" })
+      .where(eq(supportMessages.authorUserId, userId));
+    await tx
+      .update(supportCases)
+      .set({ initiatorUserId: null, subject: "" })
+      .where(eq(supportCases.initiatorUserId, userId));
+    await tx
+      .update(supportCases)
+      .set({ assignedUserId: null })
+      .where(eq(supportCases.assignedUserId, userId));
+    await tx.delete(supportStaffPreferences).where(eq(supportStaffPreferences.id, userId));
+    await tx.delete(supportUsage).where(eq(supportUsage.userId, userId));
+    await tx.delete(supportFeedback).where(eq(supportFeedback.userId, userId));
+  }
+
+  purgingCases() {
+    return this.throwableQuery(() =>
+      this.orm.select().from(supportCases).where(isNotNull(supportCases.purgingAt)).limit(20)
+    );
+  }
+
+  async reserveAttachmentTx(
+    input: { caseId: string; fileId: string; userId: string },
+    tx: SupportTransaction
+  ) {
+    return (await tx.insert(supportAttachments).values(input).returning())[0];
+  }
+  async revokeUploadsForUser(userId: string, tx: SupportTransaction) {
+    await tx
+      .update(supportAttachments)
+      .set({ revokedAt: new Date() })
+      .where(eq(supportAttachments.userId, userId));
+  }
+  unreadTotal(userId: string, admin: boolean) {
+    return this.throwableQuery(async () => {
+      const [row] = await this.orm
+        .select({ total: count() })
+        .from(supportMessages)
+        .innerJoin(supportCases, eq(supportCases.id, supportMessages.caseId))
+        .leftJoin(
+          supportReads,
+          and(eq(supportReads.caseId, supportCases.id), eq(supportReads.userId, userId))
+        )
+        .where(
+          and(
+            admin ? undefined : eq(supportCases.userId, userId),
+            isNull(supportCases.purgingAt),
+            isNotNull(supportMessages.publishedAt),
+            admin ? undefined : eq(supportMessages.visibility, "public"),
+            or(isNull(supportMessages.authorUserId), ne(supportMessages.authorUserId, userId)),
+            gt(supportMessages.sequence, sql`coalesce(${supportReads.sequence},0)`)
+          )
+        );
+      return { count: row.total };
+    });
+  }
+  expireUnusedAttachments(before: Date) {
+    return this.throwableQuery(() =>
+      this.orm
+        .update(supportAttachments)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            isNull(supportAttachments.messageId),
+            isNull(supportAttachments.revokedAt),
+            lt(supportAttachments.createdAt, before)
+          )
+        )
+        .returning({ id: supportAttachments.id })
+    );
   }
 }

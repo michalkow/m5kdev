@@ -116,7 +116,8 @@
     "nuqs": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "jest-environment-jsdom": "catalog:"
   },
   "exports": {
     "./components/*": {

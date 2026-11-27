@@ -43,3 +43,25 @@ export {
 export { workflows } from "@m5kdev/backend/modules/workflow/workflow.db";
 // m5k:workflows:end
 export { posts } from "./modules/posts/posts.db";
+
+// m5k:tags:start
+export { tags, taggings } from "@m5kdev/backend/modules/tag/tag.db";
+// m5k:tags:end
+// m5k:support:start
+export {
+  supportCases,
+  supportMessages,
+  supportEvents,
+  supportReads,
+  supportReplies,
+  supportAttachments,
+  supportSettings,
+  supportStaffPreferences,
+  supportWork,
+  supportUsage,
+  supportCorpora,
+  supportDocuments,
+  supportFeedback,
+  supportSettingsRevisions,
+} from "@m5kdev/backend/modules/support/support.db";
+// m5k:support:end

@@ -112,6 +112,10 @@ export function createSupportTRPC({ router, userProcedure }: TRPCMethods, servic
       .input(supportSchemas.input.overview)
       .output(supportSchemas.output.overview)
       .query(async ({ input, ctx }) => handleTRPCResult(await service.overview(input, ctx))),
+    getUnreadCount: userProcedure
+      .input(z.object({}))
+      .output(supportSchemas.output.unread)
+      .query(async ({ input, ctx }) => handleTRPCResult(await service.getUnreadCount(input, ctx))),
     createCase: userProcedure
       .input(supportCreateCaseSchema)
       .output(supportSchemas.output.case)

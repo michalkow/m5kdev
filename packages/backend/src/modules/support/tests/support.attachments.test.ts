@@ -45,7 +45,12 @@ it("shares sealed staff Files only with the Case participant and removes issued 
     defaultFileGrants,
     { buckets: ["local"] }
   );
-  const support = new SupportService({ support: new SupportRepository({ orm, schema }) }, { file });
+  const support = new SupportService(
+    { support: new SupportRepository({ orm, schema }) },
+    { file },
+    undefined,
+    { maxFileBytes: 8 }
+  );
   try {
     const created = await support.createCase(
       { clientId: "files", subject: "Attachment", body: "Help" },
@@ -96,6 +101,36 @@ it("shares sealed staff Files only with the Case participant and removes issued 
       ctx("staff", "admin")
     );
     expect(rejected.isErr()).toBe(true);
+    const bypass = await file.getDownloadUrl(
+      { fileId: upload.value.fileId },
+      ctx("staff", "admin")
+    );
+    expect(bypass.isErr() && bypass.error.code).toBe("FORBIDDEN");
+    const oversized = await support.initiateAttachment(
+      {
+        id: created.value.id,
+        originalName: "too-large.txt",
+        contentType: "text/plain",
+        sizeBytes: 5,
+      },
+      ctx("staff", "admin")
+    );
+    if (oversized.isErr()) throw oversized.error;
+    await fetch(oversized.value.url, {
+      method: "PUT",
+      headers: { "content-type": "text/plain" },
+      body: "123456789",
+    });
+    const tooLarge = await support.sendMessage(
+      {
+        id: created.value.id,
+        clientId: "too-large",
+        body: "Declared smaller",
+        attachmentIds: [oversized.value.fileId],
+      },
+      ctx("staff", "admin")
+    );
+    expect(tooLarge.isErr()).toBe(true);
     const download = await support.downloadAttachment(
       { id: created.value.id, fileId: upload.value.fileId },
       ctx("user")

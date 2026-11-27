@@ -36,6 +36,20 @@ it("runs a native reference client through real bearer login, Case sync and revo
     providerId: "credential",
     password: await hashPassword("Native-Reference-Password-123"),
   });
+  await orm.insert(authTables.users).values({
+    id: "native-staff",
+    name: "Staff",
+    email: "staff@local.test",
+    emailVerified: true,
+    role: "admin",
+  });
+  await orm.insert(authTables.accounts).values({
+    id: "staff-password",
+    accountId: "native-staff",
+    userId: "native-staff",
+    providerId: "credential",
+    password: await hashPassword("Native-Reference-Password-123"),
+  });
   const app = express();
   const server = app.listen(0, "127.0.0.1");
   await new Promise<void>((resolve) => server.once("listening", resolve));
@@ -62,13 +76,38 @@ it("runs a native reference client through real bearer login, Case sync and revo
       subject: "Help from native",
       body: "Native request",
     });
+    const retry = await client.call("createCase", {
+      clientId: "native-request",
+      subject: "Help from native",
+      body: "Native request",
+    });
+    expect(retry.id).toBe(created.id);
     const read = await client.call("getCase", { id: created.id });
     expect(read.messages.map((message: { body: string }) => message.body)).toEqual([
       "Native request",
     ]);
     const sync = await client.call("sync", { id: created.id });
     expect(sync.messages[0].body).toBe("Native request");
-    await client.call("markRead", { id: created.id, throughSequence: 1 });
+    const staff = createSupportReferenceClient(baseUrl);
+    await staff.signIn("staff@local.test", "Native-Reference-Password-123");
+    const reply = await staff.call("sendMessage", {
+      id: created.id,
+      clientId: "native-staff-reply",
+      body: "Reply during disconnection",
+    });
+    const repeated = await staff.call("sendMessage", {
+      id: created.id,
+      clientId: "native-staff-reply",
+      body: "Reply during disconnection",
+    });
+    expect(repeated.id).toBe(reply.id);
+    const resumed = await client.call("sync", { id: created.id, cursor: read.cursor });
+    expect(resumed.messages.map((message: { body: string }) => message.body)).toEqual([
+      "Reply during disconnection",
+    ]);
+    await client.call("markRead", { id: created.id, throughSequence: reply.sequence });
+    expect((await client.call("getUnreadCount")).count).toBe(0);
+    await staff.signOut();
     await client.signOut();
     await expect(client.call("getCase", { id: created.id })).rejects.toMatchObject({ status: 401 });
   } finally {

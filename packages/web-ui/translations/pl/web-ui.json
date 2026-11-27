@@ -623,6 +623,13 @@
         "ai": "CSAT AI"
       },
       "since": "Sprawy utworzone od"
+    },
+    "unreadTrigger": "Pomoc: {{count}} nieprzeczytanych",
+    "addNote": "Dodaj notatkę",
+    "moreCases": "Więcej spraw",
+    "handling": {
+      "ai": "Asystent AI korzysta z opublikowanej dokumentacji.",
+      "human": "Twoja sprawa czeka na obsługę przez człowieka."
     }
   }
 }

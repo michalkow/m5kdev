@@ -623,6 +623,13 @@
         "ai": "AI CSAT"
       },
       "since": "Cases created since"
+    },
+    "unreadTrigger": "Support: {{count}} unread",
+    "addNote": "Add note",
+    "moreCases": "More requests",
+    "handling": {
+      "ai": "The AI assistant uses published help documentation.",
+      "human": "Your request is with human support."
     }
   }
 }

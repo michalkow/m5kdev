@@ -18,35 +18,10 @@ export const supportSendMessageSchema = z.object({
   locale: z.string().min(2).max(35).optional(),
   preview: z.boolean().default(false),
 });
-export const supportCaseSchema = z.object({
-  id: z.string(),
-  userId: z.string(),
-  subject: z.string(),
-  organizationId: z.string().nullable(),
-  origin: z.enum(["user", "admin"]),
-  version: z.number().int(),
-  lastSequence: z.number().int(),
-  createdAt: z.coerce.date(),
-  updatedAt: z.coerce.date(),
-});
-export const supportMessageSchema = z.object({
-  id: z.string(),
-  caseId: z.string(),
-  sequence: z.number().int(),
-  authorUserId: z.string().nullable(),
-  authorKind: z.enum(["user", "admin", "ai", "system"]),
-  body: z.string(),
-  visibility: z.enum(["public", "internal"]),
-  acceptedAt: z.coerce.date(),
-  publishedAt: z.coerce.date().nullable(),
-});
-export const supportTranscriptSchema = z.object({
-  case: supportCaseSchema,
-  messages: z.array(supportMessageSchema),
-});
 export const supportListSchema = z
   .object({
     limit: z.number().int().min(1).max(100).default(30),
+    cursor: z.string().max(512).optional(),
     search: z.string().trim().max(200).optional(),
     status: z.enum(["open", "resolved"]).optional(),
     waitingOn: z.enum(["support", "user", "external"]).optional(),
@@ -56,8 +31,8 @@ export const supportListSchema = z
     active: z.boolean().optional(),
   })
   .default({ limit: 30 });
-export type SupportCreateCase = z.infer<typeof supportCreateCaseSchema>;
-export type SupportSendMessage = z.infer<typeof supportSendMessageSchema>;
+export type SupportCreateCase = z.input<typeof supportCreateCaseSchema>;
+export type SupportSendMessage = z.input<typeof supportSendMessageSchema>;
 
 export const supportSyncSchema = z.object({
   id: z.string().min(1),

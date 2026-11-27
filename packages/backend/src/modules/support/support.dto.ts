@@ -33,6 +33,7 @@ const caseOutput = createZodSchemas(supportCases)
     clientId: true,
     requestHash: true,
     initiatorUserId: true,
+    purgingAt: true,
   })
   .extend({
     unreadCount: z.number().int().min(0).default(0),
@@ -127,6 +128,7 @@ export const supportSchemas = {
       locales: z.array(z.string()),
       workingLocale: z.string(),
     }),
+    unread: z.object({ count: z.number().int().min(0) }),
     work: z.object({ id: z.string(), state: z.string() }),
     locale: z.object({ locale: z.string() }),
     upload: z.object({ fileId: z.string(), url: z.string() }),
@@ -155,7 +157,7 @@ export const supportSchemas = {
       hasOlder: z.boolean(),
       cursor: z.string(),
     }),
-    list: z.array(caseOutput),
+    list: z.object({ items: z.array(caseOutput), cursor: z.string().nullable() }),
     sync: z.object({
       case: caseOutput,
       cursor: z.string(),

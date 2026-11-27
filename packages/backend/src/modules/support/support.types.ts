@@ -33,6 +33,7 @@ export interface SupportAssistantProvider {
 }
 export interface SupportConfig {
   readonly grants?: ResourceGrant[];
+  readonly retentionDays?: number;
   readonly maxAttachments?: number;
   readonly maxFileBytes?: number;
   readonly locales?: readonly string[];

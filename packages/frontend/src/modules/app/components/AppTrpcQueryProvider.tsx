@@ -3,7 +3,8 @@ import { QueryClient, type QueryClientConfig, QueryClientProvider } from "@tanst
 import { createTRPCClient, httpBatchLink, type TRPCClient } from "@trpc/client";
 import type { AnyTRPCRouter } from "@trpc/server";
 import { createTRPCContext } from "@trpc/tanstack-react-query";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
+import { useSession } from "../../auth/hooks/useSession";
 import { useAppConfig } from "../hooks/useAppConfig";
 
 type TrpcConfig = Parameters<typeof createTRPCClient<AnyTRPCRouter>>[0];
@@ -16,19 +17,21 @@ const defaultQueryClientConfig: QueryClientConfig = {
   },
 };
 
-let browserQueryClient: QueryClient | undefined;
+let browserQueryClient: { scope: string; client: QueryClient } | undefined;
+const clientScopes = new WeakMap<QueryClient, string>();
 
 function makeQueryClient(config?: QueryClientConfig) {
   return new QueryClient(config ?? defaultQueryClientConfig);
 }
 
-function getQueryClient(config?: QueryClientConfig) {
+function getQueryClient(scope: string, config?: QueryClientConfig) {
   if (typeof window === "undefined" || config) {
     return makeQueryClient(config);
   }
 
-  browserQueryClient ??= makeQueryClient(config);
-  return browserQueryClient;
+  if (!browserQueryClient || browserQueryClient.scope !== scope)
+    browserQueryClient = { scope, client: makeQueryClient(config) };
+  return browserQueryClient.client;
 }
 
 function createTRPCClientFromConfig(url: string, config?: TrpcConfig) {
@@ -54,25 +57,54 @@ function createTRPCClientFromConfig(url: string, config?: TrpcConfig) {
 export const trpcContext: ReturnType<typeof createTRPCContext<AnyTRPCRouter>> =
   createTRPCContext<AnyTRPCRouter>();
 
-export function AppTrpcQueryProvider({
+type AppTrpcQueryProviderProps = {
+  children: ReactNode;
+  queryClient?: QueryClient;
+  queryClientConfig?: QueryClientConfig;
+  trpcClient?: TRPCClient<AnyTRPCRouter>;
+  trpcConfig?: TrpcConfig;
+  /** Override only for a custom identity flow; change it whenever its authorization scope changes. */
+  cacheScope?: string;
+};
+export function AppTrpcQueryProvider(props: AppTrpcQueryProviderProps) {
+  const { data } = useSession();
+  const scope =
+    props.cacheScope ??
+    JSON.stringify([data?.user.id ?? null, data?.session.id ?? null, data?.user.role ?? null]);
+  return <IdentityQueryProvider key={scope} {...props} scope={scope} />;
+}
+function IdentityQueryProvider({
   children,
   queryClient,
   queryClientConfig,
   trpcClient,
   trpcConfig,
-}: {
-  queryClient?: QueryClient;
-  queryClientConfig?: QueryClientConfig;
-  trpcConfig?: Parameters<typeof createTRPCClient<AnyTRPCRouter>>[0];
-  children: ReactNode;
-  trpcClient?: TRPCClient<AnyTRPCRouter>;
-}) {
+  scope,
+}: AppTrpcQueryProviderProps & { scope: string }) {
   const { serverUrl } = useAppConfig();
-  const [resolvedQueryClient] = useState(() => queryClient ?? getQueryClient(queryClientConfig));
+  const [resolvedQueryClient] = useState(
+    () => queryClient ?? getQueryClient(scope, queryClientConfig)
+  );
   const [resolvedTrpcClient] = useState(
     () => trpcClient ?? createTRPCClientFromConfig(serverUrl, trpcConfig)
   );
+  const [ready, setReady] = useState(
+    () => !clientScopes.has(resolvedQueryClient) || clientScopes.get(resolvedQueryClient) === scope
+  );
+  useEffect(() => {
+    const prior = clientScopes.get(resolvedQueryClient);
+    if (prior !== undefined && prior !== scope) {
+      void resolvedQueryClient.cancelQueries();
+      resolvedQueryClient.clear();
+    }
+    clientScopes.set(resolvedQueryClient, scope);
+    setReady(true);
+    return () => {
+      void resolvedQueryClient.cancelQueries();
+    };
+  }, [resolvedQueryClient, scope]);
   const { TRPCProvider: BaseTRPCProvider } = trpcContext;
+  if (!ready) return null;
 
   return (
     <QueryClientProvider client={resolvedQueryClient}>

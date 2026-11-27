@@ -42,3 +42,12 @@ Options: `namespace` (default `tag`) and `grants` (default `defaultTagGrants`).
 
 Service-only helpers: `linkBulk(data[])` links many tags at once and `set(data[])`
 replaces a resource's tags.
+
+## Platform Support taxonomy
+
+Tags default to `scope: "personal"` for existing User/Member/Organization consumers.
+Support creates `scope: "support"` Tags without a personal or Organization owner,
+then validates that scope when assigning them to `support.case`. Only platform
+admins manage this shared taxonomy through the Support service/API. Ordinary
+owner-filtered Tag lists and links do not expose it. Include the additive Tag
+scope column in app migrations when upgrading an existing consumer.

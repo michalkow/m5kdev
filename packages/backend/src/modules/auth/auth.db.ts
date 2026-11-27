@@ -32,6 +32,7 @@ export const users = appDatabaseSchema.table("users", {
   onboarding: integer("onboarding"),
   flags: text("flags").array().default([]).$type<string[]>(),
   locale: text("locale"),
+  lifecycleVersion: integer("lifecycle_version").notNull().default(0),
   closedAt: timestamp("closed_at", { withTimezone: true, mode: "date" }),
 });
 

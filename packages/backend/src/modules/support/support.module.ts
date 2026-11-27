@@ -14,6 +14,7 @@ import type { AuthService } from "../auth/auth.service";
 import type { FileModule } from "../file/file.module";
 import type { TagModule } from "../tag/tag.module";
 import type { WorkflowModule } from "../workflow/workflow.module";
+import { supportConfigSchema } from "./support.config";
 import type * as tables from "./support.db";
 import { createSupportProviders, type SupportModels } from "./support.providers";
 import { SupportRepository } from "./support.repository";
@@ -40,6 +41,7 @@ export class SupportModule extends BaseModule<
 > {
   constructor(private readonly config: SupportConfig & { models?: SupportModels } = {}) {
     super();
+    supportConfigSchema.parse(config);
   }
   readonly id = "support";
   override readonly optionalDependsOn = ["ai"] as const;
@@ -57,18 +59,20 @@ export class SupportModule extends BaseModule<
     const locales = appConfig.locales?.locales.map((locale) =>
       locale.code.replaceAll("_", "-")
     ) ?? ["en"];
-    return {
-      support: new SupportService(
-        repositories,
-        {
-          auth: deps.auth.services.auth as AuthService,
-          file: deps.file.services.file,
-        },
-        undefined,
-        { ...this.config, ...providers, locales }
-      ),
-    };
+    const support = new SupportService(
+      repositories,
+      { auth: deps.auth.services.auth as AuthService, file: deps.file.services.file },
+      this.config.grants,
+      { ...this.config, ...providers, locales }
+    );
+    deps.auth.services.auth.registerUserLifecycleParticipant("support", {
+      beforeClose: (id: string) => support.invalidateUserWork(id, "closed"),
+      beforeRestore: (id: string) => support.invalidateUserWork(id, "restored"),
+      beforePurge: (id: string) => support.purgeUserData(id),
+    });
+    return { support };
   }
+
   override trpc({ trpc, services }: ModuleTRPCContext<Deps, Services>) {
     return createBackendRouterMap("support", createSupportTRPC(trpc, services.support));
   }
@@ -96,12 +100,15 @@ export class SupportModule extends BaseModule<
         if (docs.isErr()) throw docs.error;
         const work = await services.support.processWork();
         if (work.isErr()) throw work.error;
-        const cleanup = await services.support.cleanupRevokedFiles();
-        if (cleanup.isErr()) throw cleanup.error;
         const result = await services.support.wakeSnoozed();
+        const cleanup = await services.support.cleanupRevokedFiles();
+        const retention = await services.support.cleanupRetention();
         if (result.isErr()) throw result.error;
+        if (cleanup.isErr()) throw cleanup.error;
+        if (retention.isErr()) throw retention.error;
       });
-    workflow.registry.register(definition, definition._handler!);
+    if (!definition._handler) throw new Error("Support maintenance handler missing");
+    workflow.registry.register(definition, definition._handler);
   }
   override express({ infra, authMiddleware, services }: ModuleExpressContext<Deps, Services>) {
     if (!authMiddleware) throw new Error("Support requires authenticated HTTP");
