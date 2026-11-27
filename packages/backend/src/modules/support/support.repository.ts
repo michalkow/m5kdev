@@ -5,9 +5,11 @@ import {
   count,
   desc,
   eq,
+  exists,
   gt,
   type InferInsertModel,
   type InferSelectModel,
+  ilike,
   inArray,
   isNotNull,
   isNull,
@@ -20,7 +22,14 @@ import {
 import type { NodePgDatabase, NodePgTransaction } from "drizzle-orm/node-postgres";
 import { BaseRepository } from "../../base/base.repository";
 import { users } from "../auth/auth.db";
-import { supportCases, supportEvents, supportMessages, supportReads } from "./support.db";
+import { taggings, tags } from "../tag/tag.db";
+import {
+  supportCases,
+  supportEvents,
+  supportMessages,
+  supportReads,
+  supportReplies,
+} from "./support.db";
 
 const tables = { supportCases, supportMessages, supportEvents, supportReads };
 type Schema = typeof tables;
@@ -109,14 +118,66 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
       ).reverse()
     );
   }
-  list(userId: string | null, limit: number) {
+  list(
+    userId: string | null,
+    input: import("zod").infer<
+      typeof import("@m5kdev/commons/modules/support/support.schema").supportListSchema
+    >
+  ) {
     return this.throwableQuery(() =>
       this.orm
         .select()
         .from(supportCases)
-        .where(userId === null ? undefined : eq(supportCases.userId, userId))
+        .where(
+          and(
+            userId === null ? undefined : eq(supportCases.userId, userId),
+            input.search
+              ? or(
+                  ilike(supportCases.subject, `%${input.search}%`),
+                  exists(
+                    this.orm
+                      .select({ id: supportMessages.id })
+                      .from(supportMessages)
+                      .where(
+                        and(
+                          eq(supportMessages.caseId, supportCases.id),
+                          eq(supportMessages.visibility, "public"),
+                          isNotNull(supportMessages.publishedAt),
+                          ilike(supportMessages.body, `%${input.search}%`)
+                        )
+                      )
+                  )
+                )
+              : undefined,
+            input.status ? eq(supportCases.status, input.status) : undefined,
+            input.waitingOn ? eq(supportCases.waitingOn, input.waitingOn) : undefined,
+            input.priority ? eq(supportCases.priority, input.priority) : undefined,
+            input.assignedUserId === undefined
+              ? undefined
+              : input.assignedUserId === null
+                ? isNull(supportCases.assignedUserId)
+                : eq(supportCases.assignedUserId, input.assignedUserId),
+            input.active
+              ? or(isNull(supportCases.snoozedUntil), lte(supportCases.snoozedUntil, new Date()))
+              : undefined,
+            input.tagId
+              ? exists(
+                  this.orm
+                    .select({ id: taggings.id })
+                    .from(taggings)
+                    .where(
+                      and(
+                        eq(taggings.resourceType, "support.case"),
+                        eq(taggings.resourceId, supportCases.id),
+                        eq(taggings.tagId, input.tagId)
+                      )
+                    )
+                )
+              : undefined
+          )
+        )
         .orderBy(desc(supportCases.updatedAt), desc(supportCases.id))
-        .limit(limit)
+        .limit(input.limit)
     );
   }
   currentUser(userId: string) {
@@ -215,5 +276,122 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
     }
     await tx.insert(supportReads).values({ caseId, userId, sequence: throughSequence });
     return { sequence: throughSequence };
+  }
+  async record(
+    current: SupportCaseRow,
+    patch: Partial<SupportCaseRow>,
+    type: string,
+    actor: { userId?: string; kind: "user" | "admin" | "system" },
+    data: Record<string, unknown>,
+    tx: SupportTransaction
+  ) {
+    const now = new Date();
+    const [row] = await tx
+      .update(supportCases)
+      .set({ ...patch, version: current.version + 1, updatedAt: now })
+      .where(eq(supportCases.id, current.id))
+      .returning();
+    await tx.insert(supportEvents).values({
+      caseId: current.id,
+      sequence: row.version,
+      type,
+      actorKind: actor.kind,
+      actorUserId: actor.userId,
+      occurredAt: now,
+      data,
+    });
+    return row;
+  }
+  async patchCase(id: string, patch: Partial<SupportCaseRow>, tx: SupportTransaction) {
+    const [row] = await tx
+      .update(supportCases)
+      .set(patch)
+      .where(eq(supportCases.id, id))
+      .returning();
+    return row;
+  }
+  dueCases(now: Date) {
+    return this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(supportCases)
+        .where(and(eq(supportCases.status, "open"), lte(supportCases.snoozedUntil, now)))
+        .limit(100)
+    );
+  }
+  catalog() {
+    return this.throwableQuery(async () => ({
+      tags: await this.orm
+        .select({ id: tags.id, name: tags.name })
+        .from(tags)
+        .where(and(eq(tags.scope, "support"), isNull(tags.deletedAt))),
+      replies: await this.orm
+        .select()
+        .from(supportReplies)
+        .orderBy(asc(supportReplies.title))
+        .limit(500),
+    }));
+  }
+  async saveCatalog(
+    input: { kind: "tag" | "reply"; id?: string; name: string; body?: string; remove: boolean },
+    tx: SupportTransaction
+  ) {
+    if (input.kind === "tag") {
+      if (input.id) {
+        if (input.remove)
+          await tx
+            .update(tags)
+            .set({ deletedAt: new Date() })
+            .where(and(eq(tags.id, input.id), eq(tags.scope, "support")));
+        else
+          await tx
+            .update(tags)
+            .set({ name: input.name, updatedAt: new Date() })
+            .where(and(eq(tags.id, input.id), eq(tags.scope, "support")));
+      } else
+        await tx
+          .insert(tags)
+          .values({ name: input.name, scope: "support", assignableTo: ["support.case"] });
+    } else if (input.id) {
+      if (input.remove) await tx.delete(supportReplies).where(eq(supportReplies.id, input.id));
+      else
+        await tx
+          .update(supportReplies)
+          .set({ title: input.name, body: input.body ?? "", updatedAt: new Date() })
+          .where(eq(supportReplies.id, input.id));
+    } else await tx.insert(supportReplies).values({ title: input.name, body: input.body ?? "" });
+  }
+  async setTags(caseId: string, tagIds: string[], tx: SupportTransaction) {
+    const allowed = await tx
+      .select({ id: tags.id })
+      .from(tags)
+      .where(and(inArray(tags.id, tagIds), eq(tags.scope, "support"), isNull(tags.deletedAt)));
+    if (new Set(tagIds).size !== allowed.length) return false;
+    await tx
+      .delete(taggings)
+      .where(and(eq(taggings.resourceType, "support.case"), eq(taggings.resourceId, caseId)));
+    if (tagIds.length)
+      await tx
+        .insert(taggings)
+        .values(
+          tagIds.map((tagId) => ({ tagId, resourceType: "support.case", resourceId: caseId }))
+        );
+    return true;
+  }
+  assignedTags(caseId: string) {
+    return this.throwableQuery(() =>
+      this.orm
+        .select({ id: taggings.tagId })
+        .from(taggings)
+        .innerJoin(tags, eq(tags.id, taggings.tagId))
+        .where(
+          and(
+            eq(taggings.resourceType, "support.case"),
+            eq(taggings.resourceId, caseId),
+            eq(tags.scope, "support"),
+            isNull(tags.deletedAt)
+          )
+        )
+    );
   }
 }

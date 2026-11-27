@@ -482,6 +482,42 @@
     },
     "markRead": "Oznacz jako przeczytane",
     "older": "Starsze wiadomości",
-    "latest": "Najnowsze wiadomości"
+    "latest": "Najnowsze wiadomości",
+    "resolve": "Rozwiąż",
+    "reopen": "Otwórz ponownie",
+    "internalNote": "Notatka wewnętrzna (tylko obsługa)",
+    "unassigned": "Nieprzypisane",
+    "assign": "ID administratora (puste usuwa przypisanie)",
+    "save": "Zapisz",
+    "snooze": "Odłóż do (czas lokalny; puste usuwa odłożenie)",
+    "clearTags": "Usuń Tagi",
+    "catalogName": "Wspólna nazwa",
+    "savedReply": "Treść zapisanej odpowiedzi",
+    "addTag": "Dodaj wspólny Tag",
+    "addReply": "Dodaj odpowiedź",
+    "filter": {
+      "q": "Szukaj w wiadomościach publicznych",
+      "status": "Stan: open / resolved",
+      "priority": "Priorytet: low / normal / high / urgent",
+      "waitingOn": "Oczekuje: support / user / external",
+      "assignee": "ID administratora / unassigned",
+      "apply": "Filtruj"
+    },
+    "status": {
+      "open": "Otwarte",
+      "resolved": "Rozwiązane"
+    },
+    "wait": {
+      "support": "Oczekuje na obsługę",
+      "user": "Oczekuje na Użytkownika",
+      "external": "Oczekuje zewnętrznie"
+    },
+    "priority": {
+      "low": "Niski",
+      "normal": "Normalny",
+      "high": "Wysoki",
+      "urgent": "Pilny"
+    },
+    "take": "Przejmij sprawę"
   }
 }

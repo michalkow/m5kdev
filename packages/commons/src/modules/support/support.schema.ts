@@ -11,6 +11,7 @@ export const supportSendMessageSchema = z.object({
   id: z.string().min(1),
   clientId: z.string().min(1).max(128),
   body: z.string().trim().min(1).max(20000),
+  visibility: z.enum(["public", "internal"]).default("public"),
 });
 export const supportCaseSchema = z.object({
   id: z.string(),
@@ -39,7 +40,16 @@ export const supportTranscriptSchema = z.object({
   messages: z.array(supportMessageSchema),
 });
 export const supportListSchema = z
-  .object({ limit: z.number().int().min(1).max(100).default(30) })
+  .object({
+    limit: z.number().int().min(1).max(100).default(30),
+    search: z.string().trim().max(200).optional(),
+    status: z.enum(["open", "resolved"]).optional(),
+    waitingOn: z.enum(["support", "user", "external"]).optional(),
+    priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+    assignedUserId: z.string().nullable().optional(),
+    tagId: z.string().optional(),
+    active: z.boolean().optional(),
+  })
   .default({ limit: 30 });
 export type SupportCreateCase = z.infer<typeof supportCreateCaseSchema>;
 export type SupportSendMessage = z.infer<typeof supportSendMessageSchema>;
@@ -57,4 +67,25 @@ export const supportReadSchema = z.object({
 export const supportHistorySchema = supportCaseIdSchema.extend({
   beforeSequence: z.number().int().min(1).optional(),
   limit: z.number().int().min(1).max(100).default(50),
+});
+
+export const supportUpdateCaseSchema = supportCaseIdSchema.extend({
+  expectedVersion: z.number().int().min(1),
+  status: z.enum(["open", "resolved"]).optional(),
+  waitingOn: z.enum(["support", "user", "external"]).optional(),
+  priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+  assignedUserId: z.string().nullable().optional(),
+  snoozedUntil: z.coerce.date().nullable().optional(),
+  handling: z.enum(["human", "ai"]).optional(),
+});
+export const supportCatalogSchema = z.object({
+  kind: z.enum(["tag", "reply"]),
+  id: z.string().optional(),
+  name: z.string().trim().min(1).max(120),
+  body: z.string().trim().min(1).max(20000).optional(),
+  remove: z.boolean().default(false),
+});
+export const supportSetTagsSchema = supportCaseIdSchema.extend({
+  expectedVersion: z.number().int().min(1),
+  tagIds: z.array(z.string().min(1)).max(30),
 });

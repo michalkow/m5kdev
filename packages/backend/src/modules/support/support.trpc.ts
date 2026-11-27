@@ -3,12 +3,29 @@ import {
   supportListSchema,
   supportSendMessageSchema,
 } from "@m5kdev/commons/modules/support/support.schema";
+import { z } from "zod";
 import { handleTRPCResult, type TRPCMethods } from "../../utils/trpc";
 import { supportSchemas } from "./support.dto";
 import type { SupportService } from "./support.service";
 
 export function createSupportTRPC({ router, userProcedure }: TRPCMethods, service: SupportService) {
   return router({
+    updateCase: userProcedure
+      .input(supportSchemas.input.updateCase)
+      .output(supportSchemas.output.case)
+      .mutation(async ({ input, ctx }) => handleTRPCResult(await service.updateCase(input, ctx))),
+    getCatalog: userProcedure
+      .input(z.object({}))
+      .output(supportSchemas.output.catalog)
+      .query(async ({ input, ctx }) => handleTRPCResult(await service.getCatalog(input, ctx))),
+    saveCatalog: userProcedure
+      .input(supportSchemas.input.catalog)
+      .output(supportSchemas.output.catalog)
+      .mutation(async ({ input, ctx }) => handleTRPCResult(await service.saveCatalog(input, ctx))),
+    setTags: userProcedure
+      .input(supportSchemas.input.setTags)
+      .output(supportSchemas.output.case)
+      .mutation(async ({ input, ctx }) => handleTRPCResult(await service.setTags(input, ctx))),
     createCase: userProcedure
       .input(supportCreateCaseSchema)
       .output(supportSchemas.output.case)

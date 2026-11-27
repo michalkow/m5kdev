@@ -375,8 +375,8 @@ Local row re-synced from Stripe; Stripe is the source of truth. The billed party
 _Avoid_: Plan, personal User subscription; Stripe customer linkage on the User; one row shared across live and test Stripe; a sandbox ACCESS_STATUS granting production access; treating skipPlanCheck as every Capability allowed
 
 **Tag**:
-A polymorphic label attached to any resource type via taggings. Ownership is UserId (personal), MemberId (Member-owned), or organizationId (org-shared).
-_Avoid_: Label, Category (unless the product truly means a separate taxonomy); a fourth ownership besides UserId, MemberId, and organizationId
+A polymorphic label attached to any resource type via taggings. Ownership is UserId (personal), MemberId (Member-owned), organizationId (org-shared), or the platform Support catalog (shared among platform admins). Support Tags apply only to Support Cases.
+_Avoid_: Label, Category (unless the product truly means a separate taxonomy); treating shared Support Tags as personal Tags or Organization tenancy
 
 ### Customer support
 

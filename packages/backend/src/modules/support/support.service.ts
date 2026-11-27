@@ -54,7 +54,7 @@ export class SupportService extends BasePermissionService<
   }
 
   readonly createCase = this.procedure("createCase")
-    .input(supportCreateCaseSchema)
+    .input(supportCreateCaseSchema, true)
     .output(supportSchemas.output.case)
     .requireAuth("user")
     .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
@@ -62,6 +62,12 @@ export class SupportService extends BasePermissionService<
       const userId = input.userId ?? ctx.actor.userId;
       const permission = this.accessGuard(ctx.actor, "write", { userId });
       if (permission.isErr()) return err(permission.error);
+      if (userId !== ctx.actor.userId) {
+        const target = await this.repository.support.currentUser(userId);
+        if (target.isErr()) return err(target.error);
+        if (!target.value || target.value.closedAt)
+          return this.error("BAD_REQUEST", "Support recipient is unavailable");
+      }
       const requestHash = hash({ ...input, userId });
       const result = await this.repository.support.transaction(async (tx) => {
         await this.repository.support.lockRequest(
@@ -88,6 +94,7 @@ export class SupportService extends BasePermissionService<
             subject: input.subject,
             organizationId: ctx.actor.userId === userId ? ctx.actor.organizationId : null,
             origin: authorKind,
+            waitingOn: authorKind === "admin" ? "user" : "support",
             clientId: input.clientId,
             requestHash,
             createdAt: now,
@@ -126,7 +133,7 @@ export class SupportService extends BasePermissionService<
     });
 
   readonly getCase = this.procedure("getCase")
-    .input(supportSchemas.input.history)
+    .input(supportSchemas.input.history, true)
     .output(supportSchemas.output.transcript)
     .requireAuth("user")
     .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
@@ -149,8 +156,14 @@ export class SupportService extends BasePermissionService<
         ctx.actor.userRole === "admin"
       );
       if (unread.isErr()) return err(unread.error);
+      const assignedTags = await this.repository.support.assignedTags(input.id);
+      if (assignedTags.isErr()) return err(assignedTags.error);
       return ok({
-        case: supportSchemas.output.case.parse({ ...state.case, unreadCount: unread.value }),
+        case: supportSchemas.output.case.parse({
+          ...state.case,
+          unreadCount: unread.value,
+          tagIds: assignedTags.value.map((tag) => tag.id),
+        }),
         messages: messages.value
           .slice(-input.limit)
           .map((value) => supportSchemas.output.message.parse(value)),
@@ -162,14 +175,14 @@ export class SupportService extends BasePermissionService<
     });
 
   readonly listCases = this.procedure("listCases")
-    .input(supportListSchema)
+    .input(supportListSchema, true)
     .output(supportSchemas.output.case.array())
     .requireAuth("user")
     .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
     .handle(async ({ input, ctx }) => {
       const result = await this.repository.support.list(
         ctx.actor.userRole === "admin" ? null : ctx.actor.userId,
-        input.limit
+        input
       );
       if (result.isErr()) return err(result.error);
       const rows = this.filterPermission(ctx.actor, "read", result.value);
@@ -188,17 +201,19 @@ export class SupportService extends BasePermissionService<
     });
 
   readonly sendMessage = this.procedure("sendMessage")
-    .input(supportSendMessageSchema)
+    .input(supportSendMessageSchema, true)
     .output(supportSchemas.output.message)
     .requireAuth("user")
     .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
     .loadResource("case", ({ input }) => this.repository.support.findById(input.id))
     .access({ action: "write", entityStep: "case" })
     .handle(async ({ input, ctx, state }) => {
+      if (input.visibility === "internal" && ctx.actor.userRole !== "admin")
+        return this.error("FORBIDDEN", "Internal notes require platform administration");
       const result = await this.repository.support.transaction(async (tx) => {
         const current = await this.repository.support.lockCase(input.id, tx);
         if (!current) throw this.error("NOT_FOUND", "Support Case not found").error;
-        const requestHash = hash(input.body);
+        const requestHash = hash({ body: input.body, visibility: input.visibility });
         const existing = await this.repository.support.findMessage(
           input.id,
           ctx.actor.userId,
@@ -213,14 +228,14 @@ export class SupportService extends BasePermissionService<
         }
         const now = new Date();
         const authorKind = ctx.actor.userRole === "admin" ? "admin" : "user";
-        return this.repository.support.append(
+        const message = await this.repository.support.append(
           {
             caseId: input.id,
             sequence: current.lastSequence + 1,
             authorUserId: ctx.actor.userId,
             authorKind,
             body: input.body,
-            visibility: "public",
+            visibility: input.visibility,
             clientId: input.clientId,
             requestHash,
             acceptedAt: now,
@@ -229,20 +244,43 @@ export class SupportService extends BasePermissionService<
           {
             caseId: input.id,
             sequence: current.version + 1,
-            type: "message.published",
+            type: input.visibility === "internal" ? "note.created" : "message.published",
             actorUserId: ctx.actor.userId,
             actorKind: authorKind,
             occurredAt: now,
-            data: { messageSequence: current.lastSequence + 1, visibility: "public" },
+            data: {
+              messageSequence: current.lastSequence + 1,
+              visibility: input.visibility,
+              cycle:
+                current.status === "resolved" && authorKind === "user"
+                  ? current.cycle + 1
+                  : current.cycle,
+              reopened: current.status === "resolved" && authorKind === "user",
+            },
           },
           tx
         );
+        if (input.visibility === "public")
+          await this.repository.support.patchCase(
+            input.id,
+            authorKind === "user"
+              ? {
+                  status: "open",
+                  waitingOn: "support",
+                  snoozedUntil: null,
+                  resolvedAt: null,
+                  cycle: current.status === "resolved" ? current.cycle + 1 : current.cycle,
+                }
+              : { waitingOn: "user" },
+            tx
+          );
+        return message;
       });
       if (result.isOk()) await this.notify(input.id, state.case.userId, ctx.actor.userId);
       return result.map((value) => supportSchemas.output.message.parse(value));
     });
   readonly sync = this.procedure("sync")
-    .input(supportSchemas.input.sync)
+    .input(supportSchemas.input.sync, true)
     .output(supportSchemas.output.sync)
     .requireAuth("user")
     .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
@@ -302,7 +340,7 @@ export class SupportService extends BasePermissionService<
     });
 
   readonly markRead = this.procedure("markRead")
-    .input(supportSchemas.input.markRead)
+    .input(supportSchemas.input.markRead, true)
     .output(supportSchemas.output.markRead)
     .requireAuth("user")
     .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
@@ -322,4 +360,149 @@ export class SupportService extends BasePermissionService<
         );
       })
     );
+  readonly updateCase = this.procedure("updateCase")
+    .input(supportSchemas.input.updateCase, true)
+    .output(supportSchemas.output.case)
+    .requireAuth("user")
+    .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .loadResource("case", ({ input }) => this.repository.support.findById(input.id))
+    .access({ action: "write", entityStep: "case" })
+    .handle(async ({ input, ctx, state }) => {
+      const { id, expectedVersion, ...patch } = input;
+      const admin = ctx.actor.userRole === "admin";
+      if (!admin && Object.keys(patch).some((key) => key !== "status"))
+        return this.error("FORBIDDEN", "Staff workflow requires platform administration");
+      if (patch.handling === "ai")
+        return this.error("BAD_REQUEST", "Documentation AI is not enabled");
+      if (patch.assignedUserId) {
+        const assignee = await this.repository.support.currentUser(patch.assignedUserId);
+        if (assignee.isErr()) return err(assignee.error);
+        if (
+          !assignee.value ||
+          assignee.value.closedAt ||
+          assignee.value.banned ||
+          assignee.value.role !== "admin"
+        )
+          return this.error("BAD_REQUEST", "Assignee must be a current platform administrator");
+      }
+      if (patch.snoozedUntil && patch.snoozedUntil <= new Date())
+        return this.error("BAD_REQUEST", "Snooze must be in the future");
+      const result = await this.repository.support.transaction(async (tx) => {
+        const current = await this.repository.support.lockCase(id, tx);
+        if (!current) throw this.error("NOT_FOUND", "Support Case not found").error;
+        if (current.version !== expectedVersion)
+          throw this.error("CONFLICT", "Support Case changed; refresh before editing").error;
+        const status = patch.status ?? current.status;
+        return this.repository.support.record(
+          current,
+          {
+            ...patch,
+            resolvedAt: status === "resolved" ? (current.resolvedAt ?? new Date()) : null,
+            cycle:
+              current.status === "resolved" && status === "open"
+                ? current.cycle + 1
+                : current.cycle,
+            handlingEpoch: patch.handling ? current.handlingEpoch + 1 : current.handlingEpoch,
+          },
+          "case.updated",
+          { userId: ctx.actor.userId, kind: admin ? "admin" : "user" },
+          { ...patch, cycle: current.cycle, previousStatus: current.status },
+          tx
+        );
+      });
+      if (result.isOk()) await this.notify(id, state.case.userId, ctx.actor.userId);
+      return result.map((row) => supportSchemas.output.case.parse(row));
+    });
+
+  readonly getCatalog = this.procedure("getCatalog")
+    .input(z.object({}))
+    .output(supportSchemas.output.catalog)
+    .requireAuth("user")
+    .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .handle(({ ctx }) =>
+      ctx.actor.userRole === "admin"
+        ? this.repository.support.catalog()
+        : Promise.resolve(
+            this.error("FORBIDDEN", "Support catalog requires platform administration")
+          )
+    );
+
+  readonly saveCatalog = this.procedure("saveCatalog")
+    .input(supportSchemas.input.catalog, true)
+    .output(supportSchemas.output.catalog)
+    .requireAuth("user")
+    .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .handle(async ({ input, ctx }) => {
+      if (ctx.actor.userRole !== "admin")
+        return this.error("FORBIDDEN", "Support catalog requires platform administration");
+      if (input.kind === "reply" && !input.remove && !input.body)
+        return this.error("BAD_REQUEST", "Saved replies require text");
+      const saved = await this.repository.support.transaction((tx) =>
+        this.repository.support.saveCatalog(input, tx)
+      );
+      if (saved.isErr()) return err(saved.error);
+      return this.repository.support.catalog();
+    });
+
+  readonly setTags = this.procedure("setTags")
+    .input(supportSchemas.input.setTags, true)
+    .output(supportSchemas.output.case)
+    .requireAuth("user")
+    .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .loadResource("case", ({ input }) => this.repository.support.findById(input.id))
+    .access({ action: "write", entityStep: "case" })
+    .handle(async ({ input, ctx }) => {
+      if (ctx.actor.userRole !== "admin")
+        return this.error("FORBIDDEN", "Shared Support Tags require platform administration");
+      const result = await this.repository.support.transaction(async (tx) => {
+        const current = await this.repository.support.lockCase(input.id, tx);
+        if (!current) throw this.error("NOT_FOUND", "Support Case not found").error;
+        if (current.version !== input.expectedVersion)
+          throw this.error("CONFLICT", "Support Case changed").error;
+        if (!(await this.repository.support.setTags(input.id, input.tagIds, tx)))
+          throw this.error("BAD_REQUEST", "Only shared Support Tags can be assigned").error;
+        return this.repository.support.record(
+          current,
+          {},
+          "tags.changed",
+          { userId: ctx.actor.userId, kind: "admin" },
+          { tagIds: input.tagIds },
+          tx
+        );
+      });
+      return result.map((row) => supportSchemas.output.case.parse(row));
+    });
+
+  async wakeSnoozed(now = new Date()): ServerResultAsync<number> {
+    const due = await this.repository.support.dueCases(now);
+    if (due.isErr()) return err(due.error);
+    let count = 0;
+    for (const candidate of due.value) {
+      const result = await this.repository.support.transaction(async (tx) => {
+        const current = await this.repository.support.lockCase(candidate.id, tx);
+        if (
+          !current ||
+          current.status !== "open" ||
+          !current.snoozedUntil ||
+          current.snoozedUntil > now
+        )
+          return false;
+        await this.repository.support.record(
+          current,
+          { snoozedUntil: null },
+          "snooze.expired",
+          { kind: "system" },
+          {},
+          tx
+        );
+        return true;
+      });
+      if (result.isErr()) return err(result.error);
+      if (result.value) {
+        count++;
+        await this.notify(candidate.id, candidate.userId, "");
+      }
+    }
+    return ok(count);
+  }
 }

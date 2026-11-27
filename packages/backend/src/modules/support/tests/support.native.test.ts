@@ -11,6 +11,7 @@ import { createTestPool } from "../../../test/postgresql";
 import * as authTables from "../../auth/auth.db";
 import { createBetterAuth } from "../../auth/auth.lib";
 import { createAuthMiddleware } from "../../auth/auth.middleware";
+import { taggings, tags } from "../../tag/tag.db";
 import * as supportTables from "../support.db";
 import { SupportRepository } from "../support.repository";
 import { createSupportRouter } from "../support.router";
@@ -18,7 +19,7 @@ import { SupportService } from "../support.service";
 
 it("runs a native reference client through real bearer login, Case sync and revocation", async () => {
   const pool = createTestPool();
-  const schema = { ...authTables, ...supportTables };
+  const schema = { ...authTables, tags, taggings, ...supportTables };
   await prepareExperienceTables(pool, schema);
   const orm = drizzle(pool, { schema });
   await orm.insert(authTables.users).values({

@@ -5,6 +5,7 @@ import {
   type ModuleRepositoriesContext,
   type ModuleServicesContext,
   type ModuleTRPCContext,
+  type ModuleWorkflowContext,
 } from "../../base/base.module";
 import type { AuthModule } from "../auth/auth.module";
 import type { AuthService } from "../auth/auth.service";
@@ -39,6 +40,16 @@ export class SupportModule extends BaseModule<
   }
   override trpc({ trpc, services }: ModuleTRPCContext<Deps, Services>) {
     return createBackendRouterMap("support", createSupportTRPC(trpc, services.support));
+  }
+  override workflows({ workflow, services }: ModuleWorkflowContext<Deps, Services>) {
+    if (!workflow) throw new Error("Support requires Workflow");
+    const definition = workflow.service
+      .cron({ name: "support.snooze", pattern: "* * * * *" })
+      .handle(async () => {
+        const result = await services.support.wakeSnoozed();
+        if (result.isErr()) throw result.error;
+      });
+    workflow.registry.register(definition, definition._handler!);
   }
   override express({ infra, authMiddleware, services }: ModuleExpressContext<Deps, Services>) {
     if (!authMiddleware) throw new Error("Support requires authenticated HTTP");

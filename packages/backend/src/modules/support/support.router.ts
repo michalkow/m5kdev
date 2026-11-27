@@ -118,7 +118,12 @@ export function createSupportRouter(service: SupportService, auth: AuthMiddlewar
     "listCases",
     supportSchemas.input.list,
     supportSchemas.output.list,
-    (req) => ({ limit: req.query.limit === undefined ? undefined : Number(req.query.limit) }),
+    (req) => ({
+      ...req.query,
+      limit: req.query.limit === undefined ? undefined : Number(req.query.limit),
+      active: req.query.active === "true",
+      assignedUserId: req.query.assignedUserId === "null" ? null : req.query.assignedUserId,
+    }),
     (input, ctx) => service.listCases(input, ctx)
   );
   register(
@@ -165,6 +170,42 @@ export function createSupportRouter(service: SupportService, auth: AuthMiddlewar
     supportSchemas.output.markRead,
     (req) => ({ ...req.body, id: req.params.id }),
     (input, ctx) => service.markRead(input, ctx)
+  );
+  register(
+    "post",
+    "/cases/:id/state",
+    "updateCase",
+    supportSchemas.input.updateCase,
+    supportSchemas.output.case,
+    (req) => ({ ...req.body, id: req.params.id }),
+    (input, ctx) => service.updateCase(input, ctx)
+  );
+  register(
+    "get",
+    "/catalog",
+    "getCatalog",
+    z.object({}),
+    supportSchemas.output.catalog,
+    () => ({}),
+    (input, ctx) => service.getCatalog(input, ctx)
+  );
+  register(
+    "post",
+    "/catalog",
+    "saveCatalog",
+    supportSchemas.input.catalog,
+    supportSchemas.output.catalog,
+    (req) => req.body,
+    (input, ctx) => service.saveCatalog(input, ctx)
+  );
+  register(
+    "post",
+    "/cases/:id/tags",
+    "setTags",
+    supportSchemas.input.setTags,
+    supportSchemas.output.case,
+    (req) => ({ ...req.body, id: req.params.id }),
+    (input, ctx) => service.setTags(input, ctx)
   );
   router.get("/openapi.json", (_req, res) =>
     res.json({

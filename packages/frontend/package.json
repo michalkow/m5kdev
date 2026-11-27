@@ -40,7 +40,8 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-i18next": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "nuqs": "catalog:"
   },
   "devDependencies": {
     "@jest/globals": "catalog:",
@@ -63,7 +64,8 @@
     "better-auth": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "nuqs": "catalog:"
   },
   "exports": {
     ".": {

@@ -482,6 +482,42 @@
     },
     "markRead": "Mark as read",
     "older": "Older messages",
-    "latest": "Latest messages"
+    "latest": "Latest messages",
+    "resolve": "Resolve",
+    "reopen": "Reopen",
+    "internalNote": "Internal note (staff only)",
+    "unassigned": "Unassigned",
+    "assign": "Assign to administrator User ID (empty to unassign)",
+    "save": "Save",
+    "snooze": "Snooze until (local time; empty to clear)",
+    "clearTags": "Clear Tags",
+    "catalogName": "Shared name",
+    "savedReply": "Saved reply text",
+    "addTag": "Add shared Tag",
+    "addReply": "Add saved reply",
+    "filter": {
+      "q": "Search public messages",
+      "status": "Status: open / resolved",
+      "priority": "Priority: low / normal / high / urgent",
+      "waitingOn": "Waiting: support / user / external",
+      "assignee": "Administrator User ID / unassigned",
+      "apply": "Apply filters"
+    },
+    "status": {
+      "open": "Open",
+      "resolved": "Resolved"
+    },
+    "wait": {
+      "support": "Waiting on support",
+      "user": "Waiting on User",
+      "external": "Waiting externally"
+    },
+    "priority": {
+      "low": "Low",
+      "normal": "Normal",
+      "high": "High",
+      "urgent": "Urgent"
+    },
+    "take": "Take Case"
   }
 }

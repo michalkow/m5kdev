@@ -6,12 +6,13 @@ import { prepareExperienceTables } from "../../../test/experience.fixtures";
 import { createTestPool } from "../../../test/postgresql";
 import { users } from "../../auth/auth.db";
 import type { AuthMiddleware } from "../../auth/auth.middleware";
+import { taggings, tags } from "../../tag/tag.db";
 import * as tables from "../support.db";
 import { SupportRepository } from "../support.repository";
 import { createSupportRouter } from "../support.router";
 import { SupportService } from "../support.service";
 
-const schema = { users, ...tables };
+const schema = { users, tags, taggings, ...tables };
 const pool = createTestPool();
 const orm = drizzle(pool, { schema });
 const support = new SupportService({ support: new SupportRepository({ orm, schema }) }, {});
@@ -199,4 +200,81 @@ it("enforces the same private Case boundary on the JSON HTTP interface", async (
       server.close((error) => (error ? reject(error) : resolve()))
     );
   }
+});
+
+it("keeps notes private and reopens a resolved cycle without losing human takeover", async () => {
+  const created = await support.createCase(
+    { clientId: "workflow", subject: "Lifecycle", body: "Question" },
+    ctx("alice")
+  );
+  if (created.isErr()) throw created.error;
+  const resolved = await support.updateCase(
+    { id: created.value.id, expectedVersion: created.value.version, status: "resolved" },
+    ctx("alice")
+  );
+  if (resolved.isErr()) throw resolved.error;
+  const note = await support.sendMessage(
+    { id: created.value.id, clientId: "note", body: "Staff secret", visibility: "internal" },
+    ctx("staff", "admin")
+  );
+  if (note.isErr()) throw note.error;
+  const customer = await support.getCase({ id: created.value.id }, ctx("alice"));
+  if (customer.isErr()) throw customer.error;
+  expect(customer.value.messages.map((message) => message.body)).toEqual(["Question"]);
+  expect(customer.value.case.status).toBe("resolved");
+  const reopened = await support.sendMessage(
+    { id: created.value.id, clientId: "reopen", body: "Still need help" },
+    ctx("alice")
+  );
+  if (reopened.isErr()) throw reopened.error;
+  const view = await support.getCase({ id: created.value.id }, ctx("alice"));
+  if (view.isErr()) throw view.error;
+  expect([
+    view.value.case.status,
+    view.value.case.cycle,
+    view.value.case.waitingOn,
+    view.value.case.handling,
+  ]).toEqual(["open", 2, "support", "human"]);
+  const stale = await support.updateCase(
+    { id: created.value.id, expectedVersion: 1, priority: "urgent" },
+    ctx("staff", "admin")
+  );
+  expect(stale.isErr() && stale.error.code).toBe("CONFLICT");
+  const sync = await support.sync({ id: created.value.id }, ctx("alice"));
+  if (sync.isErr()) throw sync.error;
+  expect(JSON.stringify(sync.value)).not.toContain("Staff secret");
+});
+
+it("shares only the Support catalog and ignores a snooze after resolution", async () => {
+  const denied = await support.saveCatalog({ kind: "tag", name: "Private?" }, ctx("alice"));
+  expect(denied.isErr() && denied.error.code).toBe("FORBIDDEN");
+  const saved = await support.saveCatalog({ kind: "tag", name: "Billing" }, ctx("staff", "admin"));
+  if (saved.isErr()) throw saved.error;
+  const tagId = saved.value.tags.find((tag) => tag.name === "Billing")?.id;
+  expect(typeof tagId).toBe("string");
+  const created = await support.createCase(
+    { clientId: "snooze", subject: "Timer", body: "Question" },
+    ctx("alice")
+  );
+  if (created.isErr()) throw created.error;
+  const assigned = await support.updateCase(
+    { id: created.value.id, expectedVersion: 1, assignedUserId: "bob" },
+    ctx("staff", "admin")
+  );
+  expect(assigned.isErr() && assigned.error.code).toBe("BAD_REQUEST");
+  const snoozed = await support.updateCase(
+    { id: created.value.id, expectedVersion: 1, snoozedUntil: new Date(Date.now() + 60000) },
+    ctx("staff", "admin")
+  );
+  if (snoozed.isErr()) throw snoozed.error;
+  const resolved = await support.updateCase(
+    { id: created.value.id, expectedVersion: snoozed.value.version, status: "resolved" },
+    ctx("alice")
+  );
+  if (resolved.isErr()) throw resolved.error;
+  const wake = await support.wakeSnoozed(new Date(Date.now() + 120000));
+  if (wake.isErr()) throw wake.error;
+  const view = await support.getCase({ id: created.value.id }, ctx("alice"));
+  if (view.isErr()) throw view.error;
+  expect(view.value.case.status).toBe("resolved");
 });

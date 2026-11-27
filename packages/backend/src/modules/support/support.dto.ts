@@ -1,11 +1,14 @@
 import {
   supportCaseIdSchema,
+  supportCatalogSchema,
   supportCreateCaseSchema,
   supportHistorySchema,
   supportListSchema,
   supportReadSchema,
   supportSendMessageSchema,
+  supportSetTagsSchema,
   supportSyncSchema,
+  supportUpdateCaseSchema,
 } from "@m5kdev/commons/modules/support/support.schema";
 import { z } from "zod";
 import { createZodSchemas } from "../../base/base.dto";
@@ -17,7 +20,10 @@ const caseOutput = createZodSchemas(supportCases)
     requestHash: true,
     initiatorUserId: true,
   })
-  .extend({ unreadCount: z.number().int().min(0).default(0) });
+  .extend({
+    unreadCount: z.number().int().min(0).default(0),
+    tagIds: z.array(z.string()).default([]),
+  });
 const messageOutput = createZodSchemas(supportMessages).output.single.omit({
   clientId: true,
   requestHash: true,
@@ -31,6 +37,9 @@ export const supportSchemas = {
     list: supportListSchema,
     sync: supportSyncSchema,
     markRead: supportReadSchema,
+    updateCase: supportUpdateCaseSchema,
+    catalog: supportCatalogSchema,
+    setTags: supportSetTagsSchema,
   },
   output: {
     case: caseOutput,
@@ -55,6 +64,10 @@ export const supportSchemas = {
           data: z.record(z.string(), z.unknown()),
         })
       ),
+    }),
+    catalog: z.object({
+      tags: z.array(z.object({ id: z.string(), name: z.string() })),
+      replies: z.array(z.object({ id: z.string(), title: z.string(), body: z.string() })),
     }),
     markRead: z.object({ sequence: z.number().int() }),
   },

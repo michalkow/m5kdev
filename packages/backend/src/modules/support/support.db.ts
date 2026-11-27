@@ -14,6 +14,21 @@ export const supportCases = appDatabaseSchema.table(
     initiatorUserId: text("initiator_user_id").references(() => users.id, { onDelete: "set null" }),
     organizationId: text("organization_id"),
     subject: text("subject").notNull(),
+    status: text("status").$type<"open" | "resolved">().notNull().default("open"),
+    waitingOn: text("waiting_on")
+      .$type<"support" | "user" | "external">()
+      .notNull()
+      .default("support"),
+    priority: text("priority")
+      .$type<"low" | "normal" | "high" | "urgent">()
+      .notNull()
+      .default("normal"),
+    assignedUserId: text("assigned_user_id").references(() => users.id, { onDelete: "set null" }),
+    handling: text("handling").$type<"human" | "ai">().notNull().default("human"),
+    handlingEpoch: integer("handling_epoch").notNull().default(0),
+    cycle: integer("cycle").notNull().default(1),
+    snoozedUntil: instant("snoozed_until"),
+    resolvedAt: instant("resolved_at"),
     origin: text("origin").$type<"user" | "admin">().notNull(),
     clientId: text("client_id").notNull(),
     requestHash: text("request_hash").notNull(),
@@ -87,3 +102,12 @@ export const supportReads = appDatabaseSchema.table(
   },
   (table) => [uniqueIndex("support_reads_reader").on(table.caseId, table.userId)]
 );
+
+export const supportReplies = appDatabaseSchema.table("support_replies", {
+  id: text("id").primaryKey().$default(uuidv4),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  updatedAt: instant("updated_at")
+    .notNull()
+    .$default(() => new Date()),
+});
