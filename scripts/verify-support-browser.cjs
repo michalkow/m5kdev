@@ -10,7 +10,7 @@ let activeBrowser;
 async function main() {
   await mkdir("/tmp/m5kdev-support-execution", { recursive: true });
   const { createSupportReferenceClient } = await import(
-    root + "/scripts/support-native-reference.mjs"
+    `${root}/scripts/support-native-reference.mjs`
   );
   const customer = createSupportReferenceClient(base);
   const staff = createSupportReferenceClient(base);
@@ -18,7 +18,7 @@ async function main() {
   await staff.signIn("support-staff@fixture.test", "Local-Support-Password-123");
   const prefs = await staff.call("getSettings");
   await staff.call("saveSettings", { ...prefs, expectedVersion: prefs.version, csatEnabled: true });
-  const title = "Browser support " + Date.now();
+  const title = `Browser support ${Date.now()}`;
   const item = await customer.call("createCase", {
     clientId: crypto.randomUUID(),
     subject: title,
@@ -36,16 +36,17 @@ async function main() {
   console.log("Real Redis worker published cited AI answer", current.messages.at(-1).citations);
   await customer.call("requestHuman", { id: item.id });
   await customer.call("setLanguage", { id: item.id, locale: "pl" });
-  const browser = (activeBrowser = await chromium.launch({ channel: "chrome", headless: true }));
+  const browser = await chromium.launch({ channel: "chrome", headless: true });
+  activeBrowser = browser;
   const adminContext = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
   const userContext = await browser.newContext({ viewport: { width: 420, height: 900 } });
   for (const [context, who] of [
     [adminContext, "support-staff"],
     [userContext, "support-customer"],
   ]) {
-    const response = await context.request.post(base + "/api/auth/sign-in/email", {
+    const response = await context.request.post(`${base}/api/auth/sign-in/email`, {
       headers: { Origin: base },
-      data: { email: who + "@fixture.test", password: "Local-Support-Password-123" },
+      data: { email: `${who}@fixture.test`, password: "Local-Support-Password-123" },
     });
     if (!response.ok()) throw new Error(await response.text());
   }
@@ -56,7 +57,7 @@ async function main() {
   const errors = [];
   admin.on("pageerror", (e) => errors.push(e.message));
   user.on("pageerror", (e) => errors.push(e.message));
-  await admin.goto(base + "/admin/support");
+  await admin.goto(`${base}/admin/support`);
   await admin.getByRole("button", { name: new RegExp(title) }).click();
 
   await admin.getByText("Internal note (staff only)", { exact: true }).click();
@@ -75,7 +76,7 @@ async function main() {
   await admin.getByRole("button", { name: "Send message", exact: true }).click();
   await admin.getByText("pl: A public staff answer", { exact: true }).first().waitFor();
   await admin.screenshot({ path: "/tmp/m5kdev-support-execution/admin.png", fullPage: true });
-  await user.goto(base + "/");
+  await user.goto(`${base}/`);
   await user.getByRole("button", { name: /Contact support/ }).focus();
   await user.keyboard.press("Enter");
   const dialog = user.getByRole("dialog", { name: "Contact support" });

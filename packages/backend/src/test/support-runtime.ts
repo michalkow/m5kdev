@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
 import { createBackendApp } from "../app";
+import { createServiceActor } from "../base/base.actor";
 import * as auth from "../modules/auth/auth.db";
 import { createBetterAuth } from "../modules/auth/auth.lib";
 import { AuthModule } from "../modules/auth/auth.module";
@@ -118,7 +119,6 @@ async function main() {
   }
   await app.start();
   const svc = app.modules.support.services.support;
-  const { createServiceActor } = await import("../base/base.actor");
   const admin = { actor: createServiceActor({ userId: "support-staff", userRole: "admin" }) };
   const text = "To reset your password open Settings to reset your password.";
   const staged = await svc.stageDocumentation(

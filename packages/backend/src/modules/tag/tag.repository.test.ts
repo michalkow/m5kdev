@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { createTestPool, prepareTestSchema } from "../../test/postgresql";
+import { prepareExperienceTables } from "../../test/experience.fixtures";
+import { createTestPool } from "../../test/postgresql";
 import { taggings, tags } from "./tag.db";
 import { TagRepository } from "./tag.repository";
 
@@ -10,13 +11,7 @@ describe("Tag native array membership", () => {
   const repository = new TagRepository({ orm, schema, table: tags });
 
   beforeAll(async () => {
-    const namespace = await prepareTestSchema(pool);
-    await pool.query(`CREATE TABLE "${namespace}".tags (
-      id text PRIMARY KEY, created_at timestamptz NOT NULL, updated_at timestamptz,
-      deleted_at timestamptz, user_id text, member_id text, organization_id text,
-      team_id text, name text NOT NULL, color text, type text, is_enabled boolean DEFAULT true,
-      parent_id text, assignable_to text[] NOT NULL
-    )`);
+    await prepareExperienceTables(pool, schema);
     await orm.insert(tags).values([
       { id: "exact", name: "Exact", assignableTo: ['quoted"\\%_'] },
       { id: "prefix", name: "Prefix", assignableTo: ['quoted"\\%_suffix'] },
