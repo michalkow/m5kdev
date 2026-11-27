@@ -2,6 +2,7 @@ import type { SupportAppRouter } from "@m5kdev/backend/modules/support/support.t
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { parseAsString, useQueryStates } from "nuqs";
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useAppTRPC } from "../../app/hooks/useAppTrpc";
 import { useServerEventHandler } from "../../app/hooks/useServerEventHandler";
 import { useSession } from "../../auth/hooks/useSession";
@@ -14,6 +15,7 @@ export function useSupport(admin = false) {
     waitingOn: parseAsString.withDefault(""),
     assignee: parseAsString.withDefault(""),
   });
+  const { i18n } = useTranslation();
   const session = useSession();
   const trpc = useAppTRPC<SupportAppRouter>();
   const cache = useQueryClient();
@@ -77,6 +79,24 @@ export function useSupport(admin = false) {
     if (!selectedId || !last) return;
     await read.mutateAsync({ id: selectedId, throughSequence: last.sequence });
   };
+  const settings = useQuery(trpc.support.getSettings.queryOptions({}, { enabled: admin }));
+  const settingsSave = useMutation(
+    trpc.support.saveSettings.mutationOptions({
+      onSuccess: () => cache.invalidateQueries(trpc.support.getSettings.queryFilter()),
+    })
+  );
+  const working = useMutation(
+    trpc.support.setWorkingLocale.mutationOptions({
+      onSuccess: () => cache.invalidateQueries(trpc.support.getSettings.queryFilter()),
+    })
+  );
+  const language = useMutation(trpc.support.setLanguage.mutationOptions({ onSuccess: refresh }));
+  const translate = useMutation(
+    trpc.support.requestTranslation.mutationOptions({ onSuccess: refresh })
+  );
+  const publication = useMutation(
+    trpc.support.controlMessage.mutationOptions({ onSuccess: refresh })
+  );
   const catalog = useQuery(trpc.support.getCatalog.queryOptions({}, { enabled: admin }));
   const update = useMutation(trpc.support.updateCase.mutationOptions({ onSuccess: refresh }));
   const save = useMutation(
@@ -169,6 +189,7 @@ export function useSupport(admin = false) {
       await create.mutateAsync({
         subject,
         body,
+        uiLocale: i18n.resolvedLanguage ?? i18n.language,
         userId,
         clientId: clientId(JSON.stringify([subject, body, userId])),
       });
@@ -177,7 +198,11 @@ export function useSupport(admin = false) {
       return false;
     }
   };
-  const sendMessage = async (body: string, visibility: "public" | "internal" = "public") => {
+  const sendMessage = async (
+    body: string,
+    visibility: "public" | "internal" = "public",
+    preview = false
+  ) => {
     if (!selectedId) return false;
     try {
       await send.mutateAsync({
@@ -185,6 +210,7 @@ export function useSupport(admin = false) {
         body,
         visibility,
         attachmentIds,
+        preview,
         clientId: clientId(JSON.stringify([selectedId, body, visibility, attachmentIds])),
       });
       return true;
@@ -193,6 +219,19 @@ export function useSupport(admin = false) {
     }
   };
   return {
+    settings: settings.data,
+    saveSettings: settingsSave.mutateAsync,
+    setWorkingLocale: working.mutate,
+    setLanguage: (locale: string | null) => {
+      if (selectedId) language.mutate({ id: selectedId, locale });
+    },
+    translateMessage: (messageId: string) => {
+      if (selectedId && settings.data)
+        translate.mutate({ id: selectedId, messageId, locale: settings.data.workingLocale });
+    },
+    controlMessage: (messageId: string, action: "retry" | "send-original" | "publish-preview") => {
+      if (selectedId) publication.mutate({ id: selectedId, messageId, action });
+    },
     attachmentIds,
     uploadFiles,
     downloadFile,
@@ -226,6 +265,11 @@ export function useSupport(admin = false) {
     isLoading: cases.isLoading || (selectedId !== null && transcript.isLoading),
     isPending: create.isPending || send.isPending || isUploading,
     error:
+      settingsSave.error?.message ??
+      working.error?.message ??
+      language.error?.message ??
+      translate.error?.message ??
+      publication.error?.message ??
       uploadError ??
       download.error?.message ??
       redact.error?.message ??

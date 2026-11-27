@@ -17,6 +17,7 @@ import { SupportRepository } from "./support.repository";
 import { createSupportRouter } from "./support.router";
 import { SupportService } from "./support.service";
 import { createSupportTRPC } from "./support.trpc";
+import type { SupportConfig } from "./support.types";
 
 type Deps = { auth: AuthModule; file: FileModule; tag: TagModule; workflow: WorkflowModule };
 type Repositories = { support: SupportRepository };
@@ -28,7 +29,7 @@ export class SupportModule extends BaseModule<
   Services,
   { support: ReturnType<typeof createSupportTRPC> }
 > {
-  constructor(private readonly config: { maxAttachments?: number; maxFileBytes?: number } = {}) {
+  constructor(private readonly config: SupportConfig = {}) {
     super();
   }
   readonly id = "support";
@@ -54,9 +55,24 @@ export class SupportModule extends BaseModule<
   }
   override workflows({ workflow, services }: ModuleWorkflowContext<Deps, Services>) {
     if (!workflow) throw new Error("Support requires Workflow");
+    const job = workflow.service
+      .job<{ data: Record<string, never> }>({
+        name: "support.automation",
+        retries: 1,
+        timeout: 70000,
+      })
+      .handle(async () => {
+        const result = await services.support.processWork();
+        if (result.isErr()) throw result.error;
+      });
+    if (!job._handler) throw new Error("Support automation handler missing");
+    workflow.registry.register(job, job._handler);
+    services.support.bindWorkDispatcher(() => job.trigger({ data: {} }));
     const definition = workflow.service
       .cron({ name: "support.snooze", pattern: "* * * * *" })
       .handle(async () => {
+        const work = await services.support.processWork();
+        if (work.isErr()) throw work.error;
         const cleanup = await services.support.cleanupRevokedFiles();
         if (cleanup.isErr()) throw cleanup.error;
         const result = await services.support.wakeSnoozed();

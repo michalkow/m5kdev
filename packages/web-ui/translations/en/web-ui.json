@@ -524,6 +524,39 @@
     "redactReason": "Redaction reason (audit)",
     "redact": "Redact",
     "attachFiles": "Attach files (up to 5; 10 MiB each)",
-    "attachedCount": "{{count}} files ready"
+    "attachedCount": "{{count}} files ready",
+    "language": "Support language",
+    "previewBeforeSend": "Preview translation before publishing",
+    "original": "Show original",
+    "translate": "Translate to my working language",
+    "translation": {
+      "pending": "Pending translation",
+      "failed": "Translation failed",
+      "ready": "Ready to publish",
+      "none": ""
+    },
+    "publication": {
+      "retry": "Retry",
+      "send-original": "Send original",
+      "publish-preview": "Publish preview"
+    },
+    "settings": {
+      "title": "Support settings",
+      "appLocales": "App locales: {{locales}}",
+      "native": "Natively supported locales (comma separated)",
+      "fallback": "Fallback admin locale",
+      "working": "My working locale",
+      "expectation": "Reply expectation shown to Users",
+      "translation": "Translation",
+      "ai": "Documentation AI",
+      "enable": "Enable",
+      "monthlyCalls": "Monthly calls",
+      "dailyUserCalls": "Daily calls per User",
+      "maxInputCharacters": "Maximum input characters",
+      "maxOutputCharacters": "Maximum output characters",
+      "concurrency": "Concurrent calls",
+      "attempts": "Attempts per task (1–3)",
+      "timeoutMs": "Timeout (ms)"
+    }
   }
 }

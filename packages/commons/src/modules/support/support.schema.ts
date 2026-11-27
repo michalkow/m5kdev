@@ -5,6 +5,8 @@ export const supportCreateCaseSchema = z.object({
   subject: z.string().trim().min(1).max(200),
   body: z.string().trim().min(1).max(20000),
   userId: z.string().min(1).optional(),
+  uiLocale: z.string().min(2).max(35).optional(),
+  experienceId: z.string().max(100).optional(),
 });
 export const supportCaseIdSchema = z.object({ id: z.string().min(1) });
 export const supportSendMessageSchema = z.object({
@@ -13,6 +15,8 @@ export const supportSendMessageSchema = z.object({
   body: z.string().trim().min(1).max(20000),
   visibility: z.enum(["public", "internal"]).default("public"),
   attachmentIds: z.array(z.string().min(1)).max(50).default([]),
+  locale: z.string().min(2).max(35).optional(),
+  preview: z.boolean().default(false),
 });
 export const supportCaseSchema = z.object({
   id: z.string(),
@@ -100,4 +104,38 @@ export const supportDownloadSchema = supportCaseIdSchema.extend({ fileId: z.stri
 export const supportRedactSchema = supportCaseIdSchema.extend({
   messageId: z.string().min(1),
   reason: z.string().trim().min(1).max(1000),
+});
+
+export const supportBudgetSchema = z.object({
+  monthlyCalls: z.number().int().min(1).max(1000000),
+  dailyUserCalls: z.number().int().min(1).max(10000),
+  maxInputCharacters: z.number().int().min(1).max(100000),
+  maxOutputCharacters: z.number().int().min(1).max(100000),
+  concurrency: z.number().int().min(1).max(20),
+  attempts: z.number().int().min(1).max(3),
+  timeoutMs: z.number().int().min(100).max(60000),
+});
+const feature = z.object({ enabled: z.boolean(), budget: supportBudgetSchema.optional() });
+export const supportSettingsSchema = z.object({
+  nativeLocales: z.array(z.string().min(2).max(35)).min(1).max(50),
+  fallbackLocale: z.string().min(2).max(35),
+  translation: feature,
+  ai: feature,
+  csatEnabled: z.boolean().default(false),
+  replyExpectation: z.string().max(500).default(""),
+});
+export const supportSaveSettingsSchema = supportSettingsSchema.extend({
+  expectedVersion: z.number().int().min(0),
+});
+export const supportLanguageSchema = supportCaseIdSchema.extend({
+  locale: z.string().min(2).max(35).nullable(),
+});
+export const supportWorkingLocaleSchema = z.object({ locale: z.string().min(2).max(35) });
+export const supportMessageControlSchema = supportCaseIdSchema.extend({
+  messageId: z.string().min(1),
+  action: z.enum(["retry", "send-original", "publish-preview"]),
+});
+export const supportTranslateSchema = supportCaseIdSchema.extend({
+  messageId: z.string().min(1),
+  locale: z.string().min(2).max(35),
 });

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SupportDeskTools } from "./SupportDeskTools";
 import { SupportMessageList } from "./SupportMessageList";
+import { SupportSettings } from "./SupportSettings";
 
 export function SupportPanel({ admin = false }: { admin?: boolean }) {
   const { t } = useTranslation("web-ui");
@@ -15,7 +16,11 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
     const values = new FormData(form);
     const body = String(values.get("body") ?? "");
     const success = state.selectedId
-      ? await state.sendMessage(body, values.get("internal") === "true" ? "internal" : "public")
+      ? await state.sendMessage(
+          body,
+          values.get("internal") === "true" ? "internal" : "public",
+          values.get("preview") === "true"
+        )
       : await state.createCase(
           String(values.get("subject") ?? ""),
           body,
@@ -45,6 +50,7 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
           </Button>
         </div>
       )}
+      {admin && <SupportSettings state={state} />}
       {admin && <SupportDeskTools state={state} onChooseReply={setSavedReply} />}
       {state.isLoading && <p role="status">{t("support.loading")}</p>}
       <nav
@@ -75,6 +81,8 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
           messages={state.transcript.messages}
           onDownload={state.downloadFile}
           onRedact={admin ? state.redactMessage : undefined}
+          onTranslate={admin ? state.translateMessage : undefined}
+          onControl={admin ? state.controlMessage : undefined}
         />
       )}
       <div className="flex gap-2">
@@ -101,6 +109,32 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
         >
           {t(state.transcript.case.status === "resolved" ? "support.reopen" : "support.resolve")}
         </Button>
+      )}
+      {state.transcript && (
+        <Form
+          className="flex items-end gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            state.setLanguage(
+              String(new FormData(event.currentTarget).get("locale") ?? "") || null
+            );
+          }}
+        >
+          <TextField name="locale">
+            <Label>{t("support.language")}</Label>
+            <Input
+              key={state.selectedId}
+              defaultValue={
+                state.transcript.case.supportLocale ??
+                state.transcript.case.detectedLocale ??
+                state.transcript.case.uiLocale
+              }
+            />
+          </TextField>
+          <Button type="submit" size="sm">
+            {t("support.save")}
+          </Button>
+        </Form>
       )}
       <Form key={savedReply?.id ?? "new"} onSubmit={submit} className="grid gap-3">
         {!state.selectedId && (
@@ -142,6 +176,12 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="internal" value="true" />
             {t("support.internalNote")}
+          </label>
+        )}
+        {admin && state.selectedId && (
+          <label className="flex gap-2 text-sm">
+            <input type="checkbox" name="preview" value="true" />
+            {t("support.previewBeforeSend")}
           </label>
         )}
         <Button type="submit" isDisabled={state.isPending} variant="primary">

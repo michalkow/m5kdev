@@ -524,6 +524,39 @@
     "redactReason": "Powód redakcji (audyt)",
     "redact": "Zredaguj",
     "attachFiles": "Dodaj pliki (do 5; 10 MiB każdy)",
-    "attachedCount": "Gotowe pliki: {{count}}"
+    "attachedCount": "Gotowe pliki: {{count}}",
+    "language": "Język obsługi",
+    "previewBeforeSend": "Podgląd tłumaczenia przed publikacją",
+    "original": "Pokaż oryginał",
+    "translate": "Przetłumacz na mój język",
+    "translation": {
+      "pending": "Oczekuje",
+      "failed": "Błąd tłumaczenia",
+      "ready": "Gotowe do publikacji",
+      "none": ""
+    },
+    "publication": {
+      "retry": "Ponów",
+      "send-original": "Wyślij oryginał",
+      "publish-preview": "Opublikuj podgląd"
+    },
+    "settings": {
+      "title": "Ustawienia obsługi",
+      "appLocales": "Języki aplikacji: {{locales}}",
+      "native": "Języki obsługiwane bez tłumaczenia (po przecinku)",
+      "fallback": "Domyślny język administratorów",
+      "working": "Mój język pracy",
+      "expectation": "Informacja o oczekiwanym czasie odpowiedzi",
+      "translation": "Tłumaczenie",
+      "ai": "Asystent AI dokumentacji",
+      "enable": "Włącz",
+      "monthlyCalls": "Wywołania miesięcznie",
+      "dailyUserCalls": "Wywołania na Użytkownika dziennie",
+      "maxInputCharacters": "Maks. znaków wejściowych",
+      "maxOutputCharacters": "Maks. znaków wyjściowych",
+      "concurrency": "Równoległe wywołania",
+      "attempts": "Próby na zadanie (1–3)",
+      "timeoutMs": "Limit czasu (ms)"
+    }
   }
 }

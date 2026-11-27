@@ -1,4 +1,4 @@
-import { index, integer, jsonb, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { v4 as uuidv4 } from "uuid";
 import { appDatabaseSchema } from "../../base/database.schema";
 import { users } from "../auth/auth.db";
@@ -14,6 +14,10 @@ export const supportCases = appDatabaseSchema.table(
     initiatorUserId: text("initiator_user_id").references(() => users.id, { onDelete: "set null" }),
     organizationId: text("organization_id"),
     subject: text("subject").notNull(),
+    uiLocale: text("ui_locale").notNull().default("en"),
+    supportLocale: text("support_locale"),
+    detectedLocale: text("detected_locale"),
+    experienceId: text("experience_id"),
     status: text("status").$type<"open" | "resolved">().notNull().default("open"),
     waitingOn: text("waiting_on")
       .$type<"support" | "user" | "external">()
@@ -59,6 +63,20 @@ export const supportMessages = appDatabaseSchema.table(
     body: text("body").notNull(),
     attachmentIds: text("attachment_ids").array().notNull().$type<string[]>().default([]),
     redactedAt: instant("redacted_at"),
+    authoredLocale: text("authored_locale"),
+    targetLocale: text("target_locale"),
+    publishedBody: text("published_body"),
+    translationState: text("translation_state")
+      .$type<"none" | "pending" | "ready" | "failed">()
+      .notNull()
+      .default("none"),
+    preview: boolean("preview").notNull().default(false),
+    renditions: jsonb("renditions")
+      .notNull()
+      .default([])
+      .$type<
+        { locale: string; text: string; provider: string; sourceHash: string; createdAt: string }[]
+      >(),
     visibility: text("visibility").$type<"public" | "internal">().notNull().default("public"),
     clientId: text("client_id").notNull(),
     requestHash: text("request_hash").notNull(),
@@ -132,3 +150,74 @@ export const supportAttachments = appDatabaseSchema.table(
   },
   (t) => [uniqueIndex("support_attachments_file").on(t.fileId)]
 );
+
+export const supportSettings = appDatabaseSchema.table("support_settings", {
+  id: text("id").primaryKey(),
+  version: integer("version").notNull().default(1),
+  config: jsonb("config")
+    .notNull()
+    .$type<
+      import("zod").infer<
+        typeof import("@m5kdev/commons/modules/support/support.schema").supportSettingsSchema
+      >
+    >(),
+  updatedAt: instant("updated_at")
+    .notNull()
+    .$default(() => new Date()),
+});
+export const supportStaffPreferences = appDatabaseSchema.table("support_staff_preferences", {
+  id: text("id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  locale: text("locale").notNull(),
+});
+export const supportWork = appDatabaseSchema.table(
+  "support_work",
+  {
+    id: text("id").primaryKey().$default(uuidv4),
+    caseId: text("case_id")
+      .notNull()
+      .references(() => supportCases.id, { onDelete: "cascade" }),
+    messageId: text("message_id").references(() => supportMessages.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    purpose: text("purpose").$type<"outbound" | "view" | "detect" | "answer">().notNull(),
+    locale: text("locale").notNull(),
+    sourceHash: text("source_hash").notNull(),
+    epoch: integer("epoch").notNull(),
+    state: text("state")
+      .$type<"queued" | "running" | "succeeded" | "failed" | "cancelled">()
+      .notNull()
+      .default("queued"),
+    attempts: integer("attempts").notNull().default(0),
+    error: text("error"),
+    leaseUntil: instant("lease_until"),
+    nextAt: instant("next_at")
+      .notNull()
+      .$default(() => new Date()),
+    createdAt: instant("created_at")
+      .notNull()
+      .$default(() => new Date()),
+    updatedAt: instant("updated_at")
+      .notNull()
+      .$default(() => new Date()),
+  },
+  (t) => [index("support_work_pending").on(t.state, t.nextAt)]
+);
+export const supportUsage = appDatabaseSchema.table("support_usage", {
+  id: text("id").primaryKey().$default(uuidv4),
+  workId: text("work_id")
+    .notNull()
+    .references(() => supportWork.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  kind: text("kind").$type<"translation" | "ai">().notNull(),
+  provider: text("provider").notNull(),
+  inputCharacters: integer("input_characters").notNull(),
+  outputCharacters: integer("output_characters").notNull().default(0),
+  createdAt: instant("created_at")
+    .notNull()
+    .$default(() => new Date()),
+});

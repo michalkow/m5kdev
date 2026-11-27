@@ -44,6 +44,36 @@ export function createSupportTRPC({ router, userProcedure }: TRPCMethods, servic
       .mutation(async ({ input, ctx }) =>
         handleTRPCResult(await service.redactMessage(input, ctx))
       ),
+    getSettings: userProcedure
+      .input(z.object({}))
+      .output(supportSchemas.output.settings)
+      .query(async ({ input, ctx }) => handleTRPCResult(await service.getSettings(input, ctx))),
+    saveSettings: userProcedure
+      .input(supportSchemas.input.saveSettings)
+      .output(supportSchemas.output.settings)
+      .mutation(async ({ input, ctx }) => handleTRPCResult(await service.saveSettings(input, ctx))),
+    setWorkingLocale: userProcedure
+      .input(supportSchemas.input.workingLocale)
+      .output(supportSchemas.output.locale)
+      .mutation(async ({ input, ctx }) =>
+        handleTRPCResult(await service.setWorkingLocale(input, ctx))
+      ),
+    setLanguage: userProcedure
+      .input(supportSchemas.input.language)
+      .output(supportSchemas.output.case)
+      .mutation(async ({ input, ctx }) => handleTRPCResult(await service.setLanguage(input, ctx))),
+    requestTranslation: userProcedure
+      .input(supportSchemas.input.translate)
+      .output(supportSchemas.output.work)
+      .mutation(async ({ input, ctx }) =>
+        handleTRPCResult(await service.requestTranslation(input, ctx))
+      ),
+    controlMessage: userProcedure
+      .input(supportSchemas.input.controlMessage)
+      .output(supportSchemas.output.message)
+      .mutation(async ({ input, ctx }) =>
+        handleTRPCResult(await service.controlMessage(input, ctx))
+      ),
     createCase: userProcedure
       .input(supportCreateCaseSchema)
       .output(supportSchemas.output.case)

@@ -7,6 +7,7 @@ import {
   eq,
   exists,
   gt,
+  gte,
   type InferInsertModel,
   type InferSelectModel,
   ilike,
@@ -30,6 +31,10 @@ import {
   supportMessages,
   supportReads,
   supportReplies,
+  supportSettings,
+  supportStaffPreferences,
+  supportUsage,
+  supportWork,
 } from "./support.db";
 
 const tables = { supportCases, supportMessages, supportEvents, supportReads };
@@ -38,6 +43,7 @@ type Orm = NodePgDatabase<Schema>;
 export type SupportTransaction = NodePgTransaction<Schema, ExtractTablesWithRelations<Schema>>;
 export type SupportCaseRow = InferSelectModel<typeof supportCases>;
 export type SupportMessageRow = InferSelectModel<typeof supportMessages>;
+export type SupportWorkRow = InferSelectModel<typeof supportWork>;
 
 export class SupportRepository extends BaseRepository<Orm, Schema, Record<string, never>> {
   transaction<T>(run: (tx: SupportTransaction) => Promise<T>) {
@@ -232,7 +238,7 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
             eq(supportMessages.caseId, caseId),
             inArray(supportMessages.sequence, sequences),
             admin ? undefined : eq(supportMessages.visibility, "public"),
-            isNotNull(supportMessages.publishedAt)
+            admin ? undefined : isNotNull(supportMessages.publishedAt)
           )
         )
         .orderBy(asc(supportMessages.sequence))
@@ -437,7 +443,14 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
   async redact(id: string, tx: SupportTransaction) {
     await tx
       .update(supportMessages)
-      .set({ body: "", attachmentIds: [], redactedAt: new Date() })
+      .set({
+        body: "",
+        publishedBody: null,
+        renditions: [],
+        attachmentIds: [],
+        redactedAt: new Date(),
+        translationState: "none",
+      })
       .where(eq(supportMessages.id, id));
     await tx
       .update(supportAttachments)
@@ -460,5 +473,158 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
         .set({ purgedAt: new Date() })
         .where(eq(supportAttachments.id, id))
     );
+  }
+  settings(tx?: SupportTransaction) {
+    return this.throwableQuery(
+      async () =>
+        (
+          await (tx ?? this.orm)
+            .select()
+            .from(supportSettings)
+            .where(eq(supportSettings.id, "platform"))
+        )[0]
+    );
+  }
+  async saveSettings(
+    config: typeof supportSettings.$inferInsert.config,
+    expectedVersion: number,
+    tx: SupportTransaction
+  ) {
+    const [current] = await tx
+      .select()
+      .from(supportSettings)
+      .where(eq(supportSettings.id, "platform"))
+      .for("update");
+    if ((current?.version ?? 0) !== expectedVersion) return undefined;
+    if (current)
+      return (
+        await tx
+          .update(supportSettings)
+          .set({ config, version: current.version + 1, updatedAt: new Date() })
+          .where(eq(supportSettings.id, "platform"))
+          .returning()
+      )[0];
+    return (await tx.insert(supportSettings).values({ id: "platform", config }).returning())[0];
+  }
+  workingLocale(userId: string) {
+    return this.throwableQuery(
+      async () =>
+        (
+          await this.orm
+            .select()
+            .from(supportStaffPreferences)
+            .where(eq(supportStaffPreferences.id, userId))
+        )[0]?.locale
+    );
+  }
+  async saveWorkingLocale(userId: string, locale: string, tx: SupportTransaction) {
+    const [existing] = await tx
+      .select()
+      .from(supportStaffPreferences)
+      .where(eq(supportStaffPreferences.id, userId));
+    if (existing)
+      await tx
+        .update(supportStaffPreferences)
+        .set({ locale })
+        .where(eq(supportStaffPreferences.id, userId));
+    else await tx.insert(supportStaffPreferences).values({ id: userId, locale });
+  }
+  async queueWork(row: typeof supportWork.$inferInsert, tx: SupportTransaction) {
+    const [existing] = await tx
+      .select()
+      .from(supportWork)
+      .where(
+        and(
+          eq(supportWork.caseId, row.caseId),
+          row.messageId ? eq(supportWork.messageId, row.messageId) : isNull(supportWork.messageId),
+          eq(supportWork.purpose, row.purpose),
+          eq(supportWork.locale, row.locale),
+          eq(supportWork.sourceHash, row.sourceHash),
+          inArray(supportWork.state, ["queued", "running"])
+        )
+      );
+    if (existing) return existing;
+    return (await tx.insert(supportWork).values(row).returning())[0];
+  }
+  pendingWork(now: Date) {
+    return this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(supportWork)
+        .where(
+          or(
+            and(eq(supportWork.state, "queued"), lte(supportWork.nextAt, now)),
+            and(eq(supportWork.state, "running"), lte(supportWork.leaseUntil, now))
+          )
+        )
+        .orderBy(asc(supportWork.createdAt))
+        .limit(20)
+    );
+  }
+  async lockWork(id: string, tx: SupportTransaction) {
+    return (await tx.select().from(supportWork).where(eq(supportWork.id, id)).for("update"))[0];
+  }
+  async updateWork(id: string, patch: Partial<SupportWorkRow>, tx: SupportTransaction) {
+    return (
+      await tx
+        .update(supportWork)
+        .set({ ...patch, updatedAt: new Date() })
+        .where(eq(supportWork.id, id))
+        .returning()
+    )[0];
+  }
+  async updateMessage(id: string, patch: Partial<SupportMessageRow>, tx: SupportTransaction) {
+    return (
+      await tx.update(supportMessages).set(patch).where(eq(supportMessages.id, id)).returning()
+    )[0];
+  }
+  async automationCounts(
+    kind: "ai" | "translation",
+    userId: string,
+    month: Date,
+    day: Date,
+    now: Date,
+    tx: SupportTransaction
+  ) {
+    const [monthly] = await tx
+      .select({ total: count() })
+      .from(supportUsage)
+      .where(and(eq(supportUsage.kind, kind), gte(supportUsage.createdAt, month)));
+    const [daily] = await tx
+      .select({ total: count() })
+      .from(supportUsage)
+      .where(
+        and(
+          eq(supportUsage.kind, kind),
+          eq(supportUsage.userId, userId),
+          gte(supportUsage.createdAt, day)
+        )
+      );
+    const [running] = await tx
+      .select({ total: count() })
+      .from(supportWork)
+      .where(
+        and(
+          eq(supportWork.state, "running"),
+          gt(supportWork.leaseUntil, now),
+          kind === "ai" ? eq(supportWork.purpose, "answer") : ne(supportWork.purpose, "answer")
+        )
+      );
+    return { monthly: monthly.total, daily: daily.total, running: running.total };
+  }
+  async reserveUsage(row: typeof supportUsage.$inferInsert, tx: SupportTransaction) {
+    return (await tx.insert(supportUsage).values(row).returning())[0];
+  }
+  async completeUsage(id: string, outputCharacters: number, tx: SupportTransaction) {
+    await tx.update(supportUsage).set({ outputCharacters }).where(eq(supportUsage.id, id));
+  }
+  async lockUser(userId: string, tx: SupportTransaction) {
+    return (
+      await tx
+        .select({ id: users.id, role: users.role, closedAt: users.closedAt, banned: users.banned })
+        .from(users)
+        .where(eq(users.id, userId))
+        .for("share")
+    )[0];
   }
 }

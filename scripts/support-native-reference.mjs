@@ -37,7 +37,8 @@ export function createSupportReferenceClient(baseUrl, fetchImpl = fetch) {
       for (const [path, methods] of Object.entries(document.paths)) {
         for (const [method, operation] of Object.entries(methods)) {
           if (operation.operationId !== operationId) continue;
-          const { id, ...payload } = input;
+          const { id, ...rest } = input;
+          const payload = path.includes("{id}") ? rest : input;
           const route = path.replace("{id}", encodeURIComponent(id ?? ""));
           const query =
             method === "get"

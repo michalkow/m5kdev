@@ -69,8 +69,8 @@ export function createSupportRouter(service: SupportService, auth: AuthMiddlewar
     router[method](path, endpoint(inputSchema, input, handle));
     const inputJson = jsonSchema(inputSchema);
     const properties = { ...inputJson.properties };
-    const required = (inputJson.required ?? []).filter((key) => key !== "id");
-    delete properties.id;
+    const required = (inputJson.required ?? []).filter((key) => !path.includes(":id") || key !== "id");
+    if(path.includes(":id"))delete properties.id;
     const parameters: Record<string, unknown>[] = path.includes(":id")
       ? [{ name: "id", in: "path", required: true, schema: { type: "string" } }]
       : [];
@@ -233,6 +233,60 @@ export function createSupportRouter(service: SupportService, auth: AuthMiddlewar
     supportSchemas.output.redaction,
     (req) => ({ ...req.body, id: req.params.id }),
     (input, ctx) => service.redactMessage(input, ctx)
+  );
+  register(
+    "get",
+    "/settings",
+    "getSettings",
+    z.object({}),
+    supportSchemas.output.settings,
+    () => ({}),
+    (input, ctx) => service.getSettings(input, ctx)
+  );
+  register(
+    "post",
+    "/settings",
+    "saveSettings",
+    supportSchemas.input.saveSettings,
+    supportSchemas.output.settings,
+    (req) => req.body,
+    (input, ctx) => service.saveSettings(input, ctx)
+  );
+  register(
+    "post",
+    "/working-locale",
+    "setWorkingLocale",
+    supportSchemas.input.workingLocale,
+    supportSchemas.output.locale,
+    (req) => req.body,
+    (input, ctx) => service.setWorkingLocale(input, ctx)
+  );
+  register(
+    "post",
+    "/cases/:id/language",
+    "setLanguage",
+    supportSchemas.input.language,
+    supportSchemas.output.case,
+    (req) => ({ ...req.body, id: req.params.id }),
+    (input, ctx) => service.setLanguage(input, ctx)
+  );
+  register(
+    "post",
+    "/cases/:id/translate",
+    "requestTranslation",
+    supportSchemas.input.translate,
+    supportSchemas.output.work,
+    (req) => ({ ...req.body, id: req.params.id }),
+    (input, ctx) => service.requestTranslation(input, ctx)
+  );
+  register(
+    "post",
+    "/cases/:id/publication",
+    "controlMessage",
+    supportSchemas.input.controlMessage,
+    supportSchemas.output.message,
+    (req) => ({ ...req.body, id: req.params.id }),
+    (input, ctx) => service.controlMessage(input, ctx)
   );
   router.get("/openapi.json", (_req, res) =>
     res.json({

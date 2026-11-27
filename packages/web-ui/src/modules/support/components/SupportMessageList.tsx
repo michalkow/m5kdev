@@ -8,9 +8,13 @@ export function SupportMessageList({
   messages,
   onDownload,
   onRedact,
+  onTranslate,
+  onControl,
 }: {
   messages: Transcript["messages"];
   onDownload?: (id: string) => Promise<void>;
+  onTranslate?: (id: string) => void;
+  onControl?: (id: string, action: "retry" | "send-original" | "publish-preview") => void;
   onRedact?: (id: string, reason: string) => Promise<void>;
 }) {
   const { t } = useTranslation("web-ui");
@@ -28,8 +32,47 @@ export function SupportMessageList({
             {message.visibility === "internal" && t("support.internalNote")}
           </p>
           <p className="whitespace-pre-wrap break-words text-sm">
-            {message.redactedAt ? t("support.redacted") : message.body}
+            {message.redactedAt ? t("support.redacted") : (message.publishedBody ?? message.body)}
           </p>
+          {!message.redactedAt &&
+            message.publishedBody &&
+            message.publishedBody !== message.body && (
+              <details className="text-sm">
+                <summary>{t("support.original")}</summary>
+                <p className="whitespace-pre-wrap">{message.body}</p>
+              </details>
+            )}
+          {!message.redactedAt &&
+            message.renditions?.map((rendition) => (
+              <details key={rendition.locale} className="text-sm">
+                <summary>
+                  {rendition.locale} · {rendition.provider}
+                </summary>
+                <p className="whitespace-pre-wrap">{rendition.text}</p>
+              </details>
+            ))}
+          {onTranslate && message.publishedAt && !message.redactedAt && (
+            <Button size="sm" variant="tertiary" onPress={() => onTranslate(message.id)}>
+              {t("support.translate")}
+            </Button>
+          )}
+          {onControl && !message.publishedAt && !message.redactedAt && (
+            <div className="flex flex-wrap gap-2">
+              <span className="text-xs">
+                {t(`support.translation.${message.translationState}`)}
+              </span>
+              {(["retry", "send-original", "publish-preview"] as const).map((action) => (
+                <Button
+                  key={action}
+                  size="sm"
+                  variant="secondary"
+                  onPress={() => onControl(message.id, action)}
+                >
+                  {t(`support.publication.${action}`)}
+                </Button>
+              ))}
+            </div>
+          )}
           {message.attachmentIds?.map((id, index) => (
             <Button key={id} size="sm" variant="tertiary" onPress={() => void onDownload?.(id)}>
               {t("support.attachment", { number: index + 1 })}
