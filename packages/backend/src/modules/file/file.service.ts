@@ -122,6 +122,7 @@ export class FileService extends BasePermissionService<
           ...(input.filters ?? []),
           uploadedFilter,
           { columnId: "sealedAt", type: "string", method: "is_null", value: "" },
+          { columnId: "sourceKey", type: "string", method: "is_null", value: "" },
           ...scopeFilters,
           ...ownFilters,
         ],
@@ -201,7 +202,7 @@ export class FileService extends BasePermissionService<
       const denied = this.denyFileAccess(ctx.actor, state.file, "delete");
       if (denied) return denied;
       const row = state.file;
-      if (row.sealedAt)
+      if (row.sealedAt || row.sourceKey)
         return this.error(
           "FORBIDDEN",
           "Shared Support Files are managed through Support redaction"
@@ -437,7 +438,11 @@ export class FileService extends BasePermissionService<
       }
       return ok(row);
     }
-    const object = await this.repository.fileS3.getS3Object(row.key, row.bucket, maxBytes);
+    const object = await this.repository.fileS3.getS3Object(
+      row.sourceKey ?? row.key,
+      row.bucket,
+      maxBytes
+    );
     if (object.isErr()) return err(object.error);
     const body = object.value.body;
     const contentType = row.contentType;
@@ -455,7 +460,19 @@ export class FileService extends BasePermissionService<
                 : false;
     if (!valid || body.byteLength > maxBytes)
       return this.error("BAD_REQUEST", "Uploaded File type or size is not allowed");
-    const sealedKey = `support-sealed/${uuidv4()}`;
+    // Persist both object locators before writing bytes. A crash at any later
+    // boundary leaves enough intent for retry and purge to converge.
+    const sourceKey = row.sourceKey ?? row.key;
+    const sealedKey = row.sourceKey ? row.key : `support-sealed/${row.id}`;
+    if (!row.sourceKey) {
+      const intent = await this.repository.file.update({
+        id: row.id,
+        sourceKey,
+        key: sealedKey,
+        status: "PENDING",
+      });
+      if (intent.isErr()) return err(intent.error);
+    }
     const put = await this.repository.fileS3.putS3Object(sealedKey, body, contentType, row.bucket);
     if (put.isErr()) return err(put.error);
     const sealed = await this.repository.file.update({
@@ -465,13 +482,10 @@ export class FileService extends BasePermissionService<
       status: "UPLOADED",
       uploadedAt: new Date(),
       sealedAt: new Date(),
-      sourceKey: row.key,
+      sourceKey,
     });
-    if (sealed.isErr()) {
-      await this.repository.fileS3.deleteS3Object(sealedKey, row.bucket);
-      return err(sealed.error);
-    }
-    const deleted = await this.repository.fileS3.deleteS3Object(row.key, row.bucket);
+    if (sealed.isErr()) return err(sealed.error);
+    const deleted = await this.repository.fileS3.deleteS3Object(sourceKey, row.bucket);
     if (deleted.isErr()) return err(deleted.error);
     return ok(sealed.value);
   }
@@ -676,10 +690,15 @@ export class FileService extends BasePermissionService<
 
   private denyFileAccess(
     actor: AuthenticatedActor,
-    file: { organizationId: string | null; memberId: string | null; sealedAt?: Date | null },
+    file: {
+      organizationId: string | null;
+      memberId: string | null;
+      sealedAt?: Date | null;
+      sourceKey?: string | null;
+    },
     action: string
   ): ServerResult<never> | null {
-    if (file.sealedAt)
+    if (file.sealedAt || file.sourceKey)
       return this.error("FORBIDDEN", "Access shared Support Files through the Support Case");
     if (!this.actorMatchesFileScope(actor, file)) {
       return this.error("FORBIDDEN", "Actor scope does not match this File");

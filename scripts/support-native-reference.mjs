@@ -29,6 +29,17 @@ export function createSupportReferenceClient(baseUrl, fetchImpl = fetch) {
       if (!token) throw new Error("Auth did not return a signed bearer session");
     },
     session: () => request("/api/auth/get-session"),
+    // Capture this acknowledgement from the page actually rendered, before
+    // a reconnect or delayed publication can change the server transcript.
+    markViewed(transcript) {
+      return this.call("markRead", {
+        id: transcript.case.id,
+        throughSequence: Math.max(0, ...transcript.messages.map((message) => message.sequence)),
+        messageIds: transcript.messages
+          .filter((message) => message.publishedAt)
+          .map((message) => message.id),
+      });
+    },
     async signOut() {
       await request("/api/auth/sign-out", "POST", {});
       token = undefined;

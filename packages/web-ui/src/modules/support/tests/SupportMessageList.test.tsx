@@ -1,6 +1,13 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { createInstance } from "i18next";
 import { renderToStaticMarkup } from "react-dom/server";
 import { I18nextProvider } from "react-i18next";
+
+const translations = JSON.parse(
+  readFileSync(path.join(__dirname, "../../../../translations/en/web-ui.json"), "utf8")
+);
+
 import { SupportMessageList } from "../components/SupportMessageList";
 
 it("renders message content as text in an announced support log", async () => {
@@ -8,7 +15,7 @@ it("renders message content as text in an announced support log", async () => {
   await i18n.init({
     lng: "en",
     resources: {
-      en: { "web-ui": { support: { messages: "Messages", author: { user: "User" } } } },
+      en: { "web-ui": translations },
     },
   });
   const html = renderToStaticMarkup(
@@ -40,6 +47,8 @@ it("renders message content as text in an announced support log", async () => {
       />
     </I18nextProvider>
   );
+  expect(html).toContain("User");
+  expect(html).not.toContain(">You ");
   expect(html).toContain('role="log"');
   expect(html).toContain('aria-live="polite"');
   expect(html).toContain("&lt;img");

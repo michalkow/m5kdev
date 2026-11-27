@@ -9,7 +9,7 @@ import {
   TextField,
 } from "@heroui/react";
 import { useSupport } from "@m5kdev/frontend/modules/support/hooks/useSupport";
-import { useState } from "react";
+import { type RefObject, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SupportDeskTools } from "./SupportDeskTools";
 import { SupportMessageList } from "./SupportMessageList";
@@ -17,11 +17,41 @@ import { SupportOverview } from "./SupportOverview";
 import { SupportSettings } from "./SupportSettings";
 
 export function SupportPanel({ admin = false }: { admin?: boolean }) {
-  const { t } = useTranslation("web-ui");
   const state = useSupport(admin);
+  return <SupportPanelView admin={admin} state={state} />;
+}
+
+export type SupportComposerDraft = { caseId: string | null; fields: Record<string, string> };
+export function snapshotSupportComposer(
+  form: HTMLFormElement,
+  caseId: string | null
+): SupportComposerDraft {
+  return {
+    caseId,
+    fields: Object.fromEntries(
+      [...new FormData(form)].filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string"
+      )
+    ),
+  };
+}
+export function SupportPanelView({
+  admin = false,
+  state,
+  composerRef,
+  draftRef,
+}: {
+  admin?: boolean;
+  state: ReturnType<typeof useSupport>;
+  composerRef?: RefObject<HTMLFormElement | null>;
+  draftRef?: RefObject<SupportComposerDraft | null>;
+}) {
+  const { t } = useTranslation("web-ui");
+  const draft = draftRef?.current?.caseId === state.selectedId ? draftRef.current : null;
+  const composerRevision = useRef(0);
   const [noteMode, setNoteMode] = useState<{ caseId: string | null; value: boolean }>({
-    caseId: null,
-    value: false,
+    caseId: draft?.caseId ?? null,
+    value: draft?.fields.internal === "true",
   });
   const internalNote = noteMode.caseId === state.selectedId && noteMode.value;
   const setInternalNote = (value: boolean) => setNoteMode({ caseId: state.selectedId, value });
@@ -35,6 +65,8 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
     event.preventDefault();
     const form = event.currentTarget;
     const values = new FormData(form);
+    const revision = composerRevision.current;
+    const submitted = snapshotSupportComposer(form, state.selectedId);
     const body = String(values.get("body") ?? "");
     const success = state.selectedId
       ? await state.sendMessage(
@@ -48,9 +80,13 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
           admin ? String(values.get("userId") ?? "") : undefined
         );
     if (success) {
-      form.reset();
-      setSavedReply(null);
-      setInternalNote(false);
+      if (draftRef?.current && JSON.stringify(draftRef.current) === JSON.stringify(submitted))
+        draftRef.current = null;
+      if (form.isConnected && composerRevision.current === revision) {
+        form.reset();
+        setSavedReply(null);
+        setInternalNote(false);
+      }
     }
   };
   return (
@@ -238,6 +274,7 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
         </fieldset>
       )}
       <Form
+        ref={composerRef}
         key={`${state.selectedId ?? "new"}:${selectedReply?.id ?? "blank"}`}
         onSubmit={submit}
         className={
@@ -246,71 +283,91 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
             : "grid gap-3"
         }
       >
-        {!state.selectedId && (
-          <>
-            {admin && (
-              <TextField name="userId" isRequired>
-                <Label>{t("support.userId")}</Label>
+        <div
+          className="contents"
+          onInput={() => {
+            composerRevision.current++;
+          }}
+        >
+          {!state.selectedId && (
+            <>
+              {admin && (
+                <TextField name="userId" isRequired defaultValue={draft?.fields.userId}>
+                  <Label>{t("support.userId")}</Label>
+                  <Input />
+                  <FieldError />
+                </TextField>
+              )}
+              <TextField
+                name="subject"
+                isRequired
+                maxLength={200}
+                defaultValue={draft?.fields.subject}
+              >
+                <Label>{t("support.subject")}</Label>
                 <Input />
                 <FieldError />
               </TextField>
-            )}
-            <TextField name="subject" isRequired maxLength={200}>
-              <Label>{t("support.subject")}</Label>
-              <Input />
-              <FieldError />
-            </TextField>
-          </>
-        )}
-        {state.selectedId && (
-          <TextField name="files">
-            <Label>{t("support.attachFiles")}</Label>
-            <Input
-              type="file"
-              multiple
-              accept="image/jpeg,image/png,image/webp,application/pdf,text/plain,.log"
-              onChange={(event) => void state.uploadFiles(Array.from(event.target.files ?? []))}
-            />
-            <p className="text-xs text-muted">
-              {t("support.attachedCount", { count: state.attachmentIds.length })}
-            </p>
-          </TextField>
-        )}
-        <TextField name="body" isRequired maxLength={20000}>
-          <Label>{t(internalNote ? "support.internalNote" : "support.message")}</Label>
-          <TextArea rows={3} defaultValue={selectedReply?.body} />
-          <FieldError />
-        </TextField>
-        {admin && state.selectedId && (
-          <Checkbox
-            name="internal"
-            value="true"
-            isSelected={internalNote}
-            onChange={setInternalNote}
-          >
-            <Checkbox.Content>
-              <Checkbox.Control>
-                <Checkbox.Indicator />
-              </Checkbox.Control>
-              {t("support.internalNote")}
-            </Checkbox.Content>
-          </Checkbox>
-        )}
-        {admin && state.selectedId && !internalNote && (
-          <Checkbox name="preview" value="true">
-            <Checkbox.Content>
-              <Checkbox.Control>
-                <Checkbox.Indicator />
-              </Checkbox.Control>
-              {t("support.previewBeforeSend")}
-            </Checkbox.Content>
-          </Checkbox>
-        )}
-        <Button type="submit" isDisabled={state.isPending} variant="primary">
-          {t(
-            state.isPending ? "support.sending" : internalNote ? "support.addNote" : "support.send"
+            </>
           )}
-        </Button>
+          {state.selectedId && (
+            <TextField name="files">
+              <Label>{t("support.attachFiles")}</Label>
+              <Input
+                type="file"
+                multiple
+                accept="image/jpeg,image/png,image/webp,application/pdf,text/plain,.log"
+                onChange={(event) => void state.uploadFiles(Array.from(event.target.files ?? []))}
+              />
+              <p className="text-xs text-muted">
+                {t("support.attachedCount", { count: state.attachmentIds.length })}
+              </p>
+            </TextField>
+          )}
+          <TextField name="body" isRequired maxLength={20000}>
+            <Label>{t(internalNote ? "support.internalNote" : "support.message")}</Label>
+            <TextArea rows={3} defaultValue={selectedReply?.body ?? draft?.fields.body} />
+            <FieldError />
+          </TextField>
+          {admin && state.selectedId && (
+            <Checkbox
+              name="internal"
+              value="true"
+              isSelected={internalNote}
+              onChange={setInternalNote}
+            >
+              <Checkbox.Content>
+                <Checkbox.Control>
+                  <Checkbox.Indicator />
+                </Checkbox.Control>
+                {t("support.internalNote")}
+              </Checkbox.Content>
+            </Checkbox>
+          )}
+          {admin && state.selectedId && !internalNote && (
+            <Checkbox
+              name="preview"
+              value="true"
+              defaultSelected={draft?.fields.preview === "true"}
+            >
+              <Checkbox.Content>
+                <Checkbox.Control>
+                  <Checkbox.Indicator />
+                </Checkbox.Control>
+                {t("support.previewBeforeSend")}
+              </Checkbox.Content>
+            </Checkbox>
+          )}
+          <Button type="submit" isDisabled={state.isPending} variant="primary">
+            {t(
+              state.isPending
+                ? "support.sending"
+                : internalNote
+                  ? "support.addNote"
+                  : "support.send"
+            )}
+          </Button>
+        </div>
       </Form>
     </section>
   );

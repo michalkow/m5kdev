@@ -1,4 +1,5 @@
 import type { AddressInfo } from "node:net";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import express from "express";
 import { createServiceActor } from "../../../base/base.actor";
@@ -9,6 +10,7 @@ import { users } from "../../auth/auth.db";
 import type { AuthMiddleware } from "../../auth/auth.middleware";
 import { taggings, tags } from "../../tag/tag.db";
 import * as tables from "../support.db";
+import { defaultSupportGrants } from "../support.grants";
 import { SupportRepository } from "../support.repository";
 import { createSupportRouter } from "../support.router";
 import { SupportService } from "../support.service";
@@ -59,11 +61,23 @@ it("recovers committed changes and keeps read state monotonic", async () => {
   if (badge.isErr()) throw badge.error;
   expect(badge.value.count).toBe(1);
   const marked = await support.markRead(
-    { id: created.value.id, throughSequence: reply.value.sequence },
+    { id: created.value.id, throughSequence: reply.value.sequence, messageIds: [reply.value.id] },
     ctx("alice")
   );
   if (marked.isErr()) throw marked.error;
-  await support.markRead({ id: created.value.id, throughSequence: 1 }, ctx("alice"));
+  await support.markRead(
+    { id: created.value.id, throughSequence: 1, messageIds: [] },
+    ctx("alice")
+  );
+  const foreign = await support.markRead(
+    {
+      id: created.value.id,
+      throughSequence: reply.value.sequence,
+      messageIds: ["foreign-or-unpublished"],
+    },
+    ctx("alice")
+  );
+  expect(foreign.isErr() && foreign.error.code).toBe("BAD_REQUEST");
   const read = await support.getCase({ id: created.value.id }, ctx("alice"));
   if (read.isErr()) throw read.error;
   expect(read.value.case.unreadCount).toBe(0);
@@ -376,4 +390,59 @@ it("pages the complete private Case list", async () => {
   expect(next.value.items).toHaveLength(1);
   expect(next.value.cursor).toBeNull();
   expect(new Set([...first.value.items, ...next.value.items].map((row) => row.id)).size).toBe(3);
+});
+
+it("binds message retries to authored language and preview intent", async () => {
+  const created = await support.createCase(
+    { clientId: "semantic-retry", subject: "Retry", body: "Question" },
+    ctx("alice")
+  );
+  if (created.isErr()) throw created.error;
+  const input = {
+    id: created.value.id,
+    clientId: "semantic-reply",
+    body: "Answer",
+    locale: "en",
+    preview: false,
+  };
+  const first = await support.sendMessage(input, ctx("staff", "admin"));
+  if (first.isErr()) throw first.error;
+  const retry = await support.sendMessage(input, ctx("staff", "admin"));
+  if (retry.isErr()) throw retry.error;
+  expect(retry.value.id).toBe(first.value.id);
+  for (const patch of [{ locale: "pl" }, { preview: true }]) {
+    const conflict = await support.sendMessage({ ...input, ...patch }, ctx("staff", "admin"));
+    expect(conflict.isErr() && conflict.error.code).toBe("CONFLICT");
+  }
+});
+
+it("lists the same public Cases allowed by a configured read-all grant", async () => {
+  const created = await support.createCase(
+    { clientId: "grant-list", subject: "Grant visibility", body: "Public question" },
+    ctx("alice")
+  );
+  if (created.isErr()) throw created.error;
+  await orm.update(users).set({ role: "reviewer" }).where(eq(users.id, "bob"));
+  const delegated = new SupportService({ support: new SupportRepository({ orm, schema }) }, {}, [
+    ...defaultSupportGrants,
+    { level: "user", role: "reviewer", action: "read", access: "all" },
+  ]);
+  try {
+    const direct = await delegated.getCase({ id: created.value.id }, ctx("bob", "reviewer"));
+    if (direct.isErr()) throw direct.error;
+    const listed = await delegated.listCases(
+      { search: "Grant visibility" },
+      ctx("bob", "reviewer")
+    );
+    if (listed.isErr()) throw listed.error;
+    expect(listed.value.items.map((item) => item.id)).toEqual([created.value.id]);
+    const ordinary = await support.listCases(
+      { search: "Grant visibility" },
+      ctx("bob", "reviewer")
+    );
+    if (ordinary.isErr()) throw ordinary.error;
+    expect(ordinary.value.items).toEqual([]);
+  } finally {
+    await orm.update(users).set({ role: "user" }).where(eq(users.id, "bob"));
+  }
 });

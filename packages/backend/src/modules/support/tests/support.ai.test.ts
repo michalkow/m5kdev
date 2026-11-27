@@ -25,6 +25,7 @@ it("answers from applicable released docs and suppresses an answer after a human
     () => {};
   let entered: () => void = () => {};
   let gate = false;
+  let suppliedHistory: string[] = [];
   const support = new SupportService(
     { support: new SupportRepository({ orm, schema }) },
     {},
@@ -34,7 +35,8 @@ it("answers from applicable released docs and suppresses an answer after a human
       documentation: { applicationVersion: "local-v1", allowedOrigins: ["https://help.local"] },
       assistant: {
         id: "local-grounded",
-        answer: async ({ sources }) => {
+        answer: async ({ sources, history }) => {
+          suppliedHistory = history.map((message) => message.content);
           if (gate) {
             entered();
             return new Promise((resolve) => {
@@ -141,6 +143,33 @@ it("answers from applicable released docs and suppresses an answer after a human
       "failed"
     );
     gate = true;
+    const redactionStarted = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const redactionQuestion = await support.sendMessage(
+      { id: created.value.id, clientId: "before-redaction", body: "Reset password" },
+      ctx("user")
+    );
+    if (redactionQuestion.isErr()) throw redactionQuestion.error;
+    const redactionWork = support.processWork();
+    await redactionStarted;
+    expect(suppliedHistory).toContain("How do I reset a password?");
+    const redacted = await support.redactMessage(
+      { id: created.value.id, messageId: view.value.messages[0].id, reason: "Private old context" },
+      ctx("staff", "admin")
+    );
+    if (redacted.isErr()) throw redacted.error;
+    release({
+      supported: true,
+      text: "Repeats redacted context",
+      citations: ["https://help.local/password/"],
+    });
+    await redactionWork;
+    const redactedView = await support.getCase({ id: created.value.id }, ctx("user"));
+    if (redactedView.isErr()) throw redactedView.error;
+    expect(redactedView.value.messages.map((message) => message.body)).not.toContain(
+      "Repeats redacted context"
+    );
     const started = new Promise<void>((resolve) => {
       entered = resolve;
     });

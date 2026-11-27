@@ -25,7 +25,7 @@ If another admin changed the request, refresh before saving again. A stale edit 
 
 ## Translation, AI and hours
 
-Open **Support settings** to choose natively supported locales, the fallback admin locale, feedback and the reply expectation. Admin locale choices must be application locales. **My working locale** controls additional viewing translations. Use **Translate to my working language** on a message when needed.
+Open **Support settings** to choose natively supported locales, the fallback admin locale, feedback and the reply expectation. If settings or documentation cannot load, an error appears. Choose **Retry** to reload the failed information. Admin locale choices must be application locales. **My working locale** controls additional viewing translations. Use **Translate to my working language** on a message when needed.
 
 AI and translation have separate enable switches. Their providers must first be configured by the app operator. Enter explicit monthly/per-User call limits, maximum text sizes, concurrency, attempts and timeout before enabling them. Exceeding an allowance preserves human messaging.
 
@@ -45,6 +45,6 @@ Feedback is an optional one-click unhappy/neutral/happy rating after a genuine r
 
 ## Redaction and account lifecycle
 
-For sensitive content, enter a **Redaction reason (audit)** and choose **Redact**. Original text, translations and attachment access are removed; a tombstone remains. Storage cleanup may remain pending while recent upload authorisations expire. A Purge may ask you to retry after five minutes rather than report unfinished cleanup as complete.
+For sensitive content, enter a **Redaction reason (audit)** and choose **Redact**. Original text, translations and attachment access are removed; a tombstone remains. Unfinished AI answers that used public message history are invalidated. Storage cleanup may remain pending while recent upload authorisations expire. A Purge may ask you to retry after five minutes rather than report unfinished cleanup as complete.
 
 Closing a User blocks their Support access and autonomous replies while staff retain grace-period access. Restoring a User does not resume old automation. Purge removes related identifiable history and Files. App-configured retention may also remove resolved requests; there is no default resolved-request expiry.

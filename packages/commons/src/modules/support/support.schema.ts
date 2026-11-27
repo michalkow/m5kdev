@@ -42,6 +42,7 @@ export const supportSyncSchema = z.object({
 export const supportReadSchema = z.object({
   id: z.string().min(1),
   throughSequence: z.number().int().min(0),
+  messageIds: z.array(z.string().min(1)).max(100),
 });
 
 export const supportHistorySchema = supportCaseIdSchema.extend({

@@ -1,0 +1,1 @@
+ALTER TABLE "app"."support_reads" ADD COLUMN "message_ids" text[] DEFAULT '{}' NOT NULL;

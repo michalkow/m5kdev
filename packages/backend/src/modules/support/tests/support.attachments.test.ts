@@ -71,6 +71,29 @@ it("shares sealed staff Files only with the Case participant and removes issued 
         })
       ).status
     ).toBe(200);
+    // Simulate a process disappearing after object bytes land, before DB finalization.
+    const putObject = store.putS3Object.bind(store);
+    let interruptedKey = "";
+    const interruptedWrite = jest
+      .spyOn(store, "putS3Object")
+      .mockImplementationOnce(async (...args) => {
+        interruptedKey = args[0];
+        const result = await putObject(...args);
+        if (result.isErr()) throw result.error;
+        throw new Error("simulated process loss after object write");
+      });
+    const interrupted = await support.sendMessage(
+      {
+        id: created.value.id,
+        clientId: "answer",
+        body: "See attached",
+        attachmentIds: [upload.value.fileId],
+      },
+      ctx("staff", "admin")
+    );
+    expect(interrupted.isErr()).toBe(true);
+    interruptedWrite.mockRestore();
+    const resumedWrites = jest.spyOn(store, "putS3Object");
     const message = await support.sendMessage(
       {
         id: created.value.id,
@@ -81,6 +104,56 @@ it("shares sealed staff Files only with the Case participant and removes issued 
       ctx("staff", "admin")
     );
     if (message.isErr()) throw message.error;
+    expect(resumedWrites.mock.calls.map((args) => args[0])).toEqual([interruptedKey]);
+    resumedWrites.mockRestore();
+
+    for (const stage of ["before-write", "after-write"]) {
+      for (const recovery of ["retry", "purge"]) {
+        const interrupted = await file.initiateSharedUpload({
+          originalName: "interrupted.txt",
+          contentType: "text/plain",
+          sizeBytes: 5,
+          userId: "staff",
+        });
+        if (interrupted.isErr()) throw interrupted.error;
+        await fetch(interrupted.value.url, {
+          method: "PUT",
+          headers: { "content-type": "text/plain" },
+          body: "Hello",
+        });
+        let intendedKey = "";
+        const originalPut = store.putS3Object.bind(store);
+        const crash = jest.spyOn(store, "putS3Object").mockImplementationOnce(async (...args) => {
+          intendedKey = args[0];
+          if (stage === "after-write") {
+            const written = await originalPut(...args);
+            if (written.isErr()) throw written.error;
+          }
+          throw new Error(`Process interrupted ${stage}`);
+        });
+        await expect(file.sealForSharing(interrupted.value.fileId, "staff", 8)).rejects.toThrow(
+          `Process interrupted ${stage}`
+        );
+        crash.mockRestore();
+        const genericDelete = await file.delete(
+          { fileId: interrupted.value.fileId },
+          ctx("staff", "admin")
+        );
+        expect(genericDelete.isErr() && genericDelete.error.code).toBe("FORBIDDEN");
+        const targetUrl = `${origin}/file-s3-mock/local/${intendedKey}`;
+        if (recovery === "retry") {
+          const retried = await file.sealForSharing(interrupted.value.fileId, "staff", 8);
+          if (retried.isErr()) throw retried.error;
+          const shared = await file.sharedDownload(interrupted.value.fileId);
+          if (shared.isErr()) throw shared.error;
+          expect(shared.value.url).toBe(targetUrl);
+          expect(await fetch(shared.value.url).then((response) => response.text())).toBe("Hello");
+        }
+        await file.purgeSharedFile(interrupted.value.fileId);
+        expect((await fetch(interrupted.value.url)).status).toBe(404);
+        expect((await fetch(targetUrl)).status).toBe(404);
+      }
+    }
     const invalid = await support.initiateAttachment(
       { id: created.value.id, originalName: "fake.png", contentType: "image/png", sizeBytes: 5 },
       ctx("staff", "admin")
@@ -150,6 +223,9 @@ it("shares sealed staff Files only with the Case participant and removes issued 
     );
     if (redacted.isErr()) throw redacted.error;
     expect((await fetch(download.value.url)).status).toBe(404);
+    const leftover = await store.getS3Object(interruptedKey, "local");
+    expect(leftover.isErr()).toBe(true);
+
     const tail = await support.sync(
       { id: created.value.id, cursor: before.value.cursor },
       ctx("user")

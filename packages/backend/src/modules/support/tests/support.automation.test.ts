@@ -21,6 +21,14 @@ it("holds failed translation and publishes the exact successful rendition on exp
     { id: "staff", name: "Staff", email: "staff@local.test", emailVerified: true, role: "admin" },
   ]);
   let unavailable = true;
+  let enteredTranslation = () => {};
+  let releaseTranslation = () => {};
+  const translationStarted = new Promise<void>((resolve) => {
+    enteredTranslation = resolve;
+  });
+  const translationGate = new Promise<void>((resolve) => {
+    releaseTranslation = resolve;
+  });
   const support = new SupportService(
     { support: new SupportRepository({ orm, schema }) },
     {},
@@ -32,6 +40,8 @@ it("holds failed translation and publishes the exact successful rendition on exp
         languages: ["en", "pl"],
         translate: async ({ text }: { text: string }) => {
           if (unavailable) throw new Error("Unavailable");
+          enteredTranslation();
+          await translationGate;
           return { text: `PL: ${text}` };
         },
       },
@@ -75,18 +85,68 @@ it("holds failed translation and publishes the exact successful rendition on exp
     const held = await support.getCase({ id: created.value.id }, ctx("user"));
     if (held.isErr()) throw held.error;
     expect(held.value.messages.map((message) => message.body)).toEqual(["Pytanie"]);
+    const newer = await support.sendMessage(
+      { id: created.value.id, clientId: "later-question", body: "Another question" },
+      ctx("user")
+    );
+    if (newer.isErr()) throw newer.error;
+    const viewed = await support.getCase({ id: created.value.id }, ctx("user"));
+    if (viewed.isErr()) throw viewed.error;
+    const acknowledgement = {
+      id: created.value.id,
+      throughSequence: newer.value.sequence,
+      messageIds: viewed.value.messages.map((message) => message.id),
+    };
+    const marked = await support.markRead(acknowledgement, ctx("user"));
+    if (marked.isErr()) throw marked.error;
     unavailable = false;
     const retry = await support.controlMessage(
       { id: created.value.id, messageId: sent.value.id, action: "retry" },
       ctx("staff", "admin")
     );
     if (retry.isErr()) throw retry.error;
-    await support.processWork();
+    const translating = support.processWork();
+    await translationStarted;
+    const redaction = await support.redactMessage(
+      {
+        id: created.value.id,
+        messageId: viewed.value.messages[0].id,
+        reason: "Remove old question",
+      },
+      ctx("staff", "admin")
+    );
+    if (redaction.isErr()) throw redaction.error;
+    releaseTranslation();
+    await translating;
     const published = await support.getCase({ id: created.value.id }, ctx("user"));
     if (published.isErr()) throw published.error;
     expect(published.value.messages[1].publishedBody).toBe("PL: Answer");
     expect(published.value.messages[1].body).toBe("Answer");
     expect(published.value.messages[1].publishedAt).not.toBeNull();
+    // Retrying an acknowledgement from before publication must not consume
+    // a reply that was accepted earlier but first appeared afterwards.
+    const repeated = await support.markRead(acknowledgement, ctx("user"));
+    if (repeated.isErr()) throw repeated.error;
+    const unread = await support.getCase({ id: created.value.id }, ctx("user"));
+    if (unread.isErr()) throw unread.error;
+    expect(unread.value.case.unreadCount).toBe(1);
+    const list = await support.listCases({}, ctx("user"));
+    if (list.isErr()) throw list.error;
+    expect(list.value.items[0].unreadCount).toBe(1);
+    const badge = await support.getUnreadCount({}, ctx("user"));
+    if (badge.isErr()) throw badge.error;
+    expect(badge.value.count).toBe(1);
+    const acknowledged = await support.markRead(
+      {
+        ...acknowledgement,
+        messageIds: published.value.messages.map((message) => message.id),
+      },
+      ctx("user")
+    );
+    if (acknowledged.isErr()) throw acknowledged.error;
+    const cleared = await support.getUnreadCount({}, ctx("user"));
+    if (cleared.isErr()) throw cleared.error;
+    expect(cleared.value.count).toBe(0);
   } finally {
     await pool.end();
   }

@@ -11,7 +11,7 @@ Implementation paths are relative to `packages/backend/src/modules/support/` unl
 | 1–3, 9 | User-owned Cases; current User/grants checked independently of Membership | `tests/support.service.test.ts`; browser uses customer without Organization |
 | 4 | Reusable `SupportWidget`, `SupportPanel`, localized controls and loading/error states | `scripts/verify-support-browser.cjs`; 420px widget artifact |
 | 5 | Actor/payload-bound command identities | service and native tests repeat Case/message submissions and reject changed payload |
-| 6–7 | Consistent cursor snapshots, paged history, changes/redaction recovery, monotonic reads and unread count | service/native tests; local SSE/cursor experiment below |
+| 6–7 | Consistent cursor snapshots, paged history, changes/redaction recovery, explicit viewed-message receipts and unread count | service/native tests; local SSE/cursor experiment below |
 | 8, 29 | Admin-origin contact starts human-handled | service boundary; local native staff-initiated SSE recovery Case |
 | 10, 19 | Public/internal visibility and distinct composer; notes leave demand/lifecycle unchanged | service tests; real browser submits private note and checks customer API/widget |
 | 11–14 | Expected-version updates, assignment/take, priority, waiting responsibility, shared catalog and filters | `tests/support.service.test.ts`; `SupportDeskTools` + list/update/catalog APIs |
@@ -33,14 +33,29 @@ Implementation paths are relative to `packages/backend/src/modules/support/` unl
 
 ## Checks run
 
-- Backend Support and native bearer suites: 21 tests in 10 suites passed. These include PostgreSQL isolation, idempotency, pagination, notes, lifecycle, budgets, translation failure/retry, takeover, File sealing/redaction, docs, metrics, calendars and CSAT.
-- Web UI: identity-cache isolation for default/injected QueryClients and safe announced message rendering: 3 tests passed.
+- Affected backend suites: 95 tests in 25 suites passed, including Support, bearer Auth, account lifecycle, Server events, File and Tag regression tests. The focused Support/native subset has 23 tests in 10 suites. These include PostgreSQL isolation, idempotency, pagination, notes, lifecycle, budgets, translation failure/retry, takeover, File sealing/redaction, docs, metrics, calendars and CSAT.
+- Web UI: identity-cache isolation for default/injected QueryClients and safe announced message rendering, settings/documentation loading and failed-read recovery, retained semantic request identities, exact mutation Retry, immediate unread badge invalidation and scoped Escape cleanup: 8 tests passed.
 - CLI creation/product-documentation/feature-catalog suites: 76 tests passed with Support selected and omitted. Required modules are implied; default documentation remains independent.
 - Backend, frontend and web-ui types/builds; Starter server and webapp types/builds passed. Build dependent packages in order: backend, frontend, web-ui, then Starter. Concurrent builds can observe an intermediate cleaned declaration directory.
-- Generated migrations `0002_happy_barracuda` and `0003_chilly_abomination` applied through Starter `drizzle:migrate` against the disposable loopback database. No SQL/journal/snapshot was hand-authored.
+- Generated migrations `0002_happy_barracuda`, `0003_chilly_abomination` and `0004_hesitant_peter_parker` applied through Starter `drizzle:migrate` against the disposable loopback database. No SQL/journal/snapshot was hand-authored.
 - Actual Starter Docusaurus build produced both en and en-GB output and a versioned help manifest. No external corpus crawl was used.
 - Real Kernel/Auth/File/Tag/Support/Workflow composition on local PostgreSQL/Redis published a deterministic cited AI answer, then a translated human reply. The browser verified note isolation through API and UI, smiley feedback, single trigger semantics and Enter/Escape behavior with zero page errors.
 - A User-authenticated `/events` stream received a minimal Case-ID notification without message text. Closing it, sending another reply and resuming from the prior cursor recovered both replies from PostgreSQL.
+
+## Review regression evidence
+
+The six Standards/Spec findings were reproduced through generated-app, real PostgreSQL Service, local object-store and React Query hook boundaries before fixing them:
+
+- Notifications no longer excludes Support's screen guides. The Support-without-Notifications creation regression checks both en and en-GB guide files.
+- Settings and corpus loading/failure remain visible. Retry refetches failed reads independently and resends the exact latest failed create/send command. A/B/A failures retain separate request identities; changed UI locale and preview intent produce new identities. Backend retries with changed authored locale or preview return 409.
+- File sealing persists both source and intended target locators before writing bytes. Interruptions before the target write and after the write are recoverable by retry or purge. Pending sharing intents cannot bypass the generic File boundary.
+- AI claims and publications fingerprint every supplied transcript source under the Case lock. Gated completion after historical public-message redaction cannot publish stale text. Unrelated human translation still publishes across that redaction; no new Work/Case lock inversion was introduced.
+- Read acknowledgements require published `messageIds` from the actual viewed page alongside `throughSequence`. Retrying a pre-publication acknowledgement cannot consume a translated reply published later at a lower acceptance sequence. Case, list and widget unread counts remain one until that reply's ID is acknowledged. The native reference client exposes `markViewed(transcript)`; JSON/OpenAPI/tRPC share the same required schema.
+- A configured user-level read-all grant sees the same public Cases in list and direct reads. Platform-admin-only settings and notes remain unchanged.
+
+The assembled browser check additionally gates a send while a newer draft is typed, commits a second send while losing its response, closes/reopens the widget, retries the identical payload/client ID and verifies one persisted message. It acknowledges the displayed published IDs, selects feedback and closes with Escape. `browser-result.json` records zero page errors. Drafts and unresolved commands remain in the authenticated component tree and are discarded when that tree remounts for a different identity.
+
+Migration `0004_hesitant_peter_parker` adds the cumulative message-ID receipts with an empty-array default. It was generated through Starter `drizzle:generate` and applied through `drizzle:migrate` only to loopback `support_migrations` on port 55439, schema `app`. The temporary Starter shared `.env` was removed. No hosted resources or telemetry were used; local fixture app workers were stopped after verification. Existing disposable PostgreSQL/Redis infrastructure was reused.
 
 ## Reproduce the assembled browser check
 

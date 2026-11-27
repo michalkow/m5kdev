@@ -77,13 +77,67 @@ async function main() {
   await admin.getByText("pl: A public staff answer", { exact: true }).first().waitFor();
   await admin.screenshot({ path: "/tmp/m5kdev-support-execution/admin.png", fullPage: true });
   await user.goto(`${base}/`);
-  await user.getByRole("button", { name: /Contact support/ }).focus();
+  await user.getByRole("button", { name: /Contact support|Support: \d+ unread/ }).focus();
   await user.keyboard.press("Enter");
   const dialog = user.getByRole("dialog", { name: "Contact support" });
   await dialog.getByRole("button", { name: new RegExp(title) }).click();
   await dialog.getByText("pl: A public staff answer", { exact: true }).first().waitFor();
   if ((await dialog.innerText()).includes("PRIVATE STAFF NOTE"))
     throw new Error("Widget note leak");
+  const composer = dialog.getByRole("textbox", { name: /^Message/ });
+  let releaseSend;
+  let sendEntered;
+  const enteredSend = new Promise((resolve) => {
+    sendEntered = resolve;
+  });
+  const sendGate = new Promise((resolve) => {
+    releaseSend = resolve;
+  });
+  const pendingHandler = async (route) => {
+    const response = await route.fetch();
+    sendEntered();
+    await sendGate;
+    await route.fulfill({ response });
+  };
+  await user.route("**/trpc/support.sendMessage*", pendingHandler);
+  await composer.fill("Submitted while waiting");
+  await dialog.getByRole("button", { name: "Send message", exact: true }).click();
+  await enteredSend;
+  await composer.fill("New draft typed during send");
+  releaseSend();
+  await expect(dialog.getByRole("button", { name: "Send message", exact: true })).toBeEnabled();
+  await expect(composer).toHaveValue("New draft typed during send");
+  await user.unroute("**/trpc/support.sendMessage*", pendingHandler);
+  const submittedRequests = [];
+  const lostResponseHandler = async (route) => {
+    submittedRequests.push(route.request().postData());
+    const response = await route.fetch();
+    if (submittedRequests.length === 1) await route.abort("failed");
+    else await route.fulfill({ response });
+  };
+  await user.route("**/trpc/support.sendMessage*", lostResponseHandler);
+  await composer.fill("Recover this exact failed send");
+  await dialog.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toBeVisible();
+  await dialog.getByRole("button", { name: "Close support", exact: true }).click();
+  await dialog.waitFor({ state: "hidden" });
+  await user.getByRole("button", { name: /Contact support|Support: \d+ unread/ }).click();
+  await expect(composer).toHaveValue("Recover this exact failed send");
+  await dialog.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  if (submittedRequests.length !== 2 || submittedRequests[0] !== submittedRequests[1])
+    throw new Error("Close/reopen Retry changed the failed command identity or payload");
+  const recovered = await customer.call("getCase", { id: item.id });
+  if (
+    recovered.messages.filter((message) => message.body === "Recover this exact failed send")
+      .length !== 1
+  )
+    throw new Error("Lost-response Retry duplicated a message");
+  await user.unroute("**/trpc/support.sendMessage*", lostResponseHandler);
+  await dialog.getByRole("button", { name: "Mark as read", exact: true }).click();
+  await expect
+    .poll(async () => (await customer.call("getCase", { id: item.id })).case.unreadCount)
+    .toBe(0);
   await dialog.getByRole("button", { name: "Resolve", exact: true }).click();
   await dialog.getByRole("button", { name: "Happy", exact: true }).click();
   await expect(dialog.getByRole("button", { name: "Happy", exact: true })).toHaveAttribute(
@@ -101,6 +155,9 @@ async function main() {
     translation: "pl rendition published",
     csat: "smiley click selected",
     keyboard: "Escape closed widget",
+    draftRecovery:
+      "new text survived pending success; close/reopen retained draft and exact failed command; Retry avoided duplicate",
+    readAcknowledgement: "displayed published message IDs cleared unread",
     pageErrors: errors,
   };
   console.log(JSON.stringify(result, null, 2));

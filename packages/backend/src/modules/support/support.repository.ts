@@ -282,7 +282,7 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
         .where(
           and(
             inArray(supportMessages.caseId, caseIds),
-            gt(supportMessages.sequence, sql`coalesce(${supportReads.sequence}, 0)`),
+            sql`not (${supportMessages.id} = any(coalesce(${supportReads.messageIds}, ARRAY[]::text[])))`,
             or(isNull(supportMessages.authorUserId), ne(supportMessages.authorUserId, userId)),
             isNotNull(supportMessages.publishedAt),
             admin ? undefined : eq(supportMessages.visibility, "public")
@@ -294,7 +294,20 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
   async unread(caseId: string, userId: string, admin: boolean) {
     return (await this.unreadCounts([caseId], userId, admin)).map((rows) => rows[0]?.total ?? 0);
   }
-  async markRead(caseId: string, userId: string, throughSequence: number, tx: SupportTransaction) {
+  async messagesByIds(caseId: string, messageIds: string[], tx: SupportTransaction) {
+    if (!messageIds.length) return [];
+    return tx
+      .select()
+      .from(supportMessages)
+      .where(and(eq(supportMessages.caseId, caseId), inArray(supportMessages.id, messageIds)));
+  }
+  async markRead(
+    caseId: string,
+    userId: string,
+    throughSequence: number,
+    messageIds: string[],
+    tx: SupportTransaction
+  ) {
     const [existing] = await tx
       .select()
       .from(supportReads)
@@ -303,11 +316,17 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
       const sequence = Math.max(existing.sequence, throughSequence);
       await tx
         .update(supportReads)
-        .set({ sequence, updatedAt: new Date() })
+        .set({
+          sequence,
+          messageIds: [...new Set([...existing.messageIds, ...messageIds])],
+          updatedAt: new Date(),
+        })
         .where(eq(supportReads.id, existing.id));
       return { sequence };
     }
-    await tx.insert(supportReads).values({ caseId, userId, sequence: throughSequence });
+    await tx
+      .insert(supportReads)
+      .values({ caseId, userId, sequence: throughSequence, messageIds: [...new Set(messageIds)] });
     return { sequence: throughSequence };
   }
   async record(
@@ -1132,7 +1151,7 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
             isNotNull(supportMessages.publishedAt),
             admin ? undefined : eq(supportMessages.visibility, "public"),
             or(isNull(supportMessages.authorUserId), ne(supportMessages.authorUserId, userId)),
-            gt(supportMessages.sequence, sql`coalesce(${supportReads.sequence},0)`)
+            sql`not (${supportMessages.id} = any(coalesce(${supportReads.messageIds}, ARRAY[]::text[])))`
           )
         );
       return { count: row.total };

@@ -33,7 +33,7 @@ export function useSupport(admin = false) {
     setAttachmentIds([]);
     setBeforeSequence(undefined);
   };
-  const pendingRequest = useRef<{ key: string; id: string } | null>(null);
+
   const cases = useInfiniteQuery(
     trpc.support.listCases.infiniteQueryOptions(
       {
@@ -69,6 +69,7 @@ export function useSupport(admin = false) {
     await Promise.all([
       cache.invalidateQueries(trpc.support.listCases.infiniteQueryFilter()),
       cache.invalidateQueries(trpc.support.getCase.queryFilter()),
+      cache.invalidateQueries(trpc.support.getUnreadCount.queryFilter()),
     ]);
   };
   useServerEventHandler({
@@ -79,9 +80,16 @@ export function useSupport(admin = false) {
   });
   const read = useMutation(trpc.support.markRead.mutationOptions({ onSuccess: refresh }));
   const markRead = () => {
-    const last = transcript.data?.messages.at(-1);
-    if (!selectedId || !last) return;
-    read.mutate({ id: selectedId, throughSequence: last.sequence });
+    const page = transcript.data;
+    const last = page?.messages.at(-1);
+    if (!selectedId || !page || !last) return;
+    read.mutate({
+      id: selectedId,
+      throughSequence: last.sequence,
+      messageIds: page.messages
+        .filter((message) => message.publishedAt)
+        .map((message) => message.id),
+    });
   };
   const availability = useQuery(
     trpc.support.getAvailability.queryOptions({}, { staleTime: 60000 })
@@ -158,7 +166,6 @@ export function useSupport(admin = false) {
   const create = useMutation(
     trpc.support.createCase.mutationOptions({
       onSuccess: async (value) => {
-        pendingRequest.current = null;
         selectCase(value.id);
         await refresh();
       },
@@ -166,10 +173,13 @@ export function useSupport(admin = false) {
   );
   const send = useMutation(
     trpc.support.sendMessage.mutationOptions({
-      onSuccess: async () => {
-        pendingRequest.current = null;
-        setBeforeSequence(undefined);
-        setAttachmentIds([]);
+      onSuccess: async (_value, input) => {
+        if (currentSelection.current === input.id) {
+          setBeforeSequence(undefined);
+          setAttachmentIds((previous) =>
+            previous.filter((id) => !input.attachmentIds?.includes(id))
+          );
+        }
         await refresh();
       },
     })
@@ -223,24 +233,32 @@ export function useSupport(admin = false) {
   const redactMessage = async (messageId: string, reason: string) => {
     if (selectedId) redact.mutate({ id: selectedId, messageId, reason });
   };
-  const clientId = (key: string) => {
-    if (pendingRequest.current?.key !== key)
-      pendingRequest.current = { key, id: crypto.randomUUID() };
-    return pendingRequest.current.id;
-  };
-  const createCase = async (subject: string, body: string, userId?: string) => {
+  type Request =
+    | { kind: "create"; input: Parameters<typeof create.mutateAsync>[0] }
+    | { kind: "send"; input: Parameters<typeof send.mutateAsync>[0] };
+  const pendingRequests = useRef(new Map<string, Request>());
+  const lastFailed = useRef<string | null>(null);
+  const runRequest = async (key: string, request: Request) => {
+    const retained = pendingRequests.current.get(key) ?? request;
+    pendingRequests.current.set(key, retained);
     try {
-      await create.mutateAsync({
-        subject,
-        body,
-        uiLocale: i18n.resolvedLanguage ?? i18n.language,
-        userId,
-        clientId: clientId(JSON.stringify([subject, body, userId])),
-      });
+      if (retained.kind === "create") await create.mutateAsync(retained.input);
+      else await send.mutateAsync(retained.input);
+      pendingRequests.current.delete(key);
+      if (lastFailed.current === key)
+        lastFailed.current = [...pendingRequests.current.keys()].at(-1) ?? null;
       return true;
     } catch {
+      lastFailed.current = key;
       return false;
     }
+  };
+  const createCase = (subject: string, body: string, userId?: string) => {
+    const input = { subject, body, userId, uiLocale: i18n.resolvedLanguage ?? i18n.language };
+    return runRequest(JSON.stringify(["create", input]), {
+      kind: "create",
+      input: { ...input, clientId: crypto.randomUUID() },
+    });
   };
   const sendMessage = async (
     body: string,
@@ -248,19 +266,27 @@ export function useSupport(admin = false) {
     preview = false
   ) => {
     if (!selectedId) return false;
-    try {
-      await send.mutateAsync({
-        id: selectedId,
-        body,
-        visibility,
-        attachmentIds,
-        preview,
-        clientId: clientId(JSON.stringify([selectedId, body, visibility, attachmentIds])),
-      });
-      return true;
-    } catch {
-      return false;
-    }
+    const locale = admin
+      ? settings.data?.workingLocale
+      : (transcript.data?.case.supportLocale ??
+        transcript.data?.case.detectedLocale ??
+        transcript.data?.case.uiLocale);
+    const input = { id: selectedId, body, visibility, attachmentIds, preview, locale };
+    return runRequest(JSON.stringify(["send", input]), {
+      kind: "send",
+      input: { ...input, clientId: crypto.randomUUID() },
+    });
+  };
+  const retry = async () => {
+    const key = lastFailed.current;
+    const request = key ? pendingRequests.current.get(key) : undefined;
+    if (key && request) await runRequest(key, request);
+    await Promise.all([
+      refresh(),
+      ...[availability, overview, documentation, settings, catalog]
+        .filter((query) => query.isError)
+        .map((query) => query.refetch()),
+    ]);
   };
   return {
     availability: availability.data,
@@ -334,11 +360,20 @@ export function useSupport(admin = false) {
     showOlder: () => setBeforeSequence(transcript.data?.messages[0]?.sequence),
     showLatest: () => setBeforeSequence(undefined),
     isHistory: beforeSequence !== undefined,
-    retry: refresh,
+    retry,
     markRead,
-    isLoading: cases.isLoading || (selectedId !== null && transcript.isLoading),
+    isSettingsLoading: admin && settings.isLoading,
+    settingsError: settings.error?.message,
+    isDocumentationLoading: admin && documentation.isLoading,
+    documentationError: documentation.error?.message,
+    isLoading:
+      cases.isLoading ||
+      (selectedId !== null && transcript.isLoading) ||
+      (admin && (settings.isLoading || documentation.isLoading)),
     isPending: create.isPending || send.isPending || isUploading,
     error:
+      settings.error?.message ??
+      documentation.error?.message ??
       availability.error?.message ??
       overview.error?.message ??
       feedback.error?.message ??

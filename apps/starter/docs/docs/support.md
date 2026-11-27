@@ -3,18 +3,18 @@ sidebar_position: 8
 title: Contact support
 ---
 
-Use **Support** in the bottom corner of the signed-in web application to ask the platform team for help. You can contact support even when you do not have an active organisation. Your requests are private to you and platform support; other organisation members cannot read them.
+Use **Contact support** in the bottom corner of the signed-in web application to ask the platform team for help. You can contact support even when you do not have an active organisation. Your requests are private to you and platform support; other organisation members cannot read them.
 
 ## Start or continue a request
 
-1. Select **Support**, then **New request**.
-2. Enter a short subject and describe what you need in **Message**. Select **Send**.
-3. Select a request from **Your requests** to read its replies or send another message. Choose **More requests** to continue through older requests. Use **Older messages** and **Latest messages** to move through long histories.
-4. Select **Mark as read** after reading new replies. The number beside a request shows unread messages.
+1. Select **Contact support**, then **New request**.
+2. Enter a short subject and describe what you need in **Message**. Select **Send message**.
+3. Select a request from **Support requests** to read its replies or send another message. Choose **More requests** to continue through older requests. Use **Older messages** and **Latest messages** to move through long histories.
+4. Select **Mark as read** after reading new replies. The number beside a request shows unread messages. Only replies on the page you viewed are marked read; a reply that finishes translation later remains unread.
 
-Start a separate request for an unrelated issue. A new message in a resolved request reopens that same request, however long ago it was resolved. Closing the Support widget does not resolve the request.
+Start a separate request for an unrelated issue. A new message in a resolved request reopens that same request, however long ago it was resolved. Closing the Support widget does not resolve the request. Your unsent draft and retry identity remain available when you reopen it during the same signed-in session.
 
-If sending fails, keep the message and retry. Retrying the same message after a connection failure does not create a duplicate. **Try again** refreshes the request list and messages. Replies become available when you return to the application; email and push notifications are not provided for Support.
+If sending fails, keep the message and retry. Retrying the same message after a connection failure does not create a duplicate. **Retry** retries your latest failed send with its original contents and request identity, and refreshes failed reads. If you edit the draft while an earlier send finishes, the newer text stays in the composer. Replies become available when you return to the application; email and push notifications are not provided for Support.
 
 ## Files and languages
 

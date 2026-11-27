@@ -44,6 +44,13 @@ const hash = (data: unknown) =>
     .update(JSON.stringify(canonical(data)))
     .digest("hex");
 
+const answerSourceHash = (message: SupportMessageRow) =>
+  hash({
+    body: message.body,
+    publishedBody: message.publishedBody,
+    redactedAt: message.redactedAt,
+  });
+
 const workSourceHash = (purpose: string, message: SupportMessageRow) =>
   purpose === "view" || purpose === "outbound"
     ? hash({ body: message.body, locale: message.authoredLocale })
@@ -294,7 +301,7 @@ export class SupportService extends BasePermissionService<
         }
       }
       const result = await this.repository.support.list(
-        ctx.actor.userRole === "admin" ? null : ctx.actor.userId,
+        this.checkPermission(ctx.actor, "read") ? null : ctx.actor.userId,
         input,
         after
       );
@@ -346,6 +353,8 @@ export class SupportService extends BasePermissionService<
           body: input.body,
           visibility: input.visibility,
           attachmentIds: input.attachmentIds,
+          locale: input.locale ?? null,
+          preview: input.preview,
         });
         const existing = await this.repository.support.findMessage(
           input.id,
@@ -610,10 +619,29 @@ export class SupportService extends BasePermissionService<
         if (!current) throw this.error("NOT_FOUND", "Support Case not found").error;
         if (input.throughSequence > current.lastSequence)
           throw this.error("BAD_REQUEST", "Cannot mark unseen future messages as read").error;
+        const messages = await this.repository.support.messagesByIds(
+          input.id,
+          input.messageIds,
+          tx
+        );
+        if (
+          messages.length !== new Set(input.messageIds).size ||
+          messages.some(
+            (message) =>
+              !message.publishedAt ||
+              message.sequence > input.throughSequence ||
+              (ctx.actor.userRole !== "admin" && message.visibility !== "public")
+          )
+        )
+          throw this.error(
+            "BAD_REQUEST",
+            "Acknowledge only published messages in the viewed transcript"
+          ).error;
         return this.repository.support.markRead(
           input.id,
           ctx.actor.userId,
           input.throughSequence,
+          input.messageIds,
           tx
         );
       })
@@ -1767,6 +1795,7 @@ export class SupportService extends BasePermissionService<
       limit: 12,
     });
     if (history.isErr()) return err(history.error);
+    const suppliedSources = [...history.value, ...(source ? [source] : [])];
     const payload = {
       question: source?.body ?? "",
       history: history.value.map((message) => ({
@@ -1797,9 +1826,23 @@ export class SupportService extends BasePermissionService<
       const latest = current
         ? await this.repository.support.latestUserMessage(current.id, tx)
         : null;
+      const currentSources = current
+        ? await this.repository.support.messagesByIds(
+            current.id,
+            suppliedSources.map((message) => message.id),
+            tx
+          )
+        : [];
+      const contextCurrent = suppliedSources.every((message) =>
+        currentSources.some(
+          (latest) =>
+            latest.id === message.id && answerSourceHash(latest) === answerSourceHash(message)
+        )
+      );
       const recipient = await this.repository.support.lockUser(work.userId, tx);
       if (
         !current ||
+        !contextCurrent ||
         current.handling !== "ai" ||
         current.handlingEpoch !== work.epoch ||
         !latest ||
@@ -1924,6 +1967,19 @@ export class SupportService extends BasePermissionService<
       const latest = current
         ? await this.repository.support.latestUserMessage(current.id, tx)
         : null;
+      const currentSources = current
+        ? await this.repository.support.messagesByIds(
+            current.id,
+            suppliedSources.map((message) => message.id),
+            tx
+          )
+        : [];
+      const contextCurrent = suppliedSources.every((message) =>
+        currentSources.some(
+          (latest) =>
+            latest.id === message.id && answerSourceHash(latest) === answerSourceHash(message)
+        )
+      );
       const recipient = await this.repository.support.lockUser(work.userId, tx);
       const freshSettings = await this.repository.support.settings(tx);
       if (freshSettings.isErr()) throw freshSettings.error;
@@ -1934,6 +1990,7 @@ export class SupportService extends BasePermissionService<
       );
       if (
         !current ||
+        !contextCurrent ||
         current.handling !== "ai" ||
         current.status !== "open" ||
         current.handlingEpoch !== work.epoch ||

@@ -105,7 +105,11 @@ it("runs a native reference client through real bearer login, Case sync and revo
     expect(resumed.messages.map((message: { body: string }) => message.body)).toEqual([
       "Reply during disconnection",
     ]);
-    await client.call("markRead", { id: created.id, throughSequence: reply.sequence });
+    await expect(
+      client.call("markRead", { id: created.id, throughSequence: reply.sequence })
+    ).rejects.toMatchObject({ status: 400 });
+    const viewed = await client.call("getCase", { id: created.id });
+    await client.markViewed(viewed);
     expect((await client.call("getUnreadCount")).count).toBe(0);
     await staff.signOut();
     await client.signOut();

@@ -30,7 +30,7 @@ POST /api/v1/support/cases
 }
 ```
 
-Keep the same `clientId` and payload when retrying a create/send after a network failure. Reusing that ID with different content returns 409. Use a new ID for each genuinely new message.
+Keep the same `clientId` and payload when retrying a create/send after a network failure. Reusing that ID with different content, authored `locale` or `preview` controls returns 409. Use a new ID for each genuinely new message.
 
 | Method and path | Operation | Access |
 | --- | --- | --- |
@@ -39,7 +39,7 @@ Keep the same `clientId` and payload when retrying a create/send after a network
 | `GET /cases/{id}` | Bounded history; `beforeSequence` loads older messages | Participant/staff |
 | `POST /cases/{id}/messages` | Send text, reserved `attachmentIds`, optional staff note/translation preview | Participant/staff |
 | `GET /cases/{id}/changes` | Durable change cursor, changed messages and state | Participant/staff |
-| `POST /cases/{id}/read` | Advance monotonic `throughSequence` | Participant/staff |
+| `POST /cases/{id}/read` | Acknowledge viewed published `messageIds` and `throughSequence` | Participant/staff |
 | `POST /cases/{id}/state` | Resolve/reopen; staff assignment, priority, wait, snooze and handling | User/staff by field |
 | `POST /cases/{id}/human` | Request human help | Participant/staff |
 | `POST /cases/{id}/language` | Set explicit support language, or `null` for detection/fallback | Participant/staff |
@@ -67,6 +67,14 @@ State and Tag edits include `expectedVersion` from the current Case. Settings ed
 `GET /cases` returns `items` and a next-page `cursor`; keep the same filters and follow that cursor to browse the complete Case list.
 
 `GET /cases/{id}` returns a history page, whether older messages exist, and a durable change cursor. Save the cursor, then call `GET /cases/{id}/changes?cursor=...` after reconnect or app resume. Apply changed messages by ID, including redaction tombstones, and replace the returned Case state. Follow `hasMore` until caught up, saving each returned cursor. Hidden staff-note positions do not represent missing public messages.
+
+To acknowledge a viewed history page, send `POST /cases/{id}/read` with `throughSequence` (the highest acceptance sequence on that page) and required `messageIds` (only the published messages you actually displayed, up to 100). Preserve this exact payload if retrying. A higher acceptance sequence alone never marks a held reply read: a translation first published later remains unread until its own ID is acknowledged. Pages accumulate read receipts; viewing an older page cannot undo them. For example:
+
+```json
+{"throughSequence": 3, "messageIds": ["first-message-id", "third-message-id"]}
+```
+
+The reference client's `markViewed(transcript)` builds this acknowledgement from a displayed `getCase` page.
 
 Kernel Server events are optional hints containing identifiers. They have no replay guarantee; always recover through HTTP. A client may poll the change endpoint without WebSockets or Server events. The framework repository includes `scripts/support-native-reference.mjs`, a plain JavaScript reference for login and operation calls.
 

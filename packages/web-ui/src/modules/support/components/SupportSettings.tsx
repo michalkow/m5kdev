@@ -1,4 +1,4 @@
-import { Button, Checkbox, Form, Input, Label, TextField } from "@heroui/react";
+import { Button, Checkbox, Form, Input, Label, Skeleton, TextField } from "@heroui/react";
 import type { useSupport } from "@m5kdev/frontend/modules/support/hooks/useSupport";
 import { useTranslation } from "react-i18next";
 import { SupportCalendarSettings } from "./SupportCalendarSettings";
@@ -16,7 +16,12 @@ const limits = [
 export function SupportSettings({ state }: { state: State }) {
   const { t } = useTranslation("web-ui");
   const settings = state.settings;
-  if (!settings) return null;
+  if (!settings)
+    return state.isSettingsLoading ? (
+      <Skeleton className="h-24 w-full rounded-lg" aria-label={t("support.loading")} />
+    ) : (
+      <p role="status">{t("support.failed")}</p>
+    );
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -131,6 +136,10 @@ export function SupportSettings({ state }: { state: State }) {
             }}
           />
         </TextField>
+        {state.isDocumentationLoading && (
+          <Skeleton className="h-12 w-full rounded-lg" aria-label={t("support.loading")} />
+        )}
+        {state.documentationError && <p role="status">{t("support.failed")}</p>}
         {state.documentation?.map((corpus) => (
           <div key={corpus.id} className="flex items-center justify-between gap-2 text-xs">
             <span>

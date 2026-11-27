@@ -1,15 +1,28 @@
 import { Button, Popover } from "@heroui/react";
+import { useSupport } from "@m5kdev/frontend/modules/support/hooks/useSupport";
 import { useSupportWidget } from "@m5kdev/frontend/modules/support/hooks/useSupportWidget";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { SupportPanel } from "./SupportPanel";
+import {
+  type SupportComposerDraft,
+  SupportPanelView,
+  snapshotSupportComposer,
+} from "./SupportPanel";
 export function SupportWidget() {
   const [open, setOpen] = useState(false);
+  const state = useSupport();
+  const composerRef = useRef<HTMLFormElement | null>(null);
+  const draftRef = useRef<SupportComposerDraft | null>(null);
+  const changeOpen = (next: boolean) => {
+    if (!next && composerRef.current)
+      draftRef.current = snapshotSupportComposer(composerRef.current, state.selectedId);
+    setOpen(next);
+  };
   const { t } = useTranslation("web-ui");
-  const { unreadCount } = useSupportWidget();
+  const { unreadCount } = useSupportWidget({ isOpen: open, onClose: () => changeOpen(false) });
   return (
     <aside className="fixed bottom-4 end-4 z-40">
-      <Popover isOpen={open} onOpenChange={setOpen}>
+      <Popover isOpen={open} onOpenChange={changeOpen}>
         <Button
           variant="primary"
           aria-label={
@@ -26,20 +39,14 @@ export function SupportWidget() {
         <Popover.Content placement="top end" className="w-96 max-w-[calc(100vw-2rem)] p-0">
           <Popover.Dialog
             aria-label={t("support.title")}
-            onKeyDownCapture={(event) => {
-              if (event.key === "Escape") {
-                event.stopPropagation();
-                setOpen(false);
-              }
-            }}
             className="max-h-[80dvh] overflow-y-auto p-0"
           >
             <div className="flex justify-end px-3 pt-2">
-              <Button size="sm" variant="tertiary" onPress={() => setOpen(false)}>
+              <Button size="sm" variant="tertiary" onPress={() => changeOpen(false)}>
                 {t("support.close")}
               </Button>
             </div>
-            <SupportPanel />
+            <SupportPanelView state={state} composerRef={composerRef} draftRef={draftRef} />
           </Popover.Dialog>
         </Popover.Content>
       </Popover>

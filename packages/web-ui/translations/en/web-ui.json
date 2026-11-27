@@ -475,7 +475,7 @@
     "send": "Send message",
     "close": "Close support",
     "author": {
-      "user": "You",
+      "user": "User",
       "admin": "Platform support",
       "ai": "AI assistant",
       "system": "Support update"

@@ -132,6 +132,7 @@ export const supportReads = appDatabaseSchema.table(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     sequence: integer("sequence").notNull().default(0),
+    messageIds: text("message_ids").array().notNull().$type<string[]>().default([]),
     updatedAt: instant("updated_at")
       .notNull()
       .$default(() => new Date()),

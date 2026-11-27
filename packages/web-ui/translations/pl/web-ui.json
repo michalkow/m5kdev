@@ -475,7 +475,7 @@
     "send": "Wyślij wiadomość",
     "close": "Zamknij pomoc",
     "author": {
-      "user": "Ty",
+      "user": "Użytkownik",
       "admin": "Pomoc platformy",
       "ai": "Asystent AI",
       "system": "Aktualizacja zgłoszenia"

@@ -172,8 +172,6 @@ const FEATURE_MANIFEST = {
       paths: [
         "apps/webapp/src/modules/notification/",
         "apps/docs/docs/notifications-web.md",
-        "apps/docs/docs/support.md",
-        "apps/docs/docs/support-desk.md",
         "apps/docs/docs/notifications-mobile.md",
       ],
     },

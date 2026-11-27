@@ -47,6 +47,13 @@ describe("scaffoldProject", () => {
       "support-manifest.mjs"
     );
     expect(await read("apps/docs/docs/support-api.md")).toContain("/api/v1/support");
+    for (const prefix of [
+      "apps/docs/docs",
+      "apps/docs/i18n/en-GB/docusaurus-plugin-content-docs/current",
+    ]) {
+      expect(await read(`${prefix}/support.md`)).toContain("Support");
+      expect(await read(`${prefix}/support-desk.md`)).toContain("Support");
+    }
     const minimal = await scaffoldProject({
       targetDirectory: "minimal-app",
       appName: "Minimal App",
