@@ -3,10 +3,11 @@ export function createSupportReferenceClient(baseUrl, fetchImpl = fetch) {
   const base = baseUrl.replace(/\/$/, "");
   let token;
   let document;
-  const request = async (path, method = "GET", body) => {
+  const request = async (path, method = "GET", body = undefined) => {
     const response = await fetchImpl(`${base}${path}`, {
       method,
       headers: {
+        Origin: new URL(base).origin,
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },

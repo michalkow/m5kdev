@@ -4,6 +4,7 @@ import express from "express";
 import { createServiceActor } from "../../../base/base.actor";
 import { prepareExperienceTables } from "../../../test/experience.fixtures";
 import { createTestPool } from "../../../test/postgresql";
+import { createTRPCMethods } from "../../../utils/trpc";
 import { users } from "../../auth/auth.db";
 import type { AuthMiddleware } from "../../auth/auth.middleware";
 import { taggings, tags } from "../../tag/tag.db";
@@ -11,6 +12,7 @@ import * as tables from "../support.db";
 import { SupportRepository } from "../support.repository";
 import { createSupportRouter } from "../support.router";
 import { SupportService } from "../support.service";
+import { createSupportTRPC } from "../support.trpc";
 
 const schema = { users, tags, taggings, ...tables };
 const pool = createTestPool();
@@ -174,6 +176,16 @@ it("enforces the same private Case boundary on the JSON HTTP interface", async (
   await new Promise<void>((resolve) => server.once("listening", resolve));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/v1/support`;
   try {
+    const contract = await fetch(`${base}/openapi.json`, {
+      headers: { "x-test-user": "alice" },
+    }).then((response) => response.json());
+    const operationIds = Object.values(contract.paths).flatMap((methods) =>
+      Object.values(methods as Record<string, { operationId: string }>).map(
+        (operation) => operation.operationId
+      )
+    );
+    const trpc = createSupportTRPC(createTRPCMethods(), support);
+    expect(operationIds.sort()).toEqual(Object.keys(trpc._def.procedures).sort());
     const created = await fetch(`${base}/cases`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-test-user": "alice" },

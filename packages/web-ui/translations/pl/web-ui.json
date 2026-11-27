@@ -630,6 +630,7 @@
     "handling": {
       "ai": "Asystent AI korzysta z opublikowanej dokumentacji.",
       "human": "Twoja sprawa czeka na obsługę przez człowieka."
-    }
+    },
+    "tools": "Narzędzia i filtry zgłoszeń"
   }
 }

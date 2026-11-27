@@ -630,6 +630,7 @@
     "handling": {
       "ai": "The AI assistant uses published help documentation.",
       "human": "Your request is with human support."
-    }
+    },
+    "tools": "Case tools and filters"
   }
 }

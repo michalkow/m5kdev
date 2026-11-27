@@ -312,7 +312,7 @@ export function useSupport(admin = false) {
     setFilters,
     catalog: catalog.data,
     updateCase,
-    saveCatalog: save.mutate,
+    saveCatalog: save.mutateAsync,
     setTags: (tagIds: string[]) => {
       if (transcript.data)
         tag.mutate({

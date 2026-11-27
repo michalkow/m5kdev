@@ -80,3 +80,5 @@ Resolved history has no default expiry. Optional `retentionDays` removes old res
 Calendar-time clocks start from customer-visible publication. First-human response includes earlier AI time; handoff wait is separate; consecutive User messages preserve outstanding demand. Notes, previews and failed/pending translations do not count as replies. Resolution cycles, elapsed lifetime and accumulated unresolved time remain distinct.
 
 The initial overview has live queue counts/oldest unanswered and a bounded cohort of Cases created in the selected 30-day default/90-day maximum window. A 500-Case cap is explicitly reported; narrow the cohort when partial. It shows median/p95/sample/unanswered counts and happy/all CSAT separated by human/AI. It does not infer active handle time, occupancy, business-hours performance or an SLA that was never configured.
+
+The native reference includes the API Origin header so fetch implementations that send browser metadata also satisfy the Better Auth origin check. Keep the returned signed bearer session in platform secure storage.

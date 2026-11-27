@@ -7,9 +7,9 @@ Platform administrators open **Admin** from the signed-in user menu, then select
 
 ## Find and answer a request
 
-Select a request to open its messages. The overview shows open, unassigned and waiting counts, the oldest unanswered requests, and response statistics. Search checks subjects and public messages; it does not expose Internal notes in customer search. Enter the filter values shown by each field and choose **Apply filters**. A blank field removes its filter.
+Select a request to open its messages. Expand **Support overview** to see open, unassigned and waiting counts, the oldest unanswered requests, and response statistics. Open **Case tools and filters** for search and work controls. Search checks subjects and public messages; it does not expose Internal notes in customer search. Enter the filter values shown by each field and choose **Apply filters**. A blank field removes its filter.
 
-Write a public reply in **Message**, optionally add Files, and select **Send**. Sent messages cannot be edited; send a correction as another message. Select **Internal note (staff only)** for information that must stay within the support team. Notes and their attachments stay private and do not change whether the User or support owes a reply.
+Write a public reply in **Message**, optionally add Files, and select **Send message**. Sent messages cannot be edited; send a correction as another message. Select **Internal note (staff only)** for information that must stay within the support team. Notes and their attachments stay private and do not change whether the User or support owes a reply.
 
 **New request** lets an admin initiate contact with an existing User. Supply that User's ID, a subject and the first message. Admin-initiated requests start with human handling.
 

@@ -90,13 +90,21 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
           </Button>
         </div>
       )}
-      {admin && <SupportOverview state={state} />}
+      {admin && (
+        <details className="rounded-lg border border-border p-3">
+          <summary className="cursor-pointer font-medium">{t("support.overview.title")}</summary>
+          <SupportOverview state={state} />
+        </details>
+      )}
       {admin && <SupportSettings state={state} />}
       {admin && (
-        <SupportDeskTools
-          state={state}
-          onChooseReply={(reply) => setSavedReply({ ...reply, caseId: state.selectedId })}
-        />
+        <details className="rounded-lg border border-border p-3">
+          <summary className="cursor-pointer font-medium">{t("support.tools")}</summary>
+          <SupportDeskTools
+            state={state}
+            onChooseReply={(reply) => setSavedReply({ ...reply, caseId: state.selectedId })}
+          />
+        </details>
       )}
       {state.isLoading && <p role="status">{t("support.loading")}</p>}
       <nav

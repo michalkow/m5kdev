@@ -159,7 +159,10 @@ export function SupportDeskTools({
               body: String(data.get("body") ?? "") || undefined,
               remove: false,
             })
-            .then(() => form.reset());
+            .then(() => form.reset())
+            .catch(() => {
+              /* The shared mutation error remains visible and the draft is retained. */
+            });
         }}
         className="grid gap-2"
       >

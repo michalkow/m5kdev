@@ -1,0 +1,63 @@
+# Support implementation verification
+
+The accepted contract is GitHub issue [#124](https://github.com/michalkow/m5kdev/issues/124), derived from [the agreed scope](customer-support-module-scope.md). Stories below use its numbering. These checks use synthetic accounts, loopback PostgreSQL/Redis and deterministic provider ports. No hosted model, object storage, database or telemetry allowance was used. No staging or production migration was applied.
+
+## Story trace
+
+Implementation paths are relative to `packages/backend/src/modules/support/` unless qualified. The `tests/` files exercise public services against disposable PostgreSQL schemas; native tests cross real Better Auth/HTTP boundaries.
+
+| Stories | Implemented boundary | Evidence |
+| --- | --- | --- |
+| 1–3, 9 | User-owned Cases; current User/grants checked independently of Membership | `tests/support.service.test.ts`; browser uses customer without Organization |
+| 4 | Reusable `SupportWidget`, `SupportPanel`, localized controls and loading/error states | `scripts/verify-support-browser.cjs`; 420px widget artifact |
+| 5 | Actor/payload-bound command identities | service and native tests repeat Case/message submissions and reject changed payload |
+| 6–7 | Consistent cursor snapshots, paged history, changes/redaction recovery, monotonic reads and unread count | service/native tests; local SSE/cursor experiment below |
+| 8, 29 | Admin-origin contact starts human-handled | service boundary; local native staff-initiated SSE recovery Case |
+| 10, 19 | Public/internal visibility and distinct composer; notes leave demand/lifecycle unchanged | service tests; real browser submits private note and checks customer API/widget |
+| 11–14 | Expected-version updates, assignment/take, priority, waiting responsibility, shared catalog and filters | `tests/support.service.test.ts`; `SupportDeskTools` + list/update/catalog APIs |
+| 15–17 | Snooze wake, explicit resolution, unlimited reopen into new cycle, retained takeover | service workflow tests; browser resolves Case |
+| 18, 36–38 | Accepted/publication split, immutable published text, previews, original viewing, held failures and explicit original/retry | `tests/support.automation.test.ts`; translated real-worker/browser reply |
+| 20–23 | Audited tombstones, sealed File sharing, guarded download, authoritative bytes/type/count | `tests/support.attachments.test.ts` uses local object store and issued URLs |
+| 24–28 | Opt-in cited answers, explicit person request, generation/source fences and failure handoff; resolve remains explicit | `tests/support.ai.test.ts`; Redis/browser synthetic cited answer; always-present human/resolve controls |
+| 30–32 | Rendered documentation exporter, version/origin/hash/applicability validation, staged activation/withdrawal | documentation/AI tests; actual Docusaurus en/en-GB manifest build |
+| 33–35 | App-native/fallback/working locales, explicit/detected/UI precedence, provider language catalog | automation tests including gated detection across handoff; settings/language APIs and UI |
+| 39–40 | Independent capability switches, persisted usage reservation, retry/lease/concurrency and per-User/month caps | automation/AI tests; real Redis worker with bounded synthetic provider configuration |
+| 41–42 | Versioned static expectation and IANA timezone/weekly/holiday display calendar | `tests/support.calendar.test.ts`; availability/settings API and localized UI |
+| 43–46 | Retained event ledger, publication-based response distributions, handoff, cycle/lifetime/unresolved clocks | `tests/support.metrics.test.ts`; overview projection/API; service tests |
+| 47–49 | Eligible resolved-cycle editable three-face feedback and human/AI split | service tests; browser single happy-face click observes persisted selection |
+| 50–51 | Close/Restore generation invalidation, User purge, redaction, configured retention and File cleanup recovery | `tests/support.privacy.test.ts`; attachment tests; generated additive migration applied locally |
+| 52–54 | Versioned JSON/OpenAPI parity with tRPC; signed bearer expiry/logout; plain JS reference client | HTTP test compares all operation IDs; native + `auth.bearer.test.ts`; actual Node-fetch reference used against Kernel |
+| 55 | Live identity/grants and authorization/lifecycle/source checks before autonomous publication | service/AI/privacy/attachment tests; frontend identity cache isolation tests |
+| 56–57 | Explicit omittable module, Auth/File/Tag/Workflow dependencies, reusable package exports, established frontend stack | real `createBackendApp` fixture + Redis worker; package and Starter builds; 76 CLI composition tests |
+| 58 | User widget, admin desk and API journeys in every Starter locale | en/en-GB documentation build; generated manifest contains the shipped guides |
+
+## Checks run
+
+- Backend Support and native bearer suites: 21 tests in 10 suites passed. These include PostgreSQL isolation, idempotency, pagination, notes, lifecycle, budgets, translation failure/retry, takeover, File sealing/redaction, docs, metrics, calendars and CSAT.
+- Web UI: identity-cache isolation for default/injected QueryClients and safe announced message rendering: 3 tests passed.
+- CLI creation/product-documentation/feature-catalog suites: 76 tests passed with Support selected and omitted. Required modules are implied; default documentation remains independent.
+- Backend, frontend and web-ui types/builds; Starter server and webapp types/builds passed. Build dependent packages in order: backend, frontend, web-ui, then Starter. Concurrent builds can observe an intermediate cleaned declaration directory.
+- Generated migrations `0002_happy_barracuda` and `0003_chilly_abomination` applied through Starter `drizzle:migrate` against the disposable loopback database. No SQL/journal/snapshot was hand-authored.
+- Actual Starter Docusaurus build produced both en and en-GB output and a versioned help manifest. No external corpus crawl was used.
+- Real Kernel/Auth/File/Tag/Support/Workflow composition on local PostgreSQL/Redis published a deterministic cited AI answer, then a translated human reply. The browser verified note isolation through API and UI, smiley feedback, single trigger semantics and Enter/Escape behavior with zero page errors.
+- A User-authenticated `/events` stream received a minimal Case-ID notification without message text. Closing it, sending another reply and resuming from the prior cursor recovered both replies from PostgreSQL.
+
+## Reproduce the assembled browser check
+
+Use a disposable local database named `support_*`, migrated with Starter's `drizzle:migrate`, and a disposable loopback Redis instance. The fixture rejects non-loopback storage and exits after ten minutes. It seeds only synthetic `@fixture.test` accounts with a public local-test password. It is maintainer verification code, excluded from published backend output.
+
+Build the reusable packages in dependency order, then build Starter webapp with `VITE_SERVER_URL=http://127.0.0.1:43191`, `VITE_APP_URL=http://127.0.0.1:43191`, and `VITE_PUBLIC_POSTHOG_KEY=demo`. Keep hosted source-map upload credentials absent. From the repository root:
+
+```sh
+APP_ENV=local APP_SLUG=support-verification DATABASE_SCHEMA=app PORT=43191 \
+OTEL_SDK_DISABLED=true \
+SUPPORT_VERIFICATION_DATABASE_URL=postgresql://USER@127.0.0.1:PORT/support_verification \
+SUPPORT_VERIFICATION_REDIS_URL=redis://127.0.0.1:REDIS_PORT \
+pnpm --filter @m5kdev/backend exec tsx src/test/support-runtime.ts
+```
+
+In another terminal run `node scripts/verify-support-browser.cjs` with Chrome installed and workspace E2E dependencies available. It writes `admin.png`, `widget.png`, and `browser-result.json` under `/tmp/m5kdev-support-execution/`. Stop the fixture and local storage after the run. The fixture intentionally has no Posts/AI provider integration beyond Support's deterministic ports; other Starter example screens are outside this experiment.
+
+## Practical limits
+
+Synthetic providers prove orchestration, authorization, persistence and UI behavior. They do not measure a hosted model's answer quality or translation quality. Overview statistics describe retained data and expose a partial cohort when capped; no SLA or active work-time measurement is claimed. Email ingestion, a React Native widget, WebSockets and the other agreed deferrals remain outside this release.
