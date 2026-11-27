@@ -74,6 +74,28 @@ export function createSupportTRPC({ router, userProcedure }: TRPCMethods, servic
       .mutation(async ({ input, ctx }) =>
         handleTRPCResult(await service.controlMessage(input, ctx))
       ),
+    getDocumentation: userProcedure
+      .input(z.object({}))
+      .output(supportSchemas.output.documentation)
+      .query(async ({ input, ctx }) =>
+        handleTRPCResult(await service.getDocumentation(input, ctx))
+      ),
+    stageDocumentation: userProcedure
+      .input(supportSchemas.input.stageDocumentation)
+      .output(supportSchemas.output.documentation)
+      .mutation(async ({ input, ctx }) =>
+        handleTRPCResult(await service.stageDocumentation(input, ctx))
+      ),
+    withdrawDocumentation: userProcedure
+      .input(supportSchemas.input.withdrawDocumentation)
+      .output(supportSchemas.output.documentation)
+      .mutation(async ({ input, ctx }) =>
+        handleTRPCResult(await service.withdrawDocumentation(input, ctx))
+      ),
+    requestHuman: userProcedure
+      .input(supportSchemas.input.read)
+      .output(supportSchemas.output.case)
+      .mutation(async ({ input, ctx }) => handleTRPCResult(await service.requestHuman(input, ctx))),
     createCase: userProcedure
       .input(supportCreateCaseSchema)
       .output(supportSchemas.output.case)

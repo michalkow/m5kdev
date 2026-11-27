@@ -1,4 +1,5 @@
 import type { SupportAppRouter } from "@m5kdev/backend/modules/support/support.trpc";
+import { supportStageDocumentationSchema } from "@m5kdev/commons/modules/support/support.schema";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { parseAsString, useQueryStates } from "nuqs";
 import { useRef, useState } from "react";
@@ -79,6 +80,20 @@ export function useSupport(admin = false) {
     if (!selectedId || !last) return;
     await read.mutateAsync({ id: selectedId, throughSequence: last.sequence });
   };
+  const documentation = useQuery(
+    trpc.support.getDocumentation.queryOptions({}, { enabled: admin })
+  );
+  const stageDocs = useMutation(
+    trpc.support.stageDocumentation.mutationOptions({
+      onSuccess: () => cache.invalidateQueries(trpc.support.getDocumentation.queryFilter()),
+    })
+  );
+  const withdrawDocs = useMutation(
+    trpc.support.withdrawDocumentation.mutationOptions({
+      onSuccess: () => cache.invalidateQueries(trpc.support.getDocumentation.queryFilter()),
+    })
+  );
+  const human = useMutation(trpc.support.requestHuman.mutationOptions({ onSuccess: refresh }));
   const settings = useQuery(trpc.support.getSettings.queryOptions({}, { enabled: admin }));
   const settingsSave = useMutation(
     trpc.support.saveSettings.mutationOptions({
@@ -219,6 +234,21 @@ export function useSupport(admin = false) {
     }
   };
   return {
+    documentation: documentation.data,
+    stageDocumentation: async (file: File) => {
+      try {
+        if (file.size > 5 * 1024 * 1024) throw new Error("Manifest exceeds limit");
+        await stageDocs.mutateAsync(
+          supportStageDocumentationSchema.parse({ manifest: JSON.parse(await file.text()) })
+        );
+      } catch (error) {
+        setUploadError(error instanceof Error ? error.message : "Manifest failed");
+      }
+    },
+    withdrawDocumentation: withdrawDocs.mutate,
+    requestHuman: () => {
+      if (selectedId) human.mutate({ id: selectedId });
+    },
     settings: settings.data,
     saveSettings: settingsSave.mutateAsync,
     setWorkingLocale: working.mutate,
@@ -265,6 +295,9 @@ export function useSupport(admin = false) {
     isLoading: cases.isLoading || (selectedId !== null && transcript.isLoading),
     isPending: create.isPending || send.isPending || isUploading,
     error:
+      stageDocs.error?.message ??
+      withdrawDocs.error?.message ??
+      human.error?.message ??
       settingsSave.error?.message ??
       working.error?.message ??
       language.error?.message ??

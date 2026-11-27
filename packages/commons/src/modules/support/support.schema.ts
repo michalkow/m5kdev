@@ -139,3 +139,22 @@ export const supportTranslateSchema = supportCaseIdSchema.extend({
   messageId: z.string().min(1),
   locale: z.string().min(2).max(35),
 });
+
+export const supportDocumentationEntrySchema = z.object({
+  id: z.string().min(1).max(200),
+  locale: z.string().min(2).max(35),
+  experience: z.string().min(1).max(100),
+  url: z.url().max(2000),
+  title: z.string().min(1).max(300),
+  text: z.string().min(1).max(100000),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export const supportManifestSchema = z.object({
+  schemaVersion: z.literal(1),
+  version: z.string().min(1).max(128),
+  applicationVersion: z.string().min(1).max(100),
+  generatedAt: z.iso.datetime(),
+  entries: z.array(supportDocumentationEntrySchema).min(1).max(2000),
+});
+export const supportStageDocumentationSchema = z.object({ manifest: supportManifestSchema });
+export const supportWithdrawDocumentationSchema = z.object({ version: z.string().min(1).max(128) });

@@ -105,6 +105,34 @@ export function SupportSettings({ state }: { state: State }) {
           {t("support.save")}
         </Button>
       </Form>
+      <section className="mt-3 grid gap-2" aria-label={t("support.documentation.title")}>
+        <TextField name="manifest">
+          <Label>{t("support.documentation.upload")}</Label>
+          <Input
+            type="file"
+            accept="application/json,.json"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void state.stageDocumentation(file);
+            }}
+          />
+        </TextField>
+        {state.documentation?.map((corpus) => (
+          <div key={corpus.id} className="flex items-center justify-between gap-2 text-xs">
+            <span>
+              {corpus.version.slice(0, 12)} · {t(`support.documentation.state.${corpus.state}`)}{" "}
+              {corpus.error && t("support.documentation.failed")}
+            </span>
+            <Button
+              size="sm"
+              variant="tertiary"
+              onPress={() => state.withdrawDocumentation({ version: corpus.version })}
+            >
+              {t("support.documentation.withdraw")}
+            </Button>
+          </div>
+        ))}
+      </section>
     </details>
   );
 }

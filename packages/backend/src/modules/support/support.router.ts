@@ -35,6 +35,7 @@ export function createSupportRouter(service: SupportService, auth: AuthMiddlewar
       const result = await handle(parsed.data, {
         user,
         session,
+        experience: request.experience,
         actor: createActorFromContext({ user, session }, "user"),
       });
       res.set("Cache-Control", "private, no-store");
@@ -69,8 +70,10 @@ export function createSupportRouter(service: SupportService, auth: AuthMiddlewar
     router[method](path, endpoint(inputSchema, input, handle));
     const inputJson = jsonSchema(inputSchema);
     const properties = { ...inputJson.properties };
-    const required = (inputJson.required ?? []).filter((key) => !path.includes(":id") || key !== "id");
-    if(path.includes(":id"))delete properties.id;
+    const required = (inputJson.required ?? []).filter(
+      (key) => !path.includes(":id") || key !== "id"
+    );
+    if (path.includes(":id")) delete properties.id;
     const parameters: Record<string, unknown>[] = path.includes(":id")
       ? [{ name: "id", in: "path", required: true, schema: { type: "string" } }]
       : [];
@@ -287,6 +290,42 @@ export function createSupportRouter(service: SupportService, auth: AuthMiddlewar
     supportSchemas.output.message,
     (req) => ({ ...req.body, id: req.params.id }),
     (input, ctx) => service.controlMessage(input, ctx)
+  );
+  register(
+    "get",
+    "/documentation",
+    "getDocumentation",
+    z.object({}),
+    supportSchemas.output.documentation,
+    () => ({}),
+    (input, ctx) => service.getDocumentation(input, ctx)
+  );
+  register(
+    "post",
+    "/documentation",
+    "stageDocumentation",
+    supportSchemas.input.stageDocumentation,
+    supportSchemas.output.documentation,
+    (req) => req.body,
+    (input, ctx) => service.stageDocumentation(input, ctx)
+  );
+  register(
+    "post",
+    "/documentation/withdraw",
+    "withdrawDocumentation",
+    supportSchemas.input.withdrawDocumentation,
+    supportSchemas.output.documentation,
+    (req) => req.body,
+    (input, ctx) => service.withdrawDocumentation(input, ctx)
+  );
+  register(
+    "post",
+    "/cases/:id/human",
+    "requestHuman",
+    supportSchemas.input.read,
+    supportSchemas.output.case,
+    (req) => ({ ...req.body, id: req.params.id }),
+    (input, ctx) => service.requestHuman(input, ctx)
   );
   router.get("/openapi.json", (_req, res) =>
     res.json({

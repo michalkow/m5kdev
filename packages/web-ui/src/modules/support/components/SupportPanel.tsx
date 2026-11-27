@@ -98,6 +98,18 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
         )}
       </div>
       {state.transcript && (
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onPress={state.requestHuman}>
+            {t("support.talkToPerson")}
+          </Button>
+          {admin && state.settings?.ai.enabled && state.transcript.case.handling === "human" && (
+            <Button size="sm" onPress={() => void state.updateCase({ handling: "ai" })}>
+              {t("support.enableAI")}
+            </Button>
+          )}
+        </div>
+      )}
+      {state.transcript && (
         <Button
           size="sm"
           variant="secondary"

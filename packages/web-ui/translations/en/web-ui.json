@@ -557,6 +557,21 @@
       "concurrency": "Concurrent calls",
       "attempts": "Attempts per task (1–3)",
       "timeoutMs": "Timeout (ms)"
+    },
+    "talkToPerson": "Talk to a person",
+    "enableAI": "Re-enable AI for this Case",
+    "documentation": {
+      "title": "AI documentation",
+      "upload": "Upload documentation release",
+      "failed": "Refresh failed; check the release.",
+      "withdraw": "Withdraw",
+      "state": {
+        "pending": "Pending",
+        "active": "Active",
+        "inactive": "Previous",
+        "failed": "Failed",
+        "withdrawn": "Withdrawn"
+      }
     }
   }
 }

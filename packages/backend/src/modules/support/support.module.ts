@@ -1,3 +1,4 @@
+import type { Mastra } from "@mastra/core";
 import { createBackendRouterMap } from "../../app";
 import {
   BaseModule,
@@ -7,19 +8,27 @@ import {
   type ModuleTRPCContext,
   type ModuleWorkflowContext,
 } from "../../base/base.module";
+import type { AIModule } from "../ai/ai.module";
 import type { AuthModule } from "../auth/auth.module";
 import type { AuthService } from "../auth/auth.service";
 import type { FileModule } from "../file/file.module";
 import type { TagModule } from "../tag/tag.module";
 import type { WorkflowModule } from "../workflow/workflow.module";
 import type * as tables from "./support.db";
+import { createSupportProviders, type SupportModels } from "./support.providers";
 import { SupportRepository } from "./support.repository";
 import { createSupportRouter } from "./support.router";
 import { SupportService } from "./support.service";
 import { createSupportTRPC } from "./support.trpc";
 import type { SupportConfig } from "./support.types";
 
-type Deps = { auth: AuthModule; file: FileModule; tag: TagModule; workflow: WorkflowModule };
+type Deps = {
+  auth: AuthModule;
+  file: FileModule;
+  tag: TagModule;
+  workflow: WorkflowModule;
+  ai?: AIModule<Mastra>;
+};
 type Repositories = { support: SupportRepository };
 type Services = { support: SupportService };
 export class SupportModule extends BaseModule<
@@ -29,15 +38,25 @@ export class SupportModule extends BaseModule<
   Services,
   { support: ReturnType<typeof createSupportTRPC> }
 > {
-  constructor(private readonly config: SupportConfig = {}) {
+  constructor(private readonly config: SupportConfig & { models?: SupportModels } = {}) {
     super();
   }
   readonly id = "support";
+  override readonly optionalDependsOn = ["ai"] as const;
   override readonly dependsOn = ["auth", "file", "tag", "workflow"] as const;
   override repositories({ db }: ModuleRepositoriesContext<Deps, typeof tables>) {
     return { support: new SupportRepository({ orm: db.orm, schema: db.schema }) };
   }
-  override services({ repositories, deps }: ModuleServicesContext<Deps, Repositories>) {
+  override services({ repositories, deps, appConfig }: ModuleServicesContext<Deps, Repositories>) {
+    if (this.config.models && !deps.ai)
+      throw new Error("Support model configuration requires the AI module");
+    const providers =
+      this.config.models && deps.ai
+        ? createSupportProviders(deps.ai.services.ai, this.config.models)
+        : {};
+    const locales = appConfig.locales?.locales.map((locale) =>
+      locale.code.replaceAll("_", "-")
+    ) ?? ["en"];
     return {
       support: new SupportService(
         repositories,
@@ -46,7 +65,7 @@ export class SupportModule extends BaseModule<
           file: deps.file.services.file,
         },
         undefined,
-        this.config
+        { ...this.config, ...providers, locales }
       ),
     };
   }
@@ -62,6 +81,8 @@ export class SupportModule extends BaseModule<
         timeout: 70000,
       })
       .handle(async () => {
+        const docs = await services.support.processDocumentation();
+        if (docs.isErr()) throw docs.error;
         const result = await services.support.processWork();
         if (result.isErr()) throw result.error;
       });
@@ -71,6 +92,8 @@ export class SupportModule extends BaseModule<
     const definition = workflow.service
       .cron({ name: "support.snooze", pattern: "* * * * *" })
       .handle(async () => {
+        const docs = await services.support.processDocumentation();
+        if (docs.isErr()) throw docs.error;
         const work = await services.support.processWork();
         if (work.isErr()) throw work.error;
         const cleanup = await services.support.cleanupRevokedFiles();

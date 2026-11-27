@@ -13,10 +13,12 @@ import {
   supportSendMessageSchema,
   supportSetTagsSchema,
   supportSettingsSchema,
+  supportStageDocumentationSchema,
   supportSyncSchema,
   supportTranslateSchema,
   supportUpdateCaseSchema,
   supportUploadSchema,
+  supportWithdrawDocumentationSchema,
   supportWorkingLocaleSchema,
 } from "@m5kdev/commons/modules/support/support.schema";
 import { z } from "zod";
@@ -49,6 +51,8 @@ export const supportSchemas = {
     updateCase: supportUpdateCaseSchema,
     catalog: supportCatalogSchema,
     setTags: supportSetTagsSchema,
+    stageDocumentation: supportStageDocumentationSchema,
+    withdrawDocumentation: supportWithdrawDocumentationSchema,
     saveSettings: supportSaveSettingsSchema,
     language: supportLanguageSchema,
     workingLocale: supportWorkingLocaleSchema,
@@ -59,6 +63,16 @@ export const supportSchemas = {
     redact: supportRedactSchema,
   },
   output: {
+    documentation: z.array(
+      z.object({
+        id: z.string(),
+        version: z.string(),
+        applicationVersion: z.string(),
+        state: z.string(),
+        error: z.string().nullable(),
+        activatedAt: z.date().nullable(),
+      })
+    ),
     settings: supportSettingsSchema.extend({
       version: z.number().int(),
       locales: z.array(z.string()),

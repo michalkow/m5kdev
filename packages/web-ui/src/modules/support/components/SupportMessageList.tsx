@@ -73,6 +73,17 @@ export function SupportMessageList({
               ))}
             </div>
           )}
+          {message.citations?.map((url) => (
+            <a
+              key={url}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block break-all text-sm text-accent underline"
+            >
+              {url}
+            </a>
+          ))}
           {message.attachmentIds?.map((id, index) => (
             <Button key={id} size="sm" variant="tertiary" onPress={() => void onDownload?.(id)}>
               {t("support.attachment", { number: index + 1 })}

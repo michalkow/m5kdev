@@ -27,6 +27,8 @@ import { taggings, tags } from "../tag/tag.db";
 import {
   supportAttachments,
   supportCases,
+  supportCorpora,
+  supportDocuments,
   supportEvents,
   supportMessages,
   supportReads,
@@ -446,6 +448,8 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
       .set({
         body: "",
         publishedBody: null,
+        citations: [],
+        aiProvenance: null,
         renditions: [],
         attachmentIds: [],
         redactedAt: new Date(),
@@ -625,6 +629,165 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
         .from(users)
         .where(eq(users.id, userId))
         .for("share")
+    )[0];
+  }
+  corpusList() {
+    return this.throwableQuery(() =>
+      this.orm
+        .select({
+          id: supportCorpora.id,
+          version: supportCorpora.version,
+          applicationVersion: supportCorpora.applicationVersion,
+          state: supportCorpora.state,
+          error: supportCorpora.error,
+          activatedAt: supportCorpora.activatedAt,
+        })
+        .from(supportCorpora)
+        .orderBy(desc(supportCorpora.createdAt))
+        .limit(30)
+    );
+  }
+  async stageCorpus(manifest: typeof supportCorpora.$inferInsert.manifest, tx: SupportTransaction) {
+    const [existing] = await tx
+      .select()
+      .from(supportCorpora)
+      .where(eq(supportCorpora.version, manifest.version));
+    if (existing) return existing;
+    return (
+      await tx
+        .insert(supportCorpora)
+        .values({
+          version: manifest.version,
+          applicationVersion: manifest.applicationVersion,
+          manifest,
+        })
+        .returning()
+    )[0];
+  }
+  pendingCorpora() {
+    return this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(supportCorpora)
+        .where(eq(supportCorpora.state, "pending"))
+        .orderBy(asc(supportCorpora.createdAt))
+        .limit(1)
+    );
+  }
+  async activateCorpus(
+    id: string,
+    entries: (typeof supportDocuments.$inferInsert)[],
+    tx: SupportTransaction
+  ) {
+    const [current] = await tx
+      .select()
+      .from(supportCorpora)
+      .where(eq(supportCorpora.id, id))
+      .for("update");
+    if (!current || current.state !== "pending") return;
+    await tx
+      .update(supportCorpora)
+      .set({ state: "inactive" })
+      .where(
+        and(
+          eq(supportCorpora.state, "active"),
+          eq(supportCorpora.applicationVersion, current.applicationVersion)
+        )
+      );
+    await tx.delete(supportDocuments).where(eq(supportDocuments.corpusId, id));
+    if (entries.length) await tx.insert(supportDocuments).values(entries);
+    await tx
+      .update(supportCorpora)
+      .set({ state: "active", activatedAt: new Date(), error: null })
+      .where(eq(supportCorpora.id, id));
+  }
+  async failCorpus(id: string, error: string, tx: SupportTransaction) {
+    await tx
+      .update(supportCorpora)
+      .set({ state: "failed", error })
+      .where(and(eq(supportCorpora.id, id), eq(supportCorpora.state, "pending")));
+  }
+  async withdrawCorpus(version: string, tx: SupportTransaction) {
+    const rows = await tx
+      .update(supportCorpora)
+      .set({ state: "withdrawn" })
+      .where(eq(supportCorpora.version, version))
+      .returning();
+    for (const row of rows)
+      await tx.delete(supportDocuments).where(eq(supportDocuments.corpusId, row.id));
+  }
+  retrieveDocumentation(
+    applicationVersion: string,
+    experience: string,
+    locale: string,
+    query: string,
+    fallback: string
+  ) {
+    return this.throwableQuery(async () => {
+      const [corpus] = await this.orm
+        .select()
+        .from(supportCorpora)
+        .where(
+          and(
+            eq(supportCorpora.state, "active"),
+            eq(supportCorpora.applicationVersion, applicationVersion)
+          )
+        )
+        .limit(1);
+      if (!corpus) return null;
+      for (const language of [...new Set([locale, locale.split("-")[0], fallback])]) {
+        const dictionary = language.startsWith("en") ? "english" : "simple";
+        const vector = sql`to_tsvector(${dictionary}::regconfig, ${supportDocuments.title} || ' ' || ${supportDocuments.text})`;
+        const terms = sql`websearch_to_tsquery(${dictionary}::regconfig, ${query})`;
+        const documents = await this.orm
+          .select()
+          .from(supportDocuments)
+          .where(
+            and(
+              eq(supportDocuments.corpusId, corpus.id),
+              eq(supportDocuments.experience, experience),
+              eq(supportDocuments.locale, language),
+              sql`${vector} @@ ${terms}`
+            )
+          )
+          .orderBy(sql`ts_rank(${vector},${terms}) desc`)
+          .limit(5);
+        if (documents.length) return { corpus, documents };
+      }
+      return { corpus, documents: [] };
+    });
+  }
+  async corpusActive(id: string, applicationVersion: string, tx: SupportTransaction) {
+    return (
+      await tx
+        .select({ id: supportCorpora.id })
+        .from(supportCorpora)
+        .where(
+          and(
+            eq(supportCorpora.id, id),
+            eq(supportCorpora.applicationVersion, applicationVersion),
+            eq(supportCorpora.state, "active")
+          )
+        )
+        .for("share")
+    )[0];
+  }
+  async latestUserMessage(caseId: string, tx: SupportTransaction) {
+    return (
+      await tx
+        .select()
+        .from(supportMessages)
+        .where(
+          and(
+            eq(supportMessages.caseId, caseId),
+            eq(supportMessages.authorKind, "user"),
+            eq(supportMessages.visibility, "public"),
+            isNotNull(supportMessages.publishedAt),
+            isNull(supportMessages.redactedAt)
+          )
+        )
+        .orderBy(desc(supportMessages.sequence))
+        .limit(1)
     )[0];
   }
 }

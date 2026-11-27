@@ -70,6 +70,13 @@ export const supportMessages = appDatabaseSchema.table(
       .$type<"none" | "pending" | "ready" | "failed">()
       .notNull()
       .default("none"),
+    citations: text("citations").array().notNull().$type<string[]>().default([]),
+    aiProvenance: jsonb("ai_provenance").$type<{
+      provider: string;
+      promptVersion: string;
+      corpusVersion: string;
+      sourceHashes: string[];
+    }>(),
     preview: boolean("preview").notNull().default(false),
     renditions: jsonb("renditions")
       .notNull()
@@ -221,3 +228,45 @@ export const supportUsage = appDatabaseSchema.table("support_usage", {
     .notNull()
     .$default(() => new Date()),
 });
+
+export const supportCorpora = appDatabaseSchema.table(
+  "support_corpora",
+  {
+    id: text("id").primaryKey().$default(uuidv4),
+    version: text("version").notNull(),
+    applicationVersion: text("application_version").notNull(),
+    manifest: jsonb("manifest")
+      .notNull()
+      .$type<
+        import("zod").infer<
+          typeof import("@m5kdev/commons/modules/support/support.schema").supportManifestSchema
+        >
+      >(),
+    state: text("state")
+      .$type<"pending" | "active" | "inactive" | "failed" | "withdrawn">()
+      .notNull()
+      .default("pending"),
+    error: text("error"),
+    createdAt: instant("created_at")
+      .notNull()
+      .$default(() => new Date()),
+    activatedAt: instant("activated_at"),
+  },
+  (t) => [uniqueIndex("support_corpora_version").on(t.version)]
+);
+export const supportDocuments = appDatabaseSchema.table(
+  "support_documents",
+  {
+    id: text("id").primaryKey().$default(uuidv4),
+    corpusId: text("corpus_id")
+      .notNull()
+      .references(() => supportCorpora.id, { onDelete: "cascade" }),
+    locale: text("locale").notNull(),
+    experience: text("experience").notNull(),
+    url: text("url").notNull(),
+    title: text("title").notNull(),
+    text: text("text").notNull(),
+    sha256: text("sha256").notNull(),
+  },
+  (t) => [index("support_documents_context").on(t.corpusId, t.experience, t.locale)]
+);

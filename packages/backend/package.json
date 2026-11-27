@@ -85,7 +85,8 @@
     "stripe": "catalog:",
     "trpc-to-openapi": "catalog:",
     "uuid": "catalog:",
-    "web-push": "catalog:"
+    "web-push": "catalog:",
+    "parse5": "catalog:"
   },
   "peerDependencies": {
     "@trpc/server": "catalog:",

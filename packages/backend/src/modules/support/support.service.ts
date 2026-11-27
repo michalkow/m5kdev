@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
+import { readFile, stat } from "node:fs/promises";
 import {
   supportCreateCaseSchema,
   supportListSchema,
+  supportManifestSchema,
   supportSendMessageSchema,
   supportSettingsSchema,
 } from "@m5kdev/commons/modules/support/support.schema";
@@ -20,10 +22,24 @@ import type {
   SupportMessageRow,
   SupportRepository,
   SupportTransaction,
+  SupportWorkRow,
 } from "./support.repository";
 import type { SupportConfig } from "./support.types";
 
-const hash = (data: unknown) => createHash("sha256").update(JSON.stringify(data)).digest("hex");
+const canonical = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map(canonical)
+    : value !== null && typeof value === "object"
+      ? Object.fromEntries(
+          Object.entries(value)
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([key, value]) => [key, canonical(value)])
+        )
+      : value;
+const hash = (data: unknown) =>
+  createHash("sha256")
+    .update(JSON.stringify(canonical(data)))
+    .digest("hex");
 
 export class SupportService extends BasePermissionService<
   { support: SupportRepository },
@@ -113,10 +129,14 @@ export class SupportService extends BasePermissionService<
             initiatorUserId: ctx.actor.userId,
             subject: input.subject,
             uiLocale: input.uiLocale ?? this.locales[0],
-            experienceId: input.experienceId ?? null,
+            experienceId:
+              typeof ctx.experience === "object" && ctx.experience && "id" in ctx.experience
+                ? String(ctx.experience.id)
+                : (input.experienceId ?? "default"),
             organizationId: ctx.actor.userId === userId ? ctx.actor.organizationId : null,
             origin: authorKind,
             waitingOn: authorKind === "admin" ? "user" : "support",
+            handling: authorKind === "user" && settings.value.ai.enabled ? "ai" : "human",
             clientId: input.clientId,
             requestHash,
             createdAt: now,
@@ -179,6 +199,19 @@ export class SupportService extends BasePermissionService<
               userId,
               purpose: "view",
               locale: settings.value.fallbackLocale,
+              sourceHash: hash(first.body),
+              epoch: created.handlingEpoch,
+            },
+            tx
+          );
+        if (created.handling === "ai")
+          await this.repository.support.queueWork(
+            {
+              caseId: created.id,
+              messageId: first.id,
+              userId,
+              purpose: "answer",
+              locale: created.uiLocale,
               sourceHash: hash(first.body),
               epoch: created.handlingEpoch,
             },
@@ -330,6 +363,17 @@ export class SupportService extends BasePermissionService<
           input.visibility === "public" &&
           settings.value.translation.enabled &&
           sourceLocale !== targetLocale;
+        const epoch =
+          current.handlingEpoch +
+          (authorKind === "admin" && input.visibility === "public" && current.handling === "ai"
+            ? 1
+            : 0);
+        if (epoch !== current.handlingEpoch)
+          await this.repository.support.patchCase(
+            input.id,
+            { handling: "human", handlingEpoch: epoch },
+            tx
+          );
         const message = await this.repository.support.append(
           {
             caseId: input.id,
@@ -397,7 +441,7 @@ export class SupportService extends BasePermissionService<
               purpose: "outbound",
               locale: targetLocale,
               sourceHash: hash(message.body),
-              epoch: current.handlingEpoch,
+              epoch,
             },
             tx
           );
@@ -414,7 +458,7 @@ export class SupportService extends BasePermissionService<
               purpose: "detect",
               locale: current.uiLocale,
               sourceHash: hash(message.body),
-              epoch: current.handlingEpoch,
+              epoch,
             },
             tx
           );
@@ -431,7 +475,20 @@ export class SupportService extends BasePermissionService<
               purpose: "view",
               locale: settings.value.fallbackLocale,
               sourceHash: hash(message.body),
-              epoch: current.handlingEpoch,
+              epoch,
+            },
+            tx
+          );
+        if (authorKind === "user" && current.handling === "ai")
+          await this.repository.support.queueWork(
+            {
+              caseId: input.id,
+              messageId: message.id,
+              userId: current.userId,
+              purpose: "answer",
+              locale: targetLocale,
+              sourceHash: hash(message.body),
+              epoch,
             },
             tx
           );
@@ -537,8 +594,17 @@ export class SupportService extends BasePermissionService<
       const admin = ctx.actor.userRole === "admin";
       if (!admin && Object.keys(patch).some((key) => key !== "status"))
         return this.error("FORBIDDEN", "Staff workflow requires platform administration");
-      if (patch.handling === "ai")
-        return this.error("BAD_REQUEST", "Documentation AI is not enabled");
+      if (patch.handling === "ai") {
+        const settings = await this.readSettings();
+        if (settings.isErr()) return err(settings.error);
+        if (
+          !settings.value.ai.enabled ||
+          !settings.value.ai.budget ||
+          !this.config.assistant ||
+          !this.config.documentation
+        )
+          return this.error("BAD_REQUEST", "Documentation AI is not enabled");
+      }
       if (patch.assignedUserId) {
         const assignee = await this.repository.support.currentUser(patch.assignedUserId);
         if (assignee.isErr()) return err(assignee.error);
@@ -558,7 +624,9 @@ export class SupportService extends BasePermissionService<
         if (current.version !== expectedVersion)
           throw this.error("CONFLICT", "Support Case changed; refresh before editing").error;
         const status = patch.status ?? current.status;
-        return this.repository.support.record(
+        if (patch.handling === "ai" && status !== "open")
+          throw this.error("BAD_REQUEST", "Reopen the Case before enabling AI").error;
+        const updated = await this.repository.support.record(
           current,
           {
             ...patch,
@@ -574,6 +642,23 @@ export class SupportService extends BasePermissionService<
           { ...patch, cycle: current.cycle, previousStatus: current.status },
           tx
         );
+        if (patch.handling === "ai") {
+          const latest = await this.repository.support.latestUserMessage(input.id, tx);
+          if (latest)
+            await this.repository.support.queueWork(
+              {
+                caseId: input.id,
+                messageId: latest.id,
+                userId: current.userId,
+                purpose: "answer",
+                locale: current.supportLocale ?? current.detectedLocale ?? current.uiLocale,
+                sourceHash: hash(latest.body),
+                epoch: updated.handlingEpoch,
+              },
+              tx
+            );
+        }
+        return updated;
       });
       if (result.isOk()) await this.notify(id, state.case.userId, ctx.actor.userId);
       return result.map((row) => supportSchemas.output.case.parse(row));
@@ -825,10 +910,13 @@ export class SupportService extends BasePermissionService<
           "BAD_REQUEST",
           "Translation requires a provider and explicit usage limits"
         );
-      if (input.ai.enabled)
+      if (
+        input.ai.enabled &&
+        (!this.config.assistant || !this.config.documentation || !input.ai.budget)
+      )
         return this.error(
           "BAD_REQUEST",
-          "Documentation AI requires an enabled provider and corpus"
+          "Documentation AI requires a provider, documentation configuration and explicit usage limits"
         );
       const { expectedVersion, ...config } = input;
       const result = await this.repository.support.transaction(async (tx) => {
@@ -1031,7 +1119,12 @@ export class SupportService extends BasePermissionService<
     if (pending.isErr()) return err(pending.error);
     let processed = 0;
     for (const candidate of pending.value) {
-      if (candidate.purpose === "answer") continue;
+      if (candidate.purpose === "answer") {
+        const answer = await this.processAnswer(candidate);
+        if (answer.isErr()) return err(answer.error);
+        if (answer.value) return ok(1);
+        continue;
+      }
       const settings = await this.readSettings();
       if (settings.isErr()) return err(settings.error);
       const provider = this.config.translation;
@@ -1295,5 +1388,479 @@ export class SupportService extends BasePermissionService<
       break;
     }
     return ok(processed);
+  }
+  readonly getDocumentation = this.procedure("getDocumentation")
+    .input(z.object({}), true)
+    .output(supportSchemas.output.documentation)
+    .requireAuth("user")
+    .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .handle(({ ctx }) =>
+      ctx.actor.userRole === "admin"
+        ? this.repository.support.corpusList()
+        : Promise.resolve(
+            this.error("FORBIDDEN", "Documentation management requires platform administration")
+          )
+    );
+  readonly stageDocumentation = this.procedure("stageDocumentation")
+    .input(supportSchemas.input.stageDocumentation, true)
+    .output(supportSchemas.output.documentation)
+    .requireAuth("user")
+    .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .handle(async ({ input, ctx }) => {
+      if (ctx.actor.userRole !== "admin")
+        return this.error("FORBIDDEN", "Documentation management requires platform administration");
+      const staged = await this.stageManifest(input.manifest);
+      if (staged.isErr()) return err(staged.error);
+      if (this.dispatchWork)
+        void this.dispatchWork().catch(() =>
+          this.logger.warn("Documentation refresh remains queued")
+        );
+      return this.repository.support.corpusList();
+    });
+  private stageManifest(manifest: z.infer<typeof supportManifestSchema>) {
+    return this.repository.support.transaction(async (tx) => {
+      await this.repository.support.lockRequest("support:documentation", tx);
+      const row = await this.repository.support.stageCorpus(manifest, tx);
+      if (
+        hash(row.manifest.entries) !== hash(manifest.entries) ||
+        row.applicationVersion !== manifest.applicationVersion
+      )
+        throw this.error("CONFLICT", "Documentation version already identifies different content")
+          .error;
+      return row;
+    });
+  }
+  readonly withdrawDocumentation = this.procedure("withdrawDocumentation")
+    .input(supportSchemas.input.withdrawDocumentation, true)
+    .output(supportSchemas.output.documentation)
+    .requireAuth("user")
+    .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .handle(async ({ input, ctx }) => {
+      if (ctx.actor.userRole !== "admin")
+        return this.error("FORBIDDEN", "Documentation management requires platform administration");
+      const withdrawn = await this.repository.support.transaction(async (tx) => {
+        await this.repository.support.lockRequest("support:documentation", tx);
+        await this.repository.support.withdrawCorpus(input.version, tx);
+      });
+      if (withdrawn.isErr()) return err(withdrawn.error);
+      return this.repository.support.corpusList();
+    });
+  async processDocumentation(): ServerResultAsync<number> {
+    if (this.config.documentation?.manifestPath) {
+      let manifest: z.infer<typeof supportManifestSchema> | null = null;
+      try {
+        const size = await stat(this.config.documentation.manifestPath);
+        if (size.size > 5 * 1024 * 1024) throw new Error("manifest-too-large");
+        manifest = supportManifestSchema.parse(
+          JSON.parse(await readFile(this.config.documentation.manifestPath, "utf8"))
+        );
+      } catch {
+        /* A failed refresh retains the previous authorized corpus. */
+      }
+      let failed = !manifest;
+      if (manifest) {
+        const staged = await this.stageManifest(manifest);
+        failed = staged.isErr();
+      }
+      if (failed) {
+        const version = `source-error-${createHash("sha256").update(this.config.documentation.manifestPath).digest("hex").slice(0, 32)}`;
+        const recorded = await this.repository.support.transaction(async (tx) => {
+          await this.repository.support.lockRequest("support:documentation", tx);
+          const row = await this.repository.support.stageCorpus(
+            {
+              schemaVersion: 1,
+              version,
+              applicationVersion: this.config.documentation!.applicationVersion,
+              generatedAt: new Date().toISOString(),
+              entries: [],
+            },
+            tx
+          );
+          await this.repository.support.failCorpus(row.id, "manifest-source-unavailable", tx);
+        });
+        if (recorded.isErr()) return err(recorded.error);
+      }
+    }
+    const pending = await this.repository.support.pendingCorpora();
+    if (pending.isErr()) return err(pending.error);
+    let count = 0;
+    for (const corpus of pending.value) {
+      const docs = this.config.documentation;
+      let failure: string | null = null;
+      if (!docs || corpus.applicationVersion !== docs.applicationVersion)
+        failure = "incompatible-application-version";
+      const keys = new Set<string>();
+      for (const entry of corpus.manifest.entries) {
+        const url = new URL(entry.url);
+        const key = `${entry.locale}:${entry.experience}:${entry.id}`;
+        if (
+          !docs ||
+          !docs.allowedOrigins.includes(url.origin) ||
+          (url.protocol !== "https:" &&
+            url.hostname !== "localhost" &&
+            url.hostname !== "127.0.0.1") ||
+          url.username ||
+          url.password ||
+          createHash("sha256").update(entry.text).digest("hex") !== entry.sha256 ||
+          keys.has(key)
+        )
+          failure = "invalid-or-unauthorized-documentation";
+        keys.add(key);
+      }
+      const indexed = await this.repository.support.transaction(async (tx) => {
+        await this.repository.support.lockRequest("support:documentation", tx);
+        if (failure) await this.repository.support.failCorpus(corpus.id, failure, tx);
+        else
+          await this.repository.support.activateCorpus(
+            corpus.id,
+            corpus.manifest.entries.map((entry) => ({
+              corpusId: corpus.id,
+              locale: entry.locale,
+              experience: entry.experience,
+              url: entry.url,
+              title: entry.title,
+              text: entry.text,
+              sha256: entry.sha256,
+            })),
+            tx
+          );
+      });
+      if (indexed.isErr()) return err(indexed.error);
+      count++;
+    }
+    return ok(count);
+  }
+  private async handoff(current: SupportCaseRow, reason: string, tx: SupportTransaction) {
+    if (current.handling !== "ai") return current;
+    return this.repository.support.record(
+      current,
+      { handling: "human", handlingEpoch: current.handlingEpoch + 1 },
+      "handoff.requested",
+      { kind: "system" },
+      { reason, cycle: current.cycle },
+      tx
+    );
+  }
+  readonly requestHuman = this.procedure("requestHuman")
+    .input(supportSchemas.input.read, true)
+    .output(supportSchemas.output.case)
+    .requireAuth("user")
+    .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .loadResource("case", ({ input }) => this.repository.support.findById(input.id))
+    .access({ action: "write", entityStep: "case" })
+    .handle(async ({ input, ctx, state }) => {
+      const result = await this.repository.support.transaction(async (tx) => {
+        const current = await this.repository.support.lockCase(input.id, tx);
+        if (!current) throw this.error("NOT_FOUND", "Support Case not found").error;
+        if (current.handling === "human") return current;
+        return this.repository.support.record(
+          current,
+          { handling: "human", handlingEpoch: current.handlingEpoch + 1 },
+          "handoff.requested",
+          { userId: ctx.actor.userId, kind: ctx.actor.userRole === "admin" ? "admin" : "user" },
+          { reason: "person-requested", cycle: current.cycle },
+          tx
+        );
+      });
+      if (result.isOk()) await this.notify(input.id, state.case.userId, ctx.actor.userId);
+      return result.map((row) => supportSchemas.output.case.parse(row));
+    });
+
+  private async processAnswer(candidate: SupportWorkRow): ServerResultAsync<boolean> {
+    const settings = await this.readSettings();
+    if (settings.isErr()) return err(settings.error);
+    const provider = this.config.assistant,
+      docs = this.config.documentation,
+      budget = settings.value.ai.budget;
+    const snapshot = await this.repository.support.findById(candidate.caseId);
+    if (snapshot.isErr()) return err(snapshot.error);
+    const currentCase = snapshot.value;
+    if (!currentCase) return ok(false);
+    const locale = currentCase.supportLocale ?? currentCase.detectedLocale ?? currentCase.uiLocale;
+    const question = await this.repository.support.transaction((tx) =>
+      candidate.messageId
+        ? this.repository.support.message(candidate.messageId, tx)
+        : Promise.resolve(undefined)
+    );
+    if (question.isErr()) return err(question.error);
+    const source = question.value;
+    const retrieved =
+      docs && source
+        ? await this.repository.support.retrieveDocumentation(
+            docs.applicationVersion,
+            currentCase.experienceId ?? "default",
+            locale,
+            source.body,
+            settings.value.fallbackLocale
+          )
+        : ok(null);
+    if (retrieved.isErr()) return err(retrieved.error);
+    const corpus = retrieved.value;
+    const history = await this.repository.support.messages(currentCase.id, false, {
+      throughSequence: currentCase.lastSequence,
+      limit: 12,
+    });
+    if (history.isErr()) return err(history.error);
+    const payload = {
+      question: source?.body ?? "",
+      history: history.value.map((message) => ({
+        role: message.authorKind === "user" ? ("user" as const) : ("assistant" as const),
+        content: message.publishedBody ?? message.body,
+      })),
+      sources:
+        corpus?.documents.map((document) => ({
+          url: document.url,
+          title: document.title,
+          text: document.text,
+          sha256: document.sha256,
+          locale: document.locale,
+        })) ?? [],
+      locale,
+    };
+    const inputCharacters = JSON.stringify(payload).length + 1000;
+    const claimed = await this.repository.support.transaction(async (tx) => {
+      await this.repository.support.lockRequest("support:ai-budget", tx);
+      const work = await this.repository.support.lockWork(candidate.id, tx);
+      if (
+        !work ||
+        (work.state !== "queued" &&
+          !(work.state === "running" && work.leaseUntil && work.leaseUntil <= new Date()))
+      )
+        return null;
+      const current = await this.repository.support.lockCase(work.caseId, tx);
+      const latest = current
+        ? await this.repository.support.latestUserMessage(current.id, tx)
+        : null;
+      const recipient = await this.repository.support.lockUser(work.userId, tx);
+      if (
+        !current ||
+        current.handling !== "ai" ||
+        current.handlingEpoch !== work.epoch ||
+        !latest ||
+        latest.id !== work.messageId ||
+        hash(latest.body) !== work.sourceHash ||
+        current.status !== "open" ||
+        !recipient ||
+        recipient.closedAt ||
+        recipient.banned
+      ) {
+        await this.repository.support.updateWork(
+          work.id,
+          { state: "cancelled", error: "source-or-authorization-changed" },
+          tx
+        );
+        return null;
+      }
+      const active =
+        corpus && docs
+          ? await this.repository.support.corpusActive(
+              corpus.corpus.id,
+              docs.applicationVersion,
+              tx
+            )
+          : null;
+      if (
+        !settings.value.ai.enabled ||
+        !provider ||
+        !docs ||
+        !budget ||
+        !active ||
+        !payload.sources.length ||
+        inputCharacters > budget.maxInputCharacters ||
+        work.attempts >= budget.attempts
+      ) {
+        await this.repository.support.updateWork(
+          work.id,
+          { state: "failed", error: "no-authorized-evidence-or-capability" },
+          tx
+        );
+        await this.handoff(current, "no-authorized-evidence-or-capability", tx);
+        return null;
+      }
+      const now = new Date(),
+        month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
+        day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      const counts = await this.repository.support.automationCounts(
+        "ai",
+        work.userId,
+        month,
+        day,
+        now,
+        tx
+      );
+      if (counts.monthly >= budget.monthlyCalls || counts.daily >= budget.dailyUserCalls) {
+        await this.repository.support.updateWork(
+          work.id,
+          { state: "failed", error: "usage-limit" },
+          tx
+        );
+        await this.handoff(current, "usage-limit", tx);
+        return null;
+      }
+      if (counts.running >= budget.concurrency) return null;
+      const usage = await this.repository.support.reserveUsage(
+        {
+          workId: work.id,
+          userId: work.userId,
+          kind: "ai",
+          provider: provider.id,
+          inputCharacters,
+        },
+        tx
+      );
+      const updated = await this.repository.support.updateWork(
+        work.id,
+        {
+          state: "running",
+          attempts: work.attempts + 1,
+          leaseUntil: new Date(now.getTime() + budget.timeoutMs + 5000),
+        },
+        tx
+      );
+      return { work: updated, usageId: usage.id };
+    });
+    if (claimed.isErr()) return err(claimed.error);
+    if (!claimed.value || !provider || !budget || !docs || !corpus) {
+      await this.notify(candidate.caseId, candidate.userId, "");
+      return ok(false);
+    }
+    const { work, usageId } = claimed.value;
+    let answer: { supported: boolean; text: string; citations: string[] } | null = null;
+    try {
+      const signal = AbortSignal.timeout(budget.timeoutMs);
+      const aborted = new Promise<never>((_, reject) =>
+        signal.addEventListener("abort", () => reject(new Error("timeout")), { once: true })
+      );
+      const raw = await Promise.race([
+        provider.answer({ ...payload, maxOutputCharacters: budget.maxOutputCharacters, signal }),
+        aborted,
+      ]);
+      const parsed = z
+        .object({
+          supported: z.boolean(),
+          text: z.string().max(budget.maxOutputCharacters),
+          citations: z.array(z.string()).max(10),
+        })
+        .safeParse(raw);
+      if (parsed.success) answer = parsed.data;
+    } catch {
+      /* Worker retries and handoff own the failure contract. */
+    }
+    const finished = await this.repository.support.transaction(async (tx) => {
+      const latestWork = await this.repository.support.lockWork(work.id, tx);
+      if (!latestWork || latestWork.state !== "running" || latestWork.attempts !== work.attempts)
+        return;
+      const current = await this.repository.support.lockCase(work.caseId, tx),
+        latest = current ? await this.repository.support.latestUserMessage(current.id, tx) : null;
+      const recipient = await this.repository.support.lockUser(work.userId, tx);
+      const freshSettings = await this.repository.support.settings(tx);
+      if (freshSettings.isErr()) throw freshSettings.error;
+      const active = await this.repository.support.corpusActive(
+        corpus.corpus.id,
+        docs.applicationVersion,
+        tx
+      );
+      if (
+        !current ||
+        current.handling !== "ai" ||
+        current.status !== "open" ||
+        current.handlingEpoch !== work.epoch ||
+        latest?.id !== work.messageId ||
+        !recipient ||
+        recipient.closedAt ||
+        recipient.banned ||
+        !active ||
+        !freshSettings.value?.config.ai.enabled
+      ) {
+        await this.repository.support.updateWork(
+          work.id,
+          { state: "cancelled", error: "source-or-authorization-changed" },
+          tx
+        );
+        return;
+      }
+      if (!answer) {
+        const retry = latestWork.attempts < budget.attempts;
+        await this.repository.support.updateWork(
+          work.id,
+          {
+            state: retry ? "queued" : "failed",
+            error: "provider-failed",
+            nextAt: new Date(Date.now() + 1000 * 2 ** latestWork.attempts),
+            leaseUntil: null,
+          },
+          tx
+        );
+        if (!retry) await this.handoff(current, "provider-failed", tx);
+        return;
+      }
+      const citations = [...new Set(answer.citations)];
+      if (
+        !answer.supported ||
+        !answer.text.trim() ||
+        !citations.length ||
+        citations.some((url) => !payload.sources.some((source) => source.url === url))
+      ) {
+        await this.repository.support.updateWork(
+          work.id,
+          { state: "failed", error: "unsupported-answer" },
+          tx
+        );
+        await this.handoff(current, "unsupported-answer", tx);
+        return;
+      }
+      const now = new Date();
+      await this.repository.support.append(
+        {
+          caseId: current.id,
+          sequence: current.lastSequence + 1,
+          authorKind: "ai",
+          authorUserId: null,
+          body: answer.text,
+          publishedBody: answer.text,
+          authoredLocale: locale,
+          targetLocale: locale,
+          visibility: "public",
+          clientId: work.id,
+          requestHash: hash(answer),
+          acceptedAt: now,
+          publishedAt: now,
+          citations,
+          aiProvenance: {
+            provider: provider.id,
+            promptVersion: "support-answer-v1",
+            corpusVersion: corpus.corpus.version,
+            sourceHashes: payload.sources
+              .filter((source) => citations.includes(source.url))
+              .map((source) => source.sha256),
+          },
+        },
+        {
+          caseId: current.id,
+          sequence: current.version + 1,
+          type: "message.published",
+          actorKind: "ai",
+          occurredAt: now,
+          data: {
+            messageSequence: current.lastSequence + 1,
+            visibility: "public",
+            cycle: current.cycle,
+            provider: provider.id,
+            corpusVersion: corpus.corpus.version,
+          },
+        },
+        tx
+      );
+      await this.repository.support.patchCase(current.id, { waitingOn: "user" }, tx);
+      await this.repository.support.completeUsage(usageId, answer.text.length, tx);
+      await this.repository.support.updateWork(
+        work.id,
+        { state: "succeeded", error: null, leaseUntil: null },
+        tx
+      );
+    });
+    if (finished.isErr()) return err(finished.error);
+    await this.notify(work.caseId, work.userId, "");
+    return ok(true);
   }
 }

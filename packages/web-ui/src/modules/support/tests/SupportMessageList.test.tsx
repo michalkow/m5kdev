@@ -30,6 +30,8 @@ it("renders message content as text in an announced support log", async () => {
             translationState: "none",
             preview: false,
             renditions: [],
+            citations: [],
+            aiProvenance: null,
             body: '<img src=x onerror="alert(1)">',
             acceptedAt: new Date(0),
             publishedAt: new Date(0),
