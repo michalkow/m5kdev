@@ -572,6 +572,57 @@
         "failed": "Failed",
         "withdrawn": "Withdrawn"
       }
+    },
+    "day": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    },
+    "csat": {
+      "enable": "Enable post-resolution feedback",
+      "question": "How was your support experience?",
+      "score": {
+        "-1": "Unhappy",
+        "0": "Neutral",
+        "1": "Happy"
+      }
+    },
+    "hours": {
+      "open": "Human support is open now",
+      "closed": "Outside human support hours; your message stays queued",
+      "settings": "Human support hours",
+      "enable": "Show human support hours",
+      "timeZone": "Time zone",
+      "day": "Day",
+      "opens": "Opens",
+      "closes": "Closes",
+      "add": "Add hours",
+      "remove": "Remove",
+      "holidays": "Holidays (YYYY-MM-DD, one per line)"
+    },
+    "overview": {
+      "title": "Support overview",
+      "open": "Open",
+      "unassigned": "Unassigned",
+      "noSample": "No samples",
+      "seconds": "s",
+      "cohort": "Cases created since {{date}}: {{count}}",
+      "partial": "Sample covers 500 Cases. Choose a later start date to narrow the range.",
+      "firstHuman": "First human response (calendar time)",
+      "median": "Median",
+      "samples": "Samples: {{count}}",
+      "unanswered": "Unanswered: {{count}}",
+      "handoff": "Human-handoff wait",
+      "oldest": "Oldest unanswered requests",
+      "csat": {
+        "human": "Human CSAT",
+        "ai": "AI CSAT"
+      },
+      "since": "Cases created since"
     }
   }
 }

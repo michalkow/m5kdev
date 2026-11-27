@@ -1,6 +1,7 @@
 import { Button, Form, Input, Label, TextField } from "@heroui/react";
 import type { useSupport } from "@m5kdev/frontend/modules/support/hooks/useSupport";
 import { useTranslation } from "react-i18next";
+import { SupportCalendarSettings } from "./SupportCalendarSettings";
 
 type State = ReturnType<typeof useSupport>;
 const limits = [
@@ -36,7 +37,8 @@ export function SupportSettings({ state }: { state: State }) {
         fallbackLocale: String(data.get("fallbackLocale") ?? ""),
         translation: feature("translation"),
         ai: feature("ai"),
-        csatEnabled: settings.csatEnabled,
+        csatEnabled: data.get("csatEnabled") === "true",
+        calendar: settings.calendar,
         replyExpectation: String(data.get("replyExpectation") ?? ""),
       });
     } catch {
@@ -64,6 +66,15 @@ export function SupportSettings({ state }: { state: State }) {
           <Label>{t("support.settings.expectation")}</Label>
           <Input defaultValue={settings.replyExpectation} maxLength={500} />
         </TextField>
+        <label className="flex gap-2">
+          <input
+            type="checkbox"
+            name="csatEnabled"
+            value="true"
+            defaultChecked={settings.csatEnabled}
+          />
+          {t("support.csat.enable")}
+        </label>
         {(["translation", "ai"] as const).map((kind) => (
           <fieldset key={kind} className="grid gap-2 rounded-lg border border-border p-3">
             <legend>{t(`support.settings.${kind}`)}</legend>
@@ -105,6 +116,7 @@ export function SupportSettings({ state }: { state: State }) {
           {t("support.save")}
         </Button>
       </Form>
+      <SupportCalendarSettings key={settings.version} state={state} />
       <section className="mt-3 grid gap-2" aria-label={t("support.documentation.title")}>
         <TextField name="manifest">
           <Label>{t("support.documentation.upload")}</Label>

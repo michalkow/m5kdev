@@ -1,4 +1,5 @@
 import {
+  supportCalendarSchema,
   supportCaseIdSchema,
   supportCatalogSchema,
   supportCreateCaseSchema,
@@ -7,6 +8,8 @@ import {
   supportLanguageSchema,
   supportListSchema,
   supportMessageControlSchema,
+  supportOverviewSchema,
+  supportRateSchema,
   supportReadSchema,
   supportRedactSchema,
   supportSaveSettingsSchema,
@@ -51,6 +54,8 @@ export const supportSchemas = {
     updateCase: supportUpdateCaseSchema,
     catalog: supportCatalogSchema,
     setTags: supportSetTagsSchema,
+    rate: supportRateSchema,
+    overview: supportOverviewSchema,
     stageDocumentation: supportStageDocumentationSchema,
     withdrawDocumentation: supportWithdrawDocumentationSchema,
     saveSettings: supportSaveSettingsSchema,
@@ -63,6 +68,50 @@ export const supportSchemas = {
     redact: supportRedactSchema,
   },
   output: {
+    metrics: z.object({
+      id: z.string(),
+      firstResponseMs: z.number().nullable(),
+      firstHumanResponseMs: z.number().nullable(),
+      handoffWaitMs: z.array(z.number()),
+      outstandingSince: z.date().nullable(),
+      activeUnresolvedMs: z.number(),
+      lifetimeResolutionElapsedMs: z.number().nullable(),
+      hasUserExchange: z.boolean(),
+      cycles: z.array(
+        z.object({
+          number: z.number(),
+          startedAt: z.date(),
+          resolvedAt: z.date().nullable(),
+          eligible: z.boolean(),
+          handledBy: z.enum(["human", "ai"]).nullable(),
+        })
+      ),
+    }),
+    overview: z.object({
+      from: z.date(),
+      to: z.date(),
+      sampleCases: z.number(),
+      partial: z.boolean(),
+      open: z.number(),
+      unassigned: z.number(),
+      waiting: z.object({ support: z.number(), user: z.number(), external: z.number() }),
+      oldestUnanswered: z.array(z.object({ id: z.string(), subject: z.string(), since: z.date() })),
+      firstHumanResponse: z.object({
+        medianMs: z.number().nullable(),
+        p95Ms: z.number().nullable(),
+        samples: z.number(),
+        unanswered: z.number(),
+      }),
+      handoffWait: z.object({
+        medianMs: z.number().nullable(),
+        p95Ms: z.number().nullable(),
+        samples: z.number(),
+      }),
+      csat: z.object({
+        human: z.object({ samples: z.number(), positive: z.number().nullable() }),
+        ai: z.object({ samples: z.number(), positive: z.number().nullable() }),
+      }),
+    }),
     documentation: z.array(
       z.object({
         id: z.string(),
@@ -85,9 +134,24 @@ export const supportSchemas = {
     redaction: z.object({ id: z.string(), cleanupPending: z.boolean() }),
     case: caseOutput,
     message: messageOutput,
+    feedback: z.object({ cycle: z.number(), score: z.number() }),
+    availability: z.object({
+      version: z.number(),
+      replyExpectation: z.string(),
+      calendar: supportCalendarSchema.nullable(),
+      openNow: z.boolean().nullable(),
+      csatEnabled: z.boolean(),
+      languages: z.array(z.string()),
+    }),
     transcript: z.object({
       case: caseOutput,
       messages: z.array(messageOutput),
+      feedback: z.object({
+        eligible: z.boolean(),
+        score: z.number().nullable(),
+        cycle: z.number(),
+        handledBy: z.enum(["human", "ai"]).nullable(),
+      }),
       hasOlder: z.boolean(),
       cursor: z.string(),
     }),

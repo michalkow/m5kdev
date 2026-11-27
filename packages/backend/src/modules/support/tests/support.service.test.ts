@@ -278,3 +278,61 @@ it("shares only the Support catalog and ignores a snooze after resolution", asyn
   if (view.isErr()) throw view.error;
   expect(view.value.case.status).toBe("resolved");
 });
+
+it("offers editable one-click feedback only for a genuine resolved cycle", async () => {
+  const settings = await support.saveSettings(
+    {
+      expectedVersion: 0,
+      nativeLocales: ["en"],
+      fallbackLocale: "en",
+      translation: { enabled: false },
+      ai: { enabled: false },
+      csatEnabled: true,
+    },
+    ctx("staff", "admin")
+  );
+  if (settings.isErr()) throw settings.error;
+  const created = await support.createCase(
+    { clientId: "feedback", subject: "Feedback", body: "Question" },
+    ctx("alice")
+  );
+  if (created.isErr()) throw created.error;
+  const resolved = await support.updateCase(
+    { id: created.value.id, expectedVersion: 1, status: "resolved" },
+    ctx("alice")
+  );
+  if (resolved.isErr()) throw resolved.error;
+  const unavailable = await support.rate(
+    { id: created.value.id, cycle: 1, score: 1 },
+    ctx("alice")
+  );
+  expect(unavailable.isErr() && unavailable.error.code).toBe("BAD_REQUEST");
+  await support.sendMessage(
+    { id: created.value.id, clientId: "feedback-reopen", body: "Need help" },
+    ctx("alice")
+  );
+  await support.sendMessage(
+    { id: created.value.id, clientId: "feedback-answer", body: "Answer" },
+    ctx("staff", "admin")
+  );
+  const view = await support.getCase({ id: created.value.id }, ctx("alice"));
+  if (view.isErr()) throw view.error;
+  const done = await support.updateCase(
+    { id: created.value.id, expectedVersion: view.value.case.version, status: "resolved" },
+    ctx("alice")
+  );
+  if (done.isErr()) throw done.error;
+  const rated = await support.rate({ id: created.value.id, cycle: 2, score: 1 }, ctx("alice"));
+  if (rated.isErr()) throw rated.error;
+  const edited = await support.rate({ id: created.value.id, cycle: 2, score: 0 }, ctx("alice"));
+  if (edited.isErr()) throw edited.error;
+  const overview = await support.overview({}, ctx("staff", "admin"));
+  if (overview.isErr()) throw overview.error;
+  expect(overview.value.csat.human).toEqual({ samples: 1, positive: 0 });
+  await support.sendMessage(
+    { id: created.value.id, clientId: "feedback-again", body: "Another question" },
+    ctx("alice")
+  );
+  const stale = await support.rate({ id: created.value.id, cycle: 2, score: 1 }, ctx("alice"));
+  expect(stale.isErr() && stale.error.code).toBe("CONFLICT");
+});

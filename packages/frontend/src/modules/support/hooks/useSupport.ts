@@ -10,6 +10,7 @@ import { useSession } from "../../auth/hooks/useSession";
 
 export function useSupport(admin = false) {
   const [filters, setFilters] = useQueryStates({
+    supportSince: parseAsString.withDefault(""),
     q: parseAsString.withDefault(""),
     status: parseAsString.withDefault(""),
     priority: parseAsString.withDefault(""),
@@ -80,6 +81,28 @@ export function useSupport(admin = false) {
     if (!selectedId || !last) return;
     await read.mutateAsync({ id: selectedId, throughSequence: last.sequence });
   };
+  const availability = useQuery(
+    trpc.support.getAvailability.queryOptions({}, { staleTime: 60000 })
+  );
+  const overview = useQuery(
+    trpc.support.overview.queryOptions(
+      {
+        since:
+          filters.supportSince && Number.isFinite(Date.parse(filters.supportSince))
+            ? new Date(filters.supportSince)
+            : undefined,
+      },
+      { enabled: admin, staleTime: 60000, refetchInterval: 60000 }
+    )
+  );
+  const feedback = useMutation(
+    trpc.support.rate.mutationOptions({
+      onSuccess: async () => {
+        await refresh();
+        await cache.invalidateQueries(trpc.support.overview.queryFilter());
+      },
+    })
+  );
   const documentation = useQuery(
     trpc.support.getDocumentation.queryOptions({}, { enabled: admin })
   );
@@ -234,6 +257,17 @@ export function useSupport(admin = false) {
     }
   };
   return {
+    availability: availability.data,
+    overview: overview.data,
+    rate: (score: number) => {
+      if (transcript.data)
+        feedback.mutate({
+          id: transcript.data.case.id,
+          cycle: transcript.data.feedback.cycle,
+          score,
+        });
+    },
+    isRating: feedback.isPending,
     documentation: documentation.data,
     stageDocumentation: async (file: File) => {
       try {
@@ -295,6 +329,9 @@ export function useSupport(admin = false) {
     isLoading: cases.isLoading || (selectedId !== null && transcript.isLoading),
     isPending: create.isPending || send.isPending || isUploading,
     error:
+      availability.error?.message ??
+      overview.error?.message ??
+      feedback.error?.message ??
       stageDocs.error?.message ??
       withdrawDocs.error?.message ??
       human.error?.message ??

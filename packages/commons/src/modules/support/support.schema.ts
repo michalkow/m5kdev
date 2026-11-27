@@ -116,12 +116,26 @@ export const supportBudgetSchema = z.object({
   timeoutMs: z.number().int().min(100).max(60000),
 });
 const feature = z.object({ enabled: z.boolean(), budget: supportBudgetSchema.optional() });
+export const supportCalendarSchema = z.object({
+  timeZone: z.string().min(1).max(100),
+  weekly: z
+    .array(
+      z.object({
+        day: z.number().int().min(0).max(6),
+        opens: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+        closes: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+      })
+    )
+    .max(28),
+  holidays: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(366),
+});
 export const supportSettingsSchema = z.object({
   nativeLocales: z.array(z.string().min(2).max(35)).min(1).max(50),
   fallbackLocale: z.string().min(2).max(35),
   translation: feature,
   ai: feature,
   csatEnabled: z.boolean().default(false),
+  calendar: supportCalendarSchema.nullable().default(null),
   replyExpectation: z.string().max(500).default(""),
 });
 export const supportSaveSettingsSchema = supportSettingsSchema.extend({
@@ -158,3 +172,9 @@ export const supportManifestSchema = z.object({
 });
 export const supportStageDocumentationSchema = z.object({ manifest: supportManifestSchema });
 export const supportWithdrawDocumentationSchema = z.object({ version: z.string().min(1).max(128) });
+
+export const supportRateSchema = supportCaseIdSchema.extend({
+  cycle: z.number().int().min(1),
+  score: z.number().int().min(-1).max(1),
+});
+export const supportOverviewSchema = z.object({ since: z.coerce.date().optional() });

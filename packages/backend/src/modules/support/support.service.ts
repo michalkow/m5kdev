@@ -15,8 +15,10 @@ import type { ResourceGrant } from "../../base/base.grants";
 import { BasePermissionService } from "../../base/base.service";
 import type { AuthService } from "../auth/auth.service";
 import type { FileService } from "../file/file.service";
+import { supportOpenNow } from "./support.calendar";
 import { supportSchemas } from "./support.dto";
 import { defaultSupportGrants } from "./support.grants";
+import { supportCaseMetrics, supportDistribution } from "./support.metrics";
 import type {
   SupportCaseRow,
   SupportMessageRow,
@@ -249,7 +251,10 @@ export class SupportService extends BasePermissionService<
       if (unread.isErr()) return err(unread.error);
       const assignedTags = await this.repository.support.assignedTags(input.id);
       if (assignedTags.isErr()) return err(assignedTags.error);
+      const feedback = await this.feedbackForCase(state.case);
+      if (feedback.isErr()) return err(feedback.error);
       return ok({
+        feedback: feedback.value,
         case: supportSchemas.output.case.parse({
           ...state.case,
           unreadCount: unread.value,
@@ -639,7 +644,12 @@ export class SupportService extends BasePermissionService<
           },
           "case.updated",
           { userId: ctx.actor.userId, kind: admin ? "admin" : "user" },
-          { ...patch, cycle: current.cycle, previousStatus: current.status },
+          {
+            ...patch,
+            cycle: current.cycle,
+            previousStatus: current.status,
+            previousHandling: current.handling,
+          },
           tx
         );
         if (patch.handling === "ai") {
@@ -918,6 +928,22 @@ export class SupportService extends BasePermissionService<
           "BAD_REQUEST",
           "Documentation AI requires a provider, documentation configuration and explicit usage limits"
         );
+      if (input.calendar) {
+        try {
+          new Intl.DateTimeFormat("en", { timeZone: input.calendar.timeZone }).format();
+        } catch {
+          return this.error("BAD_REQUEST", "Invalid support time zone");
+        }
+        if (
+          input.calendar.weekly.some((window) => window.opens >= window.closes) ||
+          input.calendar.holidays.some(
+            (date) =>
+              !Number.isFinite(Date.parse(date)) ||
+              new Date(date).toISOString().slice(0, 10) !== date
+          )
+        )
+          return this.error("BAD_REQUEST", "Invalid support hours or holiday");
+      }
       const { expectedVersion, ...config } = input;
       const result = await this.repository.support.transaction(async (tx) => {
         await this.repository.support.lockRequest("support:settings", tx);
@@ -1863,4 +1889,166 @@ export class SupportService extends BasePermissionService<
     await this.notify(work.caseId, work.userId, "");
     return ok(true);
   }
+  private async feedbackForCase(current: SupportCaseRow, tx?: SupportTransaction) {
+    const settings = await this.readSettings();
+    if (settings.isErr()) return err(settings.error);
+    const facts = await this.repository.support.metricCase(current.id, tx);
+    if (facts.isErr()) return err(facts.error);
+    const rating = await this.repository.support.feedback(current.id, current.cycle, tx);
+    if (rating.isErr()) return err(rating.error);
+    const cycle = facts.value
+      ? supportCaseMetrics(facts.value).cycles.find((cycle) => cycle.number === current.cycle)
+      : null;
+    return ok({
+      eligible: Boolean(
+        settings.value.csatEnabled && current.status === "resolved" && cycle?.eligible
+      ),
+      score: rating.value?.score ?? null,
+      cycle: current.cycle,
+      handledBy: cycle?.handledBy ?? null,
+    });
+  }
+  readonly rate = this.procedure("rate")
+    .input(supportSchemas.input.rate, true)
+    .output(supportSchemas.output.feedback)
+    .requireAuth("user")
+    .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .loadResource("case", ({ input }) => this.repository.support.findById(input.id))
+    .access({ action: "write", entityStep: "case" })
+    .handle(async ({ input, ctx }) => {
+      const settings = await this.readSettings();
+      if (settings.isErr()) return err(settings.error);
+      if (!settings.value.csatEnabled) return this.error("BAD_REQUEST", "Feedback is disabled");
+      return this.repository.support.transaction(async (tx) => {
+        const current = await this.repository.support.lockCase(input.id, tx);
+        if (!current || current.userId !== ctx.actor.userId)
+          throw this.error("FORBIDDEN", "Only the requesting User can rate support").error;
+        if (current.status !== "resolved" || current.cycle !== input.cycle)
+          throw this.error("CONFLICT", "Feedback belongs to a different resolved cycle").error;
+        const facts = await this.repository.support.metricCase(input.id, tx);
+        if (facts.isErr()) throw facts.error;
+        const cycle = facts.value
+          ? supportCaseMetrics(facts.value).cycles.find((cycle) => cycle.number === input.cycle)
+          : null;
+        if (!cycle?.eligible || !cycle.handledBy)
+          throw this.error("BAD_REQUEST", "Feedback requires a genuine resolved exchange").error;
+        const rating = await this.repository.support.rate(
+          {
+            caseId: input.id,
+            cycle: input.cycle,
+            userId: ctx.actor.userId,
+            score: input.score,
+            handledBy: cycle.handledBy,
+          },
+          tx
+        );
+        await this.repository.support.record(
+          current,
+          {},
+          "feedback.rated",
+          { userId: ctx.actor.userId, kind: "user" },
+          { cycle: input.cycle, score: input.score },
+          tx
+        );
+        return { cycle: rating.cycle, score: rating.score };
+      });
+    });
+  readonly getAvailability = this.procedure("getAvailability")
+    .input(z.object({}), true)
+    .output(supportSchemas.output.availability)
+    .requireAuth("user")
+    .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .handle(async () => {
+      const settings = await this.readSettings();
+      if (settings.isErr()) return err(settings.error);
+      return ok({
+        version: settings.value.version,
+        replyExpectation: settings.value.replyExpectation,
+        calendar: settings.value.calendar,
+        openNow: supportOpenNow(settings.value.calendar),
+        csatEnabled: settings.value.csatEnabled,
+        languages: [...new Set([...this.locales, ...(this.config.translation?.languages ?? [])])],
+      });
+    });
+  readonly getCaseMetrics = this.procedure("getCaseMetrics")
+    .input(supportSchemas.input.read, true)
+    .output(supportSchemas.output.metrics)
+    .requireAuth("user")
+    .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .loadResource("case", ({ input }) => this.repository.support.findById(input.id))
+    .access({ action: "read", entityStep: "case" })
+    .handle(async ({ input, ctx }) => {
+      if (ctx.actor.userRole !== "admin")
+        return this.error("FORBIDDEN", "Operational metrics require platform administration");
+      const facts = await this.repository.support.metricCase(input.id);
+      if (facts.isErr()) return err(facts.error);
+      if (!facts.value) return this.error("NOT_FOUND", "Support Case not found");
+      return ok(supportCaseMetrics(facts.value));
+    });
+  readonly overview = this.procedure("overview")
+    .input(supportSchemas.input.overview, true)
+    .output(supportSchemas.output.overview)
+    .requireAuth("user")
+    .use("identity", ({ ctx }) => this.checkIdentity(ctx.actor))
+    .access({ action: "read", entities: () => ({}) })
+    .handle(async ({ input, ctx }) => {
+      if (ctx.actor.userRole !== "admin")
+        return this.error("FORBIDDEN", "Operational metrics require platform administration");
+      const to = new Date(),
+        from = input.since ?? new Date(to.getTime() - 30 * 86400000);
+      if (from > to || from.getTime() < to.getTime() - 90 * 86400000)
+        return this.error("BAD_REQUEST", "Overview cohort must start within the last 90 days");
+      const cases = await this.repository.support.overviewCases(from, to);
+      if (cases.isErr()) return err(cases.error);
+      const counts = await this.repository.support.queueCounts();
+      if (counts.isErr()) return err(counts.error);
+      const oldest = await this.repository.support.oldestUnanswered();
+      if (oldest.isErr()) return err(oldest.error);
+      const ratings = await this.repository.support.feedbackCounts(from);
+      if (ratings.isErr()) return err(ratings.error);
+      const facts = await this.repository.support.metricCases(
+        cases.value.slice(0, 500).map((row) => row.id)
+      );
+      if (facts.isErr()) return err(facts.error);
+      const samples = facts.value.map((facts) => supportCaseMetrics(facts, to));
+      const waiting = { support: 0, user: 0, external: 0 };
+      let open = 0,
+        unassigned = 0;
+      for (const group of counts.value) {
+        open += group.total;
+        waiting[group.waitingOn] += group.total;
+        if (group.unassigned) unassigned += group.total;
+      }
+      const csat = (kind: "human" | "ai") => {
+        const groups = ratings.value.filter((row) => row.handledBy === kind);
+        const total = groups.reduce((sum, row) => sum + row.total, 0),
+          happy = groups.filter((row) => row.score === 1).reduce((sum, row) => sum + row.total, 0);
+        return { samples: total, positive: total ? happy / total : null };
+      };
+      return ok({
+        from,
+        to,
+        sampleCases: samples.length,
+        partial: cases.value.length > 500,
+        open,
+        unassigned,
+        waiting,
+        oldestUnanswered: oldest.value,
+        firstHumanResponse: {
+          ...supportDistribution(
+            samples.flatMap((sample) =>
+              sample.firstHumanResponseMs === null ? [] : [sample.firstHumanResponseMs]
+            )
+          ),
+          unanswered: samples.filter(
+            (sample) =>
+              sample.hasUserExchange &&
+              sample.firstHumanResponseMs === null &&
+              cases.value.find((row) => row.id === sample.id)?.status === "open"
+          ).length,
+        },
+        handoffWait: supportDistribution(samples.flatMap((sample) => sample.handoffWaitMs)),
+        csat: { human: csat("human"), ai: csat("ai") },
+      });
+    });
 }

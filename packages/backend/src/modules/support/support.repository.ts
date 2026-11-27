@@ -30,10 +30,12 @@ import {
   supportCorpora,
   supportDocuments,
   supportEvents,
+  supportFeedback,
   supportMessages,
   supportReads,
   supportReplies,
   supportSettings,
+  supportSettingsRevisions,
   supportStaffPreferences,
   supportUsage,
   supportWork,
@@ -500,16 +502,19 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
       .where(eq(supportSettings.id, "platform"))
       .for("update");
     if ((current?.version ?? 0) !== expectedVersion) return undefined;
-    if (current)
-      return (
-        await tx
-          .update(supportSettings)
-          .set({ config, version: current.version + 1, updatedAt: new Date() })
-          .where(eq(supportSettings.id, "platform"))
-          .returning()
-      )[0];
-    return (await tx.insert(supportSettings).values({ id: "platform", config }).returning())[0];
+    const row = current
+      ? (
+          await tx
+            .update(supportSettings)
+            .set({ config, version: current.version + 1, updatedAt: new Date() })
+            .where(eq(supportSettings.id, "platform"))
+            .returning()
+        )[0]
+      : (await tx.insert(supportSettings).values({ id: "platform", config }).returning())[0];
+    await tx.insert(supportSettingsRevisions).values({ version: row.version, config: row.config });
+    return row;
   }
+
   workingLocale(userId: string) {
     return this.throwableQuery(
       async () =>
@@ -789,5 +794,156 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
         .orderBy(desc(supportMessages.sequence))
         .limit(1)
     )[0];
+  }
+  metricCase(id: string, tx?: SupportTransaction) {
+    const db = tx ?? this.orm;
+    return this.throwableQuery(async () => {
+      const [row] = await db.select().from(supportCases).where(eq(supportCases.id, id));
+      if (!row) return null;
+      const messages = await db
+        .select({
+          sequence: supportMessages.sequence,
+          authorKind: supportMessages.authorKind,
+          visibility: supportMessages.visibility,
+          publishedAt: supportMessages.publishedAt,
+        })
+        .from(supportMessages)
+        .where(eq(supportMessages.caseId, id));
+      const events = await db
+        .select({
+          sequence: supportEvents.sequence,
+          type: supportEvents.type,
+          occurredAt: supportEvents.occurredAt,
+          data: supportEvents.data,
+        })
+        .from(supportEvents)
+        .where(eq(supportEvents.caseId, id))
+        .orderBy(asc(supportEvents.sequence));
+      return { ...row, messages, events };
+    });
+  }
+  feedback(caseId: string, cycle: number, tx?: SupportTransaction) {
+    return this.throwableQuery(
+      async () =>
+        (
+          await (tx ?? this.orm)
+            .select()
+            .from(supportFeedback)
+            .where(and(eq(supportFeedback.caseId, caseId), eq(supportFeedback.cycle, cycle)))
+        )[0]
+    );
+  }
+  async rate(row: typeof supportFeedback.$inferInsert, tx: SupportTransaction) {
+    const [existing] = await tx
+      .select()
+      .from(supportFeedback)
+      .where(and(eq(supportFeedback.caseId, row.caseId), eq(supportFeedback.cycle, row.cycle)));
+    if (existing)
+      return (
+        await tx
+          .update(supportFeedback)
+          .set({ score: row.score, handledBy: row.handledBy, updatedAt: new Date() })
+          .where(eq(supportFeedback.id, existing.id))
+          .returning()
+      )[0];
+    return (await tx.insert(supportFeedback).values(row).returning())[0];
+  }
+  overviewCases(from: Date, to: Date) {
+    return this.throwableQuery(() =>
+      this.orm
+        .select()
+        .from(supportCases)
+        .where(and(gte(supportCases.createdAt, from), lte(supportCases.createdAt, to)))
+        .orderBy(desc(supportCases.createdAt), desc(supportCases.id))
+        .limit(501)
+    );
+  }
+  queueCounts() {
+    return this.throwableQuery(() =>
+      this.orm
+        .select({
+          waitingOn: supportCases.waitingOn,
+          unassigned: sql<boolean>`${supportCases.assignedUserId} is null`,
+          total: count(),
+        })
+        .from(supportCases)
+        .where(eq(supportCases.status, "open"))
+        .groupBy(supportCases.waitingOn, sql`${supportCases.assignedUserId} is null`)
+    );
+  }
+  oldestUnanswered() {
+    return this.throwableQuery(() =>
+      this.orm
+        .select({
+          id: supportCases.id,
+          subject: supportCases.subject,
+          since: sql<Date>`min(${supportMessages.publishedAt})`.mapWith(
+            (value) => new Date(String(value))
+          ),
+        })
+        .from(supportCases)
+        .innerJoin(supportMessages, eq(supportMessages.caseId, supportCases.id))
+        .where(
+          and(
+            eq(supportCases.status, "open"),
+            eq(supportMessages.authorKind, "user"),
+            eq(supportMessages.visibility, "public"),
+            isNotNull(supportMessages.publishedAt),
+            sql`not exists (select 1 from ${supportMessages} s where s.case_id=${supportCases.id} and s.visibility='public' and s.author_kind in ('admin','ai') and s.published_at >= ${supportMessages.publishedAt})`
+          )
+        )
+        .groupBy(supportCases.id, supportCases.subject)
+        .orderBy(sql`min(${supportMessages.publishedAt}) asc`)
+        .limit(20)
+    );
+  }
+  feedbackCounts(from: Date) {
+    return this.throwableQuery(() =>
+      this.orm
+        .select({
+          handledBy: supportFeedback.handledBy,
+          score: supportFeedback.score,
+          total: count(),
+        })
+        .from(supportFeedback)
+        .where(gte(supportFeedback.updatedAt, from))
+        .groupBy(supportFeedback.handledBy, supportFeedback.score)
+    );
+  }
+  metricCases(ids: string[]) {
+    return this.throwableQuery(async () => {
+      if (!ids.length) return [];
+      const rows = await this.orm.select().from(supportCases).where(inArray(supportCases.id, ids));
+      const messages = await this.orm
+        .select({
+          caseId: supportMessages.caseId,
+          sequence: supportMessages.sequence,
+          authorKind: supportMessages.authorKind,
+          visibility: supportMessages.visibility,
+          publishedAt: supportMessages.publishedAt,
+        })
+        .from(supportMessages)
+        .where(inArray(supportMessages.caseId, ids));
+      const events = await this.orm
+        .select({
+          caseId: supportEvents.caseId,
+          sequence: supportEvents.sequence,
+          type: supportEvents.type,
+          occurredAt: supportEvents.occurredAt,
+          data: supportEvents.data,
+        })
+        .from(supportEvents)
+        .where(inArray(supportEvents.caseId, ids))
+        .orderBy(asc(supportEvents.sequence));
+      const byCase = new Map(
+        rows.map((row) => [
+          row.id,
+          { ...row, messages: [] as typeof messages, events: [] as typeof events },
+        ])
+      );
+      for (const message of messages) byCase.get(message.caseId)?.messages.push(message);
+      for (const event of events) byCase.get(event.caseId)?.events.push(event);
+      return [...byCase.values()];
+    });
   }
 }

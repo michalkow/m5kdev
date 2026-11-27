@@ -572,6 +572,57 @@
         "failed": "Błąd",
         "withdrawn": "Wycofane"
       }
+    },
+    "day": {
+      "0": "Niedziela",
+      "1": "Poniedziałek",
+      "2": "Wtorek",
+      "3": "Środa",
+      "4": "Czwartek",
+      "5": "Piątek",
+      "6": "Sobota"
+    },
+    "csat": {
+      "enable": "Włącz ocenę obsługi po rozwiązaniu",
+      "question": "Jak oceniasz pomoc?",
+      "score": {
+        "-1": "Niezadowolenie",
+        "0": "Neutralnie",
+        "1": "Zadowolenie"
+      }
+    },
+    "hours": {
+      "open": "Obsługa jest teraz dostępna",
+      "closed": "Poza godzinami obsługi; Twoja wiadomość pozostaje w kolejce",
+      "settings": "Godziny obsługi",
+      "enable": "Pokazuj godziny obsługi",
+      "timeZone": "Strefa czasowa",
+      "day": "Dzień",
+      "opens": "Od",
+      "closes": "Do",
+      "add": "Dodaj godziny",
+      "remove": "Usuń",
+      "holidays": "Dni wolne (RRRR-MM-DD, po jednym w wierszu)"
+    },
+    "overview": {
+      "title": "Przegląd obsługi",
+      "open": "Otwarte",
+      "unassigned": "Nieprzypisane",
+      "noSample": "Brak próbek",
+      "seconds": "s",
+      "cohort": "Sprawy utworzone od {{date}}: {{count}}",
+      "partial": "Próbka obejmuje 500 spraw. Wybierz późniejszą datę początkową, aby zawęzić zakres.",
+      "firstHuman": "Pierwsza odpowiedź człowieka (czas kalendarzowy)",
+      "median": "Mediana",
+      "samples": "Próbki: {{count}}",
+      "unanswered": "Bez odpowiedzi: {{count}}",
+      "handoff": "Czas od przekazania człowiekowi",
+      "oldest": "Najdłużej oczekujące wiadomości",
+      "csat": {
+        "human": "CSAT człowieka",
+        "ai": "CSAT AI"
+      },
+      "since": "Sprawy utworzone od"
     }
   }
 }

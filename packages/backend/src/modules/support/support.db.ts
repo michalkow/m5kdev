@@ -270,3 +270,38 @@ export const supportDocuments = appDatabaseSchema.table(
   },
   (t) => [index("support_documents_context").on(t.corpusId, t.experience, t.locale)]
 );
+
+export const supportFeedback = appDatabaseSchema.table(
+  "support_feedback",
+  {
+    id: text("id").primaryKey().$default(uuidv4),
+    caseId: text("case_id")
+      .notNull()
+      .references(() => supportCases.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    score: integer("score").notNull(),
+    handledBy: text("handled_by").$type<"human" | "ai">().notNull(),
+    createdAt: instant("created_at")
+      .notNull()
+      .$default(() => new Date()),
+    updatedAt: instant("updated_at")
+      .notNull()
+      .$default(() => new Date()),
+  },
+  (t) => [uniqueIndex("support_feedback_cycle").on(t.caseId, t.cycle)]
+);
+export const supportSettingsRevisions = appDatabaseSchema.table(
+  "support_settings_revisions",
+  {
+    id: text("id").primaryKey().$default(uuidv4),
+    version: integer("version").notNull(),
+    config: jsonb("config").notNull().$type<typeof supportSettings.$inferSelect.config>(),
+    createdAt: instant("created_at")
+      .notNull()
+      .$default(() => new Date()),
+  },
+  (t) => [uniqueIndex("support_settings_revision").on(t.version)]
+);

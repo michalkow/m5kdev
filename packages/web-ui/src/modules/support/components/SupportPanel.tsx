@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SupportDeskTools } from "./SupportDeskTools";
 import { SupportMessageList } from "./SupportMessageList";
+import { SupportOverview } from "./SupportOverview";
 import { SupportSettings } from "./SupportSettings";
 
 export function SupportPanel({ admin = false }: { admin?: boolean }) {
@@ -42,6 +43,24 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
           {t("support.new")}
         </Button>
       </header>
+      {state.availability && (
+        <div className="grid gap-1 text-xs text-muted">
+          <p>{state.availability.replyExpectation}</p>
+          {state.availability.openNow !== null && (
+            <p>{t(state.availability.openNow ? "support.hours.open" : "support.hours.closed")}</p>
+          )}
+          {state.availability.calendar && (
+            <>
+              <p>{state.availability.calendar.timeZone}</p>
+              {state.availability.calendar.weekly.map((window, index) => (
+                <p key={`${window.day}-${index}`}>
+                  {t(`support.day.${window.day}`)} {window.opens}–{window.closes}
+                </p>
+              ))}
+            </>
+          )}
+        </div>
+      )}
       {state.error && (
         <div role="alert" className="rounded-lg border border-danger p-3 text-sm">
           {t("support.failed")}{" "}
@@ -50,6 +69,7 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
           </Button>
         </div>
       )}
+      {admin && <SupportOverview state={state} />}
       {admin && <SupportSettings state={state} />}
       {admin && <SupportDeskTools state={state} onChooseReply={setSavedReply} />}
       {state.isLoading && <p role="status">{t("support.loading")}</p>}
@@ -147,6 +167,26 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
             {t("support.save")}
           </Button>
         </Form>
+      )}
+      {!admin && state.transcript?.feedback.eligible && (
+        <fieldset className="rounded-lg border border-border p-3">
+          <legend className="text-sm">{t("support.csat.question")}</legend>
+          <div className="flex gap-3">
+            {([-1, 0, 1] as const).map((score, index) => (
+              <Button
+                key={score}
+                size="lg"
+                aria-label={t(`support.csat.score.${score}`)}
+                aria-pressed={state.transcript?.feedback.score === score}
+                isDisabled={state.isRating}
+                variant={state.transcript?.feedback.score === score ? "primary" : "secondary"}
+                onPress={() => state.rate(score)}
+              >
+                {["🙁", "😐", "🙂"][index]}
+              </Button>
+            ))}
+          </div>
+        </fieldset>
       )}
       <Form key={savedReply?.id ?? "new"} onSubmit={submit} className="grid gap-3">
         {!state.selectedId && (

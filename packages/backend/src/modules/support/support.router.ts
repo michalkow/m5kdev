@@ -327,6 +327,42 @@ export function createSupportRouter(service: SupportService, auth: AuthMiddlewar
     (req) => ({ ...req.body, id: req.params.id }),
     (input, ctx) => service.requestHuman(input, ctx)
   );
+  register(
+    "post",
+    "/cases/:id/feedback",
+    "rate",
+    supportSchemas.input.rate,
+    supportSchemas.output.feedback,
+    (req) => ({ ...req.body, id: req.params.id }),
+    (input, ctx) => service.rate(input, ctx)
+  );
+  register(
+    "get",
+    "/availability",
+    "getAvailability",
+    z.object({}),
+    supportSchemas.output.availability,
+    () => ({}),
+    (input, ctx) => service.getAvailability(input, ctx)
+  );
+  register(
+    "get",
+    "/cases/:id/metrics",
+    "getCaseMetrics",
+    supportSchemas.input.read,
+    supportSchemas.output.metrics,
+    (req) => ({ id: req.params.id }),
+    (input, ctx) => service.getCaseMetrics(input, ctx)
+  );
+  register(
+    "get",
+    "/overview",
+    "overview",
+    supportSchemas.input.overview,
+    supportSchemas.output.overview,
+    (req) => req.query,
+    (input, ctx) => service.overview(input, ctx)
+  );
   router.get("/openapi.json", (_req, res) =>
     res.json({
       openapi: "3.1.0",
