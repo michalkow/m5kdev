@@ -235,6 +235,16 @@
         "types": "./dist/src/modules/app/experience.d.ts",
         "default": "./dist/src/modules/app/experience.js"
       }
+    },
+    "./modules/support/hooks/*": {
+      "import": {
+        "types": "./dist/src/modules/support/hooks/*.d.mts",
+        "default": "./dist/src/modules/support/hooks/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/support/hooks/*.d.ts",
+        "default": "./dist/src/modules/support/hooks/*.js"
+      }
     }
   }
 }

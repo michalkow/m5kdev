@@ -457,5 +457,28 @@
   "billing.invoice.action": "Działanie",
   "billing.invoice.view": "Zobacz",
   "billing.invoice.noSubscriptionDetails": "Obecnie korzystasz z bezpłatnego planu. Ulepsz go, aby uzyskać funkcje premium.",
-  "billing.invoice.premium": "Plan premium"
+  "billing.invoice.premium": "Plan premium",
+  "support": {
+    "title": "Kontakt z pomocą",
+    "desk": "Panel pomocy",
+    "new": "Nowe zgłoszenie",
+    "failed": "Nie udało się zaktualizować zgłoszenia. Wiadomość zachowano do ponowienia.",
+    "retry": "Ponów",
+    "loading": "Ładowanie pomocy…",
+    "requests": "Zgłoszenia",
+    "empty": "Utwórz zgłoszenie, aby skontaktować się z pomocą platformy.",
+    "messages": "Wiadomości",
+    "userId": "Identyfikator użytkownika",
+    "subject": "Temat",
+    "message": "Wiadomość",
+    "sending": "Wysyłanie…",
+    "send": "Wyślij wiadomość",
+    "close": "Zamknij pomoc",
+    "author": {
+      "user": "Ty",
+      "admin": "Pomoc platformy",
+      "ai": "Asystent AI",
+      "system": "Aktualizacja zgłoszenia"
+    }
+  }
 }

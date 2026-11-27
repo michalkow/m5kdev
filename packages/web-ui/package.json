@@ -308,6 +308,16 @@
         "types": "./dist/src/modules/table/hooks/*.d.ts",
         "default": "./dist/src/modules/table/hooks/*.js"
       }
+    },
+    "./modules/support/components/*": {
+      "import": {
+        "types": "./dist/src/modules/support/components/*.d.mts",
+        "default": "./dist/src/modules/support/components/*.mjs"
+      },
+      "require": {
+        "types": "./dist/src/modules/support/components/*.d.ts",
+        "default": "./dist/src/modules/support/components/*.js"
+      }
     }
   }
 }

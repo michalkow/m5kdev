@@ -457,5 +457,28 @@
   "billing.invoice.action": "Action",
   "billing.invoice.view": "View",
   "billing.invoice.noSubscriptionDetails": "You are currently on the free tier. Upgrade to access premium features.",
-  "billing.invoice.premium": "Premium Plan"
+  "billing.invoice.premium": "Premium Plan",
+  "support": {
+    "title": "Contact support",
+    "desk": "Support desk",
+    "new": "New request",
+    "failed": "Could not update support. Your message has been kept for retry.",
+    "retry": "Retry",
+    "loading": "Loading support…",
+    "requests": "Support requests",
+    "empty": "Start a request to reach platform support.",
+    "messages": "Messages",
+    "userId": "User ID",
+    "subject": "Subject",
+    "message": "Message",
+    "sending": "Sending…",
+    "send": "Send message",
+    "close": "Close support",
+    "author": {
+      "user": "You",
+      "admin": "Platform support",
+      "ai": "AI assistant",
+      "system": "Support update"
+    }
+  }
 }
