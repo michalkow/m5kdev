@@ -29,7 +29,7 @@ Open **Support settings** to choose natively supported locales, the fallback adm
 
 AI and translation have separate enable switches. Their providers must first be configured by the app operator. Enter explicit monthly/per-User call limits, maximum text sizes, concurrency, attempts and timeout before enabling them. Exceeding an allowance preserves human messaging.
 
-Successful outbound translation publishes automatically. **Preview translation before publishing** holds the rendered reply for review. A held or failed reply offers **Retry**, **Send original** and **Publish preview**. A failed translation never silently sends untranslated text. **Show original** reveals the authored text.
+Successful outbound translation publishes automatically. **Preview translation before publishing** holds the rendered reply for review. A held or failed reply offers **Retry**, **Send original** and **Publish preview**. If the support language changes while a reply is held, it automatically prepares the reply in the new language. Any earlier preview is cleared; review the new preview before choosing **Publish preview**. When the new language matches the authored message, the original text is used and preview approval is still required if selected. A failed translation never silently sends untranslated text. **Show original** reveals the authored text.
 
 **Talk to a person**, **Take Case**, or a public staff reply stops unfinished AI answers. Human control persists across reopening. **Re-enable AI for this Case** is an explicit admin action. AI uses approved public documentation, provides source links, and hands off when evidence or automation is unavailable.
 

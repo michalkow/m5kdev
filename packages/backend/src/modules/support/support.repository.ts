@@ -628,6 +628,35 @@ export class SupportRepository extends BaseRepository<Orm, Schema, Record<string
       .limit(1);
     return Boolean(row);
   }
+  async heldReplies(caseId: string, tx: SupportTransaction) {
+    return tx
+      .select()
+      .from(supportMessages)
+      .where(
+        and(
+          eq(supportMessages.caseId, caseId),
+          eq(supportMessages.authorKind, "admin"),
+          eq(supportMessages.visibility, "public"),
+          isNull(supportMessages.publishedAt),
+          isNull(supportMessages.redactedAt)
+        )
+      );
+  }
+  async hasPendingOutbound(messageId: string, epoch: number, tx: SupportTransaction) {
+    const [row] = await tx
+      .select({ id: supportWork.id })
+      .from(supportWork)
+      .where(
+        and(
+          eq(supportWork.messageId, messageId),
+          eq(supportWork.purpose, "outbound"),
+          eq(supportWork.epoch, epoch),
+          inArray(supportWork.state, ["queued", "running"])
+        )
+      )
+      .limit(1);
+    return Boolean(row);
+  }
   pendingWork(now: Date) {
     return this.throwableQuery(() =>
       this.orm

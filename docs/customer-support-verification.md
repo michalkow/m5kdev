@@ -33,7 +33,7 @@ Implementation paths are relative to `packages/backend/src/modules/support/` unl
 
 ## Checks run
 
-- Affected backend suites: 95 tests in 25 suites passed, including Support, bearer Auth, account lifecycle, Server events, File and Tag regression tests. The focused Support/native subset has 23 tests in 10 suites. These include PostgreSQL isolation, idempotency, pagination, notes, lifecycle, budgets, translation failure/retry, takeover, File sealing/redaction, docs, metrics, calendars and CSAT.
+- Affected backend suites: 102 tests in 26 suites passed, including Support, bearer Auth, account lifecycle, Server events, File and Tag regression tests. The focused Support/native subset has 30 tests in 11 suites. These include PostgreSQL isolation, idempotency, pagination, notes, lifecycle, budgets, translation failure/retry, takeover, File sealing/redaction, docs, metrics, calendars and CSAT.
 - Web UI: identity-cache isolation for default/injected QueryClients and safe announced message rendering, settings/documentation loading and failed-read recovery, retained semantic request identities, exact mutation Retry, immediate unread badge invalidation and scoped Escape cleanup: 8 tests passed.
 - CLI creation/product-documentation/feature-catalog suites: 76 tests passed with Support selected and omitted. Required modules are implied; default documentation remains independent.
 - Backend, frontend and web-ui types/builds; Starter server and webapp types/builds passed. Build dependent packages in order: backend, frontend, web-ui, then Starter. Concurrent builds can observe an intermediate cleaned declaration directory.
@@ -56,6 +56,23 @@ The six Standards/Spec findings were reproduced through generated-app, real Post
 The assembled browser check additionally gates a send while a newer draft is typed, commits a second send while losing its response, closes/reopens the widget, retries the identical payload/client ID and verifies one persisted message. It acknowledges the displayed published IDs, selects feedback and closes with Escape. `browser-result.json` records zero page errors. Drafts and unresolved commands remain in the authenticated component tree and are discarded when that tree remounts for a different identity.
 
 Migration `0004_hesitant_peter_parker` adds the cumulative message-ID receipts with an empty-array default. It was generated through Starter `drizzle:generate` and applied through `drizzle:migrate` only to loopback `support_migrations` on port 55439, schema `app`. The temporary Starter shared `.env` was removed. No hosted resources or telemetry were used; local fixture app workers were stopped after verification. Existing disposable PostgreSQL/Redis infrastructure was reused.
+
+## Bugbot language-change regression evidence
+
+The outbound language race was reproduced through public Support services against loopback PostgreSQL before the fix: a staff reply accepted before detection completed remained absent from the customer transcript. A gated provider also reproduced cancellation after an explicit language change during translation. Both now converge automatically to the current support language. Effective detection changes fence the old generation and queue held staff replies just as explicit changes do; outbound claims wait for the latest pending detection. Source, handling, lifecycle and current publication authorization fences remain enforced.
+
+`tests/support.outbound.test.ts` adds seven deterministic cases:
+
+- Detection completes before the held reply is claimed: only the detected target is translated and the customer sees one reply.
+- An explicit language change during translation discards the old result and publishes the replacement once.
+- The new target matches the authored language: the authored text is used without another provider call, both with automatic publication and with preview approval still required.
+- Detection changes a ready preview: the old preview cannot be approved; the replacement remains held for fresh approval.
+- Translation is disabled during a provider call: the held reply is visibly failed instead of remaining pending.
+- The superseded call finishes after its replacement preview: it cannot clear that ready preview; repeated approval produces one publication event and one unread reply.
+
+The existing real local object-store fixture also gates an attached reply across an in-flight language change. Customer download fails while held and after the stale completion, then returns the expected bytes after the corrected translation publishes. Its two-call allowance and one-attempt-per-work configuration remain enforced; replacements use normal durable work and shared usage reservations, with no hidden provider retries.
+
+For this fix, the affected backend command passed **102 tests in 26 suites**, including the **30 Support tests in 11 suites**. Backend, frontend, web-ui and Starter server/webapp types and builds passed in dependency order. The complete Starter help build passed for en and en-GB; generated customer and desk pages contain the updated language-change/preview guidance, and the API guides were updated in both locales. Targeted Biome checks passed with six existing optional-chain warnings. The earlier browser/Redis evidence above was reused; no assembled browser or UI/CLI test rerun was needed because their sources did not change. No schema changed and no migration ran. All new execution used synthetic provider ports, loopback PostgreSQL and local object storage; hosted usage was zero and existing disposable infrastructure was reused.
 
 ## Reproduce the assembled browser check
 

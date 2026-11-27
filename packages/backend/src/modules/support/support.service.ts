@@ -1096,6 +1096,8 @@ export class SupportService extends BasePermissionService<
           { locale: input.locale },
           tx
         );
+        for (const message of await this.repository.support.heldReplies(current.id, tx))
+          await this.queueOutbound(updated, message, tx);
         if (updated.handling === "ai" && updated.waitingOn === "support") {
           const latest = await this.repository.support.latestUserMessage(current.id, tx);
           if (latest)
@@ -1183,6 +1185,73 @@ export class SupportService extends BasePermissionService<
       tx
     );
     return published;
+  }
+  private async queueOutbound(
+    current: SupportCaseRow,
+    message: SupportMessageRow,
+    tx: SupportTransaction
+  ) {
+    const work = await this.repository.support.queueWork(
+      {
+        caseId: current.id,
+        messageId: message.id,
+        userId: current.userId,
+        purpose: "outbound",
+        locale: current.supportLocale ?? current.detectedLocale ?? current.uiLocale,
+        sourceHash: workSourceHash("outbound", message),
+        epoch: current.handlingEpoch,
+      },
+      tx
+    );
+    await this.repository.support.updateMessage(
+      message.id,
+      { publishedBody: null, translationState: "pending" },
+      tx
+    );
+    return work;
+  }
+  private async readyOutbound(
+    current: SupportCaseRow,
+    message: SupportMessageRow,
+    text: string,
+    tx: SupportTransaction
+  ) {
+    if (message.preview) {
+      await this.repository.support.updateMessage(
+        message.id,
+        { publishedBody: text, translationState: "ready" },
+        tx
+      );
+      await this.repository.support.record(
+        current,
+        {},
+        "translation.preview",
+        { kind: "system" },
+        { visibility: "internal", messageSequence: message.sequence },
+        tx
+      );
+    } else await this.publishHeld(current, message, text, { kind: "system" }, tx);
+  }
+  private async failUnreplacedOutbound(
+    work: SupportWorkRow,
+    current: SupportCaseRow | undefined,
+    message: SupportMessageRow | null | undefined,
+    tx: SupportTransaction
+  ) {
+    if (
+      work.purpose === "outbound" &&
+      current &&
+      message &&
+      !message.publishedAt &&
+      !message.redactedAt &&
+      message.translationState === "pending" &&
+      !(await this.repository.support.hasPendingOutbound(message.id, current.handlingEpoch, tx))
+    )
+      await this.repository.support.updateMessage(
+        message.id,
+        { publishedBody: null, translationState: "failed" },
+        tx
+      );
   }
   readonly controlMessage = this.procedure("controlMessage")
     .input(supportSchemas.input.controlMessage, true)
@@ -1294,14 +1363,47 @@ export class SupportService extends BasePermissionService<
           !message ||
           message.redactedAt ||
           workSourceHash(work.purpose, message) !== work.sourceHash ||
-          (work.purpose === "outbound" && work.epoch !== current.handlingEpoch)
+          (work.purpose === "outbound" &&
+            (work.epoch !== current.handlingEpoch ||
+              message.publishedAt ||
+              author?.role !== "admin" ||
+              author.closedAt ||
+              author.banned))
         ) {
           await this.repository.support.updateWork(
             work.id,
-            { state: "cancelled", error: "source-changed" },
+            { state: "cancelled", error: "source-changed", leaseUntil: null },
             tx
           );
+          await this.failUnreplacedOutbound(work, current, message, tx);
           return null;
+        }
+        if (
+          work.purpose === "outbound" &&
+          !message.publishedAt &&
+          work.locale !== (current.supportLocale ?? current.detectedLocale ?? current.uiLocale)
+        ) {
+          await this.repository.support.updateWork(
+            work.id,
+            { state: "cancelled", error: "language-changed", leaseUntil: null },
+            tx
+          );
+          await this.queueOutbound(current, message, tx);
+          return null;
+        }
+        if (work.purpose === "outbound") {
+          const latest = await this.repository.support.latestUserMessage(current.id, tx);
+          if (latest && (await this.repository.support.hasPendingDetection(latest.id, tx)))
+            return null;
+        }
+        if (work.purpose === "outbound" && message.authoredLocale === work.locale) {
+          await this.readyOutbound(current, message, message.body, tx);
+          await this.repository.support.updateWork(
+            work.id,
+            { state: "succeeded", error: null, leaseUntil: null },
+            tx
+          );
+          return { state: "changed" as const, current };
         }
         if (
           !settings.value.translation.enabled ||
@@ -1369,9 +1471,14 @@ export class SupportService extends BasePermissionService<
           },
           tx
         );
-        return { work: updated, message, current, usageId: usage.id };
+        return { state: "claimed" as const, work: updated, message, current, usageId: usage.id };
       });
       if (claimed.isErr()) return err(claimed.error);
+      if (claimed.value?.state === "changed") {
+        await this.notify(claimed.value.current.id, claimed.value.current.userId, "");
+        processed++;
+        break;
+      }
       if (!claimed.value || !provider || !budget) continue;
       const { work, message, usageId } = claimed.value;
       let value: { text?: string; locale?: string } | null = null;
@@ -1427,9 +1534,10 @@ export class SupportService extends BasePermissionService<
         if (!allowed) {
           await this.repository.support.updateWork(
             work.id,
-            { state: "cancelled", error: "authorization-or-source-changed" },
+            { state: "cancelled", error: "authorization-or-source-changed", leaseUntil: null },
             tx
           );
+          await this.failUnreplacedOutbound(work, current, source, tx);
           return;
         }
         if (!value) {
@@ -1475,15 +1583,16 @@ export class SupportService extends BasePermissionService<
               current,
               {
                 detectedLocale: value.locale,
-                handlingEpoch:
-                  current.handlingEpoch +
-                  (changed && current.handling === "ai" && current.waitingOn === "support" ? 1 : 0),
+                handlingEpoch: current.handlingEpoch + (changed ? 1 : 0),
               },
               "language.detected",
               { kind: "system" },
               { locale: value.locale },
               tx
             );
+            if (changed)
+              for (const held of await this.repository.support.heldReplies(current.id, tx))
+                await this.queueOutbound(updated, held, tx);
             if (!freshSettings.value.config.nativeLocales.includes(value.locale))
               await this.repository.support.queueWork(
                 {
@@ -1535,26 +1644,14 @@ export class SupportService extends BasePermissionService<
             ) {
               await this.repository.support.updateWork(
                 work.id,
-                { state: "cancelled", error: "language-changed" },
+                { state: "cancelled", error: "language-changed", leaseUntil: null },
                 tx
               );
+              await this.queueOutbound(current, source, tx);
+              await this.repository.support.completeUsage(usageId, value.text.length, tx);
               return;
             }
-            if (source.preview) {
-              await this.repository.support.updateMessage(
-                source.id,
-                { publishedBody: value.text, translationState: "ready" },
-                tx
-              );
-              await this.repository.support.record(
-                current,
-                {},
-                "translation.preview",
-                { kind: "system" },
-                { visibility: "internal", messageSequence: source.sequence },
-                tx
-              );
-            } else await this.publishHeld(current, source, value.text, { kind: "system" }, tx);
+            await this.readyOutbound(current, source, value.text, tx);
           } else
             await this.repository.support.record(
               current,

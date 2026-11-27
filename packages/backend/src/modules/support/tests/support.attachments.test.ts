@@ -45,11 +45,33 @@ it("shares sealed staff Files only with the Case participant and removes issued 
     defaultFileGrants,
     { buckets: ["local"] }
   );
+  let enteredTranslation = () => {};
+  let releaseTranslation = () => {};
+  const translationStarted = new Promise<void>((resolve) => {
+    enteredTranslation = resolve;
+  });
+  const translationGate = new Promise<void>((resolve) => {
+    releaseTranslation = resolve;
+  });
   const support = new SupportService(
     { support: new SupportRepository({ orm, schema }) },
     { file },
     undefined,
-    { maxFileBytes: 8 }
+    {
+      maxFileBytes: 8,
+      locales: ["en", "pl", "de"],
+      translation: {
+        id: "local-files",
+        languages: ["en", "pl", "de"],
+        translate: async ({ targetLocale }) => {
+          if (targetLocale === "pl") {
+            enteredTranslation();
+            await translationGate;
+          }
+          return { text: `${targetLocale}: See attached` };
+        },
+      },
+    }
   );
   try {
     const created = await support.createCase(
@@ -233,7 +255,75 @@ it("shares sealed staff Files only with the Case participant and removes issued 
     if (tail.isErr()) throw tail.error;
     expect(tail.value.messages[0].body).toBe("");
     expect(tail.value.messages[0].redactedAt).not.toBeNull();
+
+    const settings = await support.saveSettings(
+      {
+        expectedVersion: 0,
+        nativeLocales: ["en", "pl", "de"],
+        fallbackLocale: "en",
+        translation: {
+          enabled: true,
+          budget: {
+            monthlyCalls: 2,
+            dailyUserCalls: 2,
+            maxInputCharacters: 20000,
+            maxOutputCharacters: 20000,
+            concurrency: 1,
+            attempts: 1,
+            timeoutMs: 5000,
+          },
+        },
+        ai: { enabled: false },
+      },
+      ctx("staff", "admin")
+    );
+    if (settings.isErr()) throw settings.error;
+    const language = await support.setLanguage({ id: created.value.id, locale: "pl" }, ctx("user"));
+    if (language.isErr()) throw language.error;
+    const heldUpload = await support.initiateAttachment(
+      { id: created.value.id, originalName: "held.txt", contentType: "text/plain", sizeBytes: 5 },
+      ctx("staff", "admin")
+    );
+    if (heldUpload.isErr()) throw heldUpload.error;
+    expect(
+      (
+        await fetch(heldUpload.value.url, {
+          method: "PUT",
+          headers: { "content-type": "text/plain" },
+          body: "Hello",
+        })
+      ).status
+    ).toBe(200);
+    const heldReply = await support.sendMessage(
+      {
+        id: created.value.id,
+        clientId: "held-file",
+        body: "See attached",
+        attachmentIds: [heldUpload.value.fileId],
+      },
+      ctx("staff", "admin")
+    );
+    if (heldReply.isErr()) throw heldReply.error;
+    const attachment = { id: created.value.id, fileId: heldUpload.value.fileId };
+    expect((await support.downloadAttachment(attachment, ctx("user"))).isErr()).toBe(true);
+    const translating = support.processWork();
+    await translationStarted;
+    const changed = await support.setLanguage({ id: created.value.id, locale: "de" }, ctx("user"));
+    if (changed.isErr()) throw changed.error;
+    releaseTranslation();
+    const stale = await translating;
+    if (stale.isErr()) throw stale.error;
+    expect((await support.downloadAttachment(attachment, ctx("user"))).isErr()).toBe(true);
+    const completed = await support.processWork();
+    if (completed.isErr()) throw completed.error;
+    const delivered = await support.getCase({ id: created.value.id }, ctx("user"));
+    if (delivered.isErr()) throw delivered.error;
+    expect(delivered.value.messages.at(-1)?.publishedBody).toBe("de: See attached");
+    const shared = await support.downloadAttachment(attachment, ctx("user"));
+    if (shared.isErr()) throw shared.error;
+    expect(await fetch(shared.value.url).then((response) => response.text())).toBe("Hello");
   } finally {
+    releaseTranslation();
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve()))
     );

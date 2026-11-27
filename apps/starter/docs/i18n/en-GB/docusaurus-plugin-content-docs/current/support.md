@@ -22,7 +22,7 @@ After creating a request, use **Attach files** when sending a message. The defau
 
 **Support language** controls the language used for replies. A choice you make takes priority over automatic detection and your application language. Use a supported language tag, such as `en` or `en-GB`, then **Save**. The team may support message languages beyond those available for the application menus.
 
-When translation is enabled, a reply shows the exact translated text that was delivered. **Show original** reveals the authored text. Your original messages remain available even if translation fails. A reply awaiting translation is not yet sent to you.
+When translation is enabled, a reply shows the exact translated text that was delivered. **Show original** reveals the authored text. Your original messages remain available even if translation fails. A reply awaiting translation is not yet sent to you, and its files remain unavailable until it is sent. If your support language changes while a reply is waiting, translation follows the new language automatically.
 
 ## AI and human help
 
