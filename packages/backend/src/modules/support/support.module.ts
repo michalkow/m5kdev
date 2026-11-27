@@ -7,6 +7,7 @@ import {
   type ModuleTRPCContext,
 } from "../../base/base.module";
 import type { AuthModule } from "../auth/auth.module";
+import type { AuthService } from "../auth/auth.service";
 import type { FileModule } from "../file/file.module";
 import type { TagModule } from "../tag/tag.module";
 import type { WorkflowModule } from "../workflow/workflow.module";
@@ -31,8 +32,10 @@ export class SupportModule extends BaseModule<
   override repositories({ db }: ModuleRepositoriesContext<Deps, typeof tables>) {
     return { support: new SupportRepository({ orm: db.orm, schema: db.schema }) };
   }
-  override services({ repositories }: ModuleServicesContext<Deps, Repositories>) {
-    return { support: new SupportService(repositories, {}) };
+  override services({ repositories, deps }: ModuleServicesContext<Deps, Repositories>) {
+    return {
+      support: new SupportService(repositories, { auth: deps.auth.services.auth as AuthService }),
+    };
   }
   override trpc({ trpc, services }: ModuleTRPCContext<Deps, Services>) {
     return createBackendRouterMap("support", createSupportTRPC(trpc, services.support));

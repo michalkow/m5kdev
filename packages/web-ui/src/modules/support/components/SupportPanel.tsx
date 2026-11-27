@@ -58,7 +58,24 @@ export function SupportPanel({ admin = false }: { admin?: boolean }) {
           </Button>
         ))}
       </nav>
+      {state.transcript && state.transcript.case.unreadCount > 0 && (
+        <Button size="sm" variant="secondary" onPress={() => void state.markRead()}>
+          {t("support.markRead")}
+        </Button>
+      )}
       {state.transcript && <SupportMessageList messages={state.transcript.messages} />}
+      <div className="flex gap-2">
+        {state.transcript?.hasOlder && (
+          <Button size="sm" variant="tertiary" onPress={state.showOlder}>
+            {t("support.older")}
+          </Button>
+        )}
+        {state.isHistory && (
+          <Button size="sm" variant="tertiary" onPress={state.showLatest}>
+            {t("support.latest")}
+          </Button>
+        )}
+      </div>
       <Form onSubmit={submit} className="grid gap-3">
         {!state.selectedId && (
           <>

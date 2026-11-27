@@ -1,5 +1,4 @@
 import {
-  supportCaseIdSchema,
   supportCreateCaseSchema,
   supportListSchema,
   supportSendMessageSchema,
@@ -15,13 +14,21 @@ export function createSupportTRPC({ router, userProcedure }: TRPCMethods, servic
       .output(supportSchemas.output.case)
       .mutation(async ({ input, ctx }) => handleTRPCResult(await service.createCase(input, ctx))),
     getCase: userProcedure
-      .input(supportCaseIdSchema)
+      .input(supportSchemas.input.history)
       .output(supportSchemas.output.transcript)
       .query(async ({ input, ctx }) => handleTRPCResult(await service.getCase(input, ctx))),
     listCases: userProcedure
       .input(supportListSchema)
       .output(supportSchemas.output.list)
       .query(async ({ input, ctx }) => handleTRPCResult(await service.listCases(input, ctx))),
+    sync: userProcedure
+      .input(supportSchemas.input.sync)
+      .output(supportSchemas.output.sync)
+      .query(async ({ input, ctx }) => handleTRPCResult(await service.sync(input, ctx))),
+    markRead: userProcedure
+      .input(supportSchemas.input.markRead)
+      .output(supportSchemas.output.markRead)
+      .mutation(async ({ input, ctx }) => handleTRPCResult(await service.markRead(input, ctx))),
     sendMessage: userProcedure
       .input(supportSendMessageSchema)
       .output(supportSchemas.output.message)

@@ -69,3 +69,21 @@ export const supportEvents = appDatabaseSchema.table(
   },
   (table) => [uniqueIndex("support_events_sequence").on(table.caseId, table.sequence)]
 );
+
+export const supportReads = appDatabaseSchema.table(
+  "support_reads",
+  {
+    id: text("id").primaryKey().$default(uuidv4),
+    caseId: text("case_id")
+      .notNull()
+      .references(() => supportCases.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sequence: integer("sequence").notNull().default(0),
+    updatedAt: instant("updated_at")
+      .notNull()
+      .$default(() => new Date()),
+  },
+  (table) => [uniqueIndex("support_reads_reader").on(table.caseId, table.userId)]
+);

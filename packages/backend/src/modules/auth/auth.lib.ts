@@ -20,7 +20,7 @@ import {
   getOAuthState,
   sensitiveSessionMiddleware,
 } from "better-auth/api";
-import { admin, lastLoginMethod, magicLink, organization } from "better-auth/plugins";
+import { admin, bearer, lastLoginMethod, magicLink, organization } from "better-auth/plugins";
 import { and, desc, eq, gte, type InferSelectModel } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { TFunction } from "i18next";
@@ -1048,6 +1048,7 @@ export function createBetterAuth<
       }),
       // `x-api-key` callers get a session without an active Organization; they name one with `organizationId`.
       createApiKeyPlugin({ enableSessionForAPIKeys: true }) as BetterAuthPlugin,
+      bearer({ requireSignature: true }),
       ...createMcpOAuthPlugins(
         mcp
           ? {

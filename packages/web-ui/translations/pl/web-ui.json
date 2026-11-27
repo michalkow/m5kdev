@@ -479,6 +479,9 @@
       "admin": "Pomoc platformy",
       "ai": "Asystent AI",
       "system": "Aktualizacja zgłoszenia"
-    }
+    },
+    "markRead": "Oznacz jako przeczytane",
+    "older": "Starsze wiadomości",
+    "latest": "Najnowsze wiadomości"
   }
 }

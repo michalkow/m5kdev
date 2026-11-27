@@ -43,3 +43,18 @@ export const supportListSchema = z
   .default({ limit: 30 });
 export type SupportCreateCase = z.infer<typeof supportCreateCaseSchema>;
 export type SupportSendMessage = z.infer<typeof supportSendMessageSchema>;
+
+export const supportSyncSchema = z.object({
+  id: z.string().min(1),
+  cursor: z.string().max(512).optional(),
+  limit: z.number().int().min(1).max(100).default(50),
+});
+export const supportReadSchema = z.object({
+  id: z.string().min(1),
+  throughSequence: z.number().int().min(0),
+});
+
+export const supportHistorySchema = supportCaseIdSchema.extend({
+  beforeSequence: z.number().int().min(1).optional(),
+  limit: z.number().int().min(1).max(100).default(50),
+});

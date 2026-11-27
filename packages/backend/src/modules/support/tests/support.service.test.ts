@@ -29,6 +29,73 @@ beforeAll(async () => {
 });
 afterAll(() => pool.end());
 
+it("recovers committed changes and keeps read state monotonic", async () => {
+  const created = await support.createCase(
+    { clientId: "read-case", subject: "Unread", body: "Question" },
+    ctx("alice")
+  );
+  if (created.isErr()) throw created.error;
+  const initial = await support.sync({ id: created.value.id, limit: 20 }, ctx("alice"));
+  if (initial.isErr()) throw initial.error;
+  const reply = await support.sendMessage(
+    { id: created.value.id, clientId: "unread-reply", body: "Reply while offline" },
+    ctx("staff", "admin")
+  );
+  if (reply.isErr()) throw reply.error;
+  const tail = await support.sync(
+    { id: created.value.id, cursor: initial.value.cursor, limit: 20 },
+    ctx("alice")
+  );
+  if (tail.isErr()) throw tail.error;
+  expect(tail.value.messages.map((message) => message.body)).toEqual(["Reply while offline"]);
+  const unread = await support.getCase({ id: created.value.id }, ctx("alice"));
+  if (unread.isErr()) throw unread.error;
+  expect(unread.value.case.unreadCount).toBe(1);
+  const marked = await support.markRead(
+    { id: created.value.id, throughSequence: reply.value.sequence },
+    ctx("alice")
+  );
+  if (marked.isErr()) throw marked.error;
+  await support.markRead({ id: created.value.id, throughSequence: 1 }, ctx("alice"));
+  const read = await support.getCase({ id: created.value.id }, ctx("alice"));
+  if (read.isErr()) throw read.error;
+  expect(read.value.case.unreadCount).toBe(0);
+});
+
+it("pages history without gaps and rejects cross-Case cursors", async () => {
+  const created = await support.createCase(
+    { clientId: "pages", subject: "Pages", body: "One" },
+    ctx("alice")
+  );
+  if (created.isErr()) throw created.error;
+  for (const body of ["Two", "Three", "Four"]) {
+    const sent = await support.sendMessage(
+      { id: created.value.id, clientId: body, body },
+      ctx("alice")
+    );
+    if (sent.isErr()) throw sent.error;
+  }
+  const latest = await support.getCase({ id: created.value.id, limit: 2 }, ctx("alice"));
+  if (latest.isErr()) throw latest.error;
+  expect(latest.value.messages.map((message) => message.body)).toEqual(["Three", "Four"]);
+  expect(latest.value.hasOlder).toBe(true);
+  const older = await support.getCase(
+    { id: created.value.id, limit: 2, beforeSequence: 3 },
+    ctx("alice")
+  );
+  if (older.isErr()) throw older.error;
+  expect(older.value.messages.map((message) => message.body)).toEqual(["One", "Two"]);
+  expect(older.value.hasOlder).toBe(false);
+  const wrong = await support.sync(
+    {
+      id: created.value.id,
+      cursor: Buffer.from(JSON.stringify({ id: "another", sequence: 0 })).toString("base64url"),
+    },
+    ctx("alice")
+  );
+  expect(wrong.isErr() && wrong.error.code).toBe("BAD_REQUEST");
+});
+
 it("makes a first support request retrievable without an Organization", async () => {
   const created = await support.createCase(
     { clientId: "create-1", subject: "Billing help", body: "My invoice is wrong" },

@@ -479,6 +479,9 @@
       "admin": "Platform support",
       "ai": "AI assistant",
       "system": "Support update"
-    }
+    },
+    "markRead": "Mark as read",
+    "older": "Older messages",
+    "latest": "Latest messages"
   }
 }

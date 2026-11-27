@@ -2,18 +2,24 @@ import type { SupportAppRouter } from "@m5kdev/backend/modules/support/support.t
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { useAppTRPC } from "../../app/hooks/useAppTrpc";
+import { useServerEventHandler } from "../../app/hooks/useServerEventHandler";
 
 export function useSupport() {
   const trpc = useAppTRPC<SupportAppRouter>();
   const cache = useQueryClient();
-  const [selectedId, selectCase] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [beforeSequence, setBeforeSequence] = useState<number | undefined>();
+  const selectCase = (id: string | null) => {
+    setSelectedId(id);
+    setBeforeSequence(undefined);
+  };
   const pendingRequest = useRef<{ key: string; id: string } | null>(null);
   const cases = useQuery(
     trpc.support.listCases.queryOptions({ limit: 30 }, { refetchInterval: 5000 })
   );
   const transcript = useQuery(
     trpc.support.getCase.queryOptions(
-      { id: selectedId ?? "" },
+      { id: selectedId ?? "", beforeSequence, limit: 50 },
       { enabled: selectedId !== null, refetchInterval: 5000 }
     )
   );
@@ -22,6 +28,18 @@ export function useSupport() {
       cache.invalidateQueries(trpc.support.listCases.queryFilter()),
       cache.invalidateQueries(trpc.support.getCase.queryFilter()),
     ]);
+  };
+  useServerEventHandler({
+    resource: "support.case",
+    handler: () => {
+      void refresh();
+    },
+  });
+  const read = useMutation(trpc.support.markRead.mutationOptions({ onSuccess: refresh }));
+  const markRead = async () => {
+    const last = transcript.data?.messages.at(-1);
+    if (!selectedId || !last) return;
+    await read.mutateAsync({ id: selectedId, throughSequence: last.sequence });
   };
   const create = useMutation(
     trpc.support.createCase.mutationOptions({
@@ -36,6 +54,7 @@ export function useSupport() {
     trpc.support.sendMessage.mutationOptions({
       onSuccess: async () => {
         pendingRequest.current = null;
+        setBeforeSequence(undefined);
         await refresh();
       },
     })
@@ -78,10 +97,15 @@ export function useSupport() {
     selectCase,
     createCase,
     sendMessage,
+    showOlder: () => setBeforeSequence(transcript.data?.messages[0]?.sequence),
+    showLatest: () => setBeforeSequence(undefined),
+    isHistory: beforeSequence !== undefined,
     retry: refresh,
+    markRead,
     isLoading: cases.isLoading || (selectedId !== null && transcript.isLoading),
     isPending: create.isPending || send.isPending,
     error:
+      read.error?.message ??
       cases.error?.message ??
       transcript.error?.message ??
       create.error?.message ??
